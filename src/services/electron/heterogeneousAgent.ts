@@ -1,12 +1,22 @@
 import type {
+  ClaudeCodeAccountResolution,
+  ClaudeCodeLocalAccount,
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
   KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
-import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousAgentType,
+  HeterogeneousProviderBindingReference,
+} from '@lobechat/heterogeneous-agents';
+import type {
+  AntigravityQuotaParams,
+  AntigravityQuotaSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -22,7 +32,7 @@ class HeterogeneousAgentService {
   }
 
   async startSession(params: {
-    agentType?: string;
+    agentType?: HeterogeneousAgentType;
     args?: string[];
     command: string;
     cwd?: string;
@@ -46,6 +56,8 @@ class HeterogeneousAgentService {
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
+    /** Claude Code permission mode (Better Coding Experience lab); absent allows everything. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     /**
      * Replay the session's on-disk transcript instead of spawning the CLI.
@@ -64,8 +76,33 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.sendPrompt(params);
   }
 
+  /**
+   * Deliver a message into the session's running turn (Follow-up behavior:
+   * Steer). `accepted` means it was written; the agent confirms reading it
+   * with a `step_complete { phase: 'user_message' }` event naming `messageId`
+   * (or, for Pi, its text). Throws when the outcome is unknown.
+   */
+  async steerSession(params: {
+    imageList?: Array<{ id: string; url: string }>;
+    messageId: string;
+    prompt: string;
+    sessionId: string;
+  }): Promise<{ deliveredText?: string; status: 'accepted' | 'rejected' | 'unsupported' }> {
+    return this.ipc.heterogeneousAgent.steerSession(params);
+  }
+
   async cancelSession(sessionId: string) {
     return this.ipc.heterogeneousAgent.cancelSession({ sessionId });
+  }
+
+  /** Stop one background task of a local Claude Code SDK run. */
+  async stopBackgroundTask(sessionId: string, taskId: string) {
+    return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
+  }
+
+  /** Switch a local Claude Code run's permission mode (Better Coding Experience mode chip). */
+  async setPermissionMode(sessionId: string, mode: HeteroPermissionMode) {
+    return this.ipc.heterogeneousAgent.setPermissionMode({ mode, sessionId });
   }
 
   async stopSession(sessionId: string) {
@@ -118,6 +155,10 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.listModels(params);
   }
 
+  async getAntigravityQuota(params?: AntigravityQuotaParams): Promise<AntigravityQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getAntigravityQuota(params);
+  }
+
   async getCodexQuota(params?: {
     command?: string;
     env?: Record<string, string>;
@@ -158,6 +199,30 @@ class HeterogeneousAgentService {
     env?: Record<string, string>;
   }): Promise<ClaudeCodeQuotaSnapshot['identity']> {
     return this.ipc.heterogeneousAgent.getClaudeCodeIdentity(params);
+  }
+
+  /** Every Claude Code account signed in on this machine (default login first). */
+  async listClaudeCodeAccounts(): Promise<ClaudeCodeLocalAccount[]> {
+    return this.ipc.heterogeneousAgent.listClaudeCodeAccounts();
+  }
+
+  /** The local login a run for this provider account must spawn with. */
+  async resolveClaudeCodeAccount(externalAccountId: string): Promise<ClaudeCodeAccountResolution> {
+    return this.ipc.heterogeneousAgent.resolveClaudeCodeAccount({ externalAccountId });
+  }
+
+  /** External-provider routing flags a session spawn inherits from the desktop's env. */
+  async getClaudeCodeInheritedRoutingEnv(): Promise<Record<string, string>> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeInheritedRoutingEnv();
+  }
+
+  /** Sign an account in to its own profile; resolves once the browser login completes. */
+  async loginClaudeCodeAccount(params?: { email?: string }): Promise<ClaudeCodeLocalAccount> {
+    return this.ipc.heterogeneousAgent.loginClaudeCodeAccount(params);
+  }
+
+  async cancelClaudeCodeAccountLogin(): Promise<boolean> {
+    return this.ipc.heterogeneousAgent.cancelClaudeCodeAccountLogin();
   }
 
   /**

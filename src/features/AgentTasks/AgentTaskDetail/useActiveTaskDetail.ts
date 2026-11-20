@@ -33,23 +33,30 @@ interface ActiveTaskDetailState {
  */
 export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const setActiveTaskId = useTaskStore((s) => s.setActiveTaskId);
+  const claimActiveTask = useTaskStore((s) => s.claimActiveTask);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  const hasTaskDetail = useTaskStore((s) => (taskId ? !!s.taskDetailMap[taskId] : false));
+  const hasTaskDetail = useTaskStore((s) =>
+    taskId ? !!s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId] : false,
+  );
   // The assignee comes from the loaded task detail, so this stays undefined
   // until the first fetch resolves — which is exactly when its hydration kicks in.
   const assigneeAgentId = useTaskStore((s) =>
-    taskId ? (s.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
+    taskId
+      ? (s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.agentId ?? undefined)
+      : undefined,
   );
   const assigneeInMap = useAgentStore((s) => !!(assigneeAgentId && s.agentMap[assigneeAgentId]));
 
+  // A claim, not a plain set: a task opened beside this surface (the Portal)
+  // takes over the active task, and closing it must hand it back here rather
+  // than clear it — this effect does not re-run, so a cleared id would leave
+  // the page rendering an empty task under the right breadcrumb.
   useEffect(() => {
     if (!taskId) return;
-    setActiveTaskId(taskId);
-    return () => setActiveTaskId(undefined);
-  }, [taskId, setActiveTaskId]);
+    return claimActiveTask(taskId);
+  }, [taskId, claimActiveTask]);
 
   // `fetchTaskDetail` throws on a missing task, so `error` is the definitive
   // "settled and absent" signal — using it (instead of `!isLoading`) avoids the

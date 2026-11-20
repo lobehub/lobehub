@@ -9,6 +9,7 @@ import { ClientMessageTransport } from './ClientMessageTransport';
 const createStore = () =>
   ({
     dbMessagesMap: { 'message-key': [] },
+    internal_confirmClientMessages: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     operations: {
       'operation-1': {
@@ -38,6 +39,149 @@ describe('ClientMessageTransport', () => {
     vi.restoreAllMocks();
   });
 
+  it('persists the client origin without dropping shared intervention IDs', async () => {
+    const store = createStore();
+    const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    await transport.createToolMessage({
+      agentId: 'agent-1',
+      content: '',
+      role: 'tool',
+      pluginIntervention: {
+        batchId: 'operation-1:1:assistant',
+        operationId: 'operation-1',
+        status: 'pending',
+      },
+    });
+    expect(messageService.batchMutate).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'createMessage',
+          message: expect.objectContaining({
+            pluginIntervention: {
+              batchId: 'operation-1:1:assistant',
+              operationId: 'operation-1',
+              runtimeType: 'client',
+              status: 'pending',
+            },
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it('keeps raw Work intents available to replay but outside runtime conversation messages', async () => {
+    const store = createStore();
+    const intent = {
+      type: 'skill' as const,
+      provider: 'example',
+      toolName: 'create',
+      data: { body: 'raw payload' },
+    };
+    const row = {
+      id: 'tool-1',
+      role: 'tool',
+      content: 'truncated',
+      metadata: { operationId: 'op', toolWorkRegistration: intent },
+    };
+    store.dbMessagesMap['message-key'] = [row as any];
+    const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    expect((await transport.getToolMessage('tool-1'))?.metadata?.toolWorkRegistration).toEqual(
+      intent,
+    );
+    expect((await transport.query())[0].metadata).toEqual({ operationId: 'op' });
+    expect(row.metadata.toolWorkRegistration).toEqual(intent);
+  });
+
+  describe('query', () => {
+    const projectedRow = {
+      content: '',
+      id: 'tool-1',
+      payloadOmitted: 'detail',
+      role: 'tool',
+    } as any;
+
+    const storeWith = (messages: any[]) => {
+      const store = createStore();
+      (store as any).dbMessagesMap['message-key'] = messages;
+      return store;
+    };
+
+    it('refuses to treat an unavailable projected result as a pending tool', async () => {
+      vi.spyOn(messageService, 'getToolResultPayloads').mockResolvedValue({});
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+      await expect(transport.getToolMessage('tool-1')).rejects.toThrow(
+        'Cannot restore tool result',
+      );
+    });
+
+    it('refills a projected tool payload before the list becomes a context', async () => {
+      const fetchPayloads = vi
+        .spyOn(messageService, 'getToolResultPayloads')
+        .mockResolvedValue({ 'tool-1': { content: 'REAL TOOL OUTPUT', pluginState: { a: 1 } } });
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+
+      const [row] = await transport.query();
+
+      expect(fetchPayloads).toHaveBeenCalledWith(['tool-1']);
+      expect(row.content).toBe('REAL TOOL OUTPUT');
+      expect(row.pluginState).toEqual({ a: 1 });
+    });
+
+    it('fetches each stored payload once across the steps of a run', async () => {
+      const fetchPayloads = vi
+        .spyOn(messageService, 'getToolResultPayloads')
+        .mockResolvedValue({ 'tool-1': { content: 'REAL TOOL OUTPUT' } });
+      const store = storeWith([projectedRow]);
+      const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+
+      await transport.query();
+      (store as any).dbMessagesMap['message-key'] = [
+        projectedRow,
+        { content: 'hi', id: 'user-1', role: 'user' },
+      ];
+      const second = await transport.query();
+
+      expect(fetchPayloads).toHaveBeenCalledTimes(1);
+      expect(second[0].content).toBe('REAL TOOL OUTPUT');
+    });
+
+    it('leaves an unprojected list alone without asking the server', async () => {
+      const fetchPayloads = vi.spyOn(messageService, 'getToolResultPayloads');
+      const rows = [{ content: 'FULL', id: 'tool-1', role: 'tool' }] as any[];
+      const transport = new ClientMessageTransport(
+        () => storeWith(rows),
+        'message-key',
+        'operation-1',
+      );
+
+      expect(await transport.query()).toEqual(rows);
+      expect(fetchPayloads).not.toHaveBeenCalled();
+    });
+
+    it('keeps the projected row when the refill fails, rather than failing the step', async () => {
+      vi.spyOn(messageService, 'getToolResultPayloads').mockRejectedValue(new Error('offline'));
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+
+      const [row] = await transport.query();
+
+      expect(row.content).toBe('');
+      error.mockRestore();
+    });
+  });
+
   it('creates an optimistic message with a stable id and persists it quietly', async () => {
     const store = createStore();
     const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
@@ -54,10 +198,13 @@ describe('ClientMessageTransport', () => {
     expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
       { id: message.id, type: 'createMessage', value: { ...params, id: message.id } },
       { operationId: 'operation-1' },
+      { creationOrigin: 'client' },
     );
     expect(messageService.batchMutate).toHaveBeenCalledWith([
       { message: { ...params, id: message.id }, type: 'createMessage' },
     ]);
+    // The quiet write returns no snapshot, so the acknowledgement confirms the row.
+    expect(store.internal_confirmClientMessages).toHaveBeenCalledWith([message.id]);
     expect(store.optimisticCreateMessage).not.toHaveBeenCalled();
     expect(store.replaceMessages).not.toHaveBeenCalled();
   });
@@ -122,6 +269,7 @@ describe('ClientMessageTransport', () => {
         role: 'assistant',
       }),
     ).rejects.toThrow('Failed to create assistant message');
+    expect(store.internal_confirmClientMessages).not.toHaveBeenCalled();
 
     expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({

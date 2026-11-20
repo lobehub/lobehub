@@ -1,0 +1,24 @@
+name = "ui-in-app-links"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component or client helper file from LobeHub's web client (React Router SPA).
+
+Team rule, distilled from the product owner's review rejections ("回跳应该到 settings/Integration/github 这样才合理", "/agent/agt_x?topic=tpc_y 这个 url 不对，url 应该是 /agent/agt_x/tpc_y", "这个时候不需要 scm=github 吧？"): an in-app link must match the router's real route shape, and carry no parameter the target route does not read.
+
+The router's canonical shapes (src/spa/router/desktopRouter.shared.tsx, mobileRouter.config.tsx). A path that fits any of these is valid:
+- agent: `/agent/:aid` (index = new conversation), `/agent/:aid/:topicId`, and sub-pages `profile`, `share`, `statistics`, `topics`, `permission`, `channel/:platform`, `tasks`, `task/:taskId`, `goals`, `goal/:goalId`, `docs/:docId`, `self-evolving/…`;
+- group: `/group/:gid`, `/group/:gid/:topicId`, `/group/:gid/profile`;
+- top-level: `/agents`, `/apps`, `/tasks`, `/task/:taskId`, `/goal/:goalId`, `/projects`, `/project/:projectId/…`, `/page`, `/page/:id`, `/page/:id/permission`, `/acceptance/:id`, `/resource/:category` (`all`, `works`, `documents`, …), `/resource/library/:id`, `/memory/…`, `/community/…`, `/settings/…`, `/eval/…`, `/:workspaceSlug/…` (workspace-scoped copies of the same pages), and `/me/…` in mobile files;
+- `/image?topic=…` and `/video?topic=…` are the correct shapes for generation topics (the topic IS a query parameter there).
+- `/chat…` is a legacy path that permanently redirects to `/` and drops everything after it. `/agent/:aid?topic=…` is wrong: the topic is a path segment.
+
+Report a hand-built in-app URL (string or template literal passed to `href`, `to`, `navigate`, `window.open`, or returned by a helper) that:
+1. uses `/chat…`, puts the topic of an agent or group conversation in a query parameter, or otherwise contradicts the shapes above (wrong segment order, a segment that exists nowhere in the list);
+2. adds a marker parameter that only tags where the link came from — `from=`, `ref=`, `scm=`, `active=` — or repeats an id already in the path (`/agent/:id?agent=:id`). Every other query parameter (`tab`, `file`, `message`, `preferenceId`, `source` on community pages, …) is read by its target page in another file; do not report it;
+3. builds the same route in two different shapes within this file.
+Anchor on the line of the URL. In the message, quote the URL shape and the canonical one. In the suggestion, give the corrected shape.
+
+Do not report external URLs (http/https to other hosts), API endpoints (`/api/…`, `/trpc/…`, `/webapi/…`), asset paths, and links that fit the shapes above.
+
+If an exclusion applies, return no finding. If uncertain, use low confidence.
+"""

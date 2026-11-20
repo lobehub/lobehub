@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRender, BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Highlighter, Image, PreviewGroup } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, Flexbox, Highlighter, Image, PreviewGroup, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 
@@ -13,15 +13,18 @@ import {
   isBrowserMcpApiName,
   parseBrowserMcpApi,
 } from '../Inspector/browserMcpLabels';
+import { type IntrinsicImageSize, reservedImageProps } from './reservedImageProps';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  row: css`
-    padding-block: 6px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+  },
+});
 
 /**
  * A screenshot echoed back by the in-app browser. The MCP handler returns the
@@ -30,7 +33,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * gone and only the uploaded reference remains. Same lifecycle as `Read` on an
  * image file; see `HeterogeneousToolResultImage`.
  */
-interface BrowserMcpImage {
+interface BrowserMcpImage extends IntrinsicImageSize {
   fileId?: string;
   mediaType?: string;
   url?: string;
@@ -39,6 +42,8 @@ interface BrowserMcpImage {
 interface BrowserMcpPluginState {
   images?: BrowserMcpImage[];
 }
+
+const SCREENSHOT_MAX_HEIGHT = 600;
 
 type BrowserMcpRenderProps = BuiltinRenderProps<unknown, BrowserMcpPluginState, string>;
 
@@ -55,7 +60,7 @@ const PageRow = memo<{ content?: string }>(({ content }) => {
   if (!content) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.row} gap={6}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={6}>
       <Globe size={14} />
       <Text ellipsis>{content}</Text>
     </Flexbox>
@@ -101,9 +106,10 @@ const Screenshot = memo<BrowserMcpRenderProps>(({ content, pluginState }) => {
                 width either: upscaling a narrow capture just makes it blurry. */}
             <Image
               alt={'Browser screenshot'}
-              maxHeight={600}
+              maxHeight={SCREENSHOT_MAX_HEIGHT}
               src={image.url}
               style={{ maxWidth: '100%' }}
+              {...reservedImageProps(image, SCREENSHOT_MAX_HEIGHT)}
             />
           </Block>
         ))}
@@ -145,6 +151,7 @@ const RENDER_BY_API: Record<BrowserMcpApi, BuiltinRender> = {
   readPage: PageDump as BuiltinRender,
   screenshot: Screenshot as BuiltinRender,
   scroll: PageAction as BuiltinRender,
+  setViewport: PageAction as BuiltinRender,
   snapshot: PageDump as BuiltinRender,
 };
 

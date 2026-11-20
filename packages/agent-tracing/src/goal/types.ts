@@ -16,7 +16,10 @@
 
 /** What caused this advance. `unknown` covers traces written before a caller was labelled. */
 export type GoalAdvanceTrigger =
+  | 'wake'
   | 'create'
+  /** A draft was started: the coordinator's first move on an arranged graph. */
+  | 'start'
   | 'decide'
   | 'settle'
   | 'sweep'
@@ -66,7 +69,11 @@ export type GoalTickBranch =
   /** Budget stopped the goal before this task could be dispatched. */
   | 'budget_exhausted'
   /** Start a run for the chosen task. */
-  | 'dispatch_task';
+  | 'dispatch_task'
+  /** A repeated batch's gate passed; the coordinator releases the next wave. */
+  | 'rollout_gate'
+  /** A repeated batch's gate is blocked; the coordinator hands it to a person. */
+  | 'pattern_break';
 
 export type GoalTickOutcome =
   'advanced' | 'achieved' | 'waiting_human' | 'waiting_external' | 'no_progress' | 'failed';

@@ -1,6 +1,8 @@
+import { markdownToPlainText } from '@lobechat/agent-address-linq';
 import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import debug from 'debug';
 
+import { getMessengerLinqConfig } from '@/config/messenger';
 import {
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
@@ -20,6 +22,8 @@ import { sendTelegramAttachments } from '@/server/services/bot/platforms/telegra
 import type { BotMessageAttachment } from '@/server/services/bot/platforms/types';
 
 import type { InstallationCredentials } from './installations/types';
+import { createLinqApi } from './platforms/linq/client';
+import { pickLinqPoolNumber } from './platforms/linq/pool';
 
 const log = debug('lobe-messenger:outbound');
 
@@ -165,6 +169,29 @@ export const sendOutboundDirectMessage = async (params: {
       // Slack resolves a user id passed as `channel` to that user's DM.
       if (text && !textDelivered) await api.postMessage(platformUserId, text);
       for (const message of linkMessages) await api.postMessage(platformUserId, message);
+      return;
+    }
+    case 'linq': {
+      // Pool numbers are shared, so the "bot token" is the deployment API key
+      // and the handle picks the chat; `sendToHandle` reuses the person's
+      // existing thread with the pool before opening a new one.
+      const config = await getMessengerLinqConfig();
+      if (!config) throw new Error('Linq messenger is not configured');
+      const api = createLinqApi(config, pickLinqPoolNumber(config.numbers, platformUserId));
+      if (text) await api.sendToHandle({ handle: platformUserId, text: markdownToPlainText(text) });
+      for (const file of files ?? []) {
+        await api.sendToHandle({
+          attachment: {
+            data: file.data,
+            fetchUrl: file.fetchUrl,
+            mimeType: file.mimeType,
+            name: file.name,
+          },
+          handle: platformUserId,
+        });
+      }
+      for (const message of linkMessages)
+        await api.sendToHandle({ handle: platformUserId, text: message });
       return;
     }
     default: {

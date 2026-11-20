@@ -1,11 +1,18 @@
 'use client';
 
-import { InfoCircleOutlined } from '@ant-design/icons';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Button, Spin, Text, toast } from '@lobehub/ui/base-ui';
-import { QRCode } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { ExternalLinkIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
+import {
+  Alert,
+  Block,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  QRCode,
+  Spin,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import { ExternalLinkIcon, InfoIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +20,7 @@ import AsyncError from '@/components/AsyncError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { messengerService } from '@/services/messenger';
+import { messengerActions } from '@/store/messenger';
 
 import { getMessengerErrorMessage } from '../i18n';
 import { MessengerPushSection } from './MessengerPush';
@@ -211,7 +219,7 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
         )}
 
         <Text className={styles.tips} type="secondary">
-          <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
+          <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
           {t('messenger.wechat.qr.tip')}
         </Text>
 
@@ -247,15 +255,14 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   const [rescanning, setRescanning] = useState(false);
   const data = useMessengerData('wechat');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'wechat',
   });
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant="block" onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'wechat'} />;
 
   const link = data.links[0];
   const installation = data.installations[0];
@@ -265,7 +272,7 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   const sessionExpired = installation?.runtime?.errorCode === 'session_expired';
 
   const handleConfirmed = async () => {
-    await Promise.all([data.linksMutate(), data.installationsMutate()]);
+    await messengerActions.refreshAfterConnect();
     setRescanning(false);
     toast.success(t('messenger.wechat.connected'));
   };

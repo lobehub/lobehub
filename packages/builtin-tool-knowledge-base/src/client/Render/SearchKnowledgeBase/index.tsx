@@ -12,7 +12,13 @@ const SearchKnowledgeBase = memo<
   BuiltinRenderProps<SearchKnowledgeBaseArgs, SearchKnowledgeBaseState>
 >(({ pluginState }) => {
   const { t } = useTranslation('plugin');
-  const { fileResults } = pluginState || {};
+  const { fileResults, scope } = pluginState || {};
+
+  // Nothing was searched — saying "No results" would read as "the files don't
+  // contain it" when the agent simply has no library to look in.
+  if (scope === 'none') {
+    return <Empty description={t('builtins.lobe-knowledge-base.render.noScope')} />;
+  }
 
   if (!fileResults || fileResults.length === 0) {
     return <Empty description={t('builtins.lobe-knowledge-base.inspector.noResults')} />;

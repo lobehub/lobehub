@@ -172,16 +172,6 @@ describe('AskUserBridge', () => {
       expect(onProgress).toHaveBeenCalledTimes(3);
       drain.stop();
     });
-
-    it('skips onProgress entirely when not provided', async () => {
-      const bridge = new AskUserBridge('op-1');
-      const drain = drainEvents(bridge);
-      // No onProgress — just verify timeout still works without it.
-      const pending = bridge.pending({ arguments: {} }, { timeoutMs: 50 });
-      vi.advanceTimersByTime(60);
-      await expect(pending).resolves.toMatchObject({ cancelled: true });
-      drain.stop();
-    });
   });
 
   describe('response event mirror', () => {

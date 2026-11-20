@@ -2,13 +2,15 @@ import { CLI_API_KEY_ENV } from '../constants/auth';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
-import { getUserIdFromApiKey } from './apiKey';
+import { ApiKeyValidationError, getUserIdFromApiKey } from './apiKey';
 import { describeTokenLookup, getValidToken } from './refresh';
 import { pickAuthSource } from './source';
 
 interface ResolveTokenOptions {
   serviceToken?: string;
   token?: string;
+  /** Override the exit status for transient credential validation or refresh failures. */
+  unavailableExitCode?: number;
   userId?: string;
 }
 
@@ -85,7 +87,11 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log.error(`Failed to validate ${source.origin}: ${message}`);
-        process.exit(1);
+        process.exit(
+          error instanceof ApiKeyValidationError && error.retryable
+            ? (options.unavailableExitCode ?? 1)
+            : 1,
+        );
       }
     }
   }
@@ -112,5 +118,5 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
       ? `${report.detail} ${report.fix}`
       : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}, or provide --token.`,
   );
-  process.exit(1);
+  process.exit(result.status === 'unavailable' ? (options.unavailableExitCode ?? 1) : 1);
 }

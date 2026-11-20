@@ -14,8 +14,23 @@ export interface ChannelImportStep {
   credentials: Record<string, string>;
   enabled: boolean | undefined;
   platform: string;
-  settings: Record<string, unknown> | undefined;
+  settings: Record<string, unknown>;
 }
+
+/**
+ * The status-reaction mode a bot saved before `reactionMode` existed runs with (the runtime
+ * fallback, `DEFAULT_BOT_REACTION_MODE` on the server).
+ */
+const LEGACY_REACTION_MODE = 'minimal';
+
+/**
+ * An imported entry restores a bot that already existed, so it keeps the status reactions it ran
+ * with. Without this, an export of a bot saved before `reactionMode` existed would reach the create
+ * path with the field absent, and a new bot starts with reactions off.
+ */
+const withRestoredReactionMode = (
+  settings: Record<string, unknown> | undefined,
+): Record<string, unknown> => ({ reactionMode: LEGACY_REACTION_MODE, ...settings });
 
 /**
  * Decide what each entry of an import file should become.
@@ -37,7 +52,7 @@ export const planChannelImport = (items: ChannelImportItem[]): ChannelImportStep
       credentials,
       enabled: hasCredentials ? undefined : false,
       platform: item.platform!,
-      settings: item.settings ?? undefined,
+      settings: withRestoredReactionMode(item.settings ?? undefined),
     };
   });
 

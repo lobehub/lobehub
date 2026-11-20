@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":7079,"size":1000000}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"tool_call","toolCallId":"call_00_ET_5a3EUJFO1XsD4QZQIq1q9196","title":"bash","kind":"other","status":"in_progress","rawInput":{"command":"echo dsh-acp-proof-0207","description":"Echo verification string"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"tool_call_update","toolCallId":"call_00_ET_5a3EUJFO1XsD4QZQIq1q9196","status":"completed","content":[{"type":"content","content":{"type":"text","text":"dsh-acp-proof-0207\n"}}]}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_message_chunk","messageId":"e1f80770-75cc-4a06-95ea-ecdadf1db5b8","content":{"type":"text","text":"dsh-acp-proof-0207"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":7109,"size":1000000}}}

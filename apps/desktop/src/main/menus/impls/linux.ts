@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { GITHUB, OFFICIAL_SITE } from '@lobechat/const/url';
+import { DOWNLOAD_URL, GITHUB, OFFICIAL_SITE } from '@lobechat/const/url';
 import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, clipboard, dialog, Menu, shell } from 'electron';
@@ -79,6 +79,16 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.newTab'),
           },
+          {
+            accelerator: 'Ctrl+Shift+N',
+            click: (_item, targetWindow) => this.openNewWindow(targetWindow),
+            label: t('file.newWindow'),
+          },
+          {
+            accelerator: 'Ctrl+Shift+T',
+            click: (_item, targetWindow) => this.reopenClosedTab(targetWindow),
+            label: t('file.reopenClosedTab'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Ctrl+A',
@@ -116,12 +126,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.preferences'),
           },
-          {
-            click: () => {
-              this.app.updaterManager.checkForUpdates({ manual: true });
-            },
-            label: t('common.checkUpdates'),
-          },
+          this.getUpdateMenuItem(t),
           { type: 'separator' },
           {
             accelerator: 'CmdOrCtrl+W',
@@ -262,8 +267,8 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
       template.push({
         label: t('dev.title'),
         submenu: [
-          { label: t('dev.reload'), role: 'reload' },
-          { label: t('dev.forceReload'), role: 'forceReload' },
+          this.buildReloadMenuItem(t('dev.reload')),
+          this.buildReloadMenuItem(t('dev.forceReload'), true),
           this.buildDevToolsMenuItem(t('dev.devTools')),
           { type: 'separator' },
           {
@@ -277,6 +282,53 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
     }
 
     return template;
+  }
+
+  /**
+   * Mirrors the macOS/Windows menus: without this the Linux menu only ever
+   * offered "Check for updates" and never surfaced "Restart to update", so a
+   * downloaded update could not be installed from the menu bar at all.
+   */
+  private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
+    const { stage: shellStage } = this.app.updaterManager.getUpdaterState();
+    // The shell updater only knows full releases; with a core OTA update already
+    // staged, offer the check again (it re-announces the staged update) instead
+    // of claiming the latest version.
+    const stage =
+      shellStage === 'latest' && this.app.coreUpdateManager.getStatus().staged
+        ? 'idle'
+        : shellStage;
+
+    switch (stage) {
+      case 'checking': {
+        return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'downloading': {
+        return { enabled: false, label: t('common.downloadingUpdate') };
+      }
+      case 'downloaded': {
+        return {
+          click: () => this.app.updaterManager.installNow(),
+          label: t('common.restartToUpdate'),
+        };
+      }
+      case 'latest': {
+        return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      // snap / tar.gz / a runtime-less AppImage cannot replace themselves.
+      case 'unsupported': {
+        return {
+          click: () => shell.openExternal(DOWNLOAD_URL.default),
+          label: t('common.updateUnsupported'),
+        };
+      }
+      default: {
+        return {
+          click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
+          label: t('common.checkUpdates'),
+        };
+      }
+    }
   }
 
   private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
@@ -321,6 +373,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);
@@ -396,6 +449,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);

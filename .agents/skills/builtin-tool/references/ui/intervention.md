@@ -14,6 +14,13 @@ interface BuiltinInterventionProps<Arguments = any> {
   interactionMode?: 'approval' | 'custom';
   messageId: string;
 
+  /**
+   * Hold the host's approve action (reject / stop stay available) while the
+   * component cannot show what is being approved, e.g. review data loading or
+   * failed. Approval-mode only.
+   */
+  onApprovalBlockedChange?: (blocked: boolean) => void;
+
   /** Called when the user edits the args; the approve action awaits this. */
   onArgsChange?: (args: Arguments) => void | Promise<void>;
 
@@ -66,6 +73,7 @@ export default RunCommand;
 ## Intervention rules
 
 - **Show a preview, not a form by default.** Editing UI is opt-in via `onArgsChange` and is usually inline (click to edit a code block, etc.).
+- **Never let approval outrun the review.** If the card fetches what the user is approving (a script, a version, credentials), show loading and error-with-retry states, and call `onApprovalBlockedChange(true)` until the exact data approval acts on is on screen (see `src/features/Dashboard/WidgetPreview/useWidgetReview.ts`).
 - For args with debounced edit state (text fields), use `registerBeforeApprove(id, flushFn)` so the approve action waits for the debounce to flush. Always return the cleanup function.
 - Call `onInteractionAction({ type: 'submit', payload })` when the user approves; `'skip'` if they skip with a reason; `'cancel'` if they cancel the whole turn.
 - Add a corresponding `interventionAudit.ts` in the package root if the tool needs scope/path validation before approval (see `local-system/src/interventionAudit.ts`).

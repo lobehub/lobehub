@@ -1,4 +1,12 @@
-export { MISSING_TASK_NAME_ERROR, TASK_STATUSES, UNFINISHED_TASK_STATUSES } from './constants';
+export type { TaskCompletedWindow } from './constants';
+export {
+  MISSING_TASK_NAME_ERROR,
+  TASK_COMPLETED_WINDOW_MS,
+  TASK_COMPLETED_WINDOWS,
+  TASK_STATUSES,
+  UNFINISHED_TASK_STATUSES,
+} from './constants';
+export { resolveToolLabelIds, type ToolLabelResolution } from './labels';
 export {
   DEFAULT_LIST_TASK_LIMIT,
   normalizeListTasksParams,
@@ -14,6 +22,12 @@ export {
 export { TaskIdentifier, TaskManifest } from './manifest';
 export { normalizeSetTaskVerifyParams } from './setTaskVerify';
 export { systemPrompt } from './systemRole';
+export {
+  describeTaskModelChange,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
+} from './taskModel';
+export { resolveTaskOpenTarget, taskResultState } from './taskRef';
 export type {
   CreateGoalParams,
   CreateGoalState,

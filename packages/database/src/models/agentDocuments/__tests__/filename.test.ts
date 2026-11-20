@@ -66,4 +66,18 @@ describe('extractMarkdownH1Title', () => {
     const result = extractMarkdownH1Title('#   Spaced Title   \nbody');
     expect(result.title).toBe('Spaced Title');
   });
+
+  it('accepts up to 3 leading spaces per CommonMark', () => {
+    const result = extractMarkdownH1Title('   # Spaced Title\nbody');
+    expect(result.title).toBe('Spaced Title');
+    expect(result.content).toBe('body');
+  });
+
+  it('does not treat deeper indentation (code blocks) as a heading', () => {
+    const content = '    # install dependencies\n    npm install';
+    expect(extractMarkdownH1Title(content)).toEqual({ content });
+
+    const tabIndented = '\t# install dependencies\n\tnpm install';
+    expect(extractMarkdownH1Title(tabIndented)).toEqual({ content: tabIndented });
+  });
 });

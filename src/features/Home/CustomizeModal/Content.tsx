@@ -1,11 +1,20 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Switch, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Switch,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { RotateCcw, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import CountStepper from './components/CountStepper';
 import PresetBar from './components/PresetBar';
@@ -17,16 +26,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     overflow-y: auto;
     max-block-size: min(70vh, 560px);
-    padding-block: 12px 20px;
+    padding-block: ${densityVars.contentGap} 20px;
     padding-inline: 20px;
   `,
   footer: css`
-    padding-block: 12px;
-    padding-inline: 12px 20px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap} 20px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   header: css`
-    padding-block: 16px 4px;
+    padding-block: ${densityVars.cardPadding} 4px;
     padding-inline: 20px;
   `,
 }));
@@ -34,6 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const CustomizeModalContent = memo(() => {
   const { t } = useTranslation('home');
   const { close } = useModalContext();
+  const { pageTitleFontSize, sectionGap } = useDensityTokens();
   const {
     applyPreset,
     isWidgetHidden,
@@ -55,10 +65,10 @@ const CustomizeModalContent = memo(() => {
         horizontal
         align={'center'}
         className={styles.header}
-        gap={16}
+        gap={sectionGap}
         justify={'space-between'}
       >
-        <Text as={'h2'} fontSize={16} weight={600}>
+        <Text as={'h2'} fontSize={pageTitleFontSize} weight={600}>
           {t('dashboard.customize.title')}
         </Text>
         <ActionIcon

@@ -1,5 +1,5 @@
 import { WORKSPACE_FILE_DRAG_MIME } from '@lobechat/const';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type React from 'react';
 
 /**
@@ -51,7 +51,7 @@ export const readWorkspaceFileDragData = (
 };
 
 /**
- * Resolve a `var(--x)` reference (e.g. from antd-style `cssVar.*`) to its
+ * Resolve a `var(--x)` reference (e.g. from `@lobehub/ui` `cssVar.*`) to its
  * concrete computed value in the context of `ctx`. Lets the drag preview live on
  * `document.body` (free of transformed ancestors that would break fixed-position
  * cursor tracking) while still picking up the themed token. Mirrors the skill

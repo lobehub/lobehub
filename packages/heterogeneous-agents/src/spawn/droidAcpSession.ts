@@ -14,6 +14,7 @@ const NOTIFICATION_DRAIN_TIMEOUT_MS = 2000;
 const TRANSPORT = 'droid-acp' as const;
 
 const DROID_ACP_VALUE_ARGS = new Set([
+  '--settings',
   '--additional-tools',
   '--append-system-prompt',
   '--append-system-prompt-file',
@@ -347,6 +348,11 @@ export class DroidAcpSession extends AcpAgentSession<
     this.options.askUserBridge?.cancelAll('session_ended');
     await this.pushToPipeline({ message: error.message, type: 'droid_error' });
     await this.emitEvents(await this.pipeline.flush());
+  }
+
+  protected async onRunCancelled(): Promise<void> {
+    this.options.askUserBridge?.cancelAll('session_ended');
+    await this.pushToPipeline({ stopReason: 'cancelled', type: 'droid_prompt_completed' });
   }
 
   protected onHostClose(): void {

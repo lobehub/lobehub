@@ -8,7 +8,11 @@ export const SCROLL_SNAPSHOT_MAX_ENTRIES = 500;
 // the short TTL also keeps the localStorage key count tiny.
 export const SCROLL_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 
+// A paged topic reopens with only its newest rows, so a pixel offset from the
+// top points at different content on the next visit; the anchor row does not.
 export interface ScrollSnapshot {
+  anchorId?: string;
+  anchorOffset?: number;
   atBottom: boolean;
   offset: number;
   savedAt: number;
@@ -33,7 +37,10 @@ const isValidSnapshot = (value: unknown): value is ScrollSnapshot => {
     Number.isFinite(v.offset) &&
     typeof v.atBottom === 'boolean' &&
     typeof v.savedAt === 'number' &&
-    Number.isFinite(v.savedAt)
+    Number.isFinite(v.savedAt) &&
+    (v.anchorId === undefined || (typeof v.anchorId === 'string' && v.anchorId.length > 0)) &&
+    (v.anchorOffset === undefined ||
+      (typeof v.anchorOffset === 'number' && Number.isFinite(v.anchorOffset)))
   );
 };
 
@@ -128,6 +135,11 @@ export const loadScrollSnapshot = (contextKey: string): ScrollSnapshot | null =>
   } catch {
     return null;
   }
+};
+
+export const hasReadingPositionSnapshot = (contextKey: string): boolean => {
+  const snapshot = loadScrollSnapshot(contextKey);
+  return !!snapshot && !snapshot.atBottom && !!snapshot.anchorId;
 };
 
 export const saveScrollSnapshot = (contextKey: string, snapshot: ScrollSnapshot): void => {

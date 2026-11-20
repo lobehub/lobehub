@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { TRPCError } from '@trpc/server';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BriefModel } from '@/database/models/brief';
@@ -7,18 +9,19 @@ import { BriefModel } from '@/database/models/brief';
 import { runHeartbeatTick } from './heartbeatTick';
 import { TaskRunnerService } from './index';
 
-const { mockSelectTask, mockSetTaskSchedulerExecutionCallback } = vi.hoisted(() => ({
+const { mockSelectTask, mockSetTaskSchedulerExecutionCallback, mockWhereTask } = vi.hoisted(() => ({
   mockSelectTask: vi.fn(),
   mockSetTaskSchedulerExecutionCallback: vi.fn(),
+  mockWhereTask: vi.fn((_condition: SQL) => ({
+    limit: () => mockSelectTask(),
+  })),
 }));
 
 vi.mock('@/database/server', () => ({
   getServerDB: vi.fn().mockResolvedValue({
     select: () => ({
       from: () => ({
-        where: () => ({
-          limit: () => mockSelectTask(),
-        }),
+        where: mockWhereTask,
       }),
     }),
   }),
@@ -81,6 +84,14 @@ describe('runHeartbeatTick', () => {
     expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId, trigger: 'heartbeat' });
   });
 
+  it('excludes trashed tasks from the queued tick lookup', async () => {
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    const condition = mockWhereTask.mock.calls[0][0];
+    expect(new PgDialect().sqlToQuery(condition).sql).toContain('"tasks"."is_deleted" IS NOT TRUE');
+    expect(outcome).toEqual({ ran: false, reason: 'not-found' });
+  });
+
   it('still skips when a non-error urgent brief requires human input', async () => {
     mockSelectTask.mockResolvedValue([baseTask()]);
     mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(true);
@@ -91,6 +102,15 @@ describe('runHeartbeatTick', () => {
     expect(mockBriefModel.hasUnresolvedUrgentByTask).toHaveBeenCalledWith(taskId, {
       excludeTypes: ['error'],
     });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('skips an archived task without running it', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ archivedAt: new Date() })]);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'archived' });
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 

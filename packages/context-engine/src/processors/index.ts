@@ -4,6 +4,12 @@ export {
   ActivationResultTrimProcessor,
 } from './ActivationResultTrim';
 export { AgentCouncilFlattenProcessor } from './AgentCouncilFlatten';
+export {
+  type AgentSenderMessageConfig,
+  AgentSenderMessageProcessor,
+  formatAgentSenderHeader,
+  LH_COMMAND_TOOL_IDENTIFIERS,
+} from './AgentSenderMessage';
 export { CompressedGroupRoleTransformProcessor } from './CompressedGroupRoleTransform';
 export { DisabledToolCallFilter } from './DisabledToolCallFilter';
 export { GroupMessageFlattenProcessor } from './GroupMessageFlatten';
@@ -27,10 +33,20 @@ export {
 } from './PlaceholderVariables';
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export {
+  collectDocumentReads,
+  type DocumentRead,
+  formatRevokedDocumentResult,
+  formatUnverifiedDocumentResult,
+  type RevokedDocumentReads,
+  RevokedDocumentResultFilter,
+  type RevokedDocumentResultFilterConfig,
+} from './RevokedDocumentResultFilter';
+export {
   cacheEconomicsForProvider,
   type StaleToolResultTrimConfig,
   StaleToolResultTrimProcessor,
 } from './StaleToolResultTrim';
+export { SubAgentResultMessageProcessor } from './SubAgentResultMessage';
 export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
 export { TaskCallbackMessageProcessor } from './TaskCallbackMessage';
 export { TaskMessageProcessor } from './TaskMessage';

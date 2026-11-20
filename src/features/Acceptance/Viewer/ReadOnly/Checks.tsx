@@ -1,6 +1,6 @@
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Empty, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type Dispatch, type SetStateAction, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,35 +24,35 @@ import { groupCommentThreads, threadsForCheck } from '../Comments/threads';
 import { useAcceptanceCommentList } from '../Comments/useAcceptanceCommentList';
 import { EvidenceList } from '../Evidence/EvidenceList';
 import type { EvidenceOverlayMap } from '../Evidence/overlay';
-import { useAcceptanceBundle } from '../useAcceptanceBundle';
+import { useAcceptanceBundle, useEvidenceUrlRefresh } from '../useAcceptanceBundle';
 import { ReadComment } from './Discussion';
 
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  history: css`
-    padding-block: 8px;
-
-    & > summary {
-      cursor: pointer;
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  summary: css`
-    cursor: pointer;
-    padding: 16px;
-    font-size: ${cssVar.fontSize};
-    overflow-wrap: anywhere;
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  check: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  history: {
+    paddingBlock: '8px',
+  },
+  historySummary: {
+    cursor: 'pointer',
+    color: cssVar.colorTextSecondary,
+  },
+  summary: {
+    cursor: 'pointer',
+    padding: '16px',
+    fontSize: cssVar.fontSize,
+    overflowWrap: 'anywhere',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+});
 
 const ReadCheck = ({
   check,
@@ -70,6 +70,7 @@ const ReadCheck = ({
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data: discussion } = useAcceptanceCommentList(acceptanceId);
+  const refreshEvidenceUrl = useEvidenceUrlRefresh(acceptanceId);
   const meta = checkHeadMeta(check);
   const threads = threadsForCheck(groupCommentThreads(discussion?.items ?? []), check.id);
   const comments = threads.flatMap(({ root, replies }) => [root, ...replies]);
@@ -88,11 +89,11 @@ const ReadCheck = ({
 
   return (
     <details
-      className={styles.check}
+      {...stylex.props(styles.check)}
       open={open}
       onToggle={(event) => onToggle(event.currentTarget.open)}
     >
-      <summary className={styles.summary}>
+      <summary {...stylex.props(styles.summary)}>
         <Icon color={meta.color} icon={meta.icon} size={16} />{' '}
         {checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}
         <Text fontSize={12} style={{ marginInlineStart: 8 }} type={'secondary'}>
@@ -104,14 +105,19 @@ const ReadCheck = ({
           <Text style={{ whiteSpace: 'pre-wrap' }}>{check.result.toulmin.evidence}</Text>
         )}
         {visualization && <VisualizationRenderer manifest={visualization} />}
-        <EvidenceList evidence={check.evidence} overlays={overlays} />
+        <EvidenceList
+          evidence={check.evidence}
+          overlays={overlays}
+          reviewNotes={activeReview?.action === 'reject' ? activeReview.annotations : undefined}
+          onRefreshEvidenceUrl={refreshEvidenceUrl}
+        />
         {check.state === 'not_executed' ? (
           <Text fontSize={12} type={'secondary'}>
             {t('acceptance.focus.verifierDescription.notExecuted')}
           </Text>
         ) : check.result?.toulmin?.reasoning ? (
           <Flexbox gap={4} paddingBlock={8} paddingInline={10}>
-            <Text fontSize={11} type={'secondary'}>
+            <Text fontSize={12} type={'secondary'}>
               {t('acceptance.checks.judgeReason')}
             </Text>
             <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }}>
@@ -150,11 +156,13 @@ const ReadCheck = ({
 
         {hasHistory && (
           <details
-            className={styles.history}
+            {...stylex.props(styles.history)}
             open={historyOpen}
             onToggle={(event) => onHistoryToggle(event.currentTarget.open)}
           >
-            <summary>{t('acceptance.checks.iterationHistory', { count: check.revisions })}</summary>
+            <summary {...stylex.props(styles.historySummary)}>
+              {t('acceptance.checks.iterationHistory', { count: check.revisions })}
+            </summary>
             <Flexbox style={{ paddingBlockStart: 12 }}>
               <IterationTimeline
                 check={check}

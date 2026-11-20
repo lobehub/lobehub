@@ -1,7 +1,4 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import { ActionIcon, cssVar, cx, Divider, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { WrapText } from 'lucide-react';
 import { parse } from 'partial-json';
 import type { ReactNode } from 'react';
@@ -12,6 +9,9 @@ import type { DescriptionItem } from '@/components/Descriptions';
 import Descriptions from '@/components/Descriptions';
 import { useYamlArguments } from '@/hooks/useYamlArguments';
 import { shinyTextStyles } from '@/styles';
+
+import type { ConnectorAccountScope } from '../useConnectorAccountNames';
+import { useConnectorAccountNames } from '../useConnectorAccountNames';
 
 const formatValue = (value: any): string => {
   if (Array.isArray(value)) {
@@ -26,96 +26,103 @@ const formatValue = (value: any): string => {
   return String(value);
 };
 
-export interface ArgumentsProps {
+export interface ArgumentsProps extends ConnectorAccountScope {
   actions?: ReactNode;
   arguments?: string;
   loading?: boolean;
 }
 
-const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions }) => {
-  const { t } = useTranslation('plugin');
-  const [wrap, setWrap] = useState(false);
+const Arguments = memo<ArgumentsProps>(
+  ({ arguments: args = '', loading, actions, identifier, messageId }) => {
+    const { t } = useTranslation('plugin');
+    const [wrap, setWrap] = useState(false);
 
-  const displayArgs = useMemo(() => {
-    try {
-      const obj = parse(args);
-      if (Object.keys(obj).length === 0) return {};
-      return obj;
-    } catch {
-      return args;
-    }
-  }, [args]);
+    const displayArgs = useMemo(() => {
+      try {
+        const obj = parse(args);
+        if (Object.keys(obj).length === 0) return {};
+        return obj;
+      } catch {
+        return args;
+      }
+    }, [args]);
 
-  const yaml = useYamlArguments(args);
+    const yaml = useYamlArguments(args);
+    // A multi-account connector's `link_id` is an opaque id; show whose account
+    // the call uses, as named in the connector's Accounts.
+    const accountNames = useConnectorAccountNames(displayArgs, { identifier, messageId });
 
-  let contentNode;
+    let contentNode;
 
-  if (typeof displayArgs === 'string') {
-    contentNode = !!yaml && (
-      <Highlighter language={'yaml'} showLanguage={false} wrap={wrap}>
-        {yaml}
-      </Highlighter>
-    );
-  } else if (Object.keys(displayArgs).length === 0) {
-    contentNode = null;
-  } else {
-    const items: DescriptionItem[] = Object.entries(displayArgs).map(([key, value]) => ({
-      copyable: true,
-      key,
-      label: key,
-      value: formatValue(value),
-    }));
+    if (typeof displayArgs === 'string') {
+      contentNode = !!yaml && (
+        <Highlighter language={'yaml'} showLanguage={false} wrap={wrap}>
+          {yaml}
+        </Highlighter>
+      );
+    } else if (Object.keys(displayArgs).length === 0) {
+      contentNode = null;
+    } else {
+      const items: DescriptionItem[] = Object.entries(displayArgs).map(([key, value]) => ({
+        copyable: true,
+        key,
+        label: key,
+        value: accountNames[key] ?? formatValue(value),
+      }));
 
-    contentNode = (
-      <Flexbox paddingBlock={4} paddingInline={16}>
-        <Descriptions
-          bordered={false}
-          items={items}
-          labelWidth={140}
-          maxItemWidth={'100%'}
-          wrap={wrap}
-          classNames={{
-            label: cx(loading && shinyTextStyles.shinyText),
-          }}
-          styles={{
-            label: loading
-              ? { color: `color-mix(in srgb, ${cssVar.colorText} 33%, transparent)` }
-              : {},
-          }}
-        />
-      </Flexbox>
-    );
-  }
-
-  return (
-    <>
-      <Flexbox
-        horizontal
-        align={'center'}
-        gap={4}
-        justify={'space-between'}
-        paddingBlock={8}
-        paddingInline={16}
-      >
-        <Text>{t('arguments.title')}</Text>
-        <Flexbox horizontal gap={4}>
-          <ActionIcon
-            active={wrap}
-            icon={WrapText}
-            size={'small'}
-            title={t(
-              wrap ? 'workingPanel.review.wordWrap.disable' : 'workingPanel.review.wordWrap.enable',
-              { ns: 'chat' },
-            )}
-            onClick={() => setWrap((value) => !value)}
+      contentNode = (
+        <Flexbox paddingBlock={4} paddingInline={16}>
+          <Descriptions
+            bordered={false}
+            items={items}
+            labelWidth={140}
+            maxItemWidth={'100%'}
+            wrap={wrap}
+            classNames={{
+              label: cx(loading && shinyTextStyles.shinyText),
+            }}
+            styles={{
+              label: loading
+                ? { color: `color-mix(in srgb, ${cssVar.colorText} 33%, transparent)` }
+                : {},
+            }}
           />
-          {actions}
         </Flexbox>
-      </Flexbox>
-      <Divider style={{ marginBlock: 0 }} />
-      {contentNode}
-    </>
-  );
-});
+      );
+    }
+
+    return (
+      <>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={4}
+          justify={'space-between'}
+          paddingBlock={8}
+          paddingInline={16}
+        >
+          <Text>{t('arguments.title')}</Text>
+          <Flexbox horizontal gap={4}>
+            <ActionIcon
+              active={wrap}
+              icon={WrapText}
+              size={'small'}
+              title={t(
+                wrap
+                  ? 'workingPanel.review.wordWrap.disable'
+                  : 'workingPanel.review.wordWrap.enable',
+                { ns: 'chat' },
+              )}
+              onClick={() => setWrap((value) => !value)}
+            />
+            {actions}
+          </Flexbox>
+        </Flexbox>
+        <Divider style={{ marginBlock: 0 }} />
+        {contentNode}
+      </>
+    );
+  },
+);
 
 export default Arguments;

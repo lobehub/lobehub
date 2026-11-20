@@ -47,6 +47,12 @@ export interface LLMAttemptOutput {
   answerSalvagedFromReasoning: boolean;
   content: string;
   contentParts: LLMAttemptContentPart[];
+  /**
+   * Where the model request actually ran. Absent means the host itself (the
+   * server); `client` means the host relayed this attempt to the user's device
+   * and only received its output, so the platform neither paid for nor billed it.
+   */
+  executionSite?: 'client';
   finishReason?: string;
   grounding: GroundingSearch | null;
   hasContentImages: boolean;
@@ -63,9 +69,13 @@ export interface LLMAttemptOutput {
   toolsCalling: ChatToolPayload[];
   traceId?: string;
   usage?: ModelUsage;
+  /** `usage` was estimated by the host because the model reported none. */
+  usageEstimated?: boolean;
 }
 
 export interface LLMAttemptInput {
+  /** Assistant message this attempt streams into. */
+  assistantMessageId?: string;
   attempt: number;
   context: ContextBuildOutput;
   events: AgentEvent[];

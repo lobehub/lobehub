@@ -37,6 +37,28 @@ describe('supervisor recovery authority', () => {
     expect(recoveryEligibility(graph, { ...task, error }, operation).eligible).toBe(false);
   });
 
+  it('lets a Task retry once its usage window has reset', () => {
+    expect(
+      recoveryEligibility(graph, task, {
+        ...operation,
+        error: {
+          body: { code: 'rate_limit', rateLimitInfo: { resetsAt: 1_791_232_200 } },
+          category: 'quota',
+          message: "You've hit your session limit",
+        },
+      }).eligible,
+    ).toBe(true);
+  });
+
+  it('treats provider capacity as a transient failure', () => {
+    expect(
+      recoveryEligibility(graph, task, {
+        ...operation,
+        error: { category: 'capacity', message: 'upstream busy' },
+      }).eligible,
+    ).toBe(true);
+  });
+
   it.each(['paused', 'canceled', 'achieved', 'review'])('respects Goal %s', (status) => {
     expect(
       recoveryEligibility(
@@ -78,6 +100,19 @@ describe('supervisor recovery authority', () => {
       humanizeHeteroDispatchError('DEVICE_OFFLINE'),
       humanizeHeteroDispatchError('DEVICE_GATEWAY_UNREACHABLE'),
       humanizeHeteroDispatchError('DEVICE_GATEWAY_ERROR'),
+    ])
+      expect(
+        recoveryEligibility(graph, { ...task, error, status: 'paused' }, settled).eligible,
+      ).toBe(true);
+  });
+
+  it('recovers the transient faults that used to fall outside the policy', () => {
+    // Every real incident the policy escalated was one of these, and a fresh attempt
+    // got past each of them when a person pressed Retry.
+    for (const error of [
+      "Server discarded the agent's output (operation-not-running): this run is no longer the topic's active operation, so nothing it produced was saved",
+      'Failed to persist tool_result for message msg_8ggMzr8jCOsJL51nwA',
+      '{"error":"TIMEOUT","success":false}',
     ])
       expect(
         recoveryEligibility(graph, { ...task, error, status: 'paused' }, settled).eligible,

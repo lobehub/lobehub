@@ -1,5 +1,7 @@
 interface ResolveMessageListFeedbackOptions {
   error?: unknown;
+  /** Cached rows are on screen while the first server fetch is in flight. */
+  isInitialRevalidation?: boolean;
   isNewConversation: boolean;
   isStreaming: boolean;
   messagesInit: boolean;
@@ -7,6 +9,7 @@ interface ResolveMessageListFeedbackOptions {
 
 export const resolveMessageListFeedback = ({
   error,
+  isInitialRevalidation = false,
   isNewConversation,
   isStreaming,
   messagesInit,
@@ -15,6 +18,7 @@ export const resolveMessageListFeedback = ({
 
   return {
     showBackgroundError: messagesInit && hasError && !isStreaming,
+    showRefreshing: messagesInit && isInitialRevalidation && !hasError,
     showFirstLoadError: !messagesInit && !isNewConversation && hasError,
     showSkeleton: !messagesInit && !isNewConversation && !hasError,
   };

@@ -1,5 +1,8 @@
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
 import { resolveClaudeCodeRenderDisplayControl } from '@lobechat/builtin-tool-claude-code/client/displayControls';
+import { CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
+import { resolveLocalSystemRenderDisplayControl } from '@lobechat/builtin-tool-local-system/client/displayControls';
 import { type RenderDisplayControl } from '@lobechat/types';
 
 import { CodexRenderDisplayControls } from './codex/displayControls';
@@ -21,6 +24,11 @@ const getBuiltinRenderDisplayControls = (): Record<
 /**
  * Packages whose display control can't be decided from `apiName` alone — the
  * same API renders differently depending on what its result carries.
+ *
+ * Both file-system hosts are listed because they render the SAME `readFile`
+ * card (`LocalSystemRenders.readFile`), so whether an image read opens itself is
+ * a property of that card rather than of the host. The heterogeneous CLIs'
+ * `read` reuses the card too, but only ever returns text, so it needs no entry.
  */
 const getDynamicRenderDisplayControlResolvers = (): Record<
   string,
@@ -28,6 +36,8 @@ const getDynamicRenderDisplayControlResolvers = (): Record<
 > => {
   return {
     [ClaudeCodeIdentifier]: resolveClaudeCodeRenderDisplayControl,
+    [CloudSandboxIdentifier]: resolveLocalSystemRenderDisplayControl,
+    [LocalSystemIdentifier]: resolveLocalSystemRenderDisplayControl,
     [QODER_IDENTIFIER]: resolveClaudeCodeRenderDisplayControl,
   };
 };

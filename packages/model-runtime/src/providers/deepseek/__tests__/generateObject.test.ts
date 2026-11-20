@@ -2,6 +2,7 @@
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createDeepSeekAnthropicGenerateObject } from '../generateObject';
 import { LobeDeepSeekAnthropicAI, openAIParams } from '../index';
 import { expectNoLoneSurrogateEscapes, loneHighSurrogate, validEmoji } from './testUtils';
 
@@ -50,16 +51,16 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     vi.clearAllMocks();
   });
 
-  it('should use any tool choice by default for server-side thinking', async () => {
-    // DeepSeek's Anthropic-compatible endpoint rejects named tool_choice while
-    // thinking is active, but accepts `any`; V4 models can default to thinking
-    // enabled server-side.
+  it('should disable thinking and force the schema tool by default for V4 models', async () => {
+    // Regression: since 2026-11-02 DeepSeek's Anthropic-compatible endpoint
+    // rejects `tool_choice: any` while V4's server-side default thinking is
+    // active ("Thinking mode does not support this tool_choice").
     const result = await instance.generateObject(generateObjectPayload);
 
     const payload = getLastRequestPayload();
 
-    expect(payload.thinking).toBeUndefined();
-    expect(payload.tool_choice).toEqual({ type: 'any' });
+    expect(payload.thinking).toEqual({ type: 'disabled' });
+    expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
     expect(payload.tools).toEqual([
       expect.objectContaining({
         input_schema: expect.objectContaining({
@@ -71,6 +72,26 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
       }),
     ]);
     expect(result).toEqual({ summary: 'Task completed', title: 'Done' });
+  });
+
+  it('should disable thinking when only the mapped request model is V4', async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ input: { title: 'Done' }, name: 'task_topic_handoff', type: 'tool_use' }],
+    });
+
+    await createDeepSeekAnthropicGenerateObject(
+      { messages: { create } } as any,
+      { ...generateObjectPayload, model: 'custom-flash' },
+      undefined,
+      undefined,
+      { requestModel: 'deepseek-v4-flash' },
+    );
+
+    const payload = create.mock.calls[0][0];
+
+    expect(payload.model).toBe('deepseek-v4-flash');
+    expect(payload.thinking).toEqual({ type: 'disabled' });
+    expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
   });
 
   it('should keep named tool choice when thinking is disabled', async () => {
@@ -85,7 +106,7 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
   });
 
-  it('should use any tool choice when thinking is explicitly enabled', async () => {
+  it('should use auto tool choice with a prompt instruction when thinking is explicitly enabled', async () => {
     await instance.generateObject({
       ...generateObjectPayload,
       thinking: { budget_tokens: 1024, type: 'enabled' },
@@ -94,10 +115,11 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     const payload = getLastRequestPayload();
 
     expect(payload.thinking).toBeUndefined();
-    expect(payload.tool_choice).toEqual({ type: 'any' });
+    expect(payload.tool_choice).toEqual({ type: 'auto' });
+    expect(payload.system?.[0]?.text).toContain('`task_topic_handoff` tool');
   });
 
-  it('should use any tool choice for thinking-only deepseek-reasoner', async () => {
+  it('should use auto tool choice for thinking-only deepseek-reasoner', async () => {
     await instance.generateObject({
       ...generateObjectPayload,
       model: 'deepseek-reasoner',
@@ -106,7 +128,51 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     const payload = getLastRequestPayload();
 
     expect(payload.thinking).toBeUndefined();
-    expect(payload.tool_choice).toEqual({ type: 'any' });
+    expect(payload.tool_choice).toEqual({ type: 'auto' });
+  });
+
+  it('should force the schema tool without a thinking parameter for non-thinking deepseek-chat', async () => {
+    await instance.generateObject({
+      ...generateObjectPayload,
+      model: 'deepseek-chat',
+    });
+
+    const payload = getLastRequestPayload();
+
+    expect(payload.thinking).toBeUndefined();
+    expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
+  });
+
+  it('should use auto tool choice with a prompt instruction for V4 tools-mode requests', async () => {
+    const tools = [
+      {
+        function: {
+          description: 'Pick a title',
+          name: 'pick_title',
+          parameters: { properties: { title: { type: 'string' } }, type: 'object' as const },
+        },
+        type: 'function' as const,
+      },
+    ];
+
+    await instance.generateObject({ ...generateObjectPayload, schema: undefined, tools } as any);
+    let payload = getLastRequestPayload();
+
+    // DeepSeek treats `any` as `auto`, so tools mode relies on the instruction.
+    expect(payload.thinking).toEqual({ type: 'disabled' });
+    expect(payload.tool_choice).toEqual({ type: 'auto' });
+    expect(payload.system?.[0]?.text).toContain('calling one of the provided tools');
+
+    await instance.generateObject({
+      ...generateObjectPayload,
+      schema: undefined,
+      thinking: { budget_tokens: 1024, type: 'enabled' },
+      tools,
+    } as any);
+    payload = getLastRequestPayload();
+
+    expect(payload.thinking).toBeUndefined();
+    expect(payload.tool_choice).toEqual({ type: 'auto' });
   });
 
   it('should map reasoning_effort to output_config.effort when thinking is enabled', async () => {
@@ -119,7 +185,7 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     const payload = getLastRequestPayload();
 
     expect(payload.output_config).toEqual({ effort: 'high' });
-    expect(payload.tool_choice).toEqual({ type: 'any' });
+    expect(payload.tool_choice).toEqual({ type: 'auto' });
   });
 
   it('should remove lone surrogates from Anthropic generateObject request payload strings', async () => {

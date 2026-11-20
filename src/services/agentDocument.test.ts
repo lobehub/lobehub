@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 
 import { agentDocumentService, resolveAgentDocumentsContext } from './agentDocument';
@@ -32,6 +33,25 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
+// Every SWR key / matcher handed to `mutate`, so a test can ask whether a
+// replica sync key (or a plain `agent:*` SWR key) was revalidated.
+const revalidated = () => vi.mocked(mutate).mock.calls.map((call) => call[0]);
+const matchesReplica = (key: unknown[]) =>
+  revalidated().some((entry) => typeof entry === 'function' && entry(key));
+const agentDocumentListSyncKey = (agentId: string) => [
+  'replica:sync',
+  'agentDocumentList',
+  1,
+  cacheScope.get(),
+  agentId,
+  {},
+];
+const legacyAgentDocumentKeys = () =>
+  revalidated().filter(
+    (entry) =>
+      Array.isArray(entry) && typeof entry[0] === 'string' && entry[0].startsWith('agent:'),
+  );
+
 describe('AgentDocumentService', () => {
   beforeEach(() => {
     queryMock.mockResolvedValue({ ok: true });
@@ -52,7 +72,8 @@ describe('AgentDocumentService', () => {
       title: 'title',
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
+    expect(matchesReplica(agentDocumentListSyncKey('agent-1'))).toBe(true);
+    expect(legacyAgentDocumentKeys()).toEqual([]);
   });
 
   it('should revalidate agent documents after removeDocument', async () => {
@@ -63,24 +84,42 @@ describe('AgentDocumentService', () => {
       topicId: 'topic-1',
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
-    // `documentsList` now revalidates via a prefix matcher so the full list and
-    // the `non-web` variant (and their workspace-scoped keys) refresh together.
-    const listMatcher = vi
-      .mocked(mutate)
-      .mock.calls.map((call) => call[0])
-      .find((key) => typeof key === 'function') as ((key: unknown) => boolean) | undefined;
-    expect(listMatcher).toBeDefined();
-    expect(listMatcher!(['agent:documentsList', 'agent-1'])).toBe(true);
-    expect(listMatcher!(['agent:documentsList', 'agent-1', 'non-web'])).toBe(true);
-    expect(listMatcher!(['agent:documentsList', 'agent-1', 'ws-1'])).toBe(true);
-    expect(listMatcher!(['agent:documentsList', 'other-agent'])).toBe(false);
-    expect(listMatcher!(['agent:documents', 'agent-1'])).toBe(false);
-    expect(mutate).toHaveBeenCalledWith(['agent:documentEditor', 'agent-1', 'doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['page:meta', 'page-doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['page:detail', 'page-doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['page:list']);
-    expect(mutate).toHaveBeenCalledWith(['notebook:documents', 'topic-1']);
+    // The agent's document list is a replica keyed by agent: the per-agent sync
+    // key refreshes, other agents' entries do not, and no plain `agent:*` SWR
+    // key is revalidated any more.
+    expect(matchesReplica(agentDocumentListSyncKey('agent-1'))).toBe(true);
+    expect(matchesReplica(agentDocumentListSyncKey('other-agent'))).toBe(false);
+    expect(legacyAgentDocumentKeys()).toEqual([]);
+    // The reader replica of the touched document refreshes too.
+    expect(
+      matchesReplica([
+        'replica:sync',
+        'agentDocumentReader',
+        1,
+        cacheScope.get(),
+        'agent-1/page-doc-1',
+        { agentId: 'agent-1', documentId: 'page-doc-1' },
+      ]),
+    ).toBe(true);
+    // The page domain is a replica, so its list and by-id copies sync through
+    // `replica:sync` keys and refresh through the scoped matcher instead of the
+    // removed `page:*` SWR keys.
+    const scope = cacheScope.get();
+    expect(matchesReplica(['replica:sync', 'pageDetail', 1, scope, 'page-doc-1', {}])).toBe(true);
+    // `revalidateReplica` without an entry key covers every entry of the
+    // resource…
+    expect(matchesReplica(['replica:sync', 'pageList', 1, scope, 'all', {}])).toBe(true);
+    expect(matchesReplica(['replica:sync', 'pageList', 1, scope, 'any-entry', {}])).toBe(true);
+    // …but only that resource, and only inside the active scope.
+    expect(matchesReplica(['replica:sync', 'otherResource', 1, scope, 'all', {}])).toBe(false);
+    expect(matchesReplica(['replica:sync', 'pageList', 1, 'other:personal', 'all', {}])).toBe(
+      false,
+    );
+    // The notebook list is a replica too, so `topicId` refreshes its sync key
+    // instead of the removed `notebook:documents` SWR entry.
+    expect(
+      matchesReplica(['replica:sync', 'notebookDocuments', 1, scope, 'topic-1', 'topic-1']),
+    ).toBe(true);
   });
 
   it('should revalidate agent documents after updateLoadRule', async () => {
@@ -90,7 +129,8 @@ describe('AgentDocumentService', () => {
       rule: {},
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
+    expect(matchesReplica(agentDocumentListSyncKey('agent-1'))).toBe(true);
+    expect(legacyAgentDocumentKeys()).toEqual([]);
   });
 
   it('should fetch target agent documents when cache is missing', async () => {

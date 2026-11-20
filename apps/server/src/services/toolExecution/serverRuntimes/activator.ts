@@ -6,9 +6,9 @@ import {
   type ToolManifestInfo,
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
-import { getDisabledPluginIds } from '@lobechat/types';
+import { resolveShareAllowedSkillIds } from '@lobechat/const';
+import { describeLockedDevicePicker } from '@lobechat/types';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import {
@@ -17,6 +17,8 @@ import {
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
+import { resolveAgentSkillGates } from './librarySkillGate';
+import { REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
@@ -25,10 +27,21 @@ import { type ServerRuntimeRegistration } from './types';
  */
 export const activatorRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
-    const activatedIds: string[] = [];
+    // This factory runs for every tool call, so a list kept here only ever
+    // sees the current call. What the run already offers the model — the
+    // operation tool set plus earlier activations — arrives as
+    // `enabledToolIds`; seeding from it is what lets a repeated request
+    // answer "Already active".
+    const activatedIds: string[] = [...(context.enabledToolIds ?? [])];
     const emitActivationOutcome = async (input: {
       errorReason?: string;
       identifiers: string[];
+      /**
+       * What was activated. Only a skill belongs to the skill procedure
+       * domain; a tool is reported as a tool, with no domain, so it leaves no
+       * skill record, marker or receipt behind.
+       */
+      kind: 'skill' | 'tool';
       status: 'failed' | 'succeeded';
       summary: string;
     }) => {
@@ -41,10 +54,12 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         userId: context.userId,
       });
 
+      const isSkill = input.kind === 'skill';
+
       await emitToolOutcomeSafely({
-        apiName: 'activateSkill',
+        apiName: isSkill ? 'activateSkill' : 'activateTools',
         context: { agentId: context.agentId, userId: context.userId },
-        domainKey: 'skill:builtin-skill',
+        domainKey: isSkill ? 'skill:builtin-skill' : undefined,
         errorReason: input.errorReason,
         identifier: LobeActivatorIdentifier,
         intentClass: 'tool_command',
@@ -53,7 +68,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         policyStateStore: redisPolicyStateStore,
         relatedObjects: input.identifiers.map((id) => ({
           objectId: id,
-          objectType: 'skill',
+          objectType: input.kind,
           relation: 'selected',
         })),
         scope,
@@ -78,12 +93,20 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // model that already knows its name (prior turn, or a guess) could
       // still activate and use it. Re-derive the disabled set here so this
       // independent resolution path enforces the same tri-state.
-      let disabledSkillIds = new Set<string>();
-      if (context.agentId) {
-        const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-        const agentConfig = await agentModel.getAgentConfigById(context.agentId);
-        disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
-      }
+      const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(context);
+
+      // An Agent Share visitor reaches only the skills the creator listed in
+      // `shareConfig.skillGrants`. `activateTools` falls back to this runtime
+      // for any identifier that is not a tool, so without this check a
+      // model-supplied name would open a skill the share never granted —
+      // the same model-supplied-name hole the skills runtime closes with its
+      // own `isSkillGranted` predicate (`skills.ts`).
+      const shareVisitor = context.agentShareVisitor;
+      const isSkillReachable = (identifier: string) =>
+        !disabledSkillIds.has(identifier) &&
+        (!shareVisitor || resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0);
+      const isLibrarySkillReachable = (identifier: string) =>
+        isSkillReachable(identifier) && (isLibrarySkillEnabled?.(identifier) ?? true);
 
       skillsRuntime = new SkillsExecutionRuntime({
         // Same device gate as the skills runtime: device-only skills are
@@ -91,16 +114,22 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         // with `activeDeviceId` as the fallback for callers without a plan.
         builtinSkills: filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
-        }).filter((skill) => !disabledSkillIds.has(skill.identifier)),
+        }).filter((skill) => isLibrarySkillReachable(skill.identifier)),
         service: {
-          findAll: () => skillModel.findAll(),
+          findAll: async () => {
+            const result = await skillModel.findAll();
+            if (!shareVisitor && !isLibrarySkillEnabled) return result;
+
+            const data = result.data.filter((skill) => isLibrarySkillReachable(skill.identifier));
+            return { data, total: data.length };
+          },
           findById: async (id) => {
             const skill = await skillModel.findById(id);
-            return skill && disabledSkillIds.has(skill.identifier) ? undefined : skill;
+            return skill && isLibrarySkillReachable(skill.identifier) ? skill : undefined;
           },
           findByName: async (name) => {
             const skill = await skillModel.findByName(name);
-            return skill && disabledSkillIds.has(skill.identifier) ? undefined : skill;
+            return skill && isLibrarySkillReachable(skill.identifier) ? skill : undefined;
           },
           readResource: async () => {
             throw new Error('readResource not available in tools runtime');
@@ -116,6 +145,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
               const result = await skillsRuntime!.activateSkill(args);
               await emitActivationOutcome({
                 identifiers: [args.name],
+                kind: 'skill',
                 status: 'succeeded',
                 summary: 'Activator selected a skill.',
               });
@@ -124,6 +154,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
               await emitActivationOutcome({
                 errorReason: (error as Error).message,
                 identifiers: [args.name],
+                kind: 'skill',
                 status: 'failed',
                 summary: 'Activator failed to select a skill.',
               });
@@ -131,6 +162,12 @@ export const activatorRuntime: ServerRuntimeRegistration = {
             }
           }
         : undefined,
+      // A device-locked run walls the picker off, so activating it can only fail;
+      // say why, so the model sends the user to the device selector instead.
+      explainNotFound: (identifier) =>
+        identifier === REMOTE_DEVICE_TOOL_IDENTIFIER && context.executionPlan
+          ? describeLockedDevicePicker(context.executionPlan)
+          : undefined,
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
         // Note: context.toolManifestMap should only contain discoverable tools.
@@ -146,14 +183,31 @@ export const activatorRuntime: ServerRuntimeRegistration = {
               description: a.description,
               name: a.name,
             })),
+            // Passed through for wire-name matching: non-builtin types
+            // (`mcp`, `standalone`) append a `____<type>` segment to the
+            // offered wire name, so resolving a copied name needs it.
             identifier: manifest.identifier,
             name: manifest.meta?.title ?? manifest.identifier,
             systemRole: manifest.systemRole,
+            type: manifest.type,
           });
         }
 
         return results;
       },
+      // Full discoverable list, for inverting `MD5HASH_…` wire-name segments
+      // and resolving bare API names: neither can be probed against the
+      // identifier-keyed map, so the runtime hashes every discoverable
+      // identifier locally and matches the generated wire-name variants. Same
+      // scoping as `getToolManifests` — the map only holds discoverable tools.
+      listToolManifests: async (): Promise<ToolManifestInfo[]> =>
+        Object.values(context.toolManifestMap ?? {}).map((manifest) => ({
+          apiDescriptions: manifest.api.map((a) => ({ description: a.description, name: a.name })),
+          identifier: manifest.identifier,
+          name: manifest.meta?.title ?? manifest.identifier,
+          systemRole: manifest.systemRole,
+          type: manifest.type,
+        })),
       markActivated: (identifiers: string[]) => {
         for (const id of identifiers) {
           if (!activatedIds.includes(id)) {
@@ -162,8 +216,9 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         }
         void emitActivationOutcome({
           identifiers,
+          kind: 'tool',
           status: 'succeeded',
-          summary: 'Activator marked skills as active.',
+          summary: 'Activator activated tools.',
         }).catch((error) => {
           console.error('[AgentSignal] Failed to emit activator outcome:', error);
         });

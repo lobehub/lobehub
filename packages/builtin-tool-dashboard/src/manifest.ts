@@ -1,0 +1,408 @@
+import type { BuiltinToolManifest } from '@lobechat/types';
+import { WIDGET_OUTPUT_TYPES, WIDGET_RUNTIMES } from '@lobechat/types';
+
+import { DASHBOARD_DRY_RUN_AUDIT } from './interventionAudit';
+import { systemPrompt } from './systemRole';
+import { DashboardApiName, DashboardIdentifier } from './types';
+
+export { DashboardIdentifier } from './types';
+
+const widgetIdSchema = {
+  description: 'Widget id (uuid) returned by createWidgetDraft or listDashboards.',
+  type: 'string',
+};
+
+const versionIdSchema = {
+  description:
+    'Version id (uuid) of the exact draft, as returned by createWidgetDraft / updateWidgetDraft (listDashboards shows the current draft id of existing widgets). The user reviews and approves exactly this version.',
+  type: 'string',
+};
+
+const scriptSchema = {
+  description:
+    'The complete script. It must print exactly one JSON document matching outputType to stdout; logs go to stderr. Never embed secrets — read them from environment variables declared in manifest.env.',
+  type: 'string',
+};
+
+const runtimeSchema = {
+  description: 'node (global fetch, no npm packages), python (standard library only) or bash.',
+  enum: [...WIDGET_RUNTIMES],
+  type: 'string',
+};
+
+const outputTypeSchema = {
+  description:
+    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows), data (free-form JSON drawn by view.layout — for rich cards such as weather).',
+  enum: [...WIDGET_OUTPUT_TYPES],
+  type: 'string',
+};
+
+const manifestSchema = {
+  additionalProperties: false,
+  description: 'What the script needs to run and how the platform treats its output.',
+  properties: {
+    env: {
+      description:
+        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs. For a LobeHub Market connector the value is a placeholder that only works sent as the configured header (default Authorization: Bearer) to the provider API host, which must be in network.allow.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          connector: {
+            description: 'Connector providing the value, e.g. "github", "linear".',
+            type: 'string',
+          },
+          description: { type: 'string' },
+          field: {
+            description:
+              'For a connector holding several headers: which header to inject, e.g. "X-Api-Key" (case-insensitive). Required then; ignored for single-secret connectors.',
+            type: 'string',
+          },
+          inject: {
+            additionalProperties: false,
+            description:
+              'LobeHub Market connectors only (github, linear, notion, vercel, …): their variable holds a placeholder and the sandbox sets the real token as `header` on requests to `host`. Defaults per provider (github → Authorization: Bearer on api.github.com); set it only for another host or header. Every host must be in network.allow.',
+            properties: {
+              header: { description: 'Defaults to "Authorization".', type: 'string' },
+              host: {
+                description: 'API host (or list), exact or "*.domain".',
+                oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+              },
+              prefix: {
+                description: 'Prepended to the token; defaults to "Bearer " for Authorization.',
+                type: 'string',
+              },
+            },
+            required: ['host'],
+            type: 'object',
+          },
+          name: { description: 'Variable name, e.g. GITHUB_TOKEN.', type: 'string' },
+          required: { type: 'boolean' },
+        },
+        required: ['name'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    metric: {
+      additionalProperties: false,
+      description:
+        "Record a stat's value on every published run for a long-term trend line. valuePath defaults to 'value'.",
+      properties: {
+        key: { type: 'string' },
+        kind: { enum: ['gauge', 'counter'], type: 'string' },
+        unit: { type: 'string' },
+        valuePath: { type: 'string' },
+      },
+      required: ['key'],
+      type: 'object',
+    },
+    network: {
+      additionalProperties: false,
+      description: 'Hostnames the script calls. Without it the sandbox has no network.',
+      properties: { allow: { items: { type: 'string' }, type: 'array' } },
+      required: ['allow'],
+      type: 'object',
+    },
+    params: {
+      description:
+        'Settings a person fills in (city, target date, repository) that the script reads from its environment as text. Never secrets — credentials go in env. Set value for this widget; default is the fallback.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          default: { type: ['string', 'number', 'boolean'] },
+          description: { type: 'string' },
+          label: { description: 'Human label, e.g. "City".', type: 'string' },
+          name: { description: 'UPPER_SNAKE_CASE env name, e.g. CITY.', type: 'string' },
+          options: {
+            description: 'Choices of a select param.',
+            items: {
+              additionalProperties: false,
+              properties: { label: { type: 'string' }, value: { type: 'string' } },
+              required: ['value'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          required: { type: 'boolean' },
+          type: { enum: ['string', 'number', 'boolean', 'date', 'select'], type: 'string' },
+          value: {
+            description: "This widget's value (a date as YYYY-MM-DD).",
+            type: ['string', 'number', 'boolean'],
+          },
+        },
+        required: ['name', 'type'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    schedule: {
+      additionalProperties: false,
+      description:
+        'Suggested refresh cadence, applied when the widget is published, e.g. {"pattern":"0 * * * *"}.',
+      properties: {
+        pattern: { description: '5-field cron pattern.', type: 'string' },
+        timezone: { description: 'IANA timezone, e.g. Asia/Shanghai.', type: 'string' },
+      },
+      required: ['pattern'],
+      type: 'object',
+    },
+    timeoutMs: {
+      description: 'Script time limit in ms. Default 30000, max 120000.',
+      type: 'number',
+    },
+  },
+  type: 'object',
+};
+
+const viewSchema = {
+  additionalProperties: false,
+  description: 'How the card looks.',
+  properties: {
+    chart: { enum: ['line', 'bar', 'area'], type: 'string' },
+    columns: {
+      description: 'Table column keys to show, in order.',
+      items: { type: 'string' },
+      type: 'array',
+    },
+    html: {
+      description:
+        'A self-contained HTML document (inline CSS / JS / SVG / canvas) that draws the whole card in a sandboxed frame — for visuals the layout nodes cannot express, such as an illustrated scene or an animation. It reads the output from window.widgetData and cannot load anything from the network. Takes precedence over layout. See <card_html>.',
+      type: 'string',
+    },
+    layout: {
+      description:
+        'Declarative card template (a tree of stack / grid / text / icon / image / progress / ring / dots / sparkline / badge / divider / spacer / repeat nodes) whose values bind to the output by path. Required for outputType data; replaces the default rendering for the other types. See <card_layout>.',
+      type: 'object',
+    },
+    limit: { description: 'Maximum list / table rows on the card.', type: 'number' },
+    surface: {
+      description:
+        'Card background: a surface name (default, sky, cloudy, rain, storm, snow, night, sunset, forest, ocean, sand, rose, slate) or a binding {"bind":"data.x","map":{…}} that picks one from the data.',
+      type: ['string', 'object'],
+    },
+  },
+  type: 'object',
+};
+
+export const DashboardManifest: BuiltinToolManifest = {
+  api: [
+    {
+      description:
+        "List the user's dashboards (in a project conversation, the project's dashboards first, then the home ones) with the widgets placed on them, plus the widgets this agent already owns (with publish and last-run status). Call before creating a widget to avoid duplicates and to pick a dashboard.",
+      name: DashboardApiName.listDashboards,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Ready-made widgets (weather, countdown, year progress, GitHub repository, Hacker News, …) with their settings. Check it before writing a widget from scratch: install a match with createWidgetDraft({presetId, params}).',
+      name: DashboardApiName.listWidgetPresets,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          category: {
+            description: 'Only presets of this category.',
+            enum: ['time', 'weather', 'dev', 'life', 'finance', 'content', 'business'],
+            type: 'string',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create an empty dashboard (in a project conversation it belongs to the project) and return its id. Check listDashboards first so you do not duplicate an existing board; to create a board for one widget, addWidgetToDashboard with newDashboardTitle does both in one step.',
+      name: DashboardApiName.createDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          description: {
+            description:
+              'What the dashboard monitors and why, shown under its title, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'Dashboard title, e.g. "iBench launch". At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['title', 'description'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation). Pass presetId to install a preset from listWidgetPresets: its script, manifest and view are used, params fills its settings, and any other field you pass overrides the preset.',
+      name: DashboardApiName.createWidgetDraft,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          params: {
+            additionalProperties: { type: ['string', 'number', 'boolean'] },
+            description:
+              'With presetId: values for the preset\'s params by name, e.g. {"CITY":"Hangzhou"}.',
+            type: 'object',
+          },
+          presetId: {
+            description: 'Id of a preset from listWidgetPresets to install.',
+            type: 'string',
+          },
+          description: {
+            description:
+              'Metric definition (口径) shown on the card: data source, filters, time window and unit.',
+            type: 'string',
+          },
+          manifest: manifestSchema,
+          outputType: outputTypeSchema,
+          runtime: runtimeSchema,
+          script: scriptSchema,
+          title: { description: 'Short card title, e.g. "Open bug issues".', type: 'string' },
+          view: viewSchema,
+        },
+        required: [],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Save a new draft of an existing widget. Omitted content fields keep the current draft's values, so send only what changes. title / description update the widget itself. Call dryRunWidget afterwards.",
+      name: DashboardApiName.updateWidgetDraft,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          changeNote: {
+            description: 'One line on what changed in this draft, shown in version history.',
+            type: 'string',
+          },
+          description: {
+            description: 'New metric definition (口径) when the logic changed.',
+            type: 'string',
+          },
+          manifest: manifestSchema,
+          outputType: outputTypeSchema,
+          runtime: runtimeSchema,
+          script: scriptSchema,
+          title: { type: 'string' },
+          view: viewSchema,
+          widgetId: widgetIdSchema,
+        },
+        required: ['widgetId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Execute one exact draft version once in the sandbox and return its real output, stdout/stderr and error. Never affects the live widget. A draft that declares connector credentials (manifest.env) or network hosts (manifest.network.allow) runs only after the user approves it. Fix the script with updateWidgetDraft and dry-run the new version again until it succeeds.',
+      // Credentialed or networked code can act on the user's behalf the moment
+      // it runs, so those drafts need approval (`always`: auto-run cannot
+      // bypass it); a draft with neither runs in a closed sandbox unattended.
+      humanIntervention: {
+        dynamic: { default: 'never', policy: 'always', type: DASHBOARD_DRY_RUN_AUDIT },
+      },
+      name: DashboardApiName.dryRunWidget,
+      parameters: {
+        additionalProperties: false,
+        properties: { versionId: versionIdSchema, widgetId: widgetIdSchema },
+        required: ['widgetId', 'versionId'],
+        type: 'object',
+      },
+      renderDisplayControl: 'expand',
+    },
+    {
+      description:
+        'Ask the user to publish one exact draft version so it runs on its schedule. The user must confirm in the UI and exactly the versionId you pass goes live; it must have succeeded in a dry run with exactly this content.',
+      humanIntervention: 'always',
+      name: DashboardApiName.requestPublish,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          summary: {
+            description: 'One sentence for the confirmation card: what goes live and why.',
+            type: 'string',
+          },
+          versionId: versionIdSchema,
+          widgetId: widgetIdSchema,
+        },
+        required: ['widgetId', 'versionId'],
+        type: 'object',
+      },
+      renderDisplayControl: 'expand',
+    },
+    {
+      description:
+        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle (with newDashboardDescription) to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
+      name: DashboardApiName.addWidgetToDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          dashboardId: { description: 'Existing dashboard id (uuid).', type: 'string' },
+          newDashboardDescription: {
+            description:
+              'Description of the new dashboard, shown under its title: what it monitors and why, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." Only used with newDashboardTitle. At most 2000 characters.',
+            type: 'string',
+          },
+          newDashboardTitle: {
+            description:
+              'Create a new dashboard with this name and place the widget on it. Titles over 200 characters are rejected.',
+            type: 'string',
+          },
+          widgetId: widgetIdSchema,
+        },
+        required: ['widgetId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Rename a dashboard or rewrite its description. Pass only what changes; an empty description clears it. Only dashboards listDashboards shows are editable.',
+      name: DashboardApiName.updateDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          dashboardId: {
+            description: 'Dashboard id (uuid) from listDashboards or addWidgetToDashboard.',
+            type: 'string',
+          },
+          description: {
+            description:
+              'New dashboard description: what the board monitors and why. At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'New dashboard title. At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['dashboardId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Recent runs of a widget (scheduled, manual and preview), newest first. Pass runId to get that run's full output and logs.",
+      name: DashboardApiName.getWidgetRuns,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          limit: { description: 'How many runs to list (1-50, default 10).', type: 'number' },
+          runId: { description: 'A run id to inspect in full.', type: 'string' },
+          widgetId: widgetIdSchema,
+        },
+        required: ['widgetId'],
+        type: 'object',
+      },
+    },
+  ],
+  identifier: DashboardIdentifier,
+  meta: {
+    avatar: '📊',
+    description:
+      'Build live monitoring widgets from sandboxed scripts, preview them with real data and put them on dashboards',
+    title: 'Dashboards',
+  },
+  systemRole: systemPrompt,
+  type: 'builtin',
+};

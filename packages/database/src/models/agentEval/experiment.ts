@@ -15,9 +15,11 @@ import {
   type NewAgentEvalExperiment,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { AgentEvalDatasetModel } from './dataset';
-import { AgentEvalRunModel } from './run';
+import { AgentEvalRunModel, evalRunSummaryConfig } from './run';
+import { hasUnverifiedEvalAttempts } from './runEvidence';
 
 const RECENT_RUNS_PER_EXPERIMENT = 5;
 
@@ -130,7 +132,7 @@ export class AgentEvalExperimentModel {
     } catch (error) {
       // Race-safe idempotency: a concurrent insert with the same id lost the
       // race — return the winner's row.
-      if (experiment.id && (error as { code?: string })?.code === '23505') {
+      if (experiment.id && isUniqueViolation(error)) {
         const [existing] = await this.db
           .select()
           .from(agentEvalExperiments)
@@ -317,6 +319,8 @@ export class AgentEvalExperimentModel {
       const rankedRuns = this.db
         .select({
           ...getTableColumns(agentEvalRuns),
+          config: evalRunSummaryConfig.as('config'),
+          hasUnverifiedAttempts: hasUnverifiedEvalAttempts().as('has_unverified_attempts'),
           rn: sql<number>`row_number() over (partition by ${agentEvalRuns.experimentId} order by ${agentEvalRuns.createdAt} desc)`.as(
             'rn',
           ),

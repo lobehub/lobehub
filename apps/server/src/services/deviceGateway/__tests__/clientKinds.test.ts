@@ -1,0 +1,54 @@
+import { AuvIdentifier } from '@lobechat/builtin-tool-auv';
+import { BrowserIdentifier } from '@lobechat/builtin-tool-browser';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
+import { describe, expect, it } from 'vitest';
+
+import { resolveDeviceClientKinds } from '../clientKinds';
+
+describe('resolveDeviceClientKinds', () => {
+  // `lh connect` runs the browser with agent-browser; which client serves a
+  // call is chosen per device by `browserRuntime`, which pins `clientKinds`.
+  it('lets both clients run the browser tool', () => {
+    expect(
+      resolveDeviceClientKinds({ identifier: BrowserIdentifier, kind: 'tool', type: 'tool' }),
+    ).toEqual(['cli', 'desktop']);
+  });
+
+  // Which of the two serves a call is chosen per device by `auvRuntime`, from
+  // the client that reports the capability.
+  it('lets both clients run Computer Use', () => {
+    expect(
+      resolveDeviceClientKinds({ identifier: AuvIdentifier, kind: 'tool', type: 'tool' }),
+    ).toEqual(['desktop', 'cli']);
+  });
+
+  it('lets any client run tools both clients implement', () => {
+    expect(
+      resolveDeviceClientKinds({ identifier: LocalSystemIdentifier, kind: 'tool', type: 'tool' }),
+    ).toBeUndefined();
+    expect(
+      resolveDeviceClientKinds({ identifier: 'local', kind: 'tool', type: 'tool' }),
+    ).toBeUndefined();
+  });
+
+  it('routes MCP calls and the message API to the desktop app', () => {
+    expect(
+      resolveDeviceClientKinds({ identifier: 'some-mcp-server', kind: 'tool', type: 'mcp' }),
+    ).toEqual(['desktop']);
+    expect(resolveDeviceClientKinds({ kind: 'messageApi', platform: 'imessage' })).toEqual([
+      'desktop',
+    ]);
+  });
+
+  it('reads RPC support from device-control', () => {
+    expect(resolveDeviceClientKinds({ kind: 'rpc', method: 'trashLocalFiles' })).toEqual([
+      'desktop',
+    ]);
+    expect(resolveDeviceClientKinds({ kind: 'rpc', method: 'installAppUpdate' })).toEqual([
+      'desktop',
+    ]);
+    for (const method of ['getCliUpdateState', 'checkCliUpdate', 'restartCli'])
+      expect(resolveDeviceClientKinds({ kind: 'rpc', method })).toEqual(['cli']);
+    expect(resolveDeviceClientKinds({ kind: 'rpc', method: 'getGitBranch' })).toBeUndefined();
+  });
+});

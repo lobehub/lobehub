@@ -9,10 +9,10 @@ import { FileService as CoreFileService } from '@/server/services/file';
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicKnowledgeBase } from '../helpers/public-fields';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateKnowledgeBaseRequest,
   CreateKnowledgeBaseResponse,
-  DeleteKnowledgeBaseResponse,
   KnowledgeBaseAccessType,
   KnowledgeBaseDetailResponse,
   KnowledgeBaseListItem,
@@ -230,7 +230,7 @@ export class KnowledgeBaseService extends BaseService {
   /**
    * Delete knowledge base
    */
-  async deleteKnowledgeBase(id: string): Promise<DeleteKnowledgeBaseResponse> {
+  async deleteKnowledgeBase(id: string): Promise<DeletedResource> {
     try {
       // Permission check
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_DELETE');
@@ -265,10 +265,7 @@ export class KnowledgeBaseService extends BaseService {
 
       this.log('info', 'Knowledge base deleted successfully', { id });
 
-      return {
-        message: 'Knowledge base deleted successfully',
-        success: true,
-      };
+      return { deleted: true, id };
     } catch (error) {
       this.handleServiceError(error, '删除知识库');
     }

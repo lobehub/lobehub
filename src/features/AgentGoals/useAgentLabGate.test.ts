@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentLabGate } from './useAgentLabGate';
 
 /**
- * The lab gate reads `preference.lab.enableTopicAcceptance`, which is `false`
+ * The lab gate reads `preference.lab.enableGoals`, which is `false`
  * until `useInitUserState` resolves. Before the gate split "still loading"
  * from "settled off" via `isPreferenceInit`, the initial `false` rendered
  * `null` (a white flash inside the agent layout) and the redirect effect
@@ -13,7 +13,7 @@ import { useAgentLabGate } from './useAgentLabGate';
 const userStateMock: {
   initError?: unknown;
   isUserStateInit?: boolean;
-  preference: { lab?: { enableTopicAcceptance?: boolean } };
+  preference: { lab?: { enableGoals?: boolean } };
 } = { preference: {} };
 
 vi.mock('@/store/user', () => ({
@@ -42,7 +42,7 @@ describe('useAgentLabGate', () => {
   });
 
   it('opens the gate once preference settles with the lab enabled', () => {
-    userStateMock.preference = { lab: { enableTopicAcceptance: true } };
+    userStateMock.preference = { lab: { enableGoals: true } };
 
     const { result } = renderHook(() => useAgentLabGate());
 
@@ -55,7 +55,7 @@ describe('useAgentLabGate', () => {
   });
 
   it('redirects only after preference confirms the lab is off', () => {
-    userStateMock.preference = { lab: { enableTopicAcceptance: false } };
+    userStateMock.preference = { lab: { enableGoals: false } };
 
     const { result } = renderHook(() => useAgentLabGate());
 

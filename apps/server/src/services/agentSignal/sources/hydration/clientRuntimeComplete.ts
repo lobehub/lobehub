@@ -146,6 +146,7 @@ export const resolveClientRuntimeCompleteFeedbackSource = async (
       payload: {
         agentId: parentMessage.agentId ?? assistantMessage.agentId ?? sourceEvent.payload.agentId,
         anchorMessageId: sourceEvent.payload.anchorMessageId ?? assistantMessage.id,
+        ...(!parentMessage.parentId && !parentMessage.threadId ? { isConversationRoot: true } : {}),
         message: parentMessage.content,
         messageId: parentMessage.id,
         threadId:

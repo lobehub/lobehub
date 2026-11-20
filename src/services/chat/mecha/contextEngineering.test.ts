@@ -310,6 +310,21 @@ describe('contextEngineering', () => {
     });
   });
 
+  it('renders the cloud-sandbox workspace placeholders to the ephemeral wording on the client', async () => {
+    const output = await contextEngineering({
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+      systemRole: '<env>{{sandbox_workspace}}</env><session>{{sandbox_session_files}}</session>',
+    });
+
+    const content = String(output[0].content);
+    expect(content).not.toContain('{{sandbox_workspace}}');
+    expect(content).not.toContain('{{sandbox_session_files}}');
+    expect(content).toContain('Files created here are temporary and session-specific');
+    expect(content).toContain('<session>- Files from previous sessions may not persist</session>');
+  });
+
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
       runtimeFlags.isServerMode = true;

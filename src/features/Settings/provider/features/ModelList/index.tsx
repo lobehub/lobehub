@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Tabs } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   AudioLines,
@@ -11,6 +9,8 @@ import {
   ImageIcon,
   MessageSquareTextIcon,
   MicIcon,
+  MusicIcon,
+  SplitIcon,
   VideoIcon,
 } from 'lucide-react';
 import { memo, Suspense, useMemo, useState } from 'react';
@@ -54,8 +54,10 @@ const Content = memo<ContentProps>(({ id }) => {
       all: allModels.length,
       asr: 0,
       chat: 0,
+      decision: 0,
       embedding: 0,
       image: 0,
+      text2music: 0,
       tts: 0,
       video: 0,
     };
@@ -117,6 +119,18 @@ const Content = memo<ContentProps>(({ id }) => {
         icon: <Icon icon={AudioLines} size={16} />,
         key: 'tts',
         label: formatTabLabel(t('providerModels.tabs.tts'), modelCounts.tts),
+      },
+      {
+        count: modelCounts.text2music,
+        icon: <Icon icon={MusicIcon} size={16} />,
+        key: 'text2music',
+        label: formatTabLabel(t('providerModels.tabs.text2music'), modelCounts.text2music),
+      },
+      {
+        count: modelCounts.decision,
+        icon: <Icon icon={SplitIcon} size={16} />,
+        key: 'decision',
+        label: formatTabLabel(t('providerModels.tabs.decision'), modelCounts.decision),
       },
     ];
 

@@ -4,7 +4,7 @@ import os from 'node:os';
 
 import {
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
-  lobeHubCliGuide,
+  lobeHubCliGuideBlock,
 } from '@lobechat/heterogeneous-agents/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,8 +16,17 @@ const { saveTaskMock, getTaskMock, removeTaskMock } = vi.hoisted(() => ({
   removeTaskMock: vi.fn(),
   saveTaskMock: vi.fn(),
 }));
+const { identityMock, hasLoginMock } = vi.hoisted(() => ({
+  hasLoginMock: vi.fn(),
+  identityMock: vi.fn(),
+}));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+// The device's own Claude Code login, read for account routing.
+vi.mock('@lobechat/heterogeneous-agents/quota-sampler', () => ({
+  hasClaudeCodeLogin: hasLoginMock,
+  readClaudeCodeIdentity: identityMock,
+}));
 vi.mock('../daemon/taskRegistry', () => ({
   getTask: getTaskMock,
   removeTask: removeTaskMock,
@@ -65,6 +74,22 @@ describe('spawnHeteroAgentRun', () => {
   afterEach(() => {
     spawnMock.mockReset();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('does not hand the dispatched run an ancestor agent run identity or JWT file', () => {
+    // `lh connect` running inside a Codex shell: the CLI prefers LOBEHUB_JWT_FILE over
+    // LOBEHUB_JWT, so an inherited file would replace this dispatch's fresh token.
+    vi.stubEnv('LOBEHUB_JWT_FILE', '/tmp/ancestor/jwt');
+    vi.stubEnv('LOBEHUB_TASK_ID', 'ancestor-task');
+    spawnMock.mockReturnValue(makeFakeChild());
+
+    void spawnHeteroAgentRun({ ...baseParams, jwt: 'fresh-token' });
+
+    const { env } = spawnMock.mock.calls[0][2];
+    expect(env.LOBEHUB_JWT).toBe('fresh-token');
+    expect(env).not.toHaveProperty('LOBEHUB_JWT_FILE');
+    expect(env).not.toHaveProperty('LOBEHUB_TASK_ID');
   });
 
   it('spawns `lh hetero exec` in server-ingest mode via the current CLI entry', async () => {
@@ -120,31 +145,32 @@ describe('spawnHeteroAgentRun', () => {
 
     await expect(ackPromise).resolves.toEqual({ status: 'accepted' });
     expect(child.stdin.write).toHaveBeenCalledWith(
-      JSON.stringify([
-        { text: lobeHubCliGuide, type: 'text' },
-        { text: 'hi', type: 'text' },
-      ]),
+      JSON.stringify([lobeHubCliGuideBlock, { text: 'hi', type: 'text' }]),
     );
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
 
-  it('replaces the launcher conversation context with the dispatched run', async () => {
-    for (const key of ['AGENT', 'TASK', 'OPERATION', 'TOPIC', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
-      vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
-    }
-    const child = makeFakeChild();
-    spawnMock.mockReturnValue(child);
+  it.each([undefined, 'agt_dispatched'])(
+    'replaces the launcher conversation context with dispatched agent %s',
+    async (agentId) => {
+      for (const key of ['AGENT', 'TASK', 'OPERATION', 'TOPIC', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+        vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
+      }
+      const child = makeFakeChild();
+      spawnMock.mockReturnValue(child);
 
-    const ack = spawnHeteroAgentRun({ ...baseParams, assistantMessageId: undefined });
-    const env = spawnMock.mock.calls[0][2].env;
-    expect(env.LOBEHUB_OPERATION_ID).toBe('op');
-    expect(env.LOBEHUB_TOPIC_ID).toBe('tpc');
-    for (const key of ['AGENT', 'TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
-      expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
-    }
-    child.emit('spawn');
-    await expect(ack).resolves.toEqual({ status: 'accepted' });
-  });
+      const ack = spawnHeteroAgentRun({ ...baseParams, agentId, assistantMessageId: undefined });
+      const env = spawnMock.mock.calls[0][2].env;
+      expect(env.LOBEHUB_OPERATION_ID).toBe('op');
+      expect(env.LOBEHUB_TOPIC_ID).toBe('tpc');
+      expect(env.LOBEHUB_AGENT_ID).toBe(agentId);
+      for (const key of ['TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+        expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
+      }
+      child.emit('spawn');
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+    },
+  );
 
   it('starts the wrapper from home so its inner preflight can report a missing cwd', async () => {
     const missingCwd = '/missing';
@@ -162,10 +188,7 @@ describe('spawnHeteroAgentRun', () => {
 
     await expect(ackPromise).resolves.toEqual({ status: 'accepted' });
     expect(child.stdin.write).toHaveBeenCalledWith(
-      JSON.stringify([
-        { text: lobeHubCliGuide, type: 'text' },
-        { text: 'hi', type: 'text' },
-      ]),
+      JSON.stringify([lobeHubCliGuideBlock, { text: 'hi', type: 'text' }]),
     );
   });
 
@@ -199,6 +222,77 @@ describe('spawnHeteroAgentRun', () => {
         LOBEHUB_WORKSPACE_ID: 'ws-lobehub',
       }),
     );
+  });
+
+  it('runs Claude Code under the entrypoint the agent asked for', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'claude-code',
+      claudeCodeEntrypoint: 'lobehub',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env).toEqual(
+      expect.objectContaining({
+        CLAUDE_CODE_DISABLE_TERMINAL_TITLE: '1',
+        CLAUDE_CODE_ENTRYPOINT: 'lobehub',
+      }),
+    );
+  });
+
+  // The value arrives from another machine and lands in a process environment.
+  it('clears the entrypoint instead of passing on one that is not a plain name', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined);
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'claude-code',
+      claudeCodeEntrypoint: 'x\nLD_PRELOAD=/tmp/evil.so',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBe('');
+  });
+
+  // An empty value reaches `lh hetero exec`, which removes the variable at spawn.
+  it('clears an inherited entrypoint when the agent turned the setting off', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'inherited');
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'claude-code',
+      claudeCodeEntrypoint: '',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBe('');
+    expect(opts.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBeUndefined();
+  });
+
+  it('leaves an inherited entrypoint alone when the agent never set one', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'inherited');
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, agentType: 'claude-code' });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBe('inherited');
   });
 
   it('appends --resume when resuming a session', () => {
@@ -240,7 +334,7 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.write).toHaveBeenCalledWith(
       JSON.stringify([
         { text: 'workspace rules', type: 'text' },
-        { text: lobeHubCliGuide, type: 'text' },
+        lobeHubCliGuideBlock,
         { text: 'do it', type: 'text' },
       ]),
     );
@@ -271,7 +365,7 @@ describe('spawnHeteroAgentRun', () => {
           // Resuming, so the primary prompt above skips the CLI introduction the
           // first turn already delivered — but the fallback starts a fresh
           // session, which has to be told again.
-          { text: lobeHubCliGuide, type: 'text' },
+          lobeHubCliGuideBlock,
           { text: 'continue', type: 'text' },
         ],
       }),
@@ -303,7 +397,7 @@ describe('spawnHeteroAgentRun', () => {
 
     expect(child.stdin.write).toHaveBeenCalledWith(
       JSON.stringify([
-        { text: lobeHubCliGuide, type: 'text' },
+        lobeHubCliGuideBlock,
         { text: 'look at this', type: 'text' },
         { source: { id: 'file-1', type: 'url', url: 'https://signed/a.png' }, type: 'image' },
       ]),
@@ -343,6 +437,9 @@ describe('spawnHeteroAgentRun', () => {
   });
 
   it('removes the task registry entry on child exit when the PID still matches', async () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('process group exited'), { code: 'ESRCH' });
+    });
     const child = makeFakeChild();
     Object.defineProperty(child, 'pid', { value: 9988 });
     spawnMock.mockReturnValue(child);
@@ -363,6 +460,18 @@ describe('spawnHeteroAgentRun', () => {
     expect(removeTaskMock).toHaveBeenCalledWith('op-exit-cleanup');
   });
 
+  it('retains cancellation identity when descendants outlive the wrapper', async () => {
+    vi.spyOn(process, 'kill').mockReturnValue(true);
+    const child = Object.assign(makeFakeChild(), { pid: 9988 });
+    spawnMock.mockReturnValue(child);
+    getTaskMock.mockReturnValue({ pid: 9988 });
+    const ack = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-live-descendant' });
+    child.emit('spawn');
+    await ack;
+    child.emit('exit', 0, null);
+    expect(removeTaskMock).not.toHaveBeenCalled();
+  });
+
   it('does not remove the registry entry on exit when a newer PID replaced it', async () => {
     const child = makeFakeChild();
     Object.defineProperty(child, 'pid', { value: 7777 });
@@ -380,5 +489,45 @@ describe('spawnHeteroAgentRun', () => {
     child.emit('exit', 0, null);
 
     expect(removeTaskMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('spawnHeteroAgentRun Claude Code account routing', () => {
+  beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue(asDirectory);
+    identityMock.mockResolvedValue({ externalAccountId: 'acc-default' });
+    hasLoginMock.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    spawnMock.mockReset();
+  });
+
+  it('rejects a run pinned to an account this device is not signed in to', async () => {
+    const result = await spawnHeteroAgentRun({
+      ...baseParams,
+      claudeAccountRouting: {
+        candidates: [{ externalAccountId: 'acc-other', name: 'other@example.com' }],
+        mode: 'pinned',
+      },
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toContain('other@example.com');
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('runs a run pinned to the account this device is signed in to', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const pending = spawnHeteroAgentRun({
+      ...baseParams,
+      claudeAccountRouting: { candidates: [{ externalAccountId: 'acc-default' }], mode: 'pinned' },
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled());
+    child.emit('spawn');
+
+    expect(await pending).toEqual({ status: 'accepted' });
   });
 });

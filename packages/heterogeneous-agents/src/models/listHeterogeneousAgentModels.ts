@@ -11,10 +11,17 @@ import type {
 import { isRecord } from '@lobechat/utils/object';
 
 import { getHeterogeneousTypeLabel } from '../labels';
+import { AcpRpcResponseError } from '../spawn/acpStdioClient';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
+import { listCopilotAcpModels } from '../spawn/copilotAcpSession';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
+import { detectDshCommand, DSH_COMMAND, listDshAcpModels } from '../spawn/dshAcpSession';
+import type { ResolvedHeteroCommand } from '../spawn/resolveCliCommand';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
+import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
+import { parseAntigravityModelCatalog } from './antigravity';
+import { listCodexModels } from './codex';
 
 const execFilePromise = promisify(execFile);
 // Large catalogs (including Devin's model variants and metadata) exceed 256 KiB.
@@ -251,6 +258,34 @@ export const parseQoderModelCatalog = (stdout: string): HeterogeneousAgentModel[
   return models;
 };
 
+/** Pi extensions can register providers; retain their loading policy without running a session. */
+const buildPiCatalogArgs = (source: string[] = []): string[] => {
+  const args = ['--list-models'];
+  const switches = [
+    '--no-extensions',
+    '-ne',
+    '--approve',
+    '-a',
+    '--no-approve',
+    '-na',
+    '--offline',
+  ];
+  for (let index = 0; index < source.length; index += 1) {
+    const arg = source[index];
+    if (arg === '--') break;
+    if (arg === '--extension' || arg === '-e') {
+      const value = source[++index];
+      if (!value || value.startsWith('-')) {
+        throw Object.assign(new Error(`Missing value for Pi ${arg}`), {
+          code: 'unsupported_configuration',
+        });
+      }
+      args.push(arg, value);
+    } else if (switches.includes(arg)) args.push(arg);
+  }
+  return args;
+};
+
 const getErrorRecord = (error: unknown) =>
   error as {
     code?: string;
@@ -261,8 +296,15 @@ const getErrorRecord = (error: unknown) =>
   };
 
 const classifyCatalogError = (error: unknown): HeterogeneousAgentModelCatalogErrorCode => {
+  if (error instanceof AcpRpcResponseError && error.rpcError.code === -32_601) {
+    return 'unsupported_client';
+  }
+  // The app-server client wraps spawn errors with their original cause.
+  if (error instanceof Error && error.cause) return classifyCatalogError(error.cause);
   const { code, killed, signal } = getErrorRecord(error);
   if (code === 'ENOENT') return 'cli_not_found';
+  if (code === 'unsupported_client') return 'unsupported_client';
+  if (code === 'unsupported_configuration') return 'unsupported_configuration';
   if (code === 'ETIMEDOUT' || killed || signal === 'SIGTERM') return 'timeout';
   return 'command_failed';
 };
@@ -279,6 +321,31 @@ const getCatalogErrorMessage = (
 };
 
 /**
+ * Resolve the runtime to launch for catalog discovery. DeepSeek Harness is a
+ * protocol runtime with no local-CLI descriptor, so it is not covered by
+ * {@link resolveHeteroSpawnCommand}; its own detector validates the version and
+ * resolves the executable the same way.
+ */
+const resolveCatalogCommand = async (
+  params: ListHeterogeneousAgentModelsParams,
+  env: NodeJS.ProcessEnv | Record<string, string>,
+): Promise<ResolvedHeteroCommand> => {
+  if (params.type !== 'deepseek-harness') {
+    return resolveHeteroSpawnCommand(params.type, params.command);
+  }
+
+  const requested = params.command?.trim();
+  if (requested && requested !== DSH_COMMAND) return { command: requested };
+
+  const detected = await detectDshCommand(DSH_COMMAND, env as NodeJS.ProcessEnv).catch(
+    () => undefined,
+  );
+  return detected?.available && detected.path
+    ? { command: detected.path, pathEnv: detected.resolvedPathEnv }
+    : { command: DSH_COMMAND };
+};
+
+/**
  * Query the model catalog from the same host that will execute the agent.
  *
  * Callers own construction of the full child environment so Desktop can apply
@@ -290,8 +357,8 @@ export const listHeterogeneousAgentModels = async (
   params: ListHeterogeneousAgentModelsParams,
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
-  const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
   const callerEnv = params.env ?? process.env;
+  const resolved = await resolveCatalogCommand(params, callerEnv);
   const mergedPath = [
     ...new Set(
       [callerEnv.PATH, resolved.pathEnv].filter(Boolean).join(path.delimiter).split(path.delimiter),
@@ -305,11 +372,50 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
+    if (params.type === 'codex') {
+      const models = await listCodexModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: params.cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
+    // Catalog discovery must work even when a saved project path no longer exists.
+    // Keep valid project directories so project-specific provider configuration still applies.
+    const cwd = resolveHeteroSpawnCwd(params.cwd ?? process.cwd());
+
+    if (params.type === 'deepseek-harness') {
+      const models = await listDshAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        // Keep the interactive catalog budget instead of the runtime's 60s turn
+        // budget: a cold boot should surface a retryable timeout, not a hang.
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
+    if (params.type === 'copilot') {
+      const models = await listCopilotAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
     if (params.type === 'droid') {
       const models = await listDroidAcpModels({
         args: params.args,
         commandPath: resolved.command,
-        cwd: params.cwd ?? process.cwd(),
+        cwd: cwd ?? process.cwd(),
         env: env as NodeJS.ProcessEnv,
         timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
       });
@@ -320,7 +426,7 @@ export const listHeterogeneousAgentModels = async (
       const models = await listTraeAcpModels({
         args: params.args,
         commandPath: resolved.command,
-        cwd: params.cwd ?? process.cwd(),
+        cwd: cwd ?? process.cwd(),
         env: env as NodeJS.ProcessEnv,
         timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
       });
@@ -332,14 +438,18 @@ export const listHeterogeneousAgentModels = async (
         ? ['--help']
         : params.type === 'devin'
           ? ['models', 'list', '--format', 'json']
-          : params.type === 'grok-build' || params.type === 'opencode'
+          : params.type === 'antigravity' ||
+              params.type === 'grok-build' ||
+              params.type === 'opencode'
             ? ['models']
             : params.type === 'kimi-code'
               ? ['provider', 'list', '--json']
-              : ['--list-models'];
+              : params.type === 'pi'
+                ? buildPiCatalogArgs(params.args)
+                : ['--list-models'];
     const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
-      cwd: params.cwd,
+      cwd,
       encoding: 'utf8',
       env: env as NodeJS.ProcessEnv,
       maxBuffer: MODEL_CATALOG_MAX_BUFFER,
@@ -367,19 +477,21 @@ export const listHeterogeneousAgentModels = async (
 
     return {
       models:
-        params.type === 'cursor'
-          ? parseCursorModelCatalog(String(stdout))
-          : params.type === 'devin'
-            ? parseDevinModelCatalog(String(stdout))
-            : params.type === 'grok-build'
-              ? parseGrokBuildModelCatalog(String(stdout))
-              : params.type === 'kimi-code'
-                ? parseKimiCodeModelCatalog(String(stdout))
-                : params.type === 'pi'
-                  ? parsePiModelCatalog(String(stdout))
-                  : params.type === 'qoder'
-                    ? parseQoderModelCatalog(String(stdout))
-                    : parseOpenCodeModelCatalog(String(stdout)),
+        params.type === 'antigravity'
+          ? parseAntigravityModelCatalog(String(stdout))
+          : params.type === 'cursor'
+            ? parseCursorModelCatalog(String(stdout))
+            : params.type === 'devin'
+              ? parseDevinModelCatalog(String(stdout))
+              : params.type === 'grok-build'
+                ? parseGrokBuildModelCatalog(String(stdout))
+                : params.type === 'kimi-code'
+                  ? parseKimiCodeModelCatalog(String(stdout))
+                  : params.type === 'pi'
+                    ? parsePiModelCatalog(String(stdout))
+                    : params.type === 'qoder'
+                      ? parseQoderModelCatalog(String(stdout))
+                      : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

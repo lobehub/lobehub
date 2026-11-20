@@ -3,6 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 
 describe('shouldShowHeteroModelSelector', () => {
+  it.each(['auto', 'sandbox', 'none', 'local', 'device'] as const)(
+    'keeps Codex model and effort controls available on %s even without a catalog target',
+    (executionTarget) => {
+      expect(
+        shouldShowHeteroModelSelector({
+          executionTarget,
+          isDesktopClient: false,
+          providerType: 'codex',
+        }),
+      ).toBe(true);
+    },
+  );
+
   it('shows for sandbox-backed web runs', () => {
     expect(
       shouldShowHeteroModelSelector({

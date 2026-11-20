@@ -1,7 +1,10 @@
 import { type ToolManifestSettings } from '@lobechat/types';
-import { Form, Markdown } from '@lobehub/ui';
-import { Form as AForm } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- rendered Markdown paragraphs get no className
+  createStaticStyles,
+  Markdown,
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -31,7 +34,7 @@ interface PluginSettingsConfigProps {
   schema: ToolManifestSettings;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const fallback = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
       color: ${cssVar.colorTextDescription};
@@ -43,7 +46,12 @@ const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) =>
   const [updatePluginSettings] = useToolStore((s) => [s.updatePluginSettings]);
   const pluginSetting = useToolStore(pluginSelectors.getPluginSettingsById(id), isEqual);
 
-  const [form] = AForm.useForm();
+  const form = useForm({
+    initialValues: pluginSetting,
+    onSubmit: async (v) => {
+      await updatePluginSettings(id, v);
+    },
+  });
 
   const items = transformPluginSettings(schema);
 
@@ -52,7 +60,6 @@ const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) =>
       footer={<Form.SubmitFooter />}
       form={form}
       gap={16}
-      initialValues={pluginSetting}
       itemsType={'flat'}
       layout={'vertical'}
       variant={'borderless'}
@@ -67,19 +74,14 @@ const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) =>
           />
         ),
         desc: item.desc && (
-          <Markdown className={styles.markdown} variant={'chat'}>
+          <Markdown className={fallback.markdown} variant={'chat'}>
             {item.desc as string}
           </Markdown>
         ),
-        key: item.label,
         label: item.label,
         name: item.name,
         tag: item.tag,
-        valuePropName: item.type === 'boolean' ? 'checked' : undefined,
       }))}
-      onFinish={async (v) => {
-        await updatePluginSettings(id, v);
-      }}
     />
   );
 });

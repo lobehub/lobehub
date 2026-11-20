@@ -1,9 +1,11 @@
+import type { ChannelListItem, GroupedTopic, ShareVisitorConversation } from '@lobechat/types';
 import {
   getTopicWorkingDirectoryEffectivePath,
   getTopicWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
 import dayjs from 'dayjs';
 
+import { TopicTrigger } from '@/const/topic';
 import type { ChatTopic } from '@/types/topic';
 
 import type {
@@ -40,6 +42,19 @@ export const matchesStatus = (topic: ChatTopic, status: StatusFilter): boolean =
   }
 };
 
+/**
+ * True when every selected topic is already archived (`completed` in the UI),
+ * so the bulk bar should offer "Unarchive" instead of "Archive".
+ */
+export const areAllTopicsArchived = (topics: ChatTopic[], ids: string[]): boolean => {
+  if (ids.length === 0) return false;
+  const statusById = new Map(topics.map((t) => [t.id, t.status]));
+  return ids.every((id) => {
+    const status = statusById.get(id);
+    return status === 'completed' || status === 'archived';
+  });
+};
+
 export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
   if (groupIds.length === 0) return true;
   // ChatTopic doesn't surface groupId on the client type; fall back to the
@@ -50,6 +65,8 @@ export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
 };
 
 export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boolean => {
+  // Search can hydrate older cached results before the request revalidates.
+  if (topic.trigger === TopicTrigger.Channel) return false;
   if (triggers.length === 0) return true;
   const effective: TriggerFilter = (topic.trigger as TriggerFilter | null | undefined) ?? 'chat';
   return triggers.includes(effective);
@@ -61,9 +78,12 @@ export const matchesBotChannel = (topic: ChatTopic, botChannels: BotChannelFilte
   return !!platform && botChannels.includes(platform);
 };
 
-export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): boolean => {
+export const matchesTimeRange = (
+  item: { updatedAt?: Date | number | string | null },
+  range: TimeRangeFilter,
+): boolean => {
   if (range === 'all') return true;
-  const updated = topic.updatedAt ? new Date(topic.updatedAt).getTime() : 0;
+  const updated = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
   if (!updated) return false;
   const now = Date.now();
   const diff = now - updated;
@@ -81,6 +101,87 @@ export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): bool
       return true;
     }
   }
+};
+
+/**
+ * A Channel's status as the topic status tabs read it: archived Channels sit under the
+ * Archived (`completed`) tab, and one with a reply under way also counts as running.
+ */
+export const matchesChannelStatus = (channel: ChannelListItem, status: StatusFilter): boolean => {
+  switch (status) {
+    case 'all': {
+      return true;
+    }
+    case 'archived':
+    case 'completed': {
+      return channel.status === 'archived';
+    }
+    case 'running': {
+      return (
+        channel.status !== 'archived' &&
+        !!channel.replyJobs?.some((job) => job.status === 'running')
+      );
+    }
+    default: {
+      return channel.status !== 'archived';
+    }
+  }
+};
+
+/**
+ * Group Channels the Agent is an active member of. Its run topics there stay hidden from
+ * topic lists (they carry other members' messages), so the page lists the Channels instead.
+ * Direct conversations open from the Agent itself and are left out.
+ */
+export const agentGroupChannels = (
+  channels: ChannelListItem[] | undefined,
+  agentId: string,
+): ChannelListItem[] =>
+  channels?.filter((channel) => !channel.agentId && !!channel.agentIds?.includes(agentId)) ?? [];
+
+export const matchesChannelSearch = (channel: ChannelListItem, search: string): boolean => {
+  const keyword = search.trim().toLowerCase();
+  return !keyword || channel.title.toLowerCase().includes(keyword);
+};
+
+export const sortChannelsBy = (channels: ChannelListItem[], sortBy: SortBy): ChannelListItem[] => {
+  const time = (value: Date | string | undefined) => (value ? new Date(value).getTime() : 0);
+  return [...channels].sort((a, b) => {
+    if (sortBy === 'title') return a.title.localeCompare(b.title);
+    if (sortBy === 'createdAt') return time(b.createdAt) - time(a.createdAt);
+    return time(b.updatedAt ?? b.createdAt) - time(a.updatedAt ?? a.createdAt);
+  });
+};
+
+/**
+ * A visitor's conversation under the topic status tabs: it is never archived or completed and
+ * reports no run, so it counts as active.
+ */
+export const matchesShareVisitorStatus = (status: StatusFilter): boolean =>
+  status === 'all' || status === 'active';
+
+/** Search matches the visitor's name or the conversation's latest message. */
+export const matchesShareVisitorSearch = (
+  conversation: ShareVisitorConversation,
+  search: string,
+): boolean => {
+  const keyword = search.trim().toLowerCase();
+  if (!keyword) return true;
+  return [conversation.visitor.name, conversation.lastMessage?.content].some((text) =>
+    text?.toLowerCase().includes(keyword),
+  );
+};
+
+export const sortShareVisitorsBy = (
+  conversations: ShareVisitorConversation[],
+  sortBy: SortBy,
+): ShareVisitorConversation[] => {
+  const time = (value: Date | string) => new Date(value).getTime();
+  return [...conversations].sort((a, b) => {
+    if (sortBy === 'title') return (a.visitor.name ?? '').localeCompare(b.visitor.name ?? '');
+    if (sortBy === 'createdAt') return time(b.createdAt) - time(a.createdAt);
+    return time(b.updatedAt) - time(a.updatedAt);
+  });
 };
 
 export const sortTopics = (topics: ChatTopic[], sortBy: SortBy): ChatTopic[] => {
@@ -113,7 +214,12 @@ export const getProjectFilterLabel = (topic: ChatTopic): string | undefined => {
   return source ? getPathName(source) : undefined;
 };
 
-export const getProjectLabel = (topic: ChatTopic): string | undefined => {
+export interface ProjectInfo {
+  branch?: string;
+  path: string;
+}
+
+export const getProjectInfo = (topic: ChatTopic): ProjectInfo | undefined => {
   const source = getTopicWorkingDirectorySourcePath(topic);
   const effective = getTopicWorkingDirectoryEffectivePath(topic);
   const labelPath = effective ?? source;
@@ -121,14 +227,22 @@ export const getProjectLabel = (topic: ChatTopic): string | undefined => {
 
   const label = getPathName(labelPath);
   const sourceName = source ? getPathName(source) : undefined;
-  const pathLabel = sourceName && sourceName !== label ? `${sourceName}/${label}` : label;
-  const branch = topic.metadata?.workingDirectoryConfig?.git?.branch;
+  const path = sourceName && sourceName !== label ? `${sourceName}/${label}` : label;
+  const branch = topic.metadata?.workingDirectoryConfig?.git?.branch || undefined;
 
-  return branch ? `${pathLabel} · ${branch}` : pathLabel;
+  return { branch, path };
+};
+
+export const getProjectLabel = (topic: ChatTopic): string | undefined => {
+  const info = getProjectInfo(topic);
+  if (!info) return undefined;
+
+  return info.branch ? `${info.path} · ${info.branch}` : info.path;
 };
 
 /** Client-side platform display names (server `PlatformDefinition.name`). */
 const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  dingtalk: 'DingTalk',
   discord: 'Discord',
   feishu: 'Feishu',
   googlechat: 'Google Chat',
@@ -182,16 +296,34 @@ export const getTimeGroupTitle = (id: string, t: LooseT): string => {
 };
 
 /**
- * Resolve the human-readable title for a project-bucket group ID produced by
- * `groupTopicsByProject` (`project:<workingDirectory>` or `no-project`).
+ * Resolve the human-readable title for a project-bucket group produced by
+ * `groupTopicsByProject` (`project-id:{projectId}`, `project-directory:{id}`,
+ * `project:{device}:{path}` or `no-project`).
+ *
+ * Merged `project-id:` groups follow the most recently active directory, so
+ * the util already carries a path-derived title; when it doesn't (project
+ * topics without directory metadata), derive the label from the first child's
+ * source path — the same basename the project filter chips use.
  */
-export const getProjectGroupTitle = (
-  id: string,
-  fallback: string | undefined,
-  t: LooseT,
-): string => {
-  if (id === 'no-project') return t('management.group.noProject');
-  // Project groups carry the trimmed working-directory name in `group.title`;
-  // fall back to the raw path segment if it isn't pre-populated.
-  return fallback ?? id.replace(/^project:/, '');
+export const getProjectGroupTitle = (group: GroupedTopic, t: LooseT): string => {
+  if (group.id === 'no-project') return t('management.group.noProject');
+  if (group.title) return group.title;
+  const withPath = group.children.find((topic) => getTopicWorkingDirectorySourcePath(topic));
+  const label = withPath ? getProjectFilterLabel(withPath) : undefined;
+  if (label) return label;
+  return group.id.replace(/^(project-id|project-directory|project):/, '');
+};
+
+/**
+ * Whether the Channel list is still loading or failed. A failed first fetch leaves no list
+ * behind, so it must surface as an error instead of loading forever; a failed refresh keeps
+ * showing the list already loaded.
+ */
+export const channelListState = (
+  enabled: boolean,
+  channels: readonly unknown[] | undefined,
+  error: unknown,
+): { error: unknown; loading: boolean } => {
+  if (!enabled || channels) return { error: undefined, loading: false };
+  return error ? { error, loading: false } : { error: undefined, loading: true };
 };

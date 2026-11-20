@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum, TextArea } from '@lobehub/ui';
-import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, Hotkey, Icon, KeyMapEnum, Tabs, Text, TextArea } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,20 +12,13 @@ import QuestionPanel from './QuestionPanel';
 import type { AskUserQuestionItem } from './types';
 import type { AskUserFormApi } from './useAskUserForm';
 
+const styles = stylex.create({
+  tab: { marginInlineStart: { 'default': null, ':has([data-replace-all])': 'auto' } },
+  tabList: { width: '100%' },
+});
+
 const optionValue = (option: AskUserQuestionItem['options'][number]): string =>
   option.id ?? option.label;
-
-const styles = createStaticStyles(({ css }) => ({
-  tabs: css`
-    [role='tablist'] {
-      width: 100%;
-
-      > [role='tab']:has([data-replace-all]) {
-        margin-inline-start: auto;
-      }
-    }
-  `,
-}));
 
 /**
  * A focused interactive control keeps its native key activation — hijacking
@@ -260,7 +252,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         event.preventDefault();
         handleSubmit();
       } else if (event.key === 'Escape') {
-        if (submitting) return;
+        if (submitting || !labels.skip) return;
         event.preventDefault();
         handleSkip();
       }
@@ -299,10 +291,14 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         </Text>
       )}
       <Flexbox horizontal gap={8}>
-        <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
-          {labels.skip}
-          <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
-        </Button>
+        {/* A host whose question has no "not now" answer (a decision gate)
+            passes no skip label, and the form offers no way around it. */}
+        {labels.skip && (
+          <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
+            {labels.skip}
+            <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
+          </Button>
+        )}
         <Button
           disabled={isSubmitDisabled}
           icon={<Icon icon={Send} />}
@@ -322,8 +318,11 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       {questions.length > 0 && (
         <Tabs
           activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
-          className={styles.tabs}
           variant="square"
+          classNames={{
+            list: stylex.props(styles.tabList).className,
+            tab: stylex.props(styles.tab).className,
+          }}
           items={[
             ...questions.map((q, idx) => {
               const done = isQuestionAnswered(q, picks, custom);

@@ -67,6 +67,29 @@ If you are deploying LobeHub using one-click deployment methods (such as Vercel,
 4. Click the "Connect" button.
 5. You will be redirected to the login page; after completing the authorization, you can use your self-hosted configuration.
 
+### Connecting the Device Gateway
+
+The Device Gateway lets agents run local tools on this computer.
+
+1. Start the gateway using the [Docker Compose guide](/docs/self-hosting/platform/docker-compose). If you use a domain, proxy it to port `8788` with HTTPS and WebSocket support.
+
+2. To let clients get the address automatically, set this environment variable on your LobeHub server, then redeploy:
+
+   ```env
+   DEVICE_GATEWAY_PUBLIC_URL=https://device-gateway.example.com
+   ```
+
+3. Sign in to that instance in the desktop app and turn on **Device Gateway** in the title bar. For the CLI, run:
+
+   ```sh
+   lh login --server https://lobe.example.com
+   lh connect
+   ```
+
+The device list shows this computer's online status after it connects.
+
+<Callout>Existing custom gateway addresses take priority. You can also specify an address with the desktop `DEVICE_GATEWAY_URL` environment variable or `lh connect --gateway <url>` without setting the server variable.</Callout>
+
 ## Frequently Asked Questions
 
 ### 502 Bad Gateway
@@ -94,6 +117,11 @@ proxy_busy_buffers_size 32k;
 **Solution:**
 
 Check if the `APP_URL` environment variable matches the URL you are accessing.
+
+### Device Gateway Does Not Connect
+
+- **Disconnects immediately**: check that the gateway belongs to the instance you signed in to, including any custom address configured on the client.
+- **Connection times out**: run `curl https://device-gateway.example.com/health` on your computer. It should return `OK`; otherwise, check the gateway address, network and reverse proxy settings.
 
 ### macOS Startup Hangs or Crashes
 

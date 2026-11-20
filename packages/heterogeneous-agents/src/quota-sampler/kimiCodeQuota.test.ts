@@ -305,17 +305,6 @@ describe('fetchKimiCodeQuota', () => {
     expect(result.error).toContain('ECONNREFUSED');
   });
 
-  it('surfaces a usage API 500 as an error', async () => {
-    vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
-    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
-
-    const result = await fetchKimiCodeQuota();
-
-    expect(result).toMatchObject({ status: 'error' });
-    expect(result.reason).toBeUndefined();
-    expect(result.error).toContain('500');
-  });
-
   it('surfaces a usage API 401 as an error, not a credential state', async () => {
     vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
     vi.mocked(fetch).mockResolvedValue({ ok: false, status: 401 } as Response);

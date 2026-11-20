@@ -20,7 +20,7 @@ export type GoogleThinkingModelCategory = 'pro' | 'flash' | 'flashLite' | 'robot
 /**
  * Thinking level for Gemini 3.0+ models
  */
-export type GoogleThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+export type GoogleThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 /**
  * Options for resolving Google thinking configuration
@@ -123,7 +123,12 @@ export const isGemini3Model = (model?: string): boolean => {
 
   return (
     isGemini3OrAbove(model) ||
-    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4)
+    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4) ||
+    // Versioned Nano Banana ids (`gemini-nano-banana-2.1`) are Gemini 3 image models that accept
+    // `thinkingLevel`, like their `gemini-3.1-flash-image` predecessor.
+    (parsed?.family === 'nanoBanana' &&
+      parsed.majorVersion !== undefined &&
+      parsed.majorVersion >= 2)
   );
 };
 

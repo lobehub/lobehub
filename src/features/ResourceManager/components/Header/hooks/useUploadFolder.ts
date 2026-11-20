@@ -1,4 +1,4 @@
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { type TFunction } from 'i18next';
 import { type ChangeEvent } from 'react';
 import { useCallback } from 'react';

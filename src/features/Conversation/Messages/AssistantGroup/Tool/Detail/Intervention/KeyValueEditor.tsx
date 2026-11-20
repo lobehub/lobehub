@@ -1,36 +1,25 @@
-import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { ActionIcon, Button, toast } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
-import { Form } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Button, Flexbox, Icon, Input, toast } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LucidePlus, LucideTrash } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  form: css`
-    position: relative;
-
-    width: 100%;
-    min-width: 600px;
-    padding: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  formItem: css`
-    margin-block-end: 4px !important;
-  `,
-  input: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  row: css`
-    position: relative;
-  `,
-  title: css`
-    margin-block-end: 4px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  form: {
+    position: 'relative',
+    width: '100%',
+    minWidth: '600px',
+    padding: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  error: { fontSize: '12px', color: cssVar.colorError },
+  formItem: { marginBlockEnd: '4px' },
+  input: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+  row: { position: 'relative' },
+  title: { marginBlockEnd: '4px', color: cssVar.colorTextTertiary },
+});
 
 interface KeyValueItem {
   id: string;
@@ -69,20 +58,21 @@ const formListToRecord = (list: KeyValueItem[]): Record<string, any> => {
 
 const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish, onCancel }) => {
   const { t } = useTranslation(['tool', 'common']);
-  const [form] = Form.useForm();
-
-  const formRef = useRef<FormInstance>(null);
+  const form = useForm<{ items: KeyValueItem[] }>({
+    initialValues: { items: recordToFormList(initialValue) },
+  });
 
   useEffect(() => {
-    form.setFieldsValue({ items: recordToFormList(initialValue) });
+    form.setValues({ items: recordToFormList(initialValue) });
   }, [initialValue, form]);
 
   const [updating, setUpdating] = useState(false);
   const handleFinish = async () => {
     setUpdating(true);
     try {
-      await form.validateFields();
-      const values = form.getFieldsValue();
+      const { errors, valid } = await form.validate();
+      if (!valid) throw errors;
+      const values = form.getValues();
       const record = formListToRecord(values.items || []);
       await onFinish?.(record);
     } catch (errorInfo) {
@@ -96,80 +86,62 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
     onCancel?.();
   };
 
-  const validateKeys = (_: any, item: KeyValueItem, items: KeyValueItem[]) => {
-    if (!item?.key) {
-      return Promise.resolve();
-    }
-    const keys = items.map((i) => i?.key).filter(Boolean);
-    if (keys.filter((k) => k === item.key).length > 1) {
-      return Promise.reject(new Error(t('updateArgs.duplicateKeyError')));
-    }
-
-    return Promise.resolve();
+  const validateKey = (key: string | undefined, values: { items?: KeyValueItem[] }) => {
+    if (!key) return;
+    const keys = (values.items ?? []).map((i) => i?.key).filter(Boolean);
+    if (keys.filter((k) => k === key).length > 1) return t('updateArgs.duplicateKeyError');
   };
 
   return (
-    <Form
-      autoComplete="off"
-      className={styles.form}
-      form={form}
-      initialValues={{ items: recordToFormList(initialValue) }}
-      ref={formRef}
-    >
-      <Flexbox horizontal className={styles.title} gap={8}>
+    <Form autoComplete="off" className={stylex.props(styles.form).className} form={form} gap={0}>
+      <Flexbox horizontal className={stylex.props(styles.title).className} gap={8}>
         <Flexbox flex={1}>key</Flexbox>
         <Flexbox flex={4}>value</Flexbox>
       </Flexbox>
       <Form.List name="items">
-        {(fields, { add, remove }) => (
+        {({ fields, add, remove }) => (
           <Flexbox width={'100%'}>
-            {fields.map(({ key, name, ...restField }, index) => (
+            {fields.map(({ key, name, index }) => (
               <Flexbox
                 horizontal
                 align="center"
-                className={styles.row}
+                className={stylex.props(styles.row).className}
                 gap={8}
                 key={key}
                 width={'100%'}
               >
-                <Form.Item
-                  {...restField}
-                  className={styles.formItem}
-                  name={[name, 'key']}
-                  style={{ flex: 1 }}
-                  validateTrigger={['onChange', 'onBlur']}
-                  rules={[
-                    { message: t('updateArgs.keyRequired'), required: true },
-                    {
-                      validator: (rule) =>
-                        validateKeys(
-                          rule,
-                          form.getFieldValue(['items', index]),
-                          form.getFieldValue('items'),
-                        ),
-                    },
-                  ]}
-                >
-                  <Input
-                    allowClear
-                    className={styles.input}
-                    placeholder={t('updateArgs.form.key')}
-                    variant={'filled'}
-                  />
-                </Form.Item>
-                <Form.Item
-                  {...restField}
-                  className={styles.formItem}
-                  name={[name, 'value']}
-                  style={{ flex: 4 }}
-                >
-                  <Input
-                    allowClear
-                    className={styles.input}
-                    placeholder={t('updateArgs.form.value')}
-                    variant={'filled'}
-                  />
-                </Form.Item>
+                <Form.Field
+                  bare
+                  name={`${name}.key`}
+                  required={t('updateArgs.keyRequired')}
+                  validate={validateKey}
+                  validateOn={'change'}
+                  render={({ error, onBlur, onChange, value }) => (
+                    <Flexbox className={stylex.props(styles.formItem).className} flex={1}>
+                      <Input
+                        allowClear
+                        aria-invalid={error ? true : undefined}
+                        className={stylex.props(styles.input).className}
+                        placeholder={t('updateArgs.form.key')}
+                        value={value}
+                        variant={'filled'}
+                        onBlur={onBlur}
+                        onChange={(e) => onChange(e.target.value)}
+                      />
+                      {error && <div {...stylex.props(styles.error)}>{error}</div>}
+                    </Flexbox>
+                  )}
+                />
+                <Flexbox className={stylex.props(styles.formItem).className} flex={4}>
+                  <Form.Field bare name={`${name}.value`}>
+                    <Input
+                      allowClear
+                      className={stylex.props(styles.input).className}
+                      placeholder={t('updateArgs.form.value')}
+                      variant={'filled'}
+                    />
+                  </Form.Field>
+                </Flexbox>
                 <ActionIcon
                   icon={LucideTrash}
                   size={'small'}
@@ -177,31 +149,29 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                   style={{
                     marginBottom: 6,
                   }}
-                  onClick={() => remove(name)}
+                  onClick={() => remove(index)}
                 />
               </Flexbox>
             ))}
-            <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>
-              <Flexbox horizontal gap={8} justify={'space-between'}>
-                <Button
-                  icon={<Icon icon={LucidePlus} />}
-                  size={'small'}
-                  type="fill"
-                  onClick={() => add({ id: `new-${Date.now()}`, key: '', value: '' })}
-                >
-                  {t('updateArgs.form.add')}
-                </Button>
+            <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginTop: 8 }}>
+              <Button
+                icon={<Icon icon={LucidePlus} />}
+                size={'small'}
+                type="fill"
+                onClick={() => add({ id: `new-${Date.now()}`, key: '', value: '' })}
+              >
+                {t('updateArgs.form.add')}
+              </Button>
 
-                <Flexbox horizontal gap={8}>
-                  <Button size={'small'} onClick={handleCancel}>
-                    {t('cancel', { ns: 'common' })}
-                  </Button>
-                  <Button loading={updating} size={'small'} type={'primary'} onClick={handleFinish}>
-                    {t('save', { ns: 'common' })}
-                  </Button>
-                </Flexbox>
+              <Flexbox horizontal gap={8}>
+                <Button size={'small'} onClick={handleCancel}>
+                  {t('cancel', { ns: 'common' })}
+                </Button>
+                <Button loading={updating} size={'small'} type={'primary'} onClick={handleFinish}>
+                  {t('save', { ns: 'common' })}
+                </Button>
               </Flexbox>
-            </Form.Item>
+            </Flexbox>
           </Flexbox>
         )}
       </Form.List>

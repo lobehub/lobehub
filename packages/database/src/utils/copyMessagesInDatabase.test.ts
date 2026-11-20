@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../core/getTestDB';
@@ -455,5 +455,111 @@ describe('copyMessagesInDatabase', () => {
       where: (m, { eq }) => eq(m.userId, targetUserId),
     });
     expect(copied.map((m) => m.content).sort()).toEqual(['a', 'b']);
+  });
+});
+
+/** @example Copied edit history keeps assistant tool calls linked to separate result rows. */
+describe('copied tool result identity', () => {
+  /** @example A legacy tool row can own its call even when it has a conversation parent. */
+  it('keeps a same-row tool call linked when its parent owns a different call', async () => {
+    // ROOT CAUSE:
+    // Choosing every tool row's parent as its call owner broke legacy same-row tools/plugins.
+    // Only a copied parent containing the matching call can supply the new call-ID seed.
+    await serverDB.insert(messages).values([
+      {
+        id: 'legacy-parent',
+        role: 'assistant',
+        content: '',
+        tools: [{ id: 'other-call' }],
+        topicId: sourceTopicId,
+        userId,
+      },
+      {
+        id: 'legacy-result',
+        role: 'tool',
+        content: 'legacy output',
+        parentId: 'legacy-parent',
+        tools: [{ id: 'legacy-call' }],
+        topicId: sourceTopicId,
+        userId,
+      },
+    ]);
+    await serverDB
+      .insert(messagePlugins)
+      .values({ id: 'legacy-result', toolCallId: 'legacy-call', userId });
+    await runCopy([
+      ['legacy-parent', 'copied-legacy-parent'],
+      ['legacy-result', 'copied-legacy-result'],
+    ]);
+    const [result] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'copied-legacy-result'));
+    const [plugin] = await serverDB
+      .select()
+      .from(messagePlugins)
+      .where(eq(messagePlugins.id, result.id));
+    /** @example The copied plugin links to the same copied message's tool call. */
+    expect(result.tools?.[0]).toMatchObject({ id: plugin.toolCallId });
+    /** @example Copying still gives the call an independent identity. */
+    expect(plugin.toolCallId).not.toBe('legacy-call');
+  });
+
+  /** @example Real tool results are separate messages, not plugins on the assistant row. */
+  it('remaps both ends of a tool call and its result message together', async () => {
+    await serverDB.insert(messages).values([
+      {
+        id: 'tool-assistant',
+        role: 'assistant',
+        content: '',
+        topicId: sourceTopicId,
+        userId,
+        tools: [{ id: 'call-original', result_msg_id: 'tool-result', type: 'builtin' }],
+      },
+      {
+        id: 'tool-result',
+        role: 'tool',
+        content: 'TOOL-647-ONE',
+        parentId: 'tool-assistant',
+        topicId: sourceTopicId,
+        userId,
+      },
+    ]);
+    await serverDB.insert(messagePlugins).values({
+      id: 'tool-result',
+      apiName: 'shell',
+      arguments: '{}',
+      toolCallId: 'call-original',
+      userId,
+    });
+    // ROOT CAUSE:
+    // The old copy seeded the assistant call id with the new assistant id,
+    // but seeded the result's toolCallId with the new result id. It also left
+    // result_msg_id pointing into the source topic. Real history could not join.
+    await runCopy([
+      ['tool-assistant', 'copied-assistant'],
+      ['tool-result', 'copied-result'],
+    ]);
+    const [assistant] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'copied-assistant'));
+    const [result] = await serverDB
+      .select()
+      .from(messagePlugins)
+      .where(eq(messagePlugins.id, 'copied-result'));
+    const tool = assistant.tools?.[0];
+    /** @example The result references the copied assistant's tool call. */
+    expect(tool).toMatchObject({ id: result.toolCallId, result_msg_id: 'copied-result' });
+    /** @example The copy receives its own tool identity. */
+    expect(result.toolCallId).not.toBe('call-original');
+    const [source] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'tool-assistant'));
+    /** @example Source tool identifiers and result references remain unchanged. */
+    expect(source.tools).toEqual([
+      { id: 'call-original', result_msg_id: 'tool-result', type: 'builtin' },
+    ]);
   });
 });

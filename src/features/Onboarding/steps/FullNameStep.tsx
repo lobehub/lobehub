@@ -1,9 +1,7 @@
 'use client';
 
 import { SendButton } from '@lobehub/editor/react';
-import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Button, cssVar, Flexbox, Icon, Input } from '@lobehub/ui';
 import { SignatureIcon, Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -52,6 +50,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
           autoFocus
           placeholder={t('username.placeholder')}
           size="large"
+          style={{ paddingBlock: 8 }}
           title={t('username.hint')}
           value={value}
           prefix={

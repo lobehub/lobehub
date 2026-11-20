@@ -1,5 +1,8 @@
 import type {
   CreateSkillInput,
+  GitHubSkillBatchInput,
+  GitHubSkillDiscovery,
+  GitHubSkillOutcome,
   ImportGitHubInput,
   ImportUrlInput,
   ImportZipInput,
@@ -23,6 +26,31 @@ class AgentSkillService {
 
   // ===== Import =====
 
+  checkGitHubUpdates() {
+    return lambdaClient.agentSkills.checkGitHubUpdates.query();
+  }
+
+  applyGitHubUpdate(input: {
+    id: string;
+    revision: string;
+    commit: string;
+    overwriteLocal?: boolean;
+  }) {
+    return lambdaClient.agentSkills.applyGitHubUpdate.mutate(input);
+  }
+
+  trackLegacyGitHubSkill(input: { id: string; revision: string; ref: string }) {
+    return lambdaClient.agentSkills.trackLegacyGitHubSkill.mutate(input);
+  }
+
+  discoverGitHubSkills(gitUrl: string): Promise<GitHubSkillDiscovery> {
+    return lambdaClient.agentSkills.discoverGitHubSkills.mutate({ gitUrl });
+  }
+
+  importGitHubSkills(input: GitHubSkillBatchInput): Promise<GitHubSkillOutcome[]> {
+    return lambdaClient.agentSkills.importGitHubSkills.mutate(input);
+  }
+
   async importFromGitHub(params: ImportGitHubInput): Promise<SkillImportResult | undefined> {
     return lambdaClient.agentSkills.importFromGitHub.mutate(params);
   }
@@ -37,6 +65,14 @@ class AgentSkillService {
 
   async importFromMarket(identifier: string): Promise<SkillImportResult | undefined> {
     return lambdaClient.agentSkills.importFromMarket.mutate({ identifier });
+  }
+
+  /**
+   * Make sure the Market skills an agent references are installed in the active
+   * scope. Per-identifier outcomes; a failed one never throws.
+   */
+  async ensureFromMarket(identifiers: string[]) {
+    return lambdaClient.agentSkills.ensureFromMarket.mutate({ identifiers });
   }
 
   // ===== Query =====
@@ -92,5 +128,9 @@ class AgentSkillService {
     return lambdaClient.agentSkills.delete.mutate({ id });
   }
 }
+
+export type EnsureMarketSkillResult = Awaited<
+  ReturnType<AgentSkillService['ensureFromMarket']>
+>[number];
 
 export const agentSkillService = new AgentSkillService();

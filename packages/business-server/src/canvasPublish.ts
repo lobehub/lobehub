@@ -1,0 +1,43 @@
+import type { LobeChatDatabase } from '@lobechat/database';
+import type { CanvasPublishBundle } from '@lobechat/types';
+
+export interface PublishCanvasSiteParams {
+  bundle: CanvasPublishBundle;
+  canvasId: string;
+  db: LobeChatDatabase;
+  deploymentId?: string;
+  requestedSlug?: string;
+  title: string;
+  userId: string;
+  workspaceId?: string;
+}
+
+export interface PublishCanvasSiteResult {
+  deploymentId: string;
+  subdomainLabel?: string | null;
+  url: string;
+}
+
+export interface UnpublishCanvasSiteParams {
+  db: LobeChatDatabase;
+  deploymentId: string;
+  userId: string;
+  workspaceId?: string;
+}
+
+export const isCanvasPublishEnabled = () => false;
+
+export const getCanvasPublishRuntimeUrl = async (_major: number): Promise<string | undefined> =>
+  undefined;
+
+export const publishCanvasSite = async (
+  _params: PublishCanvasSiteParams,
+): Promise<PublishCanvasSiteResult> => {
+  throw new Error('Canvas publishing is not available in this deployment');
+};
+
+/**
+ * Take a canvas's published site offline (a deleted canvas must not stay
+ * public). Nothing is ever published here, so there is nothing to take down.
+ */
+export const unpublishCanvasSite = async (_params: UnpublishCanvasSiteParams): Promise<void> => {};

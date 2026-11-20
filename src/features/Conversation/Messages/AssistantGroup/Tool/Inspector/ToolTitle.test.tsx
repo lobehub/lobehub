@@ -13,6 +13,72 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('ToolTitle', () => {
+  describe('lh goal steps from a CLI agent', () => {
+    const createArgs = {
+      command: 'lh goal create "Fog report" --conversation --criterion "Four lines" --json',
+      description: 'Create LobeHub goal bound to conversation',
+    };
+
+    it('reads a running goal create as the goal being created, with its title', () => {
+      render(<ToolTitle isLoading apiName={'Bash'} args={createArgs} identifier={'claude-code'} />);
+
+      expect(screen.getByText('loading')).toBeInTheDocument();
+      expect(screen.getByText('Fog report')).toBeInTheDocument();
+      // Neither the generic action label nor the model's English description.
+      expect(screen.queryByText('Bash')).toBeNull();
+      expect(screen.queryByText(createArgs.description)).toBeNull();
+    });
+
+    it('flips to the settled label once the step finishes', () => {
+      render(<ToolTitle apiName={'Bash'} args={createArgs} identifier={'claude-code'} />);
+
+      expect(screen.getByText('completed')).toBeInTheDocument();
+      expect(screen.getByText('Fog report')).toBeInTheDocument();
+    });
+
+    it('says the step failed when the goal command errored', () => {
+      // The collapsed row used to read "completed" beside a failed status icon.
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={createArgs}
+          identifier={'claude-code'}
+          result={{ state: { exitCode: 1, success: false } }}
+        />,
+      );
+
+      expect(screen.getByText('failed')).toBeInTheDocument();
+      expect(screen.queryByText('completed')).toBeNull();
+    });
+
+    it('also treats a result error as failed', () => {
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={createArgs}
+          identifier={'claude-code'}
+          result={{ error: { message: 'unknown option' } }}
+        />,
+      );
+
+      expect(screen.getByText('failed')).toBeInTheDocument();
+    });
+
+    it('reads a plan submission without a raw goal id', () => {
+      render(
+        <ToolTitle
+          isLoading
+          apiName={'command_execution'}
+          args={{ command: 'lh goal plan goal_1 --token t --file plan.json --json' }}
+          identifier={'codex'}
+        />,
+      );
+
+      expect(screen.getByText('loading')).toBeInTheDocument();
+      expect(screen.queryByText(/goal_1/)).toBeNull();
+    });
+  });
+
   it.each([
     { title: '沙盒交付链路问题' },
     { description: '修复沙盒权限问题', title: '沙盒交付链路问题' },
@@ -49,7 +115,7 @@ describe('ToolTitle', () => {
       );
 
       expect(screen.getByText('runCommand')).toBeInTheDocument();
-      expect(screen.getByText('docker')).toBeInTheDocument();
+      expect(screen.getByText('docker ps')).toBeInTheDocument();
     });
 
     it('keeps the label for a latin model description (reads as a spec, not a step)', () => {
@@ -63,6 +129,61 @@ describe('ToolTitle', () => {
 
       expect(screen.getByText('runCommand')).toBeInTheDocument();
       expect(screen.getByText('docker-compose.yaml')).toBeInTheDocument();
+    });
+  });
+
+  describe('undescribed shell commands', () => {
+    // The mocked `t` echoes the last key segment: `builtins.shellCommand.read` → `read`.
+    it.each([
+      ['sed -n 1,80p src/a.ts 2>&1 | head -40', 'read', 'a.ts'],
+      ['rg -n "TODO" src', 'search', 'TODO in src'],
+      ["bunx vitest run --silent='passed-only' src/foo.test.ts", 'runTests', 'foo.test.ts'],
+      ['/bin/zsh -lc "cat docs/a.md"', 'read', 'a.md'],
+    ])('titles `%s` by what it does', (command, label, subject) => {
+      render(<ToolTitle apiName={'Bash'} args={{ command }} identifier={'claude-code'} />);
+
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText(subject)).toBeInTheDocument();
+      expect(screen.queryByText('Bash')).toBeNull();
+    });
+
+    it('names an inline script by its language, without its code', () => {
+      const { container } = render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={{ command: "cd /repo && python3 - <<'EOF'\nprint(1)\nEOF" }}
+          identifier={'claude-code'}
+        />,
+      );
+
+      expect(screen.getByText('python')).toBeInTheDocument();
+      expect(container.textContent).not.toContain('EOF');
+    });
+
+    it('keeps "<label> <command line>" for a command no action describes', () => {
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={{ command: 'cd /repo && bun run build' }}
+          identifier={'claude-code'}
+        />,
+      );
+
+      expect(screen.getByText('Bash')).toBeInTheDocument();
+      expect(screen.getByText('bun run build')).toBeInTheDocument();
+    });
+
+    it('leaves a described command on its description', () => {
+      render(
+        <ToolTitle
+          apiName={LocalSystemApiName.runCommand}
+          args={{ command: 'sed -n 1,80p src/a.ts', description: '查看文件开头' }}
+          identifier={LocalSystemIdentifier}
+        />,
+      );
+
+      expect(screen.getByText('查看文件开头')).toBeInTheDocument();
+      expect(screen.queryByText('read')).toBeNull();
     });
   });
 });

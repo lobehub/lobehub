@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Center } from '@lobehub/ui';
-import { Progress, Spin } from '@lobehub/ui/base-ui';
+import { Block, Center, Progress, Spin } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { MAX_ESTIMATED_PROGRESS, useEstimatedProgress } from '@/hooks/useEstimatedProgress';

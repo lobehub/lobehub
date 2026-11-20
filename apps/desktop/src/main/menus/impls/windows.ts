@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { GITHUB, OFFICIAL_SITE } from '@lobechat/const/url';
+import { DOWNLOAD_URL, GITHUB, OFFICIAL_SITE } from '@lobechat/const/url';
 import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, clipboard, Menu, shell } from 'electron';
@@ -8,6 +8,7 @@ import { app, clipboard, Menu, shell } from 'electron';
 import { isDev } from '@/const/env';
 import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 
+import { assignMenuIds } from '../appMenuSnapshot';
 import { buildTrayMenuTemplate } from '../trayMenu';
 import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
@@ -18,6 +19,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
 
   buildAndSetAppMenu(options?: MenuOptions): Menu {
     const template = this.getAppMenuTemplate(options);
+    assignMenuIds(template);
     this.appMenu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(this.appMenu);
     return this.appMenu;
@@ -77,6 +79,16 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
               mainWindow.broadcast('createNewTab');
             },
             label: t('file.newTab'),
+          },
+          {
+            accelerator: 'Ctrl+Shift+N',
+            click: (_item, targetWindow) => this.openNewWindow(targetWindow),
+            label: t('file.newWindow'),
+          },
+          {
+            accelerator: 'Ctrl+Shift+T',
+            click: (_item, targetWindow) => this.reopenClosedTab(targetWindow),
+            label: t('file.reopenClosedTab'),
           },
           { type: 'separator' },
           {
@@ -241,8 +253,8 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       template.push({
         label: t('dev.title'),
         submenu: [
-          { label: t('dev.reload'), role: 'reload' },
-          { label: t('dev.forceReload'), role: 'forceReload' },
+          this.buildReloadMenuItem(t('dev.reload')),
+          this.buildReloadMenuItem(t('dev.forceReload'), true),
           this.buildDevToolsMenuItem(t('dev.devTools')),
           { type: 'separator' },
           {
@@ -259,7 +271,14 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
   }
 
   private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
-    const { stage } = this.app.updaterManager.getUpdaterState();
+    const { stage: shellStage } = this.app.updaterManager.getUpdaterState();
+    // The shell updater only knows full releases; with a core OTA update already
+    // staged, offer the check again (it re-announces the staged update) instead
+    // of claiming the latest version.
+    const stage =
+      shellStage === 'latest' && this.app.coreUpdateManager.getStatus().staged
+        ? 'idle'
+        : shellStage;
 
     switch (stage) {
       case 'checking': {
@@ -276,6 +295,13 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       }
       case 'latest': {
         return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      // snap / tar.gz / a runtime-less AppImage cannot replace themselves.
+      case 'unsupported': {
+        return {
+          click: () => shell.openExternal(DOWNLOAD_URL.default),
+          label: t('common.updateUnsupported'),
+        };
       }
       default: {
         return {
@@ -328,6 +354,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);
@@ -403,6 +430,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);

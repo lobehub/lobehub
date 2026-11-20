@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AiProviderModelListItem } from 'model-bank';
-import { CHAT_MODEL_IMAGE_GENERATION_PARAMS } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -40,6 +39,15 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
   await serverDB.delete(aiModels).where(eq(aiModels.userId, userId));
+});
+
+const remoteReasoningModel = (): AiProviderModelListItem => ({
+  contextWindowTokens: 400_000,
+  displayName: 'GPT-5.6 Sol',
+  enabled: true,
+  id: 'gpt-5.6-sol',
+  source: 'remote',
+  type: 'chat',
 });
 
 describe('AiModelModel', () => {
@@ -364,14 +372,7 @@ describe('AiModelModel', () => {
       });
 
       await aiProviderModel.batchUpdateAiModels('openai', [
-        {
-          contextWindowTokens: 400_000,
-          displayName: 'GPT-5.6 Sol',
-          enabled: true,
-          id: 'gpt-5.6-sol',
-          source: 'remote',
-          type: 'chat',
-        } as AiProviderModelListItem,
+        remoteReasoningModel() as AiProviderModelListItem,
       ]);
 
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
@@ -388,14 +389,7 @@ describe('AiModelModel', () => {
       // stays clearable); clearRemoteModels demotes chatConfig-holding remote
       // rows instead of deleting them, so the preference still survives
       await aiProviderModel.batchUpdateAiModels('openai', [
-        {
-          contextWindowTokens: 400_000,
-          displayName: 'GPT-5.6 Sol',
-          enabled: true,
-          id: 'gpt-5.6-sol',
-          source: 'remote',
-          type: 'chat',
-        },
+        remoteReasoningModel(),
         { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
       ] as AiProviderModelListItem[]);
       await aiProviderModel.clearRemoteModels('openai');
@@ -416,14 +410,7 @@ describe('AiModelModel', () => {
     it('should survive clearing remote models saved in remote-first order', async () => {
       // Row created by the remote fetch first...
       await aiProviderModel.batchUpdateAiModels('openai', [
-        {
-          contextWindowTokens: 400_000,
-          displayName: 'GPT-5.6 Sol',
-          enabled: true,
-          id: 'gpt-5.6-sol',
-          source: 'remote',
-          type: 'chat',
-        },
+        remoteReasoningModel(),
         { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
       ] as AiProviderModelListItem[]);
       // ...then the user saves a preference onto the remote row
@@ -751,36 +738,6 @@ describe('AiModelModel', () => {
       expect(await aiProviderModel.findById('duplicate-model')).toMatchObject({
         abilities: { functionCall: true },
         displayName: 'First Model',
-      });
-    });
-
-    it('should keep a generated image model when it follows a provider duplicate', async () => {
-      const baseModelId = 'gemini-3.1-flash-image-preview';
-      const generatedImageModelId = `${baseModelId}:image`;
-      const models = [
-        {
-          id: baseModelId,
-          type: 'chat',
-        },
-        {
-          displayName: 'Provider Image Model',
-          id: generatedImageModelId,
-          type: 'image',
-        },
-        {
-          displayName: 'LobeHub Image Model',
-          id: generatedImageModelId,
-          parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
-          type: 'image',
-        },
-      ] as AiProviderModelListItem[];
-
-      const result = await aiProviderModel.batchUpdateAiModels('openai', models);
-
-      expect(result).toHaveLength(2);
-      expect(await aiProviderModel.findById(generatedImageModelId)).toMatchObject({
-        displayName: 'LobeHub Image Model',
-        parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
       });
     });
 

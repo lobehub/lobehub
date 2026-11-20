@@ -16,6 +16,14 @@ vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
 // Import after mock setup
 const { localSystemRuntime } = await import('../localSystem');
 
+const deviceExecutionContext = () => ({
+  activeDeviceId: 'device-1',
+  localSandbox: true,
+  toolManifestMap: {},
+  userId: 'user-1',
+  workingDirectory: '/Users/me/repo',
+});
+
 describe('localSystemRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -267,13 +275,7 @@ describe('localSystemRuntime', () => {
 
     it('forwards the sandbox decision to runCommand', async () => {
       mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
-      const proxy = localSystemRuntime.factory({
-        activeDeviceId: 'device-1',
-        localSandbox: true,
-        toolManifestMap: {},
-        userId: 'user-1',
-        workingDirectory: '/Users/me/repo',
-      });
+      const proxy = localSystemRuntime.factory(deviceExecutionContext());
       await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
 
       expect(parseArgs()).toEqual({
@@ -291,6 +293,20 @@ describe('localSystemRuntime', () => {
       // arg schema does not reject extra properties — pin the behaviour here so
       // relaxing the strip can never silently hand the model its own fence.
       mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory(deviceExecutionContext());
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'cat ~/.ssh/id_rsa',
+        cwd: '/Users/me',
+      });
+
+      expect(parseArgs().cwd).toBe('/Users/me/repo');
+      expect(parseArgs().sandbox).toBe(true);
+    });
+
+    it('never lets a model-supplied sandboxRoot move the fence', async () => {
+      // `sandboxRoot` overrides the fence root on the device; only the skills
+      // runtime may set it, so a guessed one is dropped like a guessed `cwd`.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
       const proxy = localSystemRuntime.factory({
         activeDeviceId: 'device-1',
         localSandbox: true,
@@ -299,11 +315,11 @@ describe('localSystemRuntime', () => {
         workingDirectory: '/Users/me/repo',
       });
       await proxy[LocalSystemApiName.runCommand]({
-        command: 'cat ~/.ssh/id_rsa',
-        cwd: '/Users/me',
-      });
+        command: 'echo owned > ~/.zshrc',
+        sandboxRoot: '/Users/me',
+      } as never);
 
-      expect(parseArgs().cwd).toBe('/Users/me/repo');
+      expect(parseArgs()).not.toHaveProperty('sandboxRoot');
       expect(parseArgs().sandbox).toBe(true);
     });
 
@@ -344,13 +360,7 @@ describe('localSystemRuntime', () => {
       // The manifest never exposes `sandbox`, but a model that guesses the field
       // must not be able to unfence its own commands — the run's context wins.
       mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
-      const proxy = localSystemRuntime.factory({
-        activeDeviceId: 'device-1',
-        localSandbox: true,
-        toolManifestMap: {},
-        userId: 'user-1',
-        workingDirectory: '/Users/me/repo',
-      });
+      const proxy = localSystemRuntime.factory(deviceExecutionContext());
       await proxy[LocalSystemApiName.runCommand]({ command: 'rm -rf /', sandbox: false });
 
       expect(parseArgs().sandbox).toBe(true);
@@ -556,6 +566,28 @@ describe('localSystemRuntime', () => {
       await proxy[LocalSystemApiName.runCommand]({ command: 'lh agent list' });
 
       expect(parseArgs()).toEqual({ command: 'lh agent list' });
+    });
+
+    // Regression: only the workspace scope travelled, so `lh goal plan` on the
+    // device failed with "Current manager operation ID required" and a goal
+    // managed from a device never left planning.
+    it('passes the run id to the device, in personal runs too', async () => {
+      const proxy = buildProxy({ operationId: 'op-1' });
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'lh goal plan goal_1 --file plan.json',
+      });
+
+      expect(parseArgs().env).toEqual({ LOBEHUB_OPERATION_ID: 'op-1' });
+    });
+
+    it('passes the run id alongside the workspace scope', async () => {
+      const proxy = buildProxy({ operationId: 'op-1', workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'npm run sync' });
+
+      expect(parseArgs().env).toEqual({
+        LOBEHUB_OPERATION_ID: 'op-1',
+        LOBEHUB_WORKSPACE_ID: 'ws-42',
+      });
     });
 
     it('lets a model-supplied env win', async () => {

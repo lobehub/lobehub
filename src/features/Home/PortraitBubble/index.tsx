@@ -1,9 +1,10 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
+import { densityVars } from '@/styles/densityVars';
 
 import GreetingLine from '../GreetingLine';
 import { parseGreetingLine } from '../welcomeText';
@@ -17,11 +18,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-width: 100%;
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 14px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.5;
     color: ${cssVar.colorTextSecondary};
 

@@ -1,14 +1,16 @@
 import type { SQL, SQLWrapper } from 'drizzle-orm';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { LobeChatDatabase } from '../../../type';
+import { notTrashed } from '../../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { FtsSearchBackendScope } from '../types';
 import type { PostgresFtsSearchDialect } from './dialect';
 
 /** Columns shared by the workspace-aware tables searched by the PostgreSQL providers. */
 export interface PostgresFtsSearchWorkspaceScopedColumns {
+  isDeleted?: AnyPgColumn;
   userId: AnyPgColumn;
   visibility?: AnyPgColumn;
   workspaceId: AnyPgColumn;
@@ -102,7 +104,10 @@ export function createPostgresFtsSearchContext(
     scanScopeWhere: (cols) => {
       if (!liftsWorkspaceFilter) return buildWorkspaceWhere(normalizedScope, cols);
 
-      return eq(cols.userId, normalizedScope.userId) as SQL;
+      return and(
+        eq(cols.userId, normalizedScope.userId),
+        cols.isDeleted ? notTrashed(cols.isDeleted) : undefined,
+      ) as SQL;
     },
     scope: normalizedScope,
     userId: normalizedScope.userId,

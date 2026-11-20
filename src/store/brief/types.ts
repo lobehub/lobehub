@@ -1,6 +1,7 @@
 import {
   type BriefAction,
   type BriefArtifacts,
+  type BriefMetadata,
   type BriefType,
   type TaskStatus,
 } from '@lobechat/types';
@@ -22,6 +23,8 @@ export interface BriefItem {
   createdAt: Date | string;
   cronJobId: string | null;
   id: string;
+  /** Feature-owned payload; a goal brief names its goal here. */
+  metadata?: BriefMetadata | null;
   priority: string | null;
   readAt: Date | string | null;
   resolvedAction: string | null;

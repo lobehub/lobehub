@@ -16,8 +16,15 @@ const mockRedis = {
   expire: vi.fn(),
   hgetall: vi.fn(),
   hset: vi.fn(),
+  incr: vi.fn(),
   set: vi.fn(),
 };
+
+// The daily classifier budget counts through the Redis business service.
+const mockCountClassifierCall = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/redis', () => ({
+  redisService: { agentSignal: { countClassifierCall: mockCountClassifierCall } },
+}));
 
 /**
  * Loads the Agent Signal service entrypoint with one test-scoped module graph.
@@ -97,6 +104,8 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.doUnmock('@/server/services/expertise/ingestion');
+  vi.doUnmock('../services/selfIteration/completion');
   vi.resetModules();
   (
     globalThis as { __agentSignalRedisClient?: typeof mockRedis | undefined }
@@ -301,6 +310,7 @@ describe('emitAgentSignalSourceEvent integration', () => {
       mockRedis.hgetall.mockResolvedValue({});
       mockRedis.hset.mockResolvedValue(1);
       mockRedis.expire.mockResolvedValue(1);
+      mockCountClassifierCall.mockResolvedValue(1);
       const initModelRuntimeFromDB = vi.fn().mockResolvedValue({
         generateObject: vi.fn().mockResolvedValue({
           confidence: 0.91,
@@ -348,4 +358,107 @@ describe('emitAgentSignalSourceEvent integration', () => {
       );
     },
   );
+  /**
+   * @example
+   * The 201st feedback message of the UTC day concludes without a classifier call.
+   */
+  it(
+    'skips the satisfaction classifier once the daily feedback-classifier budget is spent',
+    { timeout: 10_000 },
+    async () => {
+      (globalThis as { __agentSignalRedisClient?: typeof mockRedis }).__agentSignalRedisClient =
+        mockRedis;
+      mockRedis.set.mockResolvedValue('OK');
+      mockRedis.del.mockResolvedValue(1);
+      mockRedis.hgetall.mockResolvedValue({});
+      mockRedis.hset.mockResolvedValue(1);
+      mockRedis.expire.mockResolvedValue(1);
+      mockCountClassifierCall.mockResolvedValue(201);
+      const initModelRuntimeFromDB = vi.fn();
+
+      const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule({
+        mockInitModelRuntimeFromDB: initModelRuntimeFromDB,
+      });
+
+      const result = await emitAgentSignalSourceEvent(
+        {
+          payload: { message: 'That answer was wrong.', messageId: 'msg_budget' },
+          sourceId: 'source_budget',
+          sourceType: 'agent.user.message',
+        },
+        { agentId: 'agent_1', db: {} as never, userId: 'user_1' },
+      );
+
+      expect(result?.deduped).toBe(false);
+      expect(mockCountClassifierCall).toHaveBeenCalledWith({
+        userId: 'user_1',
+        utcDay: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+    },
+  );
+
+  /**
+   * Completion-path expertise ingestion is not budgeted per day any more; the nightly pass
+   * shares the review's per-night topic quota instead.
+   */
+  it('wires the nightly topic quota, not a daily budget, into completion-path ingestion', async () => {
+    (globalThis as { __agentSignalRedisClient?: typeof mockRedis }).__agentSignalRedisClient =
+      mockRedis;
+    mockRedis.expire.mockResolvedValue(1);
+    mockCountClassifierCall.mockResolvedValue(10_000);
+    const ingestSelfReview = vi.fn().mockResolvedValue({ ingested: 0 });
+    vi.doMock('@/server/services/expertise/ingestion', () => ({
+      ExpertiseIngestionService: class {
+        ingestSelfReview = ingestSelfReview;
+      },
+    }));
+    vi.doMock('../services/selfIteration/completion', () => ({
+      createSelfIterationCompletionHandler: () => async () => {},
+    }));
+    const createDefaultAgentSignalPolicies = vi.fn().mockReturnValue([]);
+    const source = {
+      chain: { chainId: 'chain:budget', rootSourceId: 'budget-source' },
+      payload: {},
+      scopeKey: 'topic:topic-1',
+      sourceId: 'budget-source',
+      sourceType: 'agent.execution.completed',
+      timestamp: 1_710_000_000_000,
+    };
+
+    const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule({
+      mockCreateDefaultAgentSignalPolicies: createDefaultAgentSignalPolicies,
+      mockEmitSourceEvent: vi.fn().mockResolvedValue({
+        deduped: false,
+        source,
+        trigger: { scopeKey: 'topic:topic-1', token: 't', windowEventCount: 1 },
+      }),
+      mockRuntimeFactory: vi.fn().mockReturnValue({
+        emitNormalized: vi.fn().mockResolvedValue({
+          status: 'completed',
+          trace: { actions: [], results: [], signals: [], source },
+        }),
+      }),
+    });
+
+    await emitAgentSignalSourceEvent(
+      {
+        payload: { message: 'done', messageId: 'msg-budget' },
+        sourceId: 'budget-source',
+        sourceType: 'agent.user.message',
+      },
+      { agentId: 'agent-1', db: {} as never, userId: 'user-1' },
+    );
+
+    const policyOptions = createDefaultAgentSignalPolicies.mock.calls[0]![0];
+    const completionInput = { operationId: 'op-1' };
+    await policyOptions.completion.onSelfIterationCompleted(completionInput);
+
+    const { claimNightlyReviewTopics } =
+      await import('../services/selfIteration/review/topicQuota');
+    expect(ingestSelfReview).toHaveBeenCalledWith(completionInput, {
+      claimNightlyTopics: claimNightlyReviewTopics,
+    });
+    expect(mockCountClassifierCall).not.toHaveBeenCalled();
+  });
 });

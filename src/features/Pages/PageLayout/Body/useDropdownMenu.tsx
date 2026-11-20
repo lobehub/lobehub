@@ -1,6 +1,6 @@
 'use client';
 
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { Hash, LucideCheck } from 'lucide-react';
 import { useMemo } from 'react';
@@ -10,10 +10,9 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { usePageStore } from '@/store/page';
 
-export const useDropdownMenu = (): MenuProps['items'] => {
+export const useDropdownMenu = (): DropdownItem[] => {
   const { t } = useTranslation();
   const showOnlyPagesNotInLibrary = usePageStore((s) => s.showOnlyPagesNotInLibrary);
-  const setShowOnlyPagesNotInLibrary = usePageStore((s) => s.setShowOnlyPagesNotInLibrary);
 
   const [pagePageSize, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pagePageSize(s),
@@ -40,11 +39,5 @@ export const useDropdownMenu = (): MenuProps['items'] => {
         label: t('common:navPanel.displayItems'),
       },
     ];
-  }, [
-    t,
-    setShowOnlyPagesNotInLibrary,
-    showOnlyPagesNotInLibrary,
-    pagePageSize,
-    updateSystemStatus,
-  ]);
+  }, [t, showOnlyPagesNotInLibrary, pagePageSize, updateSystemStatus]);
 };

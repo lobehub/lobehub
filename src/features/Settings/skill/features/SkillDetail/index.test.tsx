@@ -12,16 +12,22 @@ import SkillDetail from './index';
 
 const mocks = vi.hoisted(() => {
   const toolState = {
+    agentSkillListMap: {} as Record<
+      string,
+      Array<{ id: string; identifier: string; userId?: string }>
+    >,
     builtinSkills: [],
     checkLobehubSkillStatus: vi.fn(),
     composioServers: [] as Array<{ identifier: string; status: string }>,
     connectors: [] as Array<{ id: string; identifier: string }>,
     createComposioConnection: vi.fn(),
     deleteAgentSkill: vi.fn(),
+    useFetchAgentBoundConnectors: vi.fn(() => ({ isValidating: false })),
     fetchConnectors: vi.fn(),
     getLobehubSkillAuthorizeUrl: vi.fn(),
     installBuiltinTool: vi.fn(),
     installedBuiltinIds: [] as string[],
+    isAgentBoundInit: false,
     installedPlugins: [] as Array<{
       customParams?: { mcp?: Record<string, unknown> };
       identifier: string;
@@ -78,7 +84,7 @@ vi.mock('@lobechat/const', () => ({
       : undefined,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
 }));
@@ -139,6 +145,9 @@ vi.mock('@/store/tool', () => ({
 }));
 
 vi.mock('@/store/tool/selectors', () => ({
+  agentSkillsSelectors: {
+    getAgentSkills: (state: typeof mocks.toolState) => state.agentSkillListMap.all || [],
+  },
   builtinToolSelectors: {
     isBuiltinToolInstalled:
       (identifier: string) =>
@@ -353,5 +362,18 @@ describe('SkillDetail', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
+  it('loads the agents’ connectors when an agent connector’s detail is opened by link', () => {
+    render(<SkillDetail identifier="row-1" type="agent-connector" />);
+
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId('connector-detail')).toHaveTextContent('row-1');
+  });
+
+  it('leaves the agent connector query disabled for other details', () => {
+    render(<SkillDetail identifier="agent-skill-1" type="agent-skill" />);
+
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(false);
   });
 });

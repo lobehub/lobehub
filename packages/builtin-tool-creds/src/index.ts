@@ -13,6 +13,12 @@ export {
   resolveAvailableComposioServices,
   type UserCredsContext,
 } from './helpers';
+export {
+  buildInjectCredsResult,
+  type InjectCredsResultInput,
+  type InjectCredsResultSummary,
+  resolveEnvVarsByKey,
+} from './injectResult';
 export { CredsIdentifier, CredsManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {
@@ -24,6 +30,6 @@ export {
   type InitiateOAuthConnectParams,
   type InjectCredsToSandboxParams,
   type InjectCredsToSandboxState,
-  type SaveCredsParams,
-  type SaveCredsState,
+  type RequestCredsInputParams,
+  type RequestCredsInputState,
 } from './types';

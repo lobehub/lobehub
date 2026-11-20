@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -104,6 +105,25 @@ describe('TopicShareModel', () => {
 
       expect(result).toBeDefined();
       expect(result!.visibility).toBe('link');
+    });
+
+    it('stops resolving once the topic is in the recycle bin', async () => {
+      // A trashed topic keeps its share row and its messages until purge, and
+      // this query carries no user scope (that is the point of a public link),
+      // so without an explicit gate an anonymous visitor could keep reading a
+      // deleted conversation.
+      const created = await topicShareModel.create(topicId, 'link');
+      expect(await TopicShareModel.findByShareId(serverDB, created.id)).toBeDefined();
+
+      await serverDB
+        .update(topics)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(topics.id, topicId));
+
+      expect(await TopicShareModel.findByShareId(serverDB, created.id)).toBeNull();
+      await expect(
+        TopicShareModel.findByShareIdWithAccessCheck(serverDB, created.id, userId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
     it('should return null when share does not exist', async () => {

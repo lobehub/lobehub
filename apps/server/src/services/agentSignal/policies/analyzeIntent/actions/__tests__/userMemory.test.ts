@@ -7,6 +7,7 @@ import {
   buildUserMemoryActionAgentSignalMarker,
   defineUserMemoryActionHandler,
   resolveMemoryActionTargetFromState,
+  runMemoryActionAgent,
 } from '../userMemory';
 
 const memoryActionRunner = vi.fn();
@@ -341,6 +342,85 @@ describe('defineUserMemoryActionHandler', () => {
   });
 });
 
+describe('runMemoryActionAgent memory switch', () => {
+  const PLUGIN_QUERY_REACHED = new Error('plugin query reached');
+
+  const createOptions = (input: { agentMemoryEnabled?: boolean; userMemoryEnabled?: boolean }) => {
+    const pluginModel = { query: vi.fn().mockRejectedValue(PLUGIN_QUERY_REACHED) };
+    const userModel = {
+      getUserSettings: vi
+        .fn()
+        .mockResolvedValue(
+          input.userMemoryEnabled === undefined
+            ? undefined
+            : { memory: { enabled: input.userMemoryEnabled } },
+        ),
+    };
+
+    return {
+      options: {
+        agentService: {
+          getAgentConfig: vi.fn().mockResolvedValue({
+            chatConfig:
+              input.agentMemoryEnabled === undefined
+                ? {}
+                : { memory: { enabled: input.agentMemoryEnabled } },
+            model: 'gpt-test',
+            provider: 'openai',
+          }),
+        },
+        db: {} as never,
+        pluginModel,
+        userId: 'user-1',
+        userModel,
+      } as never,
+      pluginModel,
+      userModel,
+    };
+  };
+
+  it('skips the memory writer when the user turned memory off', async () => {
+    const { options, pluginModel } = createOptions({ userMemoryEnabled: false });
+
+    await expect(
+      runMemoryActionAgent({ agentId: 'agent-1', message: 'remember this' }, options),
+    ).resolves.toEqual({
+      detail: 'Memory is disabled for this agent or user.',
+      status: 'skipped',
+    });
+    expect(pluginModel.query).not.toHaveBeenCalled();
+  });
+
+  it('skips the memory writer when the agent turned memory off', async () => {
+    const { options, pluginModel, userModel } = createOptions({
+      agentMemoryEnabled: false,
+      userMemoryEnabled: true,
+    });
+
+    await expect(
+      runMemoryActionAgent({ agentId: 'agent-1', message: 'remember this' }, options),
+    ).resolves.toMatchObject({ status: 'skipped' });
+    expect(userModel.getUserSettings).not.toHaveBeenCalled();
+    expect(pluginModel.query).not.toHaveBeenCalled();
+  });
+
+  it('lets the agent-level switch override a disabled user setting', async () => {
+    const { options } = createOptions({ agentMemoryEnabled: true, userMemoryEnabled: false });
+
+    await expect(
+      runMemoryActionAgent({ agentId: 'agent-1', message: 'remember this' }, options),
+    ).rejects.toBe(PLUGIN_QUERY_REACHED);
+  });
+
+  it('keeps writing when memory has never been configured', async () => {
+    const { options } = createOptions({});
+
+    await expect(
+      runMemoryActionAgent({ agentId: 'agent-1', message: 'remember this' }, options),
+    ).rejects.toBe(PLUGIN_QUERY_REACHED);
+  });
+});
+
 describe('buildUserMemoryActionAgentSignalMarker', () => {
   it('keeps the user message as trigger without using it as the receipt anchor', () => {
     const marker = buildUserMemoryActionAgentSignalMarker({
@@ -443,6 +523,7 @@ describe('resolveMemoryActionTargetFromState', () => {
       id: 'mem_td3XirTeX4f7',
       memoryId: 'mem_8gISOK6BhxGP',
       memoryLayer: LayersEnum.Preference,
+      operation: 'create',
       summary: 'Arvin Xu 希望助手在输出时每个段落/模块都写得更长、更展开。',
       title: '偏好更详细、更长的回答段落',
       type: 'memory',
@@ -486,6 +567,7 @@ describe('resolveMemoryActionTargetFromState', () => {
     expect(target).toEqual({
       id: 'identity-existing',
       memoryLayer: LayersEnum.Identity,
+      operation: 'update',
       summary: 'The user maintains Agent Signal memory receipt behavior.',
       title: 'Maintains Agent Signal receipts',
       type: 'memory',
@@ -526,6 +608,7 @@ describe('resolveMemoryActionTargetFromState', () => {
       id: 'pref_persisted',
       memoryId: 'mem_persisted',
       memoryLayer: LayersEnum.Preference,
+      operation: 'create',
       summary: 'Use persisted tool metadata for receipt targets.',
       title: 'Persisted preference title',
       type: 'memory',
@@ -585,6 +668,7 @@ describe('resolveMemoryActionTargetFromState', () => {
       id: 'pref_confirmed',
       memoryId: 'mem_confirmed',
       memoryLayer: LayersEnum.Preference,
+      operation: 'create',
       summary: 'Fallback details for a valid confirmed target.',
       title: 'Valid confirmed preference',
       type: 'memory',
@@ -646,6 +730,7 @@ describe('resolveMemoryActionTargetFromState', () => {
       id: 'pref_confirmed',
       memoryId: 'mem_confirmed',
       memoryLayer: LayersEnum.Preference,
+      operation: 'create',
       summary: 'The user prefers longer, more developed answers.',
       title: 'Confirmed preference title',
       type: 'memory',

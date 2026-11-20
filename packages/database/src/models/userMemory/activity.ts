@@ -1,13 +1,18 @@
-import type { ActivityListParams, ActivityListResult } from '@lobechat/types';
+import type {
+  ActivityListParams,
+  ActivityListResult,
+  UserMemoryActivity,
+  UserMemoryActivityInsert,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
 import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
-import type { NewUserMemoryActivity, UserMemoryActivity } from '../../schemas';
 import { userMemories, userMemoriesActivities } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryActivityModel {
   private userId: string;
@@ -24,11 +29,11 @@ export class UserMemoryActivityModel {
     this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
-  create = async (params: Omit<NewUserMemoryActivity, 'userId'>) => {
+  create = async (params: Omit<UserMemoryActivityInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesActivities)
       .values({ ...params, userId: this.userId })
@@ -137,6 +142,9 @@ export class UserMemoryActivityModel {
     const [rows, totalResult] = await Promise.all([
       this.db
         .select({
+          associatedLocations: userMemoriesActivities.associatedLocations,
+          associatedObjects: userMemoriesActivities.associatedObjects,
+          associatedSubjects: userMemoriesActivities.associatedSubjects,
           capturedAt: userMemoriesActivities.capturedAt,
           createdAt: userMemoriesActivities.createdAt,
           endsAt: userMemoriesActivities.endsAt,

@@ -2,8 +2,10 @@
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as DatabaseModule from '@/database/core/db-adaptor';
 import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
+import * as TracingServiceModule from '@/server/services/llmGenerationTracing';
 
 import { FollowUpActionService } from './index';
 
@@ -34,12 +36,33 @@ describe('FollowUpActionService.extract', () => {
     runtimeMock = { generateObject: vi.fn() };
     vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB').mockResolvedValue(runtimeMock as any);
 
-    svc = new FollowUpActionService(dbMock, TEST_USER);
+    svc = new FollowUpActionService({ db: dbMock, userId: TEST_USER });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('preserves the originating mobile request through the router and service', async () => {
+    const { followUpActionRouter } = await import('@/server/routers/lambda/followUpAction');
+    const userAgent = 'LobeHub-Mobile/ios-v1.0.5';
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'Choose a next step.' });
+    runtimeMock.generateObject.mockImplementation(async (_payload, options) => {
+      if (options.metadata.userAgent !== userAgent) throw new Error('Missing request identity');
+      return { chips: [{ label: 'Continue', message: 'Continue please' }] };
+    });
+    vi.spyOn(DatabaseModule, 'getServerDB').mockResolvedValue(dbMock);
+    const caller = followUpActionRouter.createCaller({
+      serverDB: dbMock,
+      userAgent,
+      userId: TEST_USER,
+    } as any);
+
+    expect(await caller.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC })).toMatchObject({
+      chips: [{ label: 'Continue', message: 'Continue please' }],
+      messageId: FOUND_MSG,
+    });
   });
 
   it('reuses the source topic in outgoing OpenCode requests across extractions', async () => {
@@ -151,6 +174,7 @@ describe('FollowUpActionService.extract', () => {
       dbMock,
       TEST_USER,
       'custom-provider',
+      undefined,
     );
     expect(runtimeMock.generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -271,7 +295,7 @@ describe('FollowUpActionService.extract', () => {
   });
 
   it('filters workspace mode by workspaceId and forwards it to model runtime', async () => {
-    svc = new FollowUpActionService(dbMock, TEST_USER, 'workspace-1');
+    svc = new FollowUpActionService({ db: dbMock, userId: TEST_USER, workspaceId: 'workspace-1' });
     queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
     runtimeMock.generateObject.mockResolvedValue({ chips: [] });
 
@@ -285,6 +309,35 @@ describe('FollowUpActionService.extract', () => {
       MODEL_CONFIG.provider,
       'workspace-1',
     );
+  });
+
+  const mockTracingEnabled = (enabled: boolean) =>
+    vi
+      .spyOn(TracingServiceModule, 'getLLMGenerationTracingService')
+      .mockReturnValue({ isEnabled: () => enabled } as any);
+
+  it('returns a tracingId when the tracing store is enabled', async () => {
+    mockTracingEnabled(true);
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [{ label: 'ok', message: 'ok' }] });
+
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    expect(typeof result.tracingId).toBe('string');
+    // The id handed to the client must be the same one passed to the tracing hook.
+    expect(runtimeMock.generateObject.mock.calls[0][1].tracing.tracingId).toBe(result.tracingId);
+  });
+
+  it('omits the tracingId when the tracing store is disabled (no row would exist)', async () => {
+    mockTracingEnabled(false);
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [{ label: 'ok', message: 'ok' }] });
+
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    expect(result.chips).toHaveLength(1);
+    expect(result.tracingId).toBeUndefined();
+    expect(runtimeMock.generateObject.mock.calls[0][1].tracing.tracingId).toBeUndefined();
   });
 
   it('appends onboarding addendum to system prompt when hint is onboarding', async () => {

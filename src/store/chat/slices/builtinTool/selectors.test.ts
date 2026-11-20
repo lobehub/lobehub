@@ -10,69 +10,6 @@ describe('chatToolSelectors', () => {
     useChatStore.setState(useChatStore.getInitialState());
   });
 
-  describe('isInterpreterExecuting', () => {
-    it('should return true when interpreter is executing for message', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      let opId: string;
-
-      act(() => {
-        opId = result.current.startOperation({
-          type: 'builtinToolInterpreter',
-          context: { sessionId: 'session1', messageId: 'msg1' },
-        }).operationId;
-
-        result.current.associateMessageWithOperation('msg1', opId);
-      });
-
-      expect(chatToolSelectors.isInterpreterExecuting('msg1')(result.current)).toBe(true);
-    });
-
-    it('should return false when no operation exists for message', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      expect(chatToolSelectors.isInterpreterExecuting('msg1')(result.current)).toBe(false);
-    });
-
-    it('should return false when operation is not builtinToolInterpreter', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      let opId: string;
-
-      act(() => {
-        opId = result.current.startOperation({
-          type: 'execAgentRuntime',
-          context: { sessionId: 'session1', messageId: 'msg1' },
-        }).operationId;
-
-        result.current.associateMessageWithOperation('msg1', opId);
-      });
-
-      expect(chatToolSelectors.isInterpreterExecuting('msg1')(result.current)).toBe(false);
-    });
-
-    it('should return false when operation is completed', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      let opId: string;
-
-      act(() => {
-        opId = result.current.startOperation({
-          type: 'builtinToolInterpreter',
-          context: { sessionId: 'session1', messageId: 'msg1' },
-        }).operationId;
-
-        result.current.associateMessageWithOperation('msg1', opId);
-      });
-
-      act(() => {
-        result.current.completeOperation(opId);
-      });
-
-      expect(chatToolSelectors.isInterpreterExecuting('msg1')(result.current)).toBe(false);
-    });
-  });
-
   describe('isSearXNGSearching', () => {
     it('should return true when SearXNG search is running for message', () => {
       const { result } = renderHook(() => useChatStore());
@@ -104,7 +41,7 @@ describe('chatToolSelectors', () => {
 
       act(() => {
         opId = result.current.startOperation({
-          type: 'builtinToolInterpreter',
+          type: 'builtinToolLocalSystem',
           context: { sessionId: 'session1', messageId: 'msg1' },
         }).operationId;
 

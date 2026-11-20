@@ -1,16 +1,15 @@
 'use client';
 
-import { Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal } from '@lobehub/ui/base-ui';
-import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import { Avatar, confirmModal, Icon } from '@lobehub/ui';
+import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
+import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
-
-import { itemStyles } from '../style';
 
 interface ItemProps {
   avatar?: string;
@@ -20,9 +19,9 @@ interface ItemProps {
   title?: string;
 }
 
+/** A built-in in the store, drawn as the Connectors page row: `+` installs, `⋯` manages. */
 const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, title }) => {
   const { t } = useTranslation(['setting', 'plugin', 'common']);
-  const styles = itemStyles;
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -51,56 +50,36 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
     });
   };
 
-  const renderAction = () => {
-    if (isInstalled) {
-      return (
-        <DropdownMenu
-          placement="bottomRight"
-          items={[
-            {
-              danger: true,
-              disabled: !canEdit,
-              icon: <Icon icon={Trash2} />,
-              key: 'uninstall',
-              label: t('store.actions.uninstall', { ns: 'plugin' }),
-              onClick: handleUninstall,
-            },
-          ]}
-        >
-          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} />
-        </DropdownMenu>
-      );
-    }
-
-    return (
-      <ActionIcon
-        disabled={!canCreate}
-        icon={Plus}
-        title={t('tools.builtins.install')}
-        onClick={handleInstall}
-      />
-    );
-  };
-
   return (
-    <Block
-      horizontal
-      align={'center'}
-      className={styles.container}
-      gap={12}
-      paddingBlock={12}
-      paddingInline={12}
-      style={{ cursor: 'pointer' }}
-      variant={'outlined'}
+    <SkillListRow
+      icon={() => <Avatar avatar={avatar} size={20} />}
+      summary={description}
+      title={title || identifier}
+      extra={
+        isInstalled ? (
+          <RowMoreMenu
+            items={[
+              {
+                danger: true,
+                disabled: !canEdit,
+                icon: <Icon icon={Trash2} />,
+                key: 'uninstall',
+                label: t('store.actions.uninstall', { ns: 'plugin' }),
+                onClick: handleUninstall,
+              },
+            ]}
+            onOpenDetail={onOpenDetail}
+          />
+        ) : (
+          <RowAddAction
+            disabled={!canCreate}
+            label={t('connectorMarket.action.install')}
+            onClick={handleInstall}
+          />
+        )
+      }
       onClick={onOpenDetail}
-    >
-      <Avatar avatar={avatar} size={40} style={{ marginInlineEnd: 0 }} />
-      <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-        <span className={styles.title}>{title || identifier}</span>
-        {description && <span className={styles.description}>{description}</span>}
-      </Flexbox>
-      <div onClick={stopPropagation}>{renderAction()}</div>
-    </Block>
+    />
   );
 });
 

@@ -3,6 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
+import { getChunkingLoaderType } from '@/libs/document-loaders/loaderType';
 import { type ChunkContentParams } from '@/server/modules/ContentChunk';
 import { ContentChunk } from '@/server/modules/ContentChunk';
 import {
@@ -63,6 +64,12 @@ export class ChunkService {
     } catch (e) {
       console.error('[embeddingFileChunks] error:', e);
 
+      // The async procedure ran and rejected the task itself (for example, a business
+      // middleware recorded that the vector quota is full). Keep that error: the generic
+      // APP_URL hint below is only right when the request never reached the server.
+      const task = await this.asyncTaskModel.findById(asyncTaskId);
+      if (task?.status === AsyncTaskStatus.Error) return asyncTaskId;
+
       await this.asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
           AsyncTaskErrorType.TaskTriggerError,
@@ -85,6 +92,10 @@ export class ChunkService {
 
     // skip if already exist chunk tasks
     if (skipExist && result.chunkTaskId) return;
+
+    // No chunking loader can parse this format (e.g. `.dwg`): creating a task would only
+    // surface a retryable "Chunking failed" for a limitation retrying cannot fix.
+    if (!getChunkingLoaderType(result.name)) return;
 
     // 1. create a asyncTaskId
     const asyncTaskId = await this.asyncTaskModel.create({

@@ -1,7 +1,5 @@
 'use client';
 
-import { createContext, useContext } from 'react';
-
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 
 /**
@@ -11,30 +9,31 @@ import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
  * (`/[workspaceSlug]/settings/credential`) share UI components but talk to
  * different tRPC routers — `market.creds` (Market user account) versus
  * `workspaceCreds` (Market organization mirroring the cloud workspace).
- *
- * The workspace shell wraps the page in {@link CredsApiProvider} with the
- * workspace bindings. Forms/modals read whichever client/query namespace is
- * active via {@link useCredsApi} and otherwise behave identically.
+ * Lists, forms and modals take the binding explicitly; modals are portaled
+ * to a global host, outside any page context.
  */
 export interface CredsApi {
   client: typeof lambdaClient.market.creds;
+  /**
+   * Workspace bindings only: who a newly created credential is for —
+   * `'public'` shares it with every member, `'private'` keeps it to its
+   * creator. Unset for personal credentials.
+   */
+  createVisibility?: 'private' | 'public';
   query: typeof lambdaQuery.market.creds;
+  /** Workspace bindings only: publish a workspace credential or take it back. */
+  setVisibility?: (id: number, visibility: 'private' | 'public') => Promise<unknown>;
 }
 
 /**
- * The personal `market.creds` binding, exported so callers that need it
- * regardless of ambient context can use it explicitly — e.g. {@link CredsList}
- * routing a merged workspace-view row back to the personal API when its
- * `ownerType` is `'user'` (the row is a member's own credential, not the
- * org's), since only the owner's personal endpoint can write to it.
+ * Extra create-request fields for the binding — `workspaceCreds` accepts a
+ * `visibility`; the personal `market.creds` takes none.
  */
-export const defaultCredsApi: CredsApi = {
+export const createExtras = (credsApi: CredsApi) =>
+  credsApi.createVisibility ? { visibility: credsApi.createVisibility } : {};
+
+/** The personal `market.creds` binding. */
+export const personalCredsApi: CredsApi = {
   client: lambdaClient.market.creds,
   query: lambdaQuery.market.creds,
 };
-
-const CredsApiContext = createContext<CredsApi | null>(null);
-
-export const CredsApiProvider = CredsApiContext.Provider;
-
-export const useCredsApi = (): CredsApi => useContext(CredsApiContext) ?? defaultCredsApi;

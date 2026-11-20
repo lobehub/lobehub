@@ -52,8 +52,8 @@ runs:
         retention-days: 14
         path: |
           desktop-ota-diagnostics/
-          apps/desktop/release/core-ota/core/*/latest.json
-          release/core-ota/core/*/latest.json
+          apps/desktop/release/core-ota/core*/*/latest.json
+          release/core-ota/core*/*/latest.json
           release/shell.json
           ${{ runner.temp }}/shell.json
           ${{ runner.temp }}/previous-core.json

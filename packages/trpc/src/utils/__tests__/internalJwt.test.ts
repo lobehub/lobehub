@@ -60,10 +60,12 @@ const buildSignJWTChain = () => {
 };
 
 const SignJWTMock = vi.fn();
+const createLocalJWKSetMock = vi.fn().mockReturnValue('mock-key-set');
 const importJWKMock = vi.fn().mockResolvedValue('mock-crypto-key');
 
 vi.mock('jose', () => ({
   SignJWT: SignJWTMock,
+  createLocalJWKSet: (...args: unknown[]) => createLocalJWKSetMock(...args),
   importJWK: (...args: unknown[]) => importJWKMock(...args),
   jwtVerify: vi.fn(),
 }));

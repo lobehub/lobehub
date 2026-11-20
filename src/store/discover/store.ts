@@ -6,10 +6,13 @@ import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
+import { type DiscoverStoreState, initialState } from './initialState';
 import { type AssistantAction } from './slices/assistant/action';
 import { createAssistantSlice } from './slices/assistant/action';
 import { type GroupAgentAction } from './slices/groupAgent/action';
 import { createGroupAgentSlice } from './slices/groupAgent/action';
+import { type MarketAction } from './slices/market';
+import { createMarketSlice } from './slices/market';
 import { type MCPAction } from './slices/mcp';
 import { createMCPSlice } from './slices/mcp';
 import { type ModelAction } from './slices/model/action';
@@ -28,6 +31,7 @@ import { createUserSlice } from './slices/user';
 //  ===============  Aggregate createStoreFn ============ //
 
 export type DiscoverStore = MCPAction &
+  MarketAction &
   AssistantAction &
   GroupAgentAction &
   ProviderAction &
@@ -36,9 +40,11 @@ export type DiscoverStore = MCPAction &
   SkillAction &
   SocialAction &
   UserAction &
-  ResetableStore;
+  ResetableStore &
+  DiscoverStoreState;
 
 type DiscoverStoreAction = MCPAction &
+  MarketAction &
   AssistantAction &
   GroupAgentAction &
   ProviderAction &
@@ -55,9 +61,11 @@ class DiscoverStoreResetAction extends ResetableStoreAction<DiscoverStore> {
 
 const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<DiscoverStore, [['zustand/devtools', never]]>>
-) =>
-  flattenActions<DiscoverStoreAction>([
+) => ({
+  ...initialState,
+  ...flattenActions<DiscoverStoreAction>([
     createMCPSlice(...parameters),
+    createMarketSlice(...parameters),
     createAssistantSlice(...parameters),
     createGroupAgentSlice(...parameters),
     createProviderSlice(...parameters),
@@ -67,7 +75,8 @@ const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = 
     createSocialSlice(...parameters),
     createUserSlice(...parameters),
     new DiscoverStoreResetAction(...parameters),
-  ]);
+  ]),
+});
 
 //  ===============  Implement useStore ============ //
 

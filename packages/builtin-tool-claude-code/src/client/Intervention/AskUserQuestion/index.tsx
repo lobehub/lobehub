@@ -9,12 +9,17 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { memo, useCallback } from 'react';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { CircleAlert } from 'lucide-react';
+import { type ComponentProps, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
 import { useChatStore } from '@/store/chat';
+
+import PermissionRequestIntervention from '../PermissionRequest';
+import { useSubmissionReconcile } from '../useSubmissionReconcile';
 
 /**
  * CC AskUserQuestion intervention component.
@@ -51,6 +56,9 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     )?.heterogeneousIntervention?.deadline;
     return typeof stored === 'number' ? stored : undefined;
   });
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  // Stream events normally settle the card; a missed ACK is re-read.
+  useSubmissionReconcile(messageId);
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
@@ -80,19 +88,51 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
     timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),
-    timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
+    timeRemaining: (time: string) =>
+      t(
+        form.autoSubmitOnTimeout
+          ? 'claudeCode.askUserQuestion.timeRemaining'
+          : 'claudeCode.askUserQuestion.timeRemainingNoAnswer',
+        { time },
+      ),
   };
 
   return (
-    <AskUserQuestionView
-      {...form}
-      showCountdown
-      actionsPortalTarget={actionsPortalTarget}
-      labels={labels}
-    />
+    <Flexbox gap={8}>
+      {(form.submissionFailed ||
+        submissionPhase === 'failed' ||
+        submissionPhase === 'uncertain') && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
+      )}
+      <AskUserQuestionView
+        {...form}
+        showCountdown
+        actionsPortalTarget={actionsPortalTarget}
+        labels={labels}
+      />
+    </Flexbox>
   );
 });
 
 AskUserQuestionIntervention.displayName = 'CCAskUserQuestionIntervention';
 
-export default AskUserQuestionIntervention;
+/**
+ * A Claude Code permission request (Better Coding Experience) carries a
+ * `claudeCodePermission` detail beside the AskUserQuestion-shaped question:
+ * it gets its own card, which never counts down — Claude Code waits.
+ */
+const AskUserQuestionOrPermission = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) =>
+  (props.args as { claudeCodePermission?: unknown } | undefined)?.claudeCodePermission ? (
+    <PermissionRequestIntervention
+      {...(props as unknown as ComponentProps<typeof PermissionRequestIntervention>)}
+    />
+  ) : (
+    <AskUserQuestionIntervention {...props} />
+  ),
+);
+
+AskUserQuestionOrPermission.displayName = 'CCAskUserQuestionOrPermission';
+
+export default AskUserQuestionOrPermission;

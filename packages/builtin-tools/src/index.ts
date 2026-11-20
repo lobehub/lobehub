@@ -1,5 +1,6 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
+import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import {
   AgentDocumentsManifest,
@@ -20,18 +21,23 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
+import { CanvasManifest } from '@lobechat/builtin-tool-canvas';
+import { ChannelManifest } from '@lobechat/builtin-tool-channel';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
-import { GoalManifest, GoalSupervisorManifest } from '@lobechat/builtin-tool-goal';
+import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
+import {
+  GoalManifest,
+  GoalReportManifest,
+  GoalSupervisorManifest,
+} from '@lobechat/builtin-tool-goal';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import {
-  LocalSystemManifest,
-  resolveLocalSystemManifest,
-} from '@lobechat/builtin-tool-local-system';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -45,23 +51,30 @@ import {
   SkillsManifest,
 } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
-import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
+import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
-import { type LobeBuiltinTool } from '@lobechat/types';
+import {
+  type AgentPluginEntry,
+  getDisabledPluginIds,
+  type LobeAgentChatConfig,
+  type LobeBuiltinTool,
+  resolveToolMode,
+} from '@lobechat/types';
+
+import { resolveCloudSandboxInPageScope } from './pageScope';
 
 /**
- * Default tool IDs that will always be added to the tools list.
+ * Default candidates evaluated by the tool enable rules.
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
  */
 export const defaultToolIds = [
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   AttachmentsManifest.identifier,
@@ -69,49 +82,37 @@ export const defaultToolIds = [
   LocalSystemManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
-  TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
+  // A runtime media fallback can enable this candidate even without a user pin.
   LobeAgentManifest.identifier,
+  CanvasManifest.identifier,
 ];
 
 /**
- * Tool IDs that are always enabled regardless of user selection.
- * These are core system tools that the agent needs to function properly.
- *
- * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
- * sub-agent dispatch, multimodal fallback) should be available on every agent-mode turn,
- * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
- * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
- * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
- * from the defaults before the enable checker runs, so they end up disabled there.
- *
- * This list is also the source for builtin entries in the chat-input Tools popover.
- * They default to pinned but can be explicitly disabled per agent; entries represented by
- * the activation mode control itself are excluded from that menu.
+ * Builtins enabled by default in Agent mode. The activator loads other tools
+ * on demand, and Skills loads skill instructions.
  */
-export const alwaysOnToolIds = [
-  LobeAgentManifest.identifier,
-  LobeActivatorManifest.identifier,
-  SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
-/**
- * Runtime tools represented by the skill activation mode control itself. They remain part
- * of the engine defaults but should not appear as independently configurable tool rows.
- */
-export const activationModeControlledToolIds = [LobeActivatorManifest.identifier];
+/** Ignore stale picker preferences for fixed infrastructure in ordinary Agent mode.
+ * Only use for saved user choices, never for a share allowlist or runtime exclusion. */
+export const getUserDisabledToolIds = (
+  plugins: AgentPluginEntry[] | undefined,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+) => {
+  const disabled = getDisabledPluginIds(plugins);
+  return resolveToolMode(chatConfig) === 'agent'
+    ? disabled.filter((id) => !alwaysOnToolIds.includes(id))
+    : disabled;
+};
 
 /**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.
  * These are the tool/skill discovery tools that should be disabled when user wants precise control.
  * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
  */
-export const manualModeExcludeToolIds = [
-  LobeActivatorManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
 
 /**
  * Tool IDs allowed when the agent runs in chat mode
@@ -172,14 +173,18 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  McpEventsManifest.identifier,
   AttachmentsManifest.identifier,
+  // Enabled by a runtime rule (`hasIdentityAccount`) rather than by user
+  // selection: the identity/inbox state reaches the model as context, so this
+  // tool only exists for an agent that actually owns an account.
+  AgentAccountManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
   LocalSystemManifest.identifier,
   MemoryManifest.identifier,
   RemoteDeviceManifest.identifier,
-  LobeAgentManifest.identifier,
   WebBrowsingManifest.identifier,
 ];
 
@@ -188,7 +193,7 @@ export const runtimeManagedToolIds = [
  * touch, at BOTH the tool-set-assembly layer (server
  * `applyShareGateToToolSet`) and the dispatch layer (server
  * `isShareBlockedDataToolCall`) — see
- * `apps/server/src/services/aiAgent/shareGate.ts`. Also the single source of
+ * `apps/server/src/services/aiAgent/shareGate/`. Also the single source of
  * truth for the agent-owner-facing share settings tool picker, which must
  * show a builtin tool as unavailable-to-visitors rather than let the owner
  * select (and the UI silently confirm) a grant the server gate can never
@@ -222,11 +227,10 @@ export const runtimeManagedToolIds = [
  * (`lobe-agent-management`, `lobe-task`, `lobe-creds`, `lobe-message`,
  * `lobe-skill-store`, `lobe-agent-builder`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
- * `lobe-user-interaction`, `lobe-activator`,
- * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
- * `lobe-topic-reference`, and the hidden system-only self-iteration tools),
- * see the denied-bucket doc block at the bottom of
- * `apps/server/src/services/aiAgent/shareGate.ts`.
+ * `lobe-user-interaction`,
+ * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`, and the hidden system-only self-iteration tools),
+ * see the denied-builtins section of
+ * `apps/server/src/services/aiAgent/shareGate/README.md`.
  */
 export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   CalculatorManifest.identifier,
@@ -244,24 +248,31 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   // is skipped for visitor runs (see `cloudSandbox.ts` /
   // `preprocessLhCommand.ts`), and `lobe-creds` stays denied so
   // `~/.creds/env` is never written into that session either. See the
-  // positive-evidence doc block in `shareGate.ts` for the full rationale.
+  // allowed-builtins section of `shareGate/README.md` for the full rationale.
   CloudSandboxManifest.identifier,
   // Data-bearing tools whose whole-identifier grant AND per-API write/always-
   // blocked surface is further narrowed server-side by
-  // `DATA_TOOL_ACCESS_RULES` in `shareGate.ts` — being on this allowlist only
+  // `DATA_TOOL_ACCESS_RULES` in `shareGate/dataToolRules.ts` — being on this allowlist only
   // lets them survive to that narrower gate, it does not itself grant read or
   // write access.
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   AgentDocumentsManifest.identifier,
+  // `lobe-activator`: never picked in the owner's tool picker — it is implied
+  // (scoped to `activateTools`) by any tool grant and kept only while the
+  // gated set still holds a granted tool to activate. It can only surface
+  // manifests from that already-gated set, and its skill fallback re-checks
+  // `shareConfig.skillGrants`. See the allowed-builtins section of
+  // `shareGate/README.md`.
+  LobeActivatorManifest.identifier,
   // `lobe-skills`: a skill-driven agent is broken the moment it is shared
   // without this, since skills are loaded on demand through this tool. It is
   // allowed only in the narrow shape `DATA_TOOL_ACCESS_RULES` gives it —
   // `activateSkill` / `readReference` on skills the creator explicitly listed
   // in `shareConfig.skillGrants`, enforced again at load time in the server
   // runtime so the model cannot name a skill outside that list. Every other
-  // API of the tool is blocked. See the positive-evidence doc block in
-  // `shareGate.ts`.
+  // API of the tool is blocked. See the allowed-builtins section of
+  // `shareGate/README.md`.
   SkillsManifest.identifier,
 ]);
 
@@ -269,7 +280,7 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  * Subset of {@link AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS} whose server-side
  * data grant is UNCONDITIONALLY `none` — surviving the master allowlist only
  * to be blocked outright by `DATA_TOOL_ACCESS_RULES` in
- * `apps/server/src/services/aiAgent/shareGate.ts`, for every API and no matter
+ * `apps/server/src/services/aiAgent/shareGate/dataToolRules.ts`, for every API and no matter
  * what the share config says. There is no knowledge-base or agent-file grant
  * in `AgentShareConfig` at all (see `applyShareGateToAgentConfig`), so a
  * visitor run can never reach the knowledge-base store. Agent Documents is
@@ -281,7 +292,7 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  *
  * Exists so the owner-facing share settings tool picker can render these as
  * permanently unavailable instead of offering a toggle the server will always
- * ignore. `shareGate.test.ts` asserts this set stays exactly the set of
+ * ignore. `shareGate/dispatch.test.ts` asserts this set stays exactly the set of
  * identifiers `isShareBlockedDataToolCall` blocks under maximal permissions,
  * so relaxing a grant server-side without updating this list fails there
  * rather than silently lying in the UI.
@@ -328,7 +339,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
     type: 'builtin',
@@ -394,7 +404,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LocalSystemManifest.identifier,
     manifest: LocalSystemManifest,
-    resolveManifest: resolveLocalSystemManifest,
     type: 'builtin',
   },
   {
@@ -414,6 +423,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
+    resolveManifest: resolveCloudSandboxInPageScope(CloudSandboxManifest),
     type: 'builtin',
   },
   {
@@ -425,6 +435,30 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CredsManifest.identifier,
     manifest: CredsManifest,
+    type: 'builtin',
+  },
+  {
+    // Runtime-managed: enabled only when the agent owns an account, so it is
+    // not a user-facing row and not an always-on tool.
+    hidden: true,
+    identifier: AgentAccountManifest.identifier,
+    manifest: AgentAccountManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: McpEventsManifest.identifier,
+    manifest: McpEventsManifest,
+    type: 'builtin',
+  },
+  {
+    // On demand: hidden from the Tools popover and absent from the defaults, but discoverable, so
+    // the activator enables it when the user asks about this agent's webhooks. The `webhook`
+    // flag removes it from the pool (`featureGates.ts`); share visitors never reach it (not in
+    // AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: it creates entry points that run as the creator).
+    hidden: true,
+    identifier: WebhookManifest.identifier,
+    manifest: WebhookManifest,
     type: 'builtin',
   },
   {
@@ -495,6 +529,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
+    hidden: true,
+    identifier: ChannelManifest.identifier,
+    manifest: ChannelManifest,
+    type: 'builtin',
+  },
+  {
     identifier: MessageManifest.identifier,
     manifest: MessageManifest,
     // Context-aware: drops APIs the current IM platform can't fulfil (e.g.
@@ -506,13 +547,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: RemoteDeviceManifest.identifier,
     manifest: RemoteDeviceManifest,
-    type: 'builtin',
-  },
-  {
-    discoverable: false,
-    hidden: true,
-    identifier: TopicReferenceManifest.identifier,
-    manifest: TopicReferenceManifest,
     type: 'builtin',
   },
   {
@@ -539,6 +573,15 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     discoverable: false,
     hidden: true,
+    identifier: GoalReportManifest.identifier,
+    manifest: GoalReportManifest,
+    type: 'builtin',
+  },
+  {
+    // Hidden from the Tools popover (a goal starts from `/goal`), but
+    // discoverable so the activator can enable it when the user asks for a goal
+    // in plain words or wants a rejected goal proposal redone.
+    hidden: true,
     identifier: GoalManifest.identifier,
     manifest: GoalManifest,
     type: 'builtin',
@@ -549,6 +592,18 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    identifier: CanvasManifest.identifier,
+    manifest: CanvasManifest,
+    type: 'builtin',
+  },
+  {
+    // Opt-in: pin it in the Tools popover, or the activator enables it when a
+    // user asks for monitoring — not a default so ordinary turns stay lean.
+    identifier: DashboardManifest.identifier,
+    manifest: DashboardManifest,
+    type: 'builtin',
+  },
+  {
     discoverable: false,
     hidden: true,
     identifier: BriefManifest.identifier,
@@ -556,7 +611,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
     // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.
@@ -584,17 +638,76 @@ export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) =>
   title: tool.manifest?.meta?.title,
 }));
 
+// A saved pin on a user-selectable tool predates on-demand loading. Runtime additions
+// (mentions, media fallback, exact toolsets) are not user preferences and bypass this filter.
+export const onDemandBuiltinToolIds = builtinTools
+  .filter(
+    (tool) =>
+      (tool.discoverable !== false || tool.identifier === AuvManifest.identifier) &&
+      !alwaysOnToolIds.includes(tool.identifier) &&
+      !runtimeManagedToolIds.includes(tool.identifier),
+  )
+  .map((tool) => tool.identifier);
+const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
+
+/** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
+export const getUnavailableBuiltinToolIds = (
+  available: Iterable<string>,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+  uninstalled: readonly string[] = [],
+) => {
+  if (resolveToolMode(chatConfig) === 'agent') return uninstalled.filter(isOnDemandBuiltinTool);
+
+  const allowed = new Set(available);
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+};
+export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
+
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),
 );
 
 /**
- * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
+ * Non-selectable, non-recommended tools that require installation from the Skill Store.
  * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
  */
 export const defaultUninstalledBuiltinTools = builtinTools
-  .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
+  .filter(
+    (t) =>
+      !t.hidden && !isOnDemandBuiltinTool(t.identifier) && !recommendedBuiltinIds.has(t.identifier),
+  )
   .map((t) => t.identifier);
+
+/**
+ * Minimal view of `settings.tool` covering just the builtin-tool install slots.
+ * Typed locally so the helpers accept the loosened shape returned by
+ * `getUserState()` while still spreading the rest of `tool` through at runtime.
+ */
+export interface UninstalledBuiltinToolsScope {
+  uninstalledBuiltinTools?: string[];
+  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
+}
+
+/**
+ * Resolve the uninstalled-builtin-tools list for the active scope.
+ *
+ * - Personal context (`workspaceId == null`) → the user's personal list.
+ * - Workspace context → the per-workspace list; a workspace with no stored
+ *   entry falls back to the default seed (a clean default state), never the
+ *   user's personal customization.
+ *
+ * `undefined` (never configured) maps to the default seed in both scopes.
+ */
+export const resolveUninstalledBuiltinTools = (
+  tool: UninstalledBuiltinToolsScope | null | undefined,
+  workspaceId?: string | null,
+): string[] => {
+  const stored = workspaceId
+    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
+    : tool?.uninstalledBuiltinTools;
+
+  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+};
 
 const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
 
@@ -616,7 +729,7 @@ export const isBuiltinToolIdentifier = (identifier: string): boolean =>
  * governed builtin identifier, true only when it is explicitly listed in
  * {@link AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS}.
  *
- * Shared by the server gate (`shareGate.ts`) and the owner-facing tool picker
+ * Shared by the server gate (`apps/server/src/services/aiAgent/shareGate/`) and the owner-facing tool picker
  * so both sides agree on exactly which builtin tools a share visitor's run
  * can ever reach.
  */

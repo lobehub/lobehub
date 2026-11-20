@@ -44,7 +44,19 @@ const AGENT_MEMBER_UNAVAILABLE = buildError(
   'AGENT_MEMBER_UNAVAILABLE',
 );
 
-const START_FAILED = buildError('Agent member(s) failed to start.', 'AGENT_MEMBER_START_FAILED');
+/**
+ * Inline start-failure error. When the runner reports per-member reasons
+ * (e.g. "The model provider returned an empty completion."), surface them so
+ * the supervisor can diagnose and adapt instead of retrying blind — mirrors
+ * `ServerSubAgentRunResult.error` for callSubAgent (issue #16257).
+ */
+const startFailed = (errors?: string[]): BuiltinServerRuntimeOutput =>
+  errors && errors.length > 0
+    ? buildError(
+        `Agent member(s) failed to start.\n${errors.map((e) => `- ${e}`).join('\n')}`,
+        'AGENT_MEMBER_START_FAILED',
+      )
+    : buildError('Agent member(s) failed to start.', 'AGENT_MEMBER_START_FAILED');
 
 class GroupManagementExecutionRuntime {
   // ==================== Communication Coordination ====================
@@ -57,12 +69,12 @@ class GroupManagementExecutionRuntime {
     if (!ctx.agentMember) return AGENT_MEMBER_UNAVAILABLE;
     if (!params.agentId) return buildError('agentId is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: [{ agentId: params.agentId, instruction: params.instruction }],
       mode: 'in_group',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -81,13 +93,13 @@ class GroupManagementExecutionRuntime {
     const agentIds = params.agentIds ?? [];
     if (agentIds.length === 0) return buildError('agentIds is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       disableTools: true,
       members: agentIds.map((agentId) => ({ agentId, instruction: params.instruction })),
       mode: 'in_group',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -105,13 +117,13 @@ class GroupManagementExecutionRuntime {
     if (!ctx.agentMember) return AGENT_MEMBER_UNAVAILABLE;
     if (!params.agentId) return buildError('agentId is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: [{ agentId: params.agentId, instruction: params.reason }],
       mode: 'in_group',
       // Delegate hands control to the member — finish without another supervisor turn.
       onComplete: 'finish',
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -137,13 +149,13 @@ class GroupManagementExecutionRuntime {
       return buildError('agentId and instruction are required.', 'INVALID_ARGUMENTS');
     }
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: [{ agentId: params.agentId, instruction: params.instruction }],
       mode: 'isolated',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
       timeout: params.timeout,
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -162,14 +174,14 @@ class GroupManagementExecutionRuntime {
     const tasks = params.tasks ?? [];
     if (tasks.length === 0) return buildError('tasks is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: tasks.map((task) => ({ agentId: task.agentId, instruction: task.instruction })),
       mode: 'isolated',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
       // Per-task timeouts collapse to the longest; the barrier waits for all.
       timeout: tasks.reduce((max, task) => Math.max(max, task.timeout ?? 0), 0) || undefined,
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -180,8 +192,10 @@ class GroupManagementExecutionRuntime {
   };
 
   // ==================== Not yet implemented on the server ====================
-  // Mirror the client stubs: return inline (non-deferred) results so the
-  // supervisor LLM keeps orchestrating instead of parking.
+  // Mirror the client stubs. These actions have no server orchestration yet —
+  // they must surface explicit `success: false` errors (not success-shaped
+  // text) so the supervisor LLM can adapt instead of treating the stub output
+  // as a completed action.
 
   interrupt = async (params: InterruptParams): Promise<BuiltinServerRuntimeOutput> => ({
     content: `Interrupt is not yet supported in server orchestration (task ${params.taskId}).`,
@@ -198,10 +212,12 @@ class GroupManagementExecutionRuntime {
     success: true,
   });
 
-  vote = async (params: VoteParams): Promise<BuiltinServerRuntimeOutput> => ({
-    content: `Voting is not yet implemented (question: "${params.question}").`,
-    success: true,
-  });
+  vote = async (params: VoteParams): Promise<BuiltinServerRuntimeOutput> =>
+    buildError(
+      "Voting is not yet implemented. Collect members' opinions with `broadcast` instead, " +
+        'then tally the responses yourself.',
+      'VOTE_NOT_IMPLEMENTED',
+    );
 }
 
 const runtime = new GroupManagementExecutionRuntime();

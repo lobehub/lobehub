@@ -58,6 +58,7 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
     }),
 
     // AI chat methods
+    internal_confirmClientMessages: vi.fn(),
     internal_dispatchMessage: vi.fn().mockImplementation((payload, context) => {
       if (payload.type !== 'createMessage') return;
 
@@ -106,8 +107,6 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
     optimisticUpdateMessageError: vi.fn().mockResolvedValue(undefined),
 
     optimisticUpdateMessagePlugin: vi.fn().mockResolvedValue(undefined),
-
-    optimisticUpdateMessagePluginError: vi.fn().mockResolvedValue(undefined),
 
     optimisticUpdatePluginArguments: vi.fn().mockResolvedValue(undefined),
 

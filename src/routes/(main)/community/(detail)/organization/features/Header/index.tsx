@@ -1,9 +1,8 @@
 'use client';
 
-import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
-import { Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
+import { ActionIcon, Avatar, cssVar, Flexbox, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Globe } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

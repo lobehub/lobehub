@@ -1,7 +1,10 @@
 name: Desktop Core Seq
-description: Resolve the next core seq (max over every platform's published latest.json + 1) so a new core always outranks published ones
+description: Resolve the next core seq (max over every platform within one app version + 1) so a new core always outranks published ones
 
 inputs:
+  app-version:
+    description: Full application version owning the v4 OTA namespace
+    required: true
   channel:
     description: 'Update channel'
     required: true
@@ -24,6 +27,7 @@ runs:
       id: seq
       shell: bash
       env:
+        APP_VERSION: ${{ inputs.app-version }}
         CHANNEL: ${{ inputs.channel }}
         UPDATE_SERVER_URL: ${{ inputs.update-server-url }}
       run: |
@@ -32,16 +36,17 @@ runs:
         case "$BASE" in
           */stable|*/nightly|*/canary|*/beta) BASE="${BASE%/*}" ;;
         esac
+        [[ "$APP_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]] || { echo "::error::valid app-version required"; exit 1; }
         MAX_SEQ=-1
         for p in darwin win32 linux; do
           HTTP_STATUS=$(curl -sS --connect-timeout 10 --max-time 30 \
-            -o "$RUNNER_TEMP/latest-$p.json" -w '%{http_code}' "$BASE/$CHANNEL/core/$p/latest.json")
+            -o "$RUNNER_TEMP/latest-$p.json" -w '%{http_code}' "$BASE/$CHANNEL/$APP_VERSION/core-v4/$p/latest.json")
           case "$HTTP_STATUS" in
             200) SEQ=$(jq -er '.seq | select(type == "number")' "$RUNNER_TEMP/latest-$p.json") ;;
             404) SEQ=-1 ;;
             *) echo "::error::$p latest.json fetch failed: HTTP $HTTP_STATUS"; exit 1 ;;
           esac
-          echo "$p latest seq: $SEQ"
+          echo "$APP_VERSION/core-v4/$p latest seq: $SEQ"
           if [ "$SEQ" -gt "$MAX_SEQ" ]; then MAX_SEQ=$SEQ; fi
         done
         NEXT=$((MAX_SEQ + 1))

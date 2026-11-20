@@ -1,5 +1,6 @@
 import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { HETERO_PERMISSION_MODES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -66,6 +67,23 @@ export const workspaceUserSettingsRouter = router({
       }
     },
   ),
+
+  /**
+   * This member's "New worktree" switch for one directory in this workspace.
+   * The list's cap is applied server-side, against the stored copy.
+   */
+  setWorktreeModeDir: workspaceUserSettingsProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.workspaceUserSettingsModel.setWorktreeModeDir(input.key, input.enabled),
+    ),
+
+  /** The Claude Code permission mode this member last picked for one directory. */
+  setHeteroPermissionModeDir: workspaceUserSettingsProcedure
+    .input(z.object({ key: z.string().min(1).max(4096), mode: z.enum(HETERO_PERMISSION_MODES) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.workspaceUserSettingsModel.setHeteroPermissionModeDir(input.key, input.mode),
+    ),
 
   /**
    * Merge `input` on top of the caller's current preference and persist via

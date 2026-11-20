@@ -9,8 +9,10 @@ import {
   type SkillStoreRuntimeService,
 } from '@lobechat/builtin-tool-skill-store/executionRuntime';
 import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
+import { LIBRARY_SKILL_IMPLICIT_MODE, parsePluginEntry, upsertPluginMode } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentModel } from '@/database/models/agent';
 import { RbacModel } from '@/database/models/rbac';
 import { UserModel } from '@/database/models/user';
 import {
@@ -31,6 +33,7 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
   private messageId?: string;
   private importer: SkillImporter;
   private marketService: MarketService;
+  private enableImportedSkill?: (identifier: string) => Promise<void>;
   private operationId?: string;
   private taskId?: string;
   private toolCallId?: string;
@@ -43,6 +46,12 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
     importer: SkillImporter;
     marketService: MarketService;
     messageId?: string;
+    /**
+     * Runs after every successful import with the skill's identifier. A library
+     * skill is opt-in per agent, so the run's own agent is opted in here —
+     * otherwise the model could not use the skill it just installed.
+     */
+    enableImportedSkill?: (identifier: string) => Promise<void>;
     operationId?: string;
     taskId?: string;
     toolCallId?: string;
@@ -54,6 +63,7 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
     this.messageId = options.messageId;
     this.importer = options.importer;
     this.marketService = options.marketService;
+    this.enableImportedSkill = options.enableImportedSkill;
     this.operationId = options.operationId;
     this.taskId = options.taskId;
     this.toolCallId = options.toolCallId;
@@ -104,6 +114,7 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
   importFromGitHub = async (gitUrl: string): Promise<SkillImportServiceResult> => {
     try {
       const result = await this.importer.importFromGitHub({ gitUrl });
+      await this.enableImportedSkill?.(result.skill.identifier);
       await this.emitSkillOutcome({
         apiName: 'importFromGitHub',
         intentClass: 'tool_command',
@@ -130,6 +141,7 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
   importFromUrl = async (url: string): Promise<SkillImportServiceResult> => {
     try {
       const result = await this.importer.importFromUrl({ url });
+      await this.enableImportedSkill?.(result.skill.identifier);
       await this.emitSkillOutcome({
         apiName: 'importFromUrl',
         intentClass: 'tool_command',
@@ -153,9 +165,13 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
     }
   };
 
-  importFromZipUrl = async (url: string): Promise<SkillImportServiceResult> => {
+  importFromZipUrl = async (
+    url: string,
+    options?: { identifier?: string; source?: 'market' | 'user' },
+  ): Promise<SkillImportServiceResult> => {
     try {
-      const result = await this.importer.importFromUrl({ url });
+      const result = await this.importer.importFromUrl({ url }, options);
+      await this.enableImportedSkill?.(result.skill.identifier);
       await this.emitSkillOutcome({
         apiName: 'importFromZipUrl',
         intentClass: 'tool_command',
@@ -220,7 +236,9 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
       const downloadUrl = this.marketService.getSkillDownloadUrl(identifier);
       log('Download URL: %s', downloadUrl);
 
-      const result = await this.importFromZipUrl(downloadUrl);
+      // Same identifier as the Skill Store UI / `lh skill install` path, so a
+      // skill installed there is recognized instead of colliding on its name.
+      const result = await this.importFromZipUrl(downloadUrl, { identifier, source: 'market' });
       log('Import from market result: %O', result);
       return result;
     } catch (error) {
@@ -300,12 +318,41 @@ export const skillStoreRuntime: ServerRuntimeRegistration = {
       userInfo: { userId: context.userId },
     });
 
+    const { agentId, serverDB, userId } = context;
+    const enableForRunAgent = agentId
+      ? async (identifier: string) => {
+          try {
+            const agentModel = new AgentModel(serverDB, userId, context.workspaceId);
+            const agent = await agentModel.getAgentConfigById(agentId);
+            if (!agent) return;
+
+            // Only a skill the agent has no entry for: a pin or an explicit
+            // disable is the user's own choice and a re-import must not undo it.
+            const plugins = agent.plugins ?? undefined;
+            if (plugins?.some((entry) => parsePluginEntry(entry).identifier === identifier)) return;
+
+            await agentModel.updateConfig(agentId, {
+              plugins: upsertPluginMode(
+                plugins,
+                identifier,
+                'auto',
+                LIBRARY_SKILL_IMPLICIT_MODE,
+              ) as unknown as string[],
+            });
+          } catch (error) {
+            // The import itself succeeded; the skill can still be turned on by hand.
+            log('Failed to turn imported skill %s on for agent %s: %O', identifier, agentId, error);
+          }
+        }
+      : undefined;
+
     const service = new SkillStoreServerRuntimeService({
       agentId: context.agentId,
       emitOutcome: emitToolOutcomeSafely,
       importer,
       marketService,
       messageId: context.messageId,
+      enableImportedSkill: enableForRunAgent,
       operationId: context.operationId,
       taskId: context.taskId,
       toolCallId: context.toolCallId,

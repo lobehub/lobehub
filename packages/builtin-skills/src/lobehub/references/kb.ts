@@ -18,7 +18,7 @@ Manage knowledge bases, folders, documents, and files.
 
 ## Tips
 
-- Use \`--json\` on any subcommand for structured output
+- \`lh kb list\` and \`lh kb view\` accept \`--json\` for structured output; the write commands do not
 - \`lh kb view\` shows a full tree of folders, files, and documents
 - After uploading a file, use \`lh doc parse <fileId>\` to extract text content
 `;

@@ -4,16 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentIdentityForm } from './useAgentIdentityForm';
 
 const mocks = vi.hoisted(() => ({
-  agentMap: {} as Record<string, { name?: string; slug?: string; title?: string }>,
+  agentMap: {} as Record<
+    string,
+    { description?: string; name?: string; slug?: string; title?: string }
+  >,
+  confirmAgentSlug: vi.fn(),
   refreshAgentConfig: vi.fn(),
-  refreshAgentList: vi.fn(),
-  updateAgentMetaById: vi.fn(),
+  updateAgentMeta: vi.fn(),
   updateAgentSlug: vi.fn(),
 }));
 
 vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: unknown) => unknown) =>
-    selector({ refreshAgentList: mocks.refreshAgentList }),
+    selector({ updateAgentMeta: mocks.updateAgentMeta }),
 }));
 
 vi.mock('@/services/agent', () => ({
@@ -26,8 +29,8 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) =>
     selector({
       agentMap: mocks.agentMap,
+      internal_confirmAgentSlug: mocks.confirmAgentSlug,
       internal_refreshAgentConfig: mocks.refreshAgentConfig,
-      updateAgentMetaById: mocks.updateAgentMetaById,
     }),
 }));
 
@@ -48,9 +51,16 @@ const setup = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.agentMap = { 'agent-a': { name: 'Alice', slug: 'old-slug', title: 'Health Assistant' } };
+  mocks.agentMap = {
+    'agent-a': {
+      description: 'Tracks sleep and workouts',
+      name: 'Alice',
+      slug: 'old-slug',
+      title: 'Health Assistant',
+    },
+  };
   mocks.updateAgentSlug.mockResolvedValue({ success: true });
-  mocks.updateAgentMetaById.mockResolvedValue(undefined);
+  mocks.updateAgentMeta.mockResolvedValue(undefined);
 });
 
 describe('useAgentIdentityForm', () => {
@@ -60,6 +70,7 @@ describe('useAgentIdentityForm', () => {
     expect(result.current.name).toBe('Alice');
     expect(result.current.title).toBe('Health Assistant');
     expect(result.current.slug).toBe('old-slug');
+    expect(result.current.description).toBe('Tracks sleep and workouts');
   });
 
   it('saves name and role through the meta patch, leaving an unchanged slug alone', async () => {
@@ -70,7 +81,8 @@ describe('useAgentIdentityForm', () => {
       await result.current.save();
     });
 
-    expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
+    expect(mocks.updateAgentMeta).toHaveBeenCalledExactlyOnceWith('agent-a', {
+      description: 'Tracks sleep and workouts',
       name: '小艾',
       title: 'Health Assistant',
     });
@@ -78,29 +90,33 @@ describe('useAgentIdentityForm', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
-  // The sidebar keeps its own copy of the label; without a refresh the list
-  // shows the old name while the profile shows the new one.
-  it('refreshes the sidebar list after a rename', async () => {
+  it('saves the trimmed description with the rest of the identity', async () => {
     const { result } = setup();
 
-    act(() => result.current.setName('小艾'));
+    act(() => result.current.setDescription('  Reviews pull requests\n'));
     await act(async () => {
       await result.current.save();
     });
 
-    expect(mocks.refreshAgentList).toHaveBeenCalledOnce();
+    expect(mocks.updateAgentMeta).toHaveBeenCalledExactlyOnceWith('agent-a', {
+      description: 'Reviews pull requests',
+      name: 'Alice',
+      title: 'Health Assistant',
+    });
   });
 
-  it('does not refresh the sidebar when the save was rejected', async () => {
-    mocks.updateAgentSlug.mockResolvedValue({ reason: 'taken', success: false });
+  it('clears the description when the field is emptied', async () => {
     const { result } = setup();
 
-    act(() => result.current.setSlug('taken-slug'));
+    act(() => result.current.setDescription('   '));
     await act(async () => {
       await result.current.save();
     });
 
-    expect(mocks.refreshAgentList).not.toHaveBeenCalled();
+    expect(mocks.updateAgentMeta).toHaveBeenCalledWith(
+      'agent-a',
+      expect.objectContaining({ description: '' }),
+    );
   });
 
   it('routes a slug change to its own endpoint, normalized to lowercase', async () => {
@@ -112,6 +128,12 @@ describe('useAgentIdentityForm', () => {
     });
 
     expect(mocks.updateAgentSlug).toHaveBeenCalledExactlyOnceWith('agent-a', 'new-slug');
+    // The local `slug → id` copy follows the rename, so neither slug route paints a stale agent.
+    expect(mocks.confirmAgentSlug).toHaveBeenCalledExactlyOnceWith('agent-a', 'new-slug', {
+      // The old slug's row may only be persisted, and the rename keeps its scope.
+      previousSlug: 'old-slug',
+      scope: expect.any(String),
+    });
     expect(mocks.refreshAgentConfig).toHaveBeenCalledWith('agent-a');
     expect(onSaved).toHaveBeenCalled();
   });
@@ -127,7 +149,8 @@ describe('useAgentIdentityForm', () => {
 
     expect(result.current.error).toBe('settingAgent.slug.error.taken');
     // A rejected slug must not leave name/role persisted behind a closed form.
-    expect(mocks.updateAgentMetaById).not.toHaveBeenCalled();
+    expect(mocks.updateAgentMeta).not.toHaveBeenCalled();
+    expect(mocks.confirmAgentSlug).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
   });
 
@@ -162,7 +185,8 @@ describe('useAgentIdentityForm', () => {
       });
 
       expect(mocks.updateAgentSlug).not.toHaveBeenCalled();
-      expect(mocks.updateAgentMetaById).toHaveBeenCalledExactlyOnceWith('agent-a', {
+      expect(mocks.updateAgentMeta).toHaveBeenCalledExactlyOnceWith('agent-a', {
+        description: '',
         name: '',
         title: 'Lobe AI',
       });

@@ -5,26 +5,30 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
+import { workService } from '@/services/work';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { linkOwnBranchPullRequest } from '@/store/chat/slices/agentRun/actions/lifecycle/linkOwnBranchPullRequest';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
-import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
+import {
+  notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed,
+} from '@/store/chat/utils/desktopNotification';
 import {
   hasCompletedAssistantText,
   isAudioOnlyFirstUserMessage,
 } from '@/store/chat/utils/topicTitle';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { getUserStoreState } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { OperationStatus } from '../../../operation/types';
-import {
-  AI_RUNTIME_OPERATION_TYPES,
-  mergeQueuedMessages,
-  reconstructUploadFilesFromQueue,
-} from '../../../operation/types';
+import { AI_RUNTIME_OPERATION_TYPES, isClientHeldQueuedMessage } from '../../../operation/types';
 import { topicSelectors } from '../../../topic/selectors';
+import { scheduleQueuedFollowUp } from './queuedFollowUp';
 import type {
   AgentRunLifecycle,
   RunCompleteEvent,
@@ -36,6 +40,27 @@ import type {
 } from './types';
 
 const log = debug('lobe-store:run-lifecycle');
+
+const MAX_NOTIFIED_SERVER_OPERATIONS = 200;
+const notifiedServerOperationIds = new Set<string>();
+
+/**
+ * Claim the single desktop notification of a server run. One server run can
+ * reach this renderer through several local operations: a hetero run's in-stream
+ * end arrives before heteroFinish clears the topic marker, so a reconnect can
+ * attach and see that run end again. Local-only runs have no server id to claim.
+ */
+const claimServerRunNotification = (serverOperationId: string | undefined): boolean => {
+  if (!serverOperationId) return true;
+  if (notifiedServerOperationIds.has(serverOperationId)) return false;
+
+  notifiedServerOperationIds.add(serverOperationId);
+  if (notifiedServerOperationIds.size > MAX_NOTIFIED_SERVER_OPERATIONS) {
+    const [oldest] = notifiedServerOperationIds;
+    notifiedServerOperationIds.delete(oldest);
+  }
+  return true;
+};
 
 /**
  * Normalize the runtime/operation status into the cross-runtime
@@ -238,7 +263,7 @@ export const buildRunLifecycle = (
           return;
         }
         const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-        const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
+        const title = toTitleText(firstUserText).slice(0, 80) || 'New Topic';
         // `internal_updateTopic` already balances its own loading owner. For a
         // new client-runtime topic like "阅读下面...", an extra `false` here would
         // consume the runtime's loading owner and hide the sidebar spinner early.
@@ -283,8 +308,20 @@ export const buildRunLifecycle = (
       }
     },
     afterRunComplete: async (event: RunCompleteEvent) => {
-      if (adapter.runScope === 'sub_agent' || resolveTerminalDisposition(event) !== 'success')
+      if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
+      if (adapter.runScope === 'sub_agent') return;
+
+      const serverOperationId = get().operations[event.operationId]?.metadata.serverOperationId;
+      const disposition = resolveTerminalDisposition(event);
+      if (disposition === 'failed' && event.notification) {
+        if (!claimServerRunNotification(serverOperationId)) return;
+        await notifyDesktopAgentFailed(get, {
+          context: { agentId, groupId, topicId, workspaceSlug },
+          error: event.notification.error,
+        });
         return;
+      }
+      if (disposition !== 'success') return;
 
       // A voice-only first message cannot be summarized at the post-persist seam:
       // its content is empty and the assistant row is still a loading placeholder.
@@ -301,6 +338,7 @@ export const buildRunLifecycle = (
       // completion — the parent run is still going, so it must not fire a
       // "generation finished" notification / badge. See RunScope.
       if (!isDesktop) return;
+      if (!claimServerRunNotification(serverOperationId)) return;
 
       const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
@@ -352,6 +390,7 @@ export const buildRunLifecycle = (
     beforeRunComplete: NOOP,
     completeRun: async (event: RunCompleteEvent): Promise<RunCompleteResult> => {
       const { operationId, runtimeStatus } = event;
+      if (get().operations[operationId]?.metadata.terminalReconciled) return { requeued: false };
       // Effective terminal disposition, resolved from the client `runtimeStatus`
       // OR the normalized `status` gateway/hetero pass — so the same side effects
       // fire regardless of which transport reached this boundary.
@@ -361,6 +400,23 @@ export const buildRunLifecycle = (
       // side effect. Run it before the queued-message early return so a follow-up
       // cannot strand an audio-first topic without a title.
       if (disposition === 'success') summarizeVoiceTopicTitleAfterCompletion();
+
+      // Same for the topic's linked PRs: a queued follow-up skips the
+      // completion notification, not these. The run's gh / push commands were
+      // linked by the completion Work scan before the run reported its end; only
+      // a mounted list (Better Coding Experience PR chip / sidebar) refetches.
+      if (adapter.runScope !== 'sub_agent') {
+        void workService.refreshTopicPullRequests(topicId).catch(() => {});
+        // A PR someone opened on the topic's own branch — looked up before a
+        // queued turn can move the topic off that branch.
+        if (
+          disposition === 'success' &&
+          topicId &&
+          agentId &&
+          labPreferSelectors.enableBetterCodingExperience(getUserStoreState())
+        )
+          void linkOwnBranchPullRequest(get, { agentId, topicId });
+      }
 
       const completeSuccess = () => {
         get().completeOperation(operationId);
@@ -433,50 +489,26 @@ export const buildRunLifecycle = (
         }
       }
 
+      // A server snapshot may have settled the run while a callback awaited IO.
+      if (get().operations[operationId]?.metadata.terminalReconciled) return { requeued: false };
+
       // 2. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
       //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
       //    run, so a nested sub-agent completion must never drain it (it would
       //    re-trigger the user's queued message mid-parent-run). See RunScope.
-      if (disposition === 'success' && adapter.runScope !== 'sub_agent') {
-        const remainingQueued = get().drainQueuedMessages(contextKey);
-        if (remainingQueued.length > 0) {
-          const merged = mergeQueuedMessages(remainingQueued);
+      if (
+        disposition === 'success' &&
+        adapter.runScope !== 'sub_agent' &&
+        // The server delivers the follow-ups it holds itself.
+        get().queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage)
+      ) {
+        completeSuccess();
+        emitComplete(operationId, runtimeStatus);
 
-          completeSuccess();
-          emitComplete(operationId, runtimeStatus);
+        scheduleQueuedFollowUp(get, context, operationId, resetActiveTopicRunningStatus);
 
-          const execContext = { ...context };
-          const mergedContent = merged.content;
-          const mergedFiles =
-            merged.filesPreview.length > 0
-              ? reconstructUploadFilesFromQueue(merged.filesPreview)
-              : merged.files.length > 0
-                ? (merged.files.map((id) => ({ id })) as any)
-                : undefined;
-
-          setTimeout(() => {
-            // Use the passed `get` (the live chat-store getter) rather than a
-            // direct `useChatStore` import: in prod they resolve to the same
-            // singleton sendMessage, and avoiding the value import keeps the chat
-            // store out of this module's graph — so gateway.ts can statically
-            // import buildRunLifecycle without re-entering the store mid-eval.
-            get()
-              .sendMessage({
-                context: execContext,
-                editorData: merged.editorData,
-                files: mergedFiles,
-                ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
-                message: mergedContent,
-                metadata: { ...merged.metadata, steer: true },
-              })
-              .catch((e: unknown) => {
-                console.error('[executeClientAgent] sendMessage for queued content failed:', e);
-              });
-          }, 100);
-
-          return { requeued: true };
-        }
+        return { requeued: true };
       }
 
       // 3. Complete the operation based on the terminal disposition.
@@ -498,7 +530,12 @@ export const buildRunLifecycle = (
           // must be moved to terminal here. The client is exempt: its cancel
           // path already set the op to `cancelled` out of band, and
           // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          if (adapter.runtimeType !== 'client') {
+            get().completeOperation(operationId);
+            // A stop from elsewhere settles as `completed`; nothing drains the
+            // queue now, so the input must not wait for that hand-off.
+            get().updateOperationMetadata(operationId, { endedWithoutCompletion: true });
+          }
           break;
         }
         // `undefined`: unrecognized terminal status — fall through untouched.

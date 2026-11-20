@@ -5,4 +5,5 @@ export {
   CriterionRequiredChip,
   CriterionRow,
   type CriterionRowProps,
+  rowKeyDownHandler,
 } from './CriterionRow';

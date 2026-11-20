@@ -32,7 +32,8 @@ export const BriefManifest: BuiltinToolManifest = {
             type: 'array',
           },
           priority: {
-            description: "Priority of the brief. Default is 'normal'.",
+            description:
+              "How soon the user should look. 'urgent': needs attention now — it is pinned to the user's \"Needs you\" queue until handled, so reserve it for blockers, risks, or time-sensitive findings. 'normal': worth reading today. 'info' (default): background, fine to skim.",
             enum: ['urgent', 'normal', 'info'],
             type: 'string',
           },

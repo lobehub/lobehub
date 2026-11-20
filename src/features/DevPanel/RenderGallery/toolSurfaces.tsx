@@ -1,12 +1,11 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { Component, memo, type ReactNode, useMemo } from 'react';
 
 import { type ConversationContext, ConversationProvider } from '@/features/Conversation';
+import { densityVars } from '@/styles/densityVars';
 
 import { DEVTOOLS_AGENT_ID } from './fixtures';
 import {
@@ -19,8 +18,8 @@ import type { ApiEntry } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   missingShell: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: 12px;
 
@@ -168,7 +167,7 @@ const InterventionConversationHost = memo<InterventionConversationHostProps>(
     }, [api, derived.args, messageId, toolCallId]);
 
     return (
-      <ConversationProvider hasInitMessages skipFetch context={context} messages={messages}>
+      <ConversationProvider context={context} messages={messages}>
         {children}
       </ConversationProvider>
     );

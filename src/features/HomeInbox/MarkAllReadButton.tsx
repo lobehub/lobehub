@@ -1,4 +1,4 @@
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui';
 import { CheckCheckIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

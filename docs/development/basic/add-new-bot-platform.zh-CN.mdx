@@ -395,7 +395,7 @@ platformRegistry.register(myPlatform);
 前端会根据 Schema 自动生成配置表单，无需修改前端代码（除非你的平台需要自定义图标）。图标解析通过将平台 `name` 与 `@lobehub/ui/icons` 中的已知图标匹配来实现：
 
 ```
-// src/routes/(main)/agent/channel/const.ts
+// src/features/AgentChannel/const.ts
 const ICON_NAMES = ['Discord', 'GoogleChat', 'Lark', 'Slack', 'Telegram', ...];
 ```
 

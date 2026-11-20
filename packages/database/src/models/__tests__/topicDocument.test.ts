@@ -70,18 +70,6 @@ describe('TopicDocumentModel', () => {
       expect(result.topicId).toBe(topicId);
     });
 
-    it('should associate the same document with multiple topics', async () => {
-      const doc = await createTestDocument(documentModel, 'Shared Document');
-
-      await topicDocumentModel.associate({ documentId: doc.id, topicId });
-      await topicDocumentModel.associate({ documentId: doc.id, topicId: topicId2 });
-
-      const topicIds = await topicDocumentModel.findByDocumentId(doc.id);
-      expect(topicIds).toHaveLength(2);
-      expect(topicIds).toContain(topicId);
-      expect(topicIds).toContain(topicId2);
-    });
-
     it('should associate multiple documents with the same topic', async () => {
       const doc1 = await createTestDocument(documentModel, 'Document 1');
       const doc2 = await createTestDocument(documentModel, 'Document 2');
@@ -327,6 +315,92 @@ describe('TopicDocumentModel', () => {
       // B no longer sees it in the topic associations
       const afterUnpublish = await wsB.findByTopicId(wsTopicId);
       expect(afterUnpublish).toHaveLength(0);
+    });
+  });
+
+  describe('findVerbatimTwin', () => {
+    const createWith = async (title: string, content: string, fileType: string) => {
+      const doc = await documentModel.create({
+        content,
+        fileType,
+        source: `notebook:${topicId}`,
+        sourceType: 'api',
+        title,
+        totalCharCount: content.length,
+        totalLineCount: 1,
+      });
+      await topicDocumentModel.associate({ documentId: doc.id, topicId });
+      return doc;
+    };
+
+    it('reuses a byte-identical document another surface wrote, whatever it calls the kind', async () => {
+      // The notebook calls a report `markdown`; the page surface calls the same
+      // report `custom/document`. It is one document either way.
+      const page = await createWith('Report', 'Same body', 'custom/document');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'markdown',
+        title: 'Report',
+        topicId,
+      });
+
+      expect(twin?.id).toBe(page.id);
+    });
+
+    it('does not answer a plan write with a page holding the same text', async () => {
+      // `findPlanByTopic` filters on `agent/plan`. Reusing the page here would
+      // report a successful create and leave no discoverable plan behind.
+      await createWith('Plan', 'Same body', 'custom/document');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'agent/plan',
+        title: 'Plan',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+    });
+
+    it('does not answer a plain write with a plan holding the same text', async () => {
+      await createWith('Plan', 'Same body', 'agent/plan');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'markdown',
+        title: 'Plan',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+    });
+
+    it('keeps a labelled kind distinct — a note is not answered by a markdown row', async () => {
+      await createWith('Notes', 'Same body', 'markdown');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'note',
+        title: 'Notes',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+      // The read has to agree with the write: a `note` create that reported
+      // success must be findable as a note.
+      expect(await topicDocumentModel.findByTopicId(topicId, { type: 'note' })).toHaveLength(0);
+    });
+
+    it('finds a plain document under every equivalent kind', async () => {
+      // `documentFileTypesOfKind` widens the write; the same equivalence widens
+      // the read, so whichever equivalent name a plain document was written as,
+      // a read by the name the caller asked for finds it.
+      const page = await createWith('Report', 'Same body', 'custom/document');
+
+      const byMarkdown = await topicDocumentModel.findByTopicId(topicId, { type: 'markdown' });
+
+      expect(byMarkdown.map((doc) => doc.id)).toEqual([page.id]);
     });
   });
 

@@ -4,8 +4,9 @@ import { type App } from '@/core/App';
 
 import WorkspaceCtr from '../WorkspaceCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, listClaudeCodeMemoryMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  listClaudeCodeMemoryMock: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -17,6 +18,17 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
+  // Instruction files are deduped by their real path (CLAUDE.md is often a
+  // symlink to AGENTS.md); no fixture here uses symlinks.
+  realpath: vi.fn(async (target: string) => target),
+  // No `.git` anywhere, so the scan stays in the working directory.
+  stat: vi.fn(async () => {
+    throw new Error('ENOENT');
+  }),
+}));
+
+vi.mock('@lobechat/device-control/claude-code-memory', () => ({
+  listClaudeCodeMemory: listClaudeCodeMemoryMock,
 }));
 
 vi.mock('@lobechat/local-file-shell', () => ({
@@ -79,8 +91,8 @@ describe('WorkspaceCtr', () => {
 
       expect(result.skills.map((s) => s.name)).toEqual(['reviewer', 'spa-routes']);
       expect(result.instructions).toEqual([
-        { content: '# Agents', source: 'AGENTS.md' },
-        { content: '# Claude', source: 'CLAUDE.md' },
+        { content: '# Agents', path: '/proj/AGENTS.md', source: 'AGENTS.md' },
+        { content: '# Claude', path: '/proj/CLAUDE.md', source: 'CLAUDE.md' },
       ]);
       // Approves the scanned root for the lobe-file:// preview protocol.
       expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith('/proj');
@@ -220,6 +232,24 @@ describe('WorkspaceCtr', () => {
       const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
 
       expect(result).toEqual({ root: '/proj', skills: [], source: null });
+    });
+  });
+
+  describe('listClaudeCodeMemory', () => {
+    it('approves the memory directory for the preview protocol', async () => {
+      const memoryDir = '/device-home/.claude/projects/-proj/memory';
+      listClaudeCodeMemoryMock.mockImplementation(async (_params, deps) => {
+        await deps.approveProjectRoot(memoryDir);
+        return { files: [], memoryDir };
+      });
+
+      const result = await workspaceCtr.listClaudeCodeMemory({ scope: '/proj' });
+
+      expect(result).toEqual({ files: [], memoryDir });
+      expect(listClaudeCodeMemoryMock).toHaveBeenCalledWith({ scope: '/proj' }, expect.anything());
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith(
+        memoryDir,
+      );
     });
   });
 });

@@ -2,14 +2,18 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { MessageTranslationController } from '../controllers';
 import { requireAuth } from '../middleware';
 import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
+import { DeletedResourceSchema } from '../types/common.type';
 import {
   MessageTranslateInfoUpdateSchema,
   MessageTranslateQueryRequestSchema,
   MessageTranslateTriggerRequestSchema,
+  MessageTranslationSchema,
+  MessageTranslationWriteSchema,
 } from '../types/message-translations.type';
 
 // Message Translate related routes
@@ -18,6 +22,11 @@ const MessageTranslationRoutes = new Hono();
 // POST /api/v1/message-translates - Translate specified message
 MessageTranslationRoutes.post(
   '/:messageId',
+  routeDoc({
+    data: MessageTranslationWriteSchema,
+    summary: 'Translate a message',
+    tags: ['message-translations'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('MESSAGE_READ'),
@@ -40,6 +49,12 @@ MessageTranslationRoutes.post(
 // GET /api/v1/message-translates - Get translation info for specified message
 MessageTranslationRoutes.get(
   '/:messageId',
+  routeDoc({
+    data: MessageTranslationSchema.nullable(),
+    description: '`null` when the message has no stored translation.',
+    summary: "Get a message's translation",
+    tags: ['message-translations'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('MESSAGE_READ'),
@@ -59,6 +74,11 @@ MessageTranslationRoutes.get(
 // PUT /api/v1/message-translates/:messageId - Update message translation info
 MessageTranslationRoutes.patch(
   '/:messageId',
+  routeDoc({
+    data: MessageTranslationWriteSchema,
+    summary: "Set a message's translation",
+    tags: ['message-translations'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('MESSAGE_UPDATE'),
@@ -79,6 +99,13 @@ MessageTranslationRoutes.patch(
 // DELETE /api/v1/message-translates/:messageId - Delete message translation info
 MessageTranslationRoutes.delete(
   '/:messageId',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description: '`id` is the id of the message whose translation was removed.',
+    errors: [404],
+    summary: "Delete a message's translation",
+    tags: ['message-translations'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('TRANSLATION_DELETE'),

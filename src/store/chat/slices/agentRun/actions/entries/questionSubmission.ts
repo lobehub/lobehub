@@ -1,7 +1,10 @@
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
+import { t } from 'i18next';
 
 import type { AgentInterventionSourceAction } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
+import { shareChatService } from '@/services/shareChat';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
@@ -56,7 +59,11 @@ export class QuestionSubmissionActionImpl {
     if (this.#get().questionSubmissions[id] === 'checking') return false;
     this.#setPhase(id, 'checking');
     try {
-      const messages = await messageService.getMessages({ ...context, skipWorks: true });
+      // A share visitor can only read their own topic through the share mirror.
+      const messages =
+        context.agentShareId && context.topicId
+          ? await shareChatService.getMessages(context.agentShareId, context.topicId)
+          : await messageService.getMessages({ ...context, skipWorks: true });
       const message = messages.find((item) => item.id === id);
       if (!message?.pluginIntervention) throw new Error('Question resolution is unavailable');
       if (message.pluginIntervention.status === 'pending') {
@@ -66,6 +73,17 @@ export class QuestionSubmissionActionImpl {
           this.#setPhase(id);
           return true;
         }
+        // Reconcile stale client-only resolving flags as well as terminal results.
+        this.#applyResolution(
+          {
+            ...message,
+            pluginIntervention: {
+              ...message.pluginIntervention,
+              resolving: message.pluginIntervention.resolving === true,
+            },
+          },
+          context,
+        );
         this.#setPhase(id, 'failed');
         return false;
       }
@@ -74,9 +92,31 @@ export class QuestionSubmissionActionImpl {
       return true;
     } catch (error) {
       console.error('[QuestionSubmission] Failed to check resolution:', error);
+      const current = dbMessageSelectors.getDbMessageById(id)(this.#get());
+      if (current?.pluginIntervention && current.pluginIntervention.status !== 'pending') {
+        this.#setPhase(id);
+        return true;
+      }
+      if (current?.pluginIntervention?.resolving) {
+        this.#applyResolution(
+          { ...current, pluginIntervention: { ...current.pluginIntervention, resolving: false } },
+          context,
+        );
+      }
       this.#setPhase(id, 'uncertain');
       return false;
     }
+  };
+
+  #notifyEnded = (id: string): boolean => {
+    if (
+      dbMessageSelectors.getDbMessageById(id)(this.#get())?.pluginIntervention?.status !== 'aborted'
+    ) {
+      return false;
+    }
+    toast.info(t('tool.intervention.toolEnded', { ns: 'chat' }));
+    this.#setPhase(id);
+    return true;
   };
 
   /** The form can collapse immediately without writing to the server-owned pending row. */
@@ -85,8 +125,17 @@ export class QuestionSubmissionActionImpl {
     context: ConversationContext,
     submit: () => Promise<void>,
   ): Promise<void> => {
+    if (this.#notifyEnded(id)) return;
     const phase = this.#get().questionSubmissions[id];
-    if (phase && phase !== 'failed') return;
+    if (phase === 'uncertain') {
+      if (await this.checkQuestionSubmission(id, context)) {
+        this.#notifyEnded(id);
+        return;
+      }
+      if (this.#get().questionSubmissions[id] !== 'failed') {
+        throw new Error('Question submission could not be confirmed');
+      }
+    } else if (phase && phase !== 'failed') return;
     this.#setPhase(id, 'submitting');
     try {
       await submit();
@@ -95,11 +144,16 @@ export class QuestionSubmissionActionImpl {
       if (message?.pluginIntervention && message.pluginIntervention.status !== 'pending') {
         // The answer was accepted; a continuation failure must not reopen it.
         this.#setPhase(id);
+        if (this.#notifyEnded(id)) return;
         throw error;
       }
-      if (await this.checkQuestionSubmission(id, context)) return;
+      if (await this.checkQuestionSubmission(id, context)) {
+        this.#notifyEnded(id);
+        return;
+      }
       throw error;
     }
+    if (this.#notifyEnded(id)) return;
     const resultPhase = this.#get().questionSubmissions[id];
     if (resultPhase === 'failed' || resultPhase === 'uncertain') {
       throw new Error('Question submission could not be confirmed');

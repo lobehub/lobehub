@@ -33,7 +33,21 @@ export const resolveAgentTopicGroupMode = ({
   agentType?: HeterogeneousAgentType;
   globalMode: TopicGroupMode;
 }): TopicGroupMode => {
-  if (agentTopicGroupMode) return agentTopicGroupMode;
+  const resolved =
+    agentTopicGroupMode || getDefaultTopicGroupModeByAgentType(globalMode, agentType);
 
-  return getDefaultTopicGroupModeByAgentType(globalMode, agentType);
+  // "by agent" is only offered in project-scoped lists. When it sits in the
+  // global preference (set from a project sidebar before projects kept their
+  // own), a single agent's own topics would render as one pointless self-named
+  // bucket — keep the previous default grouping. Project-scoped lists resolve
+  // through `resolveProjectTopicGroupMode` instead.
+  return resolved === 'byAgent' ? 'byTime' : resolved;
 };
+
+/**
+ * Project-scoped lists read their own preference (default: by agent). They
+ * already belong to one project, so "by project" is not offered there; a stale
+ * value falls back to grouping by agent instead of one project-wide bucket.
+ */
+export const resolveProjectTopicGroupMode = (projectMode: TopicGroupMode): TopicGroupMode =>
+  projectMode === 'byProject' ? 'byAgent' : projectMode;

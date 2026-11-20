@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 
@@ -10,10 +9,11 @@ import {
   type SendButtonHandler,
 } from '@/features/ChatInput';
 import ActionBar from '@/features/ChatInput/ActionBar';
+import FileUpload from '@/features/ChatInput/ActionBar/Upload';
 import { useChatStore } from '@/store/chat';
 
 import type { HomeMode } from '../types';
-import { HOME_INPUT_BODY_HEIGHT } from './constants';
+import { HOME_INPUT_BODY_HEIGHT, HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import ModeSelect from './ModeSelect';
 
 const leftActions: ActionKeys[] = ['plus'];
@@ -77,6 +77,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
         leftActions={leftActions}
         rightActions={rightActions}
         slashPlacement="bottom"
+        uploadContextKey={HOME_UPLOAD_CONTEXT_KEY}
         chatInputEditorRef={(instance) => {
           if (!instance) return;
           useChatStore.setState({ mainInputEditor: instance });
@@ -100,8 +101,10 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           leftContent={
             <Flexbox horizontal align={'center'} gap={2}>
               <ModeSelect value={mode} onChange={onModeChange} />
-              {mode !== 'chat' ? null : isAgentConfigLoading ? (
+              {isAgentConfigLoading ? (
                 <ActionIcon disabled icon={PlusIcon} size={'small'} />
+              ) : mode === 'task' ? (
+                <FileUpload includeKnowledge={false} />
               ) : (
                 <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
               )}

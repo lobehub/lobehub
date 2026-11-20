@@ -40,18 +40,20 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   let res: Response;
 
   try {
-    res = await withTimeout(
-      (signal) =>
-        ssrfSafeFetch(
-          url,
-          {
-            headers: mixinHeaders,
-            signal,
-          },
-          { maxContentLength: MAX_HTML_SIZE },
-        ),
-      DEFAULT_TIMEOUT,
-    );
+    res = await withTimeout(async (signal) => {
+      const streamed = await ssrfSafeFetch(
+        url,
+        {
+          headers: mixinHeaders,
+          signal,
+        },
+        { maxContentLength: MAX_HTML_SIZE },
+      );
+      // ssrfSafeFetch resolves at the headers; buffer the capped body under the same
+      // timeout so a server that keeps dripping bytes cannot stall the crawl.
+      const body = streamed.body ? await streamed.arrayBuffer() : null;
+      return new Response(body, streamed);
+    }, DEFAULT_TIMEOUT);
   } catch (e) {
     throw toFetchError(e);
   }
@@ -71,6 +73,11 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   if (isNonDocumentContentType(type)) {
     throw new UnsupportedContentError(`URL points to non-document content (${type})`);
   }
+
+  // A PDF has readable text, but only a PDF-capable crawler can extract it. Skip so
+  // the next crawler gets a turn: fed to the HTML parser, the raw bytes stall the
+  // event loop for tens of seconds and come back as binary noise.
+  if (type?.split(';')[0].trim().toLowerCase() === 'application/pdf') return;
 
   if (type?.includes('application/json')) {
     let content: string;
@@ -92,6 +99,10 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
 
   try {
     const html = await res.text();
+
+    // Binary files are often served as text/html or with no Content-Type. Real pages
+    // never contain NUL characters, so treat such a body like the PDF case above.
+    if (html.startsWith('%PDF-') || html.includes('\u0000')) return;
 
     const result = htmlToMarkdown(html, { filterOptions, url });
 

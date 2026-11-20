@@ -51,6 +51,25 @@ const createValidMockEditor = () => ({
   setDocument: vi.fn(),
 });
 
+const pageEditorInput = (
+  mockEditor: Parameters<
+    ReturnType<typeof useDocumentStore.getState>['initDocumentWithEditor']
+  >[0]['editor'],
+): Parameters<ReturnType<typeof useDocumentStore.getState>['initDocumentWithEditor']>[0] => ({
+  content: '# Test',
+  documentId: 'doc-1',
+  editor: mockEditor,
+  sourceType: 'page',
+});
+
+const ownerLockPatch = (): Parameters<
+  ReturnType<typeof useDocumentStore.getState>['internal_dispatchDocument']
+>[0] => ({
+  id: 'doc-1',
+  type: 'updateDocument',
+  value: { lockOwnerId: 'owner-1' },
+});
+
 describe('DocumentStore - Editor Actions', () => {
   beforeEach(() => {
     vi.mocked(documentService.updateDocument).mockReset().mockResolvedValue({
@@ -217,7 +236,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       // Then call onEditorInit
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', '# Hello World');
@@ -245,7 +264,7 @@ name: youtube-comment-retrieval-workflow
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith(
@@ -293,11 +312,13 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledTimes(1);
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', editorData, {
+        keepId: true,
+      });
     });
 
     it('should fall back to editable body when SKILL.md editorData cannot be loaded', () => {
@@ -332,13 +353,15 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(consoleWarn).toHaveBeenCalledWith(
         '[DocumentStore] Failed to load SKILL.md editorData, falling back to markdown',
       );
-      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(1, 'json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(1, 'json', editorData, {
+        keepId: true,
+      });
       expect(mockEditor.setDocument).toHaveBeenNthCalledWith(2, 'markdown', '# Body');
 
       consoleWarn.mockRestore();
@@ -359,10 +382,12 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', editorData, {
+        keepId: true,
+      });
     });
 
     it('should reset editor content when target document is empty', () => {
@@ -379,7 +404,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-previous');
       });
 
       act(() => {
@@ -391,7 +416,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenLastCalledWith(
@@ -426,7 +451,7 @@ name: skill-name
       });
 
       await act(async () => {
-        await result.current.onEditorInit(mockEditor);
+        await result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(consoleError).toHaveBeenCalledWith(
@@ -876,12 +901,7 @@ name: skill-name
       } as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
         result.current.markDirty('doc-1');
       });
       vi.mocked(documentService.updateDocument).mockClear();
@@ -900,12 +920,7 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
         result.current.markDirty('doc-1');
       });
 
@@ -932,17 +947,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1019,17 +1025,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1074,11 +1071,7 @@ name: skill-name
           sourceType: 'page',
           updatedAt: knownVersion,
         });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1120,17 +1113,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1167,17 +1151,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1205,17 +1180,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1242,17 +1208,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1291,17 +1248,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1342,11 +1290,7 @@ name: skill-name
           editorData: { blocks: [{ type: 'paragraph' }] },
           sourceType: 'page',
         });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1376,17 +1320,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1413,17 +1348,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1543,17 +1469,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1589,17 +1506,8 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
-        result.current.internal_dispatchDocument({
-          id: 'doc-1',
-          type: 'updateDocument',
-          value: { lockOwnerId: 'owner-1' },
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
+        result.current.internal_dispatchDocument(ownerLockPatch());
         result.current.markDirty('doc-1');
       });
 
@@ -1628,12 +1536,7 @@ name: skill-name
       const mockEditor = createValidMockEditor() as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
       });
 
       act(() => {
@@ -1654,12 +1557,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
       });
 
       await act(async () => {
@@ -1712,12 +1610,7 @@ name: skill-name
       } as any;
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
         result.current.markDirty('doc-1');
       });
 
@@ -1749,12 +1642,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.initDocumentWithEditor({
-          content: '# Test',
-          documentId: 'doc-1',
-          editor: mockEditor,
-          sourceType: 'page',
-        });
+        result.current.initDocumentWithEditor(pageEditorInput(mockEditor));
         result.current.markDirty('doc-1');
       });
 

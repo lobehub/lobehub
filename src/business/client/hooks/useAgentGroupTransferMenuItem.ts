@@ -1,4 +1,4 @@
-import type { ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from '@lobehub/ui';
 
 interface AgentGroupTransferMeta {
   avatar?: string | null;

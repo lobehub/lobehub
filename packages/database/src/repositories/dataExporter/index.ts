@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import * as EXPORT_TABLES from '../../schemas';
@@ -141,11 +141,20 @@ export class DataExporterRepos {
     // `messageRef`: no topic column here, so keep only rows whose parent
     // message itself survives `notShareVisitorMessage()`. A NULL message
     // reference is trivially kept, matching the shared helpers' semantics.
+    //
+    // Correlate on the parent message id. The earlier `column IN (SELECT id
+    // FROM messages WHERE …)` sat under an OR, so Postgres could not pull it
+    // up into a join and ran it as a hashed SubPlan: a parallel seq scan of
+    // the whole `messages` table (~38M rows, 110 GB) on every export. Those
+    // scans outlived the 300s function timeout, piled up on client retries
+    // and saturated the primary's storage IO on 2026-10-27.
     return or(
       isNull(column),
-      inArray(
-        column,
-        this.db.select({ id: messages.id }).from(messages).where(notShareVisitorMessage()),
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(messages)
+          .where(and(eq(messages.id, column), notShareVisitorMessage())),
       ),
     );
   }

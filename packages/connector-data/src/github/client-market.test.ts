@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ConnectorDataError } from '../errors';
 import {
   createGitHubMarketConnectorClient,
   createGitHubMarketTransport,
@@ -19,6 +20,9 @@ const createProxy = () =>
     }
     if (input.endpoint === '/repos/lobehub/lobehub/contributors') {
       return { data: [{ contributions: 12, login: 'octocat' }], status: 200 };
+    }
+    if (input.endpoint === '/repos/lobehub/lobehub/branches') {
+      return { data: [{ name: 'canary', protected: true }, { name: 'main' }, {}], status: 200 };
     }
     if (input.endpoint === '/graphql') {
       const body = input.body as { query?: string };
@@ -102,5 +106,50 @@ describe('createGitHubMarketConnectorClient', () => {
       pronouns: 'they/them',
       websiteUrl: 'https://lobehub.com',
     });
+  });
+
+  it('lists a repository branches through the REST proxy', async () => {
+    const proxyOAuthRequest = createProxy();
+    const transport = createGitHubMarketTransport({ market: { proxyOAuthRequest } });
+
+    await expect(
+      transport.listRepositoryBranches({ owner: 'lobehub', perPage: 100, repository: 'lobehub' }),
+    ).resolves.toEqual([{ name: 'canary' }, { name: 'main' }, { name: null }]);
+
+    expect(proxyOAuthRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: '/repos/lobehub/lobehub/branches',
+        method: 'GET',
+        parameters: [{ in: 'query', name: 'per_page', value: 100 }],
+      }),
+    );
+  });
+});
+
+describe('GitHub proxy authorization failures', () => {
+  it('normalizes an expired 401 to authorization unavailable', async () => {
+    const client = createGitHubMarketConnectorClient({
+      market: {
+        proxyOAuthRequest: async () => ({ status: 401, data: {} }),
+      },
+    });
+    const result = client.listAccessibleRepositories();
+    await expect(result).rejects.toBeInstanceOf(ConnectorDataError);
+    await expect(result).rejects.toMatchObject({
+      code: 'github_authorization_unavailable',
+      provider: 'github',
+      retryable: false,
+    });
+  });
+
+  it.each([403, 500, 503])('preserves HTTP %i as a request failure', async (status) => {
+    const client = createGitHubMarketConnectorClient({
+      market: {
+        proxyOAuthRequest: async () => ({ status, data: {} }),
+      },
+    });
+    const result = client.listAccessibleRepositories();
+    await expect(result).rejects.not.toBeInstanceOf(ConnectorDataError);
+    await expect(result).rejects.toMatchObject({ status });
   });
 });

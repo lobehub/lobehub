@@ -105,8 +105,10 @@ const unwrapData = (data: unknown, keys: string[]) => {
   return nestedRecord(record, keys);
 };
 
+/* v8 ignore start -- unreachable `false` fallback: the only caller passes the record id, already non-empty */
 const isIssueIdentifier = (value: string | null) =>
   value ? LINEAR_ISSUE_IDENTIFIER_PATTERN.test(value) : false;
+/* v8 ignore stop */
 
 const urlSegmentAfter = (url: string | null, segmentName: string) => {
   if (!url) return null;

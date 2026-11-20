@@ -146,4 +146,31 @@ describe('normalizeAskUserQuestions', () => {
       },
     ]);
   });
+
+  it('keeps a question description a host supplies', () => {
+    expect(
+      normalizeAskUserQuestions({
+        questions: [
+          { description: 'Decides the tone', header: 'Q1', options: [], question: 'Who?' },
+        ],
+      }),
+    ).toEqual([{ description: 'Decides the tone', header: 'Q1', options: [], question: 'Who?' }]);
+  });
+
+  it('keeps an explicit recommended flag from a host-built option', () => {
+    const [question] = normalizeAskUserQuestions({
+      questions: [
+        {
+          header: '',
+          options: [
+            { id: 'retry', label: 'Retry', recommended: true },
+            { id: 'retire', label: 'Retire' },
+          ],
+          question: 'What next?',
+        },
+      ],
+    });
+    expect(question.options[0]).toMatchObject({ id: 'retry', label: 'Retry', recommended: true });
+    expect(question.options[1].recommended).toBeUndefined();
+  });
 });

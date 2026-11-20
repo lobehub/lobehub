@@ -11,12 +11,11 @@ import { useUserStore } from '@/store/user';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
-import { dbMessageSelectors } from '../../../message/selectors';
 import * as agentDispatcher from '../dispatch/agentDispatcher';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
-// Mock the tRPC client & agentRuntimeService so the import chain doesn't pull
+// Mock the tRPC client so the import chain doesn't pull
 // server-only code (cloud business packages, redis envs) into the test env.
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -29,14 +28,19 @@ vi.mock('@/libs/trpc/client', () => ({
           success: false,
         }),
       },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
-  },
-}));
-
-vi.mock('@/services/agentRuntime', () => ({
-  agentRuntimeService: {
-    handleHumanIntervention: vi.fn().mockResolvedValue({ success: true }),
+    shareChat: {
+      resolveInterventionBySource: {
+        mutate: vi.fn().mockResolvedValue({
+          contractVersion: 2,
+          status: 'unavailable',
+          success: false,
+        }),
+      },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+    },
   },
 }));
 
@@ -67,6 +71,16 @@ beforeEach(() => {
       status: 'unavailable',
       success: false,
     });
+  vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate)
+    .mockReset()
+    .mockResolvedValue({
+      contractVersion: 2,
+      status: 'unavailable',
+      success: false,
+    });
+  vi.mocked(lambdaClient.shareChat.stopPendingApproval.mutate)
+    .mockReset()
+    .mockResolvedValue({ operationId: 'operation-share', success: true } as any);
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
     questionSubmissions: {},
@@ -77,6 +91,32 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+const createToolMessageState = (
+  agentId: string,
+  topicId: string,
+  chatKey: string,
+  toolMessage: ReturnType<typeof createMockMessage>,
+) => ({
+  activeAgentId: agentId,
+  activeTopicId: topicId,
+  dbMessagesMap: { [chatKey]: [toolMessage] },
+  messagesMap: { [chatKey]: [toolMessage] },
+});
+
+const createHeteroQuestionMessage = (parentId: string) =>
+  createMockMessage({
+    id: 'tool-msg-1',
+    parentId,
+    plugin: {
+      apiName: 'askUserQuestion',
+      arguments: '{}',
+      identifier: 'lobe-claude-code',
+      type: 'default',
+    },
+    role: 'tool',
+    tool_call_id: 'cc_call_1',
+  } as any);
 
 const captureActError = async (action: () => Promise<void>): Promise<unknown> => {
   let captured: unknown;
@@ -507,6 +547,39 @@ describe('ConversationControl actions', () => {
   });
 
   describe('switchMessageBranch', () => {
+    // ROOT CAUSE:
+    // An unclaimed retry grant could outlive its visible branch. Selecting old
+    // history must revoke that grant before a newly mounted error card sees it.
+    /** @example Branch selection revokes only the selected conversation's grants. */
+    it('revokes unclaimed auto retries before displaying another branch', async () => {
+      const context = { agentId: 'retry-agent', topicId: 'retry-topic', threadId: null };
+      const otherContext = { agentId: 'retry-agent', topicId: 'other-topic', threadId: null };
+      const current = useChatStore.getState().startOperation({
+        context,
+        metadata: { heteroAutoRetryAvailable: true },
+        type: 'execServerAgentRuntime',
+      });
+      const unrelated = useChatStore.getState().startOperation({
+        context: otherContext,
+        metadata: { heteroAutoRetryAvailable: true },
+        type: 'execServerAgentRuntime',
+      });
+      vi.spyOn(useChatStore.getState(), 'optimisticUpdateMessageMetadata').mockImplementation(
+        async () => {
+          /** @example Revocation happens before the asynchronous branch replacement. */
+          expect(
+            useChatStore.getState().operations[current.operationId].metadata
+              .heteroAutoRetryAvailable,
+          ).toBe(false);
+        },
+      );
+      await useChatStore.getState().switchMessageBranch('parent-user', 1, { context });
+      /** @example Other topics retain their live recovery intent. */
+      expect(
+        useChatStore.getState().operations[unrelated.operationId].metadata.heteroAutoRetryAvailable,
+      ).toBe(true);
+    });
+
     it('should switch to a different message branch', async () => {
       const { result } = renderHook(() => useChatStore());
       const messageId = TEST_IDS.MESSAGE_ID;
@@ -847,12 +920,7 @@ describe('ConversationControl actions', () => {
           );
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         });
 
         vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
@@ -980,6 +1048,75 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
 
+      it("keeps a group supervisor's live run when approving its member's tool (G-05)", async () => {
+        // The supervisor is not paused: it waits on the member whose tool is being
+        // approved, and streams the continuation plus its own closing on its open
+        // gateway channel. Retiring it dropped the closing from the screen.
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'agt_supervisor';
+        const groupId = 'cg_launch';
+        const topicId = 'tpc_group';
+        const context = { agentId, groupId, scope: 'group', threadId: null, topicId } as any;
+        const chatKey = messageMapKey(context);
+
+        const userMessage = createMockMessage({ id: 'group-user-msg', role: 'user' });
+        const memberAssistant = createMockMessage({
+          agentId: 'agt_carol',
+          id: 'carol-msg',
+          parentId: userMessage.id,
+          role: 'assistant',
+        } as any);
+        const memberTool = createMockMessage({
+          agentId: 'agt_carol',
+          id: 'carol-tool',
+          parentId: memberAssistant.id,
+          plugin: {
+            apiName: 'execScript',
+            arguments: '{"command":"echo hi"}',
+            identifier: 'lobe-skills',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: 'call_carol',
+        } as any);
+
+        let supervisorOpId!: string;
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [userMessage, memberAssistant, memberTool] },
+            gatewayConnections: { 'server-supervisor-op': { status: 'connected' } } as any,
+            messagesMap: { [chatKey]: [userMessage, memberAssistant, memberTool] },
+          });
+          supervisorOpId = result.current.startOperation({
+            context,
+            metadata: { serverOperationId: 'server-supervisor-op' },
+            type: 'execServerAgentRuntime',
+          }).operationId;
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+
+        await act(async () => {
+          await result.current.approveToolCalling('carol-tool', 'group-1', context);
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeApproval: expect.objectContaining({ parentMessageId: 'carol-tool' }),
+          }),
+        );
+        expect(result.current.operations[supervisorOpId].status).toBe('running');
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
       it('uses the generic source claim for a durable edited approval and adopts its precreated op', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = 'server-agent';
@@ -1009,12 +1146,7 @@ describe('ConversationControl actions', () => {
         } as any;
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         });
         vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         const executeGatewayAgentSpy = vi
@@ -1045,6 +1177,7 @@ describe('ConversationControl actions', () => {
           batchId: 'batch-durable',
           operationId: 'operation-durable',
           resolutionRequestId: expect.any(String),
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
         });
         expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
@@ -1083,12 +1216,7 @@ describe('ConversationControl actions', () => {
         } as any);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
           pausedOperationId = result.current.startOperation({
             context: { agentId, topicId, threadId: null },
             type: 'execServerAgentRuntime',
@@ -1149,12 +1277,7 @@ describe('ConversationControl actions', () => {
           tool_call_id: 'call-claim-failure',
         } as any);
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         });
         vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         const mutation = vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate);
@@ -1195,12 +1318,7 @@ describe('ConversationControl actions', () => {
         } as any);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         });
         vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         const executeGatewayAgentSpy = vi
@@ -1300,12 +1418,7 @@ describe('ConversationControl actions', () => {
 
         let serverOpId: string | undefined;
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
 
           serverOpId = result.current.startOperation({
             context: { agentId, topicId, threadId: null },
@@ -1371,12 +1484,7 @@ describe('ConversationControl actions', () => {
         } as any);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
 
           result.current.startOperation({
             context: { agentId, topicId, threadId: null },
@@ -1429,12 +1537,7 @@ describe('ConversationControl actions', () => {
         } as any);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         });
 
         vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
@@ -1482,12 +1585,7 @@ describe('ConversationControl actions', () => {
         } as any);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
 
           // Server op is indexed under the group-scope key. Without scope
           // forwarding the lookup would hit the default 'main' bucket instead.
@@ -1529,6 +1627,116 @@ describe('ConversationControl actions', () => {
     });
   });
 
+  describe('share visitor', () => {
+    const agentId = 'shared-agent';
+    const topicId = 'visitor-topic';
+    const context: ConversationContext = {
+      agentId,
+      agentShareId: 'share-1',
+      scope: 'main',
+      topicId,
+    };
+    const chatKey = messageMapKey(context);
+
+    const seedShareCard = () => {
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-share',
+        pluginIntervention: {
+          batchId: 'batch-share',
+          operationId: 'operation-share',
+          status: 'pending',
+        },
+        role: 'tool',
+        tool_call_id: 'call-share',
+      } as any);
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messagesMap: { [chatKey]: [toolMessage] },
+        });
+      });
+    };
+
+    it('answers through the share mirror and resumes on the share gateway', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedShareCard();
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+      const updateTopicStatusSpy = vi.mocked(result.current.updateTopicStatus);
+      updateTopicStatusSpy.mockClear();
+
+      await act(async () => {
+        await result.current.approveToolCalling('tool-msg-share', '', context);
+      });
+
+      expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: { scope: 'once', type: 'approve_tool' },
+          shareId: 'share-1',
+          targets: [{ toolCallId: 'call-share', toolMessageId: 'tool-msg-share' }],
+          topicId,
+        }),
+      );
+      expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).not.toHaveBeenCalled();
+      // No durable store: the legacy resume goes out on the share gateway.
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          resumeApproval: expect.objectContaining({ decision: 'approved' }),
+        }),
+      );
+      // The visitor's topic belongs to the creator: no owner-scoped write.
+      expect(updateTopicStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['durable store', { contractVersion: 2, state: 'claimed', success: true }],
+      ['legacy resume', { contractVersion: 2, status: 'unavailable', success: false }],
+    ])(
+      'keeps a visitor\'s "don\'t ask again" in their own allow list (%s)',
+      async (_label, resolution) => {
+        const { result } = renderHook(() => useChatStore());
+        seedShareCard();
+        vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate).mockResolvedValue(
+          resolution as any,
+        );
+        vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+        const addToolToAllowList = vi.fn().mockResolvedValue(undefined);
+        useUserStore.setState({ addToolToAllowList });
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-share', '', context, {
+            rememberToolKey: 'lobe-cloud-sandbox/runCommand',
+          });
+        });
+
+        // A server-side `remember` would write the creator's allow list.
+        expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ action: { scope: 'once', type: 'approve_tool' } }),
+        );
+        expect(addToolToAllowList).toHaveBeenCalledWith('lobe-cloud-sandbox/runCommand');
+      },
+    );
+
+    it('stops a parked share run through the share mirror', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedShareCard();
+
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-share'], context);
+      });
+
+      expect(lambdaClient.shareChat.stopPendingApproval.mutate).toHaveBeenCalledWith({
+        batchId: 'batch-share',
+        operationId: 'operation-share',
+        shareId: 'share-1',
+        toolMessageIds: ['tool-msg-share'],
+        topicId,
+      });
+    });
+  });
+
   describe('durable terminal source lifecycle', () => {
     const agentId = 'server-agent';
     const topicId = 'server-topic';
@@ -1550,12 +1758,7 @@ describe('ConversationControl actions', () => {
       let pausedOperationId!: string;
 
       act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [toolMessage] },
-          messagesMap: { [chatKey]: [toolMessage] },
-        });
+        useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         pausedOperationId = result.current.startOperation({
           context: { agentId, topicId, threadId: null },
           type: 'execServerAgentRuntime',
@@ -1601,6 +1804,7 @@ describe('ConversationControl actions', () => {
     it('retires the paused operation only when Stop wins the durable claim', async () => {
       const { result } = renderHook(() => useChatStore());
       const pausedOperationId = seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
         .spyOn(result.current, 'executeGatewayAgent')
         .mockResolvedValue({} as any);
@@ -1624,6 +1828,31 @@ describe('ConversationControl actions', () => {
       expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
         expect.objectContaining({ status: 'active' }),
       );
+    });
+
+    // A stopped group member's card stayed on screen until a reload: its stop
+    // ends no stream this client listens on, so no refetch lands the aborted row.
+    it('settles the stopped card locally', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+      vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).mockResolvedValueOnce(
+        {
+          contractVersion: 2,
+          state: 'claimed',
+          status: 'stopped',
+          success: true,
+        },
+      );
+
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-terminal-source']);
+      });
+
+      const row = result.current.dbMessagesMap[chatKey].find(
+        (message) => message.id === 'tool-msg-terminal-source',
+      );
+      expect(row?.pluginIntervention?.status).toBe('aborted');
     });
 
     it('completes only the local action when custom cancel wins the durable claim', async () => {
@@ -1679,12 +1908,7 @@ describe('ConversationControl actions', () => {
       } as any);
 
       act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [toolMessage] },
-          messagesMap: { [chatKey]: [toolMessage] },
-        });
+        useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
 
         result.current.startOperation({
           context: { agentId, topicId, threadId: null },
@@ -1736,12 +1960,7 @@ describe('ConversationControl actions', () => {
       } as any);
 
       act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [toolMessage] },
-          messagesMap: { [chatKey]: [toolMessage] },
-        });
+        useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
 
         result.current.startOperation({
           context: { agentId, topicId, threadId: null },
@@ -2266,12 +2485,7 @@ describe('ConversationControl actions', () => {
           tool_call_id: 'call-custom-failure',
         } as any);
         act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [toolMessage] },
-            messagesMap: { [chatKey]: [toolMessage] },
-          });
+          useChatStore.setState(createToolMessageState(agentId, topicId, chatKey, toolMessage));
         });
         vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         const legacySideEffect = vi.fn().mockResolvedValue({
@@ -3044,11 +3258,13 @@ describe('ConversationControl actions', () => {
           batchId: `batch-${interactionKind}`,
           operationId: `server-operation-${interactionKind}`,
           resolutionRequestId: expect.any(String),
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
         });
         const resolvingIntervention = {
           ...toolMessage.pluginIntervention,
           resolving: true,
+          skipped: actionType === 'skip',
           status: 'pending',
         };
         expect(dispatchSpy).toHaveBeenCalledWith(
@@ -3136,7 +3352,7 @@ describe('ConversationControl actions', () => {
       expect(persistAnswersSpy).not.toHaveBeenCalled();
     });
 
-    it('fails closed after an unavailable durable source when operation memory is empty', async () => {
+    it('uses the persisted operation after an unavailable durable source on cold start', async () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'remote-agent';
       const topicId = 'remote-topic';
@@ -3167,23 +3383,24 @@ describe('ConversationControl actions', () => {
       const sourceMutation = vi.mocked(
         lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
       );
-      const pluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-        .mockResolvedValue(undefined);
       const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
       const localSubmit = vi
         .spyOn(heterogeneousAgentService, 'submitIntervention')
         .mockResolvedValue(undefined as any);
 
       await act(async () => {
-        await result.current.submitHeteroIntervention('tool-msg-source-unavailable', 'submit', {
+        await result.current.submitHeteroIntervention(toolMessage.id, 'submit', {
           Question: 'Answer',
         });
       });
 
       expect(sourceMutation).toHaveBeenCalledOnce();
-      expect(pluginSpy).not.toHaveBeenCalled();
-      expect(legacyRemoteSubmit).not.toHaveBeenCalled();
+      expect(legacyRemoteSubmit).toHaveBeenCalledWith({
+        operationId: 'server-operation-source-unavailable',
+        resolutionRequestId: expect.any(String),
+        result: { Question: 'Answer' },
+        toolCallId: 'call-source-unavailable',
+      });
       expect(localSubmit).not.toHaveBeenCalled();
     });
 
@@ -3224,9 +3441,7 @@ describe('ConversationControl actions', () => {
         });
       });
 
-      const pluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
         messages: [],
@@ -3248,11 +3463,10 @@ describe('ConversationControl actions', () => {
       expect(sourceMutation).toHaveBeenCalledWith(
         expect.objectContaining({ operationId: 'server-operation-local-fallback' }),
       );
-      expect(pluginSpy).toHaveBeenCalledWith(
-        'tool-msg-local-fallback',
-        { intervention: { status: 'approved' } },
-        { operationId: clientOperationId },
-      );
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-local-fallback')
+          ?.pluginIntervention,
+      ).toMatchObject({ status: 'pending', resolving: true });
       expect(localSubmit).toHaveBeenCalledWith({
         operationId: clientOperationId,
         result: { Question: 'Answer' },
@@ -3324,6 +3538,73 @@ describe('ConversationControl actions', () => {
       });
     });
 
+    it.each(['submit', 'cancel'] as const)(
+      'publishes a gateway %s to the server operation the producer polls',
+      async (actionType) => {
+        // ROOT CAUSE:
+        // The legacy submit published to the gateway run's client-local op id,
+        // whose stream no producer reads. The device CLI long-polls the server
+        // op id, so the answer never arrived and the request timed out.
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'remote-agent';
+        const topicId = 'remote-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const assistantMessage = createMockMessage({
+          id: 'assistant-msg-gateway',
+          role: 'assistant',
+        });
+        // OSS self-host persists no durable card locator, so the legacy submit runs.
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-gateway',
+          parentId: assistantMessage.id,
+          pluginIntervention: { status: 'pending' },
+          pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+          role: 'tool',
+          tool_call_id: 'call-gateway',
+        } as any);
+        const clientOperationId = 'op_client_local';
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+            messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          });
+          result.current.startOperation({
+            context: { agentId, threadId: null, topicId },
+            metadata: { serverOperationId: 'op_server_run' },
+            operationId: clientOperationId,
+            type: 'execServerAgentRuntime',
+          });
+          useChatStore.setState({
+            messageOperationMap: { [assistantMessage.id]: clientOperationId },
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+          messages: [],
+          success: true,
+        });
+        const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+
+        await act(async () => {
+          await result.current.submitHeteroIntervention(
+            toolMessage.id,
+            actionType,
+            actionType === 'submit' ? { Question: 'Answer' } : undefined,
+          );
+        });
+
+        expect(legacyRemoteSubmit).toHaveBeenCalledTimes(1);
+        expect(legacyRemoteSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ operationId: 'op_server_run', toolCallId: 'call-gateway' }),
+        );
+      },
+    );
+
     it('keeps a cold-start durable card unchanged when the source request fails', async () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'remote-agent';
@@ -3382,7 +3663,7 @@ describe('ConversationControl actions', () => {
       });
     });
 
-    it('submits via IPC, persists optimistic intervention, and flips topic status to running (submit)', async () => {
+    it('submits via IPC, awaits the producer result, and flips topic status to running', async () => {
       const { result } = renderHook(() => useChatStore());
 
       const agentId = 'hetero-agent';
@@ -3393,18 +3674,7 @@ describe('ConversationControl actions', () => {
         id: 'assistant-msg-1',
         role: 'assistant',
       });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-1',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        role: 'tool',
-        tool_call_id: 'cc_call_1',
-      } as any);
+      const toolMessage = createHeteroQuestionMessage(assistantMessage.id);
 
       let assistantOpId!: string;
       act(() => {
@@ -3442,12 +3712,11 @@ describe('ConversationControl actions', () => {
         await result.current.submitHeteroIntervention('tool-msg-1', 'submit', payload);
       });
 
-      // Optimistic approval runs against the resolved op (operationId carried).
-      expect(result.current.optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        'tool-msg-1',
-        { intervention: { status: 'approved' } },
-        { operationId: assistantOpId },
-      );
+      // Publishing waits for the producer ACK instead of claiming approval.
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-1')
+          ?.pluginIntervention,
+      ).toMatchObject({ status: 'pending', resolving: true });
 
       // IPC submit forwards the resolved operationId + toolCallId + result.
       expect(submitInterventionSpy).toHaveBeenCalledWith({
@@ -3473,18 +3742,7 @@ describe('ConversationControl actions', () => {
         id: 'assistant-msg-1',
         role: 'assistant',
       });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-1',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        role: 'tool',
-        tool_call_id: 'cc_call_1',
-      } as any);
+      const toolMessage = createHeteroQuestionMessage(assistantMessage.id);
 
       let executionOpId!: string;
       let reasoningOpId!: string;
@@ -3524,11 +3782,10 @@ describe('ConversationControl actions', () => {
       });
 
       expect(result.current.messageOperationMap[assistantMessage.id]).toBe(reasoningOpId);
-      expect(result.current.optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        'tool-msg-1',
-        { intervention: { status: 'approved' } },
-        { operationId: executionOpId },
-      );
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-1')
+          ?.pluginIntervention,
+      ).toMatchObject({ status: 'pending', resolving: true });
       expect(submitInterventionSpy).toHaveBeenCalledWith({
         operationId: executionOpId,
         result: payload,
@@ -3537,7 +3794,7 @@ describe('ConversationControl actions', () => {
       expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).not.toHaveBeenCalled();
     });
 
-    it("falls back to global-state optimistic context and routes a GC'd op to the remote tRPC transport", async () => {
+    it("keeps the card context and routes a GC'd op to the remote tRPC transport", async () => {
       // When the resolved op has already been garbage-collected (not present in
       // `operations`), the optimistic context is the empty object `{}`
       // (global-state fallback) rather than carrying the stale operationId. With
@@ -3551,18 +3808,7 @@ describe('ConversationControl actions', () => {
       const chatKey = messageMapKey({ agentId, topicId });
 
       const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-1',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        role: 'tool',
-        tool_call_id: 'cc_call_1',
-      } as any);
+      const toolMessage = createHeteroQuestionMessage(assistantMessage.id);
 
       act(() => {
         useChatStore.setState({
@@ -3598,19 +3844,16 @@ describe('ConversationControl actions', () => {
         ).resolves.toBeUndefined();
       });
 
-      // Remote publish is only transport acceptance: keep the form pending,
-      // mark it resolving, and use the empty global-state fallback context.
-      // The hint is dispatched locally onto both projections the UI reads and
-      // deliberately never persisted — a refresh must recover an actionable
-      // card rather than a permanently disabled one.
-      const resolvingIntervention = { resolving: true, status: 'pending' };
+      // Remote delivery waits for the ACK in the card's context, even after op GC.
+      // Both projections receive this local-only hint; Cancel clears skip intent.
+      const resolvingIntervention = { resolving: true, skipped: false, status: 'pending' };
       expect(dispatchSpy).toHaveBeenCalledWith(
         {
           id: 'tool-msg-1',
           type: 'updateMessage',
           value: { pluginIntervention: resolvingIntervention },
         },
-        {},
+        { context: { agentId, topicId, threadId: undefined } },
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
         {
@@ -3619,7 +3862,7 @@ describe('ConversationControl actions', () => {
           type: 'updateMessageTools',
           value: { intervention: resolvingIntervention },
         },
-        {},
+        { context: { agentId, topicId, threadId: undefined } },
       );
       expect(pluginSpy).not.toHaveBeenCalledWith(
         'tool-msg-1',
@@ -3666,255 +3909,11 @@ describe('ConversationControl actions', () => {
           publishError,
         );
       });
-      expect(pluginSpy).toHaveBeenLastCalledWith(
-        'tool-msg-1',
-        // A failed publish rolls back to pending AND drops the in-flight hint,
-        // so the card the user has to retry is actionable again.
-        { intervention: { resolving: false, status: 'pending' } },
-        {},
-      );
-    });
-
-    it('settles a remote card that the producer never acknowledges', async () => {
-      // Regression: the ask-user bridge stops waiting at its own deadline and
-      // its long-poll stops listening with it, so an answer published after
-      // that point can never be echoed back. The card was left on
-      // `pending + resolving` forever — every button disabled, the submit
-      // button spinning, with no way out but a refresh. The server accepted the
-      // answer, so the card settles as answered and leaves the surface; it is
-      // never re-offered, which would invite a duplicate answer.
-      vi.useFakeTimers();
-      const { result } = renderHook(() => useChatStore());
-
-      const agentId = 'hetero-agent';
-      const topicId = 'hetero-topic';
-      const chatKey = messageMapKey({ agentId, topicId });
-      const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-1',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        pluginIntervention: { status: 'pending' },
-        role: 'tool',
-        tool_call_id: 'cc_call_1',
-      } as any);
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeThreadId: undefined,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          // A GC'd op routes to the remote transport, the path that waits for
-          // a producer ACK.
-          messageOperationMap: { [assistantMessage.id]: 'gc-op-id' },
-          operations: {},
-        });
-      });
-
-      const pluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-        .mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
-      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
-        messages: [],
-        success: true,
-      });
-
-      await act(async () => {
-        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', { q: 'a' });
-      });
-
-      const resolvingMessage = dbMessageSelectors.getDbMessageById('tool-msg-1')(
-        useChatStore.getState(),
-      );
-      expect(resolvingMessage?.pluginIntervention?.resolving).toBe(true);
-      pluginSpy.mockClear();
-
-      // No ACK ever arrives.
-      await act(async () => {
-        vi.advanceTimersByTime(30 * 1000);
-      });
-
-      expect(pluginSpy).toHaveBeenCalledWith(
-        'tool-msg-1',
-        { intervention: { resolving: false, status: 'approved' } },
-        expect.anything(),
-      );
-
-      // The card must leave the surface on the local write alone. The durable
-      // write is best-effort; waiting on its echo is what left the card on
-      // screen in the first place.
-      const settled = dbMessageSelectors.getDbMessageById('tool-msg-1')(useChatStore.getState());
-      expect(settled?.pluginIntervention?.status).toBe('approved');
-      expect(settled?.pluginIntervention?.resolving).toBe(false);
-
-      vi.useRealTimers();
-    });
-
-    it.each([
-      {
-        actionType: 'skip' as const,
-        expected: {
-          rejectedReason: 'User skipped',
-          resolving: false,
-          skipped: true,
-          status: 'rejected',
-        },
-      },
-      {
-        actionType: 'cancel' as const,
-        expected: {
-          rejectedReason: 'User cancelled',
-          resolving: false,
-          skipped: false,
-          status: 'rejected',
-        },
-      },
-    ])(
-      'settles an unacknowledged $actionType as the decision the user made, not as an answer',
-      async ({ actionType, expected }) => {
-        // Regression: the settle timer runs for every remote action but always
-        // stamped `approved`, so an accepted skip/cancel that never got a
-        // producer ACK was rendered and persisted as an approved answer.
-        vi.useFakeTimers();
-        const { result } = renderHook(() => useChatStore());
-
-        const agentId = 'hetero-agent';
-        const topicId = 'hetero-topic';
-        const chatKey = messageMapKey({ agentId, topicId });
-        const assistantMessage = createMockMessage({
-          id: `assistant-${actionType}`,
-          role: 'assistant',
-        });
-        const toolMessage = createMockMessage({
-          id: `tool-${actionType}`,
-          parentId: assistantMessage.id,
-          plugin: {
-            apiName: 'askUserQuestion',
-            arguments: '{}',
-            identifier: 'lobe-claude-code',
-            type: 'default',
-          },
-          pluginIntervention: { status: 'pending' },
-          role: 'tool',
-          tool_call_id: `call-${actionType}`,
-        } as any);
-
-        act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeThreadId: undefined,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-            messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-            messageOperationMap: { [assistantMessage.id]: `gc-op-${actionType}` },
-            operations: {},
-          });
-        });
-
-        const pluginSpy = vi
-          .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-          .mockResolvedValue(undefined);
-        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-        vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
-
-        await act(async () => {
-          await result.current.submitHeteroIntervention(toolMessage.id, actionType);
-        });
-        pluginSpy.mockClear();
-
-        await act(async () => {
-          vi.advanceTimersByTime(30 * 1000);
-        });
-
-        expect(pluginSpy).toHaveBeenCalledWith(
-          toolMessage.id,
-          { intervention: expected },
-          expect.anything(),
-        );
-        const settled = dbMessageSelectors.getDbMessageById(toolMessage.id)(
-          useChatStore.getState(),
-        );
-        expect(settled?.pluginIntervention).toMatchObject(expected);
-
-        vi.useRealTimers();
-      },
-    );
-
-    it('leaves an acknowledged card alone when the settle timer fires', async () => {
-      vi.useFakeTimers();
-      const { result } = renderHook(() => useChatStore());
-
-      const agentId = 'hetero-agent';
-      const topicId = 'hetero-topic';
-      const chatKey = messageMapKey({ agentId, topicId });
-      const assistantMessage = createMockMessage({ id: 'assistant-msg-2', role: 'assistant' });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-2',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        pluginIntervention: { status: 'pending' },
-        role: 'tool',
-        tool_call_id: 'cc_call_2',
-      } as any);
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeThreadId: undefined,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          messageOperationMap: { [assistantMessage.id]: 'gc-op-id-2' },
-          operations: {},
-        });
-      });
-
-      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
-      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
-        messages: [],
-        success: true,
-      });
-
-      await act(async () => {
-        await result.current.submitHeteroIntervention('tool-msg-2', 'submit', { q: 'a' });
-      });
-
-      // The producer ACKs and the card goes terminal before the timer fires.
-      act(() => {
-        result.current.internal_dispatchMessage(
-          {
-            id: 'tool-msg-2',
-            type: 'updateMessage',
-            value: { pluginIntervention: { resolving: false, status: 'approved' } },
-          },
-          {},
-        );
-      });
-
-      await act(async () => {
-        vi.advanceTimersByTime(30 * 1000);
-      });
-
-      const settled = dbMessageSelectors.getDbMessageById('tool-msg-2')(useChatStore.getState());
-      expect(settled?.pluginIntervention?.status).toBe('approved');
-
-      vi.useRealTimers();
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-1')
+          ?.pluginIntervention,
+      ).toMatchObject({ resolving: false, status: 'pending' });
+      expect(pluginSpy).not.toHaveBeenCalled();
     });
 
     it('flips topic status on the passed context, NOT the active topic, when submitting from a background conversation', async () => {
@@ -3931,18 +3930,7 @@ describe('ConversationControl actions', () => {
       const chatKey = messageMapKey({ agentId, topicId: cardTopicId });
 
       const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-1',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        role: 'tool',
-        tool_call_id: 'cc_call_1',
-      } as any);
+      const toolMessage = createHeteroQuestionMessage(assistantMessage.id);
 
       let assistantOpId!: string;
       act(() => {

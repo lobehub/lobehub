@@ -206,12 +206,24 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   } = params;
   const workDir = cwd || process.cwd();
   const lhPath = resolveLhPath();
+  // A connector may run inside another agent's conversation. Never reuse that identity.
+  const inheritedEnv = { ...process.env };
+  for (const key of [
+    'LOBEHUB_AGENT_ID',
+    'LOBEHUB_ASSISTANT_MESSAGE_ID',
+    'LOBEHUB_TASK_ID',
+    'LOBEHUB_WORKSPACE_ID',
+  ]) {
+    delete inheritedEnv[key];
+  }
   // Propagate workspace scope into the spawned child so its own `lh notify`
   // invocations (and any grandchildren it shells out) inherit the same scope
   // via getTrpcClient → resolveWorkspaceId.
   const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...inheritedEnv,
+    ...(agentId && { LOBEHUB_AGENT_ID: agentId }),
     LOBEHUB_OPERATION_ID: operationId,
+    LOBEHUB_TOPIC_ID: topicId,
     ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
   };
   const sessionKey = parentOperationId ? operationId : topicId;

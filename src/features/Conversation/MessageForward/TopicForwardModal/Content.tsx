@@ -1,58 +1,54 @@
 'use client';
 
-import { Flexbox, SearchBar, TextArea } from '@lobehub/ui';
-import { Button, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { useMemo, useState } from 'react';
+import { Button, Flexbox, SearchBar, Text, TextArea, useModalContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import SelectCircle from '../SelectCircle';
-import type { ForwardTarget } from '../useForwardMessages';
+import { useForwardTargets } from '../useForwardTargets';
 import { useForwardTopic } from '../useForwardTopic';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    block-size: 460px;
-  `,
-  context: css`
-    flex: 1;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  divider: css`
-    align-self: stretch;
-    inline-size: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  list: css`
-    overflow-y: auto;
-    flex: 1;
-  `,
-  row: css`
-    cursor: pointer;
-
-    min-block-size: 44px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  selected: css`
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  body: { blockSize: '460px' },
+  context: {
+    flex: '1',
+    padding: densityTokens['--lobe-density-content-gap'],
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  divider: {
+    alignSelf: 'stretch',
+    inlineSize: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  list: { overflowY: 'auto', flex: '1' },
+  row: {
+    cursor: 'pointer',
+    minBlockSize: '44px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  selected: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+});
 
 export interface TopicForwardContentProps {
   cancelSourceContinuation?: boolean;
@@ -69,10 +65,12 @@ export const TopicForwardContent = ({
 }: TopicForwardContentProps) => {
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
-  const [keyword, setKeyword] = useState('');
   const [note, setNote] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const { candidates, keyword, selectedIds, setKeyword, targets, toggle } = useForwardTargets(
+    agents,
+    sourceAgentId,
+  );
   const forwardTopic = useForwardTopic({
     agentId: sourceAgentId,
     cancelSourceContinuation,
@@ -81,18 +79,7 @@ export const TopicForwardContent = ({
 
   useFetchAgentList();
 
-  const candidates = useMemo(() => {
-    const query = keyword.trim().toLowerCase();
-    return agents
-      .filter((agent) => agent.type === 'agent' && agent.id !== sourceAgentId)
-      .filter((agent) => !query || (agent.title || '').toLowerCase().includes(query));
-  }, [agents, keyword, sourceAgentId]);
-
   const handleForward = () => {
-    const targets: ForwardTarget[] = selectedIds
-      .map((id) => agents.find((agent) => agent.id === id))
-      .filter((agent): agent is NonNullable<typeof agent> => !!agent)
-      .map((agent) => ({ id: agent.id, title: agent.title }));
     if (targets.length === 0) return;
 
     forwardTopic(targets, note);
@@ -100,7 +87,7 @@ export const TopicForwardContent = ({
   };
 
   return (
-    <Flexbox horizontal className={styles.body} gap={16}>
+    <Flexbox horizontal className={stylex.props(styles.body).className} gap={16}>
       <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
         <SearchBar
           allowClear
@@ -108,7 +95,7 @@ export const TopicForwardContent = ({
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
         />
-        <Flexbox className={styles.list} gap={4}>
+        <Flexbox className={stylex.props(styles.list).className} gap={4}>
           {candidates.length === 0 ? (
             <Flexbox align={'center'} justify={'center'} padding={24}>
               <Text type={'secondary'}>{t('messageForward.modal.empty')}</Text>
@@ -120,20 +107,20 @@ export const TopicForwardContent = ({
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={cx(styles.row, selected && styles.selected)}
+                  className={stylex.props(styles.row, selected && styles.selected).className}
                   gap={8}
                   key={agent.id}
-                  onClick={() =>
-                    setSelectedIds((ids) =>
-                      selected ? ids.filter((id) => id !== agent.id) : [...ids, agent.id],
-                    )
-                  }
+                  onClick={() => toggle(agent.id)}
                 >
                   <AgentAvatar
+                    agentId={agent.id}
                     avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+                    background={agent.backgroundColor || undefined}
+                    name={agent.label || t('untitledAgent')}
+                    size={22}
                   />
                   <Text ellipsis style={{ flex: 1 }}>
-                    {agent.title || t('untitledAgent')}
+                    {agent.label || t('untitledAgent')}
                   </Text>
                   <SelectCircle checked={selected} />
                 </Flexbox>
@@ -143,11 +130,11 @@ export const TopicForwardContent = ({
         </Flexbox>
       </Flexbox>
 
-      <div className={styles.divider} />
+      <div {...stylex.props(styles.divider)} />
 
       <Flexbox flex={1} gap={12} style={{ minWidth: 0 }}>
         <Text type={'secondary'}>{t('messageForward.topic.context')}</Text>
-        <Flexbox className={styles.context} gap={8}>
+        <Flexbox className={stylex.props(styles.context).className} gap={8}>
           <Text ellipsis strong>
             {topicTitle}
           </Text>
@@ -155,17 +142,30 @@ export const TopicForwardContent = ({
         </Flexbox>
         <TextArea
           autoSize={{ maxRows: 4, minRows: 2 }}
-          placeholder={t('messageForward.modal.notePlaceholder')}
           resize={false}
           value={note}
+          placeholder={t(
+            cancelSourceContinuation
+              ? 'messageForward.topic.handoff.notePlaceholder'
+              : 'messageForward.modal.notePlaceholder',
+          )}
           onChange={(event) => setNote(event.target.value)}
         />
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button onClick={close}>{t('messageForward.bar.cancel')}</Button>
           <Button disabled={selectedIds.length === 0} type={'primary'} onClick={handleForward}>
             {selectedIds.length > 0
-              ? t('messageForward.modal.sendCount', { count: selectedIds.length })
-              : t('messageForward.bar.forward')}
+              ? t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submitCount'
+                    : 'messageForward.modal.sendCount',
+                  { count: selectedIds.length },
+                )
+              : t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submit'
+                    : 'messageForward.bar.forward',
+                )}
           </Button>
         </Flexbox>
       </Flexbox>

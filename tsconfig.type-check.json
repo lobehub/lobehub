@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "exclude": [
+    "node_modules",
+    "apps/desktop/**",
+    "apps/mobile/**",
+    "apps/share/**",
+    "apps/workbench/**",
+    "tmp",
+    "temp",
+    ".temp",
+    "e2e/**",
+    "knip.ts",
+    "packages/alint/fixtures/**",
+    "packages/*/alint/fixtures/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "tests/**"
+  ],
+  "extends": "./tsconfig.json",
+  "references": [
+    {
+      "path": "./apps/desktop"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { localFileKeys } from '@/libs/swr/keys';
+import { isTerminalLocalFileError } from '@/services/electron/localFileService';
 
 import { projectFileService, refreshProjectFiles } from './projectFile';
 
@@ -16,6 +17,11 @@ const mockDeviceClient = vi.hoisted(() => ({
   getProjectFileIndex: { query: vi.fn() },
   readExternalAssetForPublish: { query: vi.fn() },
   searchProjectFiles: { query: vi.fn() },
+}));
+
+const mockSandboxStorageService = vi.hoisted(() => ({
+  getStorage: vi.fn(),
+  listFiles: vi.fn(),
 }));
 
 const mockLocalFileService = vi.hoisted(() => ({
@@ -49,14 +55,46 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
-vi.mock('@/services/electron/localFileService', () => ({
+vi.mock('@/services/electron/localFileService', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   localFileService: mockLocalFileService,
+}));
+
+vi.mock('@/services/sandboxStorage', () => ({
+  sandboxStorageService: mockSandboxStorageService,
 }));
 
 describe('projectFileService', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps a remote device’s terminal failure code (deleted / denied file)', async () => {
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      code: 'not_found',
+      error: 'ENOENT: no such file or directory',
+      success: false,
+    });
+
+    const error = await projectFileService
+      .getLocalFilePreview({
+        deviceId: 'device-1',
+        path: '/repo/gone.md',
+        workingDirectory: '/repo',
+      })
+      .catch((reason: unknown) => reason);
+    expect(isTerminalLocalFileError(error)).toBe(true);
+
+    // A gateway / disconnect failure carries no code and stays transient.
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      error: 'Device offline',
+      success: false,
+    });
+    const transient = await projectFileService
+      .getLocalFilePreview({ deviceId: 'device-1', path: '/repo/a.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+    expect(isTerminalLocalFileError(transient)).toBe(false);
   });
 
   it('gets remote local-file preview through device RPC', async () => {
@@ -87,6 +125,21 @@ describe('projectFileService', () => {
       contentType: 'text/html',
       type: 'text',
     });
+  });
+
+  it('maps a content-less remote video preview to the binary placeholder', async () => {
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      preview: { contentType: 'video/mp4', type: 'video' },
+      success: true,
+    });
+
+    const preview = await projectFileService.getLocalFilePreview({
+      deviceId: 'device-1',
+      path: '/repo/demo.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({ contentType: 'video/mp4', type: 'binary' });
   });
 
   it('forwards image-only preview constraints to remote device RPC', async () => {
@@ -394,5 +447,47 @@ describe('projectFileService', () => {
         '/repo',
       ]);
     });
+  });
+
+  it('marks sandbox directories with a trailing slash so the tree can nest them', async () => {
+    const { projectFileService } = await import('./projectFile');
+
+    mockSandboxStorageService.getStorage.mockResolvedValue({ dir: '/mnt/workspace/ws-1' });
+    // One flat recursive listing, the way the workspace API answers: every
+    // path relative to the workspace root, directories with no trailing slash.
+    mockSandboxStorageService.listFiles.mockResolvedValue({
+      entries: [
+        { isDirectory: true, name: 'Spoon-Knife', path: 'hello-dev/Spoon-Knife' },
+        { isDirectory: false, name: 'README.md', path: 'hello-dev/Spoon-Knife/README.md' },
+        { isDirectory: false, name: 'README', path: 'hello-dev/README' },
+      ],
+      truncated: false,
+    });
+
+    const index = await projectFileService.getProjectFileIndex({
+      sandboxInstanceId: 'inst-1',
+      scope: 'hello-dev',
+    });
+
+    expect(index?.entries).toEqual([
+      {
+        isDirectory: true,
+        name: 'Spoon-Knife',
+        path: '/mnt/workspace/ws-1/hello-dev/Spoon-Knife',
+        relativePath: 'Spoon-Knife/',
+      },
+      {
+        isDirectory: false,
+        name: 'README.md',
+        path: '/mnt/workspace/ws-1/hello-dev/Spoon-Knife/README.md',
+        relativePath: 'Spoon-Knife/README.md',
+      },
+      {
+        isDirectory: false,
+        name: 'README',
+        path: '/mnt/workspace/ws-1/hello-dev/README',
+        relativePath: 'README',
+      },
+    ]);
   });
 });

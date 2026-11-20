@@ -1,8 +1,7 @@
 'use client';
 
 import { type VerifierType, verifierTypes } from '@lobechat/const/verify';
-import { Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Button, Select, Switch, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Input, Select, Switch, Text, TextArea, toast } from '@lobehub/ui';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

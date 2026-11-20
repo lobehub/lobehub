@@ -1,6 +1,9 @@
 'use client';
 
 import {
+  ActionIcon,
+  cssVar,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -10,8 +13,6 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -27,6 +28,7 @@ import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { menuKey } from '@/features/ModelSwitchPanel/utils';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useInterfaceDensity } from '@/styles/density';
 import type { EnabledProviderWithModels } from '@/types/index';
 
 import GenerationMultipleProvidersItem from './GenerationMultipleProvidersItem';
@@ -46,6 +48,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
     const { t } = useTranslation('components');
     const navigate = useWorkspaceAwareNavigate();
     const activeSlug = useActiveWorkspaceSlug();
+    const compact = useInterfaceDensity() === 'compact';
     const [detailOpen, setDetailOpen] = useState(false);
 
     switch (item.type) {
@@ -73,8 +76,8 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
             horizontal
             className={modelSwitchPanelStyles.groupHeader}
             justify="space-between"
-            paddingBlock="12px 4px"
-            paddingInline="12px 8px"
+            paddingBlock={compact ? '8px 2px' : '12px 4px'}
+            paddingInline={compact ? '10px 8px' : '12px 8px'}
           >
             <ProviderItemRender
               logo={item.provider.logo}
@@ -128,9 +131,9 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
-                style={{ paddingBlock: 8, paddingInline: 8 }}
                 className={cx(
                   menuSharedStyles.item,
+                  modelSwitchPanelStyles.rowTrigger,
                   isActive && modelSwitchPanelStyles.menuItemActive,
                 )}
                 onClick={() => {
@@ -170,9 +173,9 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
-                style={{ paddingBlock: 8, paddingInline: 8 }}
                 className={cx(
                   menuSharedStyles.item,
+                  modelSwitchPanelStyles.rowTrigger,
                   isActive && modelSwitchPanelStyles.menuItemActive,
                 )}
                 onClick={() => {

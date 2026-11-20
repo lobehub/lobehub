@@ -1,13 +1,13 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { PlayIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
 import { formatSize } from '@/utils/format';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   info: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   meta: css`
     font-size: 12px;

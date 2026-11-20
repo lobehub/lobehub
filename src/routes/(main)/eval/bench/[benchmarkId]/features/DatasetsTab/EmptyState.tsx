@@ -1,22 +1,16 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { Card } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Database, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css }) => ({
   emptyCard: css`
-    .ant-card-body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+    align-items: center;
+    justify-content: center;
 
-      padding-block: 64px;
-      padding-inline: 24px;
-    }
+    padding-block: 64px;
+    padding-inline: 24px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   iconBox: css`
     display: flex;
@@ -40,7 +34,7 @@ const EmptyState = memo<EmptyStateProps>(({ onAddDataset }) => {
   const { t } = useTranslation('eval');
 
   return (
-    <Card className={styles.emptyCard}>
+    <Block className={styles.emptyCard} variant={'outlined'}>
       <div className={styles.iconBox}>
         <Icon icon={Database} size={24} style={{ color: cssVar.colorPrimary }} />
       </div>
@@ -50,16 +44,10 @@ const EmptyState = memo<EmptyStateProps>(({ onAddDataset }) => {
           {t('dataset.empty.description')}
         </Text>
       </Flexbox>
-      <Button
-        icon={Plus}
-        size="small"
-        style={{ marginTop: 16 }}
-        type="primary"
-        onClick={onAddDataset}
-      >
+      <Button icon={Plus} style={{ marginTop: 16 }} type="primary" onClick={onAddDataset}>
         {t('dataset.actions.addDataset')}
       </Button>
-    </Card>
+    </Block>
   );
 });
 

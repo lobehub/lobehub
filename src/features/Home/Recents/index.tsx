@@ -1,5 +1,4 @@
-import { type MenuProps } from '@lobehub/ui';
-import { ContextMenuTrigger, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -7,10 +6,13 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  DropdownMenu,
+  Flexbox,
+  Icon,
   Spin,
-  Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -25,8 +27,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
@@ -44,13 +46,14 @@ interface RecentsProps {
 
 const Recents = memo<RecentsProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
-  const scope = useCacheScope();
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const isLogin = useUserStore(authSelectors.isLogin);
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
   const queryKey = createRecentQueryKey(recentPageSize + 1);
-  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
-  const syncStatus = useHomeStore(homeRecentSelectors.syncStatus(scope, queryKey));
+  const items = useHomeStore(homeRecentSelectors.query(queryKey));
+  const useFetchRecents = useHomeStore((s) => s.useFetchRecents);
+  const syncStatus = useFetchRecents(isLogin, recentPageSize);
   const refreshRecents = useHomeStore((s) => s.refreshRecents);
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
   const hiddenSections = useGlobalStore(
@@ -125,22 +128,20 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
         label: t('navPanel.customizeSidebar'),
         onClick: () => openCustomizeSidebarModal(),
       },
-    ] as MenuProps['items'];
+    ] as DropdownItem[];
   }, [recentPageSize, updateSystemStatus, t, isFirst, isLast, moveSection, hideSection]);
 
   if (!isLogin) return null;
-  if (query && query.items.length === 0) return null;
+  if (items && items.length === 0) return null;
 
   return (
     <AccordionItem value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
-          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionTrigger style={sectionTriggerStyle}>
             <Flexbox horizontal align="center" gap={4}>
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('recents')}
-              </Text>
-              {syncStatus?.isValidating && query && <Spin size="small" variant="network" />}
+              <SectionTitle>{t('recents')}</SectionTitle>
+              {syncStatus.isValidating && items && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <div
@@ -158,11 +159,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
       </ContextMenuTrigger>
       <AccordionPanel>
         <Suspense fallback={<SkeletonList rows={3} />}>
-          <RecentsList
-            error={syncStatus?.error}
-            scope={scope}
-            onRetry={() => void refreshRecents(scope)}
-          />
+          <RecentsList error={syncStatus.error} onRetry={() => void refreshRecents()} />
         </Suspense>
       </AccordionPanel>
     </AccordionItem>

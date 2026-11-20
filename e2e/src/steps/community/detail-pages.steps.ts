@@ -36,22 +36,36 @@ When('I click the back button', async function (this: CustomWorld) {
   const backButtonVisible = await backButton.isVisible().catch(() => false);
   console.log(`   📍 Back button visible: ${backButtonVisible}`);
 
+  // The click has its own short timeout: the default (30s) equals the step
+  // timeout, so a click Playwright keeps retrying (e.g. the target is briefly
+  // covered or re-rendered) used to fail the whole step instead of falling back.
+  let clicked = false;
   if (backButtonVisible) {
     // Click the parent element if it's an SVG icon
     const tagName = await backButton.evaluate((el) => el.tagName.toLowerCase());
-    if (tagName === 'svg') {
-      await backButton.locator('..').click();
-    } else {
-      await backButton.click();
-    }
-    console.log('   📍 Clicked back button');
-  } else {
-    // Use browser back as fallback
-    console.log('   📍 Using browser goBack()');
-    await this.page.goBack();
+    const target = tagName === 'svg' ? backButton.locator('..') : backButton;
+    clicked = await target
+      .click({ timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    console.log(`   📍 Clicked back button: ${clicked}`);
   }
 
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
+  const leftDetail = () =>
+    this.page
+      .waitForURL((url) => url.href !== currentUrl, { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+
+  if (!clicked || !(await leftDetail())) {
+    // Use browser back as fallback
+    console.log('   📍 Using browser goBack()');
+    await this.page.goBack({ timeout: 8000 });
+  }
+
+  // Worst case stays inside the 30s step timeout: 4s click + 4s URL wait +
+  // 8s goBack + 5s load.
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 });
   await this.page.waitForTimeout(500);
 
   const newUrl = this.page.url();

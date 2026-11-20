@@ -43,6 +43,11 @@ const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
 ]);
 const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
 export const PREVIEW_CONTENT_SIZE_HEADER = 'X-Preview-Content-Size';
+/**
+ * The file's mtime in ms. Lets the renderer tell a replaced file from the
+ * previous one at the same path when a preview is refreshed.
+ */
+export const PREVIEW_MODIFIED_AT_HEADER = 'X-Preview-Modified-At';
 
 // Edited-file records can carry `~`-prefixed paths (the file tools expand the
 // home directory at write time) — expand them here so previews resolve the
@@ -219,6 +224,9 @@ export class LocalFileProtocolManager {
           const contentType = await resolveMimeType(realResolvedPath, buffer);
           headers.set('Content-Type', contentType);
           headers.set('Content-Length', String(buffer.byteLength));
+          if (Number.isFinite(fileStat.mtimeMs)) {
+            headers.set(PREVIEW_MODIFIED_AT_HEADER, String(fileStat.mtimeMs));
+          }
           // Module scripts, styles, media, and fonts require CORS when loaded
           // by the opaque sandbox origin. Do not grant arbitrary text files
           // (for example .env) readable cross-origin access.

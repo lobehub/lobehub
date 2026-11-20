@@ -52,6 +52,7 @@ describe('useFetchTopics', () => {
         activeAgentId,
         activeGroupId: undefined,
         useFetchTopics: mockUseFetchTopicsFn,
+        topicDataMap: {},
       }),
     );
 
@@ -74,6 +75,7 @@ describe('useFetchTopics', () => {
         activeAgentId,
         activeGroupId,
         useFetchTopics: mockUseFetchTopicsFn,
+        topicDataMap: {},
       }),
     );
 
@@ -98,6 +100,7 @@ describe('useFetchTopics', () => {
         activeAgentId: INBOX_SESSION_ID,
         activeGroupId,
         useFetchTopics: mockUseFetchTopicsFn,
+        topicDataMap: {},
       }),
     );
 
@@ -120,6 +123,7 @@ describe('useFetchTopics', () => {
         activeAgentId: INBOX_SESSION_ID,
         activeGroupId: undefined,
         useFetchTopics: mockUseFetchTopicsFn,
+        topicDataMap: {},
       }),
     );
 
@@ -141,6 +145,7 @@ describe('useFetchTopics', () => {
         activeAgentId: 'agent-1',
         activeGroupId: undefined,
         useFetchTopics: mockUseFetchTopicsFn,
+        topicDataMap: {},
       }),
     );
     mockUseGlobalStore.mockImplementation((selector) =>

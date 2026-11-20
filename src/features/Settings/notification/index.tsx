@@ -2,13 +2,14 @@ import {
   COMPLETION_BUILTIN_SOUNDS,
   type CompletionSoundSettings,
 } from '@lobechat/electron-client-ipc';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Alert, Button, Segmented, Select, Skeleton, Slider, Switch } from '@lobehub/ui/base-ui';
+import { Alert, Button, Flexbox, Segmented, Select, Slider, Switch } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { Play } from 'lucide-react';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BusinessNotification from '@/business/client/BusinessSettingPages/Notification';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { completionSoundService } from '@/services/electron/completionSound';
@@ -25,6 +26,7 @@ export const DesktopNotificationSettings = () => {
   const [settings, setSettings] = useState<CompletionSoundSettings>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const form = useForm();
 
   const report = useCallback(async (action: () => Promise<CompletionSoundSettings | void>) => {
     setError(false);
@@ -79,10 +81,19 @@ export const DesktopNotificationSettings = () => {
         />
       )}
       {!settings ? (
-        !error && <Skeleton.Text rows={3} />
+        !error && (
+          // Completion sound (toggle/sound/volume) and banner sound groups.
+          <SettingsSectionSkeleton
+            groups={[
+              { rows: 3, titleWidth: 136 },
+              { rows: 1, titleWidth: 112 },
+            ]}
+          />
+        )
       ) : (
         <Form
           collapsible={false}
+          form={form}
           itemMinWidth={FORM_STYLE.itemMinWidth}
           itemsType={'group'}
           style={FORM_STYLE.style}
@@ -92,19 +103,17 @@ export const DesktopNotificationSettings = () => {
               children: [
                 {
                   children: (
-                    <Flexbox horizontal justify={'flex-end'}>
-                      <Switch
-                        checked={settings.enabled}
-                        disabled={busy}
-                        id={soundToggleId}
-                        onChange={(enabled) =>
-                          run(() => completionSoundService.setSettings({ enabled }))
-                        }
-                      />
-                    </Flexbox>
+                    <Switch
+                      checked={settings.enabled}
+                      disabled={busy}
+                      id={soundToggleId}
+                      style={{ alignSelf: 'flex-end' }}
+                      onChange={(enabled) =>
+                        run(() => completionSoundService.setSettings({ enabled }))
+                      }
+                    />
                   ),
                   desc: t('completionSound.desc'),
-                  htmlFor: soundToggleId,
                   label: (
                     <SettingsSearchAnchor id={'notification-completion-sound'}>
                       {t('completionSound.enabled')}

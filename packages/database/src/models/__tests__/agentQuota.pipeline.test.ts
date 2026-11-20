@@ -9,12 +9,12 @@ import {
   type AccountLoad,
   calibrateCapacity,
   computeTurnCostUsd,
-  parseClaudeAccountIdentity,
   projectWindows,
   type QuotaLimitReading,
   selectAccount,
   windowsToCalibrationIntervals,
 } from '@lobechat/heterogeneous-agents/quota';
+import { parseClaudeAccountIdentity } from '@lobechat/heterogeneous-agents/quota-sampler';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 

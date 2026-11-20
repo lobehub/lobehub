@@ -8,6 +8,7 @@ import {
   DocumentLoadRule,
   PolicyLoad,
 } from '@/database/models/agentDocuments';
+import { isUuid } from '@/database/utils/uuid';
 
 import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
 import type { DocumentService } from '../document';
@@ -26,12 +27,10 @@ import type { SkillAgentDocument } from './types';
 const now = new Date('2026-05-02T00:00:00.000Z');
 const backingDocumentUpdatedAt = new Date('2026-05-03T00:00:00.000Z');
 
-const createSnapshot = vi.fn(
-  async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
-    content,
-    editorData: { markdown: content, root: { children: [{ type: 'paragraph' }], type: 'root' } },
-  }),
-);
+const createSnapshot = vi.fn(async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
+  content,
+  editorData: { markdown: content, root: { children: [{ type: 'paragraph' }], type: 'root' } },
+}));
 
 const expectedEditorData = (content: string) => ({
   markdown: content,
@@ -138,7 +137,7 @@ class InMemoryAgentDocumentModel implements SkillManagementAgentDocumentModel {
   ): Promise<SkillAgentDocument> {
     this.createCalls.push({ agentId, content, filename, params });
 
-    const id = `agent-doc-${this.nextId}`;
+    const id = `00000000-0000-4000-8000-${String(this.nextId).padStart(12, '0')}`;
     const documentId = `document-${this.nextId}`;
     this.nextId += 1;
 
@@ -164,6 +163,10 @@ class InMemoryAgentDocumentModel implements SkillManagementAgentDocumentModel {
   }
 
   async findById(agentDocumentId: string): Promise<SkillAgentDocument | undefined> {
+    if (!isUuid(agentDocumentId)) {
+      throw new Error(`invalid input syntax for type uuid: "${agentDocumentId}"`);
+    }
+
     return this.documents.find((doc) => doc.id === agentDocumentId && !doc.deletedAt);
   }
 
@@ -362,10 +365,31 @@ describe('SkillManagementDocumentService', () => {
         name: 'release-writer',
       }),
     );
-    expect(detail?.bundle.agentDocumentId).toBe('agent-doc-1');
+    expect(detail?.bundle.agentDocumentId).toBe('00000000-0000-4000-8000-000000000001');
     expect(detail?.bundle.documentId).toBe('document-1');
-    expect(detail?.index.agentDocumentId).toBe('agent-doc-2');
+    expect(detail?.index.agentDocumentId).toBe('00000000-0000-4000-8000-000000000002');
     expect(detail?.index.documentId).toBe('document-2');
+  });
+
+  it('strips frontmatter pasted into bodyMarkdown instead of failing the save', async () => {
+    const { service } = createService();
+
+    const detail = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown:
+        '---\nname: stale-name\ndescription: Stale description\n---\n\n# Skill\n\n- Step one.',
+      description: 'Canonical description',
+      name: 'release-writer',
+      title: 'Release Writer',
+    });
+
+    expect(detail.content).toBe(
+      skillContent('release-writer', 'Canonical description', '# Skill\n\n- Step one.'),
+    );
+    expect(detail.frontmatter).toEqual({
+      description: 'Canonical description',
+      name: 'release-writer',
+    });
   });
 
   it('converts a hinted source document into the index while preserving ids', async () => {
@@ -520,6 +544,29 @@ describe('SkillManagementDocumentService', () => {
     );
   });
 
+  it('strips pasted frontmatter when replacing the skill index', async () => {
+    const { service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Researches APIs',
+      name: 'researcher',
+      title: 'Researcher',
+    });
+
+    const detail = await service.replaceSkillIndex({
+      agentId: 'agent-1',
+      bodyMarkdown: '---\nname: other\ndescription: Stale\n---\n\n# Better\n\nBody.',
+      name: 'researcher',
+    });
+
+    expect(detail?.content).toBe(
+      skillContent('researcher', 'Researches APIs', '# Better\n\nBody.'),
+    );
+    expect(detail?.frontmatter).toEqual({ description: 'Researches APIs', name: 'researcher' });
+    expect(created.index.agentDocumentId).toBe(detail?.index.agentDocumentId);
+  });
+
   it('resolves a target skill from either the bundle or index agent document id', async () => {
     const { service } = createService();
     const created = await service.createSkill({
@@ -542,6 +589,164 @@ describe('SkillManagementDocumentService', () => {
         name: 'portable-skill',
       }),
     );
+  });
+
+  it('falls back to the name selector when a mistyped agent document id is also given (T-507)', async () => {
+    const { service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Name fallback lookup',
+      name: 'dual-gate-review',
+      title: 'Dual Gate Review',
+    });
+
+    // Reproduces the SATO incident: the model passes both selectors but copies
+    // one id character wrong; the stable name selector must still resolve.
+    await expect(
+      service.getSkill({
+        agentDocumentId: '30b88ca8-5c56-4e09-96b9-4610e39c0add',
+        agentId: 'agent-1',
+        includeContent: true,
+        name: 'dual-gate-review',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        bundle: created.bundle,
+        index: created.index,
+        name: 'dual-gate-review',
+      }),
+    );
+  });
+
+  it('stays not-found when the mistyped id has no name selector to fall back on', async () => {
+    const { service } = createService();
+    await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Id only lookup',
+      name: 'id-only-skill',
+      title: 'Id Only Skill',
+    });
+
+    await expect(
+      service.getSkill({
+        agentDocumentId: '30b88ca8-5c56-4e09-96b9-4610e39c0add',
+        agentId: 'agent-1',
+        name: undefined,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('reads a skill whose stored frontmatter is unclosed from its last saved metadata', async () => {
+    const { agentDocumentModel, service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Writes release notes',
+      name: 'broken-index',
+      title: 'Broken Index',
+    });
+    const brokenContent = '---\nname: broken-index\ndescription: Edited by hand\n\n# Skill';
+    const index = agentDocumentModel.documents.find(
+      (doc) => doc.id === created.index.agentDocumentId,
+    )!;
+    index.content = brokenContent;
+
+    const detail = await service.getSkill({
+      agentId: 'agent-1',
+      includeContent: true,
+      name: 'broken-index',
+    });
+
+    expect(detail).toEqual(
+      expect.objectContaining({
+        content: brokenContent,
+        description: 'Writes release notes',
+        frontmatter: { description: 'Writes release notes', name: 'broken-index' },
+        frontmatterError: 'Skill index content must close frontmatter',
+        name: 'broken-index',
+      }),
+    );
+    await expect(service.listSkills({ agentId: 'agent-1' })).resolves.toEqual([
+      expect.objectContaining({
+        frontmatterError: 'Skill index content must close frontmatter',
+        name: 'broken-index',
+      }),
+    ]);
+  });
+
+  it('reads a broken skill index with an empty description when no metadata was saved', async () => {
+    const { agentDocumentModel, service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Has no metadata',
+      name: 'no-metadata',
+      title: 'No Metadata',
+    });
+    const index = agentDocumentModel.documents.find(
+      (doc) => doc.id === created.index.agentDocumentId,
+    )!;
+    index.content = '# Skill without frontmatter';
+    index.metadata = null;
+
+    await expect(service.getSkill({ agentId: 'agent-1', name: 'no-metadata' })).resolves.toEqual(
+      expect.objectContaining({
+        description: '',
+        frontmatterError: 'Skill index content must start with frontmatter',
+        name: 'no-metadata',
+      }),
+    );
+  });
+
+  it('leaves frontmatterError unset for a well-formed skill index', async () => {
+    const { service } = createService();
+    await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Well formed',
+      name: 'well-formed',
+      title: 'Well Formed',
+    });
+
+    const detail = await service.getSkill({ agentId: 'agent-1', name: 'well-formed' });
+
+    expect(detail).not.toHaveProperty('frontmatterError');
+  });
+
+  it('falls back to the name selector when the agent document id is not a uuid', async () => {
+    const { service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Malformed id lookup',
+      name: 'malformed-id-skill',
+      title: 'Malformed Id Skill',
+    });
+
+    await expect(
+      service.getSkill({
+        agentDocumentId: 'docs_AbCdEf123456',
+        agentId: 'agent-1',
+        name: 'malformed-id-skill',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ bundle: created.bundle, index: created.index }));
+  });
+
+  it('stays not-found when the agent document id is not a uuid and no name is given', async () => {
+    const { service } = createService();
+    await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Malformed id only',
+      name: 'malformed-id-only',
+      title: 'Malformed Id Only',
+    });
+
+    await expect(
+      service.getSkill({ agentDocumentId: 'docs_AbCdEf123456', agentId: 'agent-1' }),
+    ).resolves.toBeUndefined();
   });
 
   it('renames bundle identity and synchronizes index frontmatter content', async () => {

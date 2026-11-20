@@ -6,7 +6,7 @@ import { INBOX_SESSION_ID } from '@/const/session';
 import type { GlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
 import { MODEL_DETAIL_PANEL_EXPANDABLE_KEYS } from '@/store/global/initialState';
-import { readOverridableField } from '@/store/global/selectors/systemStatus';
+import { readOverridableField, systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
@@ -19,11 +19,12 @@ export const globalWorkspaceSlice = (set: Setter, get: () => GlobalStore, _api?:
 
 export class GlobalWorkspacePaneActionImpl {
   readonly #get: () => GlobalStore;
+  readonly #set: Setter;
 
   constructor(set: Setter, get: () => GlobalStore, _api?: unknown) {
     void _api;
-    void set;
     this.#get = get;
+    this.#set = set;
   }
 
   switchBackToChat = (sessionId?: string): void => {
@@ -99,7 +100,7 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   toggleHomeRail = (newValue?: boolean): void => {
-    const currentValue = this.#get().status.showHomeRail ?? true;
+    const currentValue = this.#get().status.showHomeRail ?? false;
     const showHomeRail = typeof newValue === 'boolean' ? newValue : !currentValue;
 
     this.#get().updateSystemStatus({ showHomeRail }, n('toggleHomeRail', newValue));
@@ -141,8 +142,7 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   toggleWorkingOverview = (newValue?: boolean): void => {
-    const currentValue =
-      this.#get().status.showWorkingOverview ?? !this.#get().status.showRightPanel;
+    const currentValue = systemStatusSelectors.showWorkingOverview(this.#get());
     const showWorkingOverview = typeof newValue === 'boolean' ? newValue : !currentValue;
 
     this.#get().updateSystemStatus({ showWorkingOverview }, n('toggleWorkingOverview', newValue));
@@ -188,6 +188,12 @@ export class GlobalWorkspacePaneActionImpl {
       },
       n('openWorkingSidebar', tab),
     );
+  };
+
+  /** Published by the Working Sidebar's PR tab; `undefined` when it shows no PR. */
+  setWorkingSidebarPullRequestUrl = (url?: string): void => {
+    if (this.#get().workingSidebarPullRequestUrl === url) return;
+    this.#set({ workingSidebarPullRequestUrl: url }, false, n('setWorkingSidebarPullRequestUrl'));
   };
 
   revealInFilesTab = (relativePath: string): void => {

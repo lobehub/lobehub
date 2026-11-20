@@ -17,4 +17,13 @@ describe('assertPackageRelativePath', () => {
       'path traversal is not allowed',
     );
   });
+
+  it('rejects paths that name object built-ins', () => {
+    expect(() => assertPackageRelativePath('__proto__/x.md')).toThrow(
+      'object built-in names are not allowed',
+    );
+    expect(() => assertPackageRelativePath('references/constructor')).toThrow(
+      'object built-in names are not allowed',
+    );
+  });
 });

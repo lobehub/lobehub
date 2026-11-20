@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { rehypeLobeLink } from '../Link/rehypePlugin';
+import { rehypeLobeLink } from '@/features/EntityLink/rehypePlugin';
+
 import { LOBE_LOCAL_FILE_LINK_TAG } from './parse';
 import { rehypeLocalFileLink } from './rehypePlugin';
 

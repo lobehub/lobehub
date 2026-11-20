@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "添加到资源库",
   "addToKnowledgeBase.totalFiles": "已选择 {{count}} 个文件",
   "createNew.confirm": "新建",
+  "createNew.cover.label": "封面",
   "createNew.description.label": "库描述（可选）",
   "createNew.description.placeholder": "描述有助于大语言模型更好地理解您的库",
   "createNew.edit.confirm": "保存修改",

@@ -1,15 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, createModal, Spin } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
-import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
+import { Button, createModal, createStaticStyles, cx, Flexbox, Input, Spin } from '@lobehub/ui';
+import { ChevronLeft, ChevronRight, Expand } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { Document, Page } from '@/libs/pdfjs';
+import { densityVars } from '@/styles/densityVars';
 
 import { containerStyles } from '../style';
 
@@ -28,15 +26,6 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     padding: 20px;
   `,
-  emptyState: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    height: 100%;
-
-    color: #666;
-  `,
   expandButton: css`
     position: absolute;
     z-index: 1000;
@@ -49,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-end: 0;
     inset-inline: 0;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-start: 1px solid color-mix(in srgb, black 10%, transparent);
 
     background: color-mix(in srgb, white 90%, transparent);
@@ -79,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-start: 50%;
     transform: translateX(-50%);
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-radius: 8px;
 
@@ -88,11 +77,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   fullscreenPageInput: css`
     width: 60px;
-    text-align: center;
   `,
   fullscreenPageText: css`
     min-width: 20px;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: white;
   `,
   loadingState: css`
@@ -102,6 +90,7 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: center;
 
     height: 100%;
+    min-height: 320px;
   `,
   loadingText: css`
     margin-block-start: 8px;
@@ -109,7 +98,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   pageInput: css`
     width: 50px;
-    text-align: center;
   `,
   pageNumberText: css`
     font-size: 12px;
@@ -119,7 +107,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
 }));
 
@@ -177,6 +165,7 @@ const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPag
                 max={numPages}
                 min={1}
                 size="small"
+                styles={{ input: { textAlign: 'center' } }}
                 type="number"
                 value={pageNumber}
                 onChange={(e) => {
@@ -216,12 +205,10 @@ const openPdfFullscreenModal = (pdfDataUri: string, initialPage: number) =>
   });
 
 interface PdfPreviewProps {
-  loading: boolean;
-  onGeneratePdf?: () => void;
   pdfData: string | null;
 }
 
-const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) => {
+const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
   const localStyles = styles;
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();
@@ -252,30 +239,12 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
     }
   };
 
-  if (loading) {
+  if (!pdfData) {
     return (
-      <div
-        className={cx(containerStyles.preview, containerStyles.previewWide)}
-        style={{ padding: 12 }}
-      >
+      <div className={cx(containerStyles.preview, containerStyles.previewText)}>
         <div className={localStyles.loadingState}>
           <Spin size={24} />
           <div className={localStyles.loadingText}>{t('shareModal.generatingPdf')}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!pdfData) {
-    return (
-      <div
-        className={cx(containerStyles.preview, containerStyles.previewWide)}
-        style={{ padding: 12 }}
-      >
-        <div className={localStyles.emptyState}>
-          <Button icon={<FileText size={20} />} size="large" type="primary" onClick={onGeneratePdf}>
-            {t('shareModal.generatePdf')}
-          </Button>
         </div>
       </div>
     );
@@ -289,20 +258,18 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
 
   return (
     <div className={localStyles.containerWrapper}>
-      {pdfData && (
-        <Button
-          className={localStyles.expandButton}
-          icon={<Expand size={16} />}
-          size="small"
-          type="text"
-          onClick={handleFullscreen}
-        />
-      )}
+      <Button
+        className={localStyles.expandButton}
+        icon={<Expand size={16} />}
+        size="small"
+        type="text"
+        onClick={handleFullscreen}
+      />
 
       <div
         className={cx(
           containerStyles.preview,
-          containerStyles.previewWide,
+          containerStyles.previewText,
           localStyles.previewContainer,
         )}
       >
@@ -325,7 +292,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         </Document>
       </div>
 
-      {pdfData && numPages > 1 && (
+      {numPages > 1 && (
         <div className={localStyles.footerNavigation}>
           <Flexbox horizontal align="center" gap={8} justify="center">
             <Button
@@ -341,6 +308,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
                 max={numPages}
                 min={1}
                 size="small"
+                styles={{ input: { textAlign: 'center' } }}
                 type="number"
                 value={pageNumber}
                 onChange={(e) => {

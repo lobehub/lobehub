@@ -1,12 +1,15 @@
 import type { IconType } from '@lobehub/icons';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
   Cursor,
+  DeepSeek,
   Devin,
   getLobeIconCDN,
+  GithubCopilot,
   Grok,
   Kimi,
   OpenCode,
@@ -18,22 +21,32 @@ import {
 import {
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
+  isLocalRuntimeHeterogeneousType,
   isRemoteHeterogeneousType,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
 } from '../config';
 import { DROID_AVATAR_URL, DroidIcon } from './DroidIcon';
 
-export { DROID_AVATAR_URL, DroidIcon, isRemoteHeterogeneousType };
+export { DROID_AVATAR_URL, DroidIcon, isLocalRuntimeHeterogeneousType, isRemoteHeterogeneousType };
 
 export type HeterogeneousAgentClientConfig = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number] & {
   avatar: string;
   icon: IconType;
 };
 
+export type LocalRuntimeHeterogeneousAgentClientConfig =
+  (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number] & {
+    avatar: string;
+    icon: IconType;
+  };
+
 const heterogeneousAgentIcons = {
+  'antigravity': Antigravity,
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,
   'codex': Codex,
+  'copilot': GithubCopilot,
   'cursor': Cursor,
   'droid': DroidIcon,
   'devin': Devin,
@@ -59,10 +72,19 @@ export const HETEROGENEOUS_AGENT_CLIENT_CONFIGS = HETEROGENEOUS_AGENT_CONFIGS.ma
   icon: heterogeneousAgentIcons[config.type],
 })) as readonly HeterogeneousAgentClientConfig[];
 
+export const LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CLIENT_CONFIGS =
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map((config) => ({
+    ...config,
+    avatar: createAgentAvatar(config.iconId),
+    icon: DeepSeek,
+  })) as readonly LocalRuntimeHeterogeneousAgentClientConfig[];
+
 export const getHeterogeneousAgentClientConfig = (type: string) => {
   const config = getHeterogeneousAgentConfig(type);
 
-  if (!config) return undefined;
+  if (!config) {
+    return LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CLIENT_CONFIGS.find((item) => item.type === type);
+  }
 
   return {
     ...config,

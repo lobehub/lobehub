@@ -1,9 +1,8 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Image, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { BadgeCheck, Ban, MessageSquareX } from 'lucide-react';
 import { memo } from 'react';
@@ -11,11 +10,14 @@ import { useTranslation } from 'react-i18next';
 
 import AudioPlayer from '@/features/AudioPlayer';
 import { useIsHydrated } from '@/hooks/useIsHydrated';
+import { sx } from '@/styles/sx';
 
+import { TerminalEvidenceCard } from '../../Report/TerminalEvidence';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { AttachmentThumbs } from '../Evidence/attachments';
 import { IMAGE_EVIDENCE, imageRatio } from '../Evidence/evidence';
 import { styles as evidenceStyles } from '../Evidence/styles';
+import { VideoFeedbackNotes } from '../Evidence/Video/VideoFeedbackNotes';
 import { styles } from './styles';
 import type { AcceptanceCheck, AcceptanceCheckReviewEntry, AcceptanceEvidence } from './types';
 
@@ -60,34 +62,34 @@ export const IgnoredNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ revie
  */
 export const FeedbackCard = memo<{
   evidenceById: Map<string, AcceptanceEvidence>;
+  hideHeader?: boolean;
   review: AcceptanceCheckReviewEntry;
-}>(({ evidenceById, review }) => {
+}>(({ evidenceById, hideHeader, review }) => {
   const { t } = useTranslation('verify');
   const hydrated = useIsHydrated();
   if (review.action === 'accept') return <AcceptedNote review={review} />;
   if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
-  const groups = new Map<
-    string,
-    { comment?: string; rect: AcceptanceReviewAnnotation['rect'] }[]
-  >();
+  const groups = new Map<string, AcceptanceReviewAnnotation[]>();
   for (const annotation of review.annotations ?? []) {
     const bucket = groups.get(annotation.evidenceId) ?? [];
-    bucket.push({ comment: annotation.comment, rect: annotation.rect });
+    bucket.push(annotation);
     groups.set(annotation.evidenceId, bucket);
   }
 
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal align={'center'} gap={6}>
-        <Icon color={cssVar.colorError} icon={MessageSquareX} size={13} />
-        <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
-          {t('acceptance.review.feedbackLabel')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : null}
-        </Text>
-      </Flexbox>
+      {!hideHeader && (
+        <Flexbox horizontal align={'center'} gap={6}>
+          <Icon color={cssVar.colorError} icon={MessageSquareX} size={13} />
+          <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+            {t('acceptance.review.feedbackLabel')}
+          </Text>
+          <Text fontSize={12} type={'secondary'}>
+            {hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : null}
+          </Text>
+        </Flexbox>
+      )}
       {review.comment && <Text style={{ fontSize: 12 }}>{review.comment}</Text>}
       <AttachmentThumbs attachments={review.attachments} />
       {[...groups.entries()].map(([evidenceId, annotations]) => {
@@ -101,6 +103,8 @@ export const FeedbackCard = memo<{
                 {annotation.comment}
               </Text>
             ));
+        if (evidence.type === 'video')
+          return <VideoFeedbackNotes key={evidenceId} notes={annotations} />;
         return (
           <AnnotatedImage
             annotations={annotations}
@@ -183,17 +187,16 @@ export const IterationTimeline = memo<{
             <Flexbox horizontal gap={12} key={entry.key}>
               <Flexbox align={'center'} style={{ flex: 'none', width: 9 }}>
                 <span
-                  className={styles.stepDot}
-                  style={{
+                  {...sx(styles.stepDot, {
                     borderColor:
                       entry.review.action === 'accept'
                         ? cssVar.colorSuccess
                         : entry.review.action === 'ignore'
                           ? cssVar.colorTextQuaternary
                           : cssVar.colorError,
-                  }}
+                  })}
                 />
-                {!isLast && <div className={styles.stepRail} />}
+                {!isLast && <div {...stylex.props(styles.stepRail)} />}
               </Flexbox>
               <Flexbox flex={1} gap={6} style={{ minWidth: 0, paddingBlockEnd: isLast ? 0 : 20 }}>
                 <FeedbackCard evidenceById={evidenceById} review={entry.review} />
@@ -213,13 +216,12 @@ export const IterationTimeline = memo<{
           <Flexbox horizontal gap={12} key={entry.key}>
             <Flexbox align={'center'} style={{ flex: 'none', width: 9 }}>
               <span
-                className={styles.stepDot}
-                style={{
+                {...sx(styles.stepDot, {
                   background: isCurrent ? stateColor : cssVar.colorBgContainer,
                   borderColor: isCurrent ? stateColor : cssVar.colorTextQuaternary,
-                }}
+                })}
               />
-              {!isLast && <div className={styles.stepRail} />}
+              {!isLast && <div {...stylex.props(styles.stepRail)} />}
             </Flexbox>
             <Flexbox flex={1} gap={6} style={{ minWidth: 0, paddingBlockEnd: isLast ? 0 : 20 }}>
               {onRound ? (
@@ -242,7 +244,7 @@ export const IterationTimeline = memo<{
                 <Flexbox horizontal gap={8} wrap={'wrap'}>
                   {step.evidence.map((item) =>
                     item.fileUrl && IMAGE_EVIDENCE.has(item.type) ? (
-                      <Flexbox className={evidenceStyles.evidenceImage} key={item.id}>
+                      <Flexbox key={item.id} {...stylex.props(evidenceStyles.evidenceImage)}>
                         <Image
                           alt={item.description ?? item.type}
                           loading={'lazy'}
@@ -269,11 +271,19 @@ export const IterationTimeline = memo<{
                           url={item.fileUrl}
                         />
                       </div>
+                    ) : item.type === 'terminal' ? (
+                      // An earlier round's execution keeps its command card —
+                      // folded to one line, the same record the live row shows.
+                      <div key={item.id} style={{ width: '100%' }}>
+                        <TerminalEvidenceCard evidence={item} />
+                      </div>
                     ) : item.content ? (
                       <div
-                        className={evidenceStyles.evidenceText}
                         key={item.id}
-                        style={{ maxHeight: 120, maxWidth: 420 }}
+                        {...sx(evidenceStyles.evidenceText, {
+                          maxHeight: 120,
+                          maxWidth: 420,
+                        })}
                       >
                         {item.content}
                       </div>

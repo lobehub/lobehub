@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'node:child_process';
-import { generateKeyPairSync } from 'node:crypto';
+import { createPublicKey, generateKeyPairSync } from 'node:crypto';
 import {
   appendFileSync,
   cpSync,
@@ -8,7 +8,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -18,11 +17,12 @@ import { fileURLToPath } from 'node:url';
 const DESKTOP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const WORK = path.join(DESKTOP_DIR, 'release/core-ota-e2e');
 const FEED = path.join(WORK, 'feed');
-const PORT = 8787;
-const CDP_PORT = 9333;
-const PRODUCT = 'lobehub-core-ota-e2e';
-const CHANNEL = 'stable';
+const PORT = Number(process.env.CORE_OTA_TEST_PORT || 8787);
+const CDP_PORT = Number(process.env.CORE_OTA_TEST_CDP_PORT || 9333);
+const PRODUCT = process.env.CORE_OTA_TEST_PRODUCT || 'lobehub-core-ota-e2e';
+const CHANNEL = process.env.CORE_OTA_TEST_CHANNEL || 'canary';
 const APP_VERSION = '1.0.0';
+const RELEASE = path.join(FEED, CHANNEL, APP_VERSION);
 const PLATFORM = 'darwin';
 const APP = path.join(WORK, 'app', 'mac-arm64', `${PRODUCT}.app`, 'Contents', 'MacOS', PRODUCT);
 const USER_DATA = path.join(os.homedir(), 'Library/Application Support', PRODUCT);
@@ -43,13 +43,17 @@ const manifestOf = (tag) =>
 const publish = (tag, { version, seq, previous }) => {
   const { shellAbi } = manifestOf(previous ?? tag);
   const previousArg = previous
-    ? `--previous-manifest=${path.join(FEED, 'core', PLATFORM, 'versions', `${manifestOf(previous).version}.json`)}`
+    ? `--previous-manifest=${path.join(RELEASE, 'core-v4', PLATFORM, 'versions', `${manifestOf(previous).version}.json`)}`
     : '';
   sh(
-    `node scripts/buildCore.mjs --core=${coreDir(tag)} --platform=${PLATFORM} --channel=${CHANNEL} ` +
+    `node scripts/buildCore.mjs --protocol=4 --core=${coreDir(tag)} --platform=${PLATFORM} --channel=${CHANNEL} ` +
       `--version=${version} --seq=${seq} --shell-abi=${shellAbi} ` +
-      `--objects-base-url=http://127.0.0.1:${PORT}/cas --out=${FEED} ${previousArg}`,
+      `--previous-base-url=http://127.0.0.1:${PORT}/${CHANNEL}/${APP_VERSION}/core-v4/${PLATFORM} --out=${RELEASE} ${previousArg}`,
     { RENDERER_OTA_PRIVATE_KEY: keys().privateKey },
+  );
+  cpSync(
+    path.join(RELEASE, 'core-v4', PLATFORM, 'versions', `${version}.json`),
+    path.join(coreDir(tag), 'manifest.json'),
   );
 };
 
@@ -72,6 +76,10 @@ const steps = {
     const { publicKey } = keys();
     const env = {
       RENDERER_OTA_PUBLIC_KEY: publicKey,
+      SPARKLE_ED_PUBLIC_KEY: createPublicKey(publicKey)
+        .export({ format: 'der', type: 'spki' })
+        .subarray(-32)
+        .toString('base64'),
       UPDATE_CHANNEL: CHANNEL,
       UPDATE_SERVER_URL: `http://127.0.0.1:${PORT}/${CHANNEL}`,
       APP_URL: 'http://localhost:3015',
@@ -79,6 +87,10 @@ const steps = {
       KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE=',
     };
     // Electron derives userData from package.json name; productName alone would share the dev instance's data.
+    const pkg = JSON.parse(readFileSync(path.join(DESKTOP_DIR, 'package.json'), 'utf8'));
+    const backup = path.join(WORK, 'package-metadata.json');
+    if (!existsSync(backup))
+      writeFileSync(backup, JSON.stringify({ name: pkg.name, version: pkg.version }));
     sh(`npm pkg set name=${PRODUCT} version=${APP_VERSION}`);
     if (!existsSync(path.join(DESKTOP_DIR, 'dist/renderer/apps/desktop/index.html'))) {
       sh('npm run build:main', env);
@@ -95,8 +107,6 @@ const steps = {
     cpSync(path.join(DESKTOP_DIR, 'core-dist'), coreDir('v1'), { recursive: true });
     rmSync(FEED, { force: true, recursive: true });
     publish('v1', { seq: manifestOf('v1').seq, version: manifestOf('v1').version });
-    // buildCore writes core/<platform>; the client reads <channel>/core/<platform> (S3 adds the channel prefix).
-    symlinkSync('.', path.join(FEED, CHANNEL));
     console.log(`v1 app: ${APP}`);
   },
 
@@ -119,6 +129,33 @@ const steps = {
     cpSync(coreDir('v2'), coreDir('v3'), { recursive: true });
     appendFileSync(path.join(coreDir('v3'), 'dist/main/index.js'), "\nconsole.log('core v3');\n");
     publish('v3', { previous: 'v2', seq: 2, version: `${APP_VERSION}-core.2` });
+  },
+
+  staged() {
+    const [slot, mode] = process.argv.slice(3);
+    if (!['b', 'c'].includes(slot) || !['reload', 'relaunch'].includes(mode))
+      throw new Error('usage: staged <b|c> <reload|relaunch>');
+    // Both candidates are based on the running builtin core, so C can revert
+    // B's main change and exercise relaunch -> reload without ever applying B.
+    const tag = `staged-${slot}`;
+    const marker = `STAGED ${slot.toUpperCase()} ${mode}`;
+    rmSync(coreDir(tag), { force: true, recursive: true });
+    cpSync(coreDir('v1'), coreDir(tag), { recursive: true });
+    const html = path.join(coreDir(tag), 'dist/renderer/apps/desktop/index.html');
+    writeFileSync(
+      html,
+      readFileSync(html, 'utf8').replace(
+        /<body[^>]*>/,
+        `$&<div id="core-ota-e2e" style="position:fixed;top:8px;right:8px;z-index:99999;background:#173;color:#fff;padding:6px 10px;font:bold 14px sans-serif">${marker}</div>`,
+      ),
+    );
+    if (mode === 'relaunch')
+      appendFileSync(
+        path.join(coreDir(tag), 'dist/main/index.js'),
+        `\nconsole.log(${JSON.stringify(marker)});\n`,
+      );
+    const seq = slot === 'b' ? 10 : 11;
+    publish(tag, { previous: 'v1', seq, version: `${APP_VERSION}-core.${seq}` });
   },
 
   v4() {
@@ -150,9 +187,12 @@ const steps = {
   },
 
   launch() {
+    const env = { ...process.env, RENDERER_OTA_CHECK_DELAY: '3000' };
+    // Electron-based terminals may export this; the packaged fixture must run as an app.
+    delete env.ELECTRON_RUN_AS_NODE;
     const child = spawn(APP, [`--remote-debugging-port=${CDP_PORT}`], {
       detached: true,
-      env: { ...process.env, RENDERER_OTA_CHECK_DELAY: '3000' },
+      env,
       stdio: 'ignore',
     });
     child.unref();
@@ -233,7 +273,14 @@ const steps = {
   },
 
   restore() {
-    sh('git checkout -- package.json');
+    const file = path.join(DESKTOP_DIR, 'package.json');
+    const pkg = JSON.parse(readFileSync(file, 'utf8'));
+    if (pkg.name !== PRODUCT || pkg.version !== APP_VERSION)
+      throw new Error('Test package metadata changed; refusing to overwrite it');
+    const backup = path.join(WORK, 'package-metadata.json');
+    const original = JSON.parse(readFileSync(backup, 'utf8'));
+    writeFileSync(file, JSON.stringify({ ...pkg, ...original }, null, 2) + '\n');
+    rmSync(backup);
   },
 };
 

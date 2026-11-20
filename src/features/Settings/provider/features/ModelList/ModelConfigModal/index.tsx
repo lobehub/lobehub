@@ -1,7 +1,7 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
+import { createModal, type ModalInstance } from '@lobehub/ui';
+import { type FormInstance } from '@lobehub/ui/form';
 import { t } from 'i18next';
 
 import ModelConfigContent from './Content';
@@ -25,7 +25,13 @@ export const createModelConfigModal = (options: ModelConfigModalOptions): ModalI
         }}
       />
     ),
-    footer: <ModelConfigFooter formRef={formRef} id={options.id} />,
+    footer: (
+      <ModelConfigFooter
+        formRef={formRef}
+        id={options.id}
+        showDeployName={options.showDeployName}
+      />
+    ),
     maskClosable: true,
     title: t('llm.customModelCards.modelConfig.modalTitle', { ns: 'setting' }),
     width: 'min(90vw, 640px)',

@@ -1,5 +1,6 @@
-import { mutate } from '@/libs/swr';
-import { agentConfigKeys, groupKeys } from '@/libs/swr/keys';
+import { revalidateReplica } from '@/libs/replica';
+import { getAgentStoreState } from '@/store/agent';
+import { agentGroupDetailResource } from '@/store/agentGroup/projection';
 import { useHomeStore } from '@/store/home';
 
 /**
@@ -9,9 +10,10 @@ import { useHomeStore } from '@/store/home';
  * config/detail cache refreshes too, or it keeps rendering the previous owner
  * and owner-gated controls until a focus revalidation.
  *
- * Deliberately uses the GLOBAL SWR mutator: these caches live under other SWR
- * keys, which a hook-bound `mutate` cannot reach — it would instead REPLACE
- * its own cache's data with the key array.
+ * The agent and group caches now live behind their stores' replica resources,
+ * so they are revalidated through `revalidateReplica` rather than the global
+ * SWR mutator — the replica sync query key is derived from the resource
+ * (name + version + scope), not from the old `group:*` / `agent:*` keys.
  */
 export const refreshCachesAfterOwnershipChange = async (
   resourceType: string,
@@ -19,8 +21,8 @@ export const refreshCachesAfterOwnershipChange = async (
 ): Promise<void> => {
   await Promise.all([
     resourceType === 'agent'
-      ? mutate(agentConfigKeys.config(resourceId))
-      : mutate(groupKeys.detail(resourceId)),
+      ? getAgentStoreState().internal_refreshAgentConfig(resourceId)
+      : revalidateReplica(agentGroupDetailResource, resourceId),
     useHomeStore.getState().refreshAgentList(),
   ]);
 };

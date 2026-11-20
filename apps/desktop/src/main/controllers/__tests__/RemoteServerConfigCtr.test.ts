@@ -1,14 +1,20 @@
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
-const { ipcMainHandleMock, mockFetch } = vi.hoisted(() => ({
+const { appSignInMock, ipcMainHandleMock, mockFetch } = vi.hoisted(() => ({
+  appSignInMock: {
+    refreshAppSignIn: vi.fn(async () => {}),
+    withdrawAppSignIn: vi.fn(async () => {}),
+  },
   ipcMainHandleMock: vi.fn(),
   mockFetch: vi.fn(),
 }));
+
+vi.mock('@/modules/cliEmbedding/appSignInFile', () => appSignInMock);
 
 vi.mock('@/utils/net-fetch', () => ({
   netFetch: mockFetch,
@@ -47,6 +53,7 @@ const mockBrowserManager = {
 
 const mockGatewayConnectionSrv = {
   disconnect: vi.fn().mockResolvedValue({ success: true }),
+  updatePersonalToken: vi.fn(),
 };
 
 const mockApp = {
@@ -106,6 +113,126 @@ describe('RemoteServerConfigCtr', () => {
         ...prevConfig,
         ...newConfig,
       });
+    });
+
+    it('closes the device gateway connection when switching to another server', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: 'https://a.example.com',
+        storageMode: 'selfHost',
+      });
+
+      await controller.setRemoteServerConfig({
+        active: false,
+        remoteServerUrl: 'https://b.example.com',
+        storageMode: 'selfHost',
+      });
+
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the device gateway connection when the login is deactivated', async () => {
+      mockStoreManager.get.mockReturnValue({ active: true, storageMode: 'cloud' });
+
+      await controller.setRemoteServerConfig({ active: false });
+
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the connection when re-activating the same server after sign-in', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: false,
+        remoteServerUrl: 'https://a.example.com',
+        storageMode: 'selfHost',
+      });
+
+      await controller.setRemoteServerConfig({ active: true });
+
+      expect(mockGatewayConnectionSrv.disconnect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('legacy local configuration', () => {
+    let storedConfig: unknown;
+
+    beforeEach(() => {
+      storedConfig = { active: false, storageMode: 'local' };
+      mockStoreManager.get.mockImplementation((key: string) =>
+        key === 'dataSyncConfig' ? structuredClone(storedConfig) : undefined,
+      );
+      mockStoreManager.set.mockImplementation((key: string, value: unknown) => {
+        if (key === 'dataSyncConfig') storedConfig = structuredClone(value);
+      });
+    });
+
+    afterEach(() => {
+      mockStoreManager.get.mockReset();
+      mockStoreManager.set.mockReset();
+    });
+
+    it('reads legacy configuration as cloud without changing the stored configuration', async () => {
+      expect(await controller.getRemoteServerConfig()).toEqual({
+        active: false,
+        remoteServerUrl: 'https://cloud.lobehub.com',
+        storageMode: 'cloud',
+      });
+      expect(storedConfig).toEqual({ active: false, storageMode: 'local' });
+      expect(mockStoreManager.set).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])(
+      'resolves the cloud URL without writing configuration (explicit config: %s)',
+      async (explicitConfig) => {
+        const config = mockStoreManager.get('dataSyncConfig');
+        expect(await controller.getRemoteServerUrl(explicitConfig ? config : undefined)).toBe(
+          'https://cloud.lobehub.com',
+        );
+        expect(storedConfig).toEqual({ active: false, storageMode: 'local' });
+        expect(mockStoreManager.set).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps activation persisted when comparing the previous server URL', async () => {
+      expect(await controller.setRemoteServerConfig({ active: true })).toBe(true);
+
+      expect(storedConfig).toEqual({
+        active: true,
+        remoteServerUrl: 'https://cloud.lobehub.com',
+        storageMode: 'cloud',
+      });
+      expect(mockStoreManager.set).toHaveBeenCalledTimes(1);
+      expect(mockGatewayConnectionSrv.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('keeps the new self-hosted server persisted and disconnects the previous gateway', async () => {
+      expect(
+        await controller.setRemoteServerConfig({
+          active: true,
+          remoteServerUrl: 'https://new.example.com',
+          storageMode: 'selfHost',
+        }),
+      ).toBe(true);
+
+      expect(storedConfig).toEqual({
+        active: true,
+        remoteServerUrl: 'https://new.example.com',
+        storageMode: 'selfHost',
+      });
+      expect(mockStoreManager.set).toHaveBeenCalledTimes(1);
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps deactivation persisted and disconnects the previous gateway', async () => {
+      storedConfig = { active: true, storageMode: 'local' };
+      expect(await controller.setRemoteServerConfig({ active: false })).toBe(true);
+
+      expect(storedConfig).toEqual({
+        active: false,
+        remoteServerUrl: 'https://cloud.lobehub.com',
+        storageMode: 'cloud',
+      });
+      expect(mockStoreManager.set).toHaveBeenCalledTimes(1);
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -328,6 +455,15 @@ describe('RemoteServerConfigCtr', () => {
       await controller.clearTokens();
 
       expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalled();
+    });
+
+    /** Local agent runs read the app's sign-in from a file that must follow it. */
+    it("keeps local agent runs' sign-in file in step with the tokens", async () => {
+      await controller.saveTokens('renewed-access', 'refresh', 3600);
+      expect(appSignInMock.refreshAppSignIn).toHaveBeenCalledWith('renewed-access');
+
+      await controller.clearTokens();
+      expect(appSignInMock.withdrawAppSignIn).toHaveBeenCalled();
     });
   });
 
@@ -747,6 +883,12 @@ describe('RemoteServerConfigCtr', () => {
           lastRefreshAt: expect.any(Number),
         }),
       );
+    });
+
+    it('should hand the new access token to the live gateway connection', async () => {
+      await controller.saveTokens('fresh-access', 'refresh', 3600);
+
+      expect(mockGatewayConnectionSrv.updatePersonalToken).toHaveBeenCalledWith('fresh-access');
     });
   });
 

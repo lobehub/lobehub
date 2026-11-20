@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { BriefModel } from '@/database/models/brief';
 import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { notTrashed } from '@/database/utils/softDelete';
 import { setTaskSchedulerExecutionCallback } from '@/server/services/taskScheduler';
 
 import { TaskRunnerService } from './index';
@@ -18,6 +19,7 @@ export type HeartbeatTickOutcome =
   { ran: true; taskIdentifier: string } | { ran: false; reason: HeartbeatTickSkipReason };
 
 export type HeartbeatTickSkipReason =
+  | 'archived'
   | 'human-waiting'
   | 'in-flight'
   | 'mode-changed'
@@ -46,11 +48,18 @@ export async function runHeartbeatTick(
   const [task] = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+    .where(
+      and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId), notTrashed(tasks.isDeleted)),
+    )
     .limit(1);
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
+  }
+  // Archived tasks are hidden from every list; never run them out of sight.
+  if (task.archivedAt) {
+    log('skip task=%s reason=archived', taskId);
+    return { ran: false, reason: 'archived' };
   }
   const activeTickToken = (task.context as { scheduler?: { tickToken?: string } } | null)?.scheduler
     ?.tickToken;

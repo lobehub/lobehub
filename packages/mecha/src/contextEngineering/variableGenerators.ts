@@ -1,3 +1,4 @@
+import { formatSandboxStoragePromptVariables } from '@lobechat/builtin-tool-cloud-sandbox';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import type { VariableGenerators } from '@lobechat/context-engine';
 
@@ -5,6 +6,8 @@ import type { ContextVariables } from './types';
 
 export interface CreateVariableGeneratorsParams {
   model?: string;
+  /** The clock temporal placeholders render from; the wall clock when absent. */
+  now?: () => Date;
   provider?: string;
   /** IANA timezone the temporal placeholders render in. Defaults to UTC. */
   timezone?: string;
@@ -25,11 +28,13 @@ export interface CreateVariableGeneratorsParams {
  */
 export const createVariableGenerators = ({
   model,
+  now,
   provider,
   timezone,
   variables,
 }: CreateVariableGeneratorsParams): VariableGenerators => {
   const tz = timezone || 'UTC';
+  const clock = now ?? (() => new Date());
   // h23 keeps midnight as "00" instead of "24".
   const timeParts = (): Record<string, string> => {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -41,25 +46,25 @@ export const createVariableGenerators = ({
       second: '2-digit',
       timeZone: tz,
       year: 'numeric',
-    }).formatToParts(new Date());
+    }).formatToParts(clock());
     return Object.fromEntries(parts.map((part) => [part.type, part.value]));
   };
 
   const defaults: VariableGenerators = {
     // --- time ---
-    date: () => new Date().toLocaleDateString('en-US', { dateStyle: 'full', timeZone: tz }),
-    datetime: () => new Date().toLocaleString('en-US', { timeZone: tz }),
+    date: () => clock().toLocaleDateString('en-US', { dateStyle: 'full', timeZone: tz }),
+    datetime: () => clock().toLocaleString('en-US', { timeZone: tz }),
     day: () => timeParts().day,
     hour: () => timeParts().hour,
-    iso: () => new Date().toISOString(),
+    iso: () => clock().toISOString(),
     locale: () => 'en-US',
     minute: () => timeParts().minute,
     month: () => timeParts().month,
     second: () => timeParts().second,
-    time: () => new Date().toLocaleTimeString('en-US', { timeStyle: 'medium', timeZone: tz }),
-    timestamp: () => Date.now().toString(),
+    time: () => clock().toLocaleTimeString('en-US', { timeStyle: 'medium', timeZone: tz }),
+    timestamp: () => clock().getTime().toString(),
     timezone: () => tz,
-    weekday: () => new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long' }),
+    weekday: () => clock().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long' }),
     year: () => timeParts().year,
 
     // The creds tool's session context renders the calendar date.
@@ -70,7 +75,7 @@ export const createVariableGenerators = ({
         timeZone: tz,
         weekday: 'long',
         year: 'numeric',
-      }).format(new Date()),
+      }).format(clock()),
 
     // --- model ---
     model: () => model ?? '',
@@ -93,6 +98,13 @@ export const createVariableGenerators = ({
     userDataPath: () => '(not reported)',
     videosPath: () => '(not reported)',
     workingDirectory: () => '(not specified, use user Home directory as default)',
+    // Leak-guards for the cloud-sandbox `{{sandbox_workspace}}` /
+    // `{{sandbox_session_files}}` sections. The persistent-workspace wording
+    // arrives through `variables` only for a run that actually got one
+    // (entitlement claim AND persistent mode); every other run renders the
+    // original ephemeral-session text rather than leaking the literal tokens.
+    sandbox_session_files: () => formatSandboxStoragePromptVariables().sandbox_session_files,
+    sandbox_workspace: () => formatSandboxStoragePromptVariables().sandbox_workspace,
   };
 
   return {

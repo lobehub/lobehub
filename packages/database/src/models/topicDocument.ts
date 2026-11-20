@@ -1,6 +1,11 @@
+import {
+  AGENT_DOCUMENT_FILE_TYPE,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  MARKDOWN_DOCUMENT_FILE_TYPES,
+} from '@lobechat/const';
 import type { DocumentAccessScope } from '@lobechat/types';
 import { ordinaryDocumentAccessScope } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { DocumentItem, NewTopicDocument } from '../schemas';
 import { documents, topicDocuments } from '../schemas';
@@ -11,6 +16,39 @@ import { buildWorkspaceWhere } from '../utils/workspace';
 export interface TopicDocumentWithDetails extends DocumentItem {
   associatedAt: Date;
 }
+
+/**
+ * Kinds that are all the same document: the surfaces' own names for a plain text
+ * document whose content is its bytes. The notebook writes the unlabelled
+ * default as `markdown`, the agent-documents surface writes `agent/document`,
+ * and a Page is `custom/document` — so a report written through two of them is
+ * one document, not two.
+ *
+ * The notebook's *labelled* kinds — `article`, `note`, `report` — are absent on
+ * purpose. A caller that asks for one of them asked for that kind, so it is
+ * matched and read exactly: letting a `note` write be answered by a markdown row
+ * would report success and then leave `listDocuments({ type: 'note' })` with
+ * nothing to return.
+ *
+ * A structured artifact is absent for the same reason, one step further:
+ * `agent/plan` is *found* by its type (`findPlanByTopic` filters on it).
+ */
+export const SAME_DOCUMENT_KIND_FILE_TYPES = [
+  ...MARKDOWN_DOCUMENT_FILE_TYPES,
+  AGENT_DOCUMENT_FILE_TYPE,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+];
+
+/**
+ * Every kind a document of `fileType` may be stored as: the whole equivalent set
+ * for a plain document, the kind itself for anything with a name of its own.
+ *
+ * Both the twin search and {@link TopicDocumentModel.findByTopicId}'s kind
+ * filter read this, so the two cannot disagree — a document is always findable
+ * under the kind its writer asked for.
+ */
+export const documentFileTypesOfKind = (fileType: string): string[] =>
+  SAME_DOCUMENT_KIND_FILE_TYPES.includes(fileType) ? SAME_DOCUMENT_KIND_FILE_TYPES : [fileType];
 
 export class TopicDocumentModel {
   private userId: string;
@@ -96,7 +134,9 @@ export class TopicDocumentModel {
           this.ownership(),
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
           documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
-          filter?.type ? eq(documents.fileType, filter.type) : undefined,
+          filter?.type
+            ? inArray(documents.fileType, documentFileTypesOfKind(filter.type))
+            : undefined,
         ),
       )
       .orderBy(desc(topicDocuments.createdAt));
@@ -105,6 +145,52 @@ export class TopicDocumentModel {
       ...r.document,
       associatedAt: r.associatedAt,
     }));
+  };
+
+  /**
+   * A document this topic already holds under the same title, the same body and
+   * the same kind.
+   *
+   * The notebook surface and the agent-documents surface answer one intent with
+   * two tools, and an agent that writes the same report through both used to
+   * leave two rows behind: two entries in the topic's document list and two
+   * deliverable cards on the goal graph, for one report. A matching title alone
+   * is weak (two documents may share one), so the body has to match too —
+   * byte-identical identity plus byte-identical content is the same document
+   * written twice, and the second write reuses the row.
+   *
+   * The kind is part of that identity, because a document can be *found* by its
+   * type: `findPlanByTopic` filters on `agent/plan`, and the notebook's labelled
+   * kinds are filtered by callers too. Two plain documents that agree are still
+   * one (see {@link SAME_DOCUMENT_KIND_FILE_TYPES}); a plan write must never be
+   * answered with the page that happens to hold the same text, and neither must
+   * a `note` write be answered by a markdown row.
+   */
+  findVerbatimTwin = async (params: {
+    content: string;
+    fileType: string;
+    title: string;
+    topicId: string;
+  }): Promise<DocumentItem | undefined> => {
+    const [twin] = await this.db
+      .select({ document: documents })
+      .from(topicDocuments)
+      .innerJoin(documents, eq(topicDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(topicDocuments.topicId, params.topicId),
+          eq(documents.title, params.title),
+          eq(documents.content, params.content),
+          inArray(documents.fileType, documentFileTypesOfKind(params.fileType)),
+          this.ownership(),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
+        ),
+      )
+      .orderBy(desc(topicDocuments.createdAt))
+      .limit(1);
+
+    return twin?.document;
   };
 
   /**

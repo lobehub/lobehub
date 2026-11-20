@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentSignalSourceEventInput } from '@/server/services/agentSignal/emitter';
 
 import type { SelfFeedbackIntentAction, SelfFeedbackIntentKind } from '../selfFeedbackIntent';
-import { createSelfFeedbackIntentService } from '../selfFeedbackIntent';
+import {
+  createInMemoryDeclarationLimiter,
+  createSelfFeedbackIntentService,
+} from '../selfFeedbackIntent';
 
 const createStrongIntentInput = () => ({
   action: 'refine' as const,
@@ -23,6 +26,15 @@ const createEnqueueSource = () =>
     >()
     .mockResolvedValue({ enqueued: true });
 
+const strongIntentRequest = (): Parameters<
+  ReturnType<typeof createSelfFeedbackIntentService>['declareIntent']
+>[0] => ({
+  agentId: 'agent-1',
+  input: createStrongIntentInput(),
+  topicId: 'topic-1',
+  userId: 'user-1',
+});
+
 describe('selfFeedbackIntent', () => {
   /**
    * @example
@@ -35,12 +47,7 @@ describe('selfFeedbackIntent', () => {
       nextToolCallId: () => 'tool-call-1',
     });
 
-    const result = await service.declareIntent({
-      agentId: 'agent-1',
-      input: createStrongIntentInput(),
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const result = await service.declareIntent(strongIntentRequest());
 
     expect(result).toEqual({
       accepted: true,
@@ -120,14 +127,11 @@ describe('selfFeedbackIntent', () => {
       ).resolves.toMatchObject({ accepted: true });
     }
 
-    await expect(
-      service.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toEqual({ accepted: false, reason: 'rate_limited', strength: 'strong' });
+    await expect(service.declareIntent(strongIntentRequest())).resolves.toEqual({
+      accepted: false,
+      reason: 'rate_limited',
+      strength: 'strong',
+    });
     expect(enqueueSource).toHaveBeenCalledTimes(3);
   });
 
@@ -244,14 +248,9 @@ describe('selfFeedbackIntent', () => {
       });
     }
 
-    await expect(
-      service.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toMatchObject({ accepted: true });
+    await expect(service.declareIntent(strongIntentRequest())).resolves.toMatchObject({
+      accepted: true,
+    });
     expect(enqueueSource).toHaveBeenLastCalledWith(
       expect.objectContaining({ scopeKey: 'topic:topic-1' }),
     );
@@ -282,12 +281,7 @@ describe('selfFeedbackIntent', () => {
       topicId: 'topic-1',
       userId: 'user-1',
     });
-    const topicResult = await service.declareIntent({
-      agentId: 'agent-1',
-      input: createStrongIntentInput(),
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const topicResult = await service.declareIntent(strongIntentRequest());
 
     expect(operationResult.sourceId).toBe(
       'self-feedback-intent:user-1:agent-1:operation:operation-1:shared-tool-call',
@@ -315,31 +309,80 @@ describe('selfFeedbackIntent', () => {
       nextToolCallId: () => 'tool-call-1',
     });
 
-    await expect(
-      blockedDeclarationService.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toEqual({
+    await expect(blockedDeclarationService.declareIntent(strongIntentRequest())).resolves.toEqual({
       accepted: false,
       reason: 'intent_gate_rejected',
       strength: 'strong',
     });
-    await expect(
-      blockedEnqueueService.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toEqual({
+    await expect(blockedEnqueueService.declareIntent(strongIntentRequest())).resolves.toEqual({
       accepted: false,
       reason: 'enqueue_gate_rejected',
       sourceId: 'self-feedback-intent:user-1:agent-1:topic:topic-1:tool-call-1',
       strength: 'strong',
     });
     expect(enqueueSource).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * Two service instances (two server processes) sharing one limiter enforce one limit.
+   */
+  it('enforces the declaration limit across service instances that share a limiter', async () => {
+    const enqueueSource = createEnqueueSource();
+    const declarationLimiter = createInMemoryDeclarationLimiter();
+    const processA = createSelfFeedbackIntentService({
+      declarationLimiter,
+      enqueueSource,
+      nextToolCallId: () => 'unused',
+    });
+    const processB = createSelfFeedbackIntentService({
+      declarationLimiter,
+      enqueueSource,
+      nextToolCallId: () => 'unused',
+    });
+    const declare = (service: typeof processA, toolCallId: string) =>
+      service.declareIntent({
+        agentId: 'agent-1',
+        input: createStrongIntentInput(),
+        toolCallId,
+        topicId: 'topic-shared',
+        userId: 'user-1',
+      });
+
+    await declare(processA, 'call-1');
+    await declare(processB, 'call-2');
+    await declare(processA, 'call-3');
+
+    await expect(declare(processB, 'call-4')).resolves.toMatchObject({
+      accepted: false,
+      reason: 'rate_limited',
+    });
+    expect(enqueueSource).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * @example
+   * A declaration that failed to enqueue gives its slot back.
+   */
+  it('releases the declaration slot when enqueueing fails', async () => {
+    const enqueueSource = createEnqueueSource();
+    enqueueSource.mockRejectedValueOnce(new Error('queue down'));
+    const service = createSelfFeedbackIntentService({
+      enqueueSource,
+      nextToolCallId: () => 'unused',
+    });
+    const declare = (toolCallId: string) =>
+      service.declareIntent({
+        agentId: 'agent-1',
+        input: createStrongIntentInput(),
+        toolCallId,
+        topicId: 'topic-release',
+        userId: 'user-1',
+      });
+
+    await expect(declare('call-failed')).rejects.toThrow('queue down');
+    for (const toolCallId of ['call-1', 'call-2', 'call-3']) {
+      await expect(declare(toolCallId)).resolves.toMatchObject({ accepted: true });
+    }
   });
 });

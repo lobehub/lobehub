@@ -35,6 +35,10 @@ ffmpeg -y -i ./proof/native-flow.mp4 \
   ./proof/native-flow.gif
 ```
 
+Start the recorder and log `mark step "Recording started"` in the same command
+line, so the mark is the zero point for the video's
+[chapters](./video-chapters.md); mark each step and check while driving.
+
 Inspect the resulting file before citing it and confirm that no unrelated window,
 notification, or secret entered the host-screen capture. Tag direct
 `screencapture` output as `--by cli` and FFmpeg-derived media as `--by program`.

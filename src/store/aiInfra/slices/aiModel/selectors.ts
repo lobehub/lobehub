@@ -1,3 +1,4 @@
+import type { AiProviderModelListItem } from 'model-bank';
 import {
   AiModelSourceEnum,
   type ExtendParamsType,
@@ -9,26 +10,40 @@ import { ModelSearchImplement } from '@/types/search';
 
 import { modelReasoningConfigKey } from './initialState';
 
+/**
+ * The models of the provider whose settings page is open. The list is a
+ * replica (`aiModelListMap[providerId]`); `activeAiProvider` is set by the
+ * provider page loader, so it names the entry the UI is rendering.
+ */
+const activeProviderModelList = (s: AIProviderStoreState): AiProviderModelListItem[] =>
+  (s.activeAiProvider ? s.aiModelListMap[s.activeAiProvider] : undefined) ?? [];
+
+/** The models of one provider, by id — for callers that hold the id directly. */
+const getAiProviderModelList = (providerId: string) => (s: AIProviderStoreState) =>
+  s.aiModelListMap[providerId] ?? [];
+
 const aiProviderChatModelListIds = (s: AIProviderStoreState) =>
-  s.aiProviderModelList.filter((item) => item.type === 'chat').map((item) => item.id);
+  activeProviderModelList(s)
+    .filter((item) => item.type === 'chat')
+    .map((item) => item.id);
 // List
 const enabledAiProviderModelList = (s: AIProviderStoreState) =>
-  s.aiProviderModelList.filter((item) => item.enabled);
+  activeProviderModelList(s).filter((item) => item.enabled);
 
 const disabledAiProviderModelList = (s: AIProviderStoreState) =>
-  s.aiProviderModelList.filter((item) => !item.enabled);
+  activeProviderModelList(s).filter((item) => !item.enabled);
 
 const filteredAiProviderModelList = (s: AIProviderStoreState) => {
   const keyword = s.modelSearchKeyword.toLowerCase().trim();
 
-  return s.aiProviderModelList.filter(
+  return activeProviderModelList(s).filter(
     (model) =>
       model.id.toLowerCase().includes(keyword) ||
       model.displayName?.toLowerCase().includes(keyword),
   );
 };
 
-const totalAiProviderModelList = (s: AIProviderStoreState) => s.aiProviderModelList.length;
+const totalAiProviderModelList = (s: AIProviderStoreState) => activeProviderModelList(s).length;
 
 const isEmptyAiProviderModelList = (s: AIProviderStoreState) => totalAiProviderModelList(s) === 0;
 
@@ -38,7 +53,7 @@ const getModelCard = (model: string, provider: string) => (s: AIProviderStoreSta
   ) || s.builtinAiModelList.find((item) => item.id === model && item.providerId === provider);
 
 const hasRemoteModels = (s: AIProviderStoreState) =>
-  s.aiProviderModelList.some((m) => m.source === AiModelSourceEnum.Remote);
+  activeProviderModelList(s).some((m) => m.source === AiModelSourceEnum.Remote);
 
 const isModelEnabled = (id: string) => (s: AIProviderStoreState) =>
   enabledAiProviderModelList(s).some((i) => i.id === id);
@@ -47,7 +62,7 @@ const isModelLoading = (id: string) => (s: AIProviderStoreState) =>
   s.aiModelLoadingIds.includes(id);
 
 const getAiModelById = (id: string) => (s: AIProviderStoreState) =>
-  s.aiProviderModelList.find((i) => i.id === id);
+  activeProviderModelList(s).find((i) => i.id === id);
 
 const getEnabledModelById = (id: string, provider: string) => (s: AIProviderStoreState) =>
   s.enabledAiModels?.find((i) => i.id === id && (provider ? provider === i.providerId : true));
@@ -148,10 +163,11 @@ const modelReasoningConfig = (id: string, provider: string) => (s: AIProviderSto
   s.modelReasoningConfigMap?.[modelReasoningConfigKey(provider, id)];
 
 /**
- * Whether `ensureModelReasoningConfig` / the SWR loader has settled the saved
- * config for this model (the key is kept even when nothing is saved). Topic
- * snapshots must not pin "model defaults" while the real value is still in
- * flight, so they skip pinning until this is true.
+ * Whether the replica holds a saved config for this model (the key is kept
+ * even when nothing is saved) — confirmed by the server, or restored from the
+ * local copy for display. Topic snapshots must not pin "model defaults" while
+ * the real value is still in flight, so they run `ensureModelReasoningConfig`
+ * (which confirms a restored-only value) and skip pinning until this is true.
  */
 const isModelReasoningConfigLoaded = (id: string, provider: string) => (s: AIProviderStoreState) =>
   modelReasoningConfigKey(provider, id) in (s.modelReasoningConfigMap ?? {});
@@ -210,6 +226,7 @@ export const aiModelSelectors = {
   enabledAiProviderModelList,
   filteredAiProviderModelList,
   getAiModelById,
+  getAiProviderModelList,
   getEnabledModelById,
   getModelCard,
   hasRemoteModels,

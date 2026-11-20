@@ -163,19 +163,66 @@ describe('ChatHydration', () => {
     });
   });
 
+  /** @example ⌘K Ask AI: reloading the topic it created sent the question a second time. */
+  it('drops a consumed message param when the send moves to its new topic', async () => {
+    useParamsMock.mockReturnValue({ aid: 'agt_test' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/agent/agt_test',
+      search: '?message=hello&thread=thd_456',
+    });
+    useSearchParamsMock.mockReturnValue([
+      new URLSearchParams('message=hello&thread=thd_456'),
+      setSearchParamsMock,
+    ]);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: 'tpc_new' }, false);
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_new?thread=thd_456', {
+        replace: true,
+      });
+    });
+  });
+
+  /** @example Edit changes topic and clears an already-absent thread without reverting the URL. */
+  it('does not rewrite the old URL when an edited topic clears an absent thread', async () => {
+    // ROOT CAUSE:
+    // switchTopic changes activeThreadId from null to undefined alongside the topic.
+    // An unconditional setThread(null) navigated against the old pathname after the topic navigation.
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'source' });
+    useLocationMock.mockReturnValue({ hash: '', pathname: '/agent/agt_test/source', search: '' });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(), setSearchParamsMock]);
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+    setSearchParamsMock.mockClear();
+    await act(async () => {
+      await useChatStore.getState().switchTopic('edited', { skipRefreshMessage: true });
+    });
+    /** @example The new Topic URL is the only navigation; refresh will reopen the edited topic. */
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/edited', { replace: true });
+    /** @example No redundant query-string navigation can put the source pathname back. */
+    expect(setSearchParamsMock).not.toHaveBeenCalled();
+  });
+
   it('keeps topic navigation inside a project conversation route', async () => {
     useParamsMock.mockReturnValue({ projectId: 'prj_1' });
     useLocationMock.mockReturnValue({
       hash: '',
-      pathname: '/project/prj_1/conversation',
+      pathname: '/project/prj_1/topic',
       search: '',
     });
     useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
 
     render(
       <ChatHydration
-        getConversationPath={() => '/project/prj_1/conversation'}
-        getTopicPath={(_agentId, topicId) => `/project/prj_1/conversation/${topicId}`}
+        getConversationPath={() => '/project/prj_1/topic'}
+        getTopicPath={(_agentId, topicId) => `/project/prj_1/topic/${topicId}`}
       />,
     );
 
@@ -184,7 +231,7 @@ describe('ChatHydration', () => {
     });
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith('/project/prj_1/conversation/tpc_project', {
+      expect(navigateMock).toHaveBeenCalledWith('/project/prj_1/topic/tpc_project', {
         replace: true,
       });
     });

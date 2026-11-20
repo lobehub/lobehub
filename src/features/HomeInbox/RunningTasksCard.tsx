@@ -1,16 +1,14 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { homeType } from '@/features/Home/components/homeType';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
-import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';
 import { type InboxTopic } from './useHomeInboxTopics';
 
@@ -87,7 +85,8 @@ const StackedAgentAvatar = memo<{ agentId: string }>(({ agentId }) => {
   if (!agent) return null;
 
   return (
-    <Avatar
+    <AgentAvatar
+      agentId={agentId}
       avatar={agent.avatar}
       background={agent.backgroundColor}
       className={styles.stackedAvatar}
@@ -127,8 +126,6 @@ interface RunningTasksCardProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
   running: InboxTopic[];
-  /** Team view: tag each expanded row with whose run it is. */
-  showAuthor?: boolean;
 }
 
 /**
@@ -136,7 +133,7 @@ interface RunningTasksCardProps {
  * single line by default and only opens on demand. Nothing here is actionable;
  * it exists so the user knows work is in flight.
  */
-const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, showAuthor }) => {
+const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running }) => {
   const { t } = useTranslation('home');
   const [open, setOpen] = useState(false);
 
@@ -169,16 +166,7 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ action, bare, running, s
       {open && (
         <Flexbox className={cx(styles.body, bare && styles.bareBody)}>
           {running.map((topic) => (
-            <TopicRow
-              key={topic.id}
-              leading={<RunningGlyph size={14} />}
-              topic={topic}
-              trailing={
-                showAuthor ? (
-                  <AuthorChip trigger={topic.trigger} userId={topic.userId} />
-                ) : undefined
-              }
-            />
+            <TopicRow key={topic.id} leading={<RunningGlyph size={14} />} topic={topic} />
           ))}
         </Flexbox>
       )}

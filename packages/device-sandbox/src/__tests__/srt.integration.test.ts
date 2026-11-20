@@ -180,12 +180,11 @@ describe.skipIf(process.platform !== 'darwin')('Anthropic sandbox-runtime integr
     expect(secondResult).toMatchObject({ exitCode: 0, stdout: 'second' });
   });
 
-  it('rejects a different device policy until the current session is reset', async () => {
+  it('rejects a different device policy only while a command is still running', async () => {
     const first = await createSandboxLaunchPlan({
       command: { args: ['-c', 'true'], cmd: '/bin/sh' },
       policy,
     });
-    await run(first);
 
     await expect(
       createSandboxLaunchPlan({
@@ -194,7 +193,8 @@ describe.skipIf(process.platform !== 'darwin')('Anthropic sandbox-runtime integr
       }),
     ).rejects.toMatchObject({ code: 'SANDBOX_POLICY_CONFLICT' });
 
-    await srtSandboxRuntime.shutdown();
+    await run(first);
+    // Once idle, the runtime re-initializes under the new policy.
     const next = await createSandboxLaunchPlan({
       command: { args: ['-c', 'true'], cmd: '/bin/sh' },
       policy: { ...policy, writableRoots: [deniedRoot] },

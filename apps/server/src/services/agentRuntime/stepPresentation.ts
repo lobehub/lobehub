@@ -1,3 +1,5 @@
+import { getLlmCallCount } from '@lobechat/agent-runtime';
+
 import type { StepPresentationData } from './types';
 
 interface StepResultLike {
@@ -38,6 +40,8 @@ export function buildStepPresentation(
   const { usage, cost } = stepResult.newState;
   const phase = stepResult.nextContext?.phase;
   const isToolPhase = phase === 'tool_result' || phase === 'tools_batch_result';
+  const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
+    { reason?: string; reasonDetail?: string; type: 'done' } | undefined;
 
   let content: string | undefined;
   let reasoning: string | undefined;
@@ -87,9 +91,6 @@ export function buildStepPresentation(
     summary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
   } else {
     // Check for done event first (finish step with no next context).
-    const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
-      { reason?: string; reasonDetail?: string; type: 'done' } | undefined;
-
     if (doneEvent) {
       summary = `[done] reason=${doneEvent.reason ?? 'unknown'}`;
     } else {
@@ -115,6 +116,11 @@ export function buildStepPresentation(
     }
   }
 
+  // A step can settle tool calls and then finish (e.g. the last unresolvable
+  // tool names are rejected, then the run stops): the tool phase decides the
+  // presentation, but the log line must still say the run ended and why.
+  if (isToolPhase && doneEvent) summary += ` → [done] reason=${doneEvent.reason ?? 'unknown'}`;
+
   // Step-level usage from nextContext.stepUsage.
   const stepUsage = stepResult.nextContext?.stepUsage as Record<string, number> | undefined;
 
@@ -136,7 +142,7 @@ export function buildStepPresentation(
     totalCost: cost?.total ?? 0,
     totalInputTokens: tokens?.input ?? 0,
     totalOutputTokens: tokens?.output ?? 0,
-    totalSteps: stepResult.newState.stepCount ?? 0,
+    totalSteps: getLlmCallCount(stepResult.newState),
     totalTokens: tokens?.total ?? 0,
   };
 

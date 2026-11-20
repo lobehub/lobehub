@@ -1,0 +1,508 @@
+// @vitest-environment node
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '../../../core/getTestDB';
+import { channelJobs, channelMembers, channelMessages } from '../../../schemas';
+import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { appendMessage } from '../delivery';
+import { openingRequestKey } from '../opening';
+import { createChannelFixture, jobsOf, lease } from './testUtils';
+
+const db = await getTestDB();
+const fixture = createChannelFixture(db, 'channel-view');
+beforeEach(fixture.setup);
+afterEach(fixture.cleanup);
+
+const publishedReply = async (workspace = true) => {
+  const asOwner = new ChannelRepository(
+    db,
+    fixture.ownerId,
+    workspace ? fixture.workspaceId : undefined,
+  );
+  const { channel } = await asOwner.create({ title: 'Agent replies' });
+  const author = await fixture.addAgent(channel.id, 'Author');
+  const other = await fixture.addAgent(channel.id, 'Other');
+  const request = await asOwner.send(channel.id, {
+    content: 'Hello',
+    mentions: [author.id],
+    requestKey: 'hello',
+    routing: 'fallback',
+  });
+  const [job] = await jobsOf(db, request.id);
+  const executions = new ChannelExecutionRepository(db);
+  await executions.claim(channel.id, job.id, lease);
+  await executions.accepted(channel.id, job.id);
+  await executions.saveDraft(channel.id, job.id, 'Hello from Author');
+  const replyId = await executions.publish(channel.id, job.id);
+  await executions.releaseWriter(channel.id, job.id);
+  return { asOwner, author, channel, other, replyId };
+};
+
+describe('Channel public view', () => {
+  it('returns an ordered page without exposing execution config, private topics or drafts', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const first = await asOwner.send(channel.id, {
+      content: 'First',
+      requestKey: '1',
+      routing: 'fallback',
+    });
+    await asOwner.send(channel.id, { content: 'Second', requestKey: '2', routing: 'fallback' });
+    const third = await asOwner.send(channel.id, {
+      content: 'Third',
+      requestKey: '3',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, first.id);
+    const executions = new ChannelExecutionRepository(db);
+    await executions.claim(channel.id, job.id, lease);
+    await executions.saveDraft(channel.id, job.id, 'Unpublished private draft');
+
+    const view = await asOwner.detail(channel.id, { limit: 2 });
+    expect(view.messages.map((message) => message.content)).toEqual(['Second', 'Third']);
+    expect(view.hasMore).toBe(true);
+    expect(view.members.find((member) => member.id === agent.id)?.name).toBe('Researcher');
+    expect(view.jobs[0]).not.toHaveProperty('topicId');
+    expect(view.jobs[0]).not.toHaveProperty('operationId');
+    expect(view.jobs[0]).not.toHaveProperty('executionConfig');
+    expect(view).not.toHaveProperty('member');
+    expect(view.members.every((member) => !('config' in member))).toBe(true);
+    expect(JSON.stringify(view)).not.toContain('Unpublished private draft');
+    expect(
+      (await asOwner.detail(channel.id, { before: third.sequence, limit: 2 })).messages.map(
+        (message) => message.content,
+      ),
+    ).toEqual(['First', 'Second']);
+  });
+
+  it('enforces membership, scope and revocation on the aggregate view', async () => {
+    const { asMember, channel, member } = await fixture.createTeamChannel();
+    expect((await asMember.detail(channel.id)).channel.id).toBe(channel.id);
+    await expect(
+      new ChannelRepository(db, fixture.ownerId).detail(channel.id),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await db
+      .update(channelMembers)
+      .set({ status: 'removed' })
+      .where(eq(channelMembers.id, member.id));
+    await expect(asMember.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('branches once from a main message without replaying jobs and isolates branch messages', async () => {
+    const { asOwner, channel, owner } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      mentions: [owner.id],
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const input = { followerMemberIds: [agent.id, agent.id], rootMessageId: root.id };
+    const thread = await asOwner.createThread(channel.id, input);
+    expect((await asOwner.createThread(channel.id, input)).id).toBe(thread.id);
+    expect(thread.followerMemberIds).toEqual([agent.id]);
+    expect(await jobsOf(db, root.id)).toEqual([]);
+    const reply = await asOwner.send(channel.id, {
+      content: 'Branch request',
+      requestKey: 'thread',
+      routing: 'fallback',
+      threadId: thread.id,
+    });
+    expect((await asOwner.detail(channel.id)).messages.map((m) => m.id)).toEqual([root.id]);
+    expect(
+      (await asOwner.detail(channel.id, { threadId: thread.id })).messages.map((m) => m.id),
+    ).toEqual([reply.id]);
+    expect(await jobsOf(db, reply.id)).toHaveLength(1);
+    await expect(
+      asOwner.createThread(channel.id, { ...input, rootMessageId: reply.id }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it("carries a thread's replies at work on the main timeline, and only until they settle", async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const request = await asOwner.send(channel.id, {
+      content: 'Dig into it',
+      mentions: [agent.id],
+      requestKey: 'thread-work',
+      routing: 'fallback',
+      threadId: thread.id,
+    });
+    const [job] = await jobsOf(db, request.id);
+    const setJob = (patch: Partial<typeof channelJobs.$inferInsert>) =>
+      db.update(channelJobs).set(patch).where(eq(channelJobs.id, job.id));
+    const threadJobsOnMain = async () =>
+      (await asOwner.detail(channel.id)).jobs.filter((entry) => entry.threadId === thread.id);
+
+    await setJob({ status: 'running', writerHeld: true });
+    expect(await threadJobsOnMain()).toEqual([
+      expect.objectContaining({ id: job.id, status: 'running', threadId: thread.id }),
+    ]);
+
+    // Stopping: no longer running, but still holding the writer.
+    await setJob({ publicationRevoked: true, status: 'cancelled', writerHeld: true });
+    expect((await threadJobsOnMain()).map((entry) => entry.id)).toEqual([job.id]);
+
+    await setJob({ status: 'completed', writerHeld: false });
+    expect(await threadJobsOnMain()).toEqual([]);
+    expect(
+      (await asOwner.detail(channel.id, { threadId: thread.id })).jobs.map((entry) => entry.id),
+    ).toEqual([job.id]);
+  });
+
+  it("keeps the main conversation's own jobs however many thread jobs are at work", async () => {
+    const { asOwner, channel, owner } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const main = await asOwner.send(channel.id, {
+      content: 'Main request',
+      mentions: [agent.id],
+      requestKey: 'main-work',
+      routing: 'fallback',
+    });
+    const [mainJob] = await jobsOf(db, main.id);
+    await db
+      .update(channelJobs)
+      .set({ createdAt: new Date(Date.now() - 60_000), status: 'running', writerHeld: true })
+      .where(eq(channelJobs.id, mainJob.id));
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: main.id });
+    // More queued thread work than the main view's own job limit.
+    const messages = await db
+      .insert(channelMessages)
+      .values(
+        Array.from({ length: 210 }, (_, index) => ({
+          channelId: channel.id,
+          content: `Thread request ${index}`,
+          requestKey: `flood-${index}`,
+          routingStatus: 'routed' as const,
+          sequence: 10_000 + index,
+          threadId: thread.id,
+          userId: fixture.ownerId,
+        })),
+      )
+      .returning({ id: channelMessages.id });
+    await db.insert(channelJobs).values(
+      messages.map(({ id }) => ({
+        channelId: channel.id,
+        memberId: agent.id,
+        messageId: id,
+        requesterMemberId: owner.id,
+        threadId: thread.id,
+      })),
+    );
+
+    const { jobs } = await asOwner.detail(channel.id);
+    expect(jobs.filter((job) => !job.threadId).map((job) => job.id)).toEqual([mainJob.id]);
+    expect(jobs.filter((job) => job.threadId === thread.id).length).toBeLessThan(210);
+  });
+
+  it('summarizes each thread under its root on the main timeline only', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const quiet = await asOwner.send(channel.id, {
+      content: 'Quiet root',
+      requestKey: 'quiet',
+      routing: 'fallback',
+    });
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const empty = await asOwner.createThread(channel.id, { rootMessageId: quiet.id });
+    for (const content of ['First reply', 'Latest reply'])
+      await asOwner.send(channel.id, {
+        content,
+        requestKey: content,
+        routing: 'fallback',
+        threadId: thread.id,
+      });
+
+    const main = await asOwner.detail(channel.id);
+    expect(main.threads.find((entry) => entry.id === thread.id)).toMatchObject({
+      lastNewsAt: expect.any(Date),
+      lastReply: { author: { type: 'user' }, content: 'Latest reply' },
+      replyCount: 2,
+    });
+    expect(main.threads.find((entry) => entry.id === empty.id)).toMatchObject({
+      lastReply: null,
+      replyCount: 0,
+    });
+    // A root outside the loaded page and a thread view skip the summary scan.
+    const older = await asOwner.detail(channel.id, { before: quiet.sequence, limit: 1 });
+    expect(older.threads.find((entry) => entry.id === empty.id)).not.toHaveProperty('replyCount');
+    const inThread = await asOwner.detail(channel.id, { threadId: thread.id });
+    expect(inThread.threads.find((entry) => entry.id === thread.id)).not.toHaveProperty(
+      'replyCount',
+    );
+  });
+
+  it('does not count an Agent acknowledgement as unread news in a thread summary', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const acked = await asOwner.send(channel.id, {
+      content: 'Acked root',
+      requestKey: 'acked',
+      routing: 'fallback',
+    });
+    const busy = await asOwner.send(channel.id, {
+      content: 'Busy root',
+      requestKey: 'busy',
+      routing: 'fallback',
+    });
+    const fresh = await asOwner.createThread(channel.id, { rootMessageId: acked.id });
+    const ongoing = await asOwner.createThread(channel.id, { rootMessageId: busy.id });
+    const person = await asOwner.send(channel.id, {
+      content: 'Unread person reply',
+      requestKey: 'person',
+      routing: 'fallback',
+      threadId: ongoing.id,
+    });
+    const ack = (threadId: string, jobId: string, replyToId: string) =>
+      db.transaction((tx) =>
+        appendMessage(tx, {
+          agentId: agent.agentId,
+          channelId: channel.id,
+          content: 'On it',
+          replyToId,
+          requestKey: openingRequestKey(jobId),
+          routingStatus: 'reply',
+          threadId,
+        }),
+      );
+    await ack(fresh.id, 'job_fresh', acked.id);
+    await ack(ongoing.id, 'job_ongoing', person.id);
+
+    const { threads } = await asOwner.detail(channel.id);
+    // The acknowledgement still previews what is happening, but is not news on its own.
+    expect(threads.find((entry) => entry.id === fresh.id)).toMatchObject({
+      lastNewsAt: null,
+      lastReply: { author: { type: 'agent' }, content: 'On it' },
+      replyCount: 1,
+    });
+    // Nor does it hide the earlier reply that still is.
+    expect(threads.find((entry) => entry.id === ongoing.id)).toMatchObject({
+      lastNewsAt: person.createdAt,
+      lastReply: { content: 'On it' },
+      replyCount: 2,
+    });
+  });
+
+  it.each([false, true])(
+    'includes the reply author so a new thread can answer without a mention (workspace: %s)',
+    async (workspace) => {
+      const { asOwner, author, channel, replyId } = await publishedReply(workspace);
+      const view = await asOwner.detail(channel.id);
+      expect(view.messages.find((message) => message.id === replyId)?.recipientMemberIds).toEqual(
+        [],
+      );
+      const input = { followerMemberIds: [], rootMessageId: replyId };
+      const thread = await asOwner.createThread(channel.id, input);
+      expect(thread.followerMemberIds).toEqual([author.id]);
+      expect((await asOwner.createThread(channel.id, input)).id).toBe(thread.id);
+      // Opening a thread must not trigger an unsolicited reply.
+      expect(await jobsOf(db, replyId)).toEqual([]);
+      const followup = await asOwner.send(channel.id, {
+        content: 'Which directory can you see?',
+        requestKey: 'followup',
+        routing: 'fallback',
+        threadId: thread.id,
+      });
+      expect(followup.recipientMemberIds).toEqual([author.id]);
+      expect(await jobsOf(db, followup.id)).toEqual([
+        expect.objectContaining({ memberId: author.id, threadId: thread.id, status: 'queued' }),
+      ]);
+    },
+  );
+
+  it('keeps explicitly selected followers and deduplicates the automatically included author', async () => {
+    const { asOwner, author, channel, other, replyId } = await publishedReply();
+    const thread = await asOwner.createThread(channel.id, {
+      followerMemberIds: [other.id, author.id, other.id],
+      rootMessageId: replyId,
+    });
+    expect(thread.followerMemberIds.sort()).toEqual([author.id, other.id].sort());
+  });
+
+  it.each(['inactive', 'rebound'] as const)(
+    'does not automatically include an %s reply author',
+    async (state) => {
+      const { asOwner, author, channel, other, replyId } = await publishedReply();
+      await db
+        .update(channelMembers)
+        .set(state === 'inactive' ? { status: 'removed' as const } : { agentId: other.agentId })
+        .where(eq(channelMembers.id, author.id));
+      const thread = await asOwner.createThread(channel.id, {
+        followerMemberIds: [],
+        rootMessageId: replyId,
+      });
+      expect(thread.followerMemberIds).toEqual([]);
+    },
+  );
+
+  it('still rejects explicit followers outside the reply channel', async () => {
+    const { asOwner, channel, replyId } = await publishedReply();
+    const otherChannel = await fixture.createTeamChannel('Foreign');
+    await expect(
+      asOwner.createThread(channel.id, {
+        followerMemberIds: [otherChannel.owner.id],
+        rootMessageId: replyId,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('rejects a thread, root or follower from another channel', async () => {
+    const one = await fixture.createTeamChannel('One');
+    const two = await fixture.createTeamChannel('Two');
+    const agent = await fixture.addAgent(two.channel.id, 'Other');
+    const root = await two.asOwner.send(two.channel.id, {
+      content: 'Other branch',
+      requestKey: 'other',
+      routing: 'fallback',
+    });
+    const thread = await two.asOwner.createThread(two.channel.id, {
+      followerMemberIds: [agent.id],
+      rootMessageId: root.id,
+    });
+    await expect(one.asOwner.detail(one.channel.id, { threadId: thread.id })).rejects.toMatchObject(
+      { code: 'NOT_FOUND' },
+    );
+    await expect(
+      one.asOwner.createThread(one.channel.id, {
+        followerMemberIds: [],
+        rootMessageId: root.id,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      two.asOwner.createThread(two.channel.id, {
+        followerMemberIds: [one.owner.id],
+        rootMessageId: root.id,
+      }),
+    ).resolves.toMatchObject({ id: thread.id }); // An existing thread is an idempotent open.
+  });
+
+  it('creates the selected members atomically and rolls back unavailable Agents', async () => {
+    const { channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const repo = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const created = await repo.create({
+      agents: [{ agentId: agent.agentId! }],
+      title: 'With agent',
+    });
+    expect((await repo.detail(created.channel.id)).members).toHaveLength(2);
+    const count = (await repo.list()).length;
+    await expect(
+      repo.create({
+        agents: [{ agentId: agent.agentId! }, { agentId: 'unavailable' }],
+        title: 'Rollback',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(await repo.list()).toHaveLength(count);
+  });
+
+  it('keeps read receipts monotonic and bounded by the persisted sequence', async () => {
+    const { asOwner, channel, owner } = await fixture.createTeamChannel();
+    await asOwner.send(channel.id, { content: 'Read me', requestKey: '1', routing: 'fallback' });
+    expect(await asOwner.markRead(channel.id, 500)).toBe(1);
+    expect(await asOwner.markRead(channel.id, 0)).toBe(1);
+    const view = await asOwner.detail(channel.id);
+    expect(view.members.find((member) => member.id === owner.id)?.lastReadSequence).toBe(1);
+    expect(
+      await db.select().from(channelJobs).where(eq(channelJobs.channelId, channel.id)),
+    ).toEqual([]);
+  });
+
+  it('counts unread @mentions of the caller, Threads included, until they are read', async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    const send = (content: string, mentions: string[] = [], threadId?: string) =>
+      asOwner.send(channel.id, {
+        content,
+        mentions,
+        requestKey: content,
+        routing: 'fallback',
+        threadId,
+      });
+    await send('Hi all');
+    const first = await send('Ping', [member.id]);
+    const root = await send('Ping again', [member.id]);
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const reply = await send('In a thread', [member.id], thread.id);
+
+    const listed = async () => (await asMember.list()).find((item) => item.id === channel.id);
+    expect(await listed()).toMatchObject({ mentionCount: 3, unreadCount: 4 });
+    expect((await asOwner.list()).find((item) => item.id === channel.id)?.mentionCount).toBe(0);
+
+    await asMember.markRead(channel.id, first.sequence);
+    expect(await listed()).toMatchObject({ mentionCount: 2, unreadCount: 2 });
+    await asMember.markRead(channel.id, reply.sequence);
+    expect(await listed()).toMatchObject({ mentionCount: 0, unreadCount: 0 });
+  });
+
+  it('lists the newest Thread mention of the caller however far the Channel was read', async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    const send = (content: string, mentions: string[] = [], threadId?: string) =>
+      asOwner.send(channel.id, {
+        content,
+        mentions,
+        requestKey: content,
+        routing: 'fallback',
+        threadId,
+      });
+    const root = await send('Root');
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    await send('First ping', [member.id], thread.id);
+    const latest = await send('Second ping', [member.id], thread.id);
+    await send('No ping', [], thread.id);
+    await send('Main ping', [member.id]);
+
+    const listed = async () => (await asMember.list()).find((item) => item.id === channel.id);
+    const mentioned = [{ createdAt: latest.createdAt, threadId: thread.id }];
+    expect((await listed())?.threadMentions).toEqual(mentioned);
+    expect((await asOwner.list()).find((item) => item.id === channel.id)?.threadMentions).toEqual(
+      [],
+    );
+
+    // Reading the main conversation consumes the count but not the Thread mention.
+    await asMember.markRead(channel.id, latest.sequence + 2);
+    expect(await listed()).toMatchObject({ mentionCount: 0, threadMentions: mentioned });
+
+    // A trashed Thread cannot be opened, so its mentions are no longer listed.
+    await asOwner.removeThread(channel.id, thread.id);
+    expect((await listed())?.threadMentions).toEqual([]);
+  });
+
+  it('preserves the actual reply author when a member is rebound', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const original = await fixture.addAgent(channel.id, 'Original');
+    const replacement = await fixture.addAgent(channel.id, 'Replacement');
+    const request = await asOwner.send(channel.id, {
+      content: 'Reply once',
+      mentions: [original.id],
+      requestKey: 'author',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, request.id);
+    const executions = new ChannelExecutionRepository(db);
+    await executions.claim(channel.id, job.id, lease);
+    await executions.accepted(channel.id, job.id);
+    await executions.saveDraft(channel.id, job.id, 'Original reply');
+    await executions.publish(channel.id, job.id);
+    await db
+      .update(channelMembers)
+      .set({ agentId: replacement.agentId })
+      .where(eq(channelMembers.id, original.id));
+    const view = await asOwner.detail(channel.id);
+    expect(view.messages[0].author).toMatchObject({ id: fixture.ownerId, type: 'user' });
+    expect(view.messages[1].author).toMatchObject({
+      id: original.agentId,
+      name: 'Original',
+      type: 'agent',
+    });
+  });
+});

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { MarketAPIError } from '@lobehub/market-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { marketRouter } from './market';
@@ -11,6 +12,9 @@ const mockCreateSandboxService = vi.hoisted(() =>
       callTool: mockSandboxCallTool,
     };
   }),
+);
+const mockResolveSandboxSessionConfig = vi.hoisted(() =>
+  vi.fn(async () => ({ claim: null, mode: 'ephemeral' as const })),
 );
 const mockMarketSDK = vi.hoisted(() => ({
   skills: {
@@ -54,6 +58,7 @@ vi.mock('@/server/services/file', () => ({
 
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mockCreateSandboxService,
+  resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
 }));
 
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
@@ -100,6 +105,79 @@ describe('tools marketRouter', () => {
       command:
         'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent view agt_1',
     });
+  });
+
+  // Regression: this route opened the sandbox session with no mode, no
+  // directory and no claim, so a conversation whose topic had chosen a
+  // persistent instance still ran in the disposable `/workspace` — the
+  // composer said one thing and `pwd` another. The client-side executor
+  // reaches the sandbox through here, so the feature was absent for every run
+  // that is not dispatched server-side.
+  it('opens the session with the persistence the topic resolved', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: 'ws-1',
+    } as any);
+    mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+      claim: { key: 'ws-org-ws-1', quotaBytes: 1024 },
+      cwd: 'lobehub-dev',
+      environment: 'env-1',
+      mode: 'persistent',
+    } as never);
+    mockSandboxCallTool.mockResolvedValue({ result: { ok: true }, success: true });
+
+    await caller.execInSandbox({
+      params: { command: 'pwd' },
+      toolName: 'runCommand',
+      topicId: 'topic-1',
+    });
+
+    expect(mockResolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'topic-1', userId: 'caller-user', workspaceId: 'ws-1' }),
+    );
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sandboxCwd: 'lobehub-dev',
+        sandboxInstanceId: 'env-1',
+        sandboxMode: 'persistent',
+      }),
+    );
+  });
+
+  // Regression: the same route, and the same reason as above. The environment's
+  // definition is what exports its variables, runs its maintenance command and
+  // cuts its network — all of it inert for a conversation that reaches the
+  // sandbox through here, which is every run not dispatched server-side.
+  it('opens the session with the definition the instance was built from', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: 'ws-1',
+    } as any);
+    const specification = {
+      env: { NODE_ENV: 'production' },
+      internetAccess: false,
+      maintenanceCommand: 'git pull --ff-only',
+    };
+    mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+      claim: { key: 'ws-org-ws-1', quotaBytes: 1024 },
+      cwd: 'lobehub-dev',
+      environment: 'env-1',
+      mode: 'persistent',
+      specification,
+    } as never);
+    mockSandboxCallTool.mockResolvedValue({ result: { ok: true }, success: true });
+
+    await caller.execInSandbox({
+      params: { command: 'env' },
+      toolName: 'runCommand',
+      topicId: 'topic-1',
+    });
+
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxSpecification: specification }),
+    );
   });
 
   // Regression: `input.userId` used to override `ctx.userId`, so any
@@ -188,5 +266,40 @@ describe('tools marketRouter', () => {
       tool: 'query',
       topicId: undefined,
     });
+  });
+
+  // Regression: the SDK carries the machine code in `error.code` and the message is human
+  // text, so matching the message always fell through to INTERNAL_SERVER_ERROR.
+  it.each(['NOT_CONNECTED', 'TOKEN_EXPIRED'])(
+    'should map a Market %s error to PRECONDITION_FAILED instead of UNAUTHORIZED',
+    async (code) => {
+      const caller = marketRouter.createCaller({ userId: 'user-1' } as any);
+      mockMarketSDK.skills.callTool.mockRejectedValue(
+        new MarketAPIError(401, 'Unauthorized', { error: { code, message: 'No connection' } }),
+      );
+
+      await expect(
+        caller.connectCallTool({ provider: 'linear', toolName: 'createIssue' }),
+      ).rejects.toMatchObject({
+        cause: { data: { code } },
+        code: 'PRECONDITION_FAILED',
+      });
+    },
+  );
+
+  it('should keep other connectCallTool failures as INTERNAL_SERVER_ERROR', async () => {
+    const caller = marketRouter.createCaller({ userId: 'user-1' } as any);
+    mockMarketSDK.skills.callTool.mockRejectedValueOnce(
+      new MarketAPIError(500, 'Server Error', { error: { code: 'UPSTREAM_FAILED', message: 'x' } }),
+    );
+    await expect(
+      caller.connectCallTool({ provider: 'linear', toolName: 'createIssue' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+
+    // A message that merely mentions the code is not a connection error.
+    mockMarketSDK.skills.callTool.mockRejectedValueOnce(new Error('NOT_CONNECTED'));
+    await expect(
+      caller.connectCallTool({ provider: 'linear', toolName: 'createIssue' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
   });
 });

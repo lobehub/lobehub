@@ -1,6 +1,5 @@
 import debug from 'debug';
 
-import { advanceGoal } from '../../advanceGoal';
 import type { GoalSchedulerImpl, ScheduleGoalAdvanceParams } from './type';
 
 const log = debug('goal-scheduler:local');
@@ -21,6 +20,10 @@ export class LocalGoalScheduler implements GoalSchedulerImpl {
     const timer = setTimeout(async () => {
       this.pending.delete(scheduleId);
       try {
+        // Loaded here rather than at module scope: the advance runner imports
+        // `GoalService`, which reaches this scheduler through the goal graph, so
+        // a static import would close a module cycle (`lint:circular`).
+        const { advanceGoal } = await import('../../advanceGoal');
         await advanceGoal({ goalId, trigger, userId, workspaceId });
       } catch (error) {
         // Never surface: an advance is best-effort, and the sweep retries.

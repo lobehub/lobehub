@@ -1,4 +1,3 @@
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { NotificationMetadata } from '@lobechat/types';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
@@ -6,8 +5,11 @@ import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDispla
 import { getNotificationAgentId } from './getNotificationAgentId';
 
 interface NotificationAgentDisplayMeta {
-  avatar: string;
+  /** Empty when the agent has no avatar of its own: the row draws the generated one. */
+  avatar?: string;
   backgroundColor?: string;
+  /** Seeds the generated avatar. */
+  id: string;
   title?: string;
 }
 
@@ -25,12 +27,13 @@ export const useNotificationAgentMeta = (
   const agentId = snapshot?.id ?? getNotificationAgentId(actionUrl);
   const liveAgent = useAgentDisplayMeta(agentId, { fallbackToDefault: false });
 
-  if (liveAgent) return liveAgent;
+  if (liveAgent) return { ...liveAgent, id: agentId! };
   if (!snapshot) return undefined;
 
   return {
-    avatar: snapshot.avatar || DEFAULT_AVATAR,
+    avatar: snapshot.avatar || undefined,
     backgroundColor: snapshot.backgroundColor,
+    id: snapshot.id,
     title: snapshot.name,
   };
 };

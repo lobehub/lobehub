@@ -9,6 +9,7 @@ import { AgentSkillModel } from '@/database/models/agentSkill';
 
 import { SkillImportError } from './errors';
 import { SkillImporter } from './importer';
+import type * as ParserModule from './parser';
 
 // Mock external dependencies only (GitHub, S3, parser)
 const normalizeIdentifierPart = (part: string) =>
@@ -16,9 +17,9 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/[^\w-]/g, '-')
     .replaceAll(/-+/g, '-')
     .replaceAll(/^-|-$/g, '');
-
 const mockGitHubInstance = {
-  downloadRepoZip: vi.fn(),
+  downloadCommitZip: vi.fn(),
+  resolveCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
   generateIdentifier: vi
     .fn()
     .mockImplementation((info: { owner: string; path?: string; repo: string }) => {
@@ -35,6 +36,8 @@ vi.mock('@/server/modules/GitHub', () => ({
   GitHub: vi.fn(function () {
     return mockGitHubInstance;
   }),
+  GitHubError: class GitHubError extends Error {},
+  GitHubRateLimitError: class GitHubRateLimitError extends Error {},
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -90,10 +93,50 @@ vi.mock('@/server/services/file/impls', () => ({
   })),
 }));
 
-// Mock fs/promises readFile
-vi.mock('node:fs/promises', () => ({
+vi.mock(import('node:fs/promises'), async (importOriginal) => ({
+  ...(await importOriginal()),
   readFile: vi.fn().mockResolvedValue(Buffer.from('mock-zip-content')),
 }));
+
+const fileServiceMock = (mockUploadBuffer: ReturnType<typeof vi.fn>) => ({
+  createPreSignedUrl: vi.fn(),
+  createPreSignedUpload: vi.fn(),
+  createPreSignedUrlForPreview: vi.fn(),
+  deleteFile: vi.fn(),
+  deleteFiles: vi.fn(),
+  getFileByteArray: vi.fn(),
+  getFileContent: vi.fn(),
+  getFileMetadata: vi.fn(),
+  getFullFileUrl: vi.fn(),
+  getKeyFromFullUrl: vi.fn(),
+  uploadBuffer: mockUploadBuffer,
+  uploadContent: vi.fn(),
+  uploadMedia: vi.fn(),
+});
+
+const zipFileRow = (userId: string, zipHash: string, zipFileId: string) => ({
+  fileHash: zipHash,
+  fileType: 'application/zip',
+  id: zipFileId,
+  name: 'skill.zip',
+  size: 1000,
+  url: 'mock/path/skill.zip',
+  userId,
+});
+
+const globalZipRow = (userId: string, zipHash: string) => ({
+  creator: userId,
+  fileType: 'application/zip',
+  hashId: zipHash,
+  size: 1000,
+  url: 'mock/path/skill.zip',
+});
+
+const emptyZipResponse = () => ({
+  arrayBuffer: async () => new ArrayBuffer(0),
+  ok: true,
+  status: 200,
+});
 
 describe('SkillImporter', () => {
   let db: LobeChatDatabase;
@@ -216,23 +259,9 @@ describe('SkillImporter', () => {
       const zipHash = `zip-hash-${Date.now()}`;
 
       // Insert mock file record
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# ZIP Skill content',
@@ -264,23 +293,9 @@ describe('SkillImporter', () => {
       const zipHash = `zip-hash-res-${Date.now()}`;
       const parsedZipHash = `parsed-hash-${Date.now()}`;
 
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       // Also create globalFiles for the parsed hash (for foreign key reference)
       await db.insert(globalFiles).values({
@@ -319,23 +334,9 @@ describe('SkillImporter', () => {
       const zipFileId = `zip-file-conflict-${Date.now()}`;
       const zipHash = `zip-hash-conflict-${Date.now()}`;
 
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       // First, create a skill with the same name
       await importer.createUserSkill({
@@ -370,7 +371,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-demo',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# GitHub Skill content',
         manifest: { name: 'GitHub Skill', description: 'A GitHub skill' },
@@ -385,7 +386,7 @@ describe('SkillImporter', () => {
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
       expect(result.skill.name).toBe('GitHub Skill');
-      expect(result.skill.identifier).toBe('lobehub-skill-demo');
+      expect(result.skill.identifier).toMatch(/^lobehub-skill-demo-[a-f0-9]{20}$/);
       expect(result.skill.source).toBe('market');
 
       // Verify manifest contains repository info
@@ -405,7 +406,7 @@ describe('SkillImporter', () => {
         path: 'skills/skill-creator',
         repo: 'openclaw',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Creator content',
         manifest: { name: 'skill-creator', description: 'Create skills' },
@@ -419,11 +420,11 @@ describe('SkillImporter', () => {
 
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
-      expect(result.skill.identifier).toBe('openclaw-openclaw-skill-creator');
+      expect(result.skill.identifier).toMatch(/^openclaw-openclaw-skill-creator-[a-f0-9]{20}$/);
 
-      // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
         basePath: 'skills/skill-creator',
+        fallbackName: 'skill-creator',
         repackSkillZip: true,
       });
     });
@@ -434,7 +435,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-update',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       // First import
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
@@ -474,7 +475,7 @@ describe('SkillImporter', () => {
         .select()
         .from(agentSkills)
         .where(
-          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, 'lobehub-skill-update')),
+          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, first.skill.identifier)),
         );
       expect(dbSkills).toHaveLength(1);
     });
@@ -503,19 +504,13 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'non-existent',
       });
-      mockGitHubInstance.downloadRepoZip.mockImplementation(() => {
-        throw new GitHubNotFoundError('Repository not found');
-      });
+      mockGitHubInstance.resolveCommit.mockRejectedValueOnce(
+        new GitHubNotFoundError('GitHub repository or ref not found'),
+      );
 
       await expect(
         importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' }),
-      ).rejects.toThrow(SkillImportError);
-
-      try {
-        await importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' });
-      } catch (e) {
-        expect((e as SkillImportError).code).toBe('NOT_FOUND');
-      }
+      ).rejects.toMatchObject({ code: 'NOT_FOUND', name: 'SkillImportError' });
     });
 
     it('should use custom branch when provided', async () => {
@@ -524,7 +519,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-branch',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Branch Skill',
         manifest: { name: 'Branch Skill', description: 'From develop branch' },
@@ -551,7 +546,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-global-only',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Content',
         manifest: { name: 'Global Only Skill', description: 'Test global files' },
@@ -586,21 +581,7 @@ describe('SkillImporter', () => {
       const zipHash = `path-test-${Date.now()}`;
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
-      (createFileServiceModule as any).mockReturnValue({
-        createPreSignedUrl: vi.fn(),
-        createPreSignedUpload: vi.fn(),
-        createPreSignedUrlForPreview: vi.fn(),
-        deleteFile: vi.fn(),
-        deleteFiles: vi.fn(),
-        getFileByteArray: vi.fn(),
-        getFileContent: vi.fn(),
-        getFileMetadata: vi.fn(),
-        getFullFileUrl: vi.fn(),
-        getKeyFromFullUrl: vi.fn(),
-        uploadBuffer: mockUploadBuffer,
-        uploadContent: vi.fn(),
-        uploadMedia: vi.fn(),
-      });
+      (createFileServiceModule as any).mockReturnValue(fileServiceMock(mockUploadBuffer));
 
       // Create new importer to pick up the mock
       const freshImporter = new SkillImporter(db, userId);
@@ -610,7 +591,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-path-test',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Content',
         manifest: { name: 'Path Test Skill', description: 'Test path' },
@@ -622,11 +603,11 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-path-test',
       });
 
-      // Verify uploadBuffer was called with correct path
       expect(mockUploadBuffer).toHaveBeenCalledWith(
         `skills/zip/${zipHash}.zip`,
         expect.any(Buffer),
         'application/zip',
+        undefined,
       );
     });
 
@@ -636,7 +617,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'repack-test',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('large-repo-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('large-repo-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill',
         manifest: { name: 'Test', description: 'Test' },
@@ -659,21 +640,7 @@ describe('SkillImporter', () => {
     it('should upload skillZipBuffer instead of full repo ZIP', async () => {
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
-      (createFileServiceModule as any).mockReturnValue({
-        createPreSignedUrl: vi.fn(),
-        createPreSignedUpload: vi.fn(),
-        createPreSignedUrlForPreview: vi.fn(),
-        deleteFile: vi.fn(),
-        deleteFiles: vi.fn(),
-        getFileByteArray: vi.fn(),
-        getFileContent: vi.fn(),
-        getFileMetadata: vi.fn(),
-        getFullFileUrl: vi.fn(),
-        getKeyFromFullUrl: vi.fn(),
-        uploadBuffer: mockUploadBuffer,
-        uploadContent: vi.fn(),
-        uploadMedia: vi.fn(),
-      });
+      (createFileServiceModule as any).mockReturnValue(fileServiceMock(mockUploadBuffer));
 
       const freshImporter = new SkillImporter(db, userId);
       const largeRepoZip = Buffer.alloc(10_000_000); // 10MB repo ZIP
@@ -684,7 +651,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'large-repo',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(largeRepoZip);
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(largeRepoZip);
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill',
         manifest: { name: 'Test', description: 'Test' },
@@ -697,11 +664,11 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/large-repo',
       });
 
-      // Verify uploadBuffer was called with skillZipBuffer, not the large repo ZIP
       expect(mockUploadBuffer).toHaveBeenCalledWith(
         expect.stringContaining('skills/zip/'),
         smallSkillZip, // Should be the small repacked ZIP
         'application/zip',
+        undefined,
       );
     });
 
@@ -713,7 +680,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-dedup',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Content',
         manifest: { name: 'Dedup Skill', description: 'Test deduplication' },
@@ -756,28 +723,14 @@ describe('SkillImporter', () => {
       const dbSkills = await db
         .select()
         .from(agentSkills)
-        .where(eq(agentSkills.identifier, 'lobehub-skill-dedup'));
+        .where(eq(agentSkills.identifier, first.skill.identifier));
       expect(dbSkills).toHaveLength(1);
     });
 
     it('should update skill when content changes (different zipHash)', async () => {
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
-      (createFileServiceModule as any).mockReturnValue({
-        createPreSignedUrl: vi.fn(),
-        createPreSignedUpload: vi.fn(),
-        createPreSignedUrlForPreview: vi.fn(),
-        deleteFile: vi.fn(),
-        deleteFiles: vi.fn(),
-        getFileByteArray: vi.fn(),
-        getFileContent: vi.fn(),
-        getFileMetadata: vi.fn(),
-        getFullFileUrl: vi.fn(),
-        getKeyFromFullUrl: vi.fn(),
-        uploadBuffer: mockUploadBuffer,
-        uploadContent: vi.fn(),
-        uploadMedia: vi.fn(),
-      });
+      (createFileServiceModule as any).mockReturnValue(fileServiceMock(mockUploadBuffer));
 
       const freshImporter = new SkillImporter(db, userId);
 
@@ -786,7 +739,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-update-content',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       // First import
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
@@ -962,6 +915,140 @@ description: A nested skill
       expect(second.skill.id).toBe(first.skill.id);
     });
 
+    // A market skill installed from the Skill Store UI / `lh skill install` is
+    // keyed by its market identifier. Older agent-tool imports of the same
+    // download URL derived a different identifier, missed that row, and failed
+    // the insert on the per-user name index with a raw "Failed query" error.
+    it('recognizes a skill already installed from the same URL under another identifier', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const installed = await importer.importFromUrl(
+        { url },
+        { identifier: 'openclaw-skills-memory-setup', source: 'market' },
+      );
+      const again = await importer.importFromUrl({ url });
+
+      expect(again.status).toBe('unchanged');
+      expect(again.skill.id).toBe(installed.skill.id);
+      expect(again.skill.identifier).toBe('openclaw-skills-memory-setup');
+    });
+
+    it('updates a skill imported under the URL identifier even after its name changed', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+      const legacy = await importer.importFromUrl({ url });
+
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill v2',
+        manifest: { name: 'memory-setup-v2', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+      const again = await importer.importFromUrl(
+        { url },
+        { identifier: 'openclaw-skills-memory-setup', source: 'market' },
+      );
+
+      expect(again.status).toBe('updated');
+      expect(again.skill.id).toBe(legacy.skill.id);
+      expect(again.skill.name).toBe('memory-setup-v2');
+    });
+
+    it('does not overwrite a user skill that happens to carry the URL identifier', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      const userSkill = await importer.createUserSkill({
+        content: '# My own notes',
+        description: 'Personal skill',
+        identifier: 'url.market.lobehub.com.api.v1.skills.openclaw-skills-memory-setup.download',
+        name: 'my-notes',
+      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const imported = await importer.importFromUrl(
+        { url },
+        { identifier: 'openclaw-skills-memory-setup', source: 'market' },
+      );
+
+      expect(imported.status).toBe('created');
+      expect(imported.skill.id).not.toBe(userSkill.id);
+      const untouched = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, userSkill.id),
+      });
+      expect(untouched?.name).toBe('my-notes');
+      expect(untouched?.content).toBe('# My own notes');
+    });
+
+    it('rejects a market import whose identifier is taken by a user skill instead of overwriting it', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      const userSkill = await importer.createUserSkill({
+        content: '# My own notes',
+        description: 'Personal skill',
+        identifier: 'openclaw-skills-memory-setup',
+        name: 'my-notes',
+      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const error = await importer
+        .importFromUrl({ url }, { identifier: 'openclaw-skills-memory-setup', source: 'market' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(SkillImportError);
+      expect(error.code).toBe('CONFLICT');
+      const untouched = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, userSkill.id),
+      });
+      expect(untouched?.name).toBe('my-notes');
+      expect(untouched?.content).toBe('# My own notes');
+    });
+
+    it('rejects a different skill with an installed name as a CONFLICT naming the installed one', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Image Generation',
+        manifest: { name: 'image-generation', description: 'Generate images' },
+        resources: new Map(),
+      });
+      await importer.importFromUrl(
+        {
+          url: 'https://market.lobehub.com/api/v1/skills/zhayujie-cowagent-image-generation/download',
+        },
+        { identifier: 'zhayujie-cowagent-image-generation', source: 'market' },
+      );
+
+      const error = await importer
+        .importFromUrl(
+          {
+            url: 'https://market.lobehub.com/api/v1/skills/onyx-dot-app-onyx-image-generation/download',
+          },
+          { identifier: 'onyx-dot-app-onyx-image-generation', source: 'market' },
+        )
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(SkillImportError);
+      expect(error.code).toBe('CONFLICT');
+      expect(error.message).toContain('zhayujie-cowagent-image-generation');
+    });
+
     it('should throw INVALID_URL error for invalid URL', async () => {
       await expect(importer.importFromUrl({ url: 'not-a-valid-url' })).rejects.toThrow(
         SkillImportError,
@@ -1026,6 +1113,53 @@ description: A nested skill
 
     // Regression: the imported body is stored and returned to the caller, so a raw fetch here
     // is a full-read SSRF. The fetch must go through the SSRF guard. See GHSA-53h9-fmjf-frwr / #16536.
+    it('should import a market ZIP whose SKILL.md has no front-matter (importFromMarket path)', async () => {
+      // Use the real parser for this case: the regression lives in manifest derivation
+      const { SkillParser: RealSkillParser } = (await vi.importActual(
+        './parser',
+      )) as typeof ParserModule;
+      const realParser = new RealSkillParser();
+      mockParserInstance.parseZipPackage.mockImplementation((buffer, options) =>
+        realParser.parseZipPackage(buffer, options),
+      );
+
+      // Real shape of market package brainbytes-dev-everything-claude-finance-aml-kyc
+      const skillMd = `# AML/KYC Compliance
+
+> Customer due diligence, suspicious activity reporting, PEP screening, sanctions — Anti-Money Laundering and Know Your Customer compliance.
+
+## When to Activate
+
+- Customer onboarding and KYC process design
+`;
+      const { zipSync } = await import('fflate');
+      const zipped = zipSync({ 'SKILL.md': new TextEncoder().encode(skillMd) });
+
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () =>
+          zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength),
+        headers: new Headers({ 'content-type': 'application/zip' }),
+        ok: true,
+        status: 200,
+      });
+
+      const identifier = 'brainbytes-dev-everything-claude-finance-aml-kyc';
+      // Same call shape as agentSkillsRouter.importFromMarket
+      const result = await importer.importFromUrl(
+        { url: `https://market.lobehub.com/api/v1/skills/${identifier}/download` },
+        { identifier, source: 'market' },
+      );
+
+      expect(result.status).toBe('created');
+      expect(result.skill.identifier).toBe(identifier);
+      expect(result.skill.name).toBe('AML/KYC Compliance');
+      expect(result.skill.description).toMatch(/^Customer due diligence/);
+      expect(result.skill.source).toBe('market');
+      expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
+        fallbackName: identifier,
+      });
+    });
+
     describe('SSRF protection (#16536)', () => {
       it('should fetch the user URL through ssrfSafeFetch, not raw global fetch', async () => {
         mockSsrfSafeFetch.mockResolvedValue({
@@ -1096,23 +1230,9 @@ description: A nested skill
       const zipFileId = `zip-no-repack-${Date.now()}`;
       const zipHash = `hash-no-repack-${Date.now()}`;
 
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# User Skill',
@@ -1151,7 +1271,7 @@ description: A nested skill
 
       // Second user should not be able to create skill with same identifier
       // because findByIdentifier filters by userId
-      const otherResult = await otherImporter.createUserSkill({
+      await otherImporter.createUserSkill({
         content: '# User 2 Skill',
         description: 'User 2 skill',
         identifier: 'isolation-test-skill', // Same identifier, different user

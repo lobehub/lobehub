@@ -1,9 +1,6 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import type { CSSProperties } from 'react';
+import { Button, Flexbox, TextArea, toast } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,24 +10,13 @@ import {
   useFeedbackAttachments,
 } from '../Evidence/attachments';
 
-/**
- * `autoSize` writes its own inline height onto the textarea, so a floor has to
- * reach the element itself — a `style` on the component lands on the wrapper.
- */
-const styles = createStaticStyles(({ css }) => ({
-  tall: css`
-    & textarea {
-      /* The control ships its own min-height; this floor has to outrank it. */
-      min-height: var(--acceptance-composer-min-height) !important;
-    }
-  `,
-}));
-
 /** Room for a couple of screenshots without turning a remark into an album. */
 const MAX_COMMENT_ATTACHMENTS = 4;
 
 interface CommentComposerProps {
   autoFocus?: boolean;
+  /** The surrounding block draws the frame, so the field must not draw a second one. */
+  borderless?: boolean;
   /** One-line reply box instead of the two-line root box. */
   compact?: boolean;
   /**
@@ -54,7 +40,7 @@ interface CommentComposerProps {
  * sends.
  */
 const CommentComposer = memo<CommentComposerProps>(
-  ({ autoFocus, compact, minHeight, onCancel, onSubmit, placeholder, submitLabel }) => {
+  ({ autoFocus, borderless, compact, minHeight, onCancel, onSubmit, placeholder, submitLabel }) => {
     const { t } = useTranslation('verify');
     const [value, setValue] = useState('');
     const [sending, setSending] = useState(false);
@@ -83,20 +69,17 @@ const CommentComposer = memo<CommentComposerProps>(
     };
 
     return (
-      <Flexbox
-        className={minHeight ? styles.tall : undefined}
-        gap={8}
-        style={
-          minHeight
-            ? ({ '--acceptance-composer-min-height': `${minHeight}px` } as CSSProperties)
-            : undefined
-        }
-      >
+      <Flexbox gap={8}>
         <TextArea
           autoFocus={autoFocus}
           autoSize={{ maxRows: 20, minRows: compact ? 1 : 2 }}
           placeholder={placeholder}
+          // The control ships its own min-height; the floor goes on the textarea
+          // itself, where an inline style outranks it.
+          style={borderless ? { paddingInline: 0 } : undefined}
+          styles={minHeight ? { input: { minHeight } } : undefined}
           value={value}
+          variant={borderless ? 'borderless' : undefined}
           onChange={(event) => setValue(event.target.value)}
           onPaste={handlePaste}
           onKeyDown={(event) => {

@@ -8,16 +8,17 @@ the browser.
 
 ## Choose the Existing Persistence Path
 
-- Inspect the existing store, SWR key, persistence tier, and hydration consumer before
-  adding storage. An in-memory SWR hit does not survive a full reload; a persisted
-  entry does not help if the UI's Zustand state only receives network success events.
-- Reuse `src/libs/swr/localStorageProvider.ts` and its `CACHE_TIERS` for suitable
-  query results. Builtin agent identity/configuration and project lists use its
-  asynchronous IndexedDB tier; the localStorage tier restores synchronously.
-  Restore cached results into the state consumed by the UI, then revalidate through
-  the existing SWR hook.
+- Inspect the existing store, replica, and hydration consumer before adding storage.
+  SWR keeps request state in memory only and persists nothing, so an SWR hit does not
+  survive a full reload; a persisted entry does not help if the UI's Zustand state
+  only receives network success events.
+- Persist query results the UI paints as a replica (`@/libs/replica`, see the
+  `zustand` skill). The default IndexedDB storage hydrates asynchronously, which the
+  route loader bounds before paint (`PRE_PAINT_HYDRATE_TIMEOUT`); `localStorage`
+  storage restores synchronously. The replica paints its projection, then
+  revalidates through its SWR sync key.
 - For a small subset needed before a larger response arrives, reuse
-  `LocalStorageQueryProjectionStorage` from `src/libs/queryProjectionStorage`.
+  `AppLocalStorage` from `src/libs/replica/storage.ts`.
   Keep field selection and lifecycle rules in the owning domain; do not create
   another storage framework or duplicate the same data across caches without a
   demonstrated need.
@@ -31,7 +32,7 @@ the browser.
 ## User Display Snapshot Reference
 
 `src/store/user/displaySnapshot.ts` is the domain adapter for the user's avatar URL
-and preference. It reuses `LocalStorageQueryProjectionStorage`; it is not a second
+and preference. It reuses `AppLocalStorage`; it is not a second
 cache engine. `src/layout/AuthProvider/BetterAuth/UserUpdater.tsx` reads it after the
 session identifies the exact user, before painting that user's initialized shell.
 The authoritative user-state response still refreshes the values afterward.
@@ -49,8 +50,9 @@ The authoritative user-state response still refreshes the values afterward.
 
 ## Lifecycle and Verification
 
-Reuse the SWR provider's existing user/workspace partitioning and identity trust
-checks; do not implement another partition manager. Domain projections must supply
+Reuse the replica scope's existing user/workspace partitioning and identity trust
+checks (`cacheScope` in `src/libs/replica/index.ts`); do not implement another
+partition manager. Domain projections must supply
 their explicit scope. Ensure in-memory keys and hydration consumers also respect
 scope, since persistence partitioning alone cannot guard late callbacks.
 Capture mutation scope and reject stale responses after a scope switch before they

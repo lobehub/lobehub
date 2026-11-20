@@ -1,20 +1,21 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon, Input } from '@lobehub/ui';
 import { useDebounce } from 'ahooks';
-import { Input } from 'antd';
 import { SearchIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useHeaderActionSize } from '@/styles/density';
 
 const SearchInput = memo(() => {
   const { t } = useTranslation('components');
+  const headerActionSize = useHeaderActionSize(true);
   const [expanded, setExpanded] = useState(false);
   const [showIcon, setShowIcon] = useState(true);
   const [localQuery, setLocalQuery] = useState('');
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const setSearchQuery = useResourceManagerStore((s) => s.setSearchQuery);
 
   const debouncedQuery = useDebounce(localQuery, { wait: 350 });
@@ -86,7 +87,12 @@ const SearchInput = memo(() => {
         />
       </div>
       {showIcon && (
-        <ActionIcon icon={SearchIcon} style={{ marginRight: 4 }} onClick={handleExpand} />
+        <ActionIcon
+          icon={SearchIcon}
+          size={headerActionSize}
+          style={{ marginRight: 4 }}
+          onClick={handleExpand}
+        />
       )}
     </>
   );

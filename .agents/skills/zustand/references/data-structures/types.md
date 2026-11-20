@@ -1,6 +1,6 @@
 # Type Definitions in Detail
 
-The [data-shape guide](../data-structures.md#type-definitions) covers the rules; this file holds the full worked examples.
+The [data-shape guide](../data-structures.md#rules) covers the rules; this file holds the full worked examples.
 
 ## Organization
 

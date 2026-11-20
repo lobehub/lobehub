@@ -1,12 +1,14 @@
 import { AGENT_PLAN_FILE_TYPE, isDesktop } from '@lobechat/const';
+import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import type { ContextFactProviders, ContextFactRequest, CredentialSummary } from '@lobechat/mecha';
 import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/types';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
-import { agentService } from '@/services/agent';
+import { agentDocumentService } from '@/services/agentDocument';
 import { messageService } from '@/services/message';
 import { notebookService } from '@/services/notebook';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -26,6 +28,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { getUserStoreState } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -77,11 +80,39 @@ const toIsoString = (value: Date | string | null | undefined): string =>
  * stores do not hold; which facts a turn needs is decided by
  * `gatherContextFacts` in `@lobechat/mecha`, the same way as on the server.
  */
+/** Matches the `.max()` of `agentDocument.listRevokedDocumentReads`. */
+const REVOKED_READS_BATCH = 500;
+
 export const createBrowserContextFactProviders = ({
   agentId,
   groupId,
   shareVisitor,
 }: BrowserContextFactSource = {}): ContextFactProviders => ({
+  findAgentDocument: async (targetAgentId, documentId) => {
+    const doc = await agentDocumentService.readDocument({ agentId: targetAgentId, id: documentId });
+    return doc ? { content: doc.content, title: doc.title } : null;
+  },
+
+  findRevokedDocumentReads: async (targetAgentId, documentIds) => {
+    // The endpoint takes at most REVOKED_READS_BATCH ids per call.
+    const batches: string[][] = [];
+    for (let i = 0; i < documentIds.length; i += REVOKED_READS_BATCH) {
+      batches.push(documentIds.slice(i, i + REVOKED_READS_BATCH));
+    }
+    const results = await Promise.all(
+      batches.map((batch) =>
+        agentDocumentService.listRevokedDocumentReads({
+          agentId: targetAgentId,
+          documentIds: batch,
+        }),
+      ),
+    );
+    return {
+      agentDocumentReadIds: results.flatMap((result) => result.agentDocumentReadIds),
+      documentIds: results.flatMap((result) => result.documentIds),
+    };
+  },
+
   findTopic: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
     if (!topic) return null;
@@ -193,13 +224,31 @@ export const createBrowserContextFactProviders = ({
     return result.data as CredentialSummary[];
   },
 
-  listCustomPlugins: async () =>
-    pluginSelectors.installedCustomPluginMetaList(getToolStoreState()).map((plugin) => ({
-      description: plugin.description,
-      identifier: plugin.identifier,
-      name: plugin.title || plugin.identifier,
-      type: 'custom' as const,
-    })),
+  // Custom connectors (every install now) and the custom plugin rows older
+  // installs left, one entry per identifier: the server provider's rule.
+  listCustomPlugins: async () => {
+    const toolState = getToolStoreState();
+    const plugins = new Map<string, AvailablePluginInfo>();
+    for (const connector of connectorSelectors.customConnectors(toolState)) {
+      const description = connector.metadata?.description;
+      plugins.set(connector.identifier, {
+        description: typeof description === 'string' ? description : undefined,
+        identifier: connector.identifier,
+        name: connector.name || connector.identifier,
+        type: 'custom',
+      });
+    }
+    for (const plugin of pluginSelectors.installedCustomPluginMetaList(toolState)) {
+      if (plugins.has(plugin.identifier)) continue;
+      plugins.set(plugin.identifier, {
+        description: plugin.description,
+        identifier: plugin.identifier,
+        name: plugin.title || plugin.identifier,
+        type: 'custom',
+      });
+    }
+    return [...plugins.values()];
+  },
 
   listEnabledProviders: async () =>
     (getAiInfraStoreState().enabledChatModelList || []).map((provider) => ({
@@ -213,9 +262,9 @@ export const createBrowserContextFactProviders = ({
       name: provider.name,
     })),
 
-  // The prefetched list is reused when present so sending never waits on it.
-  listRecentAgents: async (limit) =>
-    getAgentStoreState().availableAgents ?? (await agentService.queryAgents({ limit })),
+  // The local copy is reused when present so sending never waits on it; after
+  // the agents change it is fetched fresh.
+  listRecentAgents: () => getAgentStoreState().getAvailableAgents(),
 
   // Non-recommended builtins are uninstalled by default; the builder must
   // not present them as installed and pin unusable identifiers.
@@ -225,6 +274,16 @@ export const createBrowserContextFactProviders = ({
     chatSelectors
       .currentUserFiles(getChatStoreState())
       .map((file) => ({ name: file.name, size: file.size })),
+
+  // Asked of the server, because the placement follows an entitlement only it
+  // can resolve. Left unimplemented, the prompt described a disposable sandbox
+  // to a run that had a persistent directory, and the model — told its files
+  // would not survive — cloned into /tmp.
+  resolveSandboxPersistence: async () => {
+    const topicId = getChatStoreState().activeTopicId ?? undefined;
+    const placement = await sandboxStorageService.resolveSessionPlacement({ topicId });
+    return placement ?? undefined;
+  },
 
   listTopicMessages: async (topic) => {
     const msgs = await messageService.getMessages({

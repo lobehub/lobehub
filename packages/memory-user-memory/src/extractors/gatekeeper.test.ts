@@ -98,4 +98,26 @@ describe('UserMemoryGateKeeper', () => {
       expect.objectContaining({ metadata: { trigger: 'memory' } }),
     );
   });
+
+  it('reads a bare yes/no or a missing decision instead of failing the whole topic', async () => {
+    const extractor = new UserMemoryGateKeeper(extractorConfig);
+    // Shapes deepseek-v4.1-flash returned in production: booleans, strings, and the retired
+    // experience layer left out.
+    runtimeMock.generateObject = vi.fn().mockResolvedValue({
+      activity: true,
+      context: 'false',
+      identity: { reasoning: 'r', shouldExtract: true },
+      preference: false,
+    }) as any;
+
+    const result = await extractor.check(templateOptions);
+
+    expect(result).toEqual({
+      activity: { reasoning: '', shouldExtract: true },
+      context: { reasoning: 'false', shouldExtract: false },
+      experience: { reasoning: '', shouldExtract: false },
+      identity: { reasoning: 'r', shouldExtract: true },
+      preference: { reasoning: '', shouldExtract: false },
+    });
+  });
 });

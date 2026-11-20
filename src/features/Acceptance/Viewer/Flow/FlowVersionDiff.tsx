@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createModal, Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createModal, Flexbox, Select, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,24 +12,22 @@ import type { AcceptanceBundle } from '@/services/verify';
 import { diffFlowVersions } from './flowDiff';
 
 type Version = AcceptanceBundle['flows'][number]['versions'][number];
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow: auto;
-    max-height: 70dvh;
-  `,
-  change: css`
-    padding-block: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  field: css`
-    display: grid;
-    grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr);
-    gap: 12px;
-
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
-}));
+const styles = stylex.create({
+  body: { overflow: 'auto', maxHeight: '70dvh' },
+  change: {
+    paddingBlock: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  field: {
+    display: 'grid',
+    gridTemplateColumns: '120px minmax(0, 1fr) minmax(0, 1fr)',
+    gap: '12px',
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+  },
+});
 
 function FlowVersionDiff({ versions, selectedId }: { versions: Version[]; selectedId: string }) {
   const { t } = useTranslation('verify');
@@ -68,10 +66,14 @@ function FlowVersionDiff({ versions, selectedId }: { versions: Version[]; select
         />
       </Flexbox>
       <Text type="secondary">{t('flow.diff.hint')}</Text>
-      <Flexbox className={styles.body}>
+      <Flexbox className={stylex.props(styles.body).className}>
         {changes.length === 0 && <Text>{t('flow.diff.empty')}</Text>}
         {changes.map((change) => (
-          <Flexbox className={styles.change} gap={12} key={`${change.kind}:${change.key}`}>
+          <Flexbox
+            className={stylex.props(styles.change).className}
+            gap={12}
+            key={`${change.kind}:${change.key}`}
+          >
             <Flexbox horizontal gap={8}>
               <Text
                 style={{
@@ -89,7 +91,7 @@ function FlowVersionDiff({ versions, selectedId }: { versions: Version[]; select
               <Text strong>{change.title}</Text>
             </Flexbox>
             {change.fields.map((value) => (
-              <div className={styles.field} key={value.field}>
+              <div {...stylex.props(styles.field)} key={value.field}>
                 <Text type="secondary">{t(`flow.diff.fields.${value.field}`)}</Text>
                 <Text style={{ color: cssVar.colorTextSecondary }}>
                   {displayValue(value.before, value.field, before)}

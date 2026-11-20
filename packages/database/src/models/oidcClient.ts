@@ -17,6 +17,8 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 interface CreateOidcClientParams {
   description?: string | null;
+  /** Issue a `web` app's client secret at creation. Ignored for `device` apps. */
+  issueSecret?: boolean;
   logoUri?: string | null;
   name: string;
   /** Required for `web` apps, ignored for `device` apps. */
@@ -85,18 +87,22 @@ export class OidcClientModel {
   };
 
   /**
-   * Creates an app and, for `web` apps, issues its one-time client secret.
+   * Creates an app and, for a `web` app when `issueSecret` is set, issues its
+   * client secret, returned once as `secret`.
    *
    * `device` apps stay public clients with no secret: the device flow has no
    * confidential channel to keep one in. `web` apps are confidential clients
-   * because the only consumer that can use a redirect flow here is a server
-   * that can hold a secret.
+   * (the only consumer that can use a redirect flow here is a server that can
+   * hold a secret). Without `issueSecret` their secret is minted later through
+   * `rotateSecret`, when the owner is ready to store it; until then the
+   * provider treats the client as unusable (see the adapter).
    */
   create = async (params: CreateOidcClientParams) => {
     const isWeb = params.type === 'web';
-    const { encrypted, secret } = isWeb
-      ? await this.issueClientSecret()
-      : { encrypted: null, secret: undefined };
+    const { encrypted, secret } =
+      isWeb && params.issueSecret
+        ? await this.issueClientSecret()
+        : { encrypted: null, secret: undefined };
 
     const [result] = await this.db
       .insert(oidcClients)
@@ -125,15 +131,18 @@ export class OidcClientModel {
   };
 
   /**
-   * Replaces the client secret and returns the new plaintext once.
+   * Issues the client secret of a web app — the first one, or a replacement —
+   * and returns the new plaintext once.
    *
-   * Returns `undefined` when the app is not the caller's or has no secret to
-   * rotate, so a device-flow app can never be turned into a confidential one
-   * through this path.
+   * Returns `undefined` when the app is not the caller's or is not a
+   * confidential client, so a device-flow app can never be turned into a
+   * confidential one through this path.
    */
   rotateSecret = async (id: string) => {
     const existing = await this.findById(id);
-    if (!existing || !existing.clientSecret) return undefined;
+    if (!existing || !existing.tokenEndpointAuthMethod?.startsWith('client_secret')) {
+      return undefined;
+    }
 
     const { encrypted, secret } = await this.issueClientSecret();
 

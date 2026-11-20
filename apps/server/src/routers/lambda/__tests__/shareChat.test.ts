@@ -65,12 +65,12 @@ vi.mock('@/database/models/agentShare', () => ({
 }));
 
 const mockFindById = vi.fn();
-const mockCountBySender = vi.fn();
+const mockCountMessagesBySender = vi.fn();
 const mockQueryBySender = vi.fn();
 const mockIsRunningOperationAlive = vi.fn();
 const TopicModelMock = vi.fn(function () {
   return {
-    countBySender: mockCountBySender,
+    countMessagesBySender: mockCountMessagesBySender,
     findById: mockFindById,
     isRunningOperationAlive: mockIsRunningOperationAlive,
     queryBySender: mockQueryBySender,
@@ -80,7 +80,7 @@ vi.mock('@/database/models/topic', () => ({
   TopicModel: TopicModelMock,
 }));
 
-const mockMessageCountByTopic = vi.fn();
+const mockFindMessagePlugin = vi.fn();
 const mockMessageQuery = vi.fn();
 const mockMessageQueryForVisitor = vi.fn();
 vi.mock('@/database/models/message', async (importOriginal) => {
@@ -93,7 +93,7 @@ vi.mock('@/database/models/message', async (importOriginal) => {
     ...actual,
     MessageModel: vi.fn(function () {
       return {
-        countByTopic: mockMessageCountByTopic,
+        findMessagePlugin: mockFindMessagePlugin,
         query: mockMessageQuery,
         queryForVisitor: mockMessageQueryForVisitor,
       };
@@ -182,11 +182,13 @@ vi.mock('@/config/db', () => ({
 const mockExecAgent = vi.fn();
 const mockInterruptTask = vi.fn();
 const mockSetQueuedMessages = vi.fn();
+const mockStopPendingApproval = vi.fn();
 const AiAgentServiceMock = vi.fn(function () {
   return {
     execAgent: mockExecAgent,
     interruptTask: mockInterruptTask,
     setQueuedMessages: mockSetQueuedMessages,
+    stopPendingApproval: mockStopPendingApproval,
   };
 });
 vi.mock('@/server/services/aiAgent', () => ({
@@ -216,6 +218,20 @@ vi.mock('@/libs/trpc/utils/internalJwt', () => ({
   signUserJWT: (...args: any[]) => mockSignUserJWT(...args),
 }));
 
+const mockResolveBySource = vi.fn();
+vi.mock('@/business/server/agent-run/agentInterventionReview', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveAgentInterventionBySource: (...args: any[]) => mockResolveBySource(...args),
+}));
+
+const mockDispatchClaimed = vi.fn();
+const mockBridgeLegacyResume = vi.fn();
+vi.mock('../aiAgent', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  bridgeLegacyResumeToSourceIntervention: (...args: any[]) => mockBridgeLegacyResume(...args),
+  dispatchClaimedAgentIntervention: (...args: any[]) => mockDispatchClaimed(...args),
+}));
+
 const { shareChatRouter } = await import('../shareChat');
 
 const VISITOR = 'visitor-1';
@@ -227,8 +243,7 @@ const share = {
   shareConfig: {
     allowReadMemory: false,
     toolGrants: [],
-    maxTopicsPerVisitor: 2,
-    maxTurnsPerTopic: 3,
+    maxMessagesPerVisitor: 3,
   },
   shareId: 'share-1',
   visibility: 'link',
@@ -255,9 +270,8 @@ describe('shareChatRouter', () => {
     mockLockScopedAgentRow.mockResolvedValue({ id: share.agentId, workspaceId: null });
     mockFindById.mockResolvedValue(visitorTopic);
     mockIsRunningOperationAlive.mockResolvedValue(true);
-    mockCountBySender.mockResolvedValue(0);
+    mockCountMessagesBySender.mockResolvedValue(0);
     mockQueryBySender.mockResolvedValue([]);
-    mockMessageCountByTopic.mockResolvedValue(0);
     mockMessageQuery.mockResolvedValue([]);
     mockExecAgent.mockResolvedValue({ operationId: 'op-1', success: true });
     mockInterruptTask.mockResolvedValue({ operationId: 'op-1', success: true });
@@ -279,6 +293,11 @@ describe('shareChatRouter', () => {
     mockGetFileAccessUrl.mockResolvedValue('https://s3/get');
     mockGetFileMetadata.mockResolvedValue({ contentLength: 10 });
     mockDeleteStoredFile.mockResolvedValue(undefined);
+    mockResolveBySource.mockResolvedValue({ handled: false });
+    mockDispatchClaimed.mockResolvedValue({ status: 'resolving' });
+    mockBridgeLegacyResume.mockResolvedValue(undefined);
+    mockFindMessagePlugin.mockResolvedValue(undefined);
+    mockStopPendingApproval.mockResolvedValue({ operationId: 'op-1', success: true });
   });
 
   describe('execAgent', () => {
@@ -307,7 +326,7 @@ describe('shareChatRouter', () => {
         code: 'TOO_MANY_REQUESTS',
         message: 'ShareSpendLimitExceeded',
       });
-      expect(mockCountBySender).not.toHaveBeenCalled();
+      expect(mockCountMessagesBySender).not.toHaveBeenCalled();
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
@@ -329,32 +348,32 @@ describe('shareChatRouter', () => {
       });
     });
 
-    it('rejects a new-topic run once the visitor topic cap is reached', async () => {
-      mockCountBySender.mockResolvedValue(2);
+    it('refuses new and existing topics once the visitor has sent their message cap', async () => {
+      mockCountMessagesBySender.mockResolvedValue(3);
       const caller = await createCaller();
+      const refused = { code: 'TOO_MANY_REQUESTS', message: 'ShareMessageLimitExceeded' };
 
-      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'ShareTopicLimitExceeded',
+      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject(
+        refused,
+      );
+      // The cap spans all the visitor's topics, so an existing topic is refused too.
+      await expect(
+        caller.execAgent({ prompt: 'hi', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject(refused);
+      expect(mockCountMessagesBySender).toHaveBeenCalledWith({
+        agentId: share.agentId,
+        senderId: VISITOR,
       });
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
-    it('rejects an existing-topic run once the turn cap is reached', async () => {
-      mockMessageCountByTopic.mockResolvedValue(3);
+    it('admits a run while the visitor is below the message cap', async () => {
+      mockCountMessagesBySender.mockResolvedValue(2);
       const caller = await createCaller();
 
-      await expect(
-        caller.execAgent({ prompt: 'hi', shareId: 'share-1', topicId: 'tpc_visitor' }),
-      ).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'ShareTurnLimitExceeded',
-      });
-      expect(mockMessageCountByTopic).toHaveBeenCalledWith({
-        role: 'user',
-        topicId: 'tpc_visitor',
-      });
-      expect(mockExecAgent).not.toHaveBeenCalled();
+      await caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+
+      expect(mockExecAgent).toHaveBeenCalled();
     });
 
     it("fails closed when the topic is not the visitor's own share topic", async () => {
@@ -388,12 +407,12 @@ describe('shareChatRouter', () => {
         expect.objectContaining({
           // Agent id comes from the share record, not client input.
           agentId: share.agentId,
-          shareGate: {
+          shareGate: expect.objectContaining({
             agentId: share.agentId,
             shareConfig: share.shareConfig,
             shareId: share.shareId,
             visitorUserId: VISITOR,
-          },
+          }),
         }),
       );
     });
@@ -423,7 +442,7 @@ describe('shareChatRouter', () => {
         await expect(
           caller.execAgent({ fileIds, prompt: 'look', shareId: 'share-1' }),
         ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'File not found' });
-        expect(mockCountBySender).not.toHaveBeenCalled();
+        expect(mockCountMessagesBySender).not.toHaveBeenCalled();
         expect(mockExecAgent).not.toHaveBeenCalled();
       });
 
@@ -547,7 +566,7 @@ describe('shareChatRouter', () => {
       });
     });
 
-    it('never sets interactiveStart, so concurrent visitor sends contend on the real runningOperation liveness instead of only the short reservation', async () => {
+    it('never sets interactiveStart for a new send, so concurrent visitor sends contend on the real runningOperation liveness instead of only the short reservation', async () => {
       // Regression for Codex P1 (`shareChat.ts:186`): `interactiveStart:
       // true` makes `TopicModel.tryReserveTaskCallback` skip its `runningOperation`
       // liveness check entirely (`ignoreRunningOperation`) and contend only on the
@@ -566,6 +585,203 @@ describe('shareChatRouter', () => {
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({ interactiveStart: false }),
       );
+    });
+  });
+
+  describe('intervention approval', () => {
+    const shareVisitor = { agentId: share.agentId, ownerUserId: OWNER, topicId: 'tpc_visitor' };
+    const resumeApproval = {
+      decision: 'approved' as const,
+      parentMessageId: 'msg-tool',
+      toolCallId: 'call-1',
+    };
+    const source = {
+      action: { scope: 'once' as const, type: 'approve_tool' as const },
+      batchId: 'batch-1',
+      operationId: 'op-parked',
+      resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000001',
+      targets: [{ toolCallId: 'call-1', toolMessageId: 'msg-tool' }],
+    };
+
+    it("resumes the visitor's parked run with their answer and approval mode", async () => {
+      // Answering the last allowed turn's approval must not be refused.
+      mockCountMessagesBySender.mockResolvedValue(3);
+      const caller = await createCaller();
+
+      await caller.execAgent({
+        parentMessageId: 'msg-tool',
+        prompt: '',
+        resumeApproval,
+        shareId: 'share-1',
+        topicId: 'tpc_visitor',
+        userInterventionConfig: { approvalMode: 'allow-list', allowList: ['lobe-web-browsing'] },
+      });
+
+      expect(mockCountMessagesBySender).not.toHaveBeenCalled();
+      expect(mockBridgeLegacyResume).toHaveBeenCalledWith(
+        expect.objectContaining({ resumeApproval, shareVisitor }),
+        expect.objectContaining({ shareGate: expect.any(Object), userId: VISITOR }),
+      );
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // The parked operation still holds the topic; the exactly-once
+          // approval claim, not the liveness check, serializes resumes.
+          interactiveStart: true,
+          parentMessageId: 'msg-tool',
+          resume: true,
+          resumeApproval,
+          shareGate: expect.objectContaining({ visitorUserId: VISITOR }),
+          userInterventionConfig: {
+            allowList: ['lobe-web-browsing'],
+            approvalMode: 'allow-list',
+          },
+        }),
+      );
+    });
+
+    it('returns the durable claim result instead of starting a legacy resume', async () => {
+      mockBridgeLegacyResume.mockResolvedValue({ operationId: 'op-continued', success: true });
+      const caller = await createCaller();
+
+      await expect(
+        caller.execAgent({
+          parentMessageId: 'msg-tool',
+          prompt: '',
+          resumeApproval,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).resolves.toMatchObject({ operationId: 'op-continued' });
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('rejects a resume outside an existing visitor topic', async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.execAgent({
+          parentMessageId: 'msg-tool',
+          prompt: '',
+          resumeApproval,
+          shareId: 'share-1',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it("resolves a source intervention as the visitor, scoped to the visitor's topic", async () => {
+      mockResolveBySource.mockResolvedValue({
+        claimId: 'claim-1',
+        handled: true,
+        ownerUserId: OWNER,
+        state: 'claimed',
+      });
+      mockDispatchClaimed.mockResolvedValue({
+        execution: { operationId: 'op-continued', success: true },
+        status: 'resolving',
+      });
+      const caller = await createCaller();
+
+      await expect(
+        caller.resolveInterventionBySource({
+          ...source,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).resolves.toMatchObject({ state: 'claimed', success: true });
+      expect(mockResolveBySource).toHaveBeenCalledWith(
+        expect.objectContaining({ ...source, actorUserId: VISITOR, shareVisitor }),
+      );
+      expect(mockDispatchClaimed).toHaveBeenCalledWith(
+        expect.objectContaining({ claimId: 'claim-1' }),
+        expect.objectContaining({
+          shareGate: expect.objectContaining({ visitorUserId: VISITOR }),
+          userId: VISITOR,
+        }),
+      );
+    });
+
+    it("refuses to remember an approval into the creator's allow list", async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.resolveInterventionBySource({
+          ...source,
+          action: { scope: 'remember', type: 'approve_tool' },
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockResolveBySource).not.toHaveBeenCalled();
+    });
+
+    it("fails closed on a topic that is not the visitor's own", async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, senderId: 'someone-else' });
+      const caller = await createCaller();
+
+      await expect(
+        caller.resolveInterventionBySource({
+          ...source,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockResolveBySource).not.toHaveBeenCalled();
+    });
+
+    it('reports an unavailable durable store so the client falls back to a resume', async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.resolveInterventionBySource({
+          ...source,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).resolves.toMatchObject({ status: 'unavailable', success: false });
+      expect(mockDispatchClaimed).not.toHaveBeenCalled();
+    });
+
+    it('stops a parked run through the creator-scoped service without a durable store', async () => {
+      const caller = await createCaller();
+      const input = {
+        batchId: 'batch-1',
+        operationId: 'op-parked',
+        toolMessageIds: ['msg-tool'],
+        topicId: 'tpc_visitor',
+      };
+
+      await caller.stopPendingApproval({ ...input, shareId: 'share-1' });
+
+      expect(mockStopPendingApproval).toHaveBeenCalledWith(input);
+    });
+
+    it('stops a durable batch through the source claim as the visitor', async () => {
+      mockFindMessagePlugin.mockResolvedValue({
+        intervention: { batchId: 'batch-1', operationId: 'op-parked' },
+        toolCallId: 'call-1',
+      });
+      mockResolveBySource.mockResolvedValue({ handled: true, state: 'claimed' });
+      const caller = await createCaller();
+
+      await caller.stopPendingApproval({
+        batchId: 'batch-1',
+        operationId: 'op-parked',
+        shareId: 'share-1',
+        toolMessageIds: ['msg-tool'],
+        topicId: 'tpc_visitor',
+      });
+
+      expect(mockResolveBySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: { scope: 'operation', type: 'stop' },
+          actorUserId: VISITOR,
+          shareVisitor,
+          targets: [{ toolCallId: 'call-1', toolMessageId: 'msg-tool' }],
+        }),
+      );
+      expect(mockDispatchClaimed).toHaveBeenCalled();
+      expect(mockStopPendingApproval).not.toHaveBeenCalled();
     });
   });
 
@@ -1121,13 +1337,13 @@ describe('shareChatRouter', () => {
       });
     });
 
-    it('does not tie the list page size to the live maxTopicsPerVisitor cap', async () => {
-      // The cap only gates admission of NEW topics. A creator lowering it below
-      // what a visitor already created must not hide those older conversations —
-      // the visitor surface has no pagination or deep links to recover them.
+    it('does not tie the list page size to the live message cap', async () => {
+      // The cap only gates sending. A creator lowering it must not hide the
+      // visitor's older conversations — the visitor surface has no pagination
+      // or deep links to recover them.
       mockAccessCheck.mockResolvedValue({
         ...share,
-        shareConfig: { ...share.shareConfig, maxTopicsPerVisitor: 1 },
+        shareConfig: { ...share.shareConfig, maxMessagesPerVisitor: 1 },
       });
       const caller = await createCaller();
       await caller.getTopics({ shareId: 'share-1' });
@@ -1163,7 +1379,6 @@ describe('shareChatRouter', () => {
         expect.objectContaining({
           redaction: {
             showErrorDetails: undefined,
-            showModelInfo: undefined,
           },
           // Pinned to share + topic + VISITOR: the ordinary scope would join
           // the creator's Works, which must never reach a visitor surface.

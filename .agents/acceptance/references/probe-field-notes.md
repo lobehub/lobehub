@@ -226,7 +226,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   hand-written id like `tsk_foo`, then calling a task procedure — it 404s
   ("Task not found") even though the row exists and the caller is a member.
 - **Doesn't work**: any id not starting with `task_`. `TaskModel.resolve()`
-  (`packages/database/src/models/task.ts:220-223`) only treats the input as a row
+  (`packages/database/src/models/task/index.ts:116-119`) only treats the input as a row
   id when it starts with `task_`; everything else is upper-cased and looked up as
   a workspace `identifier` (e.g. `T-1`), so `tsk_foo` becomes the identifier
   lookup `TSK_FOO` → null.
@@ -256,7 +256,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   );
   r.status; // 401 → re-seed; 200 → the session is live
   ```
-  Recover with `agent-browser close --all` + `setup-auth.sh web-seed`, then re-open the route.
+  Recover with `agent-browser --session <name> close` + `setup-auth.sh web-seed`, then re-open the route.
   After re-seeding, the same bundle returned `isOwner: true` with the owner-only link rendered —
   the code was correct all along.
 - **Why it matters**: an auth-scoped assertion (owner-only / permission-gated UI) fails
@@ -279,7 +279,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 - **Test for it**: assert the field is `null` (not `undefined`) after the consume action; a test that
   only checks "the request was acted on" passes in both the broken and fixed versions.
 
-### C11. Persisted SWR cache serves a STALE agent config after a direct DB write
+### C11. Persisted cache serves a STALE agent config after a direct DB write
 
 - **Situation**: seeding `agents.agency_config` or `agents.model` directly in Postgres, then using
   the app to drive an assertion.
@@ -493,9 +493,9 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 - **Situation**: `init-dev-env.sh setup-db` needs Docker (paradedb + redis images), but
   Docker Desktop's VM can wedge indefinitely (`no route to host` to 192.168.65.x, empty
   vm/console.log). Verified working substitute:
-  - **Postgres**: local brew Postgres 17 (pgvector available). The only paradedb-specific
-    migrations are `0090_enable_pg_search` / `0093_add_bm25_indexes_with_icu` — no-op them
-    in the worktree (`SELECT 1;`), everything else applies clean.
+  - **Postgres**: local brew Postgres 17 (pgvector available). Migrations apply clean: the
+    `pg_search` / BM25 migrations skip themselves without the extension. Set
+    `FTS_SEARCH_PROVIDER=pg_like` so product search works.
   - **Redis is a hard dependency of Better Auth sign-in** — with a dead REDIS\_URL the seed
     login 500s (`[Better Auth]: Error: Connection is closed`). `brew install redis`,
     `redis-server --port 6380 --daemonize yes`.
@@ -603,9 +603,15 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   });
   await d.updateDeviceCwd(did, entry, { setDefault: false }); // so the entry exists → sourcePath resolves
   ```
-  Create a throwaway agent with `agent().createAgent({ title })` and delete it afterwards with
-  `session().removeSession(agentId)` (there is no `deleteAgent` on the agent store) plus
-  `device().removeDeviceWorkingDir(did, path)` — otherwise the fixture cwd lingers in the real account.
+  Create a throwaway agent with `agent().createAgent({ title })`. Afterwards, clean up both the agent
+  and its device working directory:
+  ```js
+  await window.__LOBE_STORES.home().removeAgent(agentId);
+  await window.__LOBE_STORES.device().removeDeviceWorkingDir(did, path);
+  ```
+  Agent deletion lives on the home store and refreshes the agent list and evicts its message cache.
+  Removing the device working directory separately prevents the fixture cwd from lingering in the real
+  account.
 - **Identify icons precisely**: lucide renders `svg.lucide.lucide-git-fork`. Several git icons live in the
   same bar (the dir picker's `DirIcon` is `git-branch`, the review toggle is `git-compare`), so scope the
   assertion to the trigger: `document.querySelector('[role=button][aria-label="Worktrees"]') svg`, and
@@ -838,7 +844,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   next on 33803, vite on 32459) — never hardcode 3010; re-run
   `scripts/test-env.sh` after the server is up, it reads the ports-file. And
   the `os error 35` agent-browser daemon wedge (D8) recovers with
-  `agent-browser close --all` + re-running `setup-auth.sh web-seed`.
+  `agent-browser --session <name> close` + re-running `setup-auth.sh web-seed`.
 
 ### E30. ✅ "Failed to fetch dynamically imported module" points at the WRONG file — the failure is downstream
 
@@ -1183,7 +1189,7 @@ permissions`, which raw member rows never create. And even after RBAC, a raw
   the cause; clearing `node_modules/.vite` does NOT fix it.
 - **Doesn't work:** clearing the Vite deps cache, restarting the dev server,
   `pnpm dedupe @lobehub/ui` (peer sets differ, instances survive).
-- **Works:** temporarily add `resolve: { dedupe: ['@lobehub/ui', 'antd-style',
+- **Works:** temporarily add `resolve: { dedupe: ['@lobehub/ui',
 'motion', 'react', 'react-dom'] }` to the cloud root `vite.config.ts` +
   `rm -rf node_modules/.vite`, and REVERT the config after capturing evidence
   (snapshot the file first — it may carry uncommitted edits).

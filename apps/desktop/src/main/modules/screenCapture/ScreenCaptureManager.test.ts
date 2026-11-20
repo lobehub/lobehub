@@ -91,6 +91,8 @@ vi.mock('./CaptureService', () => ({
 }));
 
 describe('ScreenCaptureManager', () => {
+  const mockPermissionGuideOpen = vi.fn();
+
   const createApp = ({ mainWindowVisible = true }: { mainWindowVisible?: boolean } = {}) => {
     const mainWindow = {
       browserWindow: {
@@ -110,6 +112,9 @@ describe('ScreenCaptureManager', () => {
       i18n: {
         ns: vi.fn(() => (key: string) => key),
       },
+      permissionGuide: {
+        open: mockPermissionGuideOpen,
+      },
     } as any;
   };
 
@@ -121,6 +126,7 @@ describe('ScreenCaptureManager', () => {
     mockGetScreenCaptureStatus.mockReturnValue('granted');
     mockIsMac.value = true;
     mockRequestScreenCaptureAccess.mockResolvedValue(false);
+    mockPermissionGuideOpen.mockResolvedValue(false);
   });
 
   it('keeps the app in regular mode when showing overlay on macOS', async () => {
@@ -258,6 +264,18 @@ describe('ScreenCaptureManager', () => {
     );
     expect(mockRequestScreenCaptureAccess).toHaveBeenCalled();
     expect(mockEnumerateWindows).not.toHaveBeenCalled();
+  });
+
+  it('opens the drag guide instead of the system prompt when it is available', async () => {
+    mockGetScreenCaptureStatus.mockReturnValue('denied');
+    mockPermissionGuideOpen.mockResolvedValue(true);
+    const manager = new ScreenCaptureManager(createApp());
+    await manager.startSession();
+
+    await manager.beginCapture();
+
+    expect(mockPermissionGuideOpen).toHaveBeenCalledWith('screen');
+    expect(mockRequestScreenCaptureAccess).not.toHaveBeenCalled();
   });
 
   it('does not open settings when permission prompt is dismissed', async () => {

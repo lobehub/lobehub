@@ -2,7 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Tag } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Tag } from '@lobehub/ui';
 import { CheckCircle, Download, Package, Search } from 'lucide-react';
 import { memo, useState } from 'react';
 
@@ -113,7 +113,7 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
             Cancel
           </Button>
         ) : (
-          <Button icon={<Download size={14} />} size="small" type="primary" onClick={handleInstall}>
+          <Button icon={<Download size={14} />} size="small" onClick={handleInstall}>
             Install
           </Button>
         )}

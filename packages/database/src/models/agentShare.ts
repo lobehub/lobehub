@@ -1,7 +1,6 @@
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   AGENT_SHARE_SLUG_PATTERN,
   RESERVED_AGENT_SHARE_SLUGS,
@@ -16,9 +15,10 @@ import type {
   AgentShareItem,
   NormalizedAgentShareConfig,
 } from '../schemas';
-import { agents, agentShares, users } from '../schemas';
+import { agents, agentShares, users, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
+import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 import { AgentShareProfileModel } from './agentShareProfile';
 
@@ -28,11 +28,9 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   demoCases: [],
   featuredWorkIds: [],
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  maxTurnsPerTopic: AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  maxMessagesPerVisitor: AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   showErrorDetails: false,
-  showModelInfo: false,
   toolGrants: [],
 } satisfies AgentShareConfig;
 
@@ -44,14 +42,14 @@ const normalizeAgentShareConfig = (
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
   demoCases: config?.demoCases ?? [],
+  deviceAccess: config?.deviceAccess ?? 'none',
+  deviceAllowUserIds: config?.deviceAllowUserIds ?? [],
   featuredWorkIds: config?.featuredWorkIds ?? [],
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
-  maxTopicsPerVisitor:
-    config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
-  maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
+  maxMessagesPerVisitor:
+    config?.maxMessagesPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxMessagesPerVisitor,
   monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
   showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
-  showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
   /**
    * Left absent rather than defaulted to `[]`: both read as "no skill
    * granted", so a default would only write a value the creator never picked.
@@ -127,11 +125,16 @@ export class AgentShareModel {
         .from(agents)
         .where(
           this.workspaceId
-            ? and(eq(agents.id, agentShares.agentId), eq(agents.workspaceId, this.workspaceId))
+            ? and(
+                eq(agents.id, agentShares.agentId),
+                eq(agents.workspaceId, this.workspaceId),
+                notTrashed(agents.isDeleted),
+              )
             : and(
                 eq(agents.id, agentShares.agentId),
                 eq(agents.userId, this.userId),
                 isNull(agents.workspaceId),
+                notTrashed(agents.isDeleted),
               ),
         ),
     );
@@ -158,11 +161,16 @@ export class AgentShareModel {
       .from(agents)
       .where(
         params.workspaceId
-          ? and(eq(agents.id, agentId), eq(agents.workspaceId, params.workspaceId))
+          ? and(
+              eq(agents.id, agentId),
+              eq(agents.workspaceId, params.workspaceId),
+              notTrashed(agents.isDeleted),
+            )
           : and(
               eq(agents.id, agentId),
               eq(agents.userId, params.userId),
               isNull(agents.workspaceId),
+              notTrashed(agents.isDeleted),
             ),
       )
       .for('update');
@@ -515,7 +523,7 @@ export class AgentShareModel {
     });
 
   /**
-   * Read the CURRENT `maxTopicsPerVisitor` / `maxTurnsPerTopic` caps for an
+   * Read the CURRENT `maxMessagesPerVisitor` cap for an
    * agent's share, bypassing any snapshot a caller might already be holding —
    * intended to be called from inside the SAME locked transaction a
    * visitor-abuse guard uses to recount and insert, so a cap reduction the
@@ -531,9 +539,7 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     agentId: string,
   ): Promise<
-    Required<
-      Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic' | 'monthlySpendLimit'>
-    > & {
+    Pick<NormalizedAgentShareConfig, 'maxMessagesPerVisitor' | 'monthlySpendLimit'> & {
       shareId: string | null;
       workspaceId: string | null;
     }
@@ -550,9 +556,8 @@ export class AgentShareModel {
 
     const normalized = normalizeAgentShareConfig(row?.shareConfig ?? null);
     return {
-      maxTopicsPerVisitor: normalized.maxTopicsPerVisitor!,
-      maxTurnsPerTopic: normalized.maxTurnsPerTopic!,
-      monthlySpendLimit: normalized.monthlySpendLimit!,
+      maxMessagesPerVisitor: normalized.maxMessagesPerVisitor,
+      monthlySpendLimit: normalized.monthlySpendLimit,
       shareId: row?.id ?? null,
       workspaceId: row?.workspaceId ?? null,
     };
@@ -603,7 +608,7 @@ export class AgentShareModel {
       .select({ id: agentShares.id, visibility: agentShares.visibility })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(eq(agentShares.agentId, params.agentId))
+      .where(and(eq(agentShares.agentId, params.agentId), notTrashed(agents.isDeleted)))
       .limit(1);
 
     return !!share && share.id === params.shareId && share.visibility === 'link';
@@ -643,11 +648,15 @@ export class AgentShareModel {
         userViewCount: agentShares.userViewCount,
         visibility: agentShares.visibility,
         workspaceId: agents.workspaceId,
+        // Lets the owner's "settings" link land inside the share's Workspace
+        // route instead of whichever Workspace happens to be active.
+        workspaceSlug: workspaces.slug,
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
       .leftJoin(users, eq(agents.userId, users.id))
-      .where(eq(agentShares.id, shareId))
+      .leftJoin(workspaces, eq(agents.workspaceId, workspaces.id))
+      .where(and(eq(agentShares.id, shareId), notTrashed(agents.isDeleted)))
       .limit(1);
 
     if (!share) return null;

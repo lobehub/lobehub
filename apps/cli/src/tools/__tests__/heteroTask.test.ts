@@ -119,6 +119,57 @@ function makeMockChild(pid = 9999) {
 
 // ─── Tests ───
 
+describe.each(['openclaw', 'hermes'] as const)('runHeteroTask (%s) identity', (agentType) => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const key of Object.keys(taskStore)) delete taskStore[key];
+    execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+    spawnMock.mockReturnValue(makeMockChild());
+    resetTrpcClientMock();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    { agentId: 'agent-current', inherited: false, workspaceId: 'workspace-current' },
+    { agentId: 'agent-current', inherited: true, workspaceId: 'workspace-current' },
+    { agentId: undefined, inherited: true, workspaceId: undefined },
+  ])('isolates dispatched identity ($agentId, inherited=$inherited)', async (params) => {
+    for (const key of [
+      'AGENT_ID',
+      'TOPIC_ID',
+      'OPERATION_ID',
+      'ASSISTANT_MESSAGE_ID',
+      'TASK_ID',
+      'WORKSPACE_ID',
+    ]) {
+      vi.stubEnv(`LOBEHUB_${key}`, params.inherited ? `ancestor-${key}` : undefined);
+    }
+
+    await runHeteroTask({
+      agentId: params.agentId,
+      agentType,
+      operationId: 'operation-current',
+      prompt: 'hello',
+      taskId: 'device-task-current',
+      topicId: 'topic-current',
+      workspaceId: params.workspaceId,
+    });
+
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const env = spawnMock.mock.calls[0][2].env;
+    expect(env.LOBEHUB_AGENT_ID).toBe(params.agentId);
+    expect(env.LOBEHUB_TOPIC_ID).toBe('topic-current');
+    expect(env.LOBEHUB_OPERATION_ID).toBe('operation-current');
+    expect(env.LOBEHUB_WORKSPACE_ID).toBe(params.workspaceId);
+    expect(env.LOBEHUB_ASSISTANT_MESSAGE_ID).toBeUndefined();
+    expect(env.LOBEHUB_TASK_ID).toBeUndefined();
+  });
+});
+
 describe('runHeteroTask (openclaw)', () => {
   beforeEach(() => {
     vi.clearAllMocks();

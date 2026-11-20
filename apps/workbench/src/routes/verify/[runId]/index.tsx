@@ -1,3 +1,3 @@
 'use client';
 
-export { default } from '../../../features/verify/VerifyDetail';
+export { VerifyRunRedirect as default } from '../../../features/verify/VerifyRunRedirect';

@@ -313,6 +313,26 @@ describe('bot messengers', () => {
       });
     });
 
+    it('accepts Linq (iMessage / SMS) as a link-management platform', async () => {
+      mockTrpcClient.messenger.setActiveAgent.mutate.mockResolvedValueOnce({ success: true });
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'bot',
+        'messengers',
+        'links',
+        'set-agent',
+        'linq',
+        '--agent',
+        'agent_sms',
+      ]);
+      expect(mockTrpcClient.messenger.setActiveAgent.mutate).toHaveBeenCalledWith({
+        agentId: 'agent_sms',
+        platform: 'linq',
+        tenantId: undefined,
+      });
+    });
+
     it('passes agentId through to setActiveAgent', async () => {
       mockTrpcClient.messenger.setActiveAgent.mutate.mockResolvedValueOnce({ success: true });
       await createProgram().parseAsync([

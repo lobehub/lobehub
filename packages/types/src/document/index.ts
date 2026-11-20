@@ -1,5 +1,6 @@
 export * from './access';
 export * from './share';
+export * from './writeLimit';
 
 /**
  * Document object in LobeChat

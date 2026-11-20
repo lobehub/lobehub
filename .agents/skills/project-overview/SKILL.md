@@ -30,8 +30,8 @@ This repo is the **open-source root** (`github.com/lobehub/lobehub`, package `@l
 | Framework     | Next.js 16 + React 19                      |
 | Routing       | SPA inside Next.js with `react-router-dom` |
 | Language      | TypeScript                                 |
-| UI Components | `@lobehub/ui`, antd                        |
-| CSS-in-JS     | antd-style                                 |
+| UI Components | `@lobehub/ui`                              |
+| CSS-in-JS     | `@lobehub/ui` `createStaticStyles`         |
 | Icons         | lucide-react, `@ant-design/icons`          |
 | i18n          | react-i18next                              |
 | State         | zustand                                    |

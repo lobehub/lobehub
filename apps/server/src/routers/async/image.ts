@@ -4,7 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { type CreateImageMethodOptions } from '@lobechat/model-runtime';
+import { type CreateImageMethodOptions, readRouteAttemptIdentity } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskStatus, RequestTrigger, type SpendOrigin } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -270,6 +270,9 @@ export const imageRouter = router({
             },
           );
 
+          // Before marking Success so the client's post-success topic refresh sees it
+          await generationService.ensureTopicCover(generationTopicId, thumbnailImageUrl);
+
           const duration = Date.now() - generationBatch.createdAt.getTime();
 
           log('Updating task status to Success: %s, duration: %dms', taskId, duration);
@@ -298,6 +301,7 @@ export const imageRouter = router({
             // into the outer catch and be reconciled as a generation failure.
             try {
               await chargeAfterGenerate({
+                computePriceParams: params,
                 metrics: { latency: duration },
                 metadata: {
                   ...spendOrigin,
@@ -314,6 +318,7 @@ export const imageRouter = router({
                 prechargeResult,
                 pricingContext: runtimeOptions.pricingContext,
                 provider,
+                routeAttempt: readRouteAttemptIdentity(runtimeOptions.metadata),
                 userId: ctx.userId,
                 workspaceId,
               });

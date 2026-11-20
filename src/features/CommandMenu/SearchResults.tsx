@@ -1,9 +1,4 @@
-import {
-  AGENT_CHAT_TOPIC_URL,
-  DEFAULT_AVATAR,
-  GROUP_CHAT_TOPIC_URL,
-  GROUP_CHAT_URL,
-} from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
@@ -15,19 +10,25 @@ import {
   FileText,
   Folder,
   Library,
+  ListTodo,
   MessageCircle,
   MessageSquare,
   Plug,
   Puzzle,
   Sparkles,
+  Target,
   Users,
 } from 'lucide-react';
 import { memo, type ReactNode, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
+import { goalItemPath } from '@/features/AgentGoals/goalItemPath';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
+import { libraryFolderPath, libraryItemPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
@@ -38,6 +39,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import type { CommandMenuResultClick } from './analytics';
 import { CommandItem } from './components';
 import { styles } from './styles';
+import { goalResultStatusKey } from './utils/goalResults';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
 import { createVisibleResultPositionMap } from './utils/visibleResultPosition';
@@ -77,6 +79,7 @@ const SearchResults = memo<SearchResultsProps>(
     typeFilter,
   }) => {
     const { t } = useTranslation('common');
+    const { t: tChat } = useTranslation('chat');
     const { t: tImage } = useTranslation('image');
     const { t: tVideo } = useTranslation('video');
     const navigate = useWorkspaceAwareNavigate();
@@ -123,10 +126,10 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'file': {
-          // Navigate to resource library with file parameter
+          // Open the file inside its library, or over the Docs home
           const fileUrl = result.knowledgeBaseId
-            ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
-            : `/resource?file=${result.id}`;
+            ? libraryItemPath(result.knowledgeBaseId, result.id)
+            : docsFilePath(result.id);
           console.info('[SearchResults] File navigation:', {
             fileDetails: result,
             url: fileUrl,
@@ -135,19 +138,16 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'folder': {
-          // Navigate to folder by slug
-          if (result.knowledgeBaseId && result.slug) {
-            navigate(`/resource/library/${result.knowledgeBaseId}/${result.slug}`);
-          } else if (result.slug) {
-            navigate(`/resource/library/${result.slug}`);
-          } else {
-            // Fallback to library root if no slug
-            navigate(`/resource/library`);
-          }
+          // Open the folder inside its library, or the library gallery without one
+          navigate(
+            result.knowledgeBaseId
+              ? libraryFolderPath(result.knowledgeBaseId, result.id)
+              : '/resource/library',
+          );
           break;
         }
         case 'page': {
-          navigate(`/page/${result.id.split('_')[1]}`);
+          navigate(docsPagePath(result.id));
           break;
         }
         case 'mcp': {
@@ -168,6 +168,16 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'knowledgeBase': {
           navigate(`/resource/library/${result.id}`);
+          break;
+        }
+        case 'task': {
+          navigate(taskDetailPath(result.identifier ?? result.id, undefined, result.title));
+          break;
+        }
+        case 'goal': {
+          // Under its agent when it has one, like an agent's Goals page row;
+          // an agent-less (project) goal opens on the bare route.
+          navigate(goalItemPath({ agentId: result.agentId, goalId: result.id }));
           break;
         }
       }
@@ -212,6 +222,12 @@ const SearchResults = memo<SearchResultsProps>(
         case 'knowledgeBase': {
           return <Library size={16} />;
         }
+        case 'task': {
+          return <ListTodo size={16} />;
+        }
+        case 'goal': {
+          return <Target size={16} />;
+        }
       }
     };
 
@@ -253,11 +269,23 @@ const SearchResults = memo<SearchResultsProps>(
         case 'knowledgeBase': {
           return t('cmdk.search.knowledgeBase');
         }
+        case 'task': {
+          return t('cmdk.search.task');
+        }
+        case 'goal': {
+          return t('cmdk.search.goal');
+        }
       }
     };
 
     const getItemValue = (result: FtsSearchResult) => {
-      const meta = [result.title, result.description].filter(Boolean).join(' ');
+      const meta = [
+        result.type === 'task' ? result.identifier : undefined,
+        result.title,
+        result.description,
+      ]
+        .filter(Boolean)
+        .join(' ');
       // Prefix with "search-result" to ensure these items rank after built-in commands
       // Include ID to ensure uniqueness when multiple items have the same title
       return `search-result ${result.type} ${result.id} ${meta}`.trim();
@@ -284,10 +312,12 @@ const SearchResults = memo<SearchResultsProps>(
         }
         return (
           <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
-            <Avatar
-              avatar={result.agent.avatar || DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={result.agentId}
+              avatar={result.agent.avatar}
               background={result.agent.backgroundColor || undefined}
               name={agentDisplayName(result.agent, t('defaultAgent'))}
+              shape={'circle'}
               size={14}
             />
             <span style={{ flex: 'none' }}>
@@ -305,6 +335,21 @@ const SearchResults = memo<SearchResultsProps>(
             )}
           </Flexbox>
         );
+      }
+
+      // Task results: identifier first so the ID the user typed stays visible.
+      if (result.type === 'task') {
+        const status = tChat(`taskDetail.status.${result.status}` as any, {
+          defaultValue: result.status,
+        });
+        return [result.identifier, status, description].filter(Boolean).join(' · ');
+      }
+
+      // Goal results: lifecycle first, then the requirement the query may have matched.
+      if (result.type === 'goal') {
+        const statusKey = goalResultStatusKey(result.status);
+        const status = statusKey ? tChat(statusKey) : result.status;
+        return [status, description].filter(Boolean).join(' · ');
       }
 
       // For message results, append creation date
@@ -382,10 +427,14 @@ const SearchResults = memo<SearchResultsProps>(
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
+    const taskResults = results.filter((r) => r.type === 'task');
+    const goalResults = results.filter((r) => r.type === 'goal');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
     const localResultCount = localImageTopicResults.length + localVideoTopicResults.length;
     const visibleResultPositions = createVisibleResultPositionMap<FtsSearchResult>(
       [
+        taskResults,
+        goalResults,
         messageResults,
         agentResults,
         chatGroupResults,
@@ -572,6 +621,20 @@ const SearchResults = memo<SearchResultsProps>(
         )}
 
         {/* Render search results grouped by type without headers */}
+        {taskResults.length > 0 && (
+          <Command.Group forceMount>
+            {taskResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('task', taskResults.length)}
+          </Command.Group>
+        )}
+
+        {goalResults.length > 0 && (
+          <Command.Group forceMount>
+            {goalResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('goal', goalResults.length)}
+          </Command.Group>
+        )}
+
         {messageResults.length > 0 && (
           <Command.Group forceMount>
             {messageResults.map((result) => renderResultItem(result))}

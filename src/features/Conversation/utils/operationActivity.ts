@@ -29,12 +29,7 @@ export const resolveOperationActivity = (type: OperationType): ActivityKey | und
     return 'toolCalling';
   if (type === 'rag' || type === 'searchWorkflow') return 'searching';
   if (type === 'contextCompression' || type === 'generateSummary') return 'compressing';
-  if (
-    type === 'callLLM' ||
-    type === 'groupAgentStream' ||
-    type === 'createAssistantMessage' ||
-    type === 'supervisorDecision'
-  )
+  if (type === 'callLLM' || type === 'createAssistantMessage' || type === 'supervisorDecision')
     return 'generating';
   return undefined;
 };

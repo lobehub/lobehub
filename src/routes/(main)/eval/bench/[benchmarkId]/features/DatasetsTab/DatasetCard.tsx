@@ -1,13 +1,25 @@
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Spin, Tag, toast } from '@lobehub/ui/base-ui';
-import { Card } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Spin,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { agentEvalService } from '@/services/agentEval';
+import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import { DATASET_PRESETS } from '../../../../config/datasetPresets';
 import TestCaseEmptyState from './TestCaseEmptyState';
@@ -15,9 +27,7 @@ import TestCaseTable from './TestCaseTable';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    .ant-card-body {
-      padding: 0;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   // Tonal figure block that leads with the dataset's headline metric — its
   // test-case count — given mono weight so it reads as a result at a glance.
@@ -29,7 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: flex-end;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorFillQuaternary};
@@ -69,11 +79,11 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     width: 100%;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: none;
 
     text-align: start;
@@ -117,7 +127,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   footer: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   footerLink: css`
@@ -170,6 +180,8 @@ const DatasetCard = memo<DatasetCardProps>(
     onRun,
   }) => {
     const { t } = useTranslation('eval');
+    const deleteDataset = useEvalStore((s) => s.deleteDataset);
+    const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -178,7 +190,7 @@ const DatasetCard = memo<DatasetCardProps>(
         okText: t('common.delete'),
         onOk: async () => {
           try {
-            await agentEvalService.deleteDataset(dataset.id);
+            await deleteDataset(dataset.id);
             toast.success(t('dataset.delete.success'));
             onRefresh();
           } catch {
@@ -187,10 +199,10 @@ const DatasetCard = memo<DatasetCardProps>(
         },
         title: t('common.delete'),
       });
-    }, [dataset.id, onRefresh, t]);
+    }, [dataset.id, deleteDataset, onRefresh, t]);
 
     return (
-      <Card className={styles.card}>
+      <Block className={styles.card} variant={'outlined'}>
         <div
           className={styles.datasetHeader}
           role="button"
@@ -284,7 +296,7 @@ const DatasetCard = memo<DatasetCardProps>(
             <Flexbox horizontal align="center" className={styles.footer} justify="center">
               <WorkspaceLink
                 className={styles.footerLink}
-                to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
+                to={benchmarkDatasetPath(dataset.id, lobeBench)}
               >
                 <Button icon={ArrowRight} iconPosition="end" size="small" type="text">
                   {t('dataset.detail.viewDetail')}
@@ -293,7 +305,7 @@ const DatasetCard = memo<DatasetCardProps>(
             </Flexbox>
           </div>
         )}
-      </Card>
+      </Block>
     );
   },
 );

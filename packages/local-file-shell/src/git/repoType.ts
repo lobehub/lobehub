@@ -66,3 +66,33 @@ export const detectRepoType = async (dirPath: string): Promise<'git' | 'github' 
     return undefined;
   }
 };
+
+/** Origin's public repository identity. Strip credentials before crossing the device boundary. */
+export const detectGitHubRepository = async (dirPath: string): Promise<string | undefined> => {
+  const commonDir = await resolveCommonGitDir(dirPath);
+  if (!commonDir) return;
+  try {
+    const config = await readFile(path.join(commonDir, 'config'), 'utf8');
+    let inOrigin = false;
+    let raw: string | undefined;
+    for (const entry of config.split('\n')) {
+      const line = entry.trim();
+      if (line.startsWith('[')) inOrigin = line === '[remote "origin"]';
+      if (!inOrigin) continue;
+      const equals = line.indexOf('=');
+      if (equals > 0 && line.slice(0, equals).trim() === 'url') {
+        raw = line.slice(equals + 1).trim();
+        break;
+      }
+    }
+    if (!raw) return;
+    const scp = /^git@github\.com:([\w.-]+\/[\w.-]+)$/.exec(raw);
+    const url = new URL(scp ? `https://github.com/${scp[1]}` : raw);
+    if (url.hostname !== 'github.com' || !['https:', 'ssh:'].includes(url.protocol)) return;
+    const repository = url.pathname.replace(/\/$/, '').replace(/\.git$/, '');
+    if (!/^\/[\w.-]+\/[\w.-]+$/.test(repository)) return;
+    return `https://github.com${repository}`;
+  } catch {
+    return;
+  }
+};

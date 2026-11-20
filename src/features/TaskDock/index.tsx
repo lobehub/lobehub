@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -12,6 +10,8 @@ import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import Item from './Item';
 import {
@@ -51,15 +51,13 @@ const styles = createStaticStyles(({ css }) => ({
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
     color: ${cssVar.colorTextDescription};
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
 
     background: ${cssVar.colorFillQuaternary};
   `,
   head: css`
     cursor: pointer;
     padding-block: 9px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   headDivider: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};

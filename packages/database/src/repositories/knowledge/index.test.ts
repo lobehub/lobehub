@@ -111,31 +111,6 @@ describe('KnowledgeRepo', () => {
       await serverDB.insert(documents).values(testDocuments);
     });
 
-    it('should exclude documents with fileType="custom/document" from Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Should not include editor document (custom/document)
-      const editorDoc = results.find((item) => item.name === 'editor-doc.md');
-      expect(editorDoc).toBeUndefined();
-    });
-
-    it('should exclude documents with sourceType="file" from Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Should not include uploaded PDF document (sourceType='file')
-      const uploadedPdf = results.find((item) => item.name === 'uploaded-pdf.pdf');
-      expect(uploadedPdf).toBeUndefined();
-    });
-
-    it('should exclude document-table rows from Documents category (files only)', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Documents means uploaded document FILES; derived document rows stay out
-      expect(results.find((item) => item.name === 'api-pdf.pdf')).toBeUndefined();
-      expect(results.find((item) => item.name === 'web-doc.txt')).toBeUndefined();
-      expect(results.every((item) => item.sourceType === 'file')).toBe(true);
-    });
-
     it('should surface custom/* document rows under the Pages category', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Pages });
 
@@ -145,15 +120,6 @@ describe('KnowledgeRepo', () => {
       expect(webDoc?.sourceType).toBe('document');
       // uploaded files never surface under Pages
       expect(results.every((item) => item.sourceType === 'document')).toBe(true);
-    });
-
-    it('should include files from files table in Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Should include regular files
-      const regularFile = results.find((item) => item.name === 'regular-pdf-file.pdf');
-      expect(regularFile).toBeDefined();
-      expect(regularFile?.sourceType).toBe('file');
     });
 
     it('should exclude sourceType=file documents from All category', async () => {
@@ -181,14 +147,25 @@ describe('KnowledgeRepo', () => {
       expect(regularFile).toBeDefined();
     });
 
-    it('should keep the Documents category free of document-table rows', async () => {
+    it('keeps Documents limited to uploaded files', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
+
+      // Documents means uploaded document FILES; derived document rows stay out
+      const editorDoc = results.find((item) => item.name === 'editor-doc.md');
+      expect(editorDoc).toBeUndefined();
+      const uploadedPdf = results.find((item) => item.name === 'uploaded-pdf.pdf');
+      expect(uploadedPdf).toBeUndefined();
+      expect(results.find((item) => item.name === 'api-pdf.pdf')).toBeUndefined();
+      expect(results.find((item) => item.name === 'web-doc.txt')).toBeUndefined();
 
       const documentTypeItems = results.filter((item) => item.sourceType === 'document');
       expect(documentTypeItems).toHaveLength(0);
+      expect(results.every((item) => item.sourceType === 'file')).toBe(true);
 
       // the uploaded pdf file from the files table is still there
-      expect(results.find((item) => item.name === 'regular-pdf-file.pdf')).toBeDefined();
+      const regularFile = results.find((item) => item.name === 'regular-pdf-file.pdf');
+      expect(regularFile).toBeDefined();
+      expect(regularFile?.sourceType).toBe('file');
     });
   });
 

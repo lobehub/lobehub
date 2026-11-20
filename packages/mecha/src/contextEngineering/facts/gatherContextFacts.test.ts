@@ -19,6 +19,18 @@ const message = (content: string) =>
   ({ content, createdAt: 0, id: 'm', role: 'user', updatedAt: 0 }) as never;
 
 describe('gatherContextFacts', () => {
+  it('tells the agent its name, not only its title', async () => {
+    const named = await gatherContextFacts(
+      request({ agent: { description: '', name: 'Nasa', title: 'Shadow Arvin' } }),
+      {},
+    );
+    const unnamed = await gatherContextFacts(request(), {});
+
+    expect(named.variables).toMatchObject({ agent_name: 'Nasa', agent_title: 'Shadow Arvin' });
+    // Without a name the label is the title, the same as the product shows.
+    expect(unnamed.variables).toMatchObject({ agent_name: 'Helper', agent_title: 'Helper' });
+  });
+
   it('yields no facts and never throws when the host provides nothing', async () => {
     const facts = await gatherContextFacts(request(), {});
 
@@ -91,7 +103,16 @@ describe('gatherContextFacts', () => {
       expect(facts.step.planTodo?.todos?.items.map((t) => t.text)).toEqual(['from history']);
     });
 
-    it('does not read the plan document without lobe-agent', async () => {
+    it('keeps an existing topic plan available before Lobe Agent is activated', async () => {
+      const facts = await gatherContextFacts(
+        request({ discoverableTools: [{ identifier: 'lobe-agent' }] }),
+        providers,
+      );
+
+      expect(facts.step.planTodo?.plan?.goal).toBe('Ship it');
+    });
+
+    it('does not read the plan document when Lobe Agent is unavailable', async () => {
       const getPlanDocument = vi.fn(providers.getPlanDocument);
       const facts = await gatherContextFacts(request(), { getPlanDocument });
 
@@ -126,12 +147,80 @@ describe('gatherContextFacts', () => {
       expect(off.variables.COMPOSIO_SERVICES_LIST).toBe('');
 
       const on = await gatherContextFacts(
-        request({ disabledPluginIds: ['slack'], enabledToolIds: ['lobe-creds'] }),
+        request({ disabledPluginIds: ['slack'], enabledToolIds: ['lobe-creds', 'gmail'] }),
         { listConnectedConnectorIds },
       );
       const list = on.variables.COMPOSIO_SERVICES_LIST as string;
       expect(list).toContain('gmail');
       expect(list).not.toContain('slack');
+    });
+
+    it('lists connected Composio services available for this run to activate', async () => {
+      const listConnectedConnectorIds = vi.fn(async () => ['gmail', 'slack']);
+
+      const facts = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-creds'], discoverableTools: [{ identifier: 'gmail' }] }),
+        { listConnectedConnectorIds },
+      );
+      const list = facts.variables.COMPOSIO_SERVICES_LIST as string;
+
+      expect(list).toContain('gmail');
+      expect(list).not.toContain('slack');
+    });
+  });
+
+  describe('document references', () => {
+    it('resolves referenced documents against the executing agent', async () => {
+      const findAgentDocument = vi.fn(async (_agentId: string, documentId: string) =>
+        documentId === 'doc-1' ? { content: 'Voice rules', title: 'Voice' } : null,
+      );
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [
+            message(
+              'Use <refer_document name="Voice" id="doc-1" /> and <refer_document name="X" id="doc-2" />',
+            ),
+          ],
+        }),
+        { findAgentDocument },
+      );
+
+      expect(findAgentDocument).toHaveBeenCalledWith('agt_1', 'doc-1');
+      expect(facts.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+        { documentId: 'doc-2', title: 'X' },
+      ]);
+    });
+
+    it('lists earlier-turn references without a lookup only when the documents tool can read them', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'Voice rules' }));
+      const messages = [message('<refer_document name="Voice" id="doc-1" />'), message('Next')];
+
+      const withTool = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-agent-documents'], messages }),
+        { findAgentDocument },
+      );
+      expect(withTool.step.documentReferences).toEqual([
+        { documentId: 'doc-1', earlierTurn: true, title: 'Voice' },
+      ]);
+      expect(findAgentDocument).not.toHaveBeenCalled();
+
+      const withoutTool = await gatherContextFacts(request({ messages }), { findAgentDocument });
+      expect(withoutTool.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+      ]);
+    });
+
+    it('skips the lookup when no message references a document', async () => {
+      const findAgentDocument = vi.fn();
+
+      const facts = await gatherContextFacts(request({ messages: [message('hello')] }), {
+        findAgentDocument,
+      });
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
     });
   });
 
@@ -184,6 +273,21 @@ describe('gatherContextFacts', () => {
       const summaries = facts.step.topicReferences?.map((r) => r.summary) ?? [];
       expect(summaries).toContain('my summary');
       expect(summaries).not.toContain('creator secret');
+    });
+
+    it('never resolves document references for a visitor', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'creator secret', title: 'Doc' }));
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [message('<refer_document name="Doc" id="doc-1" />')],
+          shareVisitor: visitor,
+        }),
+        { findAgentDocument },
+      );
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
     });
 
     it('never enumerates the owner’s agents, providers or plugins for a visitor', async () => {
@@ -267,6 +371,43 @@ describe('gatherContextFacts', () => {
       expect(ctx.availablePlugins).toBeUndefined();
     });
 
+    it.each([{ enabledToolIds: [] }, { enabledToolIds: ['lobe-agent-management'] }])(
+      'omits unsolicited recent agents without disabling self-management or explicit mentions ($enabledToolIds)',
+      async ({ enabledToolIds }) => {
+        const listRecentAgents = vi.fn(async () => recent);
+        const mentionedAgents = [{ id: 'agt_9', name: 'Nine' }];
+        const facts = await gatherContextFacts(
+          request({ enabledToolIds, includeRecentAgents: false, mentionedAgents }),
+          {
+            listEnabledProviders: async () => [{ id: 'openai', models: [], name: 'OpenAI' }],
+            listRecentAgents,
+          },
+        );
+
+        const ctx = facts.step.agentManagementContext!;
+        expect(listRecentAgents).not.toHaveBeenCalled();
+        expect(ctx.availableAgents).toBeUndefined();
+        expect(ctx.availableAgentsHasMore).toBeUndefined();
+        expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
+        expect(ctx.mentionedAgents).toEqual(mentionedAgents);
+        if (enabledToolIds.length)
+          expect(ctx.availableProviders).toEqual([{ id: 'openai', models: [], name: 'OpenAI' }]);
+      },
+    );
+
+    it('carries each agent’s name beside its title, for itself and the others', async () => {
+      const facts = await gatherContextFacts(
+        request({ agent: { name: 'Nasa', title: 'Shadow Arvin' } }),
+        { listRecentAgents: async () => [{ id: 'agt_2', name: 'Tiko', title: 'Reviewer' }] },
+      );
+
+      const ctx = facts.step.agentManagementContext!;
+      expect(ctx.currentAgent).toStrictEqual({ id: 'agt_1', name: 'Nasa', title: 'Shadow Arvin' });
+      expect(ctx.availableAgents).toStrictEqual([
+        { description: undefined, id: 'agt_2', name: 'Tiko', title: 'Reviewer' },
+      ]);
+    });
+
     it('adds providers and the plugin catalog only when the tool is enabled', async () => {
       const facts = await gatherContextFacts(
         request({
@@ -297,6 +438,39 @@ describe('gatherContextFacts', () => {
       );
       expect(facts.step.agentManagementContext).toEqual({
         mentionedAgents: [{ id: 'agt_9', title: 'Nine' }],
+      });
+    });
+
+    it('invites no delegation inside a sub-agent run, where callAgent is rejected', async () => {
+      const listRecentAgents = vi.fn(async () => recent);
+      const facts = await gatherContextFacts(
+        request({
+          enabledToolIds: ['lobe-agent-management'],
+          isSubAgent: true,
+          mentionedAgents: [{ id: 'agt_9', title: 'Nine' }] as never,
+        }),
+        {
+          listEnabledProviders: async () => [{ id: 'openai', models: [], name: 'OpenAI' }],
+          listRecentAgents,
+        },
+      );
+
+      const ctx = facts.step.agentManagementContext!;
+      expect(listRecentAgents).not.toHaveBeenCalled();
+      expect(ctx.availableAgents).toBeUndefined();
+      expect(ctx.mentionedAgents).toBeUndefined();
+      // Its own id stays, for updateAgent / installPlugin on itself.
+      expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
+      // CRUD facts for createAgent / updateAgent still flow.
+      expect(ctx.availableProviders).toEqual([{ id: 'openai', models: [], name: 'OpenAI' }]);
+    });
+
+    it('invites no delegation in an auto-mode sub-agent without the tool', async () => {
+      const listRecentAgents = vi.fn(async () => recent);
+      const facts = await gatherContextFacts(request({ isSubAgent: true }), { listRecentAgents });
+      expect(listRecentAgents).not.toHaveBeenCalled();
+      expect(facts.step.agentManagementContext).toEqual({
+        currentAgent: { id: 'agt_1', title: 'Helper' },
       });
     });
   });
@@ -369,5 +543,166 @@ describe('gatherContextFacts', () => {
       appUrl: 'https://x',
       workspace: { slug: 'team' },
     });
+  });
+});
+
+describe('which tool counts as reaching the sandbox', () => {
+  const persistence = { cwd: 'lobehub-dev', mode: 'persistent' as const };
+
+  it('describes the persistent workspace for a run that only has the always-on skills tool', async () => {
+    // `lobe-skills` runCommand opens the same session in the same directory as
+    // the cloud-sandbox tool, and it ships with every run. Gating the placement
+    // on the optional tool left a skills-driven run reading the ephemeral
+    // wording while its commands ran in a persistent workspace.
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-skills'] }), {
+      resolveSandboxPersistence: async () => persistence,
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('environment directory');
+    expect(facts.variables.sandbox_workspace).toContain('`lobehub-dev`');
+  });
+
+  it('still describes it for the cloud-sandbox tool on its own', async () => {
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-cloud-sandbox'] }), {
+      resolveSandboxPersistence: async () => persistence,
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('environment directory');
+  });
+
+  it('describes a drive folder as a folder on the network drive', async () => {
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-cloud-sandbox'] }), {
+      resolveSandboxPersistence: async () => ({ cwd: 'reports', mode: 'drive' as const }),
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('`reports`, a folder on the user');
+    expect(facts.variables.sandbox_session_files).toContain('persist across sessions');
+  });
+
+  it('asks for nothing when no tool can run a command in the sandbox', async () => {
+    const resolveSandboxPersistence = vi.fn(async () => persistence);
+    await gatherContextFacts(request({ enabledToolIds: ['lobe-agent'] }), {
+      resolveSandboxPersistence,
+    });
+
+    expect(resolveSandboxPersistence).not.toHaveBeenCalled();
+  });
+
+  it('skips sandbox persistence lookup when lobe-skills is routed to a local device without cloud-sandbox', async () => {
+    const resolveSandboxPersistence = vi.fn(async () => persistence);
+    await gatherContextFacts(
+      request({ activeDeviceId: 'dev_1', enabledToolIds: ['lobe-skills'] }),
+      { resolveSandboxPersistence },
+    );
+
+    expect(resolveSandboxPersistence).not.toHaveBeenCalled();
+  });
+});
+
+describe('gatherContextFacts — revoked document reads', () => {
+  const readKnowledge = (fileIds: string[]) =>
+    ({
+      content: 'rule body',
+      createdAt: 0,
+      id: 't',
+      plugin: {
+        apiName: 'readKnowledge',
+        arguments: JSON.stringify({ fileIds }),
+        identifier: 'lobe-knowledge-base',
+      },
+      role: 'tool',
+      updatedAt: 0,
+    }) as never;
+
+  it('asks the host only about documents the history read', async () => {
+    const findRevokedDocumentReads = vi.fn(async () => ({
+      agentDocumentReadIds: ['docs_kb'],
+      documentIds: ['docs_b', 'docs_a'],
+    }));
+    const facts = await gatherContextFacts(
+      request({ messages: [message('hi'), readKnowledge(['docs_a', 'docs_b'])] }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_1', ['docs_a', 'docs_b']);
+    // Sorted so the filtered prefix is stable whatever order the host returns.
+    expect(facts.revokedDocumentReads).toEqual([
+      { agentDocumentReadIds: ['docs_kb'], documentIds: ['docs_a', 'docs_b'] },
+    ]);
+  });
+
+  it('skips the lookup without a document read, for a share visitor, or without an agent', async () => {
+    const findRevokedDocumentReads = vi.fn(async () => ({ documentIds: ['docs_a'] }));
+
+    const noRead = await gatherContextFacts(request({ messages: [message('hi')] }), {
+      findRevokedDocumentReads,
+    });
+    const visitor = await gatherContextFacts(
+      request({
+        messages: [readKnowledge(['docs_a'])],
+        shareVisitor: { agentId: 'agt_1', visitorUserId: 'u_2' },
+      }),
+      { findRevokedDocumentReads },
+    );
+    const noAgent = await gatherContextFacts(
+      request({ agentId: undefined, messages: [readKnowledge(['docs_a'])] }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).not.toHaveBeenCalled();
+    expect(noRead.revokedDocumentReads).toBeUndefined();
+    expect(visitor.revokedDocumentReads).toBeUndefined();
+    expect(noAgent.revokedDocumentReads).toBeUndefined();
+  });
+
+  it('checks the edited agent while the agent builder is active', async () => {
+    const findRevokedDocumentReads = vi.fn(async () => ({ documentIds: [] }));
+    await gatherContextFacts(
+      request({
+        editingAgentId: 'agt_edit',
+        enabledToolIds: ['lobe-agent-builder'],
+        messages: [readKnowledge(['docs_a'])],
+      }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_edit', ['docs_a']);
+  });
+
+  it('leaves the fact out when nothing is revoked, and fails closed when the lookup fails', async () => {
+    const none = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
+      findRevokedDocumentReads: async () => ({ agentDocumentReadIds: [], documentIds: [] }),
+    });
+    const failed = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
+      findRevokedDocumentReads: async () => {
+        throw new Error('db down');
+      },
+    });
+
+    expect(none.revokedDocumentReads).toBeUndefined();
+    // An unknown binding state must not let a deleted body back in.
+    expect(failed.revokedDocumentReads).toEqual([{ documentIds: [], unverifiedIds: ['docs_a'] }]);
+  });
+
+  it("checks another group member's reads against that member's bindings", async () => {
+    const findRevokedDocumentReads = vi.fn(async (agentId: string) =>
+      agentId === 'agt_a' ? { documentIds: ['docs_a'] } : { documentIds: [] },
+    );
+    const facts = await gatherContextFacts(
+      request({
+        messages: [
+          { ...readKnowledge(['docs_a']), agentId: 'agt_a' } as never,
+          { ...readKnowledge(['docs_own']), agentId: 'agt_1' } as never,
+        ],
+      }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_a', ['docs_a']);
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_1', ['docs_own']);
+    expect(facts.revokedDocumentReads).toEqual([
+      { agentDocumentReadIds: [], agentId: 'agt_a', documentIds: ['docs_a'] },
+      { agentDocumentReadIds: [], documentIds: [] },
+    ]);
   });
 });

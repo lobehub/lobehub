@@ -7,6 +7,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 import { type SkillQueryParams } from '@/types/discover';
 import { DiscoverTab, SkillSorts } from '@/types/discover';
 
@@ -17,7 +18,7 @@ import List from './features/List';
 const SkillPage = memo(() => {
   const { q, page, category, sort, order } = useQuery() as SkillQueryParams;
   const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
-  const { data, error, isLoading, mutate } = useSkillList({
+  const { error, isLoading, mutate, queryKey } = useSkillList({
     category,
     order,
     page,
@@ -25,6 +26,8 @@ const SkillPage = memo(() => {
     q,
     sort: sort ?? SkillSorts.InstallCount,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(skillSelectors.skillList(queryKey));
 
   const items = data?.items ?? [];
 

@@ -1,17 +1,16 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor';
-import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
-import { Block, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { DiffAction } from '@lobehub/editor';
+import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDocumentStore } from '@/store/document';
+
+import { resolveAllDiffs } from './resolveAllDiffs';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -112,7 +111,7 @@ interface DiffAllToolbarProps {
 const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
-  const [performSave, markDirty] = useDocumentStore((s) => [s.performSave, s.markDirty]);
+  const [saveVersion, markDirty] = useDocumentStore((s) => [s.saveVersion, s.markDirty]);
 
   const hasPendingDiffs = useEditorHasPendingDiffs(editor);
 
@@ -120,7 +119,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
 
   const handleSave = async () => {
     markDirty(documentId);
-    await performSave(documentId, undefined, { saveSource: 'manual' });
+    await saveVersion(documentId);
   };
 
   return (
@@ -133,14 +132,12 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
         padding={4}
         variant="outlined"
       >
-        <Space>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Button
             size={'small'}
             type="text"
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
-                action: DiffAction.Reject,
-              });
+              resolveAllDiffs(editor, DiffAction.Reject);
               await handleSave();
             }}
           >
@@ -151,16 +148,14 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             size={'small'}
             type="fill"
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
-                action: DiffAction.Accept,
-              });
+              resolveAllDiffs(editor, DiffAction.Accept);
               await handleSave();
             }}
           >
             <Icon color={'green'} icon={Check} size={16} />
             {t('modifier.acceptAll')}
           </Button>
-        </Space>
+        </Flexbox>
       </Block>
     </div>
   );

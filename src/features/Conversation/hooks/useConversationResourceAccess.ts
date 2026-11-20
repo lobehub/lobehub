@@ -15,7 +15,14 @@ interface ConversationResourceTarget {
   groupId?: string | null;
 }
 
-const useConversationResourceAccessForTarget = ({
+/**
+ * Resource gating for a conversation the caller names explicitly, for surfaces
+ * that render beside the conversation instead of inside its
+ * `ConversationProvider` — a task run's follow-up composer knows the run's
+ * agent before any drawer is open, and must pass the same check the drawer's
+ * own composer does.
+ */
+export const useConversationResourceAccessForTarget = ({
   agentId,
   groupId,
 }: ConversationResourceTarget) => {
@@ -38,13 +45,20 @@ const useConversationResourceAccessForTarget = ({
       : undefined;
 
   const { allowed: canCreateContent } = usePermission('create_content');
-  const { canUseResource, isLoading } = useResourceAccess(
+  const { canUseResource, isAccessResolved, isLoading } = useResourceAccess(
     isGroupContext ? 'agentGroup' : 'agent',
     gatedResourceId ?? undefined,
   );
 
   return {
     canUseResource: canCreateContent && canUseResource,
+    /**
+     * `canUseResource` stays permissive while access loads or after it fails,
+     * so a composer never flickers away. An affordance that only promises
+     * writing (and has a read-only sibling) waits for a resolved grant instead,
+     * failing closed on error.
+     */
+    canUseResourceConfirmed: canCreateContent && canUseResource && isAccessResolved,
     isAccessLoading: isLoading,
     isGroupContext,
   };

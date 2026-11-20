@@ -5,14 +5,21 @@ You are reviewing one React component or hook file from the LobeHub web client.
 
 Team rule (data-fetching-architecture): remote data is read through SWR hooks (`useSWR`, `useClientDataSWR`, `useOnlyFetchOnceSWR`, or the `useFetch*` / `useSWR*` hooks that zustand stores expose), never by calling a service inside `useEffect` and copying the result into `useState`. The SWR path gives request dedupe, cache, revalidation, and shared loading/error state; an effect-based fetch loses all of that, races on unmount, and refetches on every mount.
 
-Report each `useEffect` (or `useLayoutEffect`) whose body, directly or through an async helper defined in the same file, performs a remote read and stores the result in component state: a `*Service.*` call that hits the server, a tRPC client call (`lambdaClient`, `edgeClient`, `trpc.*`), or `fetch`. Use the line of the `useEffect` call. Name the call in the message. In the suggestion, sketch the SWR hook shape (key, fetcher, and which local state it replaces).
+Report each `useEffect` (or `useLayoutEffect`) whose body, directly or through an async helper defined in the same file, performs a remote READ and stores the result in state: a `*Service.*` call that hits the server, a tRPC client call (`lambdaClient`, `edgeClient`, `trpc.*`), `fetch`, or a zustand store action that fetches from the server on mount (`fetchConnectors()`, `fetchAuthProviders()`, … — the store should expose a `useFetch*` SWR hook instead). Use the line of the `useEffect` call. Name the call in the message. In the suggestion, sketch the SWR hook shape (key, fetcher, and which local state it replaces).
 
-Do not report effects that:
-- only subscribe or unsubscribe to events, timers, observers, or websocket messages;
-- write (mutations, analytics, telemetry) in response to a user action or lifecycle;
-- sync props or URL state into local state;
-- read from a zustand store, `localStorage`, or a synchronous source;
-- talk to a local-only bridge rather than the server: Electron IPC (`electronSystemService`, `autoUpdateService`, `desktop*Service`, `window.electron`, anything backed by `ipcRenderer`), the local file system, or the device gateway.
+Report a given loader once, on the effect that first runs it on mount. When the same loader is re-run from a polling interval, a focus/visibility listener, or a retry button, those call sites are part of the same finding, not new ones.
+
+Do not report — these are the false positives this rule has produced on real code:
+- effects that WRITE: a mutation, `enable*` / `create*` / `sync*` / `prioritize*` / `ensure*` call, analytics or telemetry, even when a `mutate()` / `refresh*()` follows to re-read the result. A refresh after a write is SWR revalidation, not an effect-based fetch;
+- prefetch calls that only warm a cache or store and put nothing into this component's state (`prefetchMessages`, `preload*`, `router.preload`);
+- auth and session plumbing: bootstrapping a login session on mount, token refresh timers, OAuth / QR-code handshakes and their polling loops (`createWechatQrSession` + `poll*`). These are protocol state machines, not cached data;
+- loading code or static assets rather than server data: `import()` of a locale, dictionary or component chunk (`getAntdLocale`, `getUILocaleAndResources`, `loadLocale`), a font or a wasm module;
+- effects that only subscribe or unsubscribe to events, timers, observers, or websocket messages;
+- effects that sync props or URL state into local state, or read from a zustand store, `localStorage`, or a synchronous source;
+- a cleanup function (the effect's return value) that refreshes something on unmount;
+- anything that talks to a local-only bridge rather than the server: Electron IPC (`electronSystemService`, `autoUpdateService`, `binaryService`, `desktop*Service`, `window.electron`, anything backed by `ipcRenderer`), the local file system, or the device gateway.
+
+If an exclusion applies, return no finding for that effect; never emit a finding whose message says the effect is probably out of scope.
 
 If uncertain, use low confidence rather than forcing a finding.
 """

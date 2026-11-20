@@ -1,6 +1,8 @@
 import type {
   AnalyzeMediaParams,
   CallSubAgentParams,
+  CancelSubAgentParams,
+  CancelSubAgentState,
   MediaFileItem,
   MediaSourceMessage,
   VentParams,
@@ -8,6 +10,8 @@ import type {
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
   buildAnalyzeMediaContent,
+  buildBackgroundSubAgentReceipt,
+  buildSteeredSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
@@ -40,6 +44,7 @@ import {
 } from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
@@ -101,6 +106,54 @@ const getCreditErrorType = (error: unknown): string | undefined => {
   const errorType = (error as { errorType?: unknown }).errorType;
 
   return typeof errorType === 'string' && CREDIT_ERROR_TYPES.has(errorType) ? errorType : undefined;
+};
+
+/**
+ * Structured rejection from the model gateway (e.g. `{ errorType: 403,
+ * message: "Request blocked.", _responseBody: { provider, reason:
+ * "not_onboarded" } }`). The raw message alone gives the agent nothing to act
+ * on — the gateway's `reason` is the only actionable signal, and rethrowing
+ * collapses the whole payload into that bare string before the tool result is
+ * built. Surface it instead of letting the failure degrade to "Request
+ * blocked." with no code, no cause, and no recovery path.
+ */
+const getGatewayRejection = (error: unknown): { content: string; code: string } | undefined => {
+  if (!error || typeof error !== 'object') return;
+
+  const raw = error as {
+    _responseBody?: { provider?: unknown; reason?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+  };
+
+  const errorType = typeof raw.errorType === 'number' ? raw.errorType : undefined;
+  const provider =
+    typeof raw._responseBody?.provider === 'string' ? raw._responseBody.provider : undefined;
+  const reason =
+    typeof raw._responseBody?.reason === 'string' ? raw._responseBody.reason : undefined;
+  const message = typeof raw.message === 'string' ? raw.message : undefined;
+
+  // Numeric error types are part of the generic model-runtime error contract
+  // (429 rate limits, 4xx validation, provider-policy refusals), and
+  // `normalizeChatMessageError` propagates `provider` (and other display
+  // metadata) into every error body — so neither establishes a gateway-level
+  // refusal on its own. `_responseBody.reason` is the gateway-specific marker:
+  // require it before suppressing the throw, and keep ordinary structured
+  // errors (including provider-only response bodies, e.g. a 429 rate limit)
+  // transparent and retryable via the existing rethrow behavior.
+  if (errorType === undefined || !reason) return;
+
+  const parts = [
+    `Media analysis was rejected by the platform model gateway (HTTP ${errorType}${provider ? `, provider: ${provider}` : ''}).`,
+    `Gateway reason: ${reason}.`,
+    message && message !== 'error' ? `Upstream message: ${message}.` : undefined,
+    'This is an account/gateway-level refusal, not a content-policy verdict on the media. Do not retry blindly or treat the media as blocked content.',
+  ].filter(Boolean);
+
+  return {
+    code: `GATEWAY_${reason.toUpperCase().replaceAll(/[^A-Z0-9]+/g, '_')}`,
+    content: parts.join(' '),
+  };
 };
 
 const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
@@ -277,13 +330,31 @@ class LobeAgentExecutionRuntime {
     // declared field, so "start a new sub-agent" arrives as `subAgentId: ""`
     // rather than an omitted key. Blank means new.
     const subAgentId = params.subAgentId?.trim() || undefined;
+    const background = params.runInBackground === true;
 
-    const { started, error, threadId, subOperationId, toolMessageId } = await ctx.subAgent.run({
-      description,
-      instruction,
-      subAgentId,
-      timeout,
-    });
+    const runner = ctx.subAgent;
+    const startRun = () =>
+      runner.run({ background, description, instruction, subAgentId, timeout });
+
+    let runResult: Awaited<ReturnType<typeof startRun>>;
+    if (background) {
+      const outcome = await startBackgroundSubAgent({
+        continuesThreadId: subAgentId,
+        db: this.db,
+        groupId: this.groupId,
+        retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
+        start: startRun,
+        threadId: this.threadId,
+        topicId: this.topicId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if ('refusal' in outcome) return buildError(outcome.refusal.message, outcome.refusal.code);
+      runResult = outcome.result;
+    } else {
+      runResult = await startRun();
+    }
+    const { started, error, steered, threadId, subOperationId, toolMessageId } = runResult;
 
     // The child op failed to start — no completion bridge will ever fire to
     // backfill a placeholder, so we must NOT defer/park here. Return a normal
@@ -297,6 +368,28 @@ class LobeAgentExecutionRuntime {
       );
     }
 
+    // Steered a sub-agent that is still running: the instruction joins its next
+    // step, and the running call reports the answer. Nothing to wait for here.
+    if (steered) {
+      return {
+        content: buildSteeredSubAgentReceipt(threadId),
+        state: { status: 'completed', steered: true, threadId },
+        success: true,
+        toolMessageId,
+      };
+    }
+
+    // Detached: the receipt is the whole tool result and the parent keeps going.
+    // It goes into the placeholder the runner created (it anchors the thread);
+    // the answer reaches the parent later as its own message.
+    if (background) {
+      return {
+        content: buildBackgroundSubAgentReceipt(threadId),
+        success: true,
+        toolMessageId,
+      };
+    }
+
     return {
       // No tool_result yet — the bridge fills this in when the sub-op completes.
       content: '',
@@ -304,6 +397,62 @@ class LobeAgentExecutionRuntime {
       // `toolMessageId` rides along so the runtime's pause chunk can tell the
       // client which row to fetch; the client never sees it as tool state.
       state: { status: 'pending', subOperationId, threadId, toolMessageId },
+      success: true,
+    };
+  };
+
+  /**
+   * Stop a running sub-agent this agent dispatched earlier in the conversation.
+   * Cancelling it before it reports back keeps the stop from waking this agent
+   * again with a "did not complete" result (see `cancelSubAgentThreadRun`).
+   */
+  cancelSubAgent = async (
+    params: CancelSubAgentParams,
+    ctx: ToolExecutionContext,
+  ): Promise<BuiltinServerRuntimeOutput> => {
+    if (ctx.isSubAgent) {
+      return buildError(
+        'Sub-agents cannot be cancelled from within another sub-agent.',
+        'NESTED_SUB_AGENT_NOT_ALLOWED',
+      );
+    }
+    if (!ctx.subAgent?.cancel) {
+      return buildError(
+        'Cancelling a sub-agent is not available in this runtime.',
+        'SUB_AGENT_UNAVAILABLE',
+      );
+    }
+    const subAgentId = typeof params.subAgentId === 'string' ? params.subAgentId.trim() : '';
+    if (!subAgentId) {
+      return buildError(
+        'subAgentId is required: pass the id from the sub-agent\'s <sub_agent id="..." /> tag.',
+        'INVALID_ARGUMENTS',
+      );
+    }
+
+    const result = await ctx.subAgent.cancel({ subAgentId });
+
+    if (result.status === 'failed') {
+      return buildError(
+        `Sub-agent "${subAgentId}" could not be cancelled: ${result.error ?? 'unknown error'}`,
+        'SUB_AGENT_CANCEL_FAILED',
+      );
+    }
+
+    const state: CancelSubAgentState = { status: result.status, threadId: result.threadId };
+    if (result.status === 'not_running') {
+      return {
+        content: `Sub-agent "${subAgentId}" is not running, so there was nothing to cancel. If it already finished, its result is (or will be) delivered as usual.`,
+        state,
+        success: true,
+      };
+    }
+
+    return {
+      content: result.stopped
+        ? `Sub-agent "${subAgentId}" cancelled and stopped. No result will be delivered for it. Its history is kept: to steer it, call callSubAgent with subAgentId "${subAgentId}" and a corrected instruction.`
+        : `Sub-agent "${subAgentId}" cancelled. It is still finishing its current step and stops after it; no result will be delivered for it. Its history is kept: once it has stopped, call callSubAgent with subAgentId "${subAgentId}" and a corrected instruction to steer it.`,
+      state,
       success: true,
     };
   };
@@ -570,10 +719,15 @@ class LobeAgentExecutionRuntime {
       await consumeStreamUntilDone(response);
     } catch (error) {
       const creditErrorType = getCreditErrorType(error);
-      if (!creditErrorType) throw error;
+      if (!creditErrorType) {
+        const rejection = getGatewayRejection(error);
+        if (!rejection) throw error;
+
+        return buildError(rejection.content, rejection.code);
+      }
 
       return buildError(
-        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub credits, and those credits are exhausted (${creditErrorType}). ` +
+        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub balance, and that balance is exhausted (${creditErrorType}). ` +
           "The user's own API key for the chat model is not used by this tool, so retrying will not help. " +
           'Tell the user to top up or upgrade their LobeHub plan, or to switch the conversation to a vision-capable model on their own API key.',
         creditErrorType,

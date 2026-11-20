@@ -26,8 +26,7 @@ export const CredsManifest: BuiltinToolManifest = {
       } satisfies JSONSchema7,
     },
     {
-      description:
-        'Initiate OAuth connection flow for a LobeHub Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.',
+      description: `Initiate OAuth connection flow for a LobeHub Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.`,
       name: CredsApiName.initiateOAuthConnect,
       parameters: {
         additionalProperties: false,
@@ -63,14 +62,27 @@ export const CredsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Save a new credential securely. Use this when the user wants to store sensitive information like API keys, tokens, or secrets. The credential will be encrypted and stored securely.',
-      name: CredsApiName.saveCreds,
+        'Ask the user to enter a credential in a secure form, then store it encrypted. You only name the credential and its fields; the user types the values into the form, which saves them directly. The values never appear in this conversation, so never ask the user to paste a secret into the chat. Reusing an existing key lets the user update that credential.',
+      humanIntervention: 'always',
+      name: CredsApiName.requestCredsInput,
       parameters: {
         additionalProperties: false,
         properties: {
           description: {
             description: 'Optional description explaining what this credential is used for',
             type: 'string',
+          },
+          fieldNames: {
+            description:
+              'Names of the values the user should fill in. For kv-env, the environment variable names (e.g., ["OPENAI_API_KEY"]); for kv-header, the header names (e.g., ["Authorization"]).',
+            items: {
+              pattern: '^[A-Za-z_][A-Za-z0-9_-]*$',
+              type: 'string',
+            },
+            maxItems: 10,
+            minItems: 1,
+            type: 'array',
+            uniqueItems: true,
           },
           key: {
             description:
@@ -87,16 +99,8 @@ export const CredsManifest: BuiltinToolManifest = {
             enum: ['kv-env', 'kv-header'],
             type: 'string',
           },
-          values: {
-            additionalProperties: {
-              type: 'string',
-            },
-            description:
-              'Key-value pairs of the credential. For kv-env, the key should be the environment variable name (e.g., {"OPENAI_API_KEY": "sk-..."})',
-            type: 'object',
-          },
         },
-        required: ['key', 'name', 'type', 'values'],
+        required: ['key', 'name', 'type', 'fieldNames'],
         type: 'object',
       } satisfies JSONSchema7,
     },
@@ -105,7 +109,7 @@ export const CredsManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🔐',
     description:
-      'Manage user credentials for authentication, environment variable injection, and API verification. Use this tool when tasks require API keys, OAuth tokens, or secrets - such as calling third-party APIs, authenticating with external services, or injecting credentials into sandbox environments.',
+      'Activate first to connect a third-party account, manage API keys or tokens, or run code that needs secrets. Collect secrets securely through this tool. Never ask users to paste them into chat.',
     title: 'Credentials',
   },
   systemRole: systemPrompt,

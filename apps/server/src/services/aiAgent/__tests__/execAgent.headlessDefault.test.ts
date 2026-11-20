@@ -221,25 +221,33 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     expect(appContext.userAgent).toBeUndefined();
   });
 
-  it('forces headless for a share-visitor run regardless of what the caller passed', async () => {
-    // Share runs have no approver: any waiting mode would park the run on
-    // request_human_approve forever. The override must win over an explicit
-    // caller-provided config — a call site cannot reintroduce a waiting mode.
+  const shareGate = {
+    agentId: 'agent-1',
+    shareConfig: { toolGrants: [] },
+    shareId: 'share-1',
+    visitorUserId: 'visitor-1',
+  };
+
+  it('honors the visitor-selected approval mode on a share-visitor run', async () => {
+    // The visitor is the approver of a share run, so their own mode drives it.
     await service.execAgent({
       agentId: 'agent-1',
       prompt: 'Hello',
-      shareGate: {
-        agentId: 'agent-1',
-        shareConfig: { toolGrants: [] },
-        shareId: 'share-1',
-        visitorUserId: 'visitor-1',
-      },
-      userInterventionConfig: { approvalMode: 'manual' },
+      shareGate,
+      userInterventionConfig: { approvalMode: 'auto-run' },
     });
 
-    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'auto-run' });
+  });
+
+  it('falls back to manual, never headless, for a share-visitor run without a config', async () => {
+    // `headless` would auto-run `'required'` calls, granting consent the
+    // visitor never gave.
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', shareGate });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'manual' });
   });
 
   it('should respect explicit allow-list approval mode with allowList', async () => {

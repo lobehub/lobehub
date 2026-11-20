@@ -1,6 +1,8 @@
 import { type IThreadType, type ThreadItem } from '@lobechat/types';
 import { ThreadType } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
 export interface ChatThreadState {
   activeThreadId?: string;
   /**
@@ -15,10 +17,13 @@ export interface ChatThreadState {
   startToForkThread?: boolean;
 
   threadInputMessage: string;
+  threadListReplica: ReplicaState<ThreadItem[]>;
   threadLoadingIds: string[];
+  /**
+   * Threads by topic id, written only through the thread list replica. An
+   * `undefined` entry means the topic's threads are not loaded yet.
+   */
   threadMaps: Record<string, ThreadItem[]>;
-  threadRenamingId?: string;
-  threadsInit?: boolean;
   /**
    * when open thread creator, set the message id to it
    */
@@ -29,7 +34,7 @@ export const initialThreadState: ChatThreadState = {
   isCreatingThread: false,
   newThreadMode: ThreadType.Continuation,
   threadInputMessage: '',
+  threadListReplica: createReplicaState<ThreadItem[]>(),
   threadLoadingIds: [],
   threadMaps: {},
-  threadsInit: false,
 };

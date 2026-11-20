@@ -1,13 +1,12 @@
 'use client';
 
-import type { SWRResponse } from 'swr';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
 import { useFileStore } from '@/store/file';
 
-import type { FolderCrumb, Store } from './action';
+import type { Store } from './action';
 import { store } from './action';
 
 export type { State } from './initialState';
@@ -19,8 +18,6 @@ export const useResourceManagerStore = createStore();
 
 export { selectors } from './selectors';
 
-export const useResourceManagerFetchFolderBreadcrumb = (
-  slug?: string | null,
-): SWRResponse<FolderCrumb[]> => {
+export const useResourceManagerFetchFolderBreadcrumb = (slug?: string | null) => {
   return useFileStore((s) => s.useFetchFolderBreadcrumb)(slug);
 };

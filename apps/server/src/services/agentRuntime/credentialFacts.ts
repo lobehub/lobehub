@@ -10,7 +10,7 @@ import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 const MUTATING_API_NAMES = new Set<string>([
   CredsApiName.connectComposioService,
   CredsApiName.initiateOAuthConnect,
-  CredsApiName.saveCreds,
+  CredsApiName.requestCredsInput,
 ]);
 
 /**

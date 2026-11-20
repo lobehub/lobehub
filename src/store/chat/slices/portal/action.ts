@@ -1,8 +1,10 @@
-import type { TopicCommentItem } from '@lobechat/types';
+import type { LayersEnum, TopicCommentItem } from '@lobechat/types';
 
 import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { useGlobalStore } from '@/store/global';
+import { canvasTabKey } from '@/store/global/initialState';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
@@ -17,6 +19,7 @@ import {
   type GoalMetricKind,
   type OpenLocalFileParams,
   type PortalFile,
+  type PortalTaskWorkspace,
   type PortalViewData,
 } from './initialState';
 import { PortalViewType } from './initialState';
@@ -512,8 +515,16 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ agentDocumentId, documentId, type: PortalViewType.Document });
   };
 
-  openFilePreview = (file: PortalFile): void => {
-    this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
+  openMemoryDetail = (params: { id: string; layer: LayersEnum }): void => {
+    this.#get().pushPortalView({ ...params, type: PortalViewType.MemoryDetail });
+  };
+
+  openFilePreview = (file: PortalFile, options?: { sourceTopicId?: string }): void => {
+    this.#get().pushPortalView({
+      file,
+      ...(options?.sourceTopicId ? { sourceTopicId: options.sourceTopicId } : {}),
+      type: PortalViewType.FilePreview,
+    });
   };
 
   openLocalFile = ({
@@ -523,7 +534,7 @@ export class ChatPortalActionImpl {
     sandboxTopicId,
     workingDirectory,
   }: OpenLocalFileParams): void => {
-    const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
+    const { activeLocalFileIdsByScope, activeTopicId, openLocalFiles } = this.#get();
     const id = createLocalFileTabId({ deviceId, filePath, sandboxTopicId, workingDirectory });
     const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
     const nextFile = {
@@ -532,6 +543,7 @@ export class ChatPortalActionImpl {
       ...(sandboxTopicId ? { sandboxTopicId } : {}),
       filePath,
       id,
+      ...(deviceId && activeTopicId && { topicId: activeTopicId }),
       workingDirectory,
     };
     const scopeKey = getLocalFileActivationScopeKey(this.#get(), nextFile);
@@ -653,7 +665,7 @@ export class ChatPortalActionImpl {
     filePath,
     workingDirectory,
   }: OpenLocalFileParams): Promise<string | undefined> => {
-    const { dirtyLocalFileContents } = this.#get();
+    const { dirtyLocalFileContents, openLocalFiles } = this.#get();
     // Edit buffers are scoped by tab identity (device + working directory +
     // path), so the same absolute path opened on two devices/workspaces keeps
     // independent unsaved content.
@@ -662,10 +674,12 @@ export class ChatPortalActionImpl {
     if (buffer === undefined) return undefined;
     // deviceId routes the write to the remote device over RPC; local desktop
     // (no deviceId) goes straight to Electron IPC. The chokepoint hides the split.
+    const topicId = findLocalFileById(openLocalFiles, tabId)?.topicId;
     const result = await projectFileService.writeProjectFile({
       content: buffer,
       deviceId,
       path: filePath,
+      ...(topicId && { topicId }),
       workingDirectory,
     });
     // The remote RPC / local IPC report fs failures (permission denied, etc.) as
@@ -679,6 +693,14 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
   };
 
+  openBrowser = (sessionId: string, url: string): void => {
+    this.#get().pushPortalView({
+      request: { nonce: Date.now(), url },
+      sessionId,
+      type: PortalViewType.Browser,
+    });
+  };
+
   openAcceptanceCheck = (acceptanceId: string, checkId: string): void => {
     this.#get().pushPortalView({ acceptanceId, checkId, type: PortalViewType.AcceptanceCheck });
   };
@@ -687,12 +709,41 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   };
 
+  /** A dashboard widget in full: data, the dry run that produced a preview, versions and logs. */
+  openDashboardWidget = (widgetId: string, runId?: string): void => {
+    // The widget view only exists while the `dashboard` feature flag is on.
+    if (getServerConfigStoreState()?.featureFlags.enableDashboard !== true) return;
+    this.#get().pushPortalView({
+      ...(runId ? { runId } : {}),
+      type: PortalViewType.DashboardWidget,
+      widgetId,
+    });
+  };
+
+  openCanvas = (canvasId: string, version?: number): void => {
+    const { [canvasId]: _previous, ...canvasTabVersions } = this.#get().canvasTabVersions;
+    this.#set(
+      {
+        canvasTabVersions: version
+          ? { ...canvasTabVersions, [canvasId]: version }
+          : canvasTabVersions,
+      },
+      false,
+      'openCanvas',
+    );
+    useGlobalStore.getState().openWorkingSidebar(canvasTabKey(canvasId));
+  };
+
   openNotebook = (): void => {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
-  openTaskDetail = (taskId: string): void => {
-    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
+  openTaskDetail = (taskId: string, workspace?: PortalTaskWorkspace): void => {
+    this.#get().pushPortalView({
+      taskId,
+      type: PortalViewType.TaskDetail,
+      ...(workspace ? { workspace } : {}),
+    });
   };
 
   openTaskResult = (taskId: string): void => {
@@ -726,6 +777,16 @@ export class ChatPortalActionImpl {
       false,
       'drillIntoGoalNode',
     );
+  };
+
+  /** The wrap-up report's full text, read beside the result page. */
+  openGoalReport = (goalId: string): void => {
+    this.#get().pushPortalView({ goalId, type: PortalViewType.GoalReport });
+  };
+
+  /** One storyline chapter's local map: its main path and the detours off it. */
+  openGoalReportChapter = (goalId: string, chapterIndex: number): void => {
+    this.#get().pushPortalView({ chapterIndex, goalId, type: PortalViewType.GoalReportChapter });
   };
 
   openGoalMetric = (goalId: string, metric: GoalMetricKind): void => {

@@ -2,9 +2,11 @@
 
 import { formatElapsedClockTime } from '@lobechat/utils';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,192 +18,152 @@ import { calculateOperationUsageMetrics } from '@/utils/operationUsageMetrics';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
 import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
+import AnimatedCount from './OpStatusTray/AnimatedCount';
 import { parseStatusPhrases, pickRotatingStatusPhrase } from './OpStatusTray/logic';
 
 // Cycle the generating phrase like a carousel so a long-running task doesn't
 // stare back with the same line the whole time.
 const STATUS_PHRASE_ROTATION_MS = 4000;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    container-type: inline-size;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+const NARROW = '@container (max-width: 360px)';
+const NARROWER = '@container (max-width: 260px)';
 
-    padding-block: 8px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-block-end: none;
-    border-start-start-radius: 12px;
-    border-start-end-radius: 12px;
+const phraseEnter = stylex.keyframes({
+  from: { transform: 'translateY(3px)', opacity: 0 },
+  to: { transform: 'translateY(0)', opacity: 1 },
+});
 
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
+const glyphSpin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-    background: ${cssVar.colorBgElevated};
-  `,
-  containerTopAttached: css`
-    border-start-start-radius: 0;
-    border-start-end-radius: 0;
-  `,
-  containerSeamless: css`
-    border: none;
+const glyphCore = stylex.keyframes({
+  '0%, 100%': { transform: 'scale(0.86)', opacity: 0.9 },
+  '50%': { transform: 'scale(1)', opacity: 1 },
+});
 
-    /* keep a hairline divider on top so the tray still reads as separated from
-       the conversation above, even without the full card chrome */
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 0;
-    background: transparent;
-  `,
-  divider: css`
-    width: 1px;
-    height: 12px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  metric: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  `,
-  metricGroup: css`
-    display: inline-flex;
-    flex: none;
-    gap: 10px;
-    align-items: center;
-  `,
-  metricGroupFull: css`
-    @container (max-width: 360px) {
-      display: none;
-    }
-  `,
-  metricIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  metricPopover: css`
-    min-width: 150px;
-    padding: 2px;
-  `,
-  metricPopoverLabel: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  metricPopoverRow: css`
-    font-size: 12px;
-  `,
-  metricPopoverValue: css`
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  metricValue: css`
-    overflow: hidden;
-    max-width: 56px;
-    text-overflow: ellipsis;
-  `,
-  compactMetric: css`
-    cursor: default;
-    display: none;
-    flex: none;
-
-    @container (max-width: 360px) {
-      display: inline-flex;
-    }
-  `,
-  statusMetric: css`
-    overflow: hidden;
-    flex: 1 1 auto;
-    min-width: 0;
-  `,
-  statusText: css`
-    overflow: hidden;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  statusPhrase: css`
-    @keyframes op-status-tray-phrase-enter {
-      from {
-        transform: translateY(3px);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
-    }
-
-    display: inline-block;
-    animation: op-status-tray-phrase-enter 0.4s ease;
-  `,
-  timerValue: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-
-    @container (max-width: 260px) {
-      display: none;
-    }
-  `,
-  activityGlyph: css`
-    overflow: visible;
-    flex: none;
-
-    width: 16px;
-    height: 16px;
-
-    color: ${cssVar.colorPrimary};
-
-    @keyframes op-status-tray-glyph-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @keyframes op-status-tray-glyph-core {
-      0%,
-      100% {
-        transform: scale(0.86);
-        opacity: 0.9;
-      }
-
-      50% {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-  `,
-  glyphCore: css`
-    transform-origin: center;
-    transform-box: fill-box;
-    fill: ${cssVar.colorPrimary};
-    animation: op-status-tray-glyph-core 1.5s ease-in-out infinite;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-  glyphOrbit: css`
-    transform-origin: center;
-    transform-box: fill-box;
-
-    fill: none;
-    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 76%, transparent);
-    stroke-dasharray: 9 18;
-    stroke-linecap: round;
-    stroke-width: 1.5;
-
-    animation: op-status-tray-glyph-spin 2s linear infinite;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    containerType: 'inline-size',
+    paddingBlock: '8px',
+    paddingInline: '14px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentcolor',
+    borderStartStartRadius: '12px',
+    borderStartEndRadius: '12px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  containerTopAttached: { borderStartStartRadius: 0, borderStartEndRadius: 0 },
+  // Keeps a hairline divider on top so the tray still reads as separated from
+  // the conversation above, even without the full card chrome.
+  containerSeamless: {
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderStartStartRadius: 0,
+    borderStartEndRadius: 0,
+    borderEndStartRadius: 0,
+    borderEndEndRadius: 0,
+    backgroundColor: 'transparent',
+  },
+  divider: {
+    width: '1px',
+    height: '12px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  metric: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap',
+  },
+  metricGroup: { display: 'inline-flex', flex: 'none', gap: '10px', alignItems: 'center' },
+  // Composed after `metricGroup`: a conditional value replaces the whole
+  // property, so the resting display is restated here.
+  metricGroupFull: { display: { default: 'inline-flex', [NARROW]: 'none' } },
+  metricIcon: { flex: 'none', color: cssVar.colorTextTertiary },
+  metricPopover: { minWidth: '150px', padding: '2px' },
+  metricPopoverLabel: { color: cssVar.colorTextTertiary },
+  metricPopoverRow: { fontSize: '12px' },
+  metricPopoverValue: { fontVariantNumeric: 'tabular-nums', color: cssVar.colorTextSecondary },
+  metricValue: { overflow: 'hidden', maxWidth: '56px', textOverflow: 'ellipsis' },
+  compactMetric: {
+    cursor: 'default',
+    display: { default: 'none', [NARROW]: 'inline-flex' },
+    flex: 'none',
+  },
+  statusMetric: {
+    overflow: 'hidden',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+  },
+  statusText: {
+    overflow: 'hidden',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  statusPhrase: {
+    display: 'inline-block',
+    animationName: phraseEnter,
+    animationDuration: '0.4s',
+    animationTimingFunction: 'ease',
+  },
+  timerValue: {
+    flex: 'none',
+    color: cssVar.colorTextTertiary,
+    display: { default: null, [NARROWER]: 'none' },
+  },
+  activityGlyph: {
+    overflow: 'visible',
+    flex: 'none',
+    width: '16px',
+    height: '16px',
+    color: cssVar.colorPrimary,
+  },
+  glyphCore: {
+    transformOrigin: 'center',
+    transformBox: 'fill-box',
+    fill: cssVar.colorPrimary,
+    animationName: { default: glyphCore, [REDUCED_MOTION]: 'none' },
+    animationDuration: { default: '1.5s', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'ease-in-out', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
+  },
+  glyphOrbit: {
+    transformOrigin: 'center',
+    transformBox: 'fill-box',
+    fill: 'none',
+    stroke: `color-mix(in srgb, ${cssVar.colorPrimary} 76%, transparent)`,
+    strokeDasharray: '9 18',
+    strokeLinecap: 'round',
+    strokeWidth: 1.5,
+    animationName: { default: glyphSpin, [REDUCED_MOTION]: 'none' },
+    animationDuration: { default: '2s', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'linear', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
+  },
+});
 
 const ActivityGlyph = () => (
-  <svg aria-hidden className={styles.activityGlyph} viewBox="0 0 16 16">
-    <circle className={styles.glyphOrbit} cx="8" cy="8" r="6.1" />
-    <circle className={styles.glyphCore} cx="8" cy="8" r="2.7" />
+  <svg aria-hidden {...stylex.props(styles.activityGlyph)} viewBox="0 0 16 16">
+    <circle {...stylex.props(styles.glyphOrbit)} cx="8" cy="8" r="6.1" />
+    <circle {...stylex.props(styles.glyphCore)} cx="8" cy="8" r="2.7" />
   </svg>
 );
 
@@ -216,9 +178,9 @@ const formatCost = (cost: number) => {
   return cost.toFixed(2);
 };
 
-const normalizeStepCount = (stepCount: unknown) => {
-  if (typeof stepCount !== 'number' || !Number.isFinite(stepCount)) return 0;
-  return Math.max(0, Math.floor(stepCount));
+const normalizeCount = (count: unknown) => {
+  if (typeof count !== 'number' || !Number.isFinite(count)) return 0;
+  return Math.max(0, Math.floor(count));
 };
 
 interface OpStatusTrayProps {
@@ -235,10 +197,10 @@ interface OpStatusTrayProps {
 
 interface MetricItem {
   icon: LucideIcon;
-  key: 'cost' | 'steps' | 'tokens';
+  key: 'cost' | 'llmCalls' | 'tokens';
   label: string;
   title: string;
-  value: string;
+  value: ReactNode;
 }
 
 const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
@@ -251,8 +213,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     let activity: ActivityKey | undefined;
     let earliestStart: number | undefined;
     let latestActivityStart = -1;
+    let llmCalls = 0;
     let statusSeed: string | undefined;
-    let stepCount = 0;
     const runtimeOperationIds: string[] = [];
 
     for (const op of ops) {
@@ -265,35 +227,49 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
         activity = mapped;
       }
 
-      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type)) {
+      const isSteeredSend = op.type === 'sendMessage' && op.metadata.turnStartTime !== undefined;
+      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type) && !isSteeredSend) {
         continue;
       }
 
       runtimeOperationIds.push(op.id);
-      stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
+      // Prefer the explicit LLM-call total; older servers only sent the
+      // execution step index, which is the best available fallback.
+      const opLlmCalls =
+        typeof op.metadata.llmCalls === 'number'
+          ? normalizeCount(op.metadata.llmCalls)
+          : normalizeCount(op.metadata.stepCount);
+      llmCalls = Math.max(llmCalls, opLlmCalls);
 
-      if (earliestStart === undefined || op.metadata.startTime < earliestStart) {
-        earliestStart = op.metadata.startTime;
+      const turnStartTime = op.metadata.turnStartTime ?? op.metadata.startTime;
+      if (earliestStart === undefined || turnStartTime < earliestStart) {
+        earliestStart = turnStartTime;
         statusSeed = op.id;
       }
     }
     return {
       activity: activity ?? 'generating',
+      llmCalls,
       operationIdsKey: runtimeOperationIds.join('|'),
       startTime: earliestStart,
       statusSeed,
-      steps: stepCount,
     };
   });
   const operationsByMessage = useChatStore((s) => s.operationsByMessage);
+  const handoffStartTime = useChatStore((s) =>
+    operationSelectors.isSteerHandoffPending(context)(s)
+      ? operationSelectors.getLatestAgentRuntimeTurnStartTime(context)(s)
+      : undefined,
+  );
+  const startTime = operationState.startTime ?? handoffStartTime;
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!operationState.startTime) return;
+    if (!startTime) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [operationState.startTime]);
+  }, [startTime]);
 
   const operationIds = useMemo(
     () => new Set(operationState.operationIdsKey.split('|').filter(Boolean)),
@@ -307,12 +283,12 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     return calculateOperationUsageMetrics(dbMessages, operationIds, operationsByMessage);
   }, [dbMessages, operationIds, operationsByMessage]);
 
-  if (!operationState.startTime) return null;
+  if (!startTime) return null;
 
   const { totalCost, totalTokens } = usageMetrics;
-  const elapsed = now - operationState.startTime;
+  const elapsed = now - startTime;
   const costLabel = t('chat:opStatusTray.cost');
-  const stepLabel = t('chat:opStatusTray.steps');
+  const llmCallsLabel = t('chat:opStatusTray.llmCalls');
   const tokenLabel = t('chat:opStatusTray.tokens', { defaultValue: 'tokens' });
   const generatingPhrases = parseStatusPhrases(
     t('opStatusTray:generatingPhrases', {
@@ -324,7 +300,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
   const randomGeneratingStatus =
     pickRotatingStatusPhrase(
       generatingPhrases,
-      operationState.statusSeed ?? String(operationState.startTime),
+      operationState.statusSeed ?? String(startTime),
       rotationStep,
     ) ?? t('chat:opStatusTray.status.generating');
   const statusText =
@@ -332,16 +308,16 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
       ? randomGeneratingStatus
       : t(`chat:opStatusTray.status.${operationState.activity}`);
 
-  // Zero-valued metrics render nothing; steps only matter for long-running
-  // multi-step tasks, so a single step stays hidden too.
-  const metrics = [
-    operationState.steps > 1
+  // Zero-valued metrics render nothing. LLM calls are the user-facing "step"
+  // metric: tool-only iterations never increment it.
+  const metricCandidates: (MetricItem | undefined)[] = [
+    operationState.llmCalls > 0
       ? {
           icon: FootprintsIcon,
-          key: 'steps',
-          label: stepLabel,
-          title: `${operationState.steps} ${stepLabel}`,
-          value: String(operationState.steps),
+          key: 'llmCalls',
+          label: llmCallsLabel,
+          title: `${operationState.llmCalls} ${llmCallsLabel}`,
+          value: String(operationState.llmCalls),
         }
       : undefined,
     totalTokens > 0
@@ -350,7 +326,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           key: 'tokens',
           label: tokenLabel,
           title: `${formatTokens(totalTokens)} ${tokenLabel}`,
-          value: formatTokens(totalTokens),
+          value: <AnimatedCount format={formatTokens} value={totalTokens} />,
         }
       : undefined,
     totalCost > 0
@@ -362,34 +338,35 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           value: formatCost(totalCost),
         }
       : undefined,
-  ].filter((item): item is MetricItem => !!item);
+  ];
+  const metrics = metricCandidates.filter((item): item is MetricItem => !!item);
   const tokenMetric = metrics.find((metric) => metric.key === 'tokens');
 
   const renderMetric = ({ icon, title, value }: MetricItem) => (
     <Tooltip title={title}>
-      <span className={styles.metric}>
-        <Icon className={styles.metricIcon} icon={icon} size={13} />
-        <span className={styles.metricValue}>{value}</span>
+      <span {...stylex.props(styles.metric)}>
+        <Icon {...stylex.props(styles.metricIcon)} icon={icon} size={13} />
+        <span {...stylex.props(styles.metricValue)}>{value}</span>
       </span>
     </Tooltip>
   );
 
   const metricPopoverContent = (
-    <Flexbox className={styles.metricPopover} gap={8}>
+    <Flexbox {...stylex.props(styles.metricPopover)} gap={8}>
       {metrics.map(({ icon, key, label, value }) => (
         <Flexbox
           horizontal
           align="center"
-          className={styles.metricPopoverRow}
+          {...stylex.props(styles.metricPopoverRow)}
           gap={20}
           justify="space-between"
           key={key}
         >
-          <span className={cx(styles.metric, styles.metricPopoverLabel)}>
-            <Icon className={styles.metricIcon} icon={icon} size={13} />
+          <span {...stylex.props(styles.metric, styles.metricPopoverLabel)}>
+            <Icon {...stylex.props(styles.metricIcon)} icon={icon} size={13} />
             <span>{label}</span>
           </span>
-          <span className={styles.metricPopoverValue}>{value}</span>
+          <span {...stylex.props(styles.metricPopoverValue)}>{value}</span>
         </Flexbox>
       ))}
     </Flexbox>
@@ -400,37 +377,37 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
       horizontal
       align="center"
       justify="space-between"
-      className={cx(
+      {...stylex.props(
         styles.container,
         topAttached && styles.containerTopAttached,
         seamless && styles.containerSeamless,
       )}
     >
-      <span className={cx(styles.metric, styles.statusMetric)}>
+      <span {...stylex.props(styles.metric, styles.statusMetric)}>
         <ActivityGlyph />
-        <span className={styles.statusText}>
-          <span className={styles.statusPhrase} key={statusText}>
+        <span {...stylex.props(styles.statusText)}>
+          <span {...stylex.props(styles.statusPhrase)} key={statusText}>
             <span className={shinyTextStyles.shinyText}>{statusText}...</span>
           </span>
         </span>
-        <span className={styles.timerValue}>{formatElapsedClockTime(elapsed)}</span>
+        <span {...stylex.props(styles.timerValue)}>{formatElapsedClockTime(elapsed)}</span>
       </span>
 
       {metrics.length > 0 && (
         <>
-          <span className={cx(styles.metricGroup, styles.metricGroupFull)}>
+          <span {...stylex.props(styles.metricGroup, styles.metricGroupFull)}>
             {metrics.map((metric, i) => (
               <Fragment key={metric.key}>
-                {i > 0 && <span className={styles.divider} />}
+                {i > 0 && <span {...stylex.props(styles.divider)} />}
                 {renderMetric(metric)}
               </Fragment>
             ))}
           </span>
           {tokenMetric && (
             <Popover content={metricPopoverContent} placement="topRight" trigger="hover">
-              <span className={cx(styles.metric, styles.compactMetric)}>
-                <Icon className={styles.metricIcon} icon={tokenMetric.icon} size={13} />
-                <span className={styles.metricValue}>{tokenMetric.value}</span>
+              <span {...stylex.props(styles.metric, styles.compactMetric)}>
+                <Icon {...stylex.props(styles.metricIcon)} icon={tokenMetric.icon} size={13} />
+                <span {...stylex.props(styles.metricValue)}>{tokenMetric.value}</span>
               </span>
             </Popover>
           )}

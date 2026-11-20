@@ -1,6 +1,10 @@
 import path from 'node:path';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
+import {
+  isSupported as isGlassSupported,
+  setWindowGlass,
+} from '@lobechat/electron-mac-sidebar-glass';
 import { type BrowserWindow, type BrowserWindowConstructorOptions, nativeTheme } from 'electron';
 
 import { buildDir } from '@/const/dir';
@@ -18,6 +22,11 @@ import {
 const logger = createLogger('core:WindowThemeManager');
 
 const MACOS_VIBRANCY = 'sidebar';
+// The AppKit sidebar material exists since macOS 26, but the desktop app only
+// adopts it from macOS 27 on; macOS 26 and older keep Electron sidebar vibrancy.
+const MACOS_GLASS_MINIMUM_MAJOR_VERSION = 27;
+// lobe-design-ignore LOBE-RAW-COLOR: Electron native colors cannot resolve CSS variables.
+const MACOS_TRANSPARENT_BACKGROUND = '#00000000';
 
 interface WindowsThemeConfig {
   backgroundColor: string;
@@ -42,6 +51,7 @@ export class WindowThemeManager {
   private readonly identifier: string;
   private browserWindow?: BrowserWindow;
   private listenerSetup = false;
+  private nativeGlassActive = false;
   private boundHandleThemeChange: () => void;
 
   constructor(identifier: string) {
@@ -51,6 +61,7 @@ export class WindowThemeManager {
 
   private getWindowsTitleBarOverlay(isDarkMode: boolean): WindowsThemeConfig['titleBarOverlay'] {
     return {
+      // lobe-design-ignore LOBE-RAW-COLOR: Electron native colors cannot resolve CSS variables.
       color: '#00000000',
       // Reduce 2px to prevent blocking the container border edge
       height: TITLE_BAR_HEIGHT - 2,
@@ -73,6 +84,7 @@ export class WindowThemeManager {
    * Cleanup theme listener when window is destroyed
    */
   cleanup(): void {
+    this.removeMacGlass();
     if (this.listenerSetup) {
       nativeTheme.off('updated', this.boundHandleThemeChange);
       this.listenerSetup = false;
@@ -160,21 +172,76 @@ export class WindowThemeManager {
     }, THEME_CHANGE_DELAY);
   }
 
-  /**
-   * Disable macOS vibrancy while fullscreen so the window remains opaque.
-   */
   handleFullscreenChange(isFullScreen: boolean): void {
     if (!isMac || !this.browserWindow || this.browserWindow.isDestroyed()) return;
 
-    logger.debug(
-      `[${this.identifier}] Updating macOS vibrancy for fullscreen state: ${isFullScreen}`,
-    );
+    logger.debug(`[${this.identifier}] Updating macOS fullscreen background: ${isFullScreen}`);
 
     try {
-      this.browserWindow.setVibrancy(isFullScreen ? null : MACOS_VIBRANCY);
+      this.applyMacFullscreenChrome(isFullScreen);
     } catch (error) {
-      logger.error(`[${this.identifier}] Failed to update macOS fullscreen vibrancy:`, error);
+      logger.error(`[${this.identifier}] Failed to update macOS fullscreen background:`, error);
     }
+  }
+
+  private opaqueBackground(): string {
+    return this.resolveIsDarkMode() ? BACKGROUND_DARK : BACKGROUND_LIGHT;
+  }
+
+  /**
+   * macOS product-version gate for the AppKit sidebar material.
+   * Electron exposes the product version (e.g. "27.2.0") via getSystemVersion().
+   */
+  private isMacGlassOSSupported(): boolean {
+    const [major = ''] = process.getSystemVersion().split('.');
+    const majorVersion = Number.parseInt(major, 10);
+    return Number.isFinite(majorVersion) && majorVersion >= MACOS_GLASS_MINIMUM_MAJOR_VERSION;
+  }
+
+  /**
+   * Replace the window material in place; transparent renderer regions expose it.
+   * Keep Electron's sidebar vibrancy as the fallback below macOS 27 or addon failure.
+   */
+  private refreshMacVibrancy(): void {
+    if (!this.browserWindow) return;
+
+    this.browserWindow.setVibrancy(null);
+    if (isGlassSupported() && this.isMacGlassOSSupported()) {
+      const applied = setWindowGlass(
+        this.browserWindow.getNativeWindowHandle(),
+        true,
+        this.resolveIsDarkMode(),
+      );
+      if (applied) {
+        this.nativeGlassActive = true;
+        return;
+      }
+      this.removeMacGlass();
+      logger.warn(`[${this.identifier}] Native glass unavailable; using sidebar vibrancy.`);
+    }
+
+    this.browserWindow.setVibrancy(MACOS_VIBRANCY);
+  }
+
+  private removeMacGlass(): void {
+    if (this.nativeGlassActive && this.browserWindow && !this.browserWindow.isDestroyed()) {
+      setWindowGlass(this.browserWindow.getNativeWindowHandle(), false, false);
+    }
+    this.nativeGlassActive = false;
+  }
+
+  private applyMacFullscreenChrome(isFullScreen: boolean): void {
+    if (!this.browserWindow) return;
+
+    if (isFullScreen) {
+      this.removeMacGlass();
+      this.browserWindow.setBackgroundColor(this.opaqueBackground());
+      this.browserWindow.setVibrancy(null);
+      return;
+    }
+
+    this.browserWindow.setBackgroundColor(MACOS_TRANSPARENT_BACKGROUND);
+    this.refreshMacVibrancy();
   }
 
   // ==================== Visual Effects ====================
@@ -204,6 +271,12 @@ export class WindowThemeManager {
         this.applyWindowsVisualEffects(isDarkMode);
       } else if (isLinux) {
         this.applyLinuxVisualEffects();
+      } else if (isMac) {
+        if (this.browserWindow.isFullScreen()) {
+          this.applyMacFullscreenChrome(true);
+        } else {
+          this.refreshMacVibrancy();
+        }
       }
     } catch (error) {
       logger.error(`[${this.identifier}] Failed to apply visual effects:`, error);

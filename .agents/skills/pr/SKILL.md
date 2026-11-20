@@ -57,12 +57,22 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 - Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`)
 - Obey the `AGENT-INSTRUCTIONS` HTML comments in that template. Keep them commented out, and do not copy them into the visible description.
 - Link related GitHub issues using magic keywords (`Fixes #123`, `Closes #123`)
-- Link Linear issues if applicable (`Fixes LOBE-xxx`)
+- Link the LobeHub task if applicable (`LobeHub task: [T-<n>](url)`)
 - Put the acceptance link (or the explicit skip reason) under **Test** in the Summary section.
 - Follow the source-label, privacy, and AI assistance rules in **PR Template** below when creating or updating a PR. Do not request prompt disclosure or block the normal PR workflow waiting for consent to publish a conversation.
 - Write the body to a temporary file and use `--body-file` to preserve formatting.
 
-### 7. Open in browser
+### 7. Link the PR to its acceptance
+
+An acceptance round published before the PR existed carries no PR, and reusing that round is correct, so nothing else ever tells the acceptance about the PR. Right after `gh pr create`, record the link through the production publish environment. If step 1 reused a known acceptance and skipped the lookup, `publish_lh` is not defined yet: run [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight) now to define and verify it.
+
+```bash
+publish_lh acceptance link-pr <acceptanceId> "$(gh pr view --json url --jq .url)"
+```
+
+Do this for each PR in a stack; they share one acceptance. Skip it when the PR states that no acceptance is needed. A later round links itself only when its `result.json` names the PR (`pullRequest`); a PR inferred from the branch is recorded on the round but never linked. If the installed CLI lacks `link-pr`, or the server rejects it as unknown, mention that in the reply instead of retrying.
+
+### 8. Open in browser
 
 `gh pr view --web`
 
@@ -154,11 +164,11 @@ cd apps/cli && bun run type-check 2>&1 | grep -iE "connect\.ts|device\.register"
 
 Filter to your touched files — this repo's standalone type-check emits pre-existing env noise (`__ELECTRON__`, `@/types/llm`, unbuilt `@lobechat/types`) that isn't yours.
 
-## PR + Linear bookkeeping
+## PR + task bookkeeping
 
-- **Each PR closes only its own layer's issues.** Server PR: `Closes LOBE-<server>`. Client PR: `Closes LOBE-<pkg> / <desktop> / <cli>`. Don't let one PR's body claim another layer's issue.
-- Both PRs are `Part of LOBE-<parent>`.
-- On PR creation, move each closed sub-issue to **In Review** (not Done) and add a completion comment — see the `linear` skill.
+- **Each PR links only its own layer's LobeHub tasks.** Server PR: `LobeHub task: [T-<server>](url)`. Client PR: the `<pkg>` / `<desktop>` / `<cli>` tasks. Don't let one PR's body claim another layer's task.
+- Both PRs are `Part of T-<parent>`.
+- On PR creation, add a completion comment to each linked subtask with `lh task comment <id> -m`, finish the rest of the stack bookkeeping, and only then set the subtasks to `paused` with `lh task edit <id> --status paused`: pausing a task interrupts its running operations, including the agent doing this bookkeeping. Complete each with `lh task complete <id>` only after merge.
 
 ## Gotchas
 

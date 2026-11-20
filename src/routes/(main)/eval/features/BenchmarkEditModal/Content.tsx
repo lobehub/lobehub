@@ -1,20 +1,11 @@
 'use client';
 
-import { Input, TextArea } from '@lobehub/ui';
-import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
-import { cssVar } from 'antd-style';
-import { type FC, useEffect, useState } from 'react';
+import { Input, TextArea, toast, useModalContext } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEvalStore } from '@/store/eval';
-
-const toIdentifier = (name: string) =>
-  name
-    .trim()
-    .toLowerCase()
-    .replaceAll(/\s+/g, '-')
-    .replaceAll(/[^\da-z-]/g, '');
 
 export interface BenchmarkEditContentProps {
   benchmark: {
@@ -23,7 +14,6 @@ export interface BenchmarkEditContentProps {
     identifier: string;
     metadata?: any;
     name: string;
-    tags?: string[];
   };
   formId: string;
   onLoadingChange?: (loading: boolean) => void;
@@ -39,28 +29,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
 
-  const [form] = Form.useForm();
-  const [identifierTouched, setIdentifierTouched] = useState(false);
   const updateBenchmark = useEvalStore((s) => s.updateBenchmark);
-
-  const nameValue = Form.useWatch('name', form);
-
-  useEffect(() => {
-    if (benchmark) {
-      form.setFieldsValue({
-        description: benchmark.description || '',
-        identifier: benchmark.identifier,
-        name: benchmark.name,
-        tags: benchmark.tags || [],
-      });
-    }
-  }, [benchmark, form]);
-
-  useEffect(() => {
-    if (!identifierTouched && nameValue) {
-      form.setFieldValue('identifier', toIdentifier(nameValue));
-    }
-  }, [nameValue, identifierTouched, form]);
 
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
@@ -68,9 +37,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       await updateBenchmark({
         description: values.description?.trim() || undefined,
         id: benchmark.id,
-        identifier: values.identifier.trim(),
         name: values.name.trim(),
-        tags: values.tags?.length > 0 ? values.tags : undefined,
       });
       toast.success(t('benchmark.edit.success'));
       close();
@@ -82,41 +49,27 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
     }
   };
 
+  const form = useForm({
+    initialValues: {
+      description: benchmark.description || '',
+      name: benchmark.name,
+    },
+    onSubmit: handleFinish,
+  });
+
   return (
-    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
-      <Form.Item
+    <Form form={form} id={formId} layout="vertical">
+      <Form.Field
         label={t('benchmark.create.name.label')}
         name="name"
-        rules={[{ message: t('benchmark.create.nameRequired'), required: true }]}
+        required={t('benchmark.create.nameRequired')}
       >
         <Input autoFocus placeholder={t('benchmark.create.name.placeholder')} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
-        label={t('benchmark.create.identifier.label')}
-        name="identifier"
-        rules={[{ message: t('benchmark.create.identifierRequired'), required: true }]}
-      >
-        <Input
-          placeholder={t('benchmark.create.identifier.placeholder')}
-          style={{ fontFamily: cssVar.fontFamilyCode }}
-          onChange={() => setIdentifierTouched(true)}
-        />
-      </Form.Item>
-
-      <Form.Item label={t('benchmark.create.description.label')} name="description">
+      <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
-      </Form.Item>
-
-      <Form.Item label={t('benchmark.create.tags.label')} name="tags" style={{ marginBottom: 0 }}>
-        <Select
-          mode="tags"
-          open={false}
-          placeholder={t('benchmark.create.tags.placeholder')}
-          style={{ width: '100%' }}
-          tokenSeparators={[',', '，', ' ']}
-        />
-      </Form.Item>
+      </Form.Field>
     </Form>
   );
 };

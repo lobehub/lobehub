@@ -44,6 +44,14 @@ export type BriefType = 'decision' | 'error' | 'insight' | 'result';
 export const NEWS_BRIEF_TYPES: BriefType[] = ['insight', 'result'];
 
 /**
+ * Brief types kept off the home unresolved feed. Run failures are not
+ * decisions: they now reach the user through the notification center and no
+ * longer mint briefs, so legacy unresolved `error` rows must not crowd
+ * "Needs you" either. They stay readable on their task.
+ */
+export const HOME_FEED_EXCLUDED_BRIEF_TYPES: BriefType[] = ['error'];
+
+/**
  * A single artifact (currently only documents) referenced from a brief.
  * Programmatically collected during topic completion, not produced by the LLM.
  */
@@ -65,10 +73,36 @@ export interface BriefAgentSignalMetadata {
   nightlySelfReview?: unknown;
 }
 
+/**
+ * Goal-owned Brief metadata: what a goal brief stands for, so answering it from
+ * the inbox acts on the goal and the goal settles it when answered elsewhere.
+ */
+export interface BriefGoalMetadata {
+  /** Present on a decision brief — the gate it mirrors. */
+  decisionId?: string;
+  goalId: string;
+  goalTitle: string;
+  /** What the brief is for. */
+  kind: 'decision' | 'signOff';
+  /** The action the goal advises — set apart among the brief's buttons. */
+  recommendedAction?: string;
+  /** Present on a held batch release: the review report the decision is made in. */
+  reviewAcceptanceId?: string;
+  /** Present on a sign-off brief — the Goal-level acceptance to sign. */
+  signOffAcceptanceId?: string;
+}
+
 /** Freeform Brief metadata namespaced by feature owner. */
 export interface BriefMetadata {
   /** Other feature namespaces remain possible without schema churn. */
   [key: string]: unknown;
   /** Agent Signal extension metadata. */
   agentSignal?: BriefAgentSignalMetadata;
+  goal?: BriefGoalMetadata;
+  /**
+   * `llm_generation_tracing` row id of the generation that produced this brief's
+   * title/summary. Set for LLM-synthesized briefs so the user's resolve action
+   * (approve / feedback / ignore) can be reported back as implicit feedback.
+   */
+  tracingId?: string;
 }

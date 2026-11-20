@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -101,8 +103,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 11px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   `,
   sort: css`
     cursor: pointer;
@@ -148,7 +148,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     height: 28px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 11.5px;
@@ -171,7 +171,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
     flex: none;
     height: 44px;
-    padding-inline: 16px 12px;
+    padding-inline: ${densityVars.cardPadding} 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

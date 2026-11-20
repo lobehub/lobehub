@@ -7,12 +7,20 @@ import type {
   ASRResponse,
   ChatMethodOptions,
   ChatStreamPayload,
+  CheckCredentialsResult,
   CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
   CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResult,
+  DecisionOptions,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
   Embeddings,
   EmbeddingsOptions,
   EmbeddingsPayload,
@@ -21,10 +29,14 @@ import type {
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   ModelRequestOptions,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+  PollMusicStatusResult,
   PollVideoStatusResult,
   PullModelParams,
   TextToSpeechOptions,
   TextToSpeechPayload,
+  TextToSpeechResponse,
   VideoGenerationCapabilities,
   VideoPollingRoute,
 } from '../types';
@@ -32,15 +44,41 @@ import type {
 export interface LobeRuntimeAI {
   baseURL?: string;
   chat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<Response>;
+
+  /**
+   * Verify the configured key without generating anything (e.g. a balance endpoint).
+   * Used by the provider settings checker for providers that serve no chat model
+   * (`settings.checkMode: 'credentials'`). Throws an `AgentRuntimeError` on a rejected key.
+   */
+  checkCredentials?: () => Promise<CheckCredentialsResult>;
+
   createImage?: (
     payload: CreateImagePayload,
     options?: CreateImageMethodOptions,
   ) => Promise<CreateImageResponse>;
 
+  /**
+   * Generate a song. Synchronous providers return `success` with tracks; asynchronous ones
+   * return `pending` with a task id unless `options.waitForCompletion` is set.
+   */
+  createMusic?: (
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ) => Promise<CreateMusicResult>;
+
   createVideo?: (
     payload: CreateVideoPayload,
     options?: CreateVideoMethodOptions,
   ) => Promise<CreateVideoResult>;
+
+  /**
+   * Answer typed questions with probabilities through a decision model.
+   * Only implemented by providers that serve decision models.
+   */
+  decide?: <Q extends DecisionQuestions>(
+    payload: DecisionPayload<Q>,
+    options?: DecisionOptions,
+  ) => Promise<DecisionResponse<Q>>;
 
   embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
 
@@ -54,6 +92,14 @@ export interface LobeRuntimeAI {
   handleCreateVideoWebhook?: (
     payload: HandleCreateVideoWebhookPayload,
   ) => Promise<HandleCreateVideoWebhookResult>;
+
+  /** Query an asynchronous music task once, for `createMusic` results that are `pending`. */
+  handlePollMusicStatus?: (
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) => Promise<PollMusicStatusResult>;
 
   handlePollVideoStatus?: (
     inferenceId: string,
@@ -74,7 +120,7 @@ export interface LobeRuntimeAI {
   textToSpeech?: (
     payload: TextToSpeechPayload,
     options?: TextToSpeechOptions,
-  ) => Promise<ArrayBuffer>;
+  ) => Promise<TextToSpeechResponse>;
 
   transcribe?: (payload: ASRPayload, options?: ASROptions) => Promise<ASRResponse>;
 }
@@ -100,5 +146,8 @@ export abstract class LobeOpenAICompatibleRuntime {
 
   transcribe?(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse>;
 
-  textToSpeech?(payload: TextToSpeechPayload, options?: TextToSpeechOptions): Promise<ArrayBuffer>;
+  textToSpeech?(
+    payload: TextToSpeechPayload,
+    options?: TextToSpeechOptions,
+  ): Promise<TextToSpeechResponse>;
 }

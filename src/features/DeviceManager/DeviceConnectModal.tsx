@@ -2,9 +2,7 @@
 
 import { DOWNLOAD_URL } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
 import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,11 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import CommandLine from '@/components/CommandLine';
 import ImperativeModal from '@/components/ImperativeModal';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
     margin-block-start: 4px;
-    padding-block-start: 16px;
+    padding-block-start: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   index: css`

@@ -1,19 +1,8 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  titleInput: css`
-    &.ant-input {
-      resize: none;
-
-      min-height: auto;
-      padding: 0;
-
-      font-size: 24px;
-      font-weight: 600;
-      line-height: 1.3;
-    }
-  `,
-
   breadcrumb: css`
     overflow: hidden;
     min-width: 0;
@@ -33,15 +22,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       min-width: 0;
     }
 
-    li.ant-breadcrumb-separator {
+    li > [aria-hidden='true'] {
       overflow: visible;
       flex-shrink: 0;
       min-width: auto;
       margin-inline: 2px;
     }
 
-    .ant-breadcrumb-link,
-    .ant-breadcrumb-link > a {
+    li > :not([aria-hidden='true']) {
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -71,7 +59,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
      * faces in the cards sit on one vertical line, the cards just run wider.
      */
     padding-block: 5px;
-    padding-inline-start: 12px;
+    padding-inline-start: ${densityVars.contentGap};
 
     &::before {
       content: '';
@@ -155,7 +143,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-inline-end: 8px;
   `,
 
-  agentAuthorName: css`
+  profileAuthorName: css`
     cursor: pointer;
     transition: color 0.15s ease;
 

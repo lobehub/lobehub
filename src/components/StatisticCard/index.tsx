@@ -1,47 +1,33 @@
 import { type BlockProps } from '@lobehub/ui';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui/base-ui';
-import { Statistic } from 'antd';
-import { createStaticStyles, responsive } from 'antd-style';
+import { Block, Flexbox, Spin, Statistic, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    ${responsive.sm} {
-      flex-wrap: wrap;
-      margin-block-end: 8px;
-    }
-  `,
-  statistic: css`
-    .${prefixCls}-statistic-content-value-int, .${prefixCls}-statistic-content-value-decimal {
-      font-size: 24px;
-      font-weight: bold;
-      line-height: 1.2;
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    flex: 1;
-
-    font-size: 16px;
-    font-weight: 500;
-    line-height: 32px;
-    color: ${cssVar.colorText};
-
-    ${responsive.sm} {
-      font-size: 14px;
-      line-height: 16px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  header: {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: { default: null, [media.sm]: 'wrap' },
+    gap: 8,
+    justifyContent: 'space-between',
+    marginBlockEnd: { default: null, [media.sm]: 8 },
+  },
+  statistic: {
+    fontWeight: 'bold',
+    lineHeight: 1.2,
+  },
+  title: {
+    color: cssVar.colorText,
+    flex: '1',
+    fontSize: { default: 16, [media.sm]: 14 },
+    fontWeight: 500,
+    lineHeight: { default: '32px', [media.sm]: '16px' },
+    overflow: 'hidden',
+  },
+});
 
 export interface StatisticConfig {
   description?: ReactNode;
@@ -88,8 +74,8 @@ const StatisticCard = memo<StatisticCardProps>(
         style={style}
         variant={variant}
       >
-        <div className={styles.header}>
-          <div className={styles.title}>
+        <div {...stylex.props(styles.header)}>
+          <div {...stylex.props(styles.title)}>
             {typeof title === 'string' ? (
               <Text
                 as={'h2'}
@@ -113,10 +99,10 @@ const StatisticCard = memo<StatisticCardProps>(
         {statistic && (
           <Flexbox gap={16} style={statistic.style}>
             <Statistic
-              className={styles.statistic}
+              classNames={{ value: stylex.props(styles.statistic).className }}
               precision={statistic.precision}
               prefix={statistic.prefix}
-              styles={statistic.valueStyle ? { content: statistic.valueStyle } : undefined}
+              styles={statistic.valueStyle ? { value: statistic.valueStyle } : undefined}
               suffix={statistic.suffix}
               value={statistic.value}
             />

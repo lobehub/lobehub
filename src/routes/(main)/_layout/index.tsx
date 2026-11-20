@@ -2,7 +2,7 @@
 
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { Flexbox } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -25,6 +25,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
+import ClientLlmWaitResume from './ClientLlmWaitResume';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
@@ -50,9 +51,11 @@ const Layout: FC = () => {
         <DndContextWrapper>
           <Flexbox
             horizontal
-            className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
             height={showCloudPromotion ? `calc(100% - ${BANNER_HEIGHT}px)` : '100%'}
             width={'100%'}
+            className={
+              stylex.props(isPWA ? styles.mainContainerPWA : styles.mainContainer).className
+            }
           >
             <NavPanelShell />
             <DesktopLayoutContainer>
@@ -68,6 +71,7 @@ const Layout: FC = () => {
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
           <GatewayMuxWarmup />
+          <ClientLlmWaitResume />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />

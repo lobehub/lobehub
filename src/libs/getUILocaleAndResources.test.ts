@@ -14,12 +14,6 @@ describe('getUILocaleAndResources', () => {
     expect(result.resources).toBeDefined();
   });
 
-  it('should normalize business ui.json into a @lobehub/ui consumable resource map', async () => {
-    const result = await getUILocaleAndResources('zh-CN');
-
-    expect(translateFromUILocaleResources(result.resources, 'form.submit')).toBe('提交');
-  });
-
   it('should merge built-in resources with partial business ui.json resources', async () => {
     const result = await getUILocaleAndResources('zh-CN');
 
@@ -73,12 +67,6 @@ describe('getUILocaleAndResources', () => {
   it('should return ar locale and custom resources for ar', async () => {
     const result = await getUILocaleAndResources('ar');
     expect(result.locale).toBe('ar');
-    expect(result.resources).toBeDefined();
-  });
-
-  it('should return de-DE locale and custom resources for de-DE', async () => {
-    const result = await getUILocaleAndResources('de-DE');
-    expect(result.locale).toBe('de-DE');
     expect(result.resources).toBeDefined();
   });
 

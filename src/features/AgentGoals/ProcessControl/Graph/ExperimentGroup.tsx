@@ -1,10 +1,11 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
+import { KIND_ICON } from '../shared';
 import { experimentStatusVisual } from './experimentStatus';
 import type { GraphNodeData } from './GraphNode';
 
@@ -25,8 +26,8 @@ const styles = createStaticStyles(({ css }) => ({
     background: color-mix(in srgb, ${cssVar.colorInfo} 3%, transparent);
   `,
   header: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px 12px 0 0;
 
@@ -40,11 +41,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** An expanded answer encloses its work without replacing the surrounding map. */
+/** An expanded container encloses its work without replacing the surrounding map. */
 const ExperimentGroup = ({ data }: NodeProps) => {
-  const { view, memberCount, onToggle, onInspect, onEnter } = data as ExperimentGroupData;
+  const { containerStatus, view, memberCount, onToggle, onInspect, onEnter, kind } =
+    data as ExperimentGroupData;
   const { t } = useTranslation('chat');
-  const status = experimentStatusVisual(view.node.status);
+  const nodeStatus = containerStatus ?? view.node.status;
+  const status = experimentStatusVisual(nodeStatus);
+  // A batch folds like an experiment but is not one: it wears its own icon and
+  // the batch label, so the two containers never read as the same thing.
+  const isBatch = kind === 'batch';
+  const ContainerIcon = KIND_ICON[kind ?? view.node.kind] ?? FlaskConical;
   return (
     <div className={styles.frame}>
       <Handle position={Position.Top} type={'target'} />
@@ -68,9 +75,11 @@ const ExperimentGroup = ({ data }: NodeProps) => {
           }}
         >
           <Icon icon={ChevronDown} size={14} />
-          <Icon icon={FlaskConical} size={14} />
+          <Icon icon={ContainerIcon} size={14} />
           <span className={styles.title}>
-            {t('goalExperiment.number', { number: view.seq })} · {view.node.title}
+            {isBatch
+              ? `${t('goalProcess.kind.batch')} · ${view.node.title}`
+              : `${t('goalExperiment.number', { number: view.seq })} · ${view.node.title}`}
           </span>
         </Button>
         <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
@@ -101,7 +110,7 @@ const ExperimentGroup = ({ data }: NodeProps) => {
         <Flexbox horizontal align={'center'} gap={5}>
           <Icon color={status.color} icon={status.icon} size={13} />
           <Text fontSize={12} style={{ color: status.color }}>
-            {t(`goalExperiment.status.${view.node.status}`)}
+            {t(`goalExperiment.status.${nodeStatus}`)}
           </Text>
         </Flexbox>
         <Text fontSize={12} type={'secondary'}>

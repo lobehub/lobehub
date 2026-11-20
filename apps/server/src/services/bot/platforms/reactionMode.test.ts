@@ -25,7 +25,6 @@ describe('normalizeBotReactionMode', () => {
     expect(normalizeBotReactionMode(true)).toBe(DEFAULT_BOT_REACTION_MODE);
   });
 });
-
 describe('shouldApplyReaction', () => {
   it('never touches reactions under `none`', () => {
     expect(shouldApplyReaction('none', 'received')).toBe(false);

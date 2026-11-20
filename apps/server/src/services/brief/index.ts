@@ -5,6 +5,7 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 export interface AgentAvatarInfo {
@@ -251,6 +252,66 @@ export class BriefService {
       }
     }
 
+    // Implicit feedback for the LLM that synthesized this brief. Only briefs
+    // carrying a `tracingId` (task-synthesized ones) participate — others (e.g.
+    // signal briefs) simply have nothing to score.
+    await this.recordBriefFeedback(brief, options);
+
     return brief;
+  }
+
+  /**
+   * Translate the user's resolve action into a feedback signal against the
+   * brief's source generation. This is a proxy for task-result satisfaction,
+   * not a direct rating of the summary prompt. The write is awaited, but
+   * failures are swallowed so they cannot break brief resolution.
+   */
+  private async recordBriefFeedback(
+    brief: BriefItem,
+    options?: BriefResolveOptions,
+  ): Promise<void> {
+    const tracingId = brief.metadata?.tracingId;
+    if (!tracingId) return;
+
+    const action = options?.action;
+    const { signal, source } = ((): {
+      signal: 'positive' | 'negative' | 'neutral';
+      source: string;
+    } => {
+      switch (action) {
+        case 'approve': {
+          return { signal: 'positive', source: 'brief_approved' };
+        }
+        case 'feedback': {
+          return { signal: 'negative', source: 'brief_feedback' };
+        }
+        case 'ignore': {
+          return { signal: 'negative', source: 'brief_ignored' };
+        }
+        // acknowledge / retry / dismiss / unknown — neither a clear accept nor
+        // reject of the brief's content.
+        default: {
+          return { signal: 'neutral', source: `brief_${action ?? 'resolved'}` };
+        }
+      }
+    })();
+
+    try {
+      await getLLMGenerationTracingService().recordFeedback(
+        this.userId,
+        tracingId,
+        {
+          data: {
+            briefType: brief.type,
+            hasComment: !!options?.comment,
+          },
+          signal,
+          source,
+        },
+        this.workspaceId,
+      );
+    } catch (error) {
+      console.warn('[brief:resolve] recordFeedback failed', error);
+    }
   }
 }

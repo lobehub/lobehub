@@ -4,7 +4,11 @@ import type {
   ContextBuildInput,
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
-import { ToolResolver, type ToolsEngine } from '@lobechat/context-engine';
+import {
+  ToolResolver,
+  type ToolsEngine,
+  tryCountRequestPayloadTokens,
+} from '@lobechat/context-engine';
 import type { MessageMetadata } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
 import { dedupeBy } from '@lobechat/utils';
@@ -76,6 +80,9 @@ export class ClientContextBuilder implements ContextBuilder {
       {
         agentId: effectiveAgentId || undefined,
         additionalContexts: input.payload.additionalContexts,
+        attachmentPreviewFileIds: input.payload.attachmentPreviewFileIds,
+        discoveryManifests:
+          input.state.operationToolSet?.manifestMap ?? input.state.toolManifestMap,
         groupId,
         messages,
         model: input.model,
@@ -97,6 +104,11 @@ export class ClientContextBuilder implements ContextBuilder {
     const { messages: preparedMessages = [], ...params } = prepared.params;
 
     return {
+      // The client transport sends these messages and `params.tools` as-is.
+      contextAccounting: tryCountRequestPayloadTokens({
+        messages: preparedMessages,
+        tools: params.tools,
+      }),
       messages: preparedMessages,
       modelParameters: {
         options: prepared.options,

@@ -1,9 +1,16 @@
 'use client';
 
-import { type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Icon, Popover } from '@lobehub/ui';
-import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Popover,
+  Select,
+  Switch,
+  Tabs,
+} from '@lobehub/ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
@@ -14,7 +21,7 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useHeaderActionSize } from '@/styles/density';
 
 import type { AgentGroupBy, AgentListViewOptions, AgentOrderBy } from './listViewOptions';
 
@@ -32,7 +39,8 @@ interface ListConfigProps {
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     form: css`
-      label {
+      label,
+      label * {
         font-size: 13px !important;
         color: ${cssVar.colorTextSecondary} !important;
       }
@@ -43,7 +51,9 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const ListConfig = memo<ListConfigProps>(
   ({ options, setOptions, setViewMode, showAuthor, viewMode }) => {
     const [open, setOpen] = useState(false);
+    const form = useForm();
     const { t } = useTranslation('common');
+    const headerActionSmallSize = useHeaderActionSize(true);
 
     const groupingOptions = useMemo<Array<{ label: string; value: AgentGroupBy }>>(
       () => [
@@ -51,6 +61,7 @@ const ListConfig = memo<ListConfigProps>(
         ...(showAuthor
           ? [{ label: t('agentViewAll.groupBy.author'), value: 'author' as const }]
           : []),
+        { label: t('agentViewAll.groupBy.folder'), value: 'folder' as const },
         { label: t('agentViewAll.groupBy.label'), value: 'label' },
       ],
       [showAuthor, t],
@@ -66,7 +77,7 @@ const ListConfig = memo<ListConfigProps>(
       [showAuthor, t],
     );
 
-    const formItems: FormItemProps[] = [
+    const formItems: FormFieldProps[] = [
       {
         children: (
           <Select
@@ -138,12 +149,12 @@ const ListConfig = memo<ListConfigProps>(
         />
         <Form
           className={styles.form}
+          form={form}
           items={formItems}
           itemsType={'flat'}
-          size={'small'}
           variant={'borderless'}
           styles={{
-            item: { padding: 0 },
+            item: { paddingBlock: 4, paddingInline: 0 },
           }}
         />
       </Flexbox>
@@ -158,7 +169,7 @@ const ListConfig = memo<ListConfigProps>(
         trigger={['click']}
         onOpenChange={setOpen}
       >
-        <ActionIcon icon={Settings2Icon} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+        <ActionIcon icon={Settings2Icon} size={headerActionSmallSize} />
       </Popover>
     );
   },

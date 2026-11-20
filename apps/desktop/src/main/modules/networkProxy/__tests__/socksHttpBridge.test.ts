@@ -81,7 +81,7 @@ describe('startSocksHttpBridge', () => {
     bridge = await startSocksHttpBridge(socksConfig);
 
     const response = await request(`http://127.0.0.1:${targetPort}/`, {
-      dispatcher: new ProxyAgent({ uri: bridge.url }),
+      dispatcher: new ProxyAgent({ proxyTunnel: true, uri: bridge.url }),
     });
 
     expect(response.statusCode).toBe(200);
@@ -94,7 +94,9 @@ describe('startSocksHttpBridge', () => {
     const { origin } = new URL(bridge.url);
 
     await expect(
-      request(`http://127.0.0.1:${targetPort}/`, { dispatcher: new ProxyAgent({ uri: origin }) }),
+      request(`http://127.0.0.1:${targetPort}/`, {
+        dispatcher: new ProxyAgent({ proxyTunnel: true, uri: origin }),
+      }),
     ).rejects.toThrow(/407/);
     expect(destinations).toEqual([]);
   });

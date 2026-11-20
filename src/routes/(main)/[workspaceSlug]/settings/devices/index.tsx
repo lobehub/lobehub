@@ -1,13 +1,14 @@
 'use client';
 
 import type { DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tabs } from '@lobehub/ui/base-ui';
-import { LockIcon, RefreshCwIcon, TerminalIcon, UsersIcon } from 'lucide-react';
+import { Icon, Tabs } from '@lobehub/ui';
+import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams, useSearchParams } from 'react-router';
 
-import { DeviceConnectModal, DeviceManager, useDeviceList } from '@/features/DeviceManager';
+import { DeviceConnectModal, DeviceDetailPage, DeviceManager } from '@/features/DeviceManager';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 /**
  * Workspace device settings: two pools behind tabs —
@@ -15,21 +16,44 @@ import { DeviceConnectModal, DeviceManager, useDeviceList } from '@/features/Dev
  * - Private: the caller's own private enrollments in this workspace.
  * The tab also parameterises the connect wizard, so a device enrolled from the
  * Private tab registers as private (`lh connect … --private`).
+ * The tab lives in `?visibility=` so leaving a device's detail page
+ * (`devices/:sub`) lands back on the tab that device belongs to.
  */
 const WorkspaceDevicesSetting = memo(() => {
   const { t } = useTranslation('setting');
   const [open, setOpen] = useState(false);
-  const [visibility, setVisibility] = useState<DeviceVisibility>('public');
+  const { sub: deviceId } = useParams<{ sub?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const visibility: DeviceVisibility =
+    searchParams.get('visibility') === 'private' ? 'private' : 'public';
+  const navigate = useWorkspaceAwareNavigate();
 
-  // The connect + refresh actions sit beside the tabs (same header pattern as
-  // the workspace credential page). Shares DeviceManager's SWR entry, so
-  // `mutate` refreshes the list it renders.
-  const { isValidating, mutate } = useDeviceList();
+  const setVisibility = (next: DeviceVisibility) =>
+    setSearchParams(next === 'private' ? { visibility: next } : {}, { replace: true });
+
+  if (deviceId)
+    return (
+      <DeviceDetailPage
+        deviceId={deviceId}
+        scope={'workspace'}
+        onBack={(device) =>
+          navigate(
+            (device?.visibility ?? visibility) === 'private'
+              ? '/settings/devices?visibility=private'
+              : '/settings/devices',
+          )
+        }
+      />
+    );
 
   return (
     <>
-      <Flexbox gap={16}>
-        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+      {/* DeviceManager owns the refresh + connect toolbar; the tabs fill its
+          leading slot (same header pattern as the workspace credential page). */}
+      <DeviceManager
+        scope={'workspace'}
+        visibility={visibility}
+        toolbarLeading={
           <Tabs
             activeKey={visibility}
             items={[
@@ -46,30 +70,16 @@ const WorkspaceDevicesSetting = memo(() => {
             ]}
             onChange={(key) => setVisibility(key as DeviceVisibility)}
           />
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Button
-              icon={<Icon icon={RefreshCwIcon} />}
-              loading={isValidating}
-              title={t('devices.actions.refresh')}
-              onClick={() => mutate()}
-            />
-            <Button
-              icon={<Icon icon={TerminalIcon} />}
-              type={'primary'}
-              onClick={() => setOpen(true)}
-            >
-              {t('devices.empty.methodCli.title')}
-            </Button>
-          </Flexbox>
-        </Flexbox>
-
-        <DeviceManager
-          key={visibility}
-          scope={'workspace'}
-          visibility={visibility}
-          onConnect={() => setOpen(true)}
-        />
-      </Flexbox>
+        }
+        onConnect={() => setOpen(true)}
+        onOpenDevice={(id) =>
+          navigate(
+            `/settings/devices/${encodeURIComponent(id)}${
+              visibility === 'private' ? '?visibility=private' : ''
+            }`,
+          )
+        }
+      />
 
       <DeviceConnectModal
         open={open}

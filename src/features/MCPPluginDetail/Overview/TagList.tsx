@@ -1,19 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 
 import { Link } from '@/libs/router';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     tag: css`
       margin: 0;
       padding-block: 4px;
-      padding-inline: 12px;
+      padding-inline: ${densityVars.contentGap};
       border-radius: 16px;
 
       color: ${cssVar.colorTextSecondary};

@@ -8,6 +8,7 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 
 const {
   mockCreateVideo,
+  mockFillVideoPricingDefaults,
   mockFindPreviousGeneration,
   mockFindUserById,
   mockGenerationTopicFindById,
@@ -26,6 +27,9 @@ const {
       generationBatches: {
         findFirst: vi.fn(),
       },
+      generations: {
+        findMany: vi.fn(),
+      },
     },
     transaction: mockTransaction,
   };
@@ -33,6 +37,7 @@ const {
   const mockAfter = vi.fn(function (cb: () => void) {
     return cb();
   });
+  const mockFillVideoPricingDefaults = vi.fn(async ({ params }: { params: unknown }) => params);
   const mockAppEnv = {
     APP_URL: 'https://app.example.com',
     VIDEO_GENERATION_PREFER_WEBHOOK: false,
@@ -47,6 +52,7 @@ const {
   const mockResolveBusinessModelMapping = vi.fn();
   return {
     mockCreateVideo,
+    mockFillVideoPricingDefaults,
     mockFindPreviousGeneration,
     mockFindUserById,
     mockGenerationTopicFindById,
@@ -112,8 +118,8 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
     ]
   ) => mockIsLobeHubModelAvailable(...args),
 }));
-vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
-  getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
+vi.mock('@/server/services/generation/videoPricingDefaults', () => ({
+  fillVideoPricingDefaults: mockFillVideoPricingDefaults,
 }));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: (cb: () => void) => mockAfter(cb),
@@ -198,6 +204,15 @@ function setupMocks() {
 // ---- import router AFTER mocks are set up ----
 
 const { videoRouter } = await import('../video');
+
+const compatibleVideoEditInput = (): Parameters<
+  ReturnType<typeof videoRouter.createCaller>['createVideo']
+>[0] => ({
+  ...defaultInput,
+  model: 'gemini-omni-1.1-flash',
+  previousGenerationId: 'source-generation',
+  provider: 'google',
+});
 
 // ---- tests ----
 
@@ -370,12 +385,7 @@ describe('videoRouter', () => {
       });
 
       const caller = videoRouter.createCaller(mockCtx);
-      await caller.createVideo({
-        ...defaultInput,
-        model: 'gemini-omni-1.1-flash',
-        previousGenerationId: 'source-generation',
-        provider: 'google',
-      });
+      await caller.createVideo(compatibleVideoEditInput());
 
       expect(mockCreateVideo).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -420,12 +430,7 @@ describe('videoRouter', () => {
       });
 
       const caller = videoRouter.createCaller(mockCtx);
-      await caller.createVideo({
-        ...defaultInput,
-        model: 'gemini-omni-1.1-flash',
-        previousGenerationId: 'source-generation',
-        provider: 'google',
-      });
+      await caller.createVideo(compatibleVideoEditInput());
 
       expect(mockFindTask).toHaveBeenCalledWith('source-task');
       expect(mockCreateVideo).toHaveBeenCalledWith(
@@ -468,14 +473,7 @@ describe('videoRouter', () => {
 
       const caller = videoRouter.createCaller(mockCtx);
 
-      await expect(
-        caller.createVideo({
-          ...defaultInput,
-          model: 'gemini-omni-1.1-flash',
-          previousGenerationId: 'source-generation',
-          provider: 'google',
-        }),
-      ).rejects.toMatchObject({
+      await expect(caller.createVideo(compatibleVideoEditInput())).rejects.toMatchObject({
         code: 'BAD_REQUEST',
         message: 'Previous video generation cannot be edited with the selected model',
       });
@@ -658,6 +656,36 @@ describe('videoRouter', () => {
       expect(chargeBeforeGenerate).toHaveBeenCalledWith(expect.objectContaining({ spendOrigin }));
     });
 
+    it('prices and generates with the model defaults the request omitted', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      mockFillVideoPricingDefaults.mockImplementationOnce(async ({ params }) => ({
+        ...(params as object),
+        duration: 5,
+        resolution: '768P',
+      }));
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockFillVideoPricingDefaults).toHaveBeenCalledWith(
+        expect.objectContaining({ params: defaultInput.params }),
+      );
+      expect(chargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ duration: 5, resolution: '768P' }),
+          providerParams: expect.objectContaining({ duration: 5, resolution: '768P' }),
+        }),
+      );
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ duration: 5, resolution: '768P' }),
+        }),
+        expect.anything(),
+      );
+    });
+
     it('should return error batch when pre-charge fails', async () => {
       setupMocks();
       const { chargeBeforeGenerate } =
@@ -672,6 +700,31 @@ describe('videoRouter', () => {
 
       expect(result).toEqual({ error: 'insufficient_balance' });
       // Should not proceed to createVideo
+      expect(mockCreateVideo).not.toHaveBeenCalled();
+    });
+    it('should link error batch generations to their errored async task', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      // The billing layer links the generation to its errored async task after
+      // inserting it, so the row it returns carries no asyncTaskId.
+      vi.mocked(chargeBeforeGenerate).mockResolvedValueOnce({
+        errorBatch: {
+          data: {
+            batch: { id: 'batch-err' } as any,
+            generations: [{ asyncTaskId: null, id: 'gen-err' } as any],
+          },
+          success: true,
+        },
+      });
+      mockServerDB.query.generations.findMany.mockResolvedValueOnce([
+        { asyncTaskId: 'async-err', id: 'gen-err' },
+      ]);
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.createVideo(defaultInput);
+
+      expect(result.data?.generations?.[0]).toEqual({ asyncTaskId: 'async-err', id: 'gen-err' });
       expect(mockCreateVideo).not.toHaveBeenCalled();
     });
   });
@@ -720,6 +773,14 @@ describe('videoRouter', () => {
       ]);
       expect(mockGetVideoAvgLatencies).toHaveBeenCalledOnce();
       expect(mockGetVideoAvgLatencies).toHaveBeenCalledWith(models);
+    });
+  });
+
+  describe('getVideoFreeQuota', () => {
+    it('reports no free quota for released clients that still query it', async () => {
+      const caller = videoRouter.createCaller(mockCtx);
+
+      await expect(caller.getVideoFreeQuota({ model: 'model-1' })).resolves.toBeNull();
     });
   });
 });

@@ -3,7 +3,10 @@ import type {
   HeterogeneousProviderBindingRuntime,
   ServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
-import type { ServerDefaultHeterogeneousRelayInvocation } from '@lobechat/types';
+import type {
+  ServerDefaultHeterogeneousModelDescriptor,
+  ServerDefaultHeterogeneousRelayInvocation,
+} from '@lobechat/types';
 
 import {
   callLambdaMutation,
@@ -65,6 +68,16 @@ export const beginServerDefaultOperation = async (
   );
   return { ...result, endpoint: server.serverUrl.replace(/\/$/, '') };
 };
+
+export const describeServerDefaultModel = async (
+  auth: RemoteServerAuth,
+  input: { agentType: ServerDefaultHeterogeneousAgentType; model: string },
+): Promise<ServerDefaultHeterogeneousModelDescriptor> =>
+  callLambdaMutation<ServerDefaultHeterogeneousModelDescriptor>(
+    await getAuthenticatedServer(auth),
+    'aiAgent.describeServerDefaultHeterogeneousModel',
+    input,
+  );
 
 export const getServerDefaultEndpoint = async (auth: RemoteServerAuth): Promise<string> =>
   (await getAuthenticatedServer(auth)).serverUrl.replace(/\/$/, '');

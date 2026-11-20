@@ -376,7 +376,7 @@ describe('OidcClientModel', () => {
     const redirectUris = ['https://dc.lobehub.com/api/auth/oauth2/callback/lobehub'];
 
     it('should create a confidential client that can run the authorization code flow', async () => {
-      const { client, secret } = await oidcClientModel.create({
+      const { client } = await oidcClientModel.create({
         name: 'Develop Center',
         redirectUris,
         type: 'web',
@@ -388,27 +388,39 @@ describe('OidcClientModel', () => {
       expect(client.redirectUris).toEqual(redirectUris);
       expect(client.tokenEndpointAuthMethod).toBe('client_secret_post');
       expect(client.isFirstParty).toBe(false);
-      expect(secret).toMatch(/^lcs_[\w-]{43}$/);
     });
 
-    it('should store the secret encrypted rather than in plaintext', async () => {
-      const { client, secret } = await oidcClientModel.create({
+    it('should not issue a secret at creation unless asked; the owner generates it on demand', async () => {
+      const result = await oidcClientModel.create({
         name: 'Develop Center',
         redirectUris,
         type: 'web',
       });
 
+      expect(result.secret).toBeUndefined();
+      expect(result.client.clientSecret).toBeNull();
+    });
+
+    it('should issue the secret at creation when asked, stored encrypted', async () => {
+      const { client, secret } = await oidcClientModel.create({
+        issueSecret: true,
+        name: 'Develop Center',
+        redirectUris,
+        type: 'web',
+      });
+
+      expect(secret).toMatch(/^lcs_[\w-]{43}$/);
       expect(client.clientSecret).not.toBe(secret);
 
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-      const { plaintext, wasAuthentic } = await gateKeeper.decrypt(client.clientSecret!);
+      const { plaintext } = await gateKeeper.decrypt(client.clientSecret!);
 
-      expect(wasAuthentic).toBe(true);
       expect(plaintext).toBe(secret);
     });
 
     it('should not give a device app a secret or redirect uris', async () => {
       const { client, secret } = await oidcClientModel.create({
+        issueSecret: true,
         name: 'My CLI',
         redirectUris,
         type: 'device',
@@ -428,13 +440,31 @@ describe('OidcClientModel', () => {
         type: 'web',
       });
 
+    it("should issue a web app's first secret, stored encrypted rather than in plaintext", async () => {
+      const { client } = await createWebApp();
+
+      const secret = await oidcClientModel.rotateSecret(client.id);
+
+      expect(secret).toMatch(/^lcs_[\w-]{43}$/);
+
+      const stored = await oidcClientModel.findById(client.id);
+      expect(stored.clientSecret).not.toBe(secret);
+
+      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+      const { plaintext, wasAuthentic } = await gateKeeper.decrypt(stored.clientSecret!);
+
+      expect(wasAuthentic).toBe(true);
+      expect(plaintext).toBe(secret);
+    });
+
     it('should replace the stored secret and return the new plaintext', async () => {
-      const { client, secret } = await createWebApp();
+      const { client } = await createWebApp();
+      const first = await oidcClientModel.rotateSecret(client.id);
 
       const rotated = await oidcClientModel.rotateSecret(client.id);
 
       expect(rotated).toMatch(/^lcs_[\w-]{43}$/);
-      expect(rotated).not.toBe(secret);
+      expect(rotated).not.toBe(first);
 
       const stored = await oidcClientModel.findById(client.id);
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -453,12 +483,14 @@ describe('OidcClientModel', () => {
 
     it("should not rotate another user's app", async () => {
       const { client } = await createWebApp();
+      await oidcClientModel.rotateSecret(client.id);
+      const before = await oidcClientModel.findById(client.id);
       const otherModel = new OidcClientModel(serverDB, otherUserId);
 
       expect(await otherModel.rotateSecret(client.id)).toBeUndefined();
 
       const stored = await oidcClientModel.findById(client.id);
-      expect(stored.clientSecret).toBe(client.clientSecret);
+      expect(stored.clientSecret).toBe(before.clientSecret);
     });
   });
 

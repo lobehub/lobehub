@@ -1,19 +1,30 @@
 import type { HeteroSessionDigest } from '@lobechat/types';
 import { ClaudeCode, Codex } from '@lobehub/icons';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Checkbox, Spin, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Button,
+  Checkbox,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  Spin,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { Check, RotateCcw, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { baseName, fmtTokens, type ImportRowState, selectable, type SessionStatus } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadius};
 
     &:hover {

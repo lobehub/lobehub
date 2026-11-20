@@ -1,18 +1,17 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Check, ChevronDown, ChevronRight, CircleDashed, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyResults } from '@/features/Acceptance';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   check: css`
     padding-block: 6px;
-    padding-inline: 10px;
+    padding-inline: ${densityVars.contentGap};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};

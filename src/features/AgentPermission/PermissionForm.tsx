@@ -1,10 +1,8 @@
 'use client';
 
 import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Empty, Form, Icon } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Alert, createStaticStyles, Empty, Icon } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { Bot, InfoIcon, LockIcon, MonitorSmartphone, Share2, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +52,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     setTopicSharePolicy,
     topicSharePolicy,
   } = useAgentPermission(agentId);
+  const form = useForm();
 
   const labelKeys = getSelectionPolicyLabelKeys(isPrivate);
 
@@ -144,7 +143,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     );
   }
 
-  const memberGroup: FormGroupItemType | undefined = !accessError
+  const memberGroup: FormGroupItem | undefined = !accessError
     ? {
         children: [
           {
@@ -201,7 +200,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
       }
     : undefined;
 
-  const configGroup: FormGroupItemType = {
+  const configGroup: FormGroupItem = {
     children: [
       {
         avatar: (
@@ -265,6 +264,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
       ) : null}
       <Form
         collapsible={false}
+        form={form}
         items={[...(memberGroup ? [memberGroup] : []), configGroup]}
         itemsType={'group'}
         variant={'filled'}

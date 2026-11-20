@@ -1,0 +1,10 @@
+name = "no-prototype-pollution"
+builtInAgent = "basic-structured"
+instruction = """
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent untrusted object keys mutating prototypes.
+Report request/JSON/imported config keys used in recursive/deep assignment/merge to normal objects with no guard for __proto__, constructor, and prototype path segments, including dynamic target[key] assignment or a user-controlled deep path setter. JSON.parse alone does not pollute prototypes; identify the subsequent mutation. Anchor at the dynamic assignment or unsafe deep-set/merge sink.
+Recommend an existing safe merge implementation, a closed allowlist of accepted keys, or rejecting prototype-related segments at every traversed depth; use Map/null-prototype records for arbitrary keys where no traversal into Object.prototype remains possible.
+Do not report Object.entries/reads, JSON.parse alone, object spread (does not invoke the __proto__ setter), known patched library merge APIs without a visible unsafe configuration, Map.set, or assignment into Object.create(null) without unsafe nested traversal. A top-level blocklist is insufficient if nested untrusted paths still traverse prototypes. Do not demand a blocklist when a closed schema/key allowlist already excludes dangerous keys.
+"""

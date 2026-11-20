@@ -1,0 +1,311 @@
+import {
+  DASHBOARD_DESCRIPTION_MAX_LENGTH,
+  DASHBOARD_TITLE_MAX_LENGTH,
+  DashboardApiName,
+} from '@lobechat/builtin-tool-dashboard';
+import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
+import { DASHBOARD_VISIBILITIES } from '@lobechat/types';
+import { z } from 'zod';
+
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
+import { DASHBOARD_MAX_ITEMS, DashboardModel } from '@/database/models/dashboard';
+import type { LobeChatDatabase } from '@/database/type';
+import { router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { DashboardService } from '@/server/services/dashboard';
+import { createDashboardToolService, resolveClientTopic } from '@/server/services/widget/agentTool';
+
+import { assertDashboardEnabled } from './_helpers/dashboardFeatureGate';
+import { mapWidgetError, notFound } from './_helpers/widgetError';
+
+const dashboardProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+  // Off by default (runtime flag `dashboard`); covers `runAgentTool` too.
+  await assertDashboardEnabled(ctx.userId);
+  const workspaceId = ctx.workspaceId ?? undefined;
+  return opts.next({
+    ctx: {
+      dashboardModel: new DashboardModel(ctx.serverDB, ctx.userId, workspaceId),
+      dashboardService: new DashboardService(ctx.serverDB, ctx.userId, workspaceId),
+    },
+  });
+});
+
+// Board writes need at least the member role in a workspace; personal mode passes through.
+const dashboardWriteProcedure = dashboardProcedure.use(requireWorkspaceRoleWhenScoped('member'));
+
+// ── Schemas ──
+
+// Dashboard rows use uuid keys; reject other shapes before they reach Postgres.
+const uuid = z.uuid();
+const idInput = z.object({ id: uuid });
+const levelInput = z
+  .object({ agentId: z.string().nullish(), projectId: z.string().nullish() })
+  .optional();
+const visibility = z.enum(DASHBOARD_VISIBILITIES);
+const metadata = z.record(z.string(), z.unknown()).nullish();
+const layoutSchema = z.object({
+  h: z.number().int().min(1).max(48),
+  w: z.number().int().min(1).max(48),
+  x: z.number().int().min(0).max(96),
+  y: z.number().int().min(0),
+});
+
+// A declaration (not an arrow const) so `fail(...)` narrows control flow as `never`.
+function fail(error: unknown, operation: string): never {
+  return mapWidgetError(error, 'dashboard', operation);
+}
+
+/**
+ * Dashboards (boards) and the placement of widgets on them. Widgets
+ * themselves live in the `widget` router.
+ *
+ * Access follows `DashboardModel`: reads see readable boards (workspace
+ * visibility plus the current visibility of the attached project / agent)
+ * and only the widgets the caller may read; edits are limited to the board's
+ * creator. Missing and forbidden rows both read as NOT_FOUND.
+ */
+export const dashboardRouter = router({
+  /** Place a widget on a board (or move it when already there). */
+  addItem: dashboardWriteProcedure
+    .input(
+      z.object({
+        dashboardId: uuid,
+        layout: layoutSchema.nullish(),
+        sortOrder: z.number().int().optional(),
+        widgetId: uuid,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.dashboardService.placeWidget(input.dashboardId, input.widgetId, {
+          layout: input.layout,
+          sortOrder: input.sortOrder,
+        });
+        if (!data) throw notFound('Dashboard or widget');
+        return { data, message: 'Widget placed', success: true };
+      } catch (error) {
+        fail(error, 'place widget');
+      }
+    }),
+
+  create: dashboardWriteProcedure
+    .input(
+      z.object({
+        agentId: z.string().nullish(),
+        description: z.string().max(DASHBOARD_DESCRIPTION_MAX_LENGTH).nullish(),
+        icon: z.string().max(100).nullish(),
+        metadata,
+        projectId: z.string().nullish(),
+        sortOrder: z.number().int().optional(),
+        title: z.string().min(1).max(DASHBOARD_TITLE_MAX_LENGTH),
+        visibility: visibility.optional(),
+        /**
+         * Place this widget on the new board in the same transaction: a widget
+         * that cannot be placed rolls the board back, so no empty board is left.
+         */
+        widgetId: uuid.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { widgetId, ...boardInput } = input;
+        if (!widgetId) {
+          const data = await ctx.dashboardModel.create(boardInput);
+          return { data, message: 'Dashboard created', success: true };
+        }
+
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const data = await ctx.serverDB.transaction(async (tx) => {
+          const txDB = tx as LobeChatDatabase;
+          const board = await new DashboardModel(txDB, ctx.userId, workspaceId).create(boardInput);
+          const item = await new DashboardService(txDB, ctx.userId, workspaceId).placeWidget(
+            board.id,
+            widgetId,
+          );
+          if (!item) throw notFound('Widget');
+          return board;
+        });
+        return { data, message: 'Dashboard created', success: true };
+      } catch (error) {
+        fail(error, 'create dashboard');
+      }
+    }),
+
+  delete: dashboardWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const data = await ctx.dashboardModel.delete(input.id);
+      if (!data) throw notFound('Dashboard');
+      return { data, message: 'Dashboard deleted', success: true };
+    } catch (error) {
+      fail(error, 'delete dashboard');
+    }
+  }),
+
+  /** A board with its visible widgets, in display order. */
+  detail: dashboardProcedure.input(idInput).query(async ({ ctx, input }) => {
+    try {
+      const data = await ctx.dashboardService.getDetail(input.id);
+      if (!data) throw notFound('Dashboard');
+      return { data, success: true };
+    } catch (error) {
+      fail(error, 'get dashboard');
+    }
+  }),
+
+  /** Boards living directly on one level (personal / workspace, project, agent). */
+  list: dashboardProcedure.input(levelInput).query(async ({ ctx, input }) => {
+    try {
+      return { data: await ctx.dashboardModel.list(input ?? {}), success: true };
+    } catch (error) {
+      fail(error, 'list dashboards');
+    }
+  }),
+
+  /** Every board of a project, including those an agent of the project also owns. */
+  listByProject: dashboardProcedure
+    .input(z.object({ projectId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return { data: await ctx.dashboardModel.listByProject(input.projectId), success: true };
+      } catch (error) {
+        fail(error, 'list project dashboards');
+      }
+    }),
+
+  removeItems: dashboardWriteProcedure
+    .input(z.object({ dashboardId: uuid, itemIds: z.array(uuid).max(DASHBOARD_MAX_ITEMS) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.dashboardService.removeItems(input.dashboardId, input.itemIds);
+        return { data, message: 'Widgets removed from dashboard', success: true };
+      } catch (error) {
+        fail(error, 'remove widgets');
+      }
+    }),
+
+  restore: dashboardWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const data = await ctx.dashboardModel.restore(input.id);
+      if (!data) throw notFound('Dashboard');
+      return { data, message: 'Dashboard restored', success: true };
+    } catch (error) {
+      fail(error, 'restore dashboard');
+    }
+  }),
+
+  /**
+   * Execute one `builtin-dashboard` tool call for an agent run driven by the
+   * client runtime. The server agent runtime executes the same runtime and
+   * service in-process; both scope created widgets to the conversation's
+   * agent and (for a project topic) project. Publishing still requires the
+   * user's approval, which the agent runtime enforces before dispatching.
+   */
+  runAgentTool: dashboardWriteProcedure
+    .input(
+      z.object({
+        apiName: z.enum(Object.values(DashboardApiName) as [string, ...string[]]),
+        args: z.record(z.string(), z.unknown()),
+        context: z
+          .object({
+            agentId: z.string().nullish(),
+            messageId: z.string().nullish(),
+            operationId: z.string().nullish(),
+            topicId: z.string().nullish(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const context = input.context ?? {};
+      const topic = await resolveClientTopic(
+        ctx.serverDB,
+        context.topicId,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const runtime = new DashboardExecutionRuntime(
+        createDashboardToolService(ctx.serverDB, {
+          agentId: context.agentId ?? undefined,
+          messageId: context.messageId ?? undefined,
+          operationId: context.operationId ?? undefined,
+          projectId: topic.projectId,
+          topicId: topic.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      );
+      const method = runtime[input.apiName as keyof DashboardExecutionRuntime] as (
+        args: unknown,
+      ) => ReturnType<DashboardExecutionRuntime['listDashboards']>;
+      return method.call(runtime, input.args);
+    }),
+
+  trash: dashboardWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const data = await ctx.dashboardModel.trash(input.id);
+      if (!data) throw notFound('Dashboard');
+      return { data, message: 'Dashboard moved to trash', success: true };
+    } catch (error) {
+      fail(error, 'trash dashboard');
+    }
+  }),
+
+  update: dashboardWriteProcedure
+    .input(
+      z.object({
+        id: uuid,
+        value: z.object({
+          description: z.string().max(DASHBOARD_DESCRIPTION_MAX_LENGTH).nullish(),
+          icon: z.string().max(100).nullish(),
+          metadata,
+          sortOrder: z.number().int().optional(),
+          title: z.string().min(1).max(DASHBOARD_TITLE_MAX_LENGTH).optional(),
+          visibility: visibility.optional(),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.dashboardModel.update(input.id, input.value);
+        if (!data) throw notFound('Dashboard');
+        return { data, message: 'Dashboard updated', success: true };
+      } catch (error) {
+        fail(error, 'update dashboard');
+      }
+    }),
+
+  /**
+   * Persist a drag-and-drop result; ids not on this board are ignored. Fails
+   * with NOT_FOUND when nothing was saved (not the creator, or stale items).
+   */
+  updateItemLayouts: dashboardWriteProcedure
+    .input(
+      z.object({
+        dashboardId: uuid,
+        patches: z
+          .array(
+            z.object({
+              id: uuid,
+              layout: layoutSchema.nullish(),
+              sortOrder: z.number().int().optional(),
+            }),
+          )
+          .max(DASHBOARD_MAX_ITEMS),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.dashboardService.saveLayout(input.dashboardId, input.patches);
+        // Nothing saved means the caller cannot change this board (only its
+        // creator can) or none of the items are on it — never report success.
+        if (input.patches.length > 0 && data === 0) throw notFound('Dashboard or its items');
+        return { data, message: 'Layout saved', success: true };
+      } catch (error) {
+        fail(error, 'save layout');
+      }
+    }),
+});

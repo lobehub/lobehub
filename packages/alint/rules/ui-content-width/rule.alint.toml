@@ -1,0 +1,20 @@
+name = "ui-content-width"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React page, panel or section component from LobeHub's web client.
+
+Team rule, distilled from the product owner's review rejections ("这个全宽不好看，你得限制下宽度", "还是那一条说的，需要加个限宽，全宽不好看", "顶上的选择器这个区域宽度应该是限宽而不是全宽", "底下这个验收条需要限制下宽度", "步骤图的模式下，宽度应该也要限定下，不能是全宽的", "840 有点宽了，应该改成默认六百多的"): reading content — settings forms, detail pages, lists of cards, integration pages, reports, step lists, bottom action bars — is centered in a column with a max width, not stretched across the whole main area. Comfortable widths are roughly 600–1024px depending on density.
+
+The repo's width containers: `SettingContainer` (src/features/Setting/SettingContainer, used as `<SettingContainer maxWidth={1024}>` by every settings page), `WideScreenContainer` (the community layouts), and any wrapper with a `maxWidth`. This file is a route page or a top-level settings / feature page.
+
+Report the page's outermost content container when it grows to the full available width (`width: 100%` / `flex: 1` / no max width) and neither it nor any wrapper in this file is one of the width containers above. Anchor on the line of that outer content container. In the message, name the page. In the suggestion, name the container to wrap it in (`SettingContainer maxWidth={1024}` for settings-like pages, a centered `maxWidth` of 720–1024 otherwise).
+
+Do not report:
+- pages whose main content is a canvas, graph, editor, table, split pane or chat message list, which own their full width by design;
+- `_layout` files, skeletons, `Portal/*`, side / detail panels, modals, drawers and popovers;
+- components passed as slots (`welcome=`, `render`, `extra`, `checkErrorRender`) or that do not render a page body;
+- anything under the community routes and workspace settings, whose layouts already cap the width;
+- a container that already has any `maxWidth`, even one above 1024.
+
+If an exclusion applies, return no finding. If uncertain, use low confidence.
+"""

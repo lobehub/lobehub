@@ -45,8 +45,10 @@ vi.mock('@/server/services/aiChat', () => ({
   }),
 }));
 
+// Server-only wire types a producer never emits: the v2 message delta and the
+// relayed terminal of a mirrored (group member) operation.
 type HeterogeneousAgentStreamEvent = Omit<AgentStreamEvent, 'type'> & {
-  type: Exclude<AgentStreamEvent['type'], 'message_patch'>;
+  type: Exclude<AgentStreamEvent['type'], 'member_runtime_end' | 'message_patch'>;
 };
 
 const buildEvent = (

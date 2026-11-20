@@ -1,6 +1,4 @@
-import { Block, Flexbox, Highlighter } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Block, Divider, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,12 +6,14 @@ import Arguments from '../Arguments';
 
 interface FallbackArgumentRenderProps {
   content: string;
+  identifier?: string;
+  messageId?: string;
   requestArgs?: string;
   toolCallId: string;
 }
 
 export const FallbackArgumentRender = memo<FallbackArgumentRenderProps>(
-  ({ toolCallId, content, requestArgs }) => {
+  ({ toolCallId, content, identifier, messageId, requestArgs }) => {
     const { t } = useTranslation('plugin');
 
     // Parse and display result content
@@ -33,7 +33,7 @@ export const FallbackArgumentRender = memo<FallbackArgumentRenderProps>(
     // Default render: show arguments and result
     return (
       <Block id={toolCallId} variant={'outlined'} width={'100%'}>
-        <Arguments arguments={requestArgs} />
+        <Arguments arguments={requestArgs} identifier={identifier} messageId={messageId} />
         {content && (
           <>
             <Divider style={{ marginBlock: 0 }} />

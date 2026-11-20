@@ -1,29 +1,17 @@
 import { type ChatMessageError } from '@lobechat/types';
-import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
+import { type AlertProps, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import dynamic from '@/libs/next/dynamic';
+
+import { getOllamaErrorMessage, getUnresolvedOllamaModel } from './parseOllamaError';
 
 const loading = () => <Skeleton style={{ width: 300 }} />;
 
 const SetupGuide = dynamic(() => import('../OllamaSetupGuide'), { loading, ssr: false });
 
 const InvalidModel = dynamic(() => import('./InvalidOllamaModel'), { loading, ssr: false });
-
-interface OllamaError {
-  code: string | null;
-  message: string;
-  param?: any;
-  type: string;
-}
-
-interface OllamaErrorResponse {
-  error: OllamaError;
-}
-
-// eslint-disable-next-line regexp/no-dupe-characters-character-class, regexp/no-obscure-range
-const UNRESOLVED_MODEL_REGEXP = /model "([\w+,-_]+)" not found/;
 
 interface OllamaBizErrorProps {
   alertError?: AlertProps;
@@ -32,12 +20,10 @@ interface OllamaBizErrorProps {
 }
 
 const OllamaBizError = memo<OllamaBizErrorProps>(({ alertError, error, id }) => {
-  const errorBody: OllamaErrorResponse = (error as any)?.body;
-
-  const errorMessage = errorBody.error?.message;
+  const errorMessage = getOllamaErrorMessage(error);
 
   // error of not pull the model
-  const unresolvedModel = errorMessage?.match(UNRESOLVED_MODEL_REGEXP)?.[1];
+  const unresolvedModel = getUnresolvedOllamaModel(error);
   if (unresolvedModel) {
     return <InvalidModel id={id} model={unresolvedModel} />;
   }
@@ -47,7 +33,8 @@ const OllamaBizError = memo<OllamaBizErrorProps>(({ alertError, error, id }) => 
     return <SetupGuide id={id} />;
   }
 
-  return <ErrorContent error={alertError} id={id} />;
+  // Without the alert the message would render empty.
+  return <ErrorContent error={alertError ?? { message: errorMessage, type: 'error' }} id={id} />;
 });
 
 export default OllamaBizError;

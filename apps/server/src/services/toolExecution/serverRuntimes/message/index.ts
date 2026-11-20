@@ -24,13 +24,15 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { TopicModel } from '@/database/models/topic';
 import { agents } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
-  mergeBotSettingsForPersist,
+  mergeBotSettingsForCreate,
+  mergeBotSettingsPatch,
 } from '@/server/services/bot/agentBotProviderSettings';
 import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
 import {
@@ -45,7 +47,9 @@ import {
   wechatPendingPushKey,
   wechatWindowKey,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
@@ -57,6 +61,7 @@ import { sendMessengerPush } from '@/server/services/messenger/push';
 import type { ServerRuntimeRegistration } from '../types';
 import type { MessageRouteParams } from './MessageDispatcherService';
 import { MessageDispatcherService } from './MessageDispatcherService';
+import { createMessageImageStore } from './storeMessageImages';
 
 /**
  * Shape returned by `listMessengers` / `getMessengerDetail` to the tool runtime.
@@ -198,6 +203,7 @@ const resolveCredentials = async (
 
 /** Platforms the message tool can reach through a per-agent bot provider. */
 const PROVIDER_PLATFORMS = [
+  'dingtalk',
   'discord',
   'feishu',
   'imessage',
@@ -414,8 +420,24 @@ export const messageRuntime: ServerRuntimeRegistration = {
 
     const service = new MessageDispatcherService(serviceFactories, { resolveRoute });
 
+    /**
+     * Bot runs act with the owner's credentials, so whoever talks to the bot in a shared channel
+     * could otherwise talk it into rewiring itself. Every call that changes a bot or messenger
+     * connection refuses unless the person who sent the message this run answers is the owner.
+     * Keyed on the run's own sender (`botContext`, built per inbound message), not the topic's
+     * first author; a run outside an IM conversation carries none and is unaffected.
+     */
+    const assertOwnerMayManageBots = () => {
+      if (context.botContext && !context.botContext.isOwner) {
+        throw new Error(
+          "Only the bot's owner can change its settings. Ask them to make this change.",
+        );
+      }
+    };
+
     const botProvider: BotProviderQuery = {
       connectBot: async (botId) => {
+        assertOwnerMayManageBots();
         const bot = await providerModel.findById(botId);
         if (!bot) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
@@ -430,6 +452,11 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return { status };
       },
       createBot: async (params) => {
+        assertOwnerMayManageBots();
+        const unavailableReason = getReplyConnectionUnavailableReason(
+          platformRegistry.getPlatform(params.platform),
+        );
+        if (unavailableReason) throw new Error(unavailableReason);
         await assertBotFeatureAccess({
           action: 'manage',
           applicationId: params.applicationId,
@@ -437,7 +464,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
           userId: context.userId!,
           workspaceId: context.workspaceId ?? undefined,
         });
-        const settings = mergeBotSettingsForPersist(params.platform, params.settings);
+        const settings = await mergeBotSettingsForCreate(
+          serverDB,
+          params.agentId,
+          params.platform,
+          params.settings,
+        );
         assertBotAccessSettings(settings);
         await assertWatchKeywordsWritable({
           applicationId: params.applicationId,
@@ -450,6 +482,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return { id: result.id, platform: params.platform };
       },
       deleteBot: async (botId) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         await providerModel.delete(botId);
         if (existing) {
@@ -473,7 +506,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
           id: bot.id,
           platform: bot.platform,
           runtimeStatus: status.status,
-          settings: (bot.settings as Record<string, unknown>) ?? undefined,
+          // As the settings form shows them, so the agent reads the keys `updateBot` writes
+          // (`botWakeDuties`) even for a bot configured with a nested `botWake` object.
+          settings: flattenBotWakeSettings(bot.settings as Record<string, unknown>) ?? undefined,
         };
       },
       listBots: async () => {
@@ -496,24 +531,30 @@ export const messageRuntime: ServerRuntimeRegistration = {
         }));
       },
       listPlatforms: async () => {
-        return platformRegistry.listSerializedPlatforms().map((p) => {
-          const credSchema = (p.schema ?? []).find(
-            (f: any) => f.key === 'credentials' && f.properties,
-          );
-          const credFields = (credSchema as any)?.properties ?? [];
-          return {
-            credentialFields: credFields.map((f: any) => ({
-              key: f.key,
-              label: f.label ?? f.key,
-              required: !!f.required,
-              type: f.type ?? 'string',
-            })),
-            id: p.id,
-            name: p.name,
-          };
-        });
+        // Platforms this deployment cannot run are not offered for new bots; existing ones still
+        // show up in `listBots` so they can be disabled or removed.
+        return platformRegistry
+          .listSerializedPlatforms()
+          .filter((p) => !getReplyConnectionUnavailableReason(p))
+          .map((p) => {
+            const credSchema = (p.schema ?? []).find(
+              (f: any) => f.key === 'credentials' && f.properties,
+            );
+            const credFields = (credSchema as any)?.properties ?? [];
+            return {
+              credentialFields: credFields.map((f: any) => ({
+                key: f.key,
+                label: f.label ?? f.key,
+                required: !!f.required,
+                type: f.type ?? 'string',
+              })),
+              id: p.id,
+              name: p.name,
+            };
+          });
       },
       toggleBot: async (botId, enabled) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         if (enabled) {
@@ -536,6 +577,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         );
       },
       updateBot: async (botId, params) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
@@ -550,7 +592,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {};
         if (params.credentials !== undefined) value.credentials = params.credentials;
         if (params.settings !== undefined) {
-          const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
+          // A partial update: the keys the agent did not send keep their stored values.
+          const merged = mergeBotSettingsPatch(
+            existing.platform,
+            existing.settings as Record<string, unknown> | null,
+            params.settings,
+          );
           assertBotAccessSettings(merged);
           await assertWatchKeywordsWritable({
             applicationId: existing.applicationId,
@@ -567,6 +614,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         await invalidateBotAfterUpdate(
           {
             applicationId: existing.applicationId,
+            credentials: existing.credentials,
             platform: existing.platform,
             settings: existing.settings,
             userId: context.userId!,
@@ -692,6 +740,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       uninstallMessenger: async (installationId) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required to uninstall');
         }
@@ -781,6 +830,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       setMessengerActiveAgent: async (params) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
@@ -790,7 +840,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
           const [agentRow] = await context.serverDB
             .select({ id: agents.id })
             .from(agents)
-            .where(and(eq(agents.id, params.agentId), eq(agents.userId, context.userId)))
+            .where(
+              and(
+                eq(agents.id, params.agentId),
+                eq(agents.userId, context.userId),
+                notTrashed(agents.isDeleted),
+              ),
+            )
             .limit(1);
           if (!agentRow) {
             throw new TRPCError({
@@ -818,6 +874,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       unlinkMessenger: async (params) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
@@ -867,7 +924,16 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
     };
 
-    return new MessageExecutionRuntime({ botProvider, service });
+    return new MessageExecutionRuntime({
+      botProvider,
+      resolveImages: createMessageImageStore({
+        agentId: context.agentId,
+        serverDB,
+        userId,
+        workspaceId: context.workspaceId,
+      }),
+      service,
+    });
   },
   identifier: MessageToolIdentifier,
 };

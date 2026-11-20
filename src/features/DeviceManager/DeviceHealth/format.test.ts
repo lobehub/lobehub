@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatPercent, peakUsageLevel, usageLevel } from './format';
+import { formatPercent, LOAD_THRESHOLDS, peakUsageLevel, usageLevel } from './format';
 
 describe('device health formatters', () => {
   // The chart calls its formatter for every slot, including slots with no
@@ -16,17 +16,24 @@ describe('device health formatters', () => {
 });
 
 describe('usage levels', () => {
-  it('turns yellow from 70% and red from 90%', () => {
-    expect(usageLevel(69.9)).toBe('normal');
-    expect(usageLevel(70)).toBe('high');
-    expect(usageLevel(89.9)).toBe('high');
-    expect(usageLevel(90)).toBe('critical');
+  it('turns yellow from 80% and red from 95%', () => {
+    expect(usageLevel(79.9)).toBe('normal');
+    expect(usageLevel(80)).toBe('high');
+    expect(usageLevel(94.9)).toBe('high');
+    expect(usageLevel(95)).toBe('critical');
     expect(usageLevel(null)).toBeUndefined();
   });
 
-  it('rates a block by its busiest metric', () => {
-    expect(peakUsageLevel(40, 55, 93)).toBe('critical');
-    expect(peakUsageLevel(null, 72, undefined)).toBe('high');
-    expect(peakUsageLevel(null, undefined)).toBeUndefined();
+  it('rates load per core: yellow above the core count, red only at twice it', () => {
+    expect(usageLevel(99.9, LOAD_THRESHOLDS)).toBe('normal');
+    expect(usageLevel(129, LOAD_THRESHOLDS)).toBe('high');
+    expect(usageLevel(199.9, LOAD_THRESHOLDS)).toBe('high');
+    expect(usageLevel(200, LOAD_THRESHOLDS)).toBe('critical');
+  });
+
+  it('rates a block by its hottest level', () => {
+    expect(peakUsageLevel('normal', 'normal', 'critical')).toBe('critical');
+    expect(peakUsageLevel(undefined, 'high', 'normal')).toBe('high');
+    expect(peakUsageLevel(undefined, undefined)).toBeUndefined();
   });
 });

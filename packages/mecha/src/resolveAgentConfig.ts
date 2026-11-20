@@ -6,6 +6,7 @@ import {
 } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import {
   type AgentModelConfig,
@@ -16,6 +17,7 @@ import {
   type LobeAgentConfig,
   type MessageMapScope,
   resolveAgentModelConfig,
+  resolveToolMode,
 } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
@@ -172,6 +174,11 @@ export interface AgentConfigResolverContext {
    * the shared default.
    */
   modelOverride?: Partial<AgentModelOverride> | null;
+  /**
+   * In page scope: the page agent cannot run here (no sandbox for this user),
+   * so its tools are not injected. Defaults to available.
+   */
+  pageAgentUnavailable?: boolean;
   /** Plugins enabled for the agent */
   plugins?: string[];
 
@@ -258,6 +265,8 @@ export const resolveAgentConfig = (
   // tools-engine build time. That keeps lobe-agent's plan / todo / media-analysis
   // available to sub-agents — only the nested dispatch API is removed — instead of
   // dropping the whole tool here.
+  const injectPageAgent = ctx.scope === 'page' && !ctx.pageAgentUnavailable;
+
   const applyPluginFilters = (pluginIds: string[]) => {
     if (disableTools) {
       log('disableTools is true, returning empty plugins');
@@ -266,7 +275,7 @@ export const resolveAgentConfig = (
 
     let nextPluginIds = pluginIds;
 
-    if (ctx.scope !== 'page') {
+    if (!injectPageAgent) {
       nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
@@ -319,7 +328,11 @@ export const resolveAgentConfig = (
       : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
 
   // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
-  const basePlugins = getActivePluginIds(agentConfig?.plugins);
+  const savedPlugins = getActivePluginIds(agentConfig?.plugins);
+  const basePlugins =
+    resolveToolMode(chatConfig) === 'agent'
+      ? savedPlugins.filter((id) => !isOnDemandBuiltinTool(id))
+      : savedPlugins;
 
   // Check if this is a builtin agent
   // Priority: supervisor check (when in group scope) > agent store slug
@@ -396,7 +409,7 @@ export const resolveAgentConfig = (
     // === Page Editor Auto-Injection ===
     // When custom agent is used in page editor (scope === 'page'),
     // automatically inject page-agent tools and system role
-    if (ctx.scope === 'page') {
+    if (injectPageAgent) {
       // 1. Inject page-agent tool if not already present
       const pageAgentPlugins = finalPlugins.includes(PageAgentIdentifier)
         ? finalPlugins
@@ -555,7 +568,7 @@ export const resolveAgentConfig = (
   // === Page Editor Auto-Injection for Builtin Agents ===
   // When a builtin agent (other than page-agent itself) is used in page editor,
   // inject page-agent tools and system role
-  if (ctx.scope === 'page' && slug !== BUILTIN_AGENT_SLUGS.pageAgent) {
+  if (injectPageAgent && slug !== BUILTIN_AGENT_SLUGS.pageAgent) {
     // 1. Inject page-agent tool if not already present
     if (!finalPlugins.includes(PageAgentIdentifier)) {
       finalPlugins = [PageAgentIdentifier, ...finalPlugins];

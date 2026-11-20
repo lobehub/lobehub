@@ -20,7 +20,7 @@ const metaMap: Record<string, { avatar?: string; title?: string }> = {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number; defaultValue?: string }) =>
+    t: (key: string, options?: { count?: number; defaultValue?: string; name?: string }) =>
       (
         ({
           'builtins.lobe-activator.apiName.activateTools': 'Activate Tools',
@@ -30,12 +30,26 @@ vi.mock('react-i18next', () => ({
       )[key] ||
       (key === 'tool.intervention.viewParameters'
         ? `View parameters (${options?.count ?? 0})`
-        : options?.defaultValue || key),
+        : key === 'connector.account.usingAccount'
+          ? `Account: ${options?.name}`
+          : options?.defaultValue || key),
   }),
 }));
 
 vi.mock('@lobechat/builtin-tools/interventions', () => ({
   getBuiltinIntervention: (identifier?: string, apiName?: string) => {
+    if (identifier === 'gated' && apiName === 'review') {
+      return ({ onApprovalBlockedChange }: BuiltinInterventionProps) => (
+        <>
+          <button type="button" onClick={() => onApprovalBlockedChange?.(true)}>
+            block
+          </button>
+          <button type="button" onClick={() => onApprovalBlockedChange?.(false)}>
+            release
+          </button>
+        </>
+      );
+    }
     if (identifier !== 'devin' || apiName !== 'askUserQuestion') return;
 
     return ({ onInteractionAction }: BuiltinInterventionProps) => (
@@ -72,6 +86,16 @@ vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
+const accountNames: Record<string, string> = { lnk_work: 'work@acme.com' };
+
+vi.mock('@/store/tool/slices/connector', () => ({
+  connectorSelectors: {
+    // Names resolve only on the connector the call runs on, for the agent that ran it
+    connectorLinkNameForTool: (identifier: string, linkId: string, agentId?: string) => () =>
+      identifier === 'mail' && agentId === 'agt_mail' ? accountNames[linkId] : undefined,
+  },
+}));
+
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: unknown) => unknown) =>
     selector({ runQuestionSubmission: vi.fn() }),
@@ -101,6 +125,8 @@ vi.mock('../../../../../store', () => ({
     }) => unknown,
   ) =>
     selector({
+      context: { agentId: 'agt_mail' },
+      dbMessages: [],
       cancelToolInteraction: vi.fn(),
       skipToolInteraction: vi.fn(),
       submitHeteroIntervention,
@@ -114,7 +140,11 @@ vi.mock('../Arguments', () => ({
 }));
 
 vi.mock('./ApprovalActions', () => ({
-  default: () => <div>approval-actions</div>,
+  default: ({ approveDisabled }: { approveDisabled?: boolean }) => (
+    <div data-approve-disabled={String(!!approveDisabled)} data-testid="approval-actions">
+      approval-actions
+    </div>
+  ),
 }));
 
 vi.mock('./KeyValueEditor', () => ({
@@ -156,6 +186,38 @@ describe('FallbackIntervention', () => {
     expect(screen.getByText(reason)).toBeInTheDocument();
   });
 
+  // Parameters start collapsed, so approving a connector call must name the
+  // account it acts as without expanding them.
+  it('names the account a multi-account connector call will use', () => {
+    render(
+      <FallbackIntervention
+        apiName="send_email"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="mail"
+        requestArgs={JSON.stringify({ link_id: 'lnk_work', to: 'a@b.c' })}
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.getByText('Account: work@acme.com')).toBeInTheDocument();
+  });
+
+  it('adds no account line when the id names no known account', () => {
+    render(
+      <FallbackIntervention
+        apiName="send_email"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="mail"
+        requestArgs={JSON.stringify({ link_id: 'lnk_gone' })}
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.queryByText(/^Account:/)).not.toBeInTheDocument();
+  });
+
   it('renders URL avatars as images instead of visible text', () => {
     const iconUrl = 'https://example.com/icon.png';
     metaMap.search.avatar = iconUrl;
@@ -195,5 +257,27 @@ describe('heterogeneous custom intervention', () => {
         'Allow Devin to continue?': 'allow-once',
       });
     });
+  });
+});
+
+describe('approval-mode builtin intervention', () => {
+  it('holds the approve action while the intervention blocks approval', () => {
+    render(
+      <Intervention
+        apiName="review"
+        id="message-gated"
+        identifier="gated"
+        requestArgs="{}"
+        toolCallId="gated-1"
+      />,
+    );
+    const actions = screen.getByTestId('approval-actions');
+    expect(actions).toHaveAttribute('data-approve-disabled', 'false');
+
+    fireEvent.click(screen.getByText('block'));
+    expect(actions).toHaveAttribute('data-approve-disabled', 'true');
+
+    fireEvent.click(screen.getByText('release'));
+    expect(actions).toHaveAttribute('data-approve-disabled', 'false');
   });
 });

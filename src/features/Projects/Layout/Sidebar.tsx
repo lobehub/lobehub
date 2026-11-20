@@ -1,40 +1,71 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ClipboardCheckIcon, ListTodoIcon, TargetIcon } from 'lucide-react';
-import { memo } from 'react';
+import {
+  ClipboardCheckIcon,
+  HouseIcon,
+  LayoutDashboardIcon,
+  ListTodoIcon,
+  SettingsIcon,
+  TargetIcon,
+} from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import { useDashboardFeature } from '@/features/Dashboard/hooks/useDashboardFeature';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
+import { useCurrentProjectDetail, useProjectByRef, useProjectStore } from '@/store/project';
 
-import { getProjectAcceptancePath, getProjectGoalsPath, getProjectTasksPath } from './navigation';
+import { projectComposerAgents } from '../Workspace/projectComposerAgents';
+import {
+  getProjectAcceptancePath,
+  getProjectDashboardPath,
+  getProjectGoalsPath,
+  getProjectHomePath,
+  getProjectTasksPath,
+  isProjectSectionActive,
+  toProjectPathname,
+} from './navigation';
 import ProjectHeader from './ProjectHeader';
+import SidebarSections from './SidebarSections';
 
 const ProjectSidebarContent = memo(() => {
   const { t } = useTranslation('project');
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
   const navigate = useWorkspaceAwareNavigate();
-  const { pathname } = useLocation();
+  const pathname = toProjectPathname(useLocation().pathname);
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  // The list row is enough for the header and topics; the detail can come later.
+  const project = useProjectByRef(projectId);
+  const { enabled: dashboardEnabled } = useDashboardFeature();
+  const projectHomePath = getProjectHomePath(projectId!);
   const projectTasksPath = getProjectTasksPath(projectId!);
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
+  const projectDashboardPath = getProjectDashboardPath(projectId!);
 
-  const header = <ProjectHeader project={detail?.project} />;
+  // The main agent leads the composer list; its meta names its topic group before any topic.
+  const coordinatorAgent = useMemo(
+    () => (detail?.project ? projectComposerAgents(detail)[0] : undefined),
+    [detail],
+  );
 
-  if (detailSWR.error)
+  const header = <ProjectHeader project={project} />;
+
+  if (detailSWR.error && !detail)
     return (
       <SideBarLayout
-        body={<AsyncError error={detailSWR.error} variant="inline" onRetry={detailSWR.mutate} />}
         header={header}
+        body={
+          <AsyncError error={detailSWR.error} variant="inline" onRetry={detailSWR.revalidate} />
+        }
       />
     );
 
@@ -42,7 +73,13 @@ const ProjectSidebarContent = memo(() => {
     <SideBarLayout
       header={header}
       body={
-        <Flexbox gap={8} paddingInline={4}>
+        <Flexbox gap={1} paddingInline={4}>
+          <NavItem
+            active={pathname === projectHomePath}
+            icon={HouseIcon}
+            title={t('sections.home')}
+            onClick={() => navigate(projectHomePath)}
+          />
           <NavItem
             active={pathname === projectTasksPath}
             icon={ListTodoIcon}
@@ -55,12 +92,33 @@ const ProjectSidebarContent = memo(() => {
             title={t('sections.goals')}
             onClick={() => navigate(projectGoalsPath)}
           />
+          {dashboardEnabled && (
+            <NavItem
+              active={isProjectSectionActive(pathname, projectDashboardPath)}
+              icon={LayoutDashboardIcon}
+              title={t('sections.dashboard')}
+              onClick={() => navigate(projectDashboardPath)}
+            />
+          )}
           <NavItem
-            active={pathname === projectAcceptancePath}
+            active={isProjectSectionActive(pathname, projectAcceptancePath)}
             icon={ClipboardCheckIcon}
             title={t('sections.acceptance')}
             onClick={() => navigate(projectAcceptancePath)}
           />
+          <NavItem
+            active={pathname.includes(`/project/${projectId}/settings`)}
+            icon={SettingsIcon}
+            title={t('topics.settings')}
+            onClick={() => navigate(`/project/${projectId}/settings/general`)}
+          />
+          {project && (
+            <SidebarSections
+              coordinatorAgent={coordinatorAgent}
+              coordinatorAgentId={project.coordinatorAgentId}
+              projectId={project.id}
+            />
+          )}
         </Flexbox>
       }
     />

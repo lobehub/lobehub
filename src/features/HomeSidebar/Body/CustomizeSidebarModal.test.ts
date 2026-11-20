@@ -31,4 +31,20 @@ describe('CustomizeSidebarModal', () => {
     expect(getSortableSidebarItemIds(false).has('memory')).toBe(true);
     expect(getSortableSidebarItemIds(true).has('memory')).toBe(false);
   });
+
+  it('offers Dashboards only while the dashboard flag is on, and never in workspace mode', () => {
+    expect(getSortableSidebarItemIds(false).has('dashboard')).toBe(false);
+    expect(getSortableSidebarItemIds(false, { dashboardEnabled: true }).has('dashboard')).toBe(
+      true,
+    );
+    expect(getSortableSidebarItemIds(true, { dashboardEnabled: true }).has('dashboard')).toBe(
+      false,
+    );
+  });
+
+  it('offers Goals only while the goals lab is on', () => {
+    expect(getSortableSidebarItemIds(false).has('goals')).toBe(false);
+    expect(getSortableSidebarItemIds(false, { goalsEnabled: true }).has('goals')).toBe(true);
+    expect(getSortableSidebarItemIds(true, { goalsEnabled: true }).has('goals')).toBe(true);
+  });
 });

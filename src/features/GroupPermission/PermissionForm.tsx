@@ -1,10 +1,8 @@
 'use client';
 
 import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Empty, Form, Icon } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Alert, createStaticStyles, Empty, Icon } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { Bot, InfoIcon, LockIcon, MonitorSmartphone, Share2, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,6 +54,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     setTopicSharePolicy,
     topicSharePolicy,
   } = useGroupPermission(groupId);
+  const form = useForm();
 
   const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
 
@@ -149,7 +148,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     );
   }
 
-  const memberGroup: FormGroupItemType | undefined = sections.showAccessCard
+  const memberGroup: FormGroupItem | undefined = sections.showAccessCard
     ? {
         children: [
           {
@@ -209,7 +208,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
   // Both rows write to the supervisor agent. Until group detail resolves one
   // there is no row to write to, so the whole card waits rather than offering
   // controls whose save would silently target nothing.
-  const configGroup: FormGroupItemType | undefined = sections.showConfigCard
+  const configGroup: FormGroupItem | undefined = sections.showConfigCard
     ? {
         children: [
           {
@@ -275,6 +274,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
       ) : null}
       <Form
         collapsible={false}
+        form={form}
         items={[...(memberGroup ? [memberGroup] : []), ...(configGroup ? [configGroup] : [])]}
         itemsType={'group'}
         variant={'filled'}

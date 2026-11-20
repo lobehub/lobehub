@@ -3,10 +3,16 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Drawer, toast } from '@lobehub/ui/base-ui';
-import { Form as AForm, Popconfirm } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  Alert,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Drawer,
+  Flexbox,
+  toast,
+} from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -67,7 +73,6 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
 
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
   const [saving, setSaving] = useState(false);
-  const [form] = AForm.useForm();
 
   const { data, isLoading } = useToolStore((s) => s.useFetchAgentSkillDetail)(
     open ? skillId : undefined,
@@ -103,6 +108,8 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
     }
   };
 
+  const form = useForm<SkillEditFormValues>({ initialValues, onSubmit: handleSubmit });
+
   const handleDelete = async () => {
     if (!canEdit) return;
     await deleteAgentSkill(skillId);
@@ -112,23 +119,22 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
 
   const footer = (
     <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
-      <Popconfirm
-        arrow={false}
-        cancelText={tc('cancel')}
-        okText={tc('ok')}
-        placement={'topLeft'}
-        title={tp('dev.confirmDeleteDevPlugin')}
-        okButtonProps={{
-          danger: true,
-          disabled: !canEdit,
-          type: 'primary',
-        }}
-        onConfirm={handleDelete}
+      <Button
+        danger
+        disabled={!canEdit}
+        onClick={() =>
+          confirmModal({
+            cancelText: tc('cancel'),
+            okButtonProps: { danger: true },
+            okText: tc('ok'),
+            onOk: handleDelete,
+            content: tp('dev.confirmDeleteDevPlugin'),
+            title: tc('delete'),
+          })
+        }
       >
-        <Button danger disabled={!canEdit}>
-          {tc('delete')}
-        </Button>
-      </Popconfirm>
+        {tc('delete')}
+      </Button>
       <Flexbox horizontal gap={12}>
         <Button onClick={onClose}>{tc('cancel')}</Button>
         <Button
@@ -190,7 +196,6 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
                 form={form}
                 initialValues={initialValues}
                 name={skillDetail?.name}
-                onSubmit={handleSubmit}
               />
             </div>
             {selectedFile !== 'SKILL.md' && (

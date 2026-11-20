@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as workspaceHooks from '@/business/client/hooks/useActiveWorkspaceId';
+import { cacheScope } from '@/libs/replica';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { useToolStore } from '../../store';
@@ -10,6 +10,7 @@ import { initialConnectorState } from './initialState';
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
+      create: { mutate: vi.fn() },
       list: { query: vi.fn() },
       listAgentBound: { query: vi.fn() },
       listByAgent: { query: vi.fn() },
@@ -27,9 +28,14 @@ const listByAgentQuery = lambdaClient.connector.listByAgent.query as unknown as 
 
 const connector = (identifier: string) => ({ id: identifier, identifier, tools: [] });
 
+let scopeSpy: ReturnType<typeof vi.spyOn>;
+
 describe('createConnectorSlice — scope guard', () => {
   beforeEach(() => {
     useToolStore.setState({ ...initialConnectorState });
+    // The guard captures the full cache scope (user + workspace), not just the
+    // workspace id, so the tests drive the scope string directly.
+    scopeSpy = vi.spyOn(cacheScope, 'get').mockReturnValue('user-a:personal');
   });
 
   afterEach(() => {
@@ -37,17 +43,16 @@ describe('createConnectorSlice — scope guard', () => {
     vi.clearAllMocks();
   });
 
-  // The connector list is workspace-scoped server-side but lands in one global
+  // The connector list is identity-scoped server-side but lands in one global
   // store bucket, so a response that resolves after the active scope moved on
   // must be dropped. Booting straight into a workspace URL is exactly that: the
   // tree mounts once in personal context before the URL→store sync resolves the
   // slug, so a personal query is already in flight when the workspace switch
   // fires its own — and the personal one landing last is what made a business
   // workspace list the user's PERSONAL tools.
-  it('drops a fetchConnectors response that resolves after the scope changed', async () => {
-    const wsSpy = vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue(null);
+  it('drops a fetchConnectors response that resolves after the workspace changed', async () => {
     listQuery.mockImplementation(async () => {
-      wsSpy.mockReturnValue('ws-1');
+      scopeSpy.mockReturnValue('user-a:ws-1');
       return [connector('personal-tool')];
     });
 
@@ -60,8 +65,25 @@ describe('createConnectorSlice — scope guard', () => {
     expect(useToolStore.getState().isConnectorsInit).toBe(false);
   });
 
+  // The gap a workspace-only guard leaves open: two signed-in users in personal
+  // context both have a `null` workspace, so the scope must include the user or
+  // user A's inventory lands in user B's partition after an account switch.
+  it('drops a fetchConnectors response that resolves after the signed-in user changed', async () => {
+    listQuery.mockImplementation(async () => {
+      scopeSpy.mockReturnValue('user-b:personal');
+      return [connector('user-a-tool')];
+    });
+
+    const { result } = renderHook(() => useToolStore());
+    await act(async () => {
+      await result.current.fetchConnectors();
+    });
+
+    expect(useToolStore.getState().connectors).toEqual([]);
+    expect(useToolStore.getState().isConnectorsInit).toBe(false);
+  });
+
   it('writes a fetchConnectors response that resolves in the same scope', async () => {
-    vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
     listQuery.mockResolvedValue([connector('workspace-tool')]);
 
     const { result } = renderHook(() => useToolStore());
@@ -74,9 +96,8 @@ describe('createConnectorSlice — scope guard', () => {
   });
 
   it('drops a fetchAgentBoundConnectors response that resolves after the scope changed', async () => {
-    const wsSpy = vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
     listAgentBoundQuery.mockImplementation(async () => {
-      wsSpy.mockReturnValue(null);
+      scopeSpy.mockReturnValue('user-b:personal');
       return [connector('agent-bound')];
     });
 
@@ -90,9 +111,8 @@ describe('createConnectorSlice — scope guard', () => {
   });
 
   it('drops a fetchAgentConnectors response that resolves after the scope changed', async () => {
-    const wsSpy = vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
     listByAgentQuery.mockImplementation(async () => {
-      wsSpy.mockReturnValue('ws-2');
+      scopeSpy.mockReturnValue('user-a:ws-2');
       return [connector('agent-owned')];
     });
 
@@ -103,5 +123,42 @@ describe('createConnectorSlice — scope guard', () => {
 
     expect(useToolStore.getState().agentConnectors['agt_1']).toBeUndefined();
     expect(useToolStore.getState().agentConnectorsInit['agt_1']).toBeUndefined();
+  });
+});
+
+describe('createConnector', () => {
+  beforeEach(() => {
+    useToolStore.setState({ ...initialConnectorState });
+    vi.spyOn(cacheScope, 'get').mockReturnValue('user-a:personal');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  // An install rolls back by the returned id: a create that rejected after the
+  // server wrote the row would leave the row it replaced unrecoverable
+  it('returns the written row even when the list refresh after it fails', async () => {
+    vi.mocked(lambdaClient.connector.create.mutate).mockResolvedValue({
+      id: 'conn-1',
+      isNew: false,
+    } as never);
+    listQuery.mockRejectedValue(new Error('network down'));
+
+    await expect(
+      useToolStore.getState().createConnector({ identifier: 'mcp', name: 'MCP' } as never),
+    ).resolves.toEqual({ id: 'conn-1', isNew: false });
+    expect(useToolStore.getState().connectorCreating).toBe(false);
+  });
+
+  it('still fails a create the server refused', async () => {
+    vi.mocked(lambdaClient.connector.create.mutate).mockRejectedValue(new Error('conflict'));
+
+    await expect(
+      useToolStore.getState().createConnector({ identifier: 'mcp', name: 'MCP' } as never),
+    ).rejects.toThrow('conflict');
+    expect(listQuery).not.toHaveBeenCalled();
   });
 });

@@ -1,39 +1,43 @@
-import { exec } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
-import path from 'node:path';
-import { promisify } from 'node:util';
-
+import {
+  buildMcpToolMetadata,
+  getMcpAppEntrypoints,
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  partitionMcpToolsForViews,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
+import type { ListMcpToolsParams } from '@lobechat/device-control';
+import {
+  DeviceMcpRuntime,
+  type McpCallOptions,
+  type MCPClientParams,
+  type McpSessionOptions,
+  type McpTool,
+  type McpToolOutput,
+  withStdioOutput,
+} from '@lobechat/device-mcp';
 import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
   serializeMcpIpcPayload,
 } from '@lobechat/utils/mcpIpcPayload';
+import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 
+import { getDesktopEnv } from '@/env';
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
 
-import type { MCPClient } from '../libs/mcp/client';
-import type {
-  AudioContent,
-  ImageContent,
-  MCPClientParams,
-  ResourceContent,
-  ToolCallContent,
-  ToolCallResult,
-} from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
+import { checkDeployOption } from './mcpInstallCheck';
 
-const execPromise = promisify(exec);
 const logger = createLogger('controllers:McpCtr');
-const loadMcpClient = () => import('../libs/mcp/client');
 
 /**
  * Desktop-only copy of `@lobechat/types`'s `CheckMcpInstallResult`.
  *
  * We intentionally keep it local to avoid pulling the web app's path-alias
- * expectations (e.g. `@/config/*`) into the desktop `tsgo` typecheck.
- */
-interface CheckMcpInstallResult {
+ * expectations (e.g. `@/config/*`) into the desktop `tsrs` typecheck.
+ */ interface CheckMcpInstallResult {
   allDependenciesMet?: boolean;
   allOptions?: Array<{
     allDependenciesMet?: boolean;
@@ -82,7 +86,7 @@ interface CustomPluginMetadata {
   name?: string;
 }
 
-interface GetStdioMcpServerManifestInput {
+interface GetStdioMcpServerManifestInput extends McpSessionOptions {
   args?: string[];
   command: string;
   env?: Record<string, string>;
@@ -91,7 +95,7 @@ interface GetStdioMcpServerManifestInput {
   type?: 'stdio';
 }
 
-interface GetStreamableMcpServerManifestInput {
+interface GetStreamableMcpServerManifestInput extends McpSessionOptions {
   auth?: {
     accessToken?: string;
     token?: string;
@@ -103,185 +107,156 @@ interface GetStreamableMcpServerManifestInput {
   url: string;
 }
 
-export interface CallToolInput {
+export interface StdioCallToolInput extends McpCallOptions {
   args: any;
   env: any;
+  http?: undefined;
   params: GetStdioMcpServerManifestInput;
   toolName: string;
 }
 
+/** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
+export interface HttpCallToolInput extends McpCallOptions {
+  args: any;
+  http: {
+    auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+    headers?: Record<string, string>;
+    name: string;
+    url: string;
+  };
+  toolName: string;
+}
+
+export type CallToolInput = StdioCallToolInput | HttpCallToolInput;
+
+/** List a stdio or local-network HTTP server's tools, as the server declares them. */
+export type ListToolsInput = McpSessionOptions &
+  (
+    | { http: HttpCallToolInput['http']; stdio?: undefined }
+    | { http?: undefined; stdio: GetStdioMcpServerManifestInput }
+  );
+
+/** A tool as `listTools` reports it, with its MCP Apps `visibility` when declared. */
+export interface ListedMcpTool {
+  description?: string;
+  inputSchema: McpTool['inputSchema'];
+  mcpAppMeta?: ReturnType<typeof buildMcpToolMetadata>;
+  name: string;
+  visibility?: string[];
+}
+
+export interface ReadUiResourceInput {
+  env?: any;
+  /** HTTP endpoint only this machine can reach (localhost / LAN). */
+  http?: {
+    auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+    headers?: Record<string, string>;
+    name: string;
+    url: string;
+  };
+  params?: GetStdioMcpServerManifestInput;
+  uri: string;
+}
+
 type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
+
+/**
+ * A manifest's api is what the model may call: tools whose MCP Apps visibility
+ * leaves out "model" exist only for their view, which reaches them through
+ * `callTool`, so they stay out of it.
+ */
+const toPluginApi = (tools: McpTool[]) =>
+  tools.map((item) => ({
+    description: item.description,
+    name: item.name,
+    parameters: item.inputSchema as any,
+  }));
+
+const toModelApi = (tools: McpTool[], enabled = false) =>
+  toPluginApi(
+    tools.filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta, enabled), 'model')),
+  );
+
+/**
+ * MCP Apps: what a plugin's views may call beyond its model-facing `api`, and
+ * which `api` tools they may not, so the view-call policy finds every tool a
+ * view may reach without the model seeing the view-only ones.
+ */
+const toMcpAppsManifestFields = (tools: McpTool[], enabled = false) => {
+  const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(tools, enabled);
+
+  return {
+    ...(enabled && { mcpAppEntrypoints: getMcpAppEntrypoints(tools, true) }),
+    ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: toPluginApi(appOnlyTools) }),
+    ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
+  };
+};
 
 const deserializePayload = deserializeMcpIpcPayload;
 
 const serializePayload = serializeMcpIpcPayload;
 
-const safeParseToRecord = (value: unknown): Record<string, unknown> => {
-  if (value && typeof value === 'object' && !Array.isArray(value))
-    return value as Record<string, unknown>;
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
-        return parsed as Record<string, unknown>;
-    } catch {
-      // ignore
-    }
-  }
-  return {};
-};
-
-const MEDIA_UPLOAD_CONFIG = {
-  audio: {
-    defaultExtension: 'mp3',
-    defaultMimeType: 'audio/mpeg',
-    pathnameSegment: 'audios',
-  },
-  image: {
-    defaultExtension: 'png',
-    defaultMimeType: 'image/png',
-    pathnameSegment: 'images',
-  },
-} as const;
-
-type MediaContentType = keyof typeof MEDIA_UPLOAD_CONFIG;
-
-const PREFERRED_MIME_EXTENSIONS: Record<string, string> = {
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'image/svg+xml': 'svg',
-};
-
-const normalizeMimeType = (mimeType: string | undefined, mediaType: MediaContentType) => {
-  const normalized = mimeType?.split(';')[0]?.trim().toLowerCase();
-  return normalized || MEDIA_UPLOAD_CONFIG[mediaType].defaultMimeType;
-};
-
-const getMediaContentType = (mimeType: string | undefined): MediaContentType | undefined => {
-  const normalized = mimeType?.split(';')[0]?.trim().toLowerCase();
-  if (normalized?.startsWith('image/')) return 'image';
-  if (normalized?.startsWith('audio/')) return 'audio';
-};
-
-const getFileExtensionFromMimeType = (mimeType: string, mediaType: MediaContentType) => {
-  const [, subtype = ''] = mimeType.split('/');
-  const sanitizedSubtype = subtype
-    .split('+')[0]
-    .replaceAll(/[^a-z0-9]/gi, '')
-    .toLowerCase();
-
-  return (
-    PREFERRED_MIME_EXTENSIONS[mimeType] ||
-    sanitizedSubtype ||
-    MEDIA_UPLOAD_CONFIG[mediaType].defaultExtension
-  );
-};
-
-const todayShard = () => new Date().toISOString().split('T')[0];
-
-const toMarkdown = async (
-  blocks: ToolCallContent[] | null | undefined,
-  getHTTPURL: (key: string) => Promise<string>,
-) => {
-  if (!blocks) return '';
-
-  const parts = await Promise.all(
-    blocks.map(async (item) => {
-      switch (item.type) {
-        case 'text': {
-          return item.text;
-        }
-        case 'image': {
-          const url = await getHTTPURL(item.data);
-          return `![](${url})`;
-        }
-        case 'audio': {
-          const url = await getHTTPURL(item.data);
-          return `<resource type="${item.type}" url="${url}" />`;
-        }
-        case 'resource': {
-          return `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>`;
-        }
-        default: {
-          return '';
-        }
-      }
-    }),
-  );
-
-  return parts.filter(Boolean).join('\n\n');
-};
-
 /**
  * MCP Controller (Desktop Main Process)
  * Implements the same routes as `src/server/routers/desktop/mcp.ts`, but via IPC.
+ *
+ * Sessions, tool execution and media handling live in the shared
+ * `@lobechat/device-mcp` runtime, which `lh connect` runs too, so a tunneled
+ * call behaves the same on either device host.
  */
 export default class McpCtr extends ControllerModule {
   static override readonly groupName = 'mcp';
+
+  private runtimeInstance?: DeviceMcpRuntime;
+
+  private get runtime(): DeviceMcpRuntime {
+    this.runtimeInstance ??= new DeviceMcpRuntime({
+      clientName: 'lobehub-desktop-mcp-client',
+      getMediaUrl: (key) => this.fileService.getFileHTTPURL(key),
+      logger,
+      toolTimeoutMs: getDesktopEnv().MCP_TOOL_TIMEOUT,
+      uploadMedia: (media) => this.uploadMcpMedia(media),
+    });
+    return this.runtimeInstance;
+  }
+
+  /**
+   * App shutdown hook: disconnect every pooled stdio session so no MCP
+   * subprocess outlives the desktop process. Electron does not await
+   * Promise-returning listeners; the runtime initiates every disconnect
+   * synchronously before its first await.
+   */
+  async beforeAppReady() {
+    const { app } = await import('electron');
+    app.once('will-quit', () => {
+      void this.disposeAllPooledClients();
+    });
+  }
+
+  private async disposeAllPooledClients(): Promise<void> {
+    await this.runtimeInstance?.dispose();
+  }
 
   private get fileService() {
     return this.app.getService(FileService);
   }
 
-  private async createClient(params: MCPClientParams) {
-    const { MCPClient } = await loadMcpClient();
-    const client = new MCPClient(params);
-    await client.initialize();
-    return client;
-  }
-
-  private async uploadMcpMediaBlock(base64: string, mediaType: MediaContentType, mimeType: string) {
-    const config = MEDIA_UPLOAD_CONFIG[mediaType];
-    const ext = getFileExtensionFromMimeType(mimeType, mediaType);
-    const buffer = Buffer.from(base64, 'base64');
-    const hash = createHash('sha256').update(buffer).digest('hex');
-    const id = randomUUID();
-    const filename = `${id}.${ext}`;
-    const filePath = path.posix.join('mcp', config.pathnameSegment, todayShard(), filename);
-
+  private async uploadMcpMedia({
+    base64,
+    filename,
+    hash,
+    mimeType,
+    path,
+  }: Parameters<ConstructorParameters<typeof DeviceMcpRuntime>[0]['uploadMedia']>[0]) {
     const { metadata } = await this.fileService.uploadFile({
       content: base64,
       filename,
       hash,
-      path: filePath,
+      path,
       type: mimeType,
     });
 
     return metadata.path;
-  }
-
-  private async processContentBlocks(blocks: ToolCallContent[]): Promise<ToolCallContent[]> {
-    return Promise.all(
-      blocks.map(async (block) => {
-        if (block.type === 'image' || block.type === 'audio') {
-          const mediaType = block.type;
-          const mimeType = normalizeMimeType(block.mimeType, mediaType);
-          const data = await this.uploadMcpMediaBlock(block.data, mediaType, mimeType);
-
-          return { ...block, data, mimeType };
-        }
-
-        if (block.type === 'resource') {
-          const resourceBlock = block as ResourceContent;
-          const resource = resourceBlock.resource;
-          const mediaType = getMediaContentType(resource?.mimeType);
-
-          if (!resource?.blob || !mediaType) return block;
-
-          const mimeType = normalizeMimeType(resource.mimeType, mediaType);
-          const data = await this.uploadMcpMediaBlock(resource.blob, mediaType, mimeType);
-          const metadata = resourceBlock._meta ? { _meta: resourceBlock._meta } : {};
-
-          if (mediaType === 'image') {
-            return { ...metadata, data, mimeType, type: 'image' } as ImageContent;
-          }
-
-          return { ...metadata, data, mimeType, type: 'audio' } as AudioContent;
-        }
-
-        return block;
-      }),
-    );
   }
 
   @IpcMethod()
@@ -295,56 +270,42 @@ export default class McpCtr extends ControllerModule {
       type: 'stdio',
     };
 
-    let client: MCPClient | undefined;
+    let client: Awaited<ReturnType<DeviceMcpRuntime['acquireClient']>> | undefined;
     try {
-      client = await this.createClient(params);
-      const manifest = await client.listManifests();
+      client = await this.runtime.acquireClient(params, { mcpApps: input.mcpApps });
+      const pooled = client;
+      // Lease for the manifest refresh too: a concurrent stale-session
+      // eviction must not disconnect underneath this pending request.
+      const manifest = await this.runtime.withClientLease(pooled, () => pooled.listManifests());
       const identifier = input.name;
 
-      const tools = manifest.tools || [];
+      const api = toModelApi(manifest.tools || [], input.mcpApps);
 
       return serializePayload({
-        api: tools.map((item) => ({
-          description: item.description,
-          name: item.name,
-          parameters: item.inputSchema as any,
-        })),
+        api,
         identifier,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
           description:
             input.metadata?.description ||
-            `${identifier} MCP server has ` +
-              Object.entries(manifest)
-                .filter(([key]) => ['tools', 'prompts', 'resources'].includes(key))
-                .map(([key, item]) => `${(item as Array<any>)?.length} ${key}`)
-                .join(','),
+            getMcpServerDescription(identifier, { ...manifest, tools: api }),
           title: input.metadata?.name || identifier,
         },
         ...manifest,
+        ...toMcpAppsManifestFields(manifest.tools || [], input.mcpApps),
         mcpParams: params,
         type: 'mcp' as any,
       });
     } catch (error) {
-      // If it's an MCPConnectionError with stderr logs, enhance the error message
-      const { MCPConnectionError } = await loadMcpClient();
-      if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
-        const stderrOutput = error.stderrLogs.join('\n');
-        const enhancedError = new Error(
-          `${error.message}\n\n--- STDIO Process Output ---\n${stderrOutput}`,
-        );
-        enhancedError.name = error.name;
-        logger.error('getStdioMcpServerManifest failed with STDIO logs:', {
-          message: error.message,
-          stderrLogs: error.stderrLogs,
-        });
-        throw enhancedError;
-      }
-      throw error;
-    } finally {
-      if (client) {
-        await client.disconnect();
-      }
+      // The pooled session this manifest refresh ran on is stale/broken —
+      // evict it so the next refresh starts fresh instead of reacquiring
+      // the same dead session forever. Identity-guarded: a concurrent
+      // recreate must not be disconnected.
+      await this.runtime.evictClient(params, client);
+      const enhanced = await withStdioOutput(error);
+      if (enhanced !== error)
+        logger.error('getStdioMcpServerManifest failed with STDIO logs:', enhanced);
+      throw enhanced;
     }
   }
 
@@ -361,24 +322,22 @@ export default class McpCtr extends ControllerModule {
       url: input.url,
     };
 
-    const client = await this.createClient(params);
+    const client = await this.runtime.createClient(params, { mcpApps: input.mcpApps });
     try {
       const tools = await client.listTools();
+      const api = toModelApi(tools, input.mcpApps);
       const identifier = input.identifier;
 
       return serializePayload({
-        api: tools.map((item) => ({
-          description: item.description,
-          name: item.name,
-          parameters: item.inputSchema as any,
-        })),
+        api,
         identifier,
+        ...toMcpAppsManifestFields(tools, input.mcpApps),
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
           description:
             input.metadata?.description ||
-            `${identifier} MCP server has ${tools.length} tools, like "${tools[0]?.name}"`,
+            getMcpServerDescription(identifier, { tools: api }, { includeToolExample: true }),
           title: identifier,
         },
         type: 'mcp' as any,
@@ -388,10 +347,120 @@ export default class McpCtr extends ControllerModule {
     }
   }
 
+  /**
+   * Every tool a stdio or local-network HTTP server lists, including the ones
+   * only its views may call. A connector syncs this full list, since a view's
+   * call must find its tool synced; the model's manifest filters it later.
+   */
+  @IpcMethod()
+  async listTools(payload: SuperJSONSerialized<ListToolsInput>) {
+    const input = deserializePayload<ListToolsInput>(payload);
+    const toListed = (tools: McpTool[]): ListedMcpTool[] =>
+      tools.map((tool) => ({
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        name: tool.name,
+        visibility: getMcpToolVisibility(tool._meta),
+        ...(input.mcpApps && {
+          mcpAppMeta: buildMcpToolMetadata(resolveMcpUiToolMeta(tool._meta, false).visibility, {
+            ...resolveMcpUiToolMeta(tool._meta),
+            entrypoints: resolveMcpUiToolMeta(tool._meta).entrypoints ?? [],
+            threadEntry: getMcpAppEntrypoints([tool], true)[0],
+          }),
+        }),
+      }));
+
+    const params: MCPClientParams = input.http
+      ? { ...input.http, type: 'http' }
+      : {
+          args: input.stdio.args || [],
+          command: input.stdio.command,
+          env: input.stdio.env,
+          name: input.stdio.name,
+          type: 'stdio',
+        };
+    return serializePayload(
+      toListed(await this.runtime.listTools(params, { mcpApps: input.mcpApps })),
+    );
+  }
+
+  /**
+   * The device-gateway `listMcpTools` RPC: the cloud server can't reach this
+   * MCP server (stdio, an endpoint on this machine's network, or one the user
+   * set to connect through this device), so it asks this machine for the tool
+   * list and maps it as it maps its own listings. The tools go back as listed.
+   * Listed by the same runtime the tunneled calls run on.
+   */
+  async listToolsForGateway({ mcpApps, params }: ListMcpToolsParams): Promise<McpTool[]> {
+    const client: MCPClientParams =
+      params.type === 'http'
+        ? {
+            auth: params.auth,
+            headers: params.headers,
+            name: params.name,
+            type: 'http',
+            url: params.url,
+          }
+        : {
+            args: params.args ?? [],
+            command: params.command,
+            env: params.env,
+            name: params.name,
+            type: 'stdio',
+          };
+    return this.runtime.listTools(client, { mcpApps });
+  }
+
   @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
-    return serializePayload(await this.runStdioMcpTool(input));
+    if ('http' in input && input.http) {
+      return serializePayload(
+        await this.runHttpMcpTool(input.http, input.toolName, input.args, {
+          fromApp: input.fromApp,
+          fromEntrypoint: input.fromEntrypoint,
+          mcpApps: input.mcpApps,
+        }),
+      );
+    }
+    return serializePayload(await this.runStdioMcpTool(input as StdioCallToolInput));
+  }
+
+  /**
+   * Read an MCP Apps `ui://` resource from a stdio or local-network HTTP
+   * server, so the chat can render a tool result's interactive view.
+   *
+   * Unlike the web routes, not gated by the `mcp_apps` flag: the main process
+   * has no per-user flags, and the renderer only asks while the flag is on.
+   */
+  /**
+   * Read an MCP Apps `ui://` resource from a stdio or local-network HTTP
+   * server, so the chat can render a tool result's interactive view.
+   *
+   * Unlike the web routes, not gated by the `mcp_apps` flag: the main process
+   * has no per-user flags, and the renderer only asks while the flag is on.
+   */
+  @IpcMethod()
+  async readUiResource(payload: SuperJSONSerialized<ReadUiResourceInput>) {
+    const input = deserializePayload<ReadUiResourceInput>(payload);
+    if (!input.uri?.startsWith('ui://')) throw new Error('Only ui:// resources can be read');
+
+    let params: MCPClientParams;
+    if (input.http) {
+      params = { ...input.http, type: 'http' };
+    } else if (input.params) {
+      params = {
+        args: input.params.args || [],
+        command: input.params.command,
+        env: input.env,
+        name: input.params.name,
+        type: 'stdio',
+      };
+    } else {
+      throw new Error('Missing MCP server params');
+    }
+
+    return serializePayload(await this.runtime.readUiResource(params, input.uri));
   }
 
   /**
@@ -401,10 +470,8 @@ export default class McpCtr extends ControllerModule {
    * result envelope; callers serialize as needed. Throws on failure so each
    * caller can shape its own error response.
    */
-  async runStdioMcpTool(
-    input: CallToolInput,
-  ): Promise<{ content: string; state: unknown; success: boolean }> {
-    return this.runMcpTool(
+  async runStdioMcpTool(input: StdioCallToolInput): Promise<McpToolOutput> {
+    return this.runtime.runTool(
       {
         args: input.params.args || [],
         command: input.params.command,
@@ -414,6 +481,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
+      { fromApp: input.fromApp, fromEntrypoint: input.fromEntrypoint, mcpApps: input.mcpApps },
     );
   }
 
@@ -431,258 +499,14 @@ export default class McpCtr extends ControllerModule {
     },
     toolName: string,
     rawArgs: unknown,
-  ): Promise<{ content: string; state: unknown; success: boolean }> {
-    return this.runMcpTool(
-      {
-        auth: input.auth,
-        headers: input.headers,
-        name: input.name,
-        type: 'http',
-        url: input.url,
-      },
+    options: McpCallOptions = {},
+  ): Promise<McpToolOutput> {
+    return this.runtime.runTool(
+      { auth: input.auth, headers: input.headers, name: input.name, type: 'http', url: input.url },
       toolName,
       rawArgs,
+      options,
     );
-  }
-
-  private async runMcpTool(
-    params: MCPClientParams,
-    toolName: string,
-    rawArgs: unknown,
-  ): Promise<{ content: string; state: unknown; success: boolean }> {
-    let client: MCPClient | undefined;
-    try {
-      client = await this.createClient(params);
-      const args = safeParseToRecord(rawArgs);
-
-      const raw = (await client.callTool(toolName, args)) as ToolCallResult;
-      const processed = raw.isError ? raw.content : await this.processContentBlocks(raw.content);
-
-      const content = await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
-
-      return {
-        content,
-        state: { ...raw, content: processed },
-        success: true,
-      };
-    } catch (error) {
-      // If it's an MCPConnectionError with stderr logs, enhance the error message
-      const { MCPConnectionError } = await loadMcpClient();
-      if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
-        const stderrOutput = error.stderrLogs.join('\n');
-        const enhancedError = new Error(
-          `${error.message}\n\n--- STDIO Process Output ---\n${stderrOutput}`,
-        );
-        enhancedError.name = error.name;
-        logger.error('callTool failed with STDIO logs:', {
-          message: error.message,
-          stderrLogs: error.stderrLogs,
-        });
-        throw enhancedError;
-      }
-      logger.error('callTool failed:', error);
-      throw error;
-    } finally {
-      if (client) {
-        await client.disconnect();
-      }
-    }
-  }
-
-  // ---------- MCP Install Check (local system) ----------
-
-  private getInstallInstructions(installInstructions: any) {
-    if (!installInstructions) return undefined;
-
-    let current: string | undefined;
-
-    switch (process.platform) {
-      case 'darwin': {
-        current = installInstructions.macos;
-        break;
-      }
-      case 'linux': {
-        current = installInstructions.linux_debian || installInstructions.linux;
-        break;
-      }
-      case 'win32': {
-        current = installInstructions.windows;
-        break;
-      }
-    }
-
-    return { current, manual: installInstructions.manual };
-  }
-
-  private async checkSystemDependency(dependency: any) {
-    const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
-
-    try {
-      const { stdout, stderr } = await execPromise(checkCommand);
-
-      if (stderr && !stdout) {
-        return {
-          error: stderr,
-          installInstructions: this.getInstallInstructions(dependency.installInstructions),
-          installed: false,
-          meetRequirement: false,
-          name: dependency.name,
-          requiredVersion: dependency.requiredVersion,
-        };
-      }
-
-      const output = String(stdout || '').trim();
-      let version = output;
-
-      if (dependency.versionParsingRequired) {
-        const versionMatch = output.match(/V?(\d+(\.\d+)*)/i);
-        if (versionMatch) version = versionMatch[0];
-      }
-
-      let meetRequirement = true;
-
-      if (dependency.requiredVersion) {
-        const currentVersion = String(version).replace(/^V/i, '');
-        const currentNum = Number.parseFloat(currentVersion);
-
-        const requirementMatch = String(dependency.requiredVersion).match(/([<=>]+)?(\d+(\.\d+)*)/);
-        if (requirementMatch) {
-          const [, operator = '=', requiredVersion] = requirementMatch;
-          const requiredNum = Number.parseFloat(requiredVersion);
-          switch (operator) {
-            case '>=': {
-              meetRequirement = currentNum >= requiredNum;
-              break;
-            }
-            case '>': {
-              meetRequirement = currentNum > requiredNum;
-              break;
-            }
-            case '<=': {
-              meetRequirement = currentNum <= requiredNum;
-              break;
-            }
-            case '<': {
-              meetRequirement = currentNum < requiredNum;
-              break;
-            }
-            default: {
-              meetRequirement = currentNum === requiredNum;
-              break;
-            }
-          }
-        }
-      }
-
-      return {
-        installInstructions: this.getInstallInstructions(dependency.installInstructions),
-        installed: true,
-        meetRequirement,
-        name: dependency.name,
-        requiredVersion: dependency.requiredVersion,
-        version,
-      };
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        installInstructions: this.getInstallInstructions(dependency.installInstructions),
-        installed: false,
-        meetRequirement: false,
-        name: dependency.name,
-        requiredVersion: dependency.requiredVersion,
-      };
-    }
-  }
-
-  private async checkPackageInstalled(installationMethod: string, details: any) {
-    if (installationMethod === 'npm') {
-      const packageName = details?.packageName;
-      if (!packageName) return { installed: false };
-
-      // Only check global npm list - do NOT use npx as it may download packages
-      try {
-        const { stdout } = await execPromise(`npm list -g ${packageName} --depth=0`);
-        if (!stdout.includes('(empty)') && stdout.includes(packageName)) {
-          return { installed: true };
-        }
-      } catch {
-        // ignore - package not found in global list
-      }
-
-      // For npm packages, we don't require pre-installation
-      // npx will handle downloading and running on-demand during actual MCP connection
-      return { installed: false };
-    }
-
-    if (installationMethod === 'python') {
-      const packageName = details?.packageName;
-      if (!packageName) return { installed: false };
-
-      const pythonCommand = details?.pythonCommand || 'python';
-
-      try {
-        const command = `${pythonCommand} -m pip list | grep -i "${packageName}"`;
-        const { stdout } = await execPromise(command);
-        if (stdout.trim() && stdout.toLowerCase().includes(String(packageName).toLowerCase())) {
-          return { installed: true };
-        }
-      } catch {
-        // ignore
-      }
-
-      try {
-        const importCommand = `${pythonCommand} -c "import ${String(packageName).replace('-', '_')}; print('Package installed')"`;
-        const { stdout } = await execPromise(importCommand);
-        if (stdout.includes('Package installed')) return { installed: true };
-      } catch {
-        // ignore
-      }
-
-      return { installed: false };
-    }
-
-    // manual or unknown
-    return { installed: false };
-  }
-
-  private async checkDeployOption(option: any) {
-    const systemDependenciesResults = [];
-
-    if (Array.isArray(option.systemDependencies) && option.systemDependencies.length > 0) {
-      for (const dep of option.systemDependencies) {
-        systemDependenciesResults.push(await this.checkSystemDependency(dep));
-      }
-    }
-
-    const packageResult = await this.checkPackageInstalled(
-      option.installationMethod,
-      option.installationDetails,
-    );
-    const packageInstalled = Boolean((packageResult as any).installed);
-
-    const allDependenciesMet = systemDependenciesResults.every((dep: any) => dep.meetRequirement);
-
-    const configSchema = option.connection?.configSchema;
-    const needsConfig = Boolean(
-      configSchema &&
-      ((Array.isArray(configSchema.required) && configSchema.required.length > 0) ||
-        (configSchema.properties &&
-          Object.values(configSchema.properties).some((prop: any) => prop.required === true))),
-    );
-
-    const connection = option.connection?.url
-      ? { ...option.connection, type: 'http' }
-      : { ...option.connection, type: 'stdio' };
-
-    return {
-      allDependenciesMet,
-      configSchema,
-      connection,
-      isRecommended: option.isRecommended,
-      needsConfig,
-      packageInstalled,
-      systemDependencies: systemDependenciesResults,
-    };
   }
 
   @IpcMethod()
@@ -697,7 +521,7 @@ export default class McpCtr extends ControllerModule {
       const results = [];
 
       for (const option of options) {
-        results.push(await this.checkDeployOption(option));
+        results.push(await checkDeployOption(option));
       }
 
       const recommendedResult = results.find((r: any) => r.isRecommended && r.allDependenciesMet);

@@ -1,7 +1,7 @@
 'use client';
 
 import { LOADING_FLAT } from '@lobechat/const';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,6 +73,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, disableEditing }) => {
       showTitle
       aboveMessage={null}
       actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
+      agentId={agentId ?? null}
       avatar={{ ...avatar, title }}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}

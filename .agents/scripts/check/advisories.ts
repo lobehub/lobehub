@@ -1,7 +1,6 @@
+import { createBaseLocator } from './base';
 import { run } from './exec';
-import { getConfig, mountDir } from './paths';
-import { resolveMount } from './routing';
-import type { RepoMount } from './types';
+import { mountDir } from './paths';
 
 interface BaseFileStatus {
   baseRef: string;
@@ -15,33 +14,21 @@ const TESTING_SKILL_REFERENCE =
   '.agents/skills/testing/SKILL.md (Core Principles: "No new component tests")';
 
 const createBaseFileInspector = (): InspectBaseFile => {
-  const mergeBases = new Map<RepoMount, Promise<string | undefined>>();
+  const locate = createBaseLocator();
 
   return async (file) => {
-    const { mount, subPath } = resolveMount(getConfig().repos, file);
-    if (!mount.baseRef) return;
-
-    let mergeBase = mergeBases.get(mount);
-    if (!mergeBase) {
-      // This advisory is best-effort: an unavailable local base skips it instead of failing checks.
-      mergeBase = run('git', ['merge-base', 'HEAD', mount.baseRef], mountDir(mount)).then(
-        (result) => (result.code === 0 ? result.stdout.trim() || undefined : undefined),
-      );
-      mergeBases.set(mount, mergeBase);
-    }
-
-    const baseCommit = await mergeBase;
-    // Unlike a missing file at a valid base, an unresolved base cannot prove the file is new.
-    if (!baseCommit) return;
+    // An unresolved base cannot prove the file is new, unlike a missing file at a valid base.
+    const base = await locate(file);
+    if (!base) return;
 
     const result = await run(
       'git',
-      ['cat-file', '-e', `${baseCommit}:${subPath}`],
-      mountDir(mount),
+      ['cat-file', '-e', `${base.baseCommit}:${base.basePath}`],
+      mountDir(base.mount),
     );
 
     return {
-      baseRef: mount.baseRef,
+      baseRef: base.baseRef,
       exists: result.code === 0,
     };
   };

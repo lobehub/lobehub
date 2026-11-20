@@ -1,17 +1,15 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { DropdownMenu } from '@lobehub/ui';
-import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, DropdownMenu, Tag } from '@lobehub/ui';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 const styles = createStaticStyles(({ css }) => ({
   // The tag is a flex item of the header's left slot: without these it keeps its
@@ -34,6 +32,7 @@ interface TopicSelectorProps {
 
 const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   // Fetch topics for the group agent builder
   useFetchAgentChatTopics(agentId);
@@ -95,7 +94,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           <ActionIcon
             disabled={disabled}
             icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSmallSize}
             title={t('actions.addNewTopic')}
             onClick={() => {
               if (disabled) return;
@@ -112,7 +111,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
             <ActionIcon
               disabled={disabled || isEmpty}
               icon={Clock3Icon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
             />
           </DropdownMenu>
         </>

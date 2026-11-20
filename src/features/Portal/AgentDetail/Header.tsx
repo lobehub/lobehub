@@ -1,7 +1,6 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { Maximize2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,10 +9,12 @@ import PortalChromeHeader from '@/features/Portal/components/Header';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import Title from './Title';
 
 const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('chat');
   const agentId = useChatStore(chatPortalSelectors.agentDetailId);
   const navigate = useWorkspaceAwareNavigate();
@@ -26,7 +27,7 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
         agentId ? (
           <ActionIcon
             icon={Maximize2Icon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSize}
             title={t('internalLink.agent.open')}
             onClick={() => {
               navigate(`/agent/${agentId}`);

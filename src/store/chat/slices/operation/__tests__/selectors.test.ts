@@ -9,6 +9,7 @@ import {
   INPUT_LOADING_OPERATION_TYPES,
   INTERIM_LOADING_OPERATION_TYPES,
   QUEUE_BLOCKING_OPERATION_TYPES,
+  SEND_NOW_CANCEL_REASON,
 } from '../types';
 
 describe('Operation Selectors', () => {
@@ -868,6 +869,169 @@ describe('Operation Selectors', () => {
       expect(
         operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
       ).toBeUndefined();
+    });
+
+    it('should count a steered run from the start of the turn it continues', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context,
+          metadata: { startTime: 5000, turnStartTime: 1000 },
+        });
+      });
+
+      expect(
+        operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
+      ).toBe(1000);
+    });
+
+    it('should keep counting while a steered send waits for its runtime to start', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        result.current.startOperation({
+          type: 'sendMessage',
+          context,
+          metadata: { startTime: 5000 },
+        });
+      });
+
+      expect(
+        operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
+      ).toBeUndefined();
+
+      act(() => {
+        result.current.startOperation({
+          type: 'sendMessage',
+          context,
+          metadata: { startTime: 6000, turnStartTime: 1000 },
+        });
+      });
+
+      expect(
+        operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
+      ).toBe(1000);
+    });
+
+    it('should resolve the turn start of the latest runtime operation, finished or not', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        const { operationId: first } = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000 },
+        });
+        result.current.completeOperation(first);
+        const { operationId: second } = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 3000, turnStartTime: 1000 },
+        });
+        result.current.cancelOperation(second, 'send_now');
+        result.current.startOperation({
+          type: 'sendMessage',
+          context,
+          metadata: { startTime: 4000 },
+        });
+      });
+
+      expect(operationSelectors.getLatestAgentRuntimeTurnStartTime(context)(result.current)).toBe(
+        1000,
+      );
+      expect(
+        operationSelectors.getLatestAgentRuntimeTurnStartTime({ agentId: 'agent2' })(
+          result.current,
+        ),
+      ).toBeUndefined();
+    });
+
+    it('should keep visible loading while a completed run hands its queue to the next turn', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        const { operationId } = result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context,
+          metadata: { startTime: 1000 },
+        });
+        result.current.completeOperation(operationId);
+      });
+
+      expect(operationSelectors.isSteerHandoffPending(context)(result.current)).toBe(false);
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
+
+      act(() => {
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow up',
+          createdAt: 2000,
+          files: [],
+          id: 'q1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isSteerHandoffPending(context)(result.current)).toBe(true);
+      expect(operationSelectors.isQueueDrainPending(context)(result.current)).toBe(true);
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
+    it('should treat a run cancelled by Send now as handing off to the queued message', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        const { operationId } = result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context,
+          metadata: { startTime: 1000 },
+        });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow up',
+          createdAt: 2000,
+          id: 'q1',
+          interruptMode: 'soft',
+        });
+        void result.current.cancelOperation(operationId, SEND_NOW_CANCEL_REASON);
+      });
+
+      expect(operationSelectors.isSteerHandoffPending(context)(result.current)).toBe(true);
+      expect(operationSelectors.isQueueDrainPending(context)(result.current)).toBe(false);
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
+    it('should not treat a queue left behind a cancelled run as a pending handoff', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        const { operationId } = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000 },
+        });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow up',
+          createdAt: 2000,
+          files: [],
+          id: 'q1',
+          interruptMode: 'soft',
+        });
+        result.current.cancelOperation(operationId, 'user_cancelled');
+      });
+
+      expect(operationSelectors.isSteerHandoffPending(context)(result.current)).toBe(false);
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
     });
 
     it('should keep visible loading when a queued message waits behind a visibly-done op', () => {

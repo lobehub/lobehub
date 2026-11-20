@@ -13,15 +13,14 @@ export const SkillsApiName = {
  * content; WHICH skills they can reach is a separate question, answered by the
  * share's `skillGrants` allowlist inside the server runtime.
  *
- * The exec-class APIs (`runCommand` / `execScript`) are excluded because they
- * declare `humanIntervention: 'required'` and a visitor run is forced headless,
- * so there is no approver to honor that declaration; `exportFile` is excluded
- * because its only purpose is pulling artifacts out of an execution those APIs
- * would have started. Opening them needs Agent Share to grow a real approval
- * step first.
+ * The exec-class APIs (`runCommand` / `execScript`) stay excluded even though
+ * share runs now honor the visitor's approval flow: opening skill script
+ * execution to visitors is a separate decision. `exportFile` is
+ * excluded because its only purpose is pulling artifacts out of an execution
+ * those APIs would have started.
  *
  * Shared with the server share gate (`DATA_TOOL_ACCESS_RULES` in
- * `apps/server/src/services/aiAgent/shareGate.ts`), which derives its block
+ * `apps/server/src/services/aiAgent/shareGate/dataToolRules.ts`), which derives its block
  * list as "every API of this tool that is NOT in this set" — so a newly added
  * skill API is denied to visitors by default rather than silently exposed.
  */

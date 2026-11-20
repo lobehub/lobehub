@@ -27,6 +27,13 @@ export interface FollowUpExtractResult {
   chips: FollowUpChip[];
   /** Resolved server-side id of the assistant message the chips were extracted from. Empty string if no eligible message was found. */
   messageId: string;
+  /**
+   * `llm_generation_tracing` row id for this chip generation. Present only when
+   * chips were actually generated. The client holds it for the chip's lifetime
+   * so a click (positive) or dismissal (negative) can be reported back via
+   * `llmGenerationTracing.recordFeedback`.
+   */
+  tracingId?: string;
 }
 
 export const FollowUpHintSchema = z.union([

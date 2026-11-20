@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { cpuPercentBetween, parseMemInfo, parseVmStat } from './systemSnapshot';
+import {
+  cpuPercentBetween,
+  diskUsageFromStatfs,
+  parseMemInfo,
+  parseVmStat,
+} from './systemSnapshot';
 
 describe('cpuPercentBetween', () => {
   it('is the busy share of elapsed CPU time', () => {
@@ -43,5 +48,19 @@ describe('parseMemInfo', () => {
       totalBytes: 1000 * 1024,
       usedBytes: 750 * 1024,
     });
+  });
+});
+
+describe('diskUsageFromStatfs', () => {
+  it('counts every block the user can no longer write to as used', () => {
+    // 1000 blocks, 300 free, 250 of those available to non-root users.
+    expect(diskUsageFromStatfs({ bavail: 250, blocks: 1000, bsize: 4096 })).toEqual({
+      totalBytes: 1000 * 4096,
+      usedBytes: 750 * 4096,
+    });
+  });
+
+  it('is undefined for a volume reporting no size', () => {
+    expect(diskUsageFromStatfs({ bavail: 0, blocks: 0, bsize: 4096 })).toBeUndefined();
   });
 });

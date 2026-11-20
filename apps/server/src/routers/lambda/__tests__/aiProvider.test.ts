@@ -29,6 +29,18 @@ vi.mock('@/database/models/user');
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
+
+const resolveProviderRelay = vi.hoisted(() => vi.fn());
+vi.mock('@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite', () => ({
+  resolveProviderRelay,
+}));
+// A deployment that can relay (Agent Gateway + Redis); one that cannot keeps
+// calling the provider from the server.
+vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => ({}) }));
+vi.mock('@/server/modules/AgentRuntime/factory', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createStreamEventManager: () => ({ openLlmRelayChannel: vi.fn(), sendLlmExecute: vi.fn() }),
+}));
 vi.mock('@lobechat/business-const', async () => {
   const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
 
@@ -88,7 +100,7 @@ describe('aiProviderRouter', () => {
 
   describe('checkProviderConnectivity', () => {
     it('should pass api trigger metadata to the runtime connectivity check', async () => {
-      const mockChat = vi.fn().mockResolvedValue({ ok: true });
+      const mockChat = vi.fn().mockResolvedValue(new Response('{}'));
       const mockGetDetail = vi
         .fn()
         .mockResolvedValue({ ...mockProviderDetail, checkModel: 'gpt-4' });
@@ -111,6 +123,171 @@ describe('aiProviderRouter', () => {
           metadata: { trigger: RequestTrigger.Api },
         },
       );
+    });
+
+    // A relayed check streams even with `stream: false`: the device's provider
+    // failure is an `error` event in a 200 body, not an error status.
+    it('reports a provider error carried in the response stream as a failed check', async () => {
+      const body = 'event: error\ndata: {"errorType":"OllamaServiceUnavailable"}\n\n';
+      vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi
+        .fn()
+        .mockResolvedValue({ ...mockProviderDetail, checkModel: 'gpt-4' });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        chat: vi.fn().mockResolvedValue(new Response(body)),
+      } as any);
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.checkProviderConnectivity({ id: mockProviderId });
+
+      expect(result).toEqual({
+        error: '{"errorType":"OllamaServiceUnavailable"}',
+        model: 'gpt-4',
+        ok: false,
+      });
+    });
+
+    it('reports a device-only provider checked with no browser tab attached (CLI)', async () => {
+      resolveProviderRelay.mockResolvedValueOnce({ runtimeProvider: 'ollama' });
+      vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi
+        .fn()
+        .mockResolvedValue({ ...mockProviderDetail, checkModel: 'qwen3:1.7b' });
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.checkProviderConnectivity({ id: 'ollama' });
+
+      // The type alone does not tell a CLI user what to do; the reason does.
+      expect(result).toEqual({
+        error:
+          "ClientLlmExecutorUnavailable: ollama runs on the user's device, and no open LobeHub tab is attached to this request to run it.",
+        model: 'qwen3:1.7b',
+        ok: false,
+      });
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+    });
+
+    describe('credentials check mode', () => {
+      it('verifies a credentials-mode provider without a check model or chat', async () => {
+        const mockChat = vi.fn();
+        const mockCheckCredentials = vi.fn().mockResolvedValue({ balance: 100.5 });
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          chat: mockChat,
+          checkCredentials: mockCheckCredentials,
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({ balance: 100.5, ok: true });
+        expect(mockCheckCredentials).toHaveBeenCalledTimes(1);
+        expect(mockChat).not.toHaveBeenCalled();
+      });
+
+      it('reports a rejected key with its error type and gateway message', async () => {
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          checkCredentials: vi.fn().mockRejectedValue({
+            error: { code: 401, message: 'Unauthorized', provider: 'fal' },
+            errorType: 'InvalidProviderAPIKey',
+          }),
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({
+          error: 'InvalidProviderAPIKey: Unauthorized',
+          errorType: 'InvalidProviderAPIKey',
+          ok: false,
+        });
+      });
+
+      it('reports a missing key raised while building the runtime', async () => {
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
+          errorType: 'InvalidProviderAPIKey',
+        });
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({
+          error: 'InvalidProviderAPIKey',
+          errorType: 'InvalidProviderAPIKey',
+          ok: false,
+        });
+      });
+
+      it('honours checkMode stored on a provider detail', async () => {
+        const mockCheckCredentials = vi.fn().mockResolvedValue({});
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi
+          .fn()
+          .mockResolvedValue({ ...mockProviderDetail, settings: { checkMode: 'credentials' } });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          checkCredentials: mockCheckCredentials,
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: mockProviderId });
+
+        expect(result).toEqual({ ok: true });
+      });
+
+      it('fails clearly when the runtime has no credential check', async () => {
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          checkCredentials: vi.fn().mockResolvedValue(undefined),
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({
+          error: 'This provider does not support a credential check.',
+          ok: false,
+        });
+      });
+
+      it('still chats when a model is passed explicitly', async () => {
+        const mockChat = vi.fn().mockResolvedValue(new Response('{}'));
+        const mockCheckCredentials = vi.fn();
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          chat: mockChat,
+          checkCredentials: mockCheckCredentials,
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal', model: 'x' });
+
+        expect(result).toEqual({ model: 'x', ok: true });
+        expect(mockCheckCredentials).not.toHaveBeenCalled();
+      });
     });
   });
 

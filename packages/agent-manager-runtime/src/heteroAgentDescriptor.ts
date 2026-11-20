@@ -29,7 +29,7 @@ interface HeteroTypeProfile {
   /** Friendly product name. */
   displayName: string;
   /** Local child-process CLI vs. an agent dispatched to a remote device. */
-  kind: 'cli' | 'remote';
+  kind: 'cli' | 'remote' | 'runtime';
 }
 
 const CODING_CAPABILITIES = [
@@ -41,6 +41,13 @@ const CODING_CAPABILITIES = [
 ];
 
 const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
+  'antigravity': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Antigravity — Google's native CLI coding agent (agy). It uses its own signed-in account, models and built-in tools to read and edit files and run permitted commands in a working directory. Command execution follows the user's Antigravity permission policy.",
+    displayName: 'Antigravity',
+    kind: 'cli',
+  },
   'amp': {
     capabilities: CODING_CAPABILITIES,
     description:
@@ -69,12 +76,26 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Codex',
     kind: 'cli',
   },
+  'copilot': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "GitHub Copilot — GitHub's autonomous CLI coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'GitHub Copilot',
+    kind: 'cli',
+  },
   'cursor': {
     capabilities: CODING_CAPABILITIES,
     description:
       'Cursor — an autonomous CLI coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
     displayName: 'Cursor',
     kind: 'cli',
+  },
+  'deepseek-harness': {
+    capabilities: [...CODING_CAPABILITIES, 'subagents'],
+    description:
+      'DeepSeek Harness — LobeHub’s built-in DeepSeek agent runtime. It can inspect and modify a working directory, run shell commands, use structured tools, and delegate work to subagents without requiring an external CLI installation.',
+    displayName: 'DeepSeek Harness',
+    kind: 'runtime',
   },
   'droid': {
     capabilities: CODING_CAPABILITIES,
@@ -171,8 +192,8 @@ export interface HeteroAgentRuntimeDescriptor {
   displayName: string;
   /** Where the agent executes. */
   executionTarget?: DeviceExecutionTarget;
-  /** Local CLI child-process vs. remote device runtime. */
-  kind: 'cli' | 'remote';
+  /** External CLI, bundled local runtime, or remote device runtime. */
+  kind: 'cli' | 'remote' | 'runtime';
   /** Runtime type identifier (e.g. `claude-code`, `codex`). */
   type: HeteroType;
 }

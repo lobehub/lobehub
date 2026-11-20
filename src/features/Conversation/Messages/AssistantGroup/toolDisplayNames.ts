@@ -2,6 +2,7 @@ import {
   formatBrowserMcpShortLabel,
   formatLinearMcpShortLabel,
 } from '@lobechat/builtin-tool-claude-code/client/labels';
+import { getGoalCommand, isGoalCommandFailed } from '@lobechat/shared-tool-ui/goal-command';
 import type { ChatToolPayloadWithResult } from '@lobechat/types';
 import { formatDuration } from '@lobechat/utils';
 import { t } from 'i18next';
@@ -22,7 +23,7 @@ import {
   WORKFLOW_PROSE_SOURCE_MIN_CHARS,
   WORKFLOW_TRUNCATE_WORD_BOUNDARY_MIN_RATIO,
 } from './constants';
-import { extractToolKeyword } from './Tool/Inspector/extractToolKeyword';
+import { extractToolKeyword, getShellCommandTitle } from './Tool/Inspector/extractToolKeyword';
 
 export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): boolean => {
   const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
@@ -107,14 +108,25 @@ const getToolActionLabel = (tool: ChatToolPayloadWithResult): string => {
   return builtinLabel || getToolDisplayName(tool.apiName);
 };
 
-/** The single most informative token from the args — never the raw args dump. */
-const getToolKeywordDetail = (tool: ChatToolPayloadWithResult): string => {
+const parseToolArgs = (tool: ChatToolPayloadWithResult): Record<string, unknown> | undefined => {
   try {
-    return extractToolKeyword(JSON.parse(tool.arguments || '{}')) ?? '';
+    return JSON.parse(tool.arguments || '{}');
   } catch {
     // arguments still streaming or invalid
-    return '';
+    return undefined;
   }
+};
+
+/** The most informative text from the args (a readable command line, query, path…) — never the raw args dump. */
+const getToolKeywordDetail = (tool: ChatToolPayloadWithResult): string =>
+  extractToolKeyword(parseToolArgs(tool)) ?? '';
+
+/** An undescribed shell command as what it does ("读取 app.ts"), same as the collapsed inspector row. */
+const getShellCommandHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  const title = getShellCommandTitle(parseToolArgs(tool));
+  if (!title) return '';
+  const label = t(`builtins.shellCommand.${title.action}`, { ns: 'plugin' });
+  return title.subject ? `${label} ${title.subject}` : label;
 };
 
 /** Optional progress line from tool-runtime state (pluginState → result.state) or metadata */
@@ -144,11 +156,47 @@ export const getExplicitStepHeadlineLine = (tool: ChatToolPayloadWithResult): st
 };
 
 /**
+ * `/goal` in a CLI agent conversation creates and plans the goal through `lh`
+ * shell calls. While the run streams, that step reads as the goal step it is
+ * ("正在创建目标 <title>") rather than "执行命令 <description>".
+ */
+const getGoalCommandHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  if (!tool.arguments?.includes('goal ')) return '';
+
+  let command: unknown;
+  try {
+    command = JSON.parse(tool.arguments).command;
+  } catch {
+    // arguments still streaming or invalid
+    return '';
+  }
+  const goalCommand = typeof command === 'string' ? getGoalCommand(command) : undefined;
+  if (!goalCommand) return '';
+
+  const status =
+    tool.result == null || tool.result.content === LOADING_FLAT
+      ? 'loading'
+      : isGoalCommandFailed(tool.result)
+        ? 'failed'
+        : 'completed';
+  const label = t(`builtins.goalCommand.${goalCommand.kind}.${status}`, { ns: 'plugin' });
+  const title = goalCommand.kind === 'create' ? goalCommand.title : undefined;
+
+  return title ? `${label} ${title}` : label;
+};
+
+/**
  * C — action label + one keyword (no explicit step). This is the shining line
  * of a RUNNING collapsed workflow, so it reads as a sentence ("执行命令
  * monthly.ts"), never as a raw args dump.
  */
 export const getToolFallbackHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  const goalHeadline = getGoalCommandHeadlineLine(tool);
+  if (goalHeadline) return goalHeadline;
+
+  const commandHeadline = getShellCommandHeadlineLine(tool);
+  if (commandHeadline) return commandHeadline;
+
   const label = getToolActionLabel(tool);
   const keyword = getToolKeywordDetail(tool);
   return keyword ? `${label} ${keyword}` : label;

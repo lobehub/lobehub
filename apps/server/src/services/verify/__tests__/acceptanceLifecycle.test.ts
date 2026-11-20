@@ -14,8 +14,11 @@ const mocks = vi.hoisted(() => ({
   acceptanceEnsureForSubject: vi.fn(),
   acceptanceUpdate: vi.fn(),
   agentExec: vi.fn(),
+  carryPassedResultsForward: vi.fn(),
 
   confirmPlan: vi.fn(),
+  detachUndeliveredRound: vi.fn(),
+  recomputeStatus: vi.fn(),
   ensureForOperation: vi.fn(),
   generateDraftPlan: vi.fn(),
   operationFindById: vi.fn(),
@@ -42,10 +45,14 @@ vi.mock('../acceptanceService', async (original) => ({
       acceptanceModel: { update: mocks.acceptanceUpdate },
       attachPolicyRun: mocks.acceptanceAttachPolicyRun,
       ensureForSubject: mocks.acceptanceEnsureForSubject,
+      recomputeStatus: mocks.recomputeStatus,
     };
   }),
 }));
 
+vi.mock('../carryForward', () => ({
+  carryPassedResultsForward: mocks.carryPassedResultsForward,
+}));
 vi.mock('../planGenerator', () => ({
   VerifyPlanGeneratorService: vi.fn(function () {
     return {
@@ -75,6 +82,7 @@ vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
     return {
       confirmPlan: mocks.confirmPlan,
+      detachUndeliveredRound: mocks.detachUndeliveredRound,
       ensureForOperation: mocks.ensureForOperation,
       findByOperation: mocks.runFindByOperation,
       setMetadata: mocks.setMetadata,
@@ -150,6 +158,33 @@ describe('Verify acceptance lifecycle', () => {
     );
 
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+  });
+
+  /**
+   * Regression: a run that failed at dispatch was over before its plan was
+   * split, and in queue mode its completion ran in another process — the
+   * round landed after the release had looked for it and stayed `planned`.
+   */
+  it('releases the round once it lands when the run already failed', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'The novel is complete and coherent',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Novel' });
+    const round = { id: 'run-1', acceptanceId: 'acceptance-1', plan, status: 'planned' };
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'run-1', plan })
+      .mockResolvedValue(round);
+    mocks.operationFindById.mockResolvedValue({ parentOperationId: null, status: 'error' });
+    mocks.detachUndeliveredRound.mockResolvedValue(true);
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', { operationId: 'operation-1', taskId: 't' });
+
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+    expect(mocks.detachUndeliveredRound).toHaveBeenCalledWith('run-1');
+    expect(mocks.recomputeStatus).toHaveBeenCalledWith('acceptance-1');
   });
 
   /**
@@ -253,7 +288,7 @@ describe('Verify acceptance lifecycle', () => {
       requirement: 'Deliver a runnable repro under ~/WikiSkill-Repro',
     });
     mocks.taskFindById.mockResolvedValue({ instruction: 'Build the repro', name: 'Repro' });
-    mocks.resolveModelConfig.mockResolvedValue({ model: 'model-1', provider: 'provider-1' });
+    mocks.resolveModelConfig.mockResolvedValue({ model: 'glm-slow', provider: 'zhipu' });
     mocks.runFindByOperation
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'run-1', plan });
@@ -263,20 +298,16 @@ describe('Verify acceptance lifecycle', () => {
       taskId: 'task-1',
     });
 
-    expect(mocks.resolveModelConfig).toHaveBeenCalledWith(
-      db,
-      'user-1',
-      { verifierAgentId: 'verifier-1' },
-      undefined,
-    );
+    // The split runs on the pinned plan model, never the verifier agent's model.
+    expect(mocks.resolveModelConfig).not.toHaveBeenCalled();
     expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
       expect.objectContaining({
         context: 'Deliver a runnable repro under ~/WikiSkill-Repro',
         enableAiGeneration: true,
         holisticFallback: true,
-        modelConfig: { model: 'model-1', provider: 'provider-1' },
       }),
     );
+    expect(mocks.generateDraftPlan.mock.calls[0][0]).not.toHaveProperty('modelConfig');
   });
 
   it('does not spend an AI call when the task already picked its criteria', async () => {
@@ -391,6 +422,18 @@ describe('Verify acceptance lifecycle', () => {
       }),
     );
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
+    // Checks the repair was not asked to fix keep their earned verdict.
+    expect(mocks.carryPassedResultsForward).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      expect.objectContaining({
+        excludeItemIds: ['check-1'],
+        operationId: 'repair-operation',
+        sourceRunId: 'source-run',
+        targetRunId: 'repair-run',
+      }),
+      'workspace-1',
+    );
   });
 });
 

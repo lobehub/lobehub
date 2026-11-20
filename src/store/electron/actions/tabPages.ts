@@ -7,6 +7,7 @@ import {
   PERSONAL_TAB_SCOPE,
   resolveTabScope,
   type TabScope,
+  tabScopeHomeUrl,
   tabScopeKey,
 } from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
@@ -19,11 +20,33 @@ import { type ElectronStore } from '../store';
 
 const generateTabId = (): string => `tab_${nanoid(8)}`;
 
+const CLOSED_TAB_GROUPS_LIMIT = 20;
+
 // ======== Types ======== //
+
+/** A tab as it was when closed, enough to put it back where it stood. */
+export interface ClosedTab {
+  cached?: DynamicRouteMeta;
+  /**
+   * Set when this was the last tab: the generated home tab that replaced it. Reopening
+   * takes that placeholder's place while it is still the only, untouched tab.
+   */
+  fallbackHomeTabId?: string;
+  index: number;
+  pinned?: boolean;
+  url: string;
+  wasActive: boolean;
+}
 
 export interface TabPagesState {
   activeTabId: string | null;
   activeTabScope: TabScope;
+  /**
+   * Tabs closed this session, per scope, newest last. One close — a single tab or a bulk
+   * "close others / left / right" — is one group, and one reopen brings the group back.
+   * Memory only: the open tabs themselves already survive a restart.
+   */
+  closedTabBuckets: Record<string, ClosedTab[][]>;
   splitView: SplitViewState | null;
   tabs: TabItem[];
 }
@@ -51,6 +74,7 @@ export interface SplitViewState {
 export const tabPagesInitialState: TabPagesState = {
   activeTabScope: PERSONAL_TAB_SCOPE,
   activeTabId: null,
+  closedTabBuckets: {},
   splitView: null,
   tabs: [],
 };
@@ -233,17 +257,40 @@ export class TabPagesActionImpl {
   };
 
   removeTab = (id: string): string | null => {
-    const { tabs, activeTabId } = this.#get();
+    const { activeTabScope, tabs, activeTabId } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0) return null;
 
     const newTabs = tabs.filter((t) => t.id !== id);
+    const homeUrl = tabScopeHomeUrl(activeTabScope);
+    // A lone home tab only makes way for an identical fresh one, so there is nothing to undo.
+    const closed = newTabs.length === 0 && isSameTabTarget(tabs[index], homeUrl) ? [] : [index];
+
+    // With no tab left TabHost has nothing to render, so the last close lands on a fresh
+    // home tab instead — a new id, because a live router is never re-pointed at a new url.
+    if (newTabs.length === 0) {
+      const home: TabItem = {
+        id: generateTabId(),
+        lastVisited: Date.now(),
+        url: homeUrl,
+      };
+      this.#set(
+        {
+          activeTabId: home.id,
+          closedTabBuckets: this.#rememberClosed(closed, home.id),
+          splitView: null,
+          tabs: [home],
+        },
+        false,
+        'removeTab',
+      );
+      this.#persist();
+      return home.id;
+    }
 
     let newActiveId = activeTabId;
     if (activeTabId === id) {
-      if (newTabs.length === 0) {
-        newActiveId = null;
-      } else if (index >= newTabs.length) {
+      if (index >= newTabs.length) {
         newActiveId = newTabs.at(-1)!.id;
       } else {
         newActiveId = newTabs[index].id;
@@ -256,6 +303,7 @@ export class TabPagesActionImpl {
     this.#set(
       {
         activeTabId: newActiveId,
+        closedTabBuckets: this.#rememberClosed(closed),
         splitView: reconciled.splitView,
         tabs: this.#touch(reconciled.tabs, newActiveId),
       },
@@ -290,19 +338,89 @@ export class TabPagesActionImpl {
     this.#closeExcept((_, i) => i <= index, id, 'closeRightTabs');
   };
 
-  reorderTabs = (fromIndex: number, toIndex: number): void => {
+  /**
+   * Undo the latest close in the active scope (Cmd/Ctrl+Shift+T): its tabs return to their
+   * old positions with their cached titles, and the one that was focused takes focus — or
+   * the last one restored. A page that is open again is switched to, not duplicated. Only
+   * the url comes back; the closed tab's router, history and in-page state are gone.
+   */
+  reopenClosedTab = (): string | null => {
+    const { activeTabScope, closedTabBuckets, tabs } = this.#get();
+    const key = tabScopeKey(activeTabScope);
+    const groups = closedTabBuckets[key] ?? [];
+    const group = groups.at(-1);
+    if (!group) return null;
+
+    // Undoing a last-tab close drops the home tab generated for it, unless the user has
+    // since navigated it or opened another tab beside it.
+    const fallbackHomeTabId = group.find((closed) => closed.fallbackHomeTabId)?.fallbackHomeTabId;
+    const isUntouchedFallback =
+      !!fallbackHomeTabId &&
+      tabs.length === 1 &&
+      tabs[0].id === fallbackHomeTabId &&
+      isSameTabTarget(tabs[0], tabScopeHomeUrl(activeTabScope));
+
+    // Only tabs open before this reopen count as "already open", and each stands in for one
+    // closed tab: a bulk close can take two tabs on the same page (addNewTab allows that),
+    // and as many tabs on that page as were closed must be open afterwards.
+    const openBefore = isUntouchedFallback ? [] : tabs;
+    const matched = new Set<string>();
+    let nextTabs = openBefore;
+    let focusId = '';
+    const hadActive = group.some((closed) => closed.wasActive);
+    const now = Date.now();
+
+    for (const closed of group.toSorted((a, b) => a.index - b.index)) {
+      const existing = openBefore.find((t) => !matched.has(t.id) && isSameTabTarget(t, closed.url));
+      if (existing) matched.add(existing.id);
+      const id = existing?.id ?? generateTabId();
+
+      if (!existing) {
+        const restored: TabItem = { cached: closed.cached, id, lastVisited: now, url: closed.url };
+        if (closed.pinned) restored.pinned = true;
+
+        // Array order must equal render order (see #setPinned), so the old index is
+        // clamped into the tab's own run.
+        const pinnedCount = nextTabs.filter((t) => t.pinned).length;
+        const position = closed.pinned
+          ? Math.min(closed.index, pinnedCount)
+          : Math.min(Math.max(closed.index, pinnedCount), nextTabs.length);
+        nextTabs = [...nextTabs.slice(0, position), restored, ...nextTabs.slice(position)];
+      }
+
+      if (closed.wasActive || !hadActive) focusId = id;
+    }
+
+    this.#set(
+      { closedTabBuckets: { ...closedTabBuckets, [key]: groups.slice(0, -1) }, tabs: nextTabs },
+      false,
+      'reopenClosedTab',
+    );
+    // activateTab owns split-pane replacement, the keep-alive touch and persistence.
+    this.activateTab(focusId);
+    return focusId;
+  };
+
+  moveTab = (id: string, toIndex: number, pinned: boolean): void => {
     const { tabs } = this.#get();
-    if (fromIndex < 0 || fromIndex >= tabs.length) return;
-    if (toIndex < 0 || toIndex >= tabs.length) return;
-    // Pinned tabs form a run at the head of the list; a drag across that boundary would
-    // interleave the two groups and desync array order from render order.
-    if (!!tabs[fromIndex].pinned !== !!tabs[toIndex].pinned) return;
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return;
 
-    const newTabs = [...tabs];
-    const [moved] = newTabs.splice(fromIndex, 1);
-    newTabs.splice(toIndex, 0, moved);
+    const rest = tabs.filter((_, i) => i !== index);
+    const pinnedCount = rest.filter((t) => t.pinned).length;
+    // Pinned tabs form a run at the head of the list; clamping into the dragged tab's own
+    // run keeps array order equal to render order.
+    const position = pinned
+      ? Math.min(Math.max(toIndex, 0), pinnedCount)
+      : Math.min(Math.max(toIndex, pinnedCount), rest.length);
+    if (position === index && !!tabs[index].pinned === pinned) return;
 
-    this.#set({ tabs: newTabs }, false, 'reorderTabs');
+    const moved: TabItem = { ...tabs[index], pinned };
+    this.#set(
+      { tabs: [...rest.slice(0, position), moved, ...rest.slice(position)] },
+      false,
+      'moveTab',
+    );
     this.#persist();
   };
 
@@ -383,6 +501,7 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
     this.#persist();
+    this.#get().updateRecentPageCache(tabs[index].url, cached);
   };
 
   // Pinning is a retention promise, so a bulk close only ever narrows the unpinned run —
@@ -394,7 +513,8 @@ export class TabPagesActionImpl {
     action: string,
   ): void => {
     const { tabs, activeTabId } = this.#get();
-    const newTabs = tabs.filter((tab, index) => tab.pinned || keep(tab, index));
+    const kept = tabs.map((tab, index) => !!tab.pinned || keep(tab, index));
+    const newTabs = tabs.filter((_, index) => kept[index]);
     if (newTabs.length === tabs.length) return;
 
     const preferredActiveId = newTabs.some((t) => t.id === activeTabId) ? activeTabId : targetId;
@@ -403,6 +523,9 @@ export class TabPagesActionImpl {
     this.#set(
       {
         activeTabId: reconciled.activeTabId,
+        closedTabBuckets: this.#rememberClosed(
+          kept.flatMap((isKept, index) => (isKept ? [] : [index])),
+        ),
         splitView: reconciled.splitView,
         tabs: this.#touch(reconciled.tabs, reconciled.activeTabId),
       },
@@ -431,6 +554,34 @@ export class TabPagesActionImpl {
       pinned ? 'pinTab' : 'unpinTab',
     );
     this.#persist();
+  };
+
+  // Snapshot the tabs at `indices` (positions in the current list) as one closed group of
+  // the active scope. The copy a self-split made only mirrors its source, so it is skipped.
+  #rememberClosed = (
+    indices: number[],
+    fallbackHomeTabId?: string,
+  ): Record<string, ClosedTab[][]> => {
+    const { activeTabId, activeTabScope, closedTabBuckets, splitView, tabs } = this.#get();
+    const group: ClosedTab[] = indices
+      .filter((index) => tabs[index] && tabs[index].id !== splitView?.duplicatedTabId)
+      .map((index) => {
+        const tab = tabs[index];
+        const closed: ClosedTab = {
+          index,
+          url: tab.url,
+          wasActive: tab.id === activeTabId,
+        };
+        if (tab.cached) closed.cached = tab.cached;
+        if (tab.pinned) closed.pinned = true;
+        if (fallbackHomeTabId) closed.fallbackHomeTabId = fallbackHomeTabId;
+        return closed;
+      });
+    if (group.length === 0) return closedTabBuckets;
+
+    const key = tabScopeKey(activeTabScope);
+    const groups = [...(closedTabBuckets[key] ?? []), group].slice(-CLOSED_TAB_GROUPS_LIMIT);
+    return { ...closedTabBuckets, [key]: groups };
   };
 
   // Every path that makes a tab active must refresh its `lastVisited`: TabHost

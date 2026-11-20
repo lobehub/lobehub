@@ -6,6 +6,7 @@ import type {
   AcceptanceFlowReview,
   AcceptanceFlowVerdict,
   AcceptanceReviewAnnotation,
+  VerifyCheckDefinition,
   VerifyCheckItem,
   VerifyFlowSnapshot,
 } from '@lobechat/types';
@@ -28,6 +29,18 @@ import {
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { VerifyCriterionModel } from './verifyCriterion';
+
+/** Append a branch's trigger and condition to a check's preconditions. */
+const withBranchPreconditions = (
+  definition: VerifyCheckDefinition | undefined,
+  branch: { condition: string | null; trigger: string } | undefined,
+): VerifyCheckDefinition => ({
+  ...definition,
+  preconditions: [
+    ...(definition?.preconditions ?? []),
+    ...(branch ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])] : []),
+  ],
+});
 
 export function validateFlow(definition: AcceptanceFlowDefinition) {
   const ids = new Set(definition.nodes.map((n) => n.id));
@@ -475,15 +488,7 @@ export class AcceptanceFlowModel {
                   ? prefix + item.sourceFlowNode.incomingEdgeId
                   : undefined,
               },
-              definition: {
-                ...item.definition,
-                preconditions: [
-                  ...(item.definition?.preconditions ?? []),
-                  ...(branch
-                    ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
-                    : []),
-                ],
-              },
+              definition: withBranchPreconditions(item.definition, branch),
             })),
           );
         }
@@ -521,15 +526,7 @@ export class AcceptanceFlowModel {
             category: flow.title,
             sourceCriterionId: asset.id,
             sourceFlowNode: { flowId, nodeId: node.id, incomingEdgeId: branch?.id },
-            definition: {
-              ...definition,
-              preconditions: [
-                ...(definition.preconditions ?? []),
-                ...(branch
-                  ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
-                  : []),
-              ],
-            },
+            definition: withBranchPreconditions(definition, branch),
             documentId: asset.documentId,
             verifierType: asset.verifierType,
             verifierConfig: asset.verifierConfig ?? {},
@@ -954,12 +951,19 @@ export class AcceptanceFlowModel {
       .flatMap((f) => f.versions.flatMap((v) => v.runs.flatMap((r) => r.attempts)))
       .find((r) => r.id === resultId);
     if (!result) throw new Error('Result not found');
+    // A screenshot region is a place; a video region is a place at a moment, so
+    // it must say which frame (or span) it was drawn on.
     if (
       feedback?.annotations?.some(
-        (a) => !result.evidence.some((e) => e.id === a.evidenceId && e.type === 'screenshot'),
+        (a) =>
+          !result.evidence.some(
+            (e) =>
+              e.id === a.evidenceId &&
+              (e.type === 'video' ? a.time !== undefined : e.type === 'screenshot' && !a.time),
+          ),
       )
     )
-      throw new Error('Annotation must reference this result screenshot');
+      throw new Error('Annotation must reference this result screenshot, or a video frame');
     const [updated] = await this.db
       .update(verifyCheckResults)
       .set({

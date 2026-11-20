@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import superjson from 'superjson';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * This file contains the root router of your tRPC-backend
@@ -160,6 +161,62 @@ describe('configRouter', () => {
         } else {
           process.env.DEEPSEEK_API_KEY = originalApiKey;
         }
+      });
+    });
+
+    // Asserted on the superjson payload, where an `undefined` key would still appear in meta.
+    describe('Device Gateway discovery', () => {
+      const PUBLIC_URL = 'https://device-gateway.example.com';
+      const INTERNAL_URL = 'http://gateway:8788';
+      const SERVICE_TOKEN = 'synthetic-device-gateway-service-token';
+
+      const getSerializedGlobalConfig = async (env: Record<string, string | undefined>) => {
+        for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+        // Env modules parse at import time.
+        vi.resetModules();
+
+        const [{ createCallerFactory }, { createContextInner }, { configRouter }] =
+          await Promise.all([
+            import('@/libs/trpc/lambda'),
+            import('@/libs/trpc/lambda/context'),
+            import('./index'),
+          ]);
+        const caller = createCallerFactory(configRouter)(await createContextInner());
+        const serialized = superjson.serialize(await caller.getGlobalConfig());
+
+        return {
+          serverConfig: (serialized.json as { serverConfig: Record<string, unknown> }).serverConfig,
+          wire: JSON.stringify(serialized),
+        };
+      };
+
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('omits deviceGatewayUrl from the response when no public address is configured', async () => {
+        const { serverConfig, wire } = await getSerializedGlobalConfig({
+          DEVICE_GATEWAY_PUBLIC_URL: undefined,
+          DEVICE_GATEWAY_SERVICE_TOKEN: SERVICE_TOKEN,
+          DEVICE_GATEWAY_URL: INTERNAL_URL,
+        });
+
+        expect(serverConfig).not.toHaveProperty('deviceGatewayUrl');
+        expect(wire).not.toContain('deviceGatewayUrl');
+        expect(wire).not.toContain(INTERNAL_URL);
+        expect(wire).not.toContain(SERVICE_TOKEN);
+      });
+
+      it('returns only the public address and no gateway credentials when configured', async () => {
+        const { serverConfig, wire } = await getSerializedGlobalConfig({
+          DEVICE_GATEWAY_PUBLIC_URL: PUBLIC_URL,
+          DEVICE_GATEWAY_SERVICE_TOKEN: SERVICE_TOKEN,
+          DEVICE_GATEWAY_URL: INTERNAL_URL,
+        });
+
+        expect(serverConfig.deviceGatewayUrl).toBe(PUBLIC_URL);
+        expect(wire).not.toContain(INTERNAL_URL);
+        expect(wire).not.toContain(SERVICE_TOKEN);
       });
     });
   });

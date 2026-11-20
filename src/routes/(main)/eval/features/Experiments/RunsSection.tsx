@@ -1,26 +1,25 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Card } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { FlaskConical } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import RunRow from './RunRow';
 import type { useExperimentActions } from './useExperimentActions';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   listCard: css`
-    .ant-card-body {
-      padding-block: 4px;
-      padding-inline: 8px;
-    }
+    padding-block: 4px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   sectionTitle: css`
     margin: 0;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
   `,
 }));
@@ -38,7 +37,7 @@ const RunsSection = memo<RunsSectionProps>(({ actions, experiment }) => {
   return (
     <Flexbox gap={12}>
       <h3 className={styles.sectionTitle}>{t('experiment.detail.runs')}</h3>
-      <Card className={styles.listCard}>
+      <Block className={styles.listCard} variant={'outlined'}>
         {runs.length === 0 ? (
           <Empty description={t('run.empty.title')} icon={FlaskConical} />
         ) : (
@@ -48,7 +47,7 @@ const RunsSection = memo<RunsSectionProps>(({ actions, experiment }) => {
             ))}
           </Flexbox>
         )}
-      </Card>
+      </Block>
     </Flexbox>
   );
 });

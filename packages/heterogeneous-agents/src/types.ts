@@ -41,6 +41,12 @@ export type HeterogeneousEventType =
    */
   | 'tool_result'
   | 'step_complete'
+  /**
+   * Snapshot of one background task a main-agent tool started (Claude Code
+   * `run_in_background` Bash, Monitor). Persisted on that tool message's
+   * `pluginState.backgroundTask`; see {@link BackgroundTaskEventData}.
+   */
+  | 'background_task'
   | 'agent_runtime_end'
   | 'error';
 
@@ -56,6 +62,8 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /** Native Codex turn boundary, stable across tool-separated assistant steps. */
+  codexTurnId?: string;
   /**
    * External-trigger context for the step opened by this stream_start.
    * Set when the new step was opened in response to a repeated tool
@@ -248,10 +256,14 @@ export interface HeterogeneousToolResultImage {
   data?: string;
   /** File record id after upload to the file store. */
   fileId?: string;
+  /** Intrinsic height in pixels, read from the image header at upload time. */
+  height?: number;
   /** IANA media type, e.g. `image/png`. */
   mediaType: string;
   /** Remote URL after upload. */
   url?: string;
+  /** Intrinsic width in pixels, read from the image header at upload time. */
+  width?: number;
 }
 
 /** Data shape for tool_result events (ACP-specific) */
@@ -322,16 +334,68 @@ export interface UsageData {
 }
 
 /**
+ * Lifecycle of a background task. `interrupted` is never reported by the agent:
+ * it marks a task that was still running when its session or process ended.
+ */
+export type HeteroBackgroundTaskStatus =
+  'completed' | 'failed' | 'interrupted' | 'running' | 'stopped';
+
+/**
+ * Complete state of one background task, stored on the tool message that
+ * started it as `pluginState.backgroundTask`. Every event carries the whole
+ * snapshot, so a consumer replaces the stored value instead of merging.
+ */
+export interface HeteroBackgroundTask {
+  description: string;
+  /** Epoch ms the task ended at; absent while it runs. */
+  endedAt?: number;
+  error?: string;
+  /** Tool the task is running, for a task that reports one (agent-like tasks). */
+  lastToolName?: string;
+  /**
+   * Operation that hosts the task's session. Stamped by the interpreter, not
+   * the adapter: it is how a client routes a stop and tells whether the
+   * session is still alive.
+   */
+  operationId?: string;
+  /** Absolute path of the task's output on the machine that runs the agent. */
+  outputFile?: string;
+  startedAt: number;
+  status: HeteroBackgroundTaskStatus;
+  /** Final summary reported with the task's end. */
+  summary?: string;
+  /** Agent-native task id (Claude Code `task_id`), the handle a stop targets. */
+  taskId: string;
+  /** Agent-native task kind, e.g. Claude Code `local_bash`. */
+  taskType?: string;
+  /** Tool that started the task, e.g. `Bash` or `Monitor`. */
+  toolName: string;
+}
+
+/** Data shape for `background_task` events. */
+export interface BackgroundTaskEventData {
+  task: HeteroBackgroundTask;
+  /** Main-agent tool call that started the task; owns the persisted snapshot. */
+  toolCallId: string;
+}
+
+/**
  * Data shape for `step_complete` events. `phase` disambiguates the subtype:
  *   - `turn_metadata`: per-turn snapshot of model + provider + usage (once per LLM call)
  *   - `result_usage`: authoritative grand total at the end of a session
+ *   - `user_message`: Claude Code picked up a user message delivered into the
+ *     live session (`--replay-user-messages`); `uuid` is the one it was sent with
  */
 export interface StepCompleteData {
-  /** Total session cost in USD (only on `result_usage`, if the CLI reports it). */
+  /**
+   * This run's cost in USD (only on `result_usage`, if the CLI reports it).
+   * Adapters whose CLI reports a session-cumulative figure across resume
+   * (Claude Code) convert it to the run's own spend before emitting.
+   */
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
-  phase: 'turn_metadata' | 'result_usage';
+  phase: 'turn_metadata' | 'result_usage' | 'user_message';
   /**
    * Provider identifier for this turn — the CLI / adapter name (e.g.
    * `claude-code`, `codex`), not the underlying LLM vendor. CLI-wrapped agents
@@ -339,7 +403,14 @@ export interface StepCompleteData {
    * CLI provider, not on the wrapped model's native vendor.
    */
   provider?: string;
+  /**
+   * The text of a user message read mid-run (only on `user_message`), for an
+   * agent that reports no id for it (Pi).
+   */
+  text?: string;
   usage?: UsageData;
+  /** The replayed message's uuid (only on `user_message`). */
+  uuid?: string;
 }
 
 export interface HeterogeneousRateLimitInfo {

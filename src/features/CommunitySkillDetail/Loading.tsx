@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 const navSkeletonWidths = [88, 72, 82, 58];

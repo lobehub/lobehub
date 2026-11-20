@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
+import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,7 +33,7 @@ const AgentBuilderWelcome = memo<AgentBuilderWelcomeProps>(
             paddingBottom: 16,
           }}
         >
-          <Avatar avatar={agent.avatar || DEFAULT_INBOX_AVATAR} shape={'square'} size={78} />
+          <Avatar avatar={agent?.avatar || DEFAULT_INBOX_AVATAR} shape={'square'} size={78} />
           <Text fontSize={24} weight={'bold'}>
             {t('agentBuilder.title')}
           </Text>

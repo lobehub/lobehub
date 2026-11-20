@@ -122,6 +122,7 @@ COPY --from=builder /app/public/_spa-workbench /app/public/_spa-workbench
 COPY --from=builder /app/packages/database/migrations /app/migrations
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
 COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
+COPY --from=builder /app/scripts/migrateServerDB/pgSearchGuard.js /app/pgSearchGuard.js
 COPY --from=builder /app/fts-search-elasticsearch-reindex.cjs /app/fts-search-elasticsearch-reindex.cjs
 COPY --from=builder /app/fts-search-elasticsearch-sync.cjs /app/fts-search-elasticsearch-sync.cjs
 COPY --from=builder /app/fts-search-ineligible-message-cleanup.cjs /app/fts-search-ineligible-message-cleanup.cjs
@@ -260,6 +261,12 @@ ENV \
     COMFYUI_API_KEY="" COMFYUI_USERNAME="" COMFYUI_PASSWORD="" COMFYUI_CUSTOM_HEADERS="" \
     # DeepSeek
     DEEPSEEK_API_KEY="" DEEPSEEK_MODEL_LIST="" \
+    # Doubao Speech
+    DOUBAOSPEECH_API_KEY="" DOUBAOSPEECH_APP_ID="" DOUBAOSPEECH_ACCESS_TOKEN="" DOUBAOSPEECH_MODEL_LIST="" DOUBAOSPEECH_PROXY_URL="" \
+    # ElevenLabs
+    ELEVENLABS_API_KEY="" ELEVENLABS_MODEL_LIST="" ELEVENLABS_PROXY_URL="" \
+    # Fish Audio
+    FISHAUDIO_API_KEY="" FISHAUDIO_MODEL_LIST="" FISHAUDIO_PROXY_URL="" \
     # Fireworks AI
     FIREWORKSAI_API_KEY="" FIREWORKSAI_MODEL_LIST="" \
     # Gitee AI

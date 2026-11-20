@@ -1,5 +1,5 @@
+import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { LucideCheck } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,10 +9,16 @@ import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
 
 import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
+import { useTopicListScope } from './TopicListScope';
+import { useOnlyMineFilterItem } from './useOnlyMineFilterItem';
+import { useProjectTopicFilterItems } from './useProjectTopicFilterItems';
 
 export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const { t } = useTranslation('topic');
   const { topicGroupMode, updateTopicGroupMode } = useAgentTopicGroupMode();
+  const scope = useTopicListScope();
+  const projectFilterItems = useProjectTopicFilterItems();
+  const onlyMineItem = useOnlyMineFilterItem();
 
   const [topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore((s) => [
     preferenceSelectors.topicSortBy(s),
@@ -21,7 +27,13 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   ]);
 
   return useCallback(() => {
-    const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'flat'];
+    // "by agent" only exists where topics span multiple agents — the
+    // project-scoped list, where it is the default and listed first. That list
+    // already is one project, so it hides "by project" instead. One agent's
+    // topics still run on several machines, so both lists group by device.
+    const groupModes: TopicGroupMode[] = scope
+      ? ['byAgent', 'byStatus', 'byTime', 'byDevice', 'flat']
+      : ['byStatus', 'byTime', 'byProject', 'byDevice', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
     return [
@@ -55,6 +67,8 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
       { type: 'divider' as const },
       {
         children: [
+          // A project spans agents and devices; narrow its topics by either.
+          ...projectFilterItems(),
           {
             icon: topicIncludeCompleted ? <Icon icon={LucideCheck} /> : <div />,
             key: 'showCompleted',
@@ -63,6 +77,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
               updatePreference({ topicIncludeCompleted: !topicIncludeCompleted });
             },
           },
+          ...(onlyMineItem ? [onlyMineItem] : []),
         ],
         key: 'filter',
         label: t('filter.filter'),
@@ -73,8 +88,11 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
     topicGroupMode,
     topicSortBy,
     topicIncludeCompleted,
+    onlyMineItem,
     updatePreference,
     updateTopicGroupMode,
+    projectFilterItems,
+    scope,
     t,
   ]);
 };

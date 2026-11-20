@@ -1,8 +1,6 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
-import { type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm } from 'antd';
+import { Flexbox, Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, useForm, useWatch } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
@@ -59,6 +57,7 @@ import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevel3Slider from './ThinkingLevel3Slider';
 import ThinkingLevel4Slider from './ThinkingLevel4Slider';
+import ThinkingLevel5Slider from './ThinkingLevel5Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
@@ -128,8 +127,6 @@ const ControlsForm = memo<ControlsFormProps>(
     ]);
     const model = modelProp ?? agentModel;
     const provider = providerProp ?? agentProvider;
-    const [form] = Form.useForm();
-
     const storeConfig = useAgentStore(
       (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
       isEqual,
@@ -151,16 +148,31 @@ const ControlsForm = memo<ControlsFormProps>(
       };
     }, [config, model]);
 
+    const form = useForm<LobeAgentChatConfig>({
+      initialValues,
+      onValuesChange: async (values) => {
+        if (disabled) return;
+        onUpdatingChange?.(true);
+        try {
+          await (onChatConfigChange ?? updateAgentChatConfig)(
+            values as Partial<LobeAgentChatConfig>,
+          );
+        } finally {
+          onUpdatingChange?.(false);
+        }
+      },
+    });
+
     useEffect(() => {
-      form.setFieldsValue(initialValues);
+      form.setValues(initialValues);
     }, [form, initialValues]);
 
-    const enableReasoningValue =
-      AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
+    const enableReasoningValue = useWatch(form, 'enableReasoning') ?? initialValues.enableReasoning;
 
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
     const thinkingLevel3DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel3');
+    const thinkingLevel5DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel5');
 
     // Show descriptions as a question-mark tooltip beside the label, matching
     // the ControlRow items rendered above this form in the params panel.
@@ -589,6 +601,16 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <ThinkingLevel5Slider defaultValue={thinkingLevel5DefaultValue} />,
+        label: t('extendParams.thinkingLevel.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'thinkingLevel5',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <ImageAspectRatioSelect />,
         label: t('extendParams.imageAspectRatio.title'),
         layout: 'horizontal',
@@ -628,7 +650,7 @@ const ControlsForm = memo<ControlsFormProps>(
           paddingBottom: 0,
         },
       },
-    ].filter(Boolean) as FormItemProps[];
+    ].filter(Boolean) as FormFieldProps<LobeAgentChatConfig>[];
 
     return (
       <div
@@ -639,26 +661,15 @@ const ControlsForm = memo<ControlsFormProps>(
       >
         <Form
           form={form}
-          initialValues={initialValues}
           itemsType={'flat'}
-          size={'small'}
           style={{ fontSize: 12 }}
           variant={'borderless'}
           items={
             (modelExtendParams || [])
               .filter((item: any) => !(hideReasoningParams && REASONING_PARAMS_SET.has(item)))
               .map((item: any) => items.find((i) => i.name === item))
-              .filter(Boolean) as FormItemProps[]
+              .filter(Boolean) as FormFieldProps<LobeAgentChatConfig>[]
           }
-          onValuesChange={async (values) => {
-            if (disabled) return;
-            onUpdatingChange?.(true);
-            try {
-              await (onChatConfigChange ?? updateAgentChatConfig)(values);
-            } finally {
-              onUpdatingChange?.(false);
-            }
-          }}
         />
       </div>
     );

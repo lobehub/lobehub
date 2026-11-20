@@ -201,3 +201,47 @@ export const resolvePlacements = ({
 
   return { dividerX, placements, total: Math.max(0, x - TAB_GAP) };
 };
+
+export const NEW_TAB_BUTTON_WIDTH = 26 + TAB_GAP;
+
+export interface StripTab {
+  id: string;
+  pinned: boolean;
+}
+
+export interface StripLayoutInput {
+  activeId: string | null;
+  stripWidth: number;
+  tabs: StripTab[];
+}
+
+export interface StripLayout extends TabPlacementResult {
+  hiddenCount: number;
+  /** Indices into the unpinned tabs, in render order. */
+  visibleIndices: number[];
+}
+
+export const layoutStrip = ({ activeId, stripWidth, tabs }: StripLayoutInput): StripLayout => {
+  const pinnedIds = tabs.filter((tab) => tab.pinned).map((tab) => tab.id);
+  const flowIds = tabs.filter((tab) => !tab.pinned).map((tab) => tab.id);
+  const pinnedWidth = pinnedIds.length
+    ? pinnedIds.length * (PINNED_TAB_WIDTH + TAB_GAP) + PINNED_DIVIDER_WIDTH
+    : 0;
+
+  const layout = allocateTabWidths({
+    activeIndex: activeId === null ? -1 : flowIds.indexOf(activeId),
+    count: flowIds.length,
+    usableWidth: Math.max(0, stripWidth - pinnedWidth - NEW_TAB_BUTTON_WIDTH),
+  });
+
+  return {
+    ...resolvePlacements({
+      flowIds,
+      pinnedIds,
+      visibleIndices: layout.visibleIndices,
+      widths: layout.widths,
+    }),
+    hiddenCount: layout.hiddenCount,
+    visibleIndices: layout.visibleIndices,
+  };
+};

@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { MergeStrategyEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   recordUserMemoryLexicalSearchDecision: vi.fn(),
   searchMemory: vi.fn(),
   shouldRunUserMemoryLexicalSearch: vi.fn(),
+  updateIdentityEntry: vi.fn(),
 }));
 
 vi.mock('@/database/models/userMemory', () => ({
@@ -22,6 +24,7 @@ vi.mock('@/database/models/userMemory', () => ({
   UserMemoryModel: vi.fn().mockImplementation(function () {
     return {
       searchMemory: mocks.searchMemory,
+      updateIdentityEntry: mocks.updateIdentityEntry,
     };
   }),
 }));
@@ -128,6 +131,45 @@ describe('memoryRuntime', () => {
     );
   });
 
+  describe('context layer limits (default medium effort)', () => {
+    const emptyResult = {
+      activities: [],
+      contexts: [],
+      experiences: [],
+      identities: [],
+      preferences: [],
+    };
+
+    const runSearch = async (params: Record<string, unknown>) => {
+      mocks.embeddings.mockResolvedValueOnce([[0.1, 0.2, 0.3]]);
+      mocks.initModelRuntimeWithUserPayload.mockReturnValueOnce({ embeddings: mocks.embeddings });
+      mocks.searchMemory.mockResolvedValueOnce(emptyResult);
+
+      const runtime = await memoryRuntime.factory(createContext());
+      await runtime.searchUserMemory({ queries: ['Project Atlas launch'], ...params });
+
+      return mocks.searchMemory.mock.calls[0][0].topK;
+    };
+
+    it('searches context memories when the agent asks for the context layer', async () => {
+      const topK = await runSearch({ layers: ['context'] });
+
+      expect(topK.contexts).toBeGreaterThan(0);
+    });
+
+    it('honours an explicit topK.contexts within the explicit-request cap', async () => {
+      const topK = await runSearch({ topK: { contexts: 10 } });
+
+      expect(topK).toMatchObject({ contexts: 2, experiences: 0 });
+    });
+
+    it('keeps context memories out of searches that do not ask for them', async () => {
+      const topK = await runSearch({ layers: ['preference'] });
+
+      expect(topK).toMatchObject({ activities: 3, contexts: 0, experiences: 0, preferences: 3 });
+    });
+  });
+
   it('records the lexical decision on the default Gateway memory path', async () => {
     const longQuery = 'context '.repeat(40).trimEnd();
     const embedding = [0.1, 0.2, 0.3];
@@ -151,6 +193,32 @@ describe('memoryRuntime', () => {
       decision: 'skipped_long_context',
       queryCharacters: Array.from(longQuery).length,
       source: 'tool',
+    });
+  });
+
+  // A tool call sends only the fields it changes; replace must not clear the rest.
+  it('updates only the identity fields the tool call sent, keeping the rest on replace', async () => {
+    mocks.embeddings.mockResolvedValueOnce([[0.1, 0.2, 0.3]]);
+    mocks.initModelRuntimeWithUserPayload.mockReturnValueOnce({
+      embeddings: mocks.embeddings,
+    });
+    mocks.updateIdentityEntry.mockResolvedValueOnce(true);
+
+    const runtime = await memoryRuntime.factory(createContext());
+
+    const result = await runtime.updateIdentityMemory({
+      id: 'mem_1',
+      mergeStrategy: MergeStrategyEnum.Replace,
+      set: { title: null, withIdentity: { description: null, role: 'lead maintainer' } },
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.updateIdentityEntry).toHaveBeenCalledWith({
+      base: undefined,
+      identity: { role: 'lead maintainer' },
+      identityId: 'mem_1',
+      mergeStrategy: 'replace',
+      preserveOmittedFields: true,
     });
   });
 });

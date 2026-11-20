@@ -26,6 +26,15 @@ export const segmentHitsBox = (a: Point, b: Point, box: LayoutBox): boolean =>
       Math.max(a.x, b.x) > box.x &&
       Math.min(a.x, b.x) < box.x + box.width;
 
+/**
+ * A side-to-side link — out of the source's right, into the target's left:
+ * horizontal, then vertical exactly midway between the two, then horizontal.
+ */
+export const sideToSidePath = (source: Point, target: Point): Point[] => {
+  const midX = (source.x + target.x) / 2;
+  return [source, { x: midX, y: source.y }, { x: midX, y: target.y }, target];
+};
+
 /** Route through free row/column gutters; frames are boundaries, leaf cards are obstacles. */
 export const routeEdge = (
   source: Point,

@@ -6,18 +6,21 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import { ModelProvider } from 'model-bank';
 
-import type { AnthropicGenerateObjectResponse } from '../../core/anthropicCompatibleFactory/generateObject';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { resolveModelSamplingParameters } from '../../core/parameterResolver';
+import type { AnthropicGenerateObjectResponse } from '../../core/protocols/anthropicMessages/generateObject';
 import {
   buildAnthropicGenerateObjectRequest,
   emitAnthropicGenerateObjectUsage,
   parseAnthropicGenerateObjectResponse,
-} from '../../core/anthropicCompatibleFactory/generateObject';
-import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
-import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
-import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
-import type { LobeRuntimeAI } from '../../core/BaseAI';
-import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
-import { resolveModelSamplingParameters } from '../../core/parameterResolver';
+} from '../../core/protocols/anthropicMessages/generateObject';
+import {
+  buildAnthropicMessages,
+  buildAnthropicTools,
+} from '../../core/protocols/anthropicMessages/messages';
+import { resolveCacheTTL } from '../../core/protocols/anthropicMessages/resolveCacheTTL';
+import { resolveMaxTokens } from '../../core/protocols/anthropicMessages/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/protocols/anthropicMessages/resolveThinkingConfig';
 import {
   finalizeProviderResponse,
   initializeProviderDiagnostics,
@@ -49,6 +52,12 @@ import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefi
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
 import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
 import { recordBedrockResponseEvent } from './providerDiagnostics';
+
+/**
+ * Bedrock accepts a 20MB request body and 3.75MB per image (5MB of base64), so
+ * images get a smaller share than on the Anthropic API.
+ */
+const BEDROCK_INLINE_IMAGE_BUDGET = { maxTotalBase64Bytes: 12 * 1024 * 1024 };
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -322,7 +331,10 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     // which would otherwise skip the strip and 400 on a trailing assistant turn.
     const postMessages = stripUnsupportedClaudeAssistantPrefill(
       this.resolveModelId(model),
-      await buildAnthropicMessages(user_messages, { enabledContextCaching }),
+      await buildAnthropicMessages(user_messages, {
+        enabledContextCaching,
+        imageBudget: BEDROCK_INLINE_IMAGE_BUDGET,
+      }),
     );
 
     const anthropicBase = {
@@ -338,6 +350,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const resolvedThinking = resolveClaudeThinkingConfig({
       maxTokens: resolvedMaxTokens,
       model,
+      requestModel: this.resolveModelId(model),
       thinking,
     });
 

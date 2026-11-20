@@ -21,6 +21,30 @@ describe('resolveAgentManagementManifest', () => {
     expect(resolveAgentManagementManifest({})).toBe(AgentManagementManifest);
   });
 
+  // installPlugin(source: 'market') needs an identifier the model can only get
+  // from a marketplace search; without one it guessed ids.
+  it('pairs market installPlugin with searchMarketTools', () => {
+    const names = apiNames(AgentManagementManifest);
+    expect(names).toContain(AgentManagementApiName.searchMarketTools);
+    expect(names).toContain(AgentManagementApiName.installPlugin);
+  });
+
+  it('advertises only the callAgent params every runtime honors', () => {
+    const callAgent = AgentManagementManifest.api.find(
+      (api) => api.name === AgentManagementApiName.callAgent,
+    )!;
+
+    // The manifest is shared with the client runtime, whose inline `callAgent`
+    // path has no thread title or per-call timeout to honor. Advertising
+    // `taskTitle` / `timeout` would promise behavior only the server deferred
+    // path keeps, so they must not appear in the shared schema.
+    expect(Object.keys(callAgent.parameters.properties ?? {}).sort()).toEqual([
+      'agentId',
+      'instruction',
+      'skipCallSupervisor',
+    ]);
+  });
+
   it('hides callAgent in both api and systemRole inside a sub-agent run', () => {
     const result = resolveAgentManagementManifest({ isSubAgent: true, scope: 'main' })!;
 
@@ -29,6 +53,7 @@ describe('resolveAgentManagementManifest', () => {
     // the rest of agent-management stays available
     expect(names).toContain(AgentManagementApiName.createAgent);
     expect(names).toContain(AgentManagementApiName.searchAgent);
+    expect(names).toContain(AgentManagementApiName.searchMarketTools);
     expect(names).toContain(AgentManagementApiName.getAgentDetail);
     // exactly one API removed
     expect(names).toHaveLength(AgentManagementManifest.api.length - 1);

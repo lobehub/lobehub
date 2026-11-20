@@ -9,7 +9,11 @@
  * 2. `enableAutoScrollOnStreaming = false`  → user message pinned to top
  * 3. User scrolls up mid-stream              → viewport stays put
  */
-import { After, Given, Then, When } from '@cucumber/cucumber';
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { After, Before, Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { llmMockManager, presetResponses } from '../../mocks/llm';
@@ -21,6 +25,7 @@ import type { CustomWorld } from '../../support/world';
 const AT_BOTTOM_EPSILON = 320;
 // Distance the user manually scrolls up for scenario 3.
 const MANUAL_SCROLL_UP_DELTA = 200;
+const SCROLL_SCENARIO_LOCK_DIR = path.join(tmpdir(), 'lobehub-e2e-agent-scroll.lock');
 
 interface ScrollSnapshot {
   bottomCompensationHeight: number;
@@ -33,6 +38,26 @@ interface ScrollSnapshot {
 // ---------------------------------------------------------------------------
 // DOM helpers (executed inside the page)
 // ---------------------------------------------------------------------------
+
+async function acquireScrollScenarioLock(): Promise<void> {
+  const deadline = Date.now() + 120_000;
+
+  while (Date.now() < deadline) {
+    try {
+      await mkdir(SCROLL_SCENARIO_LOCK_DIR);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+
+  throw new Error('timed out waiting for the agent scroll scenario lock');
+}
+
+async function releaseScrollScenarioLock(): Promise<void> {
+  await rm(SCROLL_SCENARIO_LOCK_DIR, { force: true, recursive: true });
+}
 
 // The chat list's scroll viewport is virtua's own root element and carries no
 // test id, so every helper below resolves it the way the DOM exposes it: the
@@ -177,6 +202,18 @@ async function scrollBy(world: CustomWorld, deltaY: number): Promise<void> {
 // ---------------------------------------------------------------------------
 // Setting toggle via the chat-appearance settings page
 // ---------------------------------------------------------------------------
+
+Before({ tags: '@scroll', timeout: 130_000 }, async function (this: CustomWorld) {
+  await acquireScrollScenarioLock();
+  this.testContext.scrollScenarioLockHeld = true;
+});
+
+After({ tags: '@scroll' }, async function (this: CustomWorld) {
+  if (this.testContext.scrollScenarioLockHeld) {
+    await releaseScrollScenarioLock();
+    this.testContext.scrollScenarioLockHeld = false;
+  }
+});
 
 async function setAutoScrollEnabled(world: CustomWorld, desired: boolean): Promise<void> {
   await world.page.goto('/settings/chat-appearance');
@@ -352,12 +389,6 @@ Then('视口应贴近聊天列表底部', async function (this: CustomWorld) {
   const snap = await getScrollSnapshot(this);
   expect(snap, 'failed to locate scroll container').not.toBeNull();
   expect(snap!.distanceToBottom).toBeLessThanOrEqual(AT_BOTTOM_EPSILON);
-});
-
-Then('视口不应贴近聊天列表底部', async function (this: CustomWorld) {
-  const snap = await getScrollSnapshot(this);
-  expect(snap, 'failed to locate scroll container').not.toBeNull();
-  expect(snap!.distanceToBottom).toBeGreaterThan(AT_BOTTOM_EPSILON);
 });
 
 // Reset LLM mock timing overrides so the slowdown from scenario 3 does not

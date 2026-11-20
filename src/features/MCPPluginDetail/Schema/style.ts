@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -33,7 +35,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
     `,
     name: css`
       font-family: ${cssVar.fontFamilyCode};
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       font-weight: 500;
       line-height: 20px;
     `,
@@ -46,13 +48,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
       font-size: 12px;
       font-weight: 500;
       color: ${cssVar.colorTextTertiary};
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
     `,
     sectionTitle: css`
       margin: 0;
 
-      font-size: 16px;
+      font-size: ${densityVars.pageTitleFontSize};
       font-weight: 600;
       line-height: 1.5;
       white-space: nowrap;

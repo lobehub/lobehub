@@ -1,6 +1,5 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { copyToClipboard } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, toast } from '@lobehub/ui';
 import type { DragEvent, KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +38,10 @@ interface UseFileTreeActionsParams {
   onClearDisplayFilter: () => void;
   onCollapseAll: () => void;
   projectRoot: string;
+  /** Set when the tree is showing a sandbox instance nobody is talking to. */
+  sandboxInstanceId?: string;
+  /** Set when the tree is showing a cloud sandbox's workspace rather than a disk. */
+  sandboxTopicId?: string;
   treeRef: RefObject<ExplorerTreeHandle | null>;
   workingDirectory: string;
 }
@@ -77,11 +80,14 @@ export const useFileTreeActions = ({
   onClearDisplayFilter,
   onCollapseAll,
   projectRoot,
+  sandboxInstanceId,
+  sandboxTopicId,
   treeRef,
   workingDirectory,
 }: UseFileTreeActionsParams) => {
   const { t } = useTranslation('chat');
-  const isRemote = !!deviceId;
+  const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
+  const isRemote = !!deviceId || isSandbox;
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
   const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({
@@ -136,9 +142,22 @@ export const useFileTreeActions = ({
         if (!isRemote) void ops.openInSystem(node.data);
         return;
       }
-      openLocalFile({ deviceId, filePath: node.data.path, workingDirectory: projectRoot });
+      // An instance picked before the first message has no topic yet, and the
+      // portal reads sandbox files through the topic's session. Opening anyway
+      // would give the web preview no source at all and send desktop looking
+      // for a local path that is not the instance's — so say so instead.
+      if (sandboxInstanceId && !sandboxTopicId) {
+        toast.info(t('workingPanel.files.openNeedsTopic'));
+        return;
+      }
+      openLocalFile({
+        deviceId,
+        filePath: node.data.path,
+        sandboxTopicId,
+        workingDirectory: projectRoot,
+      });
     },
-    [deviceId, isRemote, openLocalFile, ops, projectRoot],
+    [deviceId, isRemote, openLocalFile, ops, projectRoot, sandboxInstanceId, sandboxTopicId, t],
   );
 
   const handleNodeClick = useCallback(
@@ -278,9 +297,10 @@ export const useFileTreeActions = ({
       canPublish,
       canUseTerminal: ops.canUseTerminal,
       isRemote,
+      readOnly: isSandbox,
       trashName: ops.trashName,
     }),
-    [isRemote, ops.canPaste, ops.canUseTerminal, ops.trashName],
+    [isRemote, isSandbox, ops.canPaste, ops.canUseTerminal, ops.trashName],
   );
 
   const getBlankContextMenuItems = useCallback(
@@ -343,25 +363,29 @@ export const useFileTreeActions = ({
           );
           return true;
         }
+        // Every mutating shortcut is off for a read-only tree, for the same
+        // reason the menu items are: these helpers reach the local or device
+        // filesystem, so Delete on a sandbox row would act on the wrong host
+        // rather than on the instance the row names.
         case 'delete': {
-          if (entries.length === 0) return false;
+          if (isSandbox || entries.length === 0) return false;
           ops.trash(entries);
           return true;
         }
         case 'copy':
         case 'cut': {
-          if (entries.length === 0) return false;
+          if (isSandbox || entries.length === 0) return false;
           ops.putOnClipboard(entries, shortcut);
           return true;
         }
         case 'paste': {
-          if (!ops.canPaste) return false;
+          if (isSandbox || !ops.canPaste) return false;
           void ops.paste(folderRel(targetFolderId(focusedNode)));
           return true;
         }
       }
     },
-    [deletedPaths, expandedIds, isMac, openNode, ops, treeRef],
+    [deletedPaths, expandedIds, isMac, isSandbox, openNode, ops, treeRef],
   );
 
   // Header "New" menu: into the selected folder, next to a selected file, or at the root.
@@ -373,10 +397,14 @@ export const useFileTreeActions = ({
     [nodeById, startCreate, treeRef],
   );
 
+  // A persistent sandbox instance's files live in the execution plane, and
+  // every mutation helper below speaks only to the local or device filesystem
+  // — so until they are routed, the tree reads rather than lies about where a
+  // rename or a delete would land.
   return {
-    canDrag: (node: Node) => !!node.data && !isDeletedNode(node, deletedPaths),
-    canDrop: ops.canDrop,
-    canRename: (node: Node) => !!node.data && !isDeletedNode(node, deletedPaths),
+    canDrag: (node: Node) => !isSandbox && !!node.data && !isDeletedNode(node, deletedPaths),
+    canDrop: (...args: Parameters<typeof ops.canDrop>) => !isSandbox && ops.canDrop(...args),
+    canRename: (node: Node) => !isSandbox && !!node.data && !isDeletedNode(node, deletedPaths),
     getBlankContextMenuItems,
     getContextMenuItems,
     handleNodeClick,
@@ -388,7 +416,7 @@ export const useFileTreeActions = ({
     pendingCreate: !!pendingCreate,
     refresh: ops.refresh,
     refreshing: ops.refreshing,
-    startCreateFromHeader,
+    startCreateFromHeader: isSandbox ? undefined : startCreateFromHeader,
     validateName: ops.validateName,
   };
 };

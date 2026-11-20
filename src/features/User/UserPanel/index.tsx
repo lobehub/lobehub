@@ -1,11 +1,11 @@
 'use client';
 
-import { Popover } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Popover } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import { memo, Suspense, useState } from 'react';
 
 import { isDesktop } from '@/const/version';
+import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
 
 import PanelContent from './PanelContent';
 import PanelContentSkeleton from './PanelContentSkeleton';
@@ -28,12 +28,15 @@ const styles = createStaticStyles(({ css }) => {
 const UserPanel = memo<PropsWithChildren>(({ children }) => {
   const hasNewVersion = useNewVersion();
   const [open, setOpen] = useState(false);
+  // Panel entries, including business slots, may navigate without a close callback.
+  const popoverKey = useCloseOnNavigate(open, () => setOpen(false));
 
   return (
     <Suspense fallback={children}>
       <UpgradeBadge showBadge={hasNewVersion}>
         <Popover
           arrow={false}
+          key={popoverKey}
           open={open}
           placement="topLeft"
           trigger="click"

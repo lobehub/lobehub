@@ -67,6 +67,9 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
 
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');
+        // `?message=` is a one-shot send for the conversation the link opened.
+        // Carried onto the topic that send created, a reload would send it again.
+        nextSearchParams.delete('message');
 
         const nextPath = state
           ? options.getTopicPath?.(routeAgentId, state) || AGENT_CHAT_TOPIC_URL(routeAgentId, state)
@@ -80,6 +83,9 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
     const unsubscribeThread = useChatStore.subscribe(
       (state) => state.activeThreadId,
       (state) => {
+        // A topic switch clears null to undefined. Avoid a redundant query update
+        // against the old pathname, which would undo navigation to the edited topic.
+        if ((state || null) === searchParamsRef.current.get('thread')) return;
         setThread(state || null);
       },
     );

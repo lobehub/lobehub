@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "Копиране на връзката",
+  "popover.copyLinkSuccess": "Връзката е копирана",
+  "popover.linkHint": "Всеки с връзката може да преглежда и изтегли този файл",
+  "popover.permissionLink": "Всеки с връзката",
+  "popover.permissionPrivate": "Частно",
+  "popover.privateHint": "Само вие можете да отворите този файл",
+  "popover.sectionViews_one": "{{count}} преглед",
+  "popover.sectionViews_other": "{{count}} прегледа",
+  "popover.title": "Споделяне на файл",
+  "popover.updateError": "Неуспешно актуализиране на настройките за споделяне",
+  "popover.visibility": "Видимост",
+  "popover.visibilityUpdated": "Видимостта е актуализирана",
+  "shareButton.label": "Споделяне"
+}

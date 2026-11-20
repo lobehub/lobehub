@@ -67,7 +67,7 @@ interface RecoveredProbeEnvironment {
   resolvedPathEnv: string;
 }
 
-const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
+const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:-[\dA-Za-z.-]+)?(?:\+[\dA-Za-z.-]+)?)/;
 
 const extractVersion = (versionBanner: string): string | undefined =>
   versionBanner.match(VERSION_PATTERN)?.[1];
@@ -305,6 +305,28 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
     });
 
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
+};
+
+/**
+ * The PATH a child spawned by this process should search: the login shell's
+ * PATH (the Windows registry's on Windows) merged ahead of the inherited one.
+ *
+ * Use when: a long-lived host started by a service manager (launchd, systemd)
+ * spawns user tools — `npx`, `uvx`, nvm-installed binaries — that only the
+ * user's login shell puts on PATH.
+ * Returns: the inherited PATH when nothing could be recovered; never throws.
+ */
+export const resolveUserSpawnPath = async (
+  currentPath: string | undefined = process.env.PATH,
+): Promise<string | undefined> => {
+  try {
+    const recovered = isWindows()
+      ? await getWindowsRegistryPath()
+      : await getCurrentLoginShellPath();
+    return mergePathValues(recovered, currentPath) ?? currentPath;
+  } catch {
+    return currentPath;
+  }
 };
 
 const recoverProbeEnvironment = async (
@@ -665,6 +687,11 @@ export const detectValidatedCommand = async (
 ): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
+  'antigravity': {
+    validateHelpKeywords: ['--input-format', '--output-format', '--conversation', 'stream-json'],
+    validatePattern:
+      /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
+  },
   'amp': {
     validateFlag: '--help',
     validateKeywords: ['Amp CLI'],
@@ -679,6 +706,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   },
   'codex': {
     validateKeywords: ['codex'],
+  },
+  'copilot': {
+    validateHelpKeywords: ['--acp'],
+    validateKeywords: ['github copilot cli', 'copilot'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'cursor': {
     validateFlag: '--help',
@@ -704,9 +736,9 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'opencode': {
-    // OpenCode prints only a bare version (for example `1.18.3`) for
-    // `--version`, without a product-name prefix.
-    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+    // OpenCode 1.x prints a bare version (`1.18.3`); 2.x prefixes the product
+    // name (`opencode v2.2.6`).
+    validatePattern: /^(?:opencode\s+)?v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/i,
   },
   'pi': {
     // Pi prints a bare semantic version for `--version`.
@@ -740,6 +772,14 @@ export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
 // desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
+    case 'antigravity': {
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        return localAppData ? [path.win32.join(localAppData, 'agy', 'bin', 'agy.exe')] : [];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.local', 'bin', 'agy')];
+    }
     case 'amp': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 
@@ -793,16 +833,32 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
 
       if (platform() !== 'darwin') return [];
 
-      // Codex.app was renamed to ChatGPT.app. Prefer the current bundle name,
-      // while keeping Codex.app as a fallback for older installations.
-      return ['ChatGPT.app', 'Codex.app'].flatMap((appBundleName) => {
-        const bundledCli = path.join(appBundleName, 'Contents', 'Resources', 'codex');
+      // Codex.app was renamed to ChatGPT.app. ChatGPT.app 26.9 then moved the
+      // CLI from `Resources/codex` into a self-contained `Resources/codex-cli/`
+      // package whose `codex-package.json` declares `bin/codex` as the
+      // entrypoint. Probe newest first; legacy Codex.app only ever shipped the
+      // flat binary.
+      return [
+        path.join('ChatGPT.app', 'Contents', 'Resources', 'codex-cli', 'bin', 'codex'),
+        path.join('ChatGPT.app', 'Contents', 'Resources', 'codex'),
+        path.join('Codex.app', 'Contents', 'Resources', 'codex'),
+      ].flatMap((bundledCli) => [
+        path.join('/Applications', bundledCli),
+        path.join(homedir(), 'Applications', bundledCli),
+      ]);
+    }
+    case 'copilot': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'copilot.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
 
-        return [
-          path.join('/Applications', bundledCli),
-          path.join(homedir(), 'Applications', bundledCli),
-        ];
-      });
+      return [
+        path.join(homedir(), '.local', 'bin', 'copilot'),
+        path.join(homedir(), '.bun', 'bin', 'copilot'),
+        path.join(homedir(), '.npm-global', 'bin', 'copilot'),
+        path.join(homedir(), 'Library', 'pnpm', 'copilot'),
+      ];
     }
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
@@ -939,6 +995,8 @@ export interface ResolvedHeteroCommand {
    * login-shell PATH; undefined when nothing extra is needed.
    */
   pathEnv?: string;
+  /** Version the validating `--version` probe reported; undefined when not resolved. */
+  version?: string;
 }
 
 /**
@@ -968,7 +1026,7 @@ export const resolveHeteroSpawnCommand = async (
   try {
     const status = await detectHeterogeneousCliCommand(agentType, defaultCommand);
     if (status.available && status.path) {
-      return { command: status.path, pathEnv: status.resolvedPathEnv };
+      return { command: status.path, pathEnv: status.resolvedPathEnv, version: status.version };
     }
   } catch {
     // best-effort: fall through to the bare command below

@@ -1,11 +1,11 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { TopicCommentItem } from '@lobechat/types';
+import type { TopicCommentItem, TopicCommentSummary, TopicCommentThread } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useTopicCommentStore } from '@/store/topicComment';
+import { topicCommentThreadsKey, useTopicCommentStore } from '@/store/topicComment';
 
 import {
   useMessageCommentCount,
@@ -18,28 +18,29 @@ import {
 } from './hooks';
 
 const mocks = vi.hoisted(() => ({
-  cacheGet: vi.fn(),
   create: vi.fn(),
-  infiniteResponse: {} as Record<string, unknown>,
+  get: vi.fn(),
   listReplies: vi.fn(),
   listThreads: vi.fn(),
   mutate: vi.fn(),
   remove: vi.fn(),
   restore: vi.fn(),
-  scopedMutate: vi.fn(),
+  syncError: undefined as unknown,
   topicId: 'topic-1' as string | null,
   update: vi.fn(),
+  useClientDataSWR: vi.fn(),
   user: {
     avatar: 'https://example.com/avatar.png',
     fullName: 'Current User',
     id: 'user-1',
     username: 'current-user',
   },
-  useClientDataSWR: vi.fn(),
-  useSWRInfinite: vi.fn(),
   workspaceId: 'workspace-1' as string | null,
 }));
 
+// The topic-comment reads are replicas: `useSync` only orchestrates fetching,
+// the store views are the source of truth. The mocked hook below stands in for
+// the sync driver, so tests seed the views directly (see the `seed*` helpers).
 vi.mock('@/libs/swr', () => ({
   mutate: mocks.mutate,
   useClientDataSWR: mocks.useClientDataSWR,
@@ -47,6 +48,14 @@ vi.mock('@/libs/swr', () => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.workspaceId,
+}));
+
+// Every replica resolves its identity partition through the app cache scope.
+// Pin it so the mocked user store below never has to answer the scope selectors.
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => 'user-1:workspace-1',
+  isScopeTrusted: () => false,
+  useCacheScope: () => 'user-1:workspace-1',
 }));
 
 vi.mock('@/store/user', () => ({
@@ -58,36 +67,73 @@ vi.mock('@/store/user/slices/auth/selectors', () => ({
   userProfileSelectors: { userProfile: (state: { user: unknown }) => state.user },
 }));
 
-vi.mock('swr', () => ({
-  unstable_serialize: (key: unknown) => JSON.stringify(key),
-  useSWRConfig: () => ({
-    cache: { get: mocks.cacheGet },
-    mutate: mocks.scopedMutate,
-  }),
-}));
-
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ activeTopicId: mocks.topicId }),
-}));
-
-vi.mock('swr/infinite', () => ({
-  default: (...args: unknown[]) => {
-    mocks.useSWRInfinite(...args);
-    return mocks.infiniteResponse;
-  },
 }));
 
 vi.mock('@/services/topicComment', () => ({
   topicCommentService: {
     create: mocks.create,
     delete: mocks.remove,
+    get: mocks.get,
     listReplies: mocks.listReplies,
     listThreads: mocks.listThreads,
     restore: mocks.restore,
     update: mocks.update,
   },
 }));
+
+/** Persisted root feed of one topic view, as the store view holds it. */
+const seedThreads = (
+  topicId: string,
+  items: TopicCommentThread[],
+  options: {
+    hasMore?: boolean;
+    isLoadingMore?: boolean;
+    loadMoreError?: unknown;
+    messageId?: string;
+    nextCursor?: string | null;
+  } = {},
+) =>
+  useTopicCommentStore.setState((state) => ({
+    threadFeedMap: {
+      ...state.threadFeedMap,
+      [topicCommentThreadsKey({ messageId: options.messageId, topicId })]: {
+        currentPage: 0,
+        hasMore: options.hasMore ?? false,
+        isLoadingMore: options.isLoadingMore,
+        items,
+        loadMoreError: options.loadMoreError,
+        nextCursor: options.nextCursor ?? null,
+        total: items.length,
+      },
+    },
+  }));
+
+const seedReplies = (rootCommentId: string, items: TopicCommentItem[], total?: number) =>
+  useTopicCommentStore.setState((state) => ({
+    replyFeedMap: {
+      ...state.replyFeedMap,
+      [rootCommentId]: {
+        currentPage: 0,
+        hasMore: false,
+        items,
+        nextCursor: null,
+        total: total ?? items.length,
+      },
+    },
+  }));
+
+const seedSummary = (topicId: string, summary: TopicCommentSummary) =>
+  useTopicCommentStore.setState((state) => ({
+    commentSummaryMap: { ...state.commentSummaryMap, [topicId]: summary },
+  }));
+
+const seedDetail = (comment: TopicCommentItem) =>
+  useTopicCommentStore.setState((state) => ({
+    commentDetailMap: { ...state.commentDetailMap, [comment.id]: comment },
+  }));
 
 const createComment = (overrides: Partial<TopicCommentItem> = {}): TopicCommentItem => ({
   anchorPreview: null,
@@ -119,24 +165,26 @@ const createComment = (overrides: Partial<TopicCommentItem> = {}): TopicCommentI
   ...overrides,
 });
 
+const threadOf = (root: TopicCommentItem, replyCount = 0): TopicCommentThread => ({
+  replyCount,
+  root,
+});
+
 describe('useTopicCommentMutations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useTopicCommentStore.getState().reset();
-    mocks.infiniteResponse = {
-      data: undefined,
-      error: undefined,
-      isLoading: true,
-      isValidating: true,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
-    mocks.cacheGet.mockReturnValue(undefined);
+    mocks.get.mockResolvedValue(undefined);
+    mocks.listReplies.mockResolvedValue({ items: [], nextCursor: null });
+    mocks.listThreads.mockResolvedValue({ items: [], nextCursor: null });
     mocks.mutate.mockResolvedValue(undefined);
-    mocks.scopedMutate.mockResolvedValue(undefined);
+    mocks.syncError = undefined;
     mocks.topicId = 'topic-1';
-    mocks.useClientDataSWR.mockReturnValue({ data: undefined });
+    mocks.useClientDataSWR.mockImplementation(() => ({
+      data: undefined,
+      error: mocks.syncError,
+      isValidating: false,
+    }));
     mocks.workspaceId = 'workspace-1';
   });
 
@@ -184,28 +232,13 @@ describe('useTopicCommentMutations', () => {
 
   it('shows a topic comment immediately and reconciles it without waiting for refresh', async () => {
     let resolveCreate: ((value: unknown) => void) | undefined;
-    let resolveRefresh: (() => void) | undefined;
     mocks.create.mockReturnValue(
       new Promise((resolve) => {
         resolveCreate = resolve;
       }),
     );
-    mocks.mutate.mockImplementation((key) =>
-      typeof key === 'function'
-        ? new Promise<void>((resolve) => {
-            resolveRefresh = resolve;
-          })
-        : Promise.resolve(undefined),
-    );
-    mocks.infiniteResponse = {
-      data: [{ items: [], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    // The summary revalidation never settles: the list must update without it.
+    mocks.mutate.mockReturnValue(new Promise(() => undefined));
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -245,19 +278,9 @@ describe('useTopicCommentMutations', () => {
     expect(threads.result.current.pendingCommentIds.has('comment-1')).toBe(false);
     expect(mutations.result.current.creating).toBe(false);
 
-    await act(async () => resolveRefresh?.());
-    expect(threads.result.current.items[0].root.id).toBe('comment-1');
-
+    // The confirmed row paints from the store, before the feed revalidates.
     const reconciledRoot = threads.result.current.items[0].root;
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: reconciledRoot }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(reconciledRoot)]);
     threads.rerender();
 
     await waitFor(() =>
@@ -274,15 +297,6 @@ describe('useTopicCommentMutations', () => {
         rejectCreate = reject;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -311,9 +325,7 @@ describe('useTopicCommentMutations', () => {
         rejectCreate = reject;
       }),
     );
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: {}, total: 4 },
-    });
+    seedSummary('topic-1', { countByMessage: {}, total: 4 });
     const mutations = renderHook(() => useTopicCommentMutations());
     const summary = renderHook(() => useTopicCommentSummary('topic-1'));
 
@@ -342,18 +354,7 @@ describe('useTopicCommentMutations', () => {
         resolveCreate = resolve;
       }),
     );
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: {}, total: 4 },
-    });
-    mocks.infiniteResponse = {
-      data: [{ items: [], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedSummary('topic-1', { countByMessage: {}, total: 4 });
     const mutations = renderHook(() => useTopicCommentMutations());
     const summary = renderHook(() => useTopicCommentSummary('topic-1'));
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
@@ -381,11 +382,9 @@ describe('useTopicCommentMutations', () => {
 
     expect(summary.result.current.data?.total).toBe(4);
     expect(threads.result.current.pendingCommentIds.has('comment-1')).toBe(false);
-    expect(
-      mocks.mutate.mock.calls.some(([key]) =>
-        Array.isArray(key) ? key[0] === 'topicComment:summary' : false,
-      ),
-    ).toBe(true);
+    // A duplicate only asks the summary entry to revalidate: it is never patched twice.
+    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(true);
+    expect(useTopicCommentStore.getState().commentSummaryMap['topic-1'].total).toBe(4);
   });
 
   it('shows a message comment in both its message scope and the topic-wide scope', async () => {
@@ -395,15 +394,6 @@ describe('useTopicCommentMutations', () => {
         rejectCreate = reject;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
     const mutations = renderHook(() => useTopicCommentMutations());
     const topicThreads = renderHook(() => useTopicCommentThreads('topic-1'));
     const messageThreads = renderHook(() => useTopicCommentThreads('topic-1', 'message-1'));
@@ -436,15 +426,6 @@ describe('useTopicCommentMutations', () => {
         rejectCreate = reject;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
     const replies = renderHook(() => useTopicCommentReplies('root-comment-1'));
@@ -476,15 +457,7 @@ describe('useTopicCommentMutations', () => {
         resolveCreate = resolve;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 2, root }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(root, 2)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -518,10 +491,7 @@ describe('useTopicCommentMutations', () => {
       useTopicCommentStore.getState().optimisticReplyCountMutations['reply-client-1']?.pending,
     ).toBe(false);
 
-    mocks.infiniteResponse = {
-      ...mocks.infiniteResponse,
-      data: [{ items: [{ replyCount: 3, root }], nextCursor: null }],
-    };
+    seedThreads('topic-1', [threadOf(root, 3)]);
     threads.rerender();
 
     await waitFor(() =>
@@ -540,15 +510,7 @@ describe('useTopicCommentMutations', () => {
       parentCommentId: root.id,
     });
     mocks.create.mockResolvedValue({ comment: reply, isDuplicate: true });
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 3, root }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(root, 3)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -577,15 +539,7 @@ describe('useTopicCommentMutations', () => {
         rejectDelete = reject;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 2, root }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(root, 2)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -625,15 +579,7 @@ describe('useTopicCommentMutations', () => {
       topicId: root.topicId,
       workspaceId: root.workspaceId,
     });
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 2, root }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(root, 2)]);
 
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -646,21 +592,12 @@ describe('useTopicCommentMutations', () => {
   it('shows an edit immediately, keeps it over stale data, and reconciles the server result', async () => {
     const comment = createComment();
     let resolveUpdate: ((value: TopicCommentItem) => void) | undefined;
-    mocks.mutate.mockReturnValue(new Promise(() => undefined));
     mocks.update.mockReturnValue(
       new Promise((resolve) => {
         resolveUpdate = resolve;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(comment)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -686,15 +623,11 @@ describe('useTopicCommentMutations', () => {
     });
 
     expect(threads.result.current.items[0].root).toEqual(confirmed);
-    expect(mocks.mutate).toHaveBeenCalledWith(['topicComment:detail', comment.id], confirmed, {
-      revalidate: false,
-    });
-    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(false);
+    // The confirmed write lands in the by-id detail view, not in a detail SWR key.
+    expect(useTopicCommentStore.getState().commentDetailMap[comment.id]).toEqual(confirmed);
+    expect(mocks.mutate.mock.calls.some(([key]) => Array.isArray(key))).toBe(false);
 
-    mocks.infiniteResponse = {
-      ...mocks.infiniteResponse,
-      data: [{ items: [{ replyCount: 0, root: confirmed }], nextCursor: null }],
-    };
+    seedThreads('topic-1', [threadOf(confirmed)]);
     threads.rerender();
     await waitFor(() =>
       expect(useTopicCommentStore.getState().optimisticMutations[comment.id]).toBeUndefined(),
@@ -710,15 +643,7 @@ describe('useTopicCommentMutations', () => {
         rejectUpdate = reject;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(comment)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -750,7 +675,7 @@ describe('useTopicCommentMutations', () => {
         rejectUpdate = reject;
       }),
     );
-    mocks.useClientDataSWR.mockReturnValue({ data: comment });
+    seedDetail(comment);
     const mutations = renderHook(() => useTopicCommentMutations());
     const detail = renderHook(() => useTopicCommentDetail(comment.id));
 
@@ -772,7 +697,7 @@ describe('useTopicCommentMutations', () => {
 
   it('keeps a root visible during a pending hard delete and hides it after confirmation', () => {
     const comment = createComment();
-    mocks.useClientDataSWR.mockReturnValue({ data: comment });
+    seedDetail(comment);
     useTopicCommentStore.getState().upsertOptimisticMutation({
       comment,
       deleteMode: 'hard',
@@ -799,10 +724,8 @@ describe('useTopicCommentMutations', () => {
 
   it('clears retained detail data when revalidation reports not found', () => {
     const comment = createComment({ id: 'deleted-reply', parentCommentId: 'comment-1' });
-    mocks.useClientDataSWR.mockReturnValue({
-      data: comment,
-      error: { data: { code: 'NOT_FOUND' } },
-    });
+    seedDetail(comment);
+    mocks.syncError = { data: { code: 'NOT_FOUND' } };
 
     const detail = renderHook(() => useTopicCommentDetail(comment.id));
 
@@ -822,15 +745,7 @@ describe('useTopicCommentMutations', () => {
       pending: false,
     });
     mocks.update.mockRejectedValue(new Error('network failed'));
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: staleComment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(staleComment)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -857,18 +772,8 @@ describe('useTopicCommentMutations', () => {
         rejectDelete = reject;
       }),
     );
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: { 'message-1': 1 }, total: 1 },
-    });
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedSummary('topic-1', { countByMessage: { 'message-1': 1 }, total: 1 });
+    seedThreads('topic-1', [threadOf(comment)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
     const summary = renderHook(() => useTopicCommentSummary('topic-1'));
@@ -894,15 +799,8 @@ describe('useTopicCommentMutations', () => {
     const comment = createComment();
     mocks.remove.mockResolvedValue({ mode: 'hard' });
     mocks.mutate.mockReturnValue(new Promise(() => undefined));
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedThreads('topic-1', [threadOf(comment)]);
+    seedDetail(comment);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -912,20 +810,12 @@ describe('useTopicCommentMutations', () => {
 
     expect(threads.result.current.items).toEqual([]);
     expect(useTopicCommentStore.getState().optimisticMutations[comment.id]?.pending).toBe(false);
-    expect(
-      mocks.mutate.mock.calls.filter(
-        ([key]) => Array.isArray(key) && key[0] === 'topicComment:summary',
-      ),
-    ).toHaveLength(1);
-    expect(mocks.mutate).toHaveBeenCalledWith(['topicComment:detail', comment.id], undefined, {
-      revalidate: false,
-    });
-    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(false);
+    // The by-id detail view drops the row; the feed reconciles it on the next sync.
+    expect(useTopicCommentStore.getState().commentDetailMap[comment.id]).toBeUndefined();
+    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(true);
+    expect(mocks.mutate.mock.calls.some(([key]) => Array.isArray(key))).toBe(false);
 
-    mocks.infiniteResponse = {
-      ...mocks.infiniteResponse,
-      data: [{ items: [], nextCursor: null }],
-    };
+    seedThreads('topic-1', []);
     threads.rerender();
     await waitFor(() =>
       expect(useTopicCommentStore.getState().optimisticMutations[comment.id]).toBeUndefined(),
@@ -946,18 +836,8 @@ describe('useTopicCommentMutations', () => {
         resolveDelete = resolve;
       }),
     );
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: { 'message-1': 1 }, total: 1 },
-    });
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedSummary('topic-1', { countByMessage: { 'message-1': 1 }, total: 1 });
+    seedThreads('topic-1', [threadOf(comment)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
     const summary = renderHook(() => useTopicCommentSummary('topic-1'));
@@ -985,9 +865,7 @@ describe('useTopicCommentMutations', () => {
     });
 
     expect(threads.result.current.items[0].root).toEqual(moderated);
-    expect(mocks.mutate).toHaveBeenCalledWith(['topicComment:detail', comment.id], moderated, {
-      revalidate: false,
-    });
+    expect(useTopicCommentStore.getState().commentDetailMap[comment.id]).toEqual(moderated);
   });
 
   it('restores a moderated comment immediately and rolls back when restore fails', async () => {
@@ -1006,16 +884,8 @@ describe('useTopicCommentMutations', () => {
         rejectRestore = reject;
       }),
     );
-    mocks.useClientDataSWR.mockReturnValue({ data: { countByMessage: {}, total: 0 } });
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedSummary('topic-1', { countByMessage: {}, total: 0 });
+    seedThreads('topic-1', [threadOf(comment)]);
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
     const summary = renderHook(() => useTopicCommentSummary('topic-1'));
@@ -1048,25 +918,11 @@ describe('useTopicCommentMutations', () => {
       kind: 'delete',
       pending: false,
     });
-    mocks.infiniteResponse = {
-      data: undefined,
-      error: undefined,
-      isLoading: true,
-      isValidating: true,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
 
     expect(useTopicCommentStore.getState().optimisticMutations[comment.id]).toBeDefined();
 
-    mocks.infiniteResponse = {
-      ...mocks.infiniteResponse,
-      data: [{ items: [], nextCursor: null }],
-      isLoading: false,
-      isValidating: false,
-    };
+    seedThreads('topic-1', []);
     threads.rerender();
     await waitFor(() =>
       expect(useTopicCommentStore.getState().optimisticMutations[comment.id]).toBeUndefined(),
@@ -1081,15 +937,7 @@ describe('useTopicCommentMutations', () => {
         rejectDelete = reject;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [reply], nextCursor: null, total: 1 }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    seedReplies('comment-1', [reply], 1);
     const mutations = renderHook(() => useTopicCommentMutations());
     const replies = renderHook(() => useTopicCommentReplies('comment-1'));
 
@@ -1114,18 +962,8 @@ describe('useTopicCommentMutations', () => {
         resolveDelete = resolve;
       }),
     );
-    mocks.infiniteResponse = {
-      data: [{ items: [{ replyCount: 2, root: comment }], nextCursor: null }],
-      error: undefined,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: { 'message-1': 1 }, total: 2 },
-    });
+    seedThreads('topic-1', [threadOf(comment, 2)]);
+    seedSummary('topic-1', { countByMessage: { 'message-1': 1 }, total: 2 });
     const mutations = renderHook(() => useTopicCommentMutations());
     const threads = renderHook(() => useTopicCommentThreads('topic-1'));
     const summary = renderHook(() => useTopicCommentSummary('topic-1'));
@@ -1155,10 +993,7 @@ describe('useTopicCommentMutations', () => {
       deletedAt: new Date('2026-07-21T00:00:00.000Z'),
       updatedAt: new Date('2026-07-21T00:00:00.000Z'),
     });
-    mocks.infiniteResponse = {
-      ...mocks.infiniteResponse,
-      data: [{ items: [{ replyCount: 2, root: tombstone }], nextCursor: null }],
-    };
+    seedThreads('topic-1', [threadOf(tombstone, 2)]);
     threads.rerender();
 
     await waitFor(() =>
@@ -1172,17 +1007,20 @@ describe('topic comment read hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useTopicCommentStore.getState().reset();
-    mocks.cacheGet.mockReturnValue(undefined);
-    mocks.scopedMutate.mockResolvedValue(undefined);
+    mocks.listReplies.mockResolvedValue({ items: [], nextCursor: null });
+    mocks.listThreads.mockResolvedValue({ items: [], nextCursor: null });
+    mocks.syncError = undefined;
     mocks.topicId = 'topic-1';
+    mocks.useClientDataSWR.mockImplementation(() => ({
+      data: undefined,
+      error: mocks.syncError,
+      isValidating: false,
+    }));
     mocks.workspaceId = 'workspace-1';
-    mocks.useClientDataSWR.mockReturnValue({ data: undefined });
   });
 
   it('reads a message badge from the root-thread summary', () => {
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: { 'message-1': 3 }, total: 8 },
-    });
+    seedSummary('topic-1', { countByMessage: { 'message-1': 3 }, total: 8 });
 
     const { result } = renderHook(() => useMessageCommentCount('message-1'));
 
@@ -1190,48 +1028,42 @@ describe('topic comment read hooks', () => {
   });
 
   it('warms and caches the topic first page before the summary loads', async () => {
-    const page = { items: [{ replyCount: 0, root: { id: 'comment-1' } }], nextCursor: null };
+    const page = { items: [threadOf({ id: 'comment-1' } as TopicCommentItem)], nextCursor: null };
     mocks.listThreads.mockResolvedValue(page);
-    mocks.useClientDataSWR.mockImplementation((key, fetcher) => {
-      if (Array.isArray(key) && key[0] === 'topicComment:warmup') void fetcher();
-      return { data: undefined };
-    });
 
     renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
     await waitFor(() =>
-      expect(mocks.scopedMutate).toHaveBeenCalledWith(
-        ['topicComment:threads', 'workspace-1', 'topic-1', '', ''],
-        page,
-        { revalidate: false },
-      ),
+      expect(
+        useTopicCommentStore.getState().threadFeedMap[
+          topicCommentThreadsKey({ topicId: 'topic-1' })
+        ]?.items,
+      ).toHaveLength(1),
     );
+    expect(mocks.listThreads).toHaveBeenCalledWith({
+      cursor: undefined,
+      limit: 30,
+      messageId: undefined,
+      topicId: 'topic-1',
+    });
   });
 
   it('warms and caches first-page replies for roots that have replies', async () => {
     const threadPage = {
       items: [
-        { replyCount: 2, root: { id: 'comment-1' } },
-        { replyCount: 0, root: { id: 'comment-2' } },
+        threadOf({ id: 'comment-1' } as TopicCommentItem, 2),
+        threadOf({ id: 'comment-2' } as TopicCommentItem),
       ],
       nextCursor: null,
     };
-    const replyPage = { items: [{ id: 'reply-1' }], nextCursor: null, total: 1 };
+    const replyPage = { items: [createComment({ id: 'reply-1' })], nextCursor: null, total: 1 };
     mocks.listThreads.mockResolvedValue(threadPage);
     mocks.listReplies.mockResolvedValue(replyPage);
-    mocks.useClientDataSWR.mockImplementation((key, fetcher) => {
-      if (Array.isArray(key) && key[0] === 'topicComment:warmup') void fetcher();
-      return { data: undefined };
-    });
 
     renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
     await waitFor(() =>
-      expect(mocks.scopedMutate).toHaveBeenCalledWith(
-        ['topicComment:replies', 'workspace-1', 'comment-1', ''],
-        replyPage,
-        { revalidate: false },
-      ),
+      expect(useTopicCommentStore.getState().replyFeedMap['comment-1']?.items).toHaveLength(1),
     );
     expect(mocks.listReplies).toHaveBeenCalledOnce();
     expect(mocks.listReplies).toHaveBeenCalledWith({
@@ -1242,39 +1074,48 @@ describe('topic comment read hooks', () => {
   });
 
   it('keeps a failed topic warmup retryable and caches a later successful retry', async () => {
-    const error = new Error('prefetch failed');
-    const page = { items: [{ replyCount: 0, root: { id: 'comment-1' } }], nextCursor: null };
-    let warmupFetcher: (() => Promise<boolean>) | undefined;
-    mocks.listThreads.mockRejectedValueOnce(error).mockResolvedValueOnce(page);
-    mocks.useClientDataSWR.mockImplementation((key, fetcher) => {
-      if (Array.isArray(key) && key[0] === 'topicComment:warmup') warmupFetcher = fetcher;
-      return { data: undefined };
+    const page = { items: [threadOf({ id: 'comment-1' } as TopicCommentItem)], nextCursor: null };
+    mocks.listThreads
+      .mockRejectedValueOnce(new Error('prefetch failed'))
+      .mockResolvedValueOnce(page);
+
+    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
+
+    await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledOnce());
+    expect(
+      useTopicCommentStore.getState().threadFeedMap[topicCommentThreadsKey({ topicId: 'topic-1' })],
+    ).toBeUndefined();
+
+    // The warmup is best-effort: a later attempt fills the same view.
+    await act(async () => {
+      await useTopicCommentStore.getState().prefetchTopicComments('topic-1');
     });
 
-    renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
-
-    await expect(warmupFetcher?.()).rejects.toBe(error);
-    await expect(warmupFetcher?.()).resolves.toBe(true);
-    expect(mocks.scopedMutate).toHaveBeenCalledWith(
-      ['topicComment:threads', 'workspace-1', 'topic-1', '', ''],
-      page,
-      { revalidate: false },
-    );
+    expect(
+      useTopicCommentStore.getState().threadFeedMap[topicCommentThreadsKey({ topicId: 'topic-1' })]
+        ?.items,
+    ).toHaveLength(1);
   });
 
-  it('registers only the bounded topic-level warmup', () => {
+  it('warms only the bounded topic feed, not a warmup SWR key', async () => {
     renderHook(() => usePrefetchTopicCommentsOnTopicLoad('topic-1'));
 
-    expect(mocks.useClientDataSWR).toHaveBeenCalledOnce();
-    expect(mocks.useClientDataSWR).toHaveBeenCalledWith(
-      ['topicComment:warmup', 'workspace-1', 'topic-1'],
-      expect.any(Function),
-      { revalidateOnFocus: false },
-    );
+    await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledOnce());
+    expect(mocks.listThreads).toHaveBeenCalledWith({
+      cursor: undefined,
+      limit: 30,
+      messageId: undefined,
+      topicId: 'topic-1',
+    });
+    expect(
+      mocks.useClientDataSWR.mock.calls.some(([key]) =>
+        JSON.stringify(key ?? '').includes('topicComment:warmup'),
+      ),
+    ).toBe(false);
   });
 
   it('refreshes only the affected summary after a comment write', async () => {
-    const response = { comment: { id: 'comment-1' }, isDuplicate: false };
+    const response = { comment: createComment({ id: 'comment-1' }), isDuplicate: false };
     mocks.create.mockResolvedValue(response);
     const { result } = renderHook(() => useTopicCommentMutations());
 
@@ -1286,109 +1127,69 @@ describe('topic comment read hooks', () => {
       });
     });
 
-    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(false);
-    expect(
-      mocks.mutate.mock.calls.filter(
-        ([key]) => Array.isArray(key) && key[0] === 'topicComment:summary',
-      ),
-    ).toHaveLength(1);
+    // The summary entry is revalidated through the replica match, never a raw SWR key.
+    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(true);
     expect(
       mocks.mutate.mock.calls.some(
-        ([key]) => Array.isArray(key) && key[0] === 'topicComment:warmup',
+        ([key]) => Array.isArray(key) && key[0] === 'topicComment:summary',
       ),
     ).toBe(false);
   });
 
-  it('uses the summary as an immediate empty fallback while revalidating in the background', () => {
-    mocks.useClientDataSWR.mockReturnValue({
-      data: { countByMessage: {}, total: 0 },
+  it('reads the persisted topic feed before the network confirms it', () => {
+    const thread = threadOf({ id: 'comment-1' } as TopicCommentItem);
+    seedThreads('topic-1', [thread]);
+
+    const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
+
+    expect(result.current.items).toEqual([thread]);
+    expect(result.current.isLoadingInitial).toBe(false);
+  });
+
+  it('reads the persisted reply feed before the network confirms it', () => {
+    const reply = createComment({ id: 'reply-1', parentCommentId: 'comment-1' });
+    seedReplies('comment-1', [reply], 1);
+
+    const { result } = renderHook(() => useTopicCommentReplies('comment-1', 1));
+
+    expect(result.current.items).toEqual([reply]);
+    expect(result.current.total).toBe(1);
+  });
+
+  it('shows an empty topic feed as loaded when the summary reports no comments', () => {
+    seedSummary('topic-1', { countByMessage: { 'message-without-comments': 0 }, total: 0 });
+    seedThreads('topic-1', [], { messageId: 'message-without-comments' });
+
+    const { result } = renderHook(() =>
+      useTopicCommentThreads('topic-1', 'message-without-comments'),
+    );
+
+    expect(result.current.items).toEqual([]);
+    expect(result.current.isLoadingInitial).toBe(false);
+  });
+
+  it('treats a zero reply snapshot as an immediate empty reply list', () => {
+    const { result } = renderHook(() => useTopicCommentReplies('root-comment-1', 0));
+
+    expect(result.current.items).toEqual([]);
+    expect(result.current.total).toBe(0);
+    expect(result.current.isLoadingInitial).toBe(false);
+  });
+
+  it('reload revalidates the feed entry it is showing', async () => {
+    seedThreads('topic-1', [threadOf({ id: 'comment-1' } as TopicCommentItem)]);
+    const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
+
+    await act(async () => {
+      await result.current.reload();
     });
 
-    renderHook(() => useTopicCommentThreads('topic-1', 'message-without-comments'));
-
-    expect(mocks.useSWRInfinite).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-      expect.objectContaining({
-        fallbackData: [{ items: [], nextCursor: null }],
-        revalidateOnMount: true,
-      }),
-    );
-  });
-
-  it('uses a zero reply snapshot as an immediate empty fallback while revalidating', () => {
-    renderHook(() => useTopicCommentReplies('root-comment-1', 0));
-
-    expect(mocks.useSWRInfinite).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-      expect.objectContaining({
-        fallbackData: [{ items: [], nextCursor: null, total: 0 }],
-        revalidateOnMount: true,
-      }),
-    );
-  });
-
-  it('uses prefetched first-page replies as an immediate fallback while revalidating', () => {
-    const page = { items: [{ id: 'reply-1' }], nextCursor: null, total: 1 };
-    mocks.cacheGet.mockImplementation((key) =>
-      key === JSON.stringify(['topicComment:replies', 'workspace-1', 'root-comment-1', ''])
-        ? { data: page }
-        : undefined,
-    );
-
-    renderHook(() => useTopicCommentReplies('root-comment-1', 1));
-
-    expect(mocks.useSWRInfinite).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-      expect.objectContaining({
-        fallbackData: [page],
-        revalidateOnMount: true,
-      }),
-    );
-  });
-
-  it('uses a prefetched first page as an immediate fallback while revalidating', () => {
-    const page = { items: [{ replyCount: 0, root: { id: 'comment-1' } }], nextCursor: null };
-    mocks.cacheGet.mockReturnValue({ data: page });
-
-    renderHook(() => useTopicCommentThreads('topic-1', 'message-1'));
-
-    expect(mocks.useSWRInfinite).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-      expect.objectContaining({
-        fallbackData: [page],
-        revalidateOnMount: true,
-      }),
-    );
-  });
-
-  it('revalidates the first page when returning from a comment thread', () => {
-    renderHook(() => useTopicCommentThreads('topic-1'));
-
-    expect(mocks.useSWRInfinite).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-      expect.objectContaining({ revalidateOnMount: true }),
-    );
+    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(true);
   });
 
   it('keeps loaded threads visible while the next page is loading', () => {
-    const thread = {
-      replyCount: 2,
-      root: { id: 'comment-1' },
-    };
-    mocks.infiniteResponse = {
-      data: [{ items: [thread], nextCursor: 'next' }, undefined],
-      error: undefined,
-      isLoading: false,
-      isValidating: true,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 2,
-    };
+    const thread = threadOf({ id: 'comment-1' } as TopicCommentItem, 2);
+    seedThreads('topic-1', [thread], { hasMore: true, isLoadingMore: true });
 
     const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
 
@@ -1399,38 +1200,57 @@ describe('topic comment read hooks', () => {
 
   it('exposes a tail error without turning it into an initial failure', () => {
     const error = new Error('next page failed');
-    const thread = {
-      replyCount: 0,
-      root: { id: 'comment-1' },
-    };
-    mocks.infiniteResponse = {
-      data: [{ items: [thread], nextCursor: 'next' }, undefined],
-      error,
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 2,
-    };
+    const thread = threadOf({ id: 'comment-1' } as TopicCommentItem);
+    seedThreads('topic-1', [thread], { hasMore: true, loadMoreError: error, nextCursor: 'c2' });
 
     const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
 
     expect(result.current.items).toEqual([thread]);
+    expect(result.current.error).toBe(error);
     expect(result.current.isInitialError).toBe(false);
     expect(result.current.isLoadingMore).toBe(false);
     expect(result.current.hasMore).toBe(false);
   });
 
+  it('retries the failed cursor request on reload instead of the head', async () => {
+    const error = new Error('next page failed');
+    const thread = threadOf({ id: 'comment-1' } as TopicCommentItem);
+    seedThreads('topic-1', [thread], { hasMore: true, loadMoreError: error, nextCursor: 'c2' });
+
+    const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    // The head-only revalidation cannot reach the page that failed: reload must
+    // re-issue the cursor request.
+    expect(mocks.listThreads).toHaveBeenCalledWith({
+      cursor: 'c2',
+      limit: 30,
+      messageId: undefined,
+      topicId: 'topic-1',
+    });
+  });
+
+  it('revalidates the head when there is no tail error to retry', async () => {
+    seedThreads('topic-1', [threadOf({ id: 'comment-1' } as TopicCommentItem)], {
+      hasMore: true,
+      nextCursor: 'c2',
+    });
+
+    const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(mocks.mutate.mock.calls.some(([key]) => typeof key === 'function')).toBe(true);
+    expect(mocks.listThreads).not.toHaveBeenCalled();
+  });
+
   it('marks a first-page failure as an initial error', () => {
-    mocks.infiniteResponse = {
-      data: undefined,
-      error: new Error('first page failed'),
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-      setSize: vi.fn(),
-      size: 1,
-    };
+    mocks.syncError = new Error('first page failed');
 
     const { result } = renderHook(() => useTopicCommentThreads('topic-1'));
 

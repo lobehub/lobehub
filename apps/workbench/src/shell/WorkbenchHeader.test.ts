@@ -9,8 +9,7 @@ const brand = readFileSync(path.join(dir, 'WorkbenchBrandLink.tsx'), 'utf8');
 
 const pageFiles = [
   '../features/acceptance/AcceptanceDetail.tsx',
-  '../features/verify/VerifyDetail.tsx',
-  '../features/verify/VerifyList.tsx',
+  '../features/verify/VerifyReportUnavailable.tsx',
 ] as const;
 
 describe('WorkbenchHeader', () => {

@@ -72,7 +72,7 @@ describe('extractTaskWorkTargets', () => {
         args: { name: 'A', instruction: 'do' },
         result: { state: { identifier: 'T-1', taskId: 'task_1', success: true }, success: true },
       }),
-    ).toEqual([{ taskId: 'task_1', taskIdentifier: 'T-1' }]);
+    ).toEqual([{ taskId: 'task_1', taskIdentifier: undefined }]);
   });
 
   it('falls back to args.identifier for updates that return no state (server runtime)', () => {
@@ -146,7 +146,7 @@ describe('resolveWorkRegistration', () => {
     ).toEqual({
       action: 'create',
       changeType: 'created',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
 
@@ -171,7 +171,7 @@ describe('resolveWorkRegistration', () => {
       }),
     ).toEqual({
       action: 'delete',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
   });
@@ -553,5 +553,84 @@ describe('dispatchWorkRegistrationIntent', () => {
         }),
       );
     });
+  });
+});
+
+describe('dispatchWorkRegistrationIntent · canvas', () => {
+  const provenance: WorkRegistrationProvenance = {
+    agentId: 'agent-1',
+    cumulativeCost: 0.02,
+    messageId: 'msg-1',
+    rootOperationId: 'op-root',
+    threadId: 'thread-1',
+    toolCallId: 'call-1',
+    toolIdentifier: 'lobe-canvas',
+    toolName: 'createCanvas',
+    topicId: 'topic-1',
+  };
+
+  const intent: WorkRegistrationIntent = {
+    action: 'register',
+    canvas: {
+      canvasId: 'cvs_1',
+      description: 'Cost up',
+      metadata: {
+        entry: 'index.html',
+        fileCount: 1,
+        manifestKey: 'k',
+        runtimeMajor: 1,
+        totalSize: 10,
+      },
+      title: 'Cost report',
+      toolName: 'writeCanvasFiles',
+    },
+    type: 'canvas',
+  };
+
+  it('registers the canvas version with provenance', async () => {
+    const registerCanvas = vi.fn().mockResolvedValue(undefined);
+    await dispatchWorkRegistrationIntent(
+      intent,
+      {
+        deleteTaskWork: vi.fn(),
+        handleSkillToolResult: vi.fn(),
+        registerCanvas,
+        registerDocument: vi.fn(),
+        registerTask: vi.fn(),
+      },
+      provenance,
+    );
+
+    expect(registerCanvas).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      canvasId: 'cvs_1',
+      cumulativeCost: 0.02,
+      cumulativeUsage: undefined,
+      description: 'Cost up',
+      messageId: 'msg-1',
+      metadata: intent.type === 'canvas' ? intent.canvas.metadata : undefined,
+      rootOperationId: 'op-root',
+      threadId: 'thread-1',
+      title: 'Cost report',
+      toolCallId: 'call-1',
+      toolIdentifier: 'lobe-canvas',
+      toolName: 'writeCanvasFiles',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('is a no-op when the side has no canvas port', async () => {
+    await expect(
+      dispatchWorkRegistrationIntent(
+        intent,
+        {
+          deleteTaskWork: vi.fn(),
+          handleSkillToolResult: vi.fn(),
+          registerDocument: vi.fn(),
+          registerTask: vi.fn(),
+        },
+        provenance,
+      ),
+    ).resolves.toBeUndefined();
   });
 });

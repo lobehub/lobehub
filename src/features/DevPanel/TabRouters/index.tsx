@@ -1,11 +1,15 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
+import {
+  DEFAULT_LIVE_TAB_ROUTER_CAP,
+  useLiveTabRouterCap,
+} from '@/features/Electron/TabHost/liveTabRouterCap';
 import { useElectronStore } from '@/store/electron';
+import { densityVars } from '@/styles/densityVars';
 
 import { type TabRouterRow, useTabRouterDebug } from './useTabRouterDebug';
 
@@ -14,6 +18,19 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  capInput: css`
+    inline-size: 48px;
+    margin-inline-start: 4px;
+    padding-block: 0;
+    padding-inline: 4px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 4px;
+
+    font: inherit;
+    color: ${cssVar.colorText};
+
+    background: transparent;
   `,
   cold: css`
     color: ${cssVar.colorTextQuaternary};
@@ -33,8 +50,6 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-start: 0;
 
     color: ${cssVar.colorTextQuaternary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -42,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 10px;
@@ -67,7 +82,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 5px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};
@@ -90,7 +105,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};
@@ -158,6 +173,7 @@ Row.displayName = 'DevTabRoutersRow';
 
 const TabRouters = memo(() => {
   const { cap, liveCount, orphanIds, rows, scopeKey } = useTabRouterDebug();
+  const setCap = useLiveTabRouterCap((s) => s.setCap);
 
   const evictable = rows.filter((row) => row.live && !row.active);
   const nextEvictedId =
@@ -171,7 +187,18 @@ const TabRouters = memo(() => {
         scope <b>{scopeKey}</b> · tabs <b>{rows.length}</b> · live routers{' '}
         <b className={liveCount > cap ? styles.drift : undefined}>
           {liveCount}/{cap}
-        </b>
+        </b>{' '}
+        · cap
+        <input
+          aria-label={'Live tab router cap'}
+          className={styles.capInput}
+          min={1}
+          step={1}
+          title={`Default ${DEFAULT_LIVE_TAB_ROUTER_CAP}`}
+          type={'number'}
+          value={cap}
+          onChange={(e) => setCap(e.target.valueAsNumber)}
+        />
         {orphanIds.length > 0 && (
           <span className={styles.drift}> · orphan routers {orphanIds.join(', ')}</span>
         )}

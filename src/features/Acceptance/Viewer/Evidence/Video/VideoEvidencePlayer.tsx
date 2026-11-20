@@ -1,0 +1,321 @@
+'use client';
+
+import { isFullFrameRect } from '@lobechat/const/verify';
+import type {
+  AcceptanceCommentTime,
+  AcceptanceReviewAnnotation,
+  VerifyEvidenceChapter,
+} from '@lobechat/types';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Video.Controls frame number
+  createStaticStyles,
+  cx,
+  Flexbox,
+  useVideo,
+  useVideoPlayer,
+  useVideoState,
+  Video,
+  type VideoPlayer,
+} from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
+
+import { floatingActionHostMarker, videoPlayerMarker } from '../../markers.stylex';
+import FloatingCommentAction from '../FloatingCommentAction';
+import { noteKeyOf, toClaimMarkers, toNoteMarkers, toSections } from './chapters';
+import { readStoredRate, storeRate } from './playbackRate';
+import { styles } from './styles';
+import { useVideoRegionGesture } from './useVideoRegionGesture';
+import { DraftRegion, type FrameRegion, FrameRegions } from './VideoChrome';
+import { VideoClaimList } from './VideoClaimList';
+import { VideoLoadFailed } from './VideoLoadFailed';
+import { frameOf } from './videoTime';
+
+const MAX_HEIGHT = 360;
+const MIN_PLAYER_WIDTH = 480;
+
+const fallback = createStaticStyles(({ css }) => ({
+  compactControls: css`
+    @media (width <= 767px) {
+      .lobe-video__frame-number {
+        display: none;
+      }
+    }
+  `,
+}));
+
+const playerStyles = stylex.create({
+  root: {
+    display: { 'default': null, ':fullscreen': 'flex' },
+    flexDirection: { 'default': null, ':fullscreen': 'column' },
+    borderRadius: { 'default': null, ':fullscreen': 0 },
+  },
+  controls: {
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none' },
+  },
+  stage: {
+    containerType: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'size',
+    },
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: '1' },
+    alignItems: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'center',
+    },
+    minWidth: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 0 },
+    minHeight: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 0 },
+  },
+  frame: {
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none' },
+    width: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]:
+        'min(100cqw, calc(100cqh * var(--acceptance-video-aspect)))',
+    },
+    maxWidth: {
+      default: 'var(--acceptance-video-frame-width)',
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none',
+    },
+    height: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]:
+        'min(100cqh, calc(100cqw / var(--acceptance-video-aspect)))',
+    },
+  },
+});
+
+export interface VideoEvidencePlayerHandle {
+  focus: (time: AcceptanceCommentTime, options?: { reveal?: boolean }) => void;
+}
+
+/** A comment, draft, or rejection note pinned to its original video frame. */
+export interface VideoMark {
+  color?: string;
+  comment?: string;
+  key: string;
+  label?: number | string;
+  rect: AcceptanceReviewAnnotation['rect'];
+  time: NonNullable<AcceptanceReviewAnnotation['time']>;
+}
+
+interface VideoEvidencePlayerProps {
+  activeMark?: string;
+  /** The description stays at content width even when the frame is portrait. */
+  caption?: ReactNode;
+  chapters?: VerifyEvidenceChapter[];
+  claimList?: boolean;
+  frameMaxHeight?: string;
+  handleRef?: RefObject<VideoEvidencePlayerHandle | null>;
+  initialTime?: number;
+  marks?: VideoMark[];
+  onComment?: (time: number) => void;
+  onMarkClick?: (key: string) => void;
+  onRefreshSource?: () => Promise<unknown>;
+  onRegion?: (note: { rect: AcceptanceReviewAnnotation['rect']; time: { start: number } }) => void;
+  src: string;
+}
+
+/** Only the drawing surface subscribes to playback; typing does not redraw the workspace. */
+const CommentSurface = ({
+  active,
+  player,
+  regions,
+  onRegion,
+}: {
+  active?: string;
+  onRegion: NonNullable<VideoEvidencePlayerProps['onRegion']>;
+  player: VideoPlayer;
+  regions: FrameRegion[];
+}) => {
+  const ready = useVideo((state) => state.status === 'ready');
+  const frame = useVideo((state) => frameOf(state.time));
+  const paused = useVideo((state) => state.paused);
+  const { t } = useTranslation('verify');
+  const gesture = useVideoRegionGesture(player, onRegion);
+  if (!ready) return null;
+  return (
+    <div {...stylex.props(styles.overlay, styles.drawable)} onPointerDown={gesture.onPointerDown}>
+      <FrameRegions active={active} regions={regions} />
+      {gesture.draft ? (
+        <DraftRegion rect={gesture.draft} />
+      ) : (
+        <div {...stylex.props(styles.hint)}>
+          {t(
+            paused
+              ? 'acceptance.comments.video.hintPaused'
+              : 'acceptance.comments.video.hintPlaying',
+            { frame },
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
+  ({
+    activeMark,
+    caption,
+    chapters = [],
+    claimList = true,
+    frameMaxHeight,
+    handleRef,
+    initialTime = 0,
+    marks = [],
+    onComment,
+    onMarkClick,
+    onRefreshSource,
+    onRegion,
+    src,
+  }) => {
+    const { t } = useTranslation('verify');
+    const player = useVideoPlayer();
+    const size = useVideoState(player, (state) => state.size);
+    const aspect = size?.height ? size.width / size.height : 16 / 9;
+    const frameWidth = Math.round(MAX_HEIGHT * aspect);
+    const [defaultRate] = useState(readStoredRate);
+    const root = useRef<HTMLDivElement>(null);
+    const requestedTime = useRef(initialTime);
+    // Seek only once the shared player has metadata; a deep link may arrive before it does.
+    useEffect(() => {
+      let sought = false;
+      const seek = () => {
+        if (sought || player.getState().status !== 'ready') return;
+        sought = true;
+        player.pause();
+        player.seek(requestedTime.current);
+      };
+      seek();
+      return player.subscribe(seek);
+    }, [player, src]);
+    useImperativeHandle(
+      handleRef,
+      () => ({
+        focus: (target, { reveal = true } = {}) => {
+          requestedTime.current = target.start;
+          player.pause();
+          player.seek(target.start);
+          if (reveal) root.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        },
+      }),
+      [player],
+    );
+
+    const sections = useMemo(() => toSections(chapters), [chapters]);
+    const markers = useMemo(
+      () => [
+        ...toClaimMarkers(chapters, (kind) => t(`acceptance.video.claim.${kind}`)),
+        ...toNoteMarkers(
+          marks.map((mark) => ({
+            color: mark.color,
+            comment: mark.comment,
+            key: mark.key,
+            start: mark.time.start,
+          })),
+        ),
+      ],
+      [chapters, marks, t],
+    );
+    const regions = marks
+      .filter((mark) => !isFullFrameRect(mark.rect))
+      .map((mark) => ({
+        color: mark.color,
+        comment: mark.comment,
+        key: mark.key,
+        label: mark.label,
+        rect: mark.rect,
+        start: mark.time.start,
+      }));
+
+    return (
+      <Flexbox gap={8} ref={root} width={'100%'}>
+        {/* The host takes the player's width, so the comment action floats right
+            beside a narrow recording instead of at the far edge of the column. */}
+        <div
+          data-acceptance-video-host
+          {...sx(floatingActionHostMarker, {
+            maxWidth: frameMaxHeight
+              ? `max(${MIN_PLAYER_WIDTH}px, calc(${frameMaxHeight} * ${aspect}))`
+              : `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,
+            position: 'relative',
+            width: '100%',
+          })}
+        >
+          <Video.Root
+            defaultPlaybackRate={defaultRate}
+            markers={markers}
+            maxHeight={frameMaxHeight ? undefined : MAX_HEIGHT}
+            player={player}
+            sections={sections}
+            src={src}
+            className={cx(
+              stylex.props(playerStyles.root, videoPlayerMarker).className,
+              fallback.compactControls,
+            )}
+            style={
+              {
+                '--acceptance-video-aspect': aspect,
+                '--acceptance-video-frame-width': frameMaxHeight
+                  ? `calc(${frameMaxHeight} * ${aspect})`
+                  : `${frameWidth}px`,
+                'width': '100%',
+              } as CSSProperties
+            }
+            onRateChange={storeRate}
+            onRetry={onRefreshSource}
+            onMarkerClick={(marker) => {
+              const key = noteKeyOf(marker);
+              if (key !== undefined) onMarkClick?.(key);
+            }}
+          >
+            <div data-acceptance-video-stage {...stylex.props(styles.stage, playerStyles.stage)}>
+              <Video.Frame className={stylex.props(playerStyles.frame).className}>
+                {onRegion ? (
+                  <CommentSurface
+                    active={activeMark}
+                    player={player}
+                    regions={regions}
+                    onRegion={onRegion}
+                  />
+                ) : (
+                  <FrameRegions active={activeMark} regions={regions} />
+                )}
+                <Video.Caption />
+                {!onRegion && <Video.CenterPlay />}
+                <VideoLoadFailed player={player} src={src} onRetry={onRefreshSource} />
+              </Video.Frame>
+            </div>
+            <Video.Controls frameStep className={stylex.props(playerStyles.controls).className} />
+          </Video.Root>
+          {onComment && (
+            <FloatingCommentAction
+              title={t('acceptance.comments.commentMedia')}
+              onClick={() => {
+                player.pause();
+                onComment(player.getState().time);
+              }}
+            />
+          )}
+        </div>
+        {caption && <div style={{ overflowWrap: 'anywhere' }}>{caption}</div>}
+        {claimList && (
+          <VideoClaimList
+            chapters={chapters}
+            onSeek={(seconds) => {
+              player.pause();
+              player.seek(seconds);
+              player.setCaptions(true);
+            }}
+          />
+        )}
+      </Flexbox>
+    );
+  },
+);
+
+VideoEvidencePlayer.displayName = 'AcceptanceVideoEvidencePlayer';

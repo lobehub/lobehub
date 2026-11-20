@@ -11,6 +11,16 @@ vi.mock('@/database/models/generationTopic');
 vi.mock('@/server/services/file');
 vi.mock('@/server/services/generation');
 
+const deletedTopicWithCover = (mockTopicId: string, mockCoverUrl: string) => ({
+  id: mockTopicId,
+  title: 'Deleted Topic',
+  userId: 'test-user',
+  coverUrl: mockCoverUrl,
+  accessedAt: new Date(),
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
 describe('generationTopicRouter', () => {
   const mockCtx = {
     userId: 'test-user',
@@ -133,7 +143,6 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockUpdateValue = {
       title: 'Updated Title',
-      coverUrl: 'updated-cover-url',
     };
     const mockUpdatedTopic = {
       id: mockTopicId,
@@ -162,6 +171,26 @@ describe('generationTopicRouter', () => {
     expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
   });
 
+  it('should not let updateTopic write an arbitrary cover key', async () => {
+    const mockTopicId = 'topic-123';
+    const mockUpdate = vi.fn().mockResolvedValue({ id: mockTopicId, title: 'Title' });
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
+
+    const caller = generationTopicRouter.createCaller(mockCtx);
+    await caller.updateTopic({
+      id: mockTopicId,
+      // A key of another user's object; deleting the topic would delete it
+      value: { coverUrl: 'files/other-user/private.png', title: 'Title' } as any,
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { title: 'Title' });
+  });
+
   it('should update topic cover', async () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'https://example.com/cover.jpg';
@@ -177,7 +206,9 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreateCoverFromUrl = vi.fn().mockResolvedValue(mockNewCoverKey);
-    const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
+    const mockReplaceCover = vi
+      .fn()
+      .mockResolvedValue({ previousCoverUrl: null, topic: mockUpdatedTopic });
 
     vi.mocked(GenerationService).mockImplementation(function () {
       return {
@@ -188,7 +219,7 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(function () {
       return {
         findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
-        update: mockUpdate,
+        replaceCover: mockReplaceCover,
       } as any;
     });
 
@@ -200,7 +231,42 @@ describe('generationTopicRouter', () => {
 
     expect(result).toEqual(mockUpdatedTopic);
     expect(mockCreateCoverFromUrl).toHaveBeenCalledWith(mockCoverUrl);
-    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { coverUrl: mockNewCoverKey });
+    expect(mockReplaceCover).toHaveBeenCalledWith(mockTopicId, mockNewCoverKey);
+  });
+
+  it('should delete the cover actually displaced by the update', async () => {
+    const mockTopicId = 'topic-123';
+    // Set after the request read the topic (e.g. by the server success path)
+    const mockDisplacedCoverKey = 'generations/covers/server-cover.webp';
+    const mockNewCoverKey = 'generations/covers/new-cover-key.webp';
+    const mockUpdatedTopic = { coverUrl: mockNewCoverKey, id: mockTopicId, userId: 'test-user' };
+    const mockDeleteFile = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return { createCoverFromUrl: vi.fn().mockResolvedValue(mockNewCoverKey) } as any;
+    });
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ coverUrl: null, id: mockTopicId, userId: 'test-user' }),
+        replaceCover: vi
+          .fn()
+          .mockResolvedValue({ previousCoverUrl: mockDisplacedCoverKey, topic: mockUpdatedTopic }),
+      } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { deleteFile: mockDeleteFile } as any;
+    });
+
+    const caller = generationTopicRouter.createCaller(mockCtx);
+    const result = await caller.updateTopicCover({
+      coverUrl: 'https://example.com/cover.jpg',
+      id: mockTopicId,
+    });
+
+    expect(result).toEqual(mockUpdatedTopic);
+    expect(mockDeleteFile).toHaveBeenCalledWith(mockDisplacedCoverKey);
   });
 
   it('should delete a topic without cover', async () => {
@@ -246,15 +312,7 @@ describe('generationTopicRouter', () => {
   it('should delete a topic with cover and remove the cover file', async () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'generations/covers/cover-key.webp';
-    const mockDeletedTopic = {
-      id: mockTopicId,
-      title: 'Deleted Topic',
-      userId: 'test-user',
-      coverUrl: mockCoverUrl,
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedTopic = deletedTopicWithCover(mockTopicId, mockCoverUrl);
 
     // Fix Mock return structure to match the new implementation
     const mockDelete = vi.fn().mockResolvedValue({
@@ -287,15 +345,7 @@ describe('generationTopicRouter', () => {
   it('should still return deleted topic when file deletion fails', async () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'generations/covers/cover-key.webp';
-    const mockDeletedTopic = {
-      id: mockTopicId,
-      title: 'Deleted Topic',
-      userId: 'test-user',
-      coverUrl: mockCoverUrl,
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedTopic = deletedTopicWithCover(mockTopicId, mockCoverUrl);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedTopic: mockDeletedTopic,
@@ -376,15 +426,7 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockCoverUrl = 'generations/covers/cover-key.webp';
     const mockThumbnailUrls = ['thumb1.jpg', 'thumb2.jpg'];
-    const mockDeletedTopic = {
-      id: mockTopicId,
-      title: 'Deleted Topic',
-      userId: 'test-user',
-      coverUrl: mockCoverUrl,
-      accessedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedTopic = deletedTopicWithCover(mockTopicId, mockCoverUrl);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedTopic: mockDeletedTopic,
@@ -489,7 +531,6 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockUpdateValue = {
       title: null,
-      coverUrl: null,
     };
     const mockUpdatedTopic = {
       id: mockTopicId,

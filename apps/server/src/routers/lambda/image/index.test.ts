@@ -1,3 +1,4 @@
+import { TRPCClientError } from '@trpc/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
@@ -15,6 +16,8 @@ const {
   mockCreateAsyncCaller,
   mockGenerationTopicFindById,
   mockFindUserById,
+  mockGetAiProviderModelList,
+  mockGetAiProviderRuntimeState,
   mockInsertValues,
   mockIsLobeHubModelAvailable,
   mockResolveBusinessModelMapping,
@@ -30,6 +33,8 @@ const {
   mockCreateAsyncCaller: vi.fn(),
   mockGenerationTopicFindById: vi.fn(),
   mockFindUserById: vi.fn(),
+  mockGetAiProviderModelList: vi.fn(),
+  mockGetAiProviderRuntimeState: vi.fn(),
   mockInsertValues: [] as unknown[],
   mockIsLobeHubModelAvailable: vi.fn(),
   mockResolveBusinessModelMapping: vi.fn(),
@@ -76,6 +81,24 @@ vi.mock('@/database/models/user', () => ({
   UserModel: {
     findById: mockFindUserById,
   },
+}));
+
+vi.mock('@/database/repositories/aiInfra', () => ({
+  AiInfraRepos: vi.fn(function () {
+    return {
+      getAiProviderModelList: mockGetAiProviderModelList,
+      getAiProviderRuntimeState: mockGetAiProviderRuntimeState,
+    };
+  }),
+}));
+
+// User scoping (hidden builtin models) is covered by the service's own tests
+vi.mock('@/server/services/aiProviderAccess', () => ({
+  getUserScopedAiProviderRuntimeState: (_userId: string, load: () => Promise<unknown>) => load(),
+}));
+
+vi.mock('@/server/globalConfig', () => ({
+  getServerGlobalConfig: vi.fn(async () => ({ aiProvider: {} })),
 }));
 
 // Mock chargeBeforeGenerate
@@ -132,13 +155,6 @@ vi.mock('@/database/schemas', () => ({
   generations: { id: 'generations.id', userId: 'generations.userId' },
 }));
 
-// Mock seed generator
-vi.mock('@/utils/number', () => ({
-  generateUniqueSeeds: vi.fn(function (count: number) {
-    return Array.from({ length: count }, (_, i) => 1000 + i);
-  }),
-}));
-
 describe('imageRouter', () => {
   const mockUserId = 'test-user-id';
   const mockAsyncCallerCreateImage = vi.fn();
@@ -176,6 +192,7 @@ describe('imageRouter', () => {
     mockGetFullFileUrl.mockResolvedValue(null);
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
+    mockGetAiProviderModelList.mockResolvedValue([]);
     mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
 
     // Setup default transaction mock
@@ -227,6 +244,7 @@ describe('imageRouter', () => {
       return callback(tx);
     });
 
+    mockAsyncCallerCreateImage.mockResolvedValue(undefined);
     mockCreateAsyncCaller.mockResolvedValue({
       image: {
         createImage: mockAsyncCallerCreateImage,
@@ -235,6 +253,68 @@ describe('imageRouter', () => {
   });
 
   describe('createImage', () => {
+    describe('default model selection', () => {
+      const imageModel = (providerId: string, id: string) => ({
+        abilities: {},
+        enabled: true,
+        id,
+        providerId,
+        type: 'image',
+      });
+
+      beforeEach(() => {
+        mockGetAiProviderRuntimeState.mockResolvedValue({
+          enabledAiModels: [
+            imageModel('openai', 'gpt-image-2'),
+            imageModel('lobehub', 'gpt-image-2'),
+            imageModel('lobehub', 'gemini-3.1-flash-image:image'),
+            { ...imageModel('lobehub', 'chat-model'), type: 'chat' },
+          ],
+          enabledImageAiProviders: [{ id: 'openai' }, { id: 'lobehub' }],
+        });
+      });
+
+      it('uses the image page default model when model and provider are omitted', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+        await caller.createImage(createDefaultInput({ model: undefined, provider: undefined }));
+
+        expect(mockInsertValues[0]).toMatchObject({
+          model: 'gemini-3.1-flash-image:image',
+          provider: 'lobehub',
+        });
+        expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+          expect.objectContaining({ model: 'gemini-3.1-flash-image:image', provider: 'lobehub' }),
+        );
+      });
+
+      it('uses the first enabled provider serving an explicit model', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+        await caller.createImage(createDefaultInput({ model: 'gpt-image-2', provider: undefined }));
+
+        expect(mockInsertValues[0]).toMatchObject({ model: 'gpt-image-2', provider: 'openai' });
+      });
+
+      it('rejects before queueing when no enabled image model matches', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+
+        await expect(
+          caller.createImage(createDefaultInput({ model: 'missing', provider: undefined })),
+        ).rejects.toThrow('No enabled image model matched missing.');
+        expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      });
+
+      it('keeps an explicit model and provider without loading the runtime state', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+        await caller.createImage(createDefaultInput());
+
+        expect(mockGetAiProviderRuntimeState).not.toHaveBeenCalled();
+        expect(mockInsertValues[0]).toMatchObject({
+          model: 'stable-diffusion',
+          provider: 'test-provider',
+        });
+      });
+    });
+
     it('should create image generation batch and generations successfully', async () => {
       const ctx = createMockCtx();
       const input = createDefaultInput();
@@ -311,6 +391,60 @@ describe('imageRouter', () => {
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
+    it('should reject params the model does not declare before charging or creating records', async () => {
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'gpt-image-2.5',
+          parameters: { prompt: { default: '' }, size: { default: 'auto', enum: ['auto'] } },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(createDefaultInput({ model: 'gpt-image-2.5', provider: 'lobehub' })),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'Unsupported parameters for gpt-image-2.5: height, width. Supported: prompt, size',
+      });
+
+      expect(mockGetAiProviderModelList).toHaveBeenCalledWith('lobehub', { type: 'image' });
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+    });
+
+    it('should accept params declared by the model', async () => {
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'stable-diffusion',
+          parameters: {
+            height: { default: 512 },
+            prompt: { default: '' },
+            width: { default: 512 },
+          },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(caller.createImage(createDefaultInput())).resolves.toMatchObject({
+        success: true,
+      });
+    });
+
+    it('should reject an empty prompt before charging or creating records', async () => {
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(createDefaultInput({ params: { prompt: '  ' } })),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+    });
+
     it('should convert imageUrls to S3 keys for database storage', async () => {
       mockGetKeyFromFullUrl
         .mockResolvedValueOnce('files/image1.jpg')
@@ -330,12 +464,10 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockGetKeyFromFullUrl).toHaveBeenCalledTimes(2);
-      expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
-        'https://s3.amazonaws.com/bucket/files/image1.jpg',
-      );
-      expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
-        'https://s3.amazonaws.com/bucket/files/image2.jpg',
+      expect(mockInsertValues[0]).toEqual(
+        expect.objectContaining({
+          config: { prompt: 'test prompt', imageUrls: ['files/image1.jpg', 'files/image2.jpg'] },
+        }),
       );
     });
 
@@ -353,8 +485,10 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
-        'https://s3.amazonaws.com/bucket/files/single-image.jpg',
+      expect(mockInsertValues[0]).toEqual(
+        expect.objectContaining({
+          config: { prompt: 'test prompt', imageUrl: 'files/single-image.jpg' },
+        }),
       );
     });
 
@@ -374,6 +508,9 @@ describe('imageRouter', () => {
 
       // Should still succeed, just with empty imageUrls in config
       expect(result.success).toBe(true);
+      expect(mockInsertValues[0]).toEqual(
+        expect.objectContaining({ config: { prompt: 'test prompt', imageUrls: [] } }),
+      );
     });
 
     it('should throw error when imageUrls conversion fails and URLs remain', async () => {
@@ -537,7 +674,21 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+      expect(mockAsyncCallerCreateImage).toHaveBeenCalledTimes(2);
+      expect(mockAsyncCallerCreateImage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          generationBatchId: 'batch-1',
+          generationId: 'gen-1',
+          generationTopicId: 'topic-1',
+          params: input.params,
+          taskId: 'task-1',
+        }),
+      );
+      expect(mockAsyncCallerCreateImage).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ generationId: 'gen-2', taskId: 'task-2' }),
+      );
     });
 
     it('should persist and forward workspaceId for background image tasks', async () => {
@@ -558,6 +709,75 @@ describe('imageRouter', () => {
       );
     });
 
+    it('does not fail the request or the tasks when the background call rejects', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      mockAsyncCallerCreateImage.mockRejectedValue(
+        new Error('Unexpected token \'<\', "<!DOCTYPE "... is not valid JSON'),
+      );
+
+      try {
+        const caller = imageRouter.createCaller(createMockCtx());
+        const result = await caller.createImage(createDefaultInput());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(result.success).toBe(true);
+        expect(mockAsyncTaskModelUpdate).not.toHaveBeenCalled();
+        expect(unhandled).not.toHaveBeenCalled();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Async image task %s request failed: %O',
+          expect.any(String),
+          expect.any(Error),
+        );
+      } finally {
+        process.off('unhandledRejection', unhandled);
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('fails and refunds a task right away when the async router refuses the call', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // An internal JWT that expired before the async function verified it
+      const rejection = new TRPCClientError('Invalid JWT token', {
+        result: { error: { code: -32001, data: { code: 'UNAUTHORIZED' }, message: '' } },
+      } as any);
+      mockAsyncCallerCreateImage.mockResolvedValueOnce(undefined).mockRejectedValueOnce(rejection);
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      try {
+        const caller = imageRouter.createCaller(createMockCtx());
+        const result = await caller.createImage(createDefaultInput());
+        await vi.waitFor(() => expect(mockChargeAfterGenerate).toHaveBeenCalledTimes(1));
+
+        expect(result.success).toBe(true);
+        const rejectedTaskId = result.data.generations[1].asyncTaskId;
+        expect(mockAsyncTaskModelUpdate).toHaveBeenCalledTimes(1);
+        expect(mockAsyncTaskModelUpdate).toHaveBeenCalledWith(
+          rejectedTaskId,
+          expect.objectContaining({
+            error: expect.objectContaining({
+              body: expect.objectContaining({
+                detail: 'start async task error: Invalid JWT token',
+              }),
+            }),
+            status: AsyncTaskStatus.Error,
+          }),
+        );
+        expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isError: true,
+            metadata: expect.objectContaining({ asyncTaskId: rejectedTaskId }),
+            prechargeResult: { reservationKey: 'k-2' },
+          }),
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
     it('should handle async caller creation failure', async () => {
       mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
 
@@ -569,8 +789,6 @@ describe('imageRouter', () => {
 
       // Should still return success as the database records were created
       expect(result.success).toBe(true);
-      // Should update async task status to error
-      expect(mockAsyncTaskModelUpdate).toHaveBeenCalled();
     });
 
     it('reconciles per-generation billing handles when async startup fails', async () => {
@@ -646,7 +864,10 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockServerDB.transaction).toHaveBeenCalled();
+      const generations = mockInsertValues[1] as { seed: number }[];
+      expect(generations).toHaveLength(2);
+      expect(generations.every(({ seed }) => Number.isInteger(seed))).toBe(true);
+      expect(new Set(generations.map(({ seed }) => seed)).size).toBe(2);
     });
 
     it('should use null seeds when seed param is not provided', async () => {
@@ -661,7 +882,10 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockServerDB.transaction).toHaveBeenCalled();
+      expect(mockInsertValues[1]).toEqual([
+        expect.objectContaining({ seed: null }),
+        expect.objectContaining({ seed: null }),
+      ]);
     });
 
     it('should pass with valid key-based imageUrls', async () => {
@@ -706,7 +930,14 @@ describe('imageRouter', () => {
         const result = await caller.createImage(input);
 
         expect(result.success).toBe(true);
-        expect(mockGetFullFileUrl).toHaveBeenCalledWith('files/image-key.jpg');
+        expect(mockAsyncCallerCreateImage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            params: {
+              prompt: 'test prompt',
+              imageUrl: 'https://s3.amazonaws.com/bucket/files/image-key.jpg',
+            },
+          }),
+        );
       });
 
       it('should convert multiple imageUrls to S3 URLs in development mode', async () => {
@@ -729,9 +960,17 @@ describe('imageRouter', () => {
         const result = await caller.createImage(input);
 
         expect(result.success).toBe(true);
-        expect(mockGetFullFileUrl).toHaveBeenCalledTimes(2);
-        expect(mockGetFullFileUrl).toHaveBeenCalledWith('files/image1.jpg');
-        expect(mockGetFullFileUrl).toHaveBeenCalledWith('files/image2.jpg');
+        expect(mockAsyncCallerCreateImage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            params: {
+              prompt: 'test prompt',
+              imageUrls: [
+                'https://s3.amazonaws.com/bucket/files/image1.jpg',
+                'https://s3.amazonaws.com/bucket/files/image2.jpg',
+              ],
+            },
+          }),
+        );
       });
 
       it('should not convert URLs when getFullFileUrl returns null', async () => {
@@ -750,7 +989,11 @@ describe('imageRouter', () => {
         const result = await caller.createImage(input);
 
         expect(result.success).toBe(true);
-        expect(mockGetFullFileUrl).toHaveBeenCalled();
+        expect(mockAsyncCallerCreateImage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            params: { prompt: 'test prompt', imageUrl: 'http://localhost:3000/f/file-id' },
+          }),
+        );
       });
     });
   });

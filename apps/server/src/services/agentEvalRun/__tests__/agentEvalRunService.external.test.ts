@@ -472,14 +472,45 @@ describe('AgentEvalRunService external protocol', () => {
         expectedTotalCases: 10,
         run: { config: null, id: 'r1' },
         runTopics: [
-          { runId: 'r1', score: 1, status: 'passed', topicId: 't1' },
-          { runId: 'r1', score: 0, status: 'failed', topicId: 't2' },
+          { passed: true, runId: 'r1', score: 1, status: 'passed', topicId: 't1' },
+          { passed: false, runId: 'r1', score: 0, status: 'failed', topicId: 't2' },
         ],
       });
 
       expect(metrics.totalCases).toBe(10);
       expect(metrics.completedCases).toBe(2);
       expect(metrics.passRate).toBeCloseTo(0.1);
+      expect(metrics.passedCases).toBe(1);
+      expect(metrics.failedCases).toBe(1);
+      expect(metrics.errorCases).toBe(0);
+      expect(metrics.passAllAt).toBeUndefined();
+      expect(metrics.passAnyAt).toBeUndefined();
+    });
+
+    it('does not turn legacy status-only results into verified verdicts', async () => {
+      const service = new AgentEvalRunService(serverDB, userId);
+      const runTopics = [
+        { runId: 'r1', score: 1, status: 'passed', topicId: 't1' },
+        { runId: 'r1', score: 0, status: 'failed', topicId: 't2' },
+      ];
+      const metrics = await service.evaluateAndFinalizeRun({
+        expectedTotalCases: 10,
+        run: { config: null, id: 'r1' },
+        runTopics,
+      });
+
+      expect(metrics).toMatchObject({
+        averageScore: 0,
+        completedCases: 2,
+        errorCases: 2,
+        failedCases: 0,
+        passedCases: 0,
+        passRate: 0,
+        totalCases: 10,
+      });
+      expect(metrics.passAllAt).toBeUndefined();
+      expect(metrics.passAnyAt).toBeUndefined();
+      expect(runTopics.map((topic) => topic.score)).toEqual([1, 0]);
     });
   });
 });

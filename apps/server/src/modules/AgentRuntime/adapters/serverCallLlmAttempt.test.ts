@@ -71,6 +71,7 @@ const createAttempt = (
     agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
     userAgent?: string;
   },
+  abortSignal?: AbortSignal,
 ) => {
   const publishStreamChunk = vi.fn().mockResolvedValue('event-1');
   const streamManager = {
@@ -78,6 +79,7 @@ const createAttempt = (
     publishStreamEvent: vi.fn().mockResolvedValue('event-2'),
   } as unknown as RuntimeExecutorContext['streamManager'];
   const ctx = {
+    abortSignal,
     messageModel: {} as RuntimeExecutorContext['messageModel'],
     operationId: 'operation-1',
     serverDB: {} as RuntimeExecutorContext['serverDB'],
@@ -334,6 +336,34 @@ describe('ServerCallLlmAttempt', () => {
 
     await expect(attempt.execute()).rejects.toThrow('Request aborted');
     expect(recordModelCompletionFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('hands the operation abort signal to the provider so an interrupt stops the stream', async () => {
+    const interrupt = new AbortController();
+    const { attempt } = createAttempt(
+      async ({ callback, signal }) => {
+        await callback?.onThinking?.('Planning the article');
+        interrupt.abort();
+        if (signal?.aborted) {
+          await callback?.onCompletion?.({ finishReason: 'abort', text: '' });
+          return;
+        }
+        await callback?.onText?.('Full article of the cancelled request');
+        await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 800 } });
+      },
+      undefined,
+      undefined,
+      interrupt.signal,
+    );
+
+    await attempt.execute();
+
+    expect(attempt.snapshot()).toMatchObject({
+      content: '',
+      finishReason: 'abort',
+      thinkingContent: 'Planning the article',
+      usage: undefined,
+    });
   });
 
   it('stores an in-band stream error with the trace id attached by the error hook', async () => {

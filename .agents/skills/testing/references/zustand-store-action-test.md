@@ -119,14 +119,65 @@ it('should handle streaming chunks', async () => {
 });
 ```
 
-## SWR Hook Testing
+## Fetch Hook Testing
+
+### Replica-backed hooks (`useFetch*` over `local-replica`)
+
+A replica hook returns sync flags plus a `queryKey`; the data lives in the store and is read through selectors. The engine is what the test exercises, so the SWR driver is a bare recorder: capture the registered sync, run its fetcher, fold the response through `onSuccess`, then read it back with the selector.
+
+```typescript
+vi.mock('@/services/discover', () => ({
+  discoverService: { getPluginCategories: vi.fn() },
+}));
+
+// The replica schedules its fetches through the app's SWR driver.
+vi.mock('@/libs/swr', () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: vi.fn() })),
+}));
+
+const syncCalls = async (name: string) => {
+  const { useClientDataSWR } = await import('@/libs/swr');
+  return vi
+    .mocked(useClientDataSWR)
+    .mock.calls.filter(
+      ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[1] === name,
+    )
+    .map(([, fetcher, config]) => ({
+      config: config as { onSuccess?: (data: unknown) => void },
+      fetcher: fetcher as () => Promise<any>,
+    }));
+};
+
+it('folds the categories into the replica view the selectors read', async () => {
+  const mockData = [{ category: 'tools', count: 1 }];
+  vi.mocked(discoverService.getPluginCategories).mockResolvedValue(mockData as any);
+
+  const { result } = renderHook(() => useStore.getState().useFetchPluginCategories({ q: 'x' }));
+  const [call] = await syncCalls('pluginCategories');
+  const fetched = await call.fetcher();
+  act(() => call.config.onSuccess!(fetched));
+
+  expect(pluginSelectors.pluginCategories(result.current.queryKey)(useStore.getState())).toEqual(
+    mockData,
+  );
+});
+```
+
+**Key points for replica hooks:**
+
+- Assert on the store through selectors, not on a hook-returned `data`
+- Assert the sync options that matter (e.g. `config.revalidateOnFocus`) on the recorded call
+- See `src/store/discover/slices/*/action.test.ts` for full examples
+
+### Plain SWR hooks
 
 ```typescript
 it('should fetch data', async () => {
   const mockData = [{ id: '1', name: 'Item 1' }];
-  vi.spyOn(discoverService, 'getPluginCategories').mockResolvedValue(mockData);
+  vi.spyOn(someService, 'getItems').mockResolvedValue(mockData);
 
-  const { result } = renderHook(() => useStore.getState().usePluginCategories(params));
+  const { result } = renderHook(() => useStore.getState().useFetchItems(params));
 
   await waitFor(() => {
     expect(result.current.data).toEqual(mockData);

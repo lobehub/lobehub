@@ -1,8 +1,9 @@
+import type { UserMemoryPreference, UserMemoryPreferenceInsert } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { NewUserMemoryPreference, UserMemoryPreference } from '../../schemas';
 import { userMemories, userMemoriesPreferences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryPreferenceModel {
   private userId: string;
@@ -13,11 +14,11 @@ export class UserMemoryPreferenceModel {
     this.db = db;
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
-  create = async (params: Omit<NewUserMemoryPreference, 'userId'>) => {
+  create = async (params: Omit<UserMemoryPreferenceInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesPreferences)
       .values({ ...params, userId: this.userId })

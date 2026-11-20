@@ -487,4 +487,36 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.content).toBe('kb body');
     });
   });
+
+  describe('resolveSkill', () => {
+    const userSkill = {
+      content: 'PLAN BODY',
+      description: 'How each unit is done',
+      identifier: 'user-skills:goal-plan-x',
+      name: 'user-skills:goal-plan-x',
+      resources: {
+        'scripts/check.sh': { content: 'echo ok', fileHash: 'h', size: 7 },
+      },
+      source: 'builtin' as const,
+      title: 'Plan',
+    };
+
+    it('reads a skill that was not preloaded, once, only when it is asked for', async () => {
+      const resolveSkill = vi.fn().mockResolvedValue(userSkill);
+      const runtime = new SkillsExecutionRuntime({ resolveSkill, service: createMockService() });
+      expect(resolveSkill).not.toHaveBeenCalled();
+
+      const activated = await runtime.activateSkill({ name: 'user-skills:goal-plan-x' });
+      expect(activated.success).toBe(true);
+      expect(activated.content).toContain('PLAN BODY');
+      expect(activated.state).toMatchObject({ source: 'user' });
+
+      const script = await runtime.readReference({
+        id: 'user-skills:goal-plan-x',
+        path: 'scripts/check.sh',
+      } as never);
+      expect(script.content).toContain('echo ok');
+      expect(resolveSkill).toHaveBeenCalledTimes(1);
+    });
+  });
 });

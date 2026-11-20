@@ -236,6 +236,8 @@ export const ResolveAgentInterventionBySourceSchema = z
     batchId: z.string().min(1),
     operationId: z.string().min(1),
     resolutionRequestId: z.string().uuid(),
+    /** Gateway stream features the resolving client handles — see `ExecAgentSchema`. */
+    streamFeatures: z.array(z.string()).optional(),
     targets: AgentInterventionSourceTargetsSchema,
   })
   .strict()

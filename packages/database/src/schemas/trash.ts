@@ -40,6 +40,9 @@ export const trashItems = pgTable(
     resourceType: text('resource_type').$type<TrashResourceType>().notNull(),
     resourceId: text('resource_id').notNull(),
 
+    /** Project at first trash registration; deliberately no FK so project deletion retains it. */
+    projectId: text('project_id'),
+
     /** Denormalised display title captured at trash time. */
     title: text('title'),
     meta: jsonb('meta').$type<TrashItemMeta>(),

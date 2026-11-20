@@ -2,15 +2,26 @@ import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 import { agentShareDocumentAccessScope, ordinaryDocumentAccessScope } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
 
+import type { AgentDocumentListItem } from '@/database/models/agentDocuments';
 import { TaskModel } from '@/database/models/task';
-import { tasks } from '@/database/schemas';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
+import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+
+const toListedDocument = (d: AgentDocumentListItem, childCounts: Map<string, number>) => ({
+  childCount: childCounts.get(d.documentId) ?? 0,
+  documentId: d.documentId,
+  filename: d.filename,
+  fileType: d.fileType,
+  id: d.id,
+  parentId: d.parentId,
+  title: d.title,
+  updatedAt: d.updatedAt,
+});
 
 export const agentDocumentsRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -32,20 +43,35 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           visitorUserId: context.agentShareVisitor.visitorUserId,
         })
       : ordinaryDocumentAccessScope;
-    const service = new AgentDocumentsService(
-      db,
-      userId,
-      context.workspaceId,
-      context.agentVisibility,
-      documentAccessScope,
-    );
     const { taskId } = context;
-    const workRegistrar = createDocumentWorkRegistrar({
-      db,
-      logPrefix: '[agentDocumentsRuntime]',
-      userId,
-      workspaceId: context.workspaceId,
-    });
+    // Resolve and validate the task-derived scope once, before any document
+    // read or write. Even when the pipeline supplied workspaceId, a task that
+    // was trashed after dispatch or belongs to another scope must fail closed.
+    let workspaceIdPromise: Promise<string | undefined> | undefined;
+    const resolveWorkspaceId = () =>
+      (workspaceIdPromise ??= resolveTaskWorkspaceId(db, taskId, context.workspaceId));
+    let servicePromise: Promise<AgentDocumentsService> | undefined;
+    const getService = () =>
+      (servicePromise ??= resolveWorkspaceId().then(
+        (workspaceId) =>
+          new AgentDocumentsService(
+            db,
+            userId,
+            workspaceId,
+            context.agentVisibility,
+            documentAccessScope,
+          ),
+      ));
+    let workRegistrarPromise: Promise<ReturnType<typeof createDocumentWorkRegistrar>> | undefined;
+    const getWorkRegistrar = () =>
+      (workRegistrarPromise ??= resolveWorkspaceId().then((workspaceId) =>
+        createDocumentWorkRegistrar({
+          db,
+          logPrefix: '[agentDocumentsRuntime]',
+          userId,
+          workspaceId,
+        }),
+      ));
     const emitDocumentOutcome = async (input: {
       agentId?: string;
       agentDocumentId?: string;
@@ -118,18 +144,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
 
     const pinToTask = async <T extends { documentId?: string } | undefined>(doc: T): Promise<T> => {
       if (taskId && doc?.documentId) {
-        // Prefer the workspaceId already threaded through the pipeline; fall
-        // back to the owning task row for legacy callers.
-        let wsId = context.workspaceId;
-        if (!wsId) {
-          const [row] = await db
-            .select({ workspaceId: tasks.workspaceId })
-            .from(tasks)
-            .where(eq(tasks.id, taskId))
-            .limit(1);
-          wsId = row?.workspaceId ?? undefined;
-        }
-        const taskModel = new TaskModel(db, userId, wsId);
+        const taskModel = new TaskModel(db, userId, await resolveWorkspaceId());
         await taskModel.pinDocument(taskId, doc.documentId, 'agent');
       }
       return doc;
@@ -155,7 +170,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents copied a document.',
                 toolAction: 'copy',
               },
-              () => service.copyDocumentById(id, newTitle, agentId),
+              async () => (await getService()).copyDocumentById(id, newTitle, agentId),
             ),
           );
           return doc;
@@ -172,10 +187,12 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents created a document.',
                 toolAction: 'create',
               },
-              () =>
-                shareTopicId
+              async () => {
+                const service = await getService();
+                return shareTopicId
                   ? service.createForTopic(agentId, title, content, shareTopicId)
-                  : service.createDocument(agentId, title, content, { hintIsSkill, parentId }),
+                  : service.createDocument(agentId, title, content, { hintIsSkill, parentId });
+              },
             ),
           );
           return doc;
@@ -199,8 +216,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents created a topic document.',
                 toolAction: 'create',
               },
-              () =>
-                service.createForTopic(
+              async () =>
+                (await getService()).createForTopic(
                   agentId,
                   title,
                   content,
@@ -211,7 +228,23 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           );
           return doc;
         },
+        createFolder: async ({ agentId, parentId, title }) => {
+          if (shareTopicId) throw new Error('Creating folders is not available to share visitors');
+
+          return withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'createFolder',
+              getAgentDocumentId: (result) => result.folder.id,
+              relation: 'created',
+              summary: 'Agent documents created a folder.',
+              toolAction: 'create',
+            },
+            async () => (await getService()).createFolder(agentId, title, parentId),
+          );
+        },
         listDocuments: async ({ agentId, parentId, sourceType }) => {
+          const service = await getService();
           // Agents discover archived tool results via this path (see
           // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
           const docs = shareTopicId
@@ -222,14 +255,11 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 includeArchivedToolResults: true,
                 parentId,
               });
-          return docs.map((d) => ({
-            documentId: d.documentId,
-            filename: d.filename,
-            id: d.id,
-            title: d.title,
-          }));
+          const childCounts = await service.countChildren(agentId);
+          return docs.map((d) => toListedDocument(d, childCounts));
         },
         listTopicDocuments: async ({ agentId, parentId, sourceType, topicId }) => {
+          const service = await getService();
           const docs = await service.listDocumentsForTopic(
             agentId,
             shareTopicId ?? topicId,
@@ -238,15 +268,29 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               includeArchivedToolResults: true,
             },
           );
+          const childCounts = await service.countChildren(agentId);
+          if (!parentId) return docs.map((d) => toListedDocument(d, childCounts));
+
           // Topic listing joins through topic associations rather than the agent
-          // folder tree, so the folder filter is applied in-memory here.
-          const filtered = parentId ? docs.filter((d) => d.parentId === parentId) : docs;
-          return filtered.map((d) => ({
-            documentId: d.documentId,
-            filename: d.filename,
-            id: d.id,
-            title: d.title,
-          }));
+          // folder tree, so the parent filter is applied in-memory here.
+          const parent = await service.resolveParent(agentId, parentId);
+          return docs
+            .filter((d) => d.parentId === parent.documentId)
+            .map((d) => toListedDocument(d, childCounts));
+        },
+        moveDocuments: async ({ agentId, ids, parentId }) => {
+          if (shareTopicId) throw new Error('Moving documents is not available to share visitors');
+
+          return withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'moveDocuments',
+              relation: 'updated',
+              summary: `Agent documents moved ${ids.length} document(s).`,
+              toolAction: 'move',
+            },
+            async () => (await getService()).moveDocuments(agentId, ids, parentId),
+          );
         },
         modifyNodes: async ({ agentId, id, operations }) => {
           const doc = await withDocumentOutcome(
@@ -258,12 +302,13 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               summary: 'Agent documents modified document nodes.',
               toolAction: 'edit',
             },
-            () => service.modifyDocumentNodesById(id, operations, agentId),
+            async () => (await getService()).modifyDocumentNodesById(id, operations, agentId),
           );
           return doc;
         },
-        readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-        removeDocument: ({ agentId, id }) =>
+        readDocument: async ({ agentId, id }) =>
+          (await getService()).getDocumentSnapshotById(id, agentId),
+        removeDocument: ({ agentId, id, withChildren }) =>
           withDocumentOutcome(
             {
               agentId,
@@ -273,7 +318,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               summary: 'Agent documents removed a document.',
               toolAction: 'remove',
             },
-            () => service.removeDocumentById(id, agentId),
+            async () => (await getService()).removeDocumentById(id, agentId, { withChildren }),
           ),
         renameDocument: async ({ agentId, id, newTitle }) => {
           const doc = await withDocumentOutcome(
@@ -285,7 +330,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               summary: 'Agent documents renamed a document.',
               toolAction: 'rename',
             },
-            () => service.renameDocumentById(id, newTitle, agentId),
+            async () => (await getService()).renameDocumentById(id, newTitle, agentId),
           );
           return doc;
         },
@@ -299,7 +344,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               summary: 'Agent documents replaced document content.',
               toolAction: 'replace',
             },
-            () => service.replaceDocumentContentById(id, content, agentId),
+            async () => (await getService()).replaceDocumentContentById(id, content, agentId),
           );
           return doc;
         },
@@ -313,8 +358,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               summary: 'Agent documents updated a load rule.',
               toolAction: 'update',
             },
-            () =>
-              service.updateLoadRuleById(
+            async () =>
+              (await getService()).updateLoadRuleById(
                 id,
                 { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
                 agentId,
@@ -325,8 +370,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         documentReadonly: Boolean(context.agentShareVisitor),
         getDocumentUrl: context.agentShareVisitor
           ? undefined
-          : ({ agentId, documentId }) =>
-              workRegistrar.buildRegisteredDocumentUrl(agentId, documentId),
+          : async ({ agentId, documentId }) =>
+              (await getWorkRegistrar()).buildRegisteredDocumentUrl(agentId, documentId),
       },
     );
   },

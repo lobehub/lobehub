@@ -115,6 +115,32 @@ describe('LocalFileProtocolManager', () => {
     expect(response.headers.get('Content-Length')).toBe(String(pngBytes.byteLength));
   });
 
+  it('exposes the file mtime so refreshed previews can detect a replaced file', async () => {
+    mockStat.mockImplementation(async () => ({
+      isFile: () => true,
+      mtimeMs: 1_700_000_000_123,
+      size: 4,
+    }));
+    mockReadFile.mockResolvedValue(Buffer.from('demo'));
+
+    const manager = new LocalFileProtocolManager();
+    manager.registerHandler();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    const url = await manager.createPreviewUrl({
+      filePath: '/Users/alice/project/demo.mp4',
+      workspaceRoot: '/Users/alice/project',
+    });
+    if (!url) throw new Error('Expected local file preview URL');
+
+    const response = await protocolHandlerRef.current({
+      headers: new Headers(),
+      method: 'GET',
+      url,
+    });
+
+    expect(response.headers.get('X-Preview-Modified-At')).toBe('1700000000123');
+  });
+
   it('short-circuits oversized documents without reading them', async () => {
     const oversized = 20 * 1024 * 1024 + 1;
     mockStat.mockImplementation(async () => ({ isFile: () => true, size: oversized }));

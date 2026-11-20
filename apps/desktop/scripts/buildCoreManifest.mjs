@@ -31,8 +31,8 @@ const assertManifest = (manifest) => {
   if (problems.length) throw new Error(`core manifest invalid: ${problems.join(', ')}`);
 };
 
-export const readCoreTree = (coreDir) => {
-  const { objects, tree: allFiles } = readRendererTree(coreDir);
+export const readCoreTree = (coreDir, options) => {
+  const { objects, tree: allFiles } = readRendererTree(coreDir, options);
   const tree = allFiles.filter(
     (file) => file.path !== 'manifest.json' && path.posix.basename(file.path) !== '.DS_Store',
   );
@@ -134,4 +134,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log(
     `core manifest: ${manifest.channel}/${manifest.platform} ${manifest.version} seq ${manifest.seq} (${manifest.tree.length} files, ${manifest.signature ? 'signed' : 'UNSIGNED'})`,
   );
+}
+
+export class EmptyReleaseError extends Error {
+  constructor() {
+    super('empty release');
+  }
 }

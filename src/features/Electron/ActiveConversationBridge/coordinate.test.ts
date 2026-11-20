@@ -53,6 +53,69 @@ describe('active conversation coordinate', () => {
     );
   });
 
+  it('resolves a project conversation route and keeps topic navigation in the project route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/project/prj_1/topic/tpc_1?thread=thread-a',
+    });
+
+    expect(coordinate).toMatchObject({
+      isConversation: true,
+      projectBasePath: '/project/prj_1/topic',
+      projectId: 'prj_1',
+      threadId: 'thread-a',
+      topicId: 'tpc_1',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/project/prj_1/topic/tpc_2',
+    );
+  });
+
+  it('keeps the workspace prefix in the project conversation base path', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/acme/project/prj_1/topic/tpc_1',
+    });
+
+    expect(coordinate.projectBasePath).toBe('/acme/project/prj_1/topic');
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/acme/project/prj_1/topic/tpc_2',
+    );
+  });
+
+  it('resolves the route root when the project slug is literally "project"', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'project', topicId: 'tpc_1' },
+      url: '/project/project/topic/tpc_1',
+    });
+
+    expect(coordinate).toMatchObject({
+      isConversation: true,
+      projectBasePath: '/project/project/topic',
+      projectId: 'project',
+      topicId: 'tpc_1',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/project/project/topic/tpc_2',
+    );
+  });
+
+  it('resolves a project conversation route without a topic id', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1' },
+      url: '/project/prj_1/topic',
+    });
+    expect(coordinate).toMatchObject({
+      isConversation: true,
+      projectBasePath: '/project/prj_1/topic',
+      projectId: 'prj_1',
+      topicId: null,
+    });
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/project/prj_1/topic/tpc_2',
+    );
+  });
+
   it('keeps the resolved agent id on an agent subpage', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: { aid: 'friendly-name' },

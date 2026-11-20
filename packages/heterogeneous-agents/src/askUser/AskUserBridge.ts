@@ -59,10 +59,17 @@ export interface PendingOptions {
   /**
    * Absolute deadline (`Date.now() + timeoutMs`). When it elapses, the
    * pending promise resolves with `{ cancelled: true, cancelReason: 'timeout' }`.
-   * Default: 10 minutes.
+   * Default: 10 minutes. `Infinity` never times out (a permission request
+   * waits for the user); the wire deadline is then {@link NO_DEADLINE_MS} away.
    */
   timeoutMs?: number;
 }
+
+/**
+ * Wire deadline of a request that never times out: durable review rows need a
+ * finite one, and a year outlives any run.
+ */
+export const NO_DEADLINE_MS = 365 * 24 * 60 * 60 * 1000;
 
 interface PendingEntry {
   cleanup: () => void;
@@ -155,10 +162,11 @@ export class AskUserBridge {
     const timeoutMs = options.timeoutMs ?? DEFAULT_ASK_USER_TIMEOUT_MS;
     const progressIntervalMs = options.progressIntervalMs ?? 30_000;
     const startedAt = Date.now();
-    const deadline = startedAt + timeoutMs;
+    const expires = Number.isFinite(timeoutMs);
+    const deadline = startedAt + (expires ? timeoutMs : NO_DEADLINE_MS);
 
     return new Promise<InterventionAnswer>((resolve, reject) => {
-      const timeoutTimer = setTimeout(() => {
+      const onTimeout = () => {
         this.pending_.delete(toolCallId);
         clearInterval(progressTimer);
         // Mirror the terminal state onto the outbound stream so the consumer
@@ -168,7 +176,8 @@ export class AskUserBridge {
         // given up.
         this.emitResponse(toolCallId, { cancelReason: 'timeout', cancelled: true });
         resolve({ cancelled: true, cancelReason: 'timeout' });
-      }, timeoutMs);
+      };
+      const timeoutTimer = expires ? setTimeout(onTimeout, timeoutMs) : undefined;
 
       const progressTimer: ReturnType<typeof setInterval> | undefined = options.onProgress
         ? setInterval(() => {
@@ -179,7 +188,7 @@ export class AskUserBridge {
         : undefined;
 
       const cleanup = () => {
-        clearTimeout(timeoutTimer);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
         if (progressTimer) clearInterval(progressTimer);
       };
 

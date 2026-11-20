@@ -4,6 +4,7 @@ import type {
   AgentOperationStatus,
   VerifyCheckItem,
 } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import { boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
@@ -31,6 +32,8 @@ export interface AgentOperationAppContext {
   documentId?: string | null;
   /** The agent a builder run edits (scope `agent_builder`); the run itself is owned by the builder. */
   editingAgentId?: string;
+  /** The group a Group Agent Builder run edits; recovered by intervention continuations. */
+  editingGroupId?: string;
   groupId?: string | null;
   scope?: string | null;
   sessionId?: string;
@@ -143,7 +146,16 @@ export const agentOperations = pgTable(
     index('agent_operations_chat_group_id_idx').on(t.chatGroupId),
     index('agent_operations_parent_operation_id_idx').on(t.parentOperationId),
     index('agent_operations_status_idx').on(t.status),
+    /**
+     * Live-run scans of `StaleOperationReaper`. Keyed on `created_at` rather
+     * than `updated_at` on purpose: every write bumps `updated_at`, so an
+     * index on it would cost the table its HOT updates.
+     */
+    index('agent_operations_running_created_at_idx')
+      .on(t.createdAt)
+      .where(sql`${t.status} = 'running'`),
     index('agent_operations_user_id_created_at_idx').on(t.userId, t.createdAt),
+    index('agent_operations_workspace_id_created_at_idx').on(t.workspaceId, t.createdAt),
     index('agent_operations_metadata_idx').using('gin', t.metadata),
   ],
 );

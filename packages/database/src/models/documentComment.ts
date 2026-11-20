@@ -21,6 +21,8 @@ import type { DocumentCommentItem } from '../schemas/documentComment';
 import { documentCommentMentions, documentComments } from '../schemas/documentComment';
 import { documents } from '../schemas/file';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
+import { nonNull } from './utils/rows';
 
 export const DOCUMENT_COMMENT_WORKSPACE_REQUIRED =
   'Document comments are workspace-scoped; a workspaceId is required';
@@ -134,7 +136,7 @@ export class DocumentCommentModel {
       const [document] = await tx
         .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
         .from(documents)
-        .where(eq(documents.id, params.documentId))
+        .where(and(eq(documents.id, params.documentId), notTrashed(documents.isDeleted)))
         .limit(1)
         .for('update');
 
@@ -483,9 +485,11 @@ export class DocumentCommentModel {
           )
           .groupBy(documentComments.parentCommentId)
       : [];
+    // inArray(parent_comment_id, rootIds) never matches a NULL parent.
     const countByRoot = new Map(
-      replyCounts.flatMap(({ parentCommentId, total }) =>
-        parentCommentId ? [[parentCommentId, total] as const] : [],
+      replyCounts.map(
+        ({ parentCommentId, total }) =>
+          [nonNull(parentCommentId, 'document_comments.parent_comment_id'), total] as const,
       ),
     );
 

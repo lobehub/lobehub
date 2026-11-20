@@ -4,6 +4,8 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 
+export type AgentShareDeviceAccess = 'allowlist' | 'none';
+
 export interface AgentShareConfig {
   /**
    * Whether the creator may view visitor sessions/topics created against this
@@ -18,6 +20,31 @@ export interface AgentShareConfig {
   allowReadMemory?: boolean;
   /** Visitor trial scenarios, maintained independently of agents.openingQuestions. */
   demoCases?: AgentShareDemoCase[];
+  /**
+   * Which visitors may run on the Agent's configured execution environment
+   * (its bound or auto-selected device):
+   *
+   * - `none` (default): no visitor reaches a device; device tools are dropped
+   *   and a heterogeneous (Claude Code / Codex) Agent refuses the run.
+   * - `allowlist`: only the people in {@link deviceAllowUserIds} who are
+   *   still in the Agent's address book. They get the device tools and, for a
+   *   heterogeneous Agent, run it on the device.
+   *
+   * There is no "every visitor" value: a stranger never reaches the creator's
+   * machine. The visitor never picks the device — it always follows the
+   * Agent's own execution-environment setting. Resolved per run by
+   * `resolveShareVisitorDeviceAccess`.
+   */
+  deviceAccess?: AgentShareDeviceAccess;
+  /**
+   * User ids allowed to use the device when {@link deviceAccess} is
+   * `allowlist`; ignored otherwise. Each must be in the address book of the
+   * Agent's scope when written (personal contacts for a personal Agent; the
+   * workspace's members and external contacts for a workspace Agent), and is
+   * checked against it again on every run, so removing a contact revokes the
+   * grant without editing the share.
+   */
+  deviceAllowUserIds?: string[];
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
   /**
@@ -27,10 +54,11 @@ export interface AgentShareConfig {
    * visitor attachments off entirely. Enforced by `shareChat.createUploadUrl`.
    */
   maxFileStorage?: number;
-  /** Maximum number of topics each signed-in visitor can create for this share. */
-  maxTopicsPerVisitor?: number;
-  /** Maximum number of message turns allowed in each shared topic. */
-  maxTurnsPerTopic?: number;
+  /**
+   * Messages each signed-in visitor may send to this share in total, across every conversation.
+   * Only the visitor's own messages count; the Agent's replies do not.
+   */
+  maxMessagesPerVisitor?: number;
   /**
    * Per-Agent monthly spend cap for this share, in USD credits.
    *
@@ -49,11 +77,6 @@ export interface AgentShareConfig {
    * a generic failure notice. Defaults to `false`.
    */
   showErrorDetails?: boolean;
-  /**
-   * Whether visitors may see which model/provider is powering the agent.
-   * Defaults to `false` — the creator's model choice is hidden by default.
-   */
-  showModelInfo?: boolean;
   /**
    * Skills visitors may load, by skill identifier. Deliberately separate from
    * {@link toolGrants}: a skill grant governs BOTH the tool path
@@ -86,12 +109,13 @@ export interface AgentShareConfig {
 }
 
 /**
- * `AgentShareConfig` as returned by `normalizeAgentShareConfig`: the spend cap
- * is guaranteed present, so enforcement paths never have to re-derive a
+ * `AgentShareConfig` as returned by `normalizeAgentShareConfig`: the caps are
+ * guaranteed present, so enforcement paths never have to re-derive a
  * default (and can never mistake a missing cap for "unlimited").
  */
 export type NormalizedAgentShareConfig = AgentShareConfig & {
   maxFileStorage: number;
+  maxMessagesPerVisitor: number;
   monthlySpendLimit: number;
 };
 

@@ -1,5 +1,7 @@
 import { type AgentLabelListItem } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
 export interface LabelState {
   /**
    * Agent label registry for the current scope (workspace-shared, or
@@ -8,13 +10,13 @@ export interface LabelState {
    */
   agentLabels: AgentLabelListItem[];
   /**
-   * Workspace the loaded registry belongs to (`null` for personal scope).
-   * Registries are disjoint per scope, so anything loaded for another
-   * workspace must count as not-yet-loaded rather than as stale-but-usable:
+   * Replica bookkeeping for the registry (the flat `agentLabels` field is its
+   * view). The cache scope partitions the registry, so a scope switch counts
+   * an already-loaded list as not-yet-loaded rather than as stale-but-usable:
    * applying a label id from the wrong scope is a destructive write, not a
    * cosmetic glitch.
    */
-  agentLabelsWorkspaceId: string | null;
+  agentLabelsReplica: ReplicaState<AgentLabelListItem[]>;
   /**
    * Whether the label list has been initialized
    */
@@ -23,6 +25,6 @@ export interface LabelState {
 
 export const initialLabelState: LabelState = {
   agentLabels: [],
-  agentLabelsWorkspaceId: null,
+  agentLabelsReplica: createReplicaState(),
   isAgentLabelsInit: false,
 };

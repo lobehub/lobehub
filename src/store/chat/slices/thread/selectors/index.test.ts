@@ -2,6 +2,7 @@ import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { ChatStoreState } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { threadSelectors } from '.';
 
@@ -115,5 +116,28 @@ describe('threadSelectors', () => {
     } as unknown as ChatStoreState;
 
     expect(threadSelectors.isActiveThreadSubagent(state)).toBe(true);
+  });
+  it('reads thread replies from the raw rows, not the rendered transcript', () => {
+    const mainKey = messageMapKey({ agentId: 'agent-1', topicId: 'topic-1' });
+    const state = {
+      activeAgentId: 'agent-1',
+      activeTopicId: 'topic-1',
+      // The rendered transcript deliberately leaves threads out, so the replies only exist
+      // in the raw rows. Reading `messagesMap` here would return nothing.
+      dbMessagesMap: {
+        [mainKey]: [
+          { content: 'Question', id: 'message-1' },
+          { content: 'Reply', id: 'message-2', threadId: 'thread-1' },
+          { content: 'Other thread', id: 'message-3', threadId: 'thread-2' },
+        ],
+      },
+      messagesMap: { [mainKey]: [{ content: 'Question', id: 'message-1' }] },
+    } as unknown as ChatStoreState;
+
+    expect(
+      threadSelectors
+        .getThreadChildMessages('thread-1')(state)
+        .map((m) => m.id),
+    ).toEqual(['message-2']);
   });
 });

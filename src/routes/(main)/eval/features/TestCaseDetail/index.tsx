@@ -1,15 +1,23 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { Breadcrumb } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, FileText, Pencil } from 'lucide-react';
+import {
+  Breadcrumb,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tag,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
+import { FileText, Pencil } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import Transcript from './Transcript';
 import { useCaseDraft } from './useCaseDraft';
@@ -46,11 +54,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   editor: css`
     font-size: ${cssVar.fontSize};
-    line-height: 1.75;
+
+    textarea {
+      line-height: 1.75;
+    }
   `,
   prose: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSize};
@@ -67,9 +78,10 @@ export interface TestCaseDetailProps {
   testCase: {
     datasetId: string;
     content?: {
+      expected?: string;
       input?: string;
       messages?: Array<{ content?: unknown; role?: string }>;
-    } & Record<string, unknown>;
+    };
     evalConfig?: Record<string, unknown> | null;
     evalMode?: string | null;
     id: string;
@@ -115,7 +127,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     if (!patch) return stop();
     setSaving(true);
     try {
-      await updateTestCase(testCase.id, testCase.datasetId, patch);
+      await updateTestCase(testCase.id, patch);
       stop();
     } catch (error) {
       toast.error((error as Error)?.message ?? t('testCaseDetail.saveFailed'));
@@ -137,7 +149,6 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     >
       <Breadcrumb
         className={styles.breadcrumb}
-        separator={<Icon icon={ChevronRight} size={14} />}
         items={[
           {
             title: <WorkspaceLink to="/eval">{t('testCaseDetail.breadcrumb.eval')}</WorkspaceLink>,

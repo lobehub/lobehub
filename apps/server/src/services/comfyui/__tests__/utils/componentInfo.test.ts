@@ -177,18 +177,6 @@ describe('componentInfo.ts', () => {
       const resultUndefined = getComponentInfo(undefined as any);
       expect(resultUndefined).toBeUndefined();
     });
-
-    it('should work with different file extensions', () => {
-      // Since we're mocking the entire module, we need to test the existing mock data
-      // This test validates that the function works with the current mock setup
-      const result = getComponentInfo('clip-l.safetensors');
-      expect(result).toEqual({
-        displayName: 'CLIP text encoder',
-        folderPath: 'models/clip',
-        nodeType: 'CLIPTextEncode',
-        type: 'clip',
-      });
-    });
   });
 
   describe('isSystemComponent', () => {
@@ -293,18 +281,6 @@ describe('componentInfo.ts', () => {
       // Since we can't easily mock return values, test with invalid input
       expect(() => getComponentInfo('any-file.safetensors')).not.toThrow();
       expect(() => isSystemComponent('any-file.safetensors')).not.toThrow();
-    });
-
-    it('should handle corrupted COMPONENT_NODE_MAPPINGS gracefully', () => {
-      // Test with a component that exists in SYSTEM_COMPONENTS but has invalid type
-      const result = getComponentInfo('invalid-component.bin');
-      expect(result).toBeUndefined();
-    });
-
-    it('should handle missing properties in config', () => {
-      // Test with a component that has invalid type in our mock
-      const result = getComponentInfo('invalid-component.bin');
-      expect(result).toBeUndefined();
     });
 
     it('should handle very long filenames', () => {

@@ -4,6 +4,7 @@ import { memo } from 'react';
 
 import type { MessengerPlatform } from '../constants';
 import DiscordDetail from './Discord';
+import LinqDetail from './Linq';
 import SlackDetail from './Slack';
 import TelegramDetail from './Telegram';
 import WechatDetail from './Wechat';
@@ -35,6 +36,9 @@ const IntegrationDetail = memo<IntegrationDetailProps>(({ platform, ...rest }) =
     }
     case 'wechat': {
       return <WechatDetail {...rest} />;
+    }
+    case 'linq': {
+      return <LinqDetail {...rest} />;
     }
   }
 });

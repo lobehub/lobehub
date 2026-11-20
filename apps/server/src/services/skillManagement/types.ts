@@ -34,6 +34,8 @@ export interface SkillSummary {
   bundle: SkillDocumentRef;
   /** Skill description parsed from index frontmatter. */
   description: string;
+  /** Why the SKILL.md frontmatter could not be parsed; set only when name and description fell back to saved values. */
+  frontmatterError?: string;
   /** Child index document reference. */
   index: SkillDocumentRef;
   /** Stable skill bundle name. */
@@ -96,7 +98,7 @@ export interface GetSkillInput extends SkillTargetInput {
 export interface CreateSkillInput {
   /** Agent id that owns the skill documents. */
   agentId: string;
-  /** Markdown body authored by the skill-management agent; must not include YAML frontmatter. */
+  /** Markdown body authored by the skill-management agent; a pasted YAML frontmatter block is stripped before rendering. */
   bodyMarkdown: string;
   /** Frontmatter description to persist for the skill. */
   description: string;
@@ -114,7 +116,7 @@ export interface CreateSkillInput {
 export interface ReplaceSkillIndexInput extends SkillTargetInput {
   /** Agent id that owns the skill documents. */
   agentId: string;
-  /** Replacement Markdown body authored by the skill-management agent; must not include YAML frontmatter. */
+  /** Replacement Markdown body authored by the skill-management agent; a pasted YAML frontmatter block is stripped before rendering. */
   bodyMarkdown: string;
   /** Optional frontmatter description override. */
   description?: string;

@@ -1,36 +1,39 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
-import dayjs from 'dayjs';
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
-
-const preformat = (id: string) =>
-  id.startsWith('20') ? (id.includes('-') ? dayjs(id).format('MMMM') : id) : undefined;
+import { formatTimeGroupId } from './timeGroupTitle';
 
 const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('topic');
   const { id, title, children } = group;
 
-  const timeTitle = useMemo(() => preformat(id) ?? t(`groupTitle.byTime.${id}` as any), [id, t]);
+  const timeTitle = useMemo(
+    () => formatTimeGroupId(id) ?? t(`groupTitle.byTime.${id}` as any),
+    [id, t],
+  );
 
   return (
     <AccordionItem value={id}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
-            <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
-              {title || timeTitle}
-            </Text>
+            <Flexbox flex={1} style={{ minWidth: 0 }}>
+              <SectionTitle>{title || timeTitle}</SectionTitle>
+            </Flexbox>
           </Flexbox>
         </AccordionTrigger>
       </AccordionHeader>
@@ -39,6 +42,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
           {children.map((topic) => (
             <TopicItem
               fav={topic.favorite}
+              hasGoal={topic.hasGoal}
               id={topic.id}
               key={topic.id}
               metadata={topic.metadata}

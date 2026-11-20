@@ -1,9 +1,9 @@
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, CopyButton, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -14,20 +14,17 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow-y: auto;
     flex: 1;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   fieldLabel: css`
     margin: 0;
-
     font-size: ${cssVar.fontSizeSM};
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
   `,
   fieldValue: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     font-size: ${cssVar.fontSize};
@@ -43,8 +40,8 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   title: css`

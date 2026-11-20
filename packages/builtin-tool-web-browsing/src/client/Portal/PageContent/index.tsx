@@ -1,9 +1,8 @@
 import type { CrawlPluginState, CrawlResult } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 import { CopyButton, Flexbox, Highlighter, Icon, Markdown, stopPropagation } from '@lobehub/ui';
-import { Alert, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { Descriptions } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Descriptions, Segmented, Skeleton, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -117,7 +116,6 @@ const PageContent = memo<PageContentProps>(({ messageId, result }) => {
         <div>
           <Descriptions
             column={1}
-            size="small"
             classNames={{
               content: styles.footerText,
             }}
@@ -192,7 +190,6 @@ const PageContent = memo<PageContentProps>(({ messageId, result }) => {
         <div className={styles.footer}>
           <Descriptions
             column={2}
-            size="small"
             classNames={{
               content: styles.footerText,
             }}

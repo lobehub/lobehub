@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Activity, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,10 +32,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface EmptyStateProps {
+  /** The button text; a Lobe Bench benchmark starts an experiment rather than a run. */
+  createLabel?: string;
   onCreate: () => void;
 }
 
-const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
+const EmptyState = memo<EmptyStateProps>(({ createLabel, onCreate }) => {
   const { t } = useTranslation('eval');
 
   return (
@@ -51,8 +51,8 @@ const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
           {t('run.empty.descriptionBenchmark')}
         </Text>
       </Flexbox>
-      <Button icon={Plus} size="small" type="primary" onClick={onCreate}>
-        {t('run.actions.create')}
+      <Button icon={Plus} type="primary" onClick={onCreate}>
+        {createLabel ?? t('run.actions.create')}
       </Button>
     </Flexbox>
   );

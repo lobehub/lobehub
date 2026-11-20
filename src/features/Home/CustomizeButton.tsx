@@ -1,4 +1,4 @@
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { SlidersHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

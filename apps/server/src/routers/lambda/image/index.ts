@@ -5,6 +5,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
@@ -15,11 +16,18 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { UserModel } from '@/database/models/user';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerGlobalConfig } from '@/server/globalConfig';
 import { createAsyncCaller } from '@/server/routers/async/caller';
+import {
+  isAsyncCallRejectedBeforeRun,
+  keepAliveForAsyncRejection,
+} from '@/server/routers/async/rejection';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { FileService } from '@/server/services/file';
 import {
   AsyncTaskError,
@@ -27,11 +35,21 @@ import {
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@/types/asyncTask';
+import { type ProviderConfig } from '@/types/user/settings';
+import { resolveImageModelSelection } from '@/utils/defaultImageModel';
 import { generateUniqueSeeds } from '@/utils/number';
 
-import { validateNoUrlsInConfig } from './utils';
+import { buildEnabledImageProviderModels } from './defaultModel';
+import {
+  applyLookupPricingParamDefaults,
+  findUnsupportedImageParams,
+  validateNoUrlsInConfig,
+} from './utils';
 
 const log = debug('lobe-image:lambda');
+
+/** Bounds the task updates and refunds when failing a large batch at once. */
+const FAIL_UNSTARTED_CONCURRENCY = 5;
 
 const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -57,19 +75,24 @@ const imageCreateProcedure = imageProcedure
 const createImageInputSchema = z.object({
   generationTopicId: z.string(),
   imageNum: z.number(),
-  model: z.string(),
+  /**
+   * Omit (together with or without `provider`) to let the server pick the user's default image
+   * model with the same rule as the image page, see `resolveImageModelSelection`.
+   */
+  model: z.string().optional(),
   params: z
     .object({
       cfg: z.number().optional(),
       height: z.number().optional(),
       imageUrls: z.array(z.string()).optional(),
-      prompt: z.string(),
+      prompt: z.string().refine((prompt) => prompt.trim().length > 0, 'prompt is required'),
       seed: z.number().nullish(),
       steps: z.number().optional(),
       width: z.number().optional(),
     })
     .passthrough(),
-  provider: z.string(),
+  /** Omit to use the first enabled provider serving `model`, or the default image model. */
+  provider: z.string().optional(),
 });
 export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
 
@@ -94,9 +117,42 @@ export const imageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, imageNum, params } = input;
+      const { generationTopicId, imageNum, params } = input;
 
       log('Starting image creation process, input: %O', input);
+
+      const { aiProvider } = await getServerGlobalConfig();
+      const aiInfraRepos = new AiInfraRepos(
+        serverDB,
+        userId,
+        aiProvider as Record<string, ProviderConfig>,
+        wsId,
+      );
+
+      // Callers such as `lh gen image` may omit the model/provider; fill them in from the user's
+      // enabled image models with the image page's default rule instead of a client-side guess.
+      let model = input.model;
+      let provider = input.provider;
+      if (!model || !provider) {
+        const runtimeState = await getUserScopedAiProviderRuntimeState(userId, () =>
+          aiInfraRepos.getAiProviderRuntimeState(),
+        );
+        const selection = resolveImageModelSelection(
+          buildEnabledImageProviderModels(runtimeState),
+          { model, provider },
+        );
+        if (!selection) {
+          const requested = [provider, model].filter(Boolean).join('/');
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: requested
+              ? `No enabled image model matched ${requested}.`
+              : 'No enabled image model is available.',
+          });
+        }
+        ({ model, provider } = selection);
+        log('Resolved image model selection: %s/%s', provider, model);
+      }
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -114,6 +170,25 @@ export const imageRouter = router({
           code: 'BAD_REQUEST',
           message: ChatErrorType.LobeHubModelDeprecated,
         });
+      }
+
+      // Reject params the model does not declare before anything is queued or charged. The
+      // schema comes from the same merged model list the image page and image tool read, so a
+      // user-customized model is validated against its own declaration. Models without a
+      // declared schema (e.g. custom ids) are passed through unchanged.
+      const modelCard = (
+        await aiInfraRepos.getAiProviderModelList(provider, { type: 'image' })
+      ).find((item) => item.id === model);
+      const parametersSchema =
+        modelCard && 'parameters' in modelCard ? modelCard.parameters : undefined;
+      if (parametersSchema) {
+        const unsupportedParams = findUnsupportedImageParams(params, parametersSchema);
+        if (unsupportedParams.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Unsupported parameters for ${model}: ${unsupportedParams.join(', ')}. Supported: ${Object.keys(parametersSchema).join(', ')}`,
+          });
+        }
       }
 
       // Normalize reference image addresses, store S3 keys uniformly (avoid storing expiring presigned URLs in database)
@@ -191,6 +266,16 @@ export const imageRouter = router({
 
       // Defensive check: ensure no full URLs enter the database
       validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
+
+      // Backfill lookup-pricing params (e.g. quality/resolution) from model
+      // card defaults so omitted optional parameters don't break cost
+      // computation before charging. Use the resolved model ID so business
+      // aliases without their own model-bank card still resolve pricing.
+      generationParams = await applyLookupPricingParamDefaults(
+        generationParams,
+        resolvedModelId,
+        provider,
+      );
 
       const generationTopic = await generationTopicModel.findById(generationTopicId);
       if (!generationTopic) {
@@ -319,6 +404,62 @@ export const imageRouter = router({
       // Step 2: Trigger background image generation tasks.
       log('Starting async image generation tasks');
 
+      /**
+       * Marks tasks the async router never ran as failed and reconciles their
+       * billing: with no async run, its failure handling cannot fire for them.
+       */
+      const failUnstartedTasks = async (
+        tasks: { asyncTaskId: string; index: number }[],
+        error: unknown,
+      ) => {
+        const message =
+          'start async task error: ' + (error instanceof Error ? error.message : 'Unknown error');
+
+        await pMap(
+          tasks,
+          async ({ asyncTaskId }) => {
+            try {
+              await asyncTaskModel.update(asyncTaskId, {
+                error: new AsyncTaskError(AsyncTaskErrorType.ServerError, message),
+                status: AsyncTaskStatus.Error,
+              });
+            } catch (updateError) {
+              console.error('Failed to update task status:', updateError);
+            }
+          },
+          { concurrency: FAIL_UNSTARTED_CONCURRENCY },
+        );
+
+        if (!ENABLE_BUSINESS_FEATURES || !prechargeItems?.length) return;
+
+        await pMap(
+          tasks,
+          async ({ asyncTaskId, index }) => {
+            const prechargeItem = prechargeItems[index];
+            if (prechargeItem === undefined) return;
+            try {
+              await chargeAfterGenerate({
+                isError: true,
+                metadata: {
+                  ...ctx.spendOrigin,
+                  asyncTaskId,
+                  generationBatchId: createdBatch.id,
+                  modelId: model,
+                  topicId: generationTopicId,
+                },
+                prechargeResult: prechargeItem,
+                provider,
+                userId,
+                workspaceId: wsId,
+              });
+            } catch (chargeError) {
+              console.error('Failed to reconcile billing for failed task:', chargeError);
+            }
+          },
+          { concurrency: FAIL_UNSTARTED_CONCURRENCY },
+        );
+      };
+
       try {
         log('Creating unified async caller for userId: %s', userId);
 
@@ -330,13 +471,12 @@ export const imageRouter = router({
         log('Unified async caller created successfully for userId: %s', ctx.userId);
         log('Processing %d async image generation tasks', generationsWithTasks.length);
 
-        // Fire-and-forget: trigger async tasks without awaiting
-        // These calls go to the async router which handles them independently
-        // Do not schedule here; the async router handles these tasks independently.
-        generationsWithTasks.forEach(({ generation, asyncTaskId }) => {
+        // Fire-and-forget: trigger async tasks without awaiting. The async router
+        // handles them independently; the response only waits briefly for a refusal.
+        generationsWithTasks.forEach(({ generation, asyncTaskId }, index) => {
           log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
-          asyncCaller.image.createImage({
+          const call = asyncCaller.image.createImage({
             generationBatchId: createdBatch.id,
             generationId: generation.id,
             generationTopicId,
@@ -346,59 +486,28 @@ export const imageRouter = router({
             taskId: asyncTaskId,
             workspaceId: wsId,
           });
+          const handled = call
+            // The async router owns the task's status and billing once the request
+            // reaches it; a failed HTTP response here (e.g. a proxy timing out a
+            // long generation) does not mean the task failed, so only log it.
+            // A call its auth middleware refused never ran, so fail that task now
+            // instead of leaving it pending until the status poll times it out.
+            .catch(async (error: unknown) => {
+              console.error('Async image task %s request failed: %O', asyncTaskId, error);
+              if (isAsyncCallRejectedBeforeRun(error))
+                await failUnstartedTasks([{ asyncTaskId, index }], error);
+            });
+          keepAliveForAsyncRejection(call, handled);
         });
 
         log('All %d background async image generation tasks started', generationsWithTasks.length);
       } catch (e) {
-        console.error('Failed to process async tasks:', e);
         console.error('Failed to process async tasks: %O', e);
 
-        // If overall failure occurs, update all task statuses to failed
-        try {
-          await Promise.allSettled(
-            generationsWithTasks.map(({ asyncTaskId }) =>
-              asyncTaskModel.update(asyncTaskId, {
-                error: new AsyncTaskError(
-                  AsyncTaskErrorType.ServerError,
-                  'start async task error: ' + (e instanceof Error ? e.message : 'Unknown error'),
-                ),
-                status: AsyncTaskStatus.Error,
-              }),
-            ),
-          );
-        } catch (batchUpdateError) {
-          console.error('Failed to update batch task statuses:', batchUpdateError);
-        }
-
-        // The async router never ran for these tasks, so its failure billing
-        // reconciliation cannot fire — reconcile each generation's billing
-        // handle here instead of leaving it dangling.
-        if (ENABLE_BUSINESS_FEATURES && prechargeItems?.length) {
-          await Promise.allSettled(
-            generationsWithTasks.map(async ({ asyncTaskId }, index) => {
-              const prechargeItem = prechargeItems[index];
-              if (prechargeItem === undefined) return;
-              try {
-                await chargeAfterGenerate({
-                  isError: true,
-                  metadata: {
-                    ...ctx.spendOrigin,
-                    asyncTaskId,
-                    generationBatchId: createdBatch.id,
-                    modelId: model,
-                    topicId: generationTopicId,
-                  },
-                  prechargeResult: prechargeItem,
-                  provider,
-                  userId,
-                  workspaceId: wsId,
-                });
-              } catch (chargeError) {
-                console.error('Failed to reconcile billing for failed task:', chargeError);
-              }
-            }),
-          );
-        }
+        await failUnstartedTasks(
+          generationsWithTasks.map(({ asyncTaskId }, index) => ({ asyncTaskId, index })),
+          e,
+        );
       }
 
       const createdGenerations = generationsWithTasks.map((item) => ({

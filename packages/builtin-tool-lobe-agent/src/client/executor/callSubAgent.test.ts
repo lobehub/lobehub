@@ -111,3 +111,20 @@ describe('lobeAgentExecutor.callSubAgent', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('lobeAgentExecutor.callSubAgent runInBackground', () => {
+  // Delivering a background result needs the server runtime. Quietly running in
+  // the foreground instead would block the turn the model meant to keep going.
+  it('refuses without starting a sub-agent', async () => {
+    const run = vi.fn();
+
+    const result = await lobeAgentExecutor.callSubAgent(
+      { ...params, runInBackground: true },
+      createContext(run),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('not supported in this runtime');
+    expect(run).not.toHaveBeenCalled();
+  });
+});

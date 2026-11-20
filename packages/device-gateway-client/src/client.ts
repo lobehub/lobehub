@@ -5,6 +5,7 @@ import os from 'node:os';
 import type { DeviceMetricSample } from '@lobechat/types';
 import WebSocket from 'ws';
 
+import { toDeviceGatewayWebSocketUrl } from './endpoint';
 import { DeviceTunnelHost } from './tunnel';
 import type {
   AgentRunAckMessage,
@@ -19,6 +20,8 @@ import type {
   ServerMessage,
   SystemInfoRequestMessage,
   SystemInfoResponseMessage,
+  ToolCallCompletionAckMessage,
+  ToolCallCompletionMessage,
   ToolCallRequestMessage,
   ToolCallResponseMessage,
 } from './types';
@@ -38,6 +41,14 @@ const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
  */
 const CONNECT_TIMEOUT = 15_000; // 15s
 const METRICS_ACK_TIMEOUT_MS = 15_000;
+const COMPLETION_ACK_TIMEOUT_MS = 30_000;
+/**
+ * Close reason the gateway sends when a newer socket with the same
+ * `connectionId` takes over. `connectionId` is persisted per install, so this
+ * is how a second process of the same install (two `lh connect` sharing one
+ * home) shows up.
+ */
+const REPLACED_CLOSE_REASON = 'Replaced by new connection';
 
 // ─── Logger Interface ───
 
@@ -47,6 +58,9 @@ export interface GatewayClientLogger {
   info: (msg: string, ...args: unknown[]) => void;
   warn: (msg: string, ...args: unknown[]) => void;
 }
+
+const completionAckKey = (operationId: string, toolCallId: string) =>
+  `${operationId}:${toolCallId}`;
 
 const noopLogger: GatewayClientLogger = {
   debug: () => {},
@@ -115,7 +129,23 @@ export class GatewayClient extends EventEmitter {
     string,
     { reject: (error: Error) => void; resolve: () => void }
   >();
+  private pendingCompletionAcks = new Map<
+    string,
+    {
+      reject: (error: Error) => void;
+      resolve: (ack: Omit<ToolCallCompletionAckMessage, 'type'>) => void;
+    }
+  >();
   private intentionalDisconnect = false;
+  /**
+   * When each socket abandoned mid-handshake was abandoned. Only such a socket
+   * can reach the gateway after its successor and knock it off with the
+   * takeover reason: an opened socket was registered before the successor
+   * existed. Each can do that at most once, and only within `connectTimeoutMs`
+   * (the handshake budget), so a takeover consumes one live entry and anything
+   * beyond them is another client.
+   */
+  private inFlightAbandons: number[] = [];
   private deviceId: string;
   private connectionId: string;
   private channel?: string;
@@ -162,6 +192,11 @@ export class GatewayClient extends EventEmitter {
 
   get currentDeviceId(): string {
     return this.deviceId;
+  }
+
+  /** Tunnel HTTP requests and WebSockets this device is serving right now. */
+  get activeTunnelCount(): number {
+    return this.tunnelHost?.activeCount ?? 0;
   }
 
   get currentConnectionId(): string {
@@ -263,6 +298,40 @@ export class GatewayClient extends EventEmitter {
     });
   }
 
+  /**
+   * Send the late result of a call the device kept watching, and resolve with
+   * the gateway's verdict. Rejects when not connected, when the connection drops
+   * mid-flight, or when no ack arrives in time — the caller keeps the result and
+   * sends it again, which is safe because the server applies it at most once.
+   */
+  reportToolCallCompletion(
+    completion: Omit<ToolCallCompletionMessage, 'type'>,
+  ): Promise<Omit<ToolCallCompletionAckMessage, 'type'>> {
+    if (this.status !== 'connected' || this.ws?.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error('Gateway not connected'));
+    }
+    const key = completionAckKey(completion.operationId, completion.toolCallId);
+    // A resend supersedes the attempt still waiting on this socket.
+    this.pendingCompletionAcks.get(key)?.reject(new Error('Superseded by a newer send'));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingCompletionAcks.delete(key);
+        reject(new Error('Timed out waiting for tool_call_completion_ack'));
+      }, COMPLETION_ACK_TIMEOUT_MS);
+      this.pendingCompletionAcks.set(key, {
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+        resolve: (ack) => {
+          clearTimeout(timer);
+          resolve(ack);
+        },
+      });
+      this.sendMessage({ ...completion, type: 'tool_call_completion' });
+    });
+  }
+
   sendSystemInfoResponse(response: Omit<SystemInfoResponseMessage, 'type'>): void {
     this.sendMessage({
       ...response,
@@ -325,8 +394,9 @@ export class GatewayClient extends EventEmitter {
   }
 
   private buildWsUrl(): string {
-    const wsProtocol = this.gatewayUrl.startsWith('https') ? 'wss' : 'ws';
-    const host = this.gatewayUrl.replace(/^https?:\/\//, '');
+    // Keeps a path prefix (`https://host/gw` → `wss://host/gw/ws`) and tolerates
+    // a trailing slash in a hand-entered address.
+    const url = toDeviceGatewayWebSocketUrl(this.gatewayUrl);
     const params = new URLSearchParams({
       connectionId: this.connectionId,
       deviceId: this.deviceId,
@@ -347,7 +417,8 @@ export class GatewayClient extends EventEmitter {
       params.set('userId', this.userId);
     }
 
-    return `${wsProtocol}://${host}/ws?${params.toString()}`;
+    url.search = params.toString();
+    return url.toString();
   }
 
   /**
@@ -442,6 +513,15 @@ export class GatewayClient extends EventEmitter {
           break;
         }
 
+        case 'tool_call_completion_ack': {
+          const { type: _type, ...ack } = message as ToolCallCompletionAckMessage;
+          const key = completionAckKey(ack.operationId, ack.toolCallId);
+          const pending = this.pendingCompletionAcks.get(key);
+          this.pendingCompletionAcks.delete(key);
+          pending?.resolve(ack);
+          break;
+        }
+
         case 'device_metrics_ack': {
           const pending = this.pendingMetricAcks.get(message.batchId);
           this.pendingMetricAcks.delete(message.batchId);
@@ -489,6 +569,25 @@ export class GatewayClient extends EventEmitter {
     this.clearConnectWatchdog();
     this.ws = null;
 
+    if (
+      !this.intentionalDisconnect &&
+      reason.toString() === REPLACED_CLOSE_REASON &&
+      !this.consumeInFlightAbandon()
+    ) {
+      // Another client holding our connectionId just took over. Reconnecting
+      // would knock it off in turn: the two would trade the connection every
+      // second, and each tool call would land on whichever connected last —
+      // including a getCommandOutput sent to the process that never ran the
+      // command. Newest wins; this one stays down.
+      this.logger.warn(
+        'Connection taken over by another client with the same connection id; not reconnecting',
+      );
+      this.setStatus('disconnected');
+      this.emit('replaced');
+      this.emit('disconnected');
+      return;
+    }
+
     if (!this.intentionalDisconnect && this.autoReconnect) {
       this.setStatus('reconnecting');
       this.scheduleReconnect();
@@ -497,6 +596,13 @@ export class GatewayClient extends EventEmitter {
       this.emit('disconnected');
     }
   };
+
+  /** Attribute a takeover to one of our own late sockets, if one can still land. */
+  private consumeInFlightAbandon(): boolean {
+    const now = Date.now();
+    this.inFlightAbandons = this.inFlightAbandons.filter((at) => now - at <= this.connectTimeoutMs);
+    return this.inFlightAbandons.shift() !== undefined;
+  }
 
   private handleError = (error: Error) => {
     this.logger.error('WebSocket error:', error.message);
@@ -613,6 +719,10 @@ export class GatewayClient extends EventEmitter {
       pending.reject(new Error('Gateway connection closed'));
     }
     this.pendingMetricAcks.clear();
+    for (const pending of this.pendingCompletionAcks.values()) {
+      pending.reject(new Error('Gateway connection closed'));
+    }
+    this.pendingCompletionAcks.clear();
   }
 
   private closeWebSocket() {
@@ -625,6 +735,7 @@ export class GatewayClient extends EventEmitter {
       return;
     }
     const ws = this.ws;
+    if (ws.readyState === WebSocket.CONNECTING) this.inFlightAbandons.push(Date.now());
     const suppressCloseError = (error: Error) => {
       this.logger.debug(`Ignoring WebSocket error during close: ${error.message}`);
     };

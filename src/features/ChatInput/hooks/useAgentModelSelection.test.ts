@@ -113,10 +113,40 @@ describe('useAgentModelSelection', () => {
       provider: 'shared-provider',
       usesWorkspaceMemberSelection: false,
     });
-    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
-      model: 'next-model',
-      provider: 'next-provider',
-    });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-1',
+      { model: 'next-model', provider: 'next-provider' },
+      undefined,
+    );
+    expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('forwards write options and resolves true once the Agent row is written', async () => {
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await expect(
+      result.current.selectModel(
+        { model: 'next-model', provider: 'next-provider' },
+        { rethrow: true, showErrorMessage: false },
+      ),
+    ).resolves.toBe(true);
+
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-1',
+      { model: 'next-model', provider: 'next-provider' },
+      { rethrow: true, showErrorMessage: false },
+    );
+  });
+
+  it('resolves false without writing when the model cannot be switched', async () => {
+    testState.resource.canConfigureResource = false;
+    const { result } = renderHook(() => useAgentModelSelection('agent-1'));
+
+    await expect(
+      result.current.selectModel({ model: 'next-model', provider: 'next-provider' }),
+    ).resolves.toBe(false);
+
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
     expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
   });
 
@@ -293,10 +323,11 @@ describe('useAgentModelSelection', () => {
       selectionPolicy: 'fixed',
       usesWorkspaceMemberSelection: false,
     });
-    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
-      model: 'next-model',
-      provider: 'next-provider',
-    });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-1',
+      { model: 'next-model', provider: 'next-provider' },
+      undefined,
+    );
     expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
   });
 
@@ -323,10 +354,11 @@ describe('useAgentModelSelection', () => {
       selectionPolicy: 'fixed',
       usesWorkspaceMemberSelection: false,
     });
-    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
-      model: 'next-model',
-      provider: 'next-provider',
-    });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-1',
+      { model: 'next-model', provider: 'next-provider' },
+      undefined,
+    );
     expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
   });
 

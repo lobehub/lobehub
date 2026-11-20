@@ -5,16 +5,28 @@ import {
   type LobeDefaultAiModelListItem,
 } from 'model-bank';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
+import type { AiModelReasoningConfigEntry } from './projection';
+
 export interface AIModelsState {
+  /**
+   * Replica view of the models of every visited provider
+   * (`aiModelListMap[providerId]`). Read the active provider's list through
+   * `aiModelSelectors`; the slice is the only writer.
+   */
+  aiModelListMap: Record<string, AiProviderModelListItem[]>;
+  /** Replica bookkeeping of `aiModelListMap`. */
+  aiModelListReplica: ReplicaState<AiProviderModelListItem[]>;
   aiModelLoadingIds: string[];
-  aiProviderModelList: AiProviderModelListItem[];
   builtinAiModelList: LobeDefaultAiModelListItem[];
-  isAiModelListInit?: boolean;
   /**
    * The user's per-model-instance reasoning defaults, keyed by
    * `${providerId}/${modelId}` (personal scope, cross-workspace).
    */
   modelReasoningConfigMap: Record<string, AiModelReasoningConfig | undefined>;
+  /** Replica bookkeeping of `modelReasoningConfigMap`. */
+  modelReasoningConfigReplica: ReplicaState<AiModelReasoningConfigEntry>;
   /**
    * `${providerId}/${modelId}` keys with an in-flight reasoning-config save.
    */
@@ -23,10 +35,12 @@ export interface AIModelsState {
 }
 
 export const initialAIModelState: AIModelsState = {
+  aiModelListMap: {},
+  aiModelListReplica: createReplicaState(),
   aiModelLoadingIds: [],
-  aiProviderModelList: [],
   builtinAiModelList: [],
   modelReasoningConfigMap: {},
+  modelReasoningConfigReplica: createReplicaState(),
   modelReasoningConfigUpdatingKeys: [],
   modelSearchKeyword: '',
 };

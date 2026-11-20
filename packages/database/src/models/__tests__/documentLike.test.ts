@@ -76,6 +76,16 @@ describe('DocumentLikeModel', () => {
     );
   });
 
+  it('rejects a document in the recycle bin', async () => {
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(documents.id, documentId));
+
+    await expect(memberModel.summary(documentId)).rejects.toThrow(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
+    await expect(memberModel.like(documentId)).rejects.toThrow(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
+  });
+
   it('likes idempotently, reports the document author, and stamps the workspace', async () => {
     await expect(memberModel.like(documentId)).resolves.toMatchObject({
       created: true,

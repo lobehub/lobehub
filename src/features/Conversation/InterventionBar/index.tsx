@@ -1,4 +1,5 @@
 import { ChatInput } from '@lobehub/editor/react';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
@@ -73,11 +74,16 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
   return (
     <ChatInput
       data-pending-hotkey-scope
-      className={styles.container}
-      footer={<div className={styles.actions} ref={setActionsPortalTarget} />}
+      className={stylex.props(styles.container).className}
+      footer={<div {...stylex.props(styles.actions)} ref={setActionsPortalTarget} />}
       // The card's action row — Stop sits beside Submit inside `ApprovalActions`
       // and the whole row portals in here.
       maxHeight={'50vh' as any}
+      // The editor body's 64px minimum is sized for the composer this bar
+      // replaces. Inherited here, a one-line status leaves ~11px of empty tray
+      // below it, which parks that status above the tray's center. Let the tray
+      // size to its content: a card taller than the old minimum is unaffected.
+      minHeight={0}
       resize={false}
     >
       {hasMultipleCards && (

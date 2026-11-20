@@ -1,7 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import { Block, Button, cssVar, cx, Divider, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -84,7 +81,7 @@ export const RecommendationCard = memo<RecommendationCardProps>(
             </Text>
           </Flexbox>
         </Flexbox>
-        <Divider dashed style={{ marginBlock: 0 }} />
+        <Divider dashed />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} gap={8}>

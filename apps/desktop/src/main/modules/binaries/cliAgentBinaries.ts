@@ -88,6 +88,14 @@ export const codexBinary: BinarySpec = {
   priority: 2,
 };
 
+/** GitHub Copilot CLI @see https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli */
+export const copilotBinary: BinarySpec = {
+  description: 'GitHub Copilot - GitHub official agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('copilot', 'copilot'),
+  name: 'copilot',
+  priority: 3,
+};
+
 /** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
 export const cursorBinary: BinarySpec = {
   description: 'Cursor - Cursor agentic coding CLI',
@@ -217,10 +225,17 @@ export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
  * All CLI agent binaries
  */
 export const heterogeneousCliAgentBinaries = {
+  'antigravity': {
+    description: 'Antigravity CLI - Google agentic coding CLI',
+    detect: () => detectHeterogeneousCliCommand('antigravity', 'agy'),
+    name: 'agy',
+    priority: 8,
+  },
   'amp': ampBinary,
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
+  'copilot': copilotBinary,
   'cursor': cursorBinary,
   'droid': droidBinary,
   'devin': devinBinary,
@@ -238,6 +253,3 @@ export const cliAgentBinaries: BinarySpec[] = [
   qwenCodeBinary,
   aiderBinary,
 ];
-
-export const listHeterogeneousCliBinaryTypes = (): LocalHeterogeneousAgentType[] =>
-  Object.keys(heterogeneousCliAgentBinaries) as LocalHeterogeneousAgentType[];

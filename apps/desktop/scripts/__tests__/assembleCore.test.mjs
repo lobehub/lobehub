@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -67,7 +68,7 @@ describe('assembleCore', () => {
     assembleCore(options);
 
     expect(await listFiles(options.out)).toEqual([
-      'cli/lobe-cli.js',
+      'cli/dist/index.js',
       'cli/package.json',
       'dist/main/chunk.js',
       'dist/main/index.js',
@@ -80,7 +81,7 @@ describe('assembleCore', () => {
       'resources/sounds/ping.mp3',
       'resources/tray.png',
     ]);
-    expect(await readFile(path.join(options.out, 'cli/lobe-cli.js'), 'utf8')).toBe('cli');
+    expect(await readFile(path.join(options.out, 'cli/dist/index.js'), 'utf8')).toBe('cli');
     expect(JSON.parse(await readFile(path.join(options.out, 'package.json'), 'utf8'))).toEqual({
       type: 'commonjs',
     });
@@ -89,6 +90,20 @@ describe('assembleCore', () => {
       type: 'module',
       version: '1.2.3',
     });
+  });
+
+  it('keeps the CLI entry one directory below its package metadata', async () => {
+    const options = await setup();
+    await write(
+      'cli/dist/index.js',
+      `import { createRequire } from 'node:module'; console.log(createRequire(import.meta.url)('../package.json').version);`,
+    );
+    assembleCore(options);
+    expect(
+      execFileSync(process.execPath, [path.join(options.out, 'cli/dist/index.js')], {
+        encoding: 'utf8',
+      }).trim(),
+    ).toBe('1.2.3');
   });
 
   it('throws when dist/main is missing', async () => {

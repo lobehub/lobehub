@@ -442,4 +442,21 @@ describe('UsageRecordService', () => {
       expect(deepIncludes(whereArgs[0], `is distinct from`)).toBe(false);
     });
   });
+
+  describe('trashed topic parents', () => {
+    it.each([
+      ['usage records', () => service.findByDateRange('2024-01-01', '2024-01-31')],
+      [
+        'agent stats',
+        () => service.getAgentUsageStats('agt_123', '2024-01-01', '2024-01-31', 'day'),
+      ],
+    ])('adds the live parent-topic fence to %s', async (_name, run) => {
+      const { whereArgs } = setupCapturingMock([]);
+
+      await run();
+
+      expect(deepIncludes(whereArgs[0], 'topic_id')).toBe(true);
+      expect(deepIncludes(whereArgs[0], 'is_deleted')).toBe(true);
+    });
+  });
 });

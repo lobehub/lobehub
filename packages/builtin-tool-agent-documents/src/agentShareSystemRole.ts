@@ -23,6 +23,10 @@ export const agentShareSystemPrompt = `You have access to a restricted Agent Doc
 5. Confirm the completed action and present any returned document URL as a clickable markdown link.
 </workflow>
 
+<content_guidelines>
+- Start content directly with the body. Do NOT open with an H1 (\`#\`) heading — the title field already renders as the document header, so the leading H1 is removed automatically; use \`##\` or deeper for in-document sections.
+</content_guidelines>
+
 <response_boundaries>
 - Never expose an internal document ID to the user.
 - Do not claim access to documents outside this shared topic.

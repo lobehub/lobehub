@@ -41,13 +41,14 @@ function walk(dir, files = []) {
   return files;
 }
 
-export function readRendererTree(rendererDir) {
+// Path-only indexing lets pack builders load one object at a time.
+export function readRendererTree(rendererDir, { retainContents = true } = {}) {
   const objects = new Map();
   const tree = walk(rendererDir)
     .map((full) => {
       const content = readFileSync(full);
       const sha256 = sha256Of(content);
-      if (!objects.has(sha256)) objects.set(sha256, content);
+      if (!objects.has(sha256)) objects.set(sha256, retainContents ? content : full);
       return {
         path: path.relative(rendererDir, full).replaceAll('\\', '/'),
         sha256,

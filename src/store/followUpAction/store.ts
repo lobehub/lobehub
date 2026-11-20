@@ -3,6 +3,8 @@ import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { createReplicaState } from '@/libs/replica';
+
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { type StoreSetter } from '../types';
@@ -32,7 +34,9 @@ class FollowUpActionStoreResetAction implements ResetableStore {
     for (const slot of Object.values(current.slots)) {
       slot.abortController?.abort();
     }
-    this.#set({ slots: {} }, false, 'resetFollowUpActionStore');
+    // Reset the view and the replica bookkeeping together: `slots` is the
+    // replica's view, so clearing only the view would leave stale entries.
+    this.#set({ slots: {}, slotsReplica: createReplicaState() }, false, 'resetFollowUpActionStore');
   };
 }
 

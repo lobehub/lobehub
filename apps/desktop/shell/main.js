@@ -48,7 +48,7 @@ try {
   const { installShellResolver, resolveCore } = require('./core-loader');
 
   const builtinDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'core')
+    ? path.join(process.resourcesPath, 'core.asar')
     : path.join(__dirname, '..');
 
   const loadAbi = () => {
@@ -61,11 +61,18 @@ try {
   };
 
   const abi = loadAbi();
+  const startupUpdate = app.isPackaged
+    ? require('./update').createStartupUpdate({
+        channel: require(path.join(builtinDir, 'manifest.json')).channel,
+        userData: app.getPath('userData'),
+      })
+    : undefined;
 
   core = app.isPackaged
     ? resolveCore({
         abi: abi.shellAbi,
         builtinDir,
+        deferBoot: startupUpdate.pending,
         publicKey: abi.publicKey,
         userData: app.getPath('userData'),
       })
@@ -84,12 +91,30 @@ try {
     abi: abi.shellAbi,
     builtinDir,
     coreDir: core.dir,
+    coreProtocol: 4,
     log: core.log,
     manifest: core.manifest,
-    markHealthy: core.markHealthy ?? (() => {}),
+    markHealthy: () => {
+      core.markHealthy?.();
+      startupUpdate?.markHealthy();
+    },
     publicKey: abi.publicKey,
     shellVersion: abi.shellVersion,
     source: core.source,
+    startupUpdate: startupUpdate && {
+      pending: startupUpdate.pending,
+      checkSecurity: startupUpdate.checkSecurity,
+      run: async (check) => {
+        try {
+          const ready = await startupUpdate.run(check);
+          if (ready && startupUpdate.pending) core.startBoot();
+          return ready;
+        } catch (error) {
+          rescue(error, core.log);
+          return false;
+        }
+      },
+    },
   };
 } catch (error) {
   rescue(error, core?.log);

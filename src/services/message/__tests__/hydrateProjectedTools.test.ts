@@ -2,6 +2,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  hydrateProjectedConversation,
   hydrateProjectedToolMessages,
   mergeStoredToolPayloads,
 } from '../hydrateProjectedTools';
@@ -111,5 +112,66 @@ describe('mergeStoredToolPayloads', () => {
     const { missing } = mergeStoredToolPayloads([projectedTool()], undefined);
 
     expect(missing).toEqual(['t1']);
+  });
+});
+
+describe('hydrateProjectedConversation', () => {
+  const folded = [
+    msg({
+      children: [
+        {
+          content: '',
+          id: 'a1',
+          tools: [
+            {
+              apiName: 'run',
+              arguments: '{}',
+              id: 'call-1',
+              identifier: 'shell',
+              result: { content: '', id: 't1', state: { exitCode: 0 } },
+              result_msg_id: 't1',
+              type: 'default',
+            },
+          ],
+        },
+      ],
+      id: 'a1',
+      role: 'assistantGroup',
+    }),
+  ];
+
+  it('restores folded tool results using ids from the raw list', async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      t1: { content: 'full stdout', pluginState: { exitCode: 0, stdout: 'full stdout' } },
+    });
+
+    const result = await hydrateProjectedConversation(folded, [projectedTool()], fetch);
+
+    expect(fetch).toHaveBeenCalledWith(['t1']);
+    expect(result[0].children?.[0].tools?.[0].result).toEqual({
+      content: 'full stdout',
+      id: 't1',
+      state: { exitCode: 0, stdout: 'full stdout' },
+    });
+  });
+
+  it('restores nested member lists', async () => {
+    const fetch = vi.fn().mockResolvedValue({ t1: { content: 'full' } });
+
+    const result = await hydrateProjectedConversation(
+      [msg({ id: 'g', members: [projectedTool()], role: 'supervisor' })],
+      undefined,
+      fetch,
+    );
+
+    expect(result[0].members?.[0].content).toBe('full');
+  });
+
+  it('makes no request when nothing was projected', async () => {
+    const fetch = vi.fn();
+    const messages = [msg({ id: 'u1' })];
+
+    expect(await hydrateProjectedConversation(messages, messages, fetch)).toBe(messages);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

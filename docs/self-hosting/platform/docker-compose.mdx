@@ -363,6 +363,8 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
   Devices joined with `lh connect --gateway http://your_server_ip:8788` can run local tools for this deployment through the device gateway on port `8788`.
 </Callout>
 
+Optional: set `DEVICE_GATEWAY_PUBLIC_URL` in `.env` to a client-accessible gateway address, such as `http://your_server_ip:8788`. Do not use the container-internal address `http://gateway:8788`. Leave it unset to keep using `--gateway` above. For domain setup, see [Connecting the Device Gateway](/docs/self-hosting/advanced/desktop#connecting-the-device-gateway).
+
 ## Upgrading an Existing Deployment
 
 <Callout type="warning">

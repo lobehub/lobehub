@@ -84,6 +84,36 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
 // either runner does not inherit the parent's shareGate, so for a run with
 // `ctx.agentShareVisitor` set, no runner may be built at all.
 describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () => {
+  it('quarantines the placeholder before a child can write an early completion', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'placeholder' });
+    const execVirtualSubAgent = vi.fn(async () => {
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '',
+        }),
+      );
+      return { operationId: 'child', success: true, threadId: 'thread' };
+    });
+    const runner = buildServerVirtualSubAgentRunner(
+      {
+        operationId: 'op',
+        stepIndex: 4,
+        topicId: 'topic',
+        execVirtualSubAgent,
+        messageModel: { create },
+        hookDispatcher: { hasAfterToolCallControl: () => true },
+      } as unknown as RuntimeExecutorContext,
+      {
+        origin: { agentId: 'agent', topicId: 'topic' },
+        usage: { tools: { byTool: [{ name: 'lobe-agent/callSubAgent', calls: 1 }] } },
+      } as AgentState,
+      { id: 'call', identifier: 'lobe-agent', apiName: 'callSubAgent' } as ChatToolPayload,
+      'assistant',
+    );
+    await runner!.run({ description: 'task', instruction: 'run' });
+    expect(execVirtualSubAgent).toHaveBeenCalledTimes(1);
+  });
+
   it('reuses the sub-agent thread and links the new placeholder to it', async () => {
     const execVirtualSubAgent = vi
       .fn()
@@ -168,5 +198,58 @@ describe('runner builders fail closed for share-visitor runs', () => {
         'parent-message-1',
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('buildServerVirtualSubAgentRunner cancel', () => {
+  const state = {
+    operationId: 'parent-op',
+    origin: { agentId: 'agent-1', topicId: 'topic-1' },
+  } as AgentState;
+
+  it('cancels only within the dispatching agent and topic', async () => {
+    const cancelVirtualSubAgent = vi
+      .fn()
+      .mockResolvedValue({ status: 'cancelled', threadId: 'thread-1' });
+    const ctx = {
+      cancelVirtualSubAgent,
+      execVirtualSubAgent: vi.fn(),
+      messageModel: {},
+      operationId: 'parent-op',
+      topicId: 'topic-1',
+    } as unknown as RuntimeExecutorContext;
+
+    const runner = buildServerVirtualSubAgentRunner(
+      ctx,
+      state,
+      { id: 'tool-call-1' } as ChatToolPayload,
+      'parent-message-1',
+    );
+    const result = await runner!.cancel!({ subAgentId: 'thread-1' });
+
+    expect(cancelVirtualSubAgent).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+    expect(result).toEqual({ status: 'cancelled', threadId: 'thread-1' });
+  });
+
+  it('offers no cancel when the runtime cannot cancel', () => {
+    const ctx = {
+      execVirtualSubAgent: vi.fn(),
+      messageModel: {},
+      operationId: 'parent-op',
+      topicId: 'topic-1',
+    } as unknown as RuntimeExecutorContext;
+
+    const runner = buildServerVirtualSubAgentRunner(
+      ctx,
+      state,
+      { id: 'tool-call-1' } as ChatToolPayload,
+      'parent-message-1',
+    );
+
+    expect(runner?.cancel).toBeUndefined();
   });
 });

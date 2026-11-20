@@ -1,71 +1,73 @@
-import { type TableProps } from 'antd';
-import { ConfigProvider, Table } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { memo } from 'react';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Table renders table cells without a slot
+  createStaticStyles,
+  cx,
+  Table,
+  type TableProps,
+} from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-const prefixCls = 'ant';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  hoverToActive: css`
-    opacity: 0.6;
+const hoverStyles = stylex.create({
+  hoverToActive: {
+    opacity: { 'default': 0.6, ':hover': 1 },
+  },
+});
 
-    &:hover {
-      opacity: 1;
-    }
-  `,
+const fallback = createStaticStyles(({ css, cssVar }) => ({
   table: css`
-    .${prefixCls}-table {
-      background: transparent;
-
-      th,
-      td {
-        border: none !important;
-        font-size: 13px;
-      }
-
-      .${prefixCls}-table-cell:before {
-        display: none;
-      }
+    table {
+      font-size: 13px;
     }
 
-    tr {
-      td:first-child,
-      th:first-child {
-        padding-inline-start: 24px !important;
-      }
+    /* Compact rows: 4px + 23px line + 4px, in line with rowHeight 32. */
+    html[data-density='compact'] & .lobe-table-small {
+      --lobe-table-padding-block: 4px;
+      --lobe-table-virtual-row-height: calc(4px * 2 + 23px);
+    }
 
-      td:last-child,
-      th:last-child {
-        padding-inline-end: 24px !important;
-      }
+    th {
+      background: transparent;
+      box-shadow: inset 0 999px 0 ${cssVar.colorFillQuaternary};
+    }
+
+    td {
+      border: none;
+      background: transparent;
+    }
+
+    tr:hover > td {
+      background: ${cssVar.colorFillQuaternary};
+    }
+
+    tr td:first-child,
+    tr th:first-child {
+      padding-inline-start: 24px;
+    }
+
+    tr td:last-child,
+    tr th:last-child {
+      padding-inline-end: 24px;
     }
   `,
 }));
 
-const InlineTable = memo<TableProps & { hoverToActive?: boolean }>(
-  ({ hoverToActive, className, ...rest }) => {
-    return (
-      <ConfigProvider
-        theme={{
-          components: {
-            Table: {
-              headerBg: cssVar.colorFillQuaternary,
-              headerBorderRadius: 0,
-            },
-          },
-        }}
-      >
-        <Table
-          bordered={false}
-          className={cx(styles.table, hoverToActive && styles.hoverToActive, className)}
-          pagination={false}
-          scroll={{ x: 'max-content' }}
-          size={'small'}
-          {...rest}
-        />
-      </ConfigProvider>
-    );
-  },
+export type InlineTableProps<T> = TableProps<T> & { hoverToActive?: boolean };
+
+const InlineTable = <T extends object>({
+  hoverToActive,
+  className,
+  ...rest
+}: InlineTableProps<T>) => (
+  <Table<T>
+    pagination={false}
+    size={'small'}
+    className={
+      sx(hoverToActive && hoverStyles.hoverToActive, cx(fallback.table, className)).className
+    }
+    {...rest}
+  />
 );
 
 export default InlineTable;

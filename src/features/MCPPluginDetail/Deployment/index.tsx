@@ -1,9 +1,21 @@
-import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
+import SiApple from '@icons-pack/react-simple-icons/icons/SiApple';
+import SiLinux from '@icons-pack/react-simple-icons/icons/SiLinux';
 import { Microsoft } from '@lobehub/icons';
-import { Block, Empty, Flexbox, Icon, Popover, Snippet } from '@lobehub/ui';
-import { Accordion, ActionIcon, Tag } from '@lobehub/ui/base-ui';
-import { Divider, Steps } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Accordion,
+  ActionIcon,
+  Block,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Empty,
+  Flexbox,
+  Icon,
+  Popover,
+  Snippet,
+  Steps,
+  Tag,
+} from '@lobehub/ui';
 import { startCase } from 'es-toolkit/compat';
 import {
   CheckIcon,
@@ -162,11 +174,9 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                       <p style={{ margin: 0 }}>{item.description}</p>
                       {setupSteps && setupSteps.length > 0 && (
                         <Steps
-                          progressDot
-                          current={-1}
-                          direction="vertical"
-                          size={'small'}
+                          orientation="vertical"
                           style={{ marginTop: 12 }}
+                          variant="dot"
                           items={setupSteps.map((i) => ({
                             title: <p style={{ color: cssVar.colorText }}>{i}</p>,
                           }))}
@@ -276,7 +286,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                                       />
                                       {dep.checkCommand && (
                                         <>
-                                          <Divider style={{ margin: 0 }} />
+                                          <Divider />
                                           <Descriptions
                                             rows={1}
                                             items={[

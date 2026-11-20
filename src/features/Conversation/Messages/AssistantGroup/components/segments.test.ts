@@ -5,6 +5,7 @@ import { LOADING_FLAT } from '@/const/message';
 import {
   countAssistantLlmCalls,
   hasRenderableFinalAnswer,
+  liftMcpAppSegments,
   resolveWorkflowExpandLevel,
   shouldFoldProcess,
 } from './segments';
@@ -54,7 +55,61 @@ describe('hasRenderableFinalAnswer', () => {
 });
 
 describe('shouldFoldProcess', () => {
+  it.each([undefined, { images: [{ url: 'https://x/image.png' }] }])(
+    'keeps Codex image outputs visible, including upload failures',
+    (state) => {
+      const output = {
+        id: 'image',
+        apiName: 'image_output',
+        identifier: 'codex',
+        result: { state },
+      };
+      expect(
+        shouldFoldProcess({
+          enabled: true,
+          hasFinalAnswer: true,
+          isGenerating: false,
+          isLatestItem: true,
+          operationEnded: true,
+          processSegments: [
+            w('commands', 2),
+            {
+              kind: 'workflow',
+              blocks: [{ id: 'image', tools: [output] } as any],
+              standalone: true,
+            },
+          ],
+        }),
+      ).toBe(false);
+    },
+  );
   const proc = [w('t1')];
+
+  it('folds a finished turn whose process only READ an image', () => {
+    const readImage = {
+      apiName: 'Read',
+      id: 'read-image',
+      identifier: 'claude-code',
+      result: { content: 'ok', id: 'r', state: { images: [{ url: 'https://x/a.png' }] } },
+    };
+    expect(
+      shouldFoldProcess({
+        enabled: true,
+        hasFinalAnswer: true,
+        isGenerating: false,
+        isLatestItem: true,
+        operationEnded: true,
+        processSegments: [
+          w('commands', 2),
+          {
+            kind: 'workflow',
+            blocks: [{ id: 'read-image', tools: [readImage] } as any],
+            standalone: true,
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
 
   it('folds a finished, non-latest turn that has a workflow when enabled', () => {
     expect(
@@ -131,6 +186,29 @@ describe('shouldFoldProcess', () => {
     ).toBe(false);
   });
 
+  it('folds a finished turn whose process carries an MCP App view', () => {
+    const appTool = {
+      apiName: 'get_weather',
+      id: 'app',
+      identifier: 'weather-demo',
+      result: {
+        content: 'ok',
+        id: 'r',
+        state: { content: [], mcpApp: { resourceUri: 'ui://weather/view' } },
+      },
+    };
+    expect(
+      shouldFoldProcess({
+        enabled: true,
+        hasFinalAnswer: true,
+        isGenerating: false,
+        isLatestItem: true,
+        operationEnded: true,
+        processSegments: [{ blocks: [{ id: 'app', tools: [appTool] } as any], kind: 'workflow' }],
+      }),
+    ).toBe(true);
+  });
+
   it('does not fold when the process has no workflow (e.g. pure prose)', () => {
     expect(
       shouldFoldProcess({
@@ -166,5 +244,74 @@ describe('resolveWorkflowExpandLevel', () => {
       completion: 'full',
       streaming: 'semi',
     });
+  });
+});
+
+describe('liftMcpAppSegments', () => {
+  const mcpView = (id: string) => ({
+    apiName: 'get_weather',
+    id,
+    identifier: 'weather-demo',
+    result: {
+      content: 'ok',
+      id: `${id}-r`,
+      state: { content: [], mcpApp: { resourceUri: 'ui://weather/view' } },
+    },
+  });
+  const plain = (id: string) => ({
+    apiName: 'search_city',
+    id,
+    identifier: 'weather-demo',
+    result: { content: 'ok', id: `${id}-r` },
+  });
+
+  it('keeps the MCP App view out of a multi-step fold and leaves the other steps folded', () => {
+    const steps = {
+      blocks: [{ id: 's1', tools: [plain('a'), plain('b')] } as any],
+      kind: 'workflow' as const,
+    };
+    const view = {
+      blocks: [{ id: 's2', tools: [mcpView('c')] } as any],
+      kind: 'workflow' as const,
+      standalone: true,
+    };
+    const prose = {
+      block: { content: 'Checking.', id: 's1-prose' } as any,
+      kind: 'answer' as const,
+    };
+
+    const { folded, lifted } = liftMcpAppSegments([steps, prose, view]);
+
+    expect(folded).toEqual([steps, prose]);
+    expect(lifted).toEqual([view]);
+  });
+
+  it("lifts a lone view out of the segment it shares with the answer's reasoning", () => {
+    const view = { id: 's1', tools: [mcpView('a')] } as any;
+    const reasoning = { content: '', id: 's2', reasoning: { content: 'Thinking.' } } as any;
+    const shared = { blocks: [view, reasoning], kind: 'workflow' as const };
+
+    expect(liftMcpAppSegments([shared])).toEqual({
+      folded: [{ blocks: [reasoning], kind: 'workflow' }],
+      lifted: [{ blocks: [view], kind: 'workflow' }],
+    });
+  });
+
+  it('does not lift a segment that mixes a view with ordinary tools', () => {
+    const mixed = {
+      blocks: [{ id: 's1', tools: [plain('a'), mcpView('b')] } as any],
+      kind: 'workflow' as const,
+    };
+
+    expect(liftMcpAppSegments([mixed])).toEqual({ folded: [mixed], lifted: [] });
+  });
+
+  it('does not lift a tool from an MCP server without a view', () => {
+    const noView = {
+      blocks: [{ id: 's1', tools: [plain('a')] } as any],
+      kind: 'workflow' as const,
+    };
+
+    expect(liftMcpAppSegments([noView])).toEqual({ folded: [noView], lifted: [] });
   });
 });

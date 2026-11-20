@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
 import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
+import { useDensityTokens } from '@/styles/density';
 
 import ConnectedItem from './ConnectedItem';
 
@@ -21,14 +21,14 @@ interface AllRecentsDrawerProps {
 
 const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
+  const { pagePaddingBlockEnd } = useDensityTokens();
   const [searchKeyword, setSearchKeyword] = useState('');
-  const scope = useCacheScope();
   const useFetchAllRecents = useHomeStore((s) => s.useFetchAllRecents);
   const queryKey = createRecentQueryKey(50);
-  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
-  const items = query?.items;
+  const items = useHomeStore(homeRecentSelectors.query(queryKey));
 
-  const { isLoading } = useFetchAllRecents(open, scope);
+  const { isHydrated, isValidating } = useFetchAllRecents(open);
+  const isLoading = !isHydrated || isValidating;
 
   const filteredItems = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
@@ -56,20 +56,18 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
       onClose={onClose}
     >
       <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
-        {isLoading && !query ? (
+        {isLoading && !items ? (
           <SkeletonList rows={5} />
         ) : filteredItems.length === 0 && searchKeyword.trim() ? (
           <Empty
             description={t('navPanel.searchResultEmpty')}
             icon={SearchIcon}
-            style={{ paddingBlock: 24 }}
+            style={{ paddingBlock: pagePaddingBlockEnd }}
           />
         ) : (
           filteredItems.map((item) => {
             const itemRef = `${item.type}:${item.id}` as const;
-            return (
-              <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} scope={scope} />
-            );
+            return <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} />;
           })
         )}
       </Flexbox>

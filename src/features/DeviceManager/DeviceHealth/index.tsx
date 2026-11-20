@@ -1,14 +1,16 @@
 'use client';
 
+import type { DeviceScope } from '@lobechat/types';
 import { AreaChart, Tracker } from '@lobehub/charts';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { formatSize } from '@/utils/format';
 
 import { buildHealthTimeline, groupStripBlocks, type HealthSlot } from './buildHealthTimeline';
-import { formatPercent, usageLevel } from './format';
+import { formatPercent, LOAD_THRESHOLDS, usageLevel, type UsageThresholds } from './format';
 import {
   blockColor,
   formatClock as time,
@@ -20,24 +22,48 @@ import { healthViewState } from './viewState';
 
 export { HealthLegend } from './shared';
 
-/** Status-strip block width: wide enough to see and hover in the side panel. */
-const STRIP_BLOCK_MS = 15 * 60_000;
+/**
+ * Status-strip block span. The strip spans the full-width detail page, so a
+ * 5-minute block keeps each tick narrow there (~144 over 12 hours) instead of
+ * blowing 48 blocks up into large squares.
+ */
+const STRIP_BLOCK_MS = 5 * 60_000;
+
+const styles = stylex.create({
+  /**
+   * Charts side by side, at most two per row: each column is at least half
+   * the row, so a third chart wraps instead of squeezing in, and a row too
+   * narrow for two 320px charts falls back to one column, which itself
+   * shrinks to the row when the row is under 320px.
+   */
+  charts: {
+    display: 'grid',
+    gap: densityTokens['--lobe-density-section-gap'],
+    gridTemplateColumns:
+      'repeat(auto-fill, minmax(max(min(100%, 320px), calc((100% - 16px) / 2)), 1fr))',
+  },
+});
 
 interface MetricChartProps {
   ceiling: number;
   data: { time: string; value: number | null }[];
   label: string;
   latest: number | null | undefined;
+  thresholds?: UsageThresholds;
 }
 
 /** Left: what is measured (with its size); right: the latest share, colored by level. */
-const MetricChart = ({ ceiling, data, label, latest }: MetricChartProps) => (
+const MetricChart = ({ ceiling, data, label, latest, thresholds }: MetricChartProps) => (
   <Flexbox gap={4}>
     <Flexbox horizontal align={'baseline'} distribution={'space-between'}>
       <Text fontSize={12} type={'secondary'}>
         {label}
       </Text>
-      <Text fontSize={12} style={{ color: usageTextColor(usageLevel(latest)) }} weight={500}>
+      <Text
+        fontSize={12}
+        style={{ color: usageTextColor(usageLevel(latest, thresholds)) }}
+        weight={500}
+      >
         {formatPercent(latest)}
       </Text>
     </Flexbox>
@@ -62,9 +88,9 @@ const MetricChart = ({ ceiling, data, label, latest }: MetricChartProps) => (
  * disconnected" from "not running at all" — what a user needs to explain why
  * a device dropped.
  */
-const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
+const DeviceHealth = ({ deviceId, scope }: { deviceId: string; scope: DeviceScope }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isValidating, mutate } = useDeviceMetricSeries(deviceId);
+  const { data, error, isValidating, mutate } = useDeviceMetricSeries(deviceId, scope);
   const blockTooltip = useBlockTooltip();
 
   const view = healthViewState({ data, error });
@@ -107,11 +133,12 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
   return (
     <Flexbox gap={16}>
       <Flexbox gap={6}>
-        {/* Blocks flex to an equal share of the panel — the default fixed
-            12px overflowed and clipped the newest hours. */}
+        {/* Blocks flex to an equal share of the width — the default fixed
+            12px overflowed and clipped the newest hours. Thin ticks with a 1px
+            gap match the usage bars above. */}
         <Tracker
-          blockGap={2}
-          blockHeight={16}
+          blockGap={1}
+          blockHeight={12}
           blockWidth={'100%'}
           width={'100%'}
           data={groupStripBlocks(
@@ -134,30 +161,33 @@ const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
         </Flexbox>
       </Flexbox>
 
-      <MetricChart
-        ceiling={100}
-        data={rows((slot) => slot.cpuPercent)}
-        label={t('devices.health.cpuCores', { count: cores })}
-        latest={timeline.latest?.cpuPercent}
-      />
-      <MetricChart
-        ceiling={100}
-        data={rows((slot) => slot.memoryPercent)}
-        latest={timeline.latest?.memoryPercent}
-        label={
-          data.memoryTotalBytes
-            ? `${t('devices.health.memory')} · ${formatSize(data.memoryTotalBytes)}`
-            : t('devices.health.memory')
-        }
-      />
-      {timeline.slots.some((slot) => slot.loadPercent !== null) && (
+      <div {...stylex.props(styles.charts)}>
         <MetricChart
-          ceiling={timeline.loadCeiling}
-          data={rows((slot) => slot.loadPercent)}
-          label={t('devices.health.load', { count: cores })}
-          latest={timeline.latest?.loadPercent}
+          ceiling={100}
+          data={rows((slot) => slot.cpuPercent)}
+          label={t('devices.health.cpuCores', { count: cores })}
+          latest={timeline.latest?.cpuPercent}
         />
-      )}
+        <MetricChart
+          ceiling={100}
+          data={rows((slot) => slot.memoryPercent)}
+          latest={timeline.latest?.memoryPercent}
+          label={
+            data.memoryTotalBytes
+              ? `${t('devices.health.memory')} · ${formatSize(data.memoryTotalBytes)}`
+              : t('devices.health.memory')
+          }
+        />
+        {timeline.slots.some((slot) => slot.loadPercent !== null) && (
+          <MetricChart
+            ceiling={timeline.loadCeiling}
+            data={rows((slot) => slot.loadPercent)}
+            label={t('devices.health.load', { count: cores })}
+            latest={timeline.latest?.loadPercent}
+            thresholds={LOAD_THRESHOLDS}
+          />
+        )}
+      </div>
     </Flexbox>
   );
 };

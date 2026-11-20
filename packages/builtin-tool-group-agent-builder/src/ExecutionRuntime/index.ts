@@ -77,12 +77,21 @@ export class GroupAgentBuilderExecutionRuntime {
     const { query, limit = 10 } = args;
 
     try {
-      const results = await agentService.queryAgents({ keyword: query, limit });
+      // A builtin can never join a group (`addAgentsToGroup` refuses it), so the
+      // inbox has to be excluded by the query itself: filtering the page
+      // afterwards lets a recently updated inbox consume a `limit` slot and hide
+      // an addable agent behind it.
+      const results = await agentService.queryAgents({
+        includeInbox: false,
+        keyword: query,
+        limit,
+      });
 
       const agents = results.map((agent) => ({
         avatar: agent.avatar,
         description: agent.description,
         id: agent.id,
+        name: agent.name ?? undefined,
         title: agent.title,
       }));
 
@@ -98,12 +107,17 @@ export class GroupAgentBuilderExecutionRuntime {
         };
       }
 
-      // Format agents list for LLM consumption
+      // Format agents list for LLM consumption. Lead with the name the agent is
+      // known by and keep the title as its role, so a named agent stays
+      // recognizable to the model.
       const agentList = agents
-        .map(
-          (a, i) =>
-            `${i + 1}. ${a.title || 'Untitled'} (ID: ${a.id})${a.description ? ` - ${a.description}` : ''}`,
-        )
+        .map((a, i) => {
+          const name = a.name?.trim();
+          const label = name
+            ? `${name}${a.title ? ` [title: ${a.title}]` : ''}`
+            : a.title || 'Untitled';
+          return `${i + 1}. ${label} (ID: ${a.id})${a.description ? ` - ${a.description}` : ''}`;
+        })
         .join('\n');
 
       return {
@@ -138,7 +152,7 @@ export class GroupAgentBuilderExecutionRuntime {
         title: args.title,
       });
 
-      state.internal_dispatchChatGroup({ payload: group, type: 'addGroup' });
+      state.internal_addGroup(group);
 
       if (args.supervisor) {
         const {

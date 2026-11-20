@@ -1,0 +1,13 @@
+{
+  "name": "desktop-security-policy-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.932.0",
+    "builder-util-runtime": "9.7.0",
+    "semver": "7.8.5",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
+  }
+}

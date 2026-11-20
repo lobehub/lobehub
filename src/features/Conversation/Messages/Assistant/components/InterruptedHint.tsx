@@ -1,20 +1,26 @@
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
+
+import { contextSelectors, useConversationStore } from '../../../store';
+
+const styles = stylex.create({
+  container: { paddingBlock: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 const InterruptedHint = memo(() => {
   const { t } = useTranslation('chat');
+  const context = useConversationStore(contextSelectors.context);
+  const handingOff = useChatStore(operationSelectors.isSteerHandoffPending(context));
+
+  if (handingOff) return null;
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       {t('messageAction.interrupted')} · {t('messageAction.interruptedHint')}
     </div>
   );

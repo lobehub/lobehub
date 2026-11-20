@@ -1,24 +1,21 @@
 'use client';
 
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
-import { Carousel as AntCarousel } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Carousel,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { X } from 'lucide-react';
 import * as m from 'motion/react-m';
-import {
-  type ComponentRef,
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAnalytics } from '@/libs/analytics/client';
+import { densityVars } from '@/styles/densityVars';
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
 import { resolveBillboardAction, runBillboardAction } from './actions';
@@ -68,8 +65,7 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-end: 8px;
 
     /* Sits over the cover image (140px band) — give it its own opaque surface so
-       the icon reads on any image, and lift z-index above the carousel dots /
-       slick internals. */
+       the icon reads on any image, and lift z-index above the carousel slides. */
     color: #fff;
 
     background: rgb(0 0 0 / 45%);
@@ -86,7 +82,7 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 4;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
   `,
@@ -119,7 +115,7 @@ const styles = createStaticStyles(({ css }) => ({
     object-fit: cover;
   `,
   itemBody: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   title: css`
     overflow: hidden;
@@ -127,7 +123,7 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
@@ -254,7 +250,6 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
   ({ set, onClose, closing, exitTarget, onAnimationFinish, cardAttr }) => {
     const [paused, setPaused] = useState(false);
     const [current, setCurrent] = useState(0);
-    const carouselRef = useRef<ComponentRef<typeof AntCarousel>>(null);
     const { analytics } = useAnalytics();
 
     useEffect(() => {
@@ -309,13 +304,12 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
           />
         ) : (
           <>
-            <AntCarousel
+            <Carousel
               adaptiveHeight
-              autoplay={!paused}
-              autoplaySpeed={6000}
-              beforeChange={(_: number, next: number) => setCurrent(next)}
+              autoplay={paused ? false : 6000}
               dots={false}
-              ref={carouselRef}
+              index={current}
+              onIndexChange={setCurrent}
             >
               {set.items.map((item, idx) => (
                 <div key={item.id}>
@@ -327,13 +321,13 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
                   />
                 </div>
               ))}
-            </AntCarousel>
+            </Carousel>
             <Flexbox horizontal className={styles.dots} gap={6} justify="center">
               {set.items.map((item, idx) => (
                 <div
                   className={`${styles.dot} ${current === idx ? styles.dotActive : ''}`}
                   key={item.id}
-                  onClick={() => carouselRef.current?.goTo(idx)}
+                  onClick={() => setCurrent(idx)}
                 />
               ))}
             </Flexbox>

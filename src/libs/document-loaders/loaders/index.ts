@@ -1,12 +1,16 @@
-import { convertIpynbToMarkdown, scrubIpynbFallbackText } from '@lobechat/file-loaders';
+import {
+  convertIpynbToMarkdown,
+  isFileParseBudgetError,
+  scrubIpynbFallbackText,
+} from '@lobechat/file-loaders';
 
-import { SUPPORT_TEXT_LIST } from '../file';
-import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../splitter';
-import { type DocumentChunk, type FileLoaderType } from '../types';
+import { getChunkingLoaderType } from '../loaderType';
+import { type DocumentChunk } from '../types';
 import { CodeLoader } from './code';
 import { CsVLoader } from './csv';
 import { DocxLoader } from './docx';
 import { EPubLoader } from './epub';
+import { ExcelLoader } from './excel';
 import { LatexLoader } from './latex';
 import { MarkdownLoader } from './markdown';
 import { PdfLoader } from './pdf';
@@ -23,43 +27,49 @@ class DocumentLoaderError extends Error {
 export class ChunkingLoader {
   partitionContent = async (filename: string, content: Uint8Array): Promise<DocumentChunk[]> => {
     try {
-      const fileBlob = new Blob([Buffer.from(content)]);
-      const txt = this.uint8ArrayToString(content);
+      // Both copy the whole file: built on first use, so a binary format does not also pay for
+      // a text decode of itself (a 64MiB xlsx decoded as text is a ~100MB string of nothing).
+      const blob = () => new Blob([Buffer.from(content)]);
+      const text = () => this.uint8ArrayToString(content);
 
-      const type = this.getType(filename?.toLowerCase());
+      const type = getChunkingLoaderType(filename ?? '');
 
       switch (type) {
         case 'code': {
           const ext = filename.split('.').pop();
-          return await CodeLoader(txt, ext!);
+          return await CodeLoader(text(), ext!);
         }
 
         case 'ppt': {
-          return await PPTXLoader(fileBlob);
+          return await PPTXLoader(blob());
         }
 
         case 'latex': {
-          return await LatexLoader(txt);
+          return await LatexLoader(text());
         }
 
         case 'pdf': {
-          return await PdfLoader(fileBlob);
+          return await PdfLoader(blob());
         }
 
         case 'markdown': {
-          return await MarkdownLoader(txt);
+          return await MarkdownLoader(text());
         }
 
         case 'doc': {
-          return await DocxLoader(fileBlob);
+          return await DocxLoader(blob());
+        }
+
+        case 'excel': {
+          return await ExcelLoader(blob());
         }
 
         case 'text': {
-          return await TextLoader(txt);
+          return await TextLoader(text());
         }
 
         case 'csv': {
-          return await CsVLoader(fileBlob);
+          return await CsVLoader(blob());
         }
 
         case 'epub': {
@@ -69,63 +79,25 @@ export class ChunkingLoader {
         case 'ipynb': {
           // Notebook JSON → markdown so chunks carry semantic text instead
           // of base64 payloads; non-nbformat-v4 files fall back to raw text.
-          const markdown = convertIpynbToMarkdown(txt);
+          const source = text();
+          const markdown = convertIpynbToMarkdown(source);
           return markdown === null
-            ? await TextLoader(scrubIpynbFallbackText(txt))
+            ? await TextLoader(scrubIpynbFallbackText(source))
             : await MarkdownLoader(markdown);
         }
 
         default: {
           throw new Error(
-            `Unsupported file type [${type}], please check your file is supported, or create report issue here: https://github.com/lobehub/lobe-chat/discussions/3550`,
+            `Unsupported file type [${type}], please check your file is supported, or create report issue here: https://github.com/lobehub/lobehub/discussions/3550`,
           );
         }
       }
     } catch (e) {
+      // A structural refusal is a deliberate "too large", not a loader failure: keep its type so
+      // callers can tell the user, and so it is not retried as if the file were merely broken.
+      if (isFileParseBudgetError(e)) throw e;
       throw new DocumentLoaderError((e as Error).message);
     }
-  };
-
-  private getType = (filename: string): FileLoaderType | undefined => {
-    if (filename.endsWith('pptx')) {
-      return 'ppt';
-    }
-
-    if (filename.endsWith('docx') || filename.endsWith('doc')) {
-      return 'doc';
-    }
-
-    if (filename.endsWith('pdf')) {
-      return 'pdf';
-    }
-
-    if (filename.endsWith('tex')) {
-      return 'latex';
-    }
-
-    if (filename.endsWith('md') || filename.endsWith('mdx')) {
-      return 'markdown';
-    }
-
-    if (filename.endsWith('csv')) {
-      return 'csv';
-    }
-
-    if (filename.endsWith('epub')) {
-      return 'epub';
-    }
-
-    if (filename.endsWith('ipynb')) {
-      return 'ipynb';
-    }
-
-    const ext = filename.split('.').pop();
-
-    if (ext && SUPPORTED_LANGUAGES.includes(ext as SupportedLanguage)) {
-      return 'code';
-    }
-
-    if (ext && SUPPORT_TEXT_LIST.includes(ext)) return 'text';
   };
 
   private uint8ArrayToString(uint8Array: Uint8Array) {

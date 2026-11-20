@@ -29,13 +29,13 @@ vi.mock('@/database/models/device', () => ({
 // Import after mock setup
 const { remoteDeviceRuntime } = await import('../remoteDevice');
 
-/** Minimal drizzle-like chain that resolves the agent's workspace_id lookup. */
+/** Minimal drizzle-like chain that resolves a live agent's workspace_id lookup. */
 const makeServerDB = (workspaceId: string | null) =>
   ({
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => Promise.resolve(workspaceId === null ? [] : [{ workspaceId }]),
+          limit: () => Promise.resolve([{ workspaceId }]),
         }),
       }),
     }),
@@ -49,6 +49,21 @@ beforeEach(() => {
   mockQueryWorkspaceDevices.mockResolvedValue([]);
   mockQueryWorkspaceHiddenDeviceIds.mockReset();
   mockQueryWorkspaceHiddenDeviceIds.mockResolvedValue([]);
+});
+
+const personalDeviceRow = () => ({
+  deviceId: 'd-personal',
+  hostname: 'laptop',
+  lastSeen: '2024-01-01',
+  online: true,
+  platform: 'darwin',
+});
+
+const workspaceExecutionContext = () => ({
+  serverDB: makeServerDB('ws-1'),
+  toolManifestMap: {},
+  userId: 'user-1',
+  workspaceId: 'ws-1',
 });
 
 describe('remoteDeviceRuntime', () => {
@@ -129,20 +144,9 @@ describe('remoteDeviceRuntime', () => {
     });
 
     it('lists ONLY workspace devices in a workspace run (personal devices excluded)', async () => {
-      const context: ToolExecutionContext = {
-        serverDB: makeServerDB('ws-1'),
-        toolManifestMap: {},
-        userId: 'user-1',
-        workspaceId: 'ws-1',
-      };
+      const context: ToolExecutionContext = workspaceExecutionContext();
 
-      const personalDevice = {
-        deviceId: 'd-personal',
-        hostname: 'laptop',
-        lastSeen: '2024-01-01',
-        online: true,
-        platform: 'darwin',
-      };
+      const personalDevice = personalDeviceRow();
       const workspaceDevice = {
         deviceId: 'd-workspace',
         hostname: 'shared-mac',
@@ -182,13 +186,7 @@ describe('remoteDeviceRuntime', () => {
         userId: 'user-1',
       };
 
-      const personalDevice = {
-        deviceId: 'd-personal',
-        hostname: 'laptop',
-        lastSeen: '2024-01-01',
-        online: true,
-        platform: 'darwin',
-      };
+      const personalDevice = personalDeviceRow();
       const workspaceDevice = {
         deviceId: 'd-workspace',
         hostname: 'shared-mac',
@@ -222,15 +220,7 @@ describe('remoteDeviceRuntime', () => {
         toolManifestMap: {},
         userId: 'user-1',
       };
-      mockQueryDeviceList.mockResolvedValue([
-        {
-          deviceId: 'd-personal',
-          hostname: 'laptop',
-          lastSeen: '2024-01-01',
-          online: true,
-          platform: 'darwin',
-        },
-      ]);
+      mockQueryDeviceList.mockResolvedValue([personalDeviceRow()]);
 
       const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
       await runtime.listOnlineDevices();
@@ -240,12 +230,7 @@ describe('remoteDeviceRuntime', () => {
     });
 
     it('surfaces a DB-registered workspace device (with its alias) merged with gateway online status (no duplicate)', async () => {
-      const context: ToolExecutionContext = {
-        serverDB: makeServerDB('ws-1'),
-        toolManifestMap: {},
-        userId: 'user-1',
-        workspaceId: 'ws-1',
-      };
+      const context: ToolExecutionContext = workspaceExecutionContext();
 
       const gatewayWorkspaceDevice = {
         deviceId: 'd-ws',
@@ -284,12 +269,7 @@ describe('remoteDeviceRuntime', () => {
 
     /** @example A registry outage cannot authorize raw workspace Gateway presence. */
     it('fails closed when the workspace DB lookup fails', async () => {
-      const context: ToolExecutionContext = {
-        serverDB: makeServerDB('ws-1'),
-        toolManifestMap: {},
-        userId: 'user-1',
-        workspaceId: 'ws-1',
-      };
+      const context: ToolExecutionContext = workspaceExecutionContext();
 
       mockQueryWorkspaceDevices.mockRejectedValue(new Error('db down'));
       mockQueryDeviceList.mockImplementation(function (_userId: string, wsId?: string) {

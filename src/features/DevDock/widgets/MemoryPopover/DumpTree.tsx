@@ -1,7 +1,7 @@
 'use client';
 
 import type { MemoryDumpNode, MemoryDumpProcess } from '@lobechat/electron-client-ipc';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 

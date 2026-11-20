@@ -1,7 +1,8 @@
-import { Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { UnassignedAssigneeIcon } from './UnassignedAssigneeIcon';
@@ -9,12 +10,14 @@ import { UnassignedAssigneeIcon } from './UnassignedAssigneeIcon';
 interface AssigneeAvatarProps {
   agentId?: string | null;
   fallbackToDefault?: boolean;
+  /** Show the agent's profile card on hover; takes precedence over `tooltip`. */
+  profileCard?: boolean;
   size?: number;
   tooltip?: boolean;
 }
 
 const AssigneeAvatar = memo<AssigneeAvatarProps>(
-  ({ agentId, fallbackToDefault, size = 18, tooltip }) => {
+  ({ agentId, fallbackToDefault, profileCard, size = 18, tooltip }) => {
     const displayMeta = useAgentDisplayMeta(agentId, { fallbackToDefault });
 
     if (!displayMeta) {
@@ -22,7 +25,8 @@ const AssigneeAvatar = memo<AssigneeAvatarProps>(
     }
 
     const avatar = (
-      <Avatar
+      <AgentAvatar
+        agentId={agentId}
         avatar={displayMeta.avatar}
         background={displayMeta.backgroundColor || cssVar.colorBgContainer}
         shape={'circle'}
@@ -32,7 +36,28 @@ const AssigneeAvatar = memo<AssigneeAvatarProps>(
       />
     );
 
-    return tooltip ? <Tooltip title={displayMeta.title}>{avatar}</Tooltip> : avatar;
+    if (profileCard && agentId)
+      return (
+        <AgentProfilePopup
+          agentId={agentId}
+          trigger={'hover'}
+          agent={{
+            avatar: displayMeta.avatar,
+            backgroundColor: displayMeta.backgroundColor,
+            title: displayMeta.title,
+          }}
+        >
+          <span style={{ display: 'inline-flex' }}>{avatar}</span>
+        </AgentProfilePopup>
+      );
+
+    return tooltip ? (
+      <Tooltip title={displayMeta.title}>
+        <span style={{ display: 'inline-flex' }}>{avatar}</span>
+      </Tooltip>
+    ) : (
+      avatar
+    );
   },
 );
 

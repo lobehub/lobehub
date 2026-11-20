@@ -1,15 +1,15 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, ImageSelect } from '@lobehub/ui';
-import { Select, Skeleton, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { Ban, Gauge, Monitor, Moon, Rows3, Rows4, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { CommonSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Appearance';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
@@ -21,6 +21,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type LocaleMode } from '@/types/locale';
+import { type UserGeneralConfig } from '@/types/user/settings';
 import { preloadLang } from '@/utils/client/preloadLang';
 
 const Common = memo(() => {
@@ -32,6 +33,11 @@ const Common = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm({
+    initialValues: general,
+    values: general,
+    onValuesChange: (v) => save(() => setSettings({ general: v })),
+  });
 
   // Use the theme value from next-themes, default to 'system'
   const currentTheme = theme || 'system';
@@ -40,9 +46,9 @@ const Common = memo(() => {
     switchLocale(value);
   };
 
-  if (!(isStatusInit && isUserStateInit)) return <Skeleton.Text rows={5} />;
+  if (!(isStatusInit && isUserStateInit)) return <CommonSectionSkeleton />;
 
-  const themeFormGroup: FormGroupItemType = {
+  const themeFormGroup: FormGroupItem<UserGeneralConfig> = {
     children: [
       {
         children: (
@@ -145,35 +151,35 @@ const Common = memo(() => {
         ),
         minWidth: undefined,
         name: 'animationMode',
-        valuePropName: 'activeKey',
+        valueProp: 'activeKey',
       },
       {
         children: (
           <Tabs
             items={[
               {
-                icon: <Icon icon={Ban} size={16} />,
-                key: 'disabled',
-                label: t('settingAppearance.contextMenuMode.disabled'),
+                icon: <Icon icon={Rows4} size={16} />,
+                key: 'compact',
+                label: t('settingAppearance.density.compact'),
               },
               {
-                icon: <Icon icon={Mouse} size={16} />,
-                key: 'default',
-                label: t('settingAppearance.contextMenuMode.default'),
+                icon: <Icon icon={Rows3} size={16} />,
+                key: 'loose',
+                label: t('settingAppearance.density.loose'),
               },
             ]}
           />
         ),
+        desc: t('settingAppearance.density.desc'),
         label: (
-          <SettingsSearchAnchor id={'appearance-context-menu'}>
-            {t('settingAppearance.contextMenuMode.title')}
+          <SettingsSearchAnchor id={'appearance-density'}>
+            {t('settingAppearance.density.title')}
           </SettingsSearchAnchor>
         ),
         minWidth: undefined,
-        name: 'contextMenuMode',
-        valuePropName: 'activeKey',
+        name: 'interfaceDensity',
+        valueProp: 'activeKey',
       },
-
       {
         children: (
           <Flexbox horizontal justify={'flex-end'}>
@@ -205,11 +211,10 @@ const Common = memo(() => {
   return (
     <Form
       collapsible={false}
-      initialValues={general}
+      form={form}
       items={[themeFormGroup]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={(v) => save(() => setSettings({ general: v }))}
       {...FORM_STYLE}
     />
   );

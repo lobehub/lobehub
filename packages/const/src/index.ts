@@ -1,4 +1,6 @@
+export * from './acceptanceReview';
 export * from './agentDocument';
+export * from './agentDocumentDrag';
 export * from './agentName';
 export * from './agentShare';
 export * from './apiKeyScope';
@@ -31,8 +33,10 @@ export * from './theme';
 export * from './threadDrag';
 export * from './topicDrag';
 export * from './trace';
+export * from './trash';
 export * from './url';
 export * from './user';
 export * from './userMemory';
 export * from './version';
 export * from './workspace';
+export * from './worktreeName';

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 
 import { markdownElements } from '../../Markdown/plugins';
 import ContentPreview from './components/ContentPreview';
+import { shouldPreviewLongMessage } from './longMessage';
 
 const rehypePlugins = markdownElements
   .filter((s) => s.scope !== 'assistant')
@@ -37,7 +38,7 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
           }),
         ) as any,
         customRender: (dom: ReactNode, { text }: { text: string }) => {
-          if (text.length > 30_000) return <ContentPreview content={text} id={id} />;
+          if (shouldPreviewLongMessage(text)) return <ContentPreview content={text} id={id} />;
           return dom;
         },
         enableStream: false,

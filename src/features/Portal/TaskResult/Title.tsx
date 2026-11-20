@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +14,9 @@ import { useLiveRun } from './useLiveRun';
 const Title = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useChatStore(chatPortalSelectors.taskResultId);
-  const detail = useTaskStore((state) => (taskId ? state.taskDetailMap[taskId] : undefined));
+  const detail = useTaskStore((state) =>
+    taskId ? state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId] : undefined,
+  );
   const liveRun = useLiveRun();
   const agentMeta = useAgentDisplayMeta(liveRun?.agentId);
 

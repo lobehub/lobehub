@@ -80,9 +80,49 @@ export const countLogicalChecks = (
   for (const result of results) {
     logical.add(logicalByItemId.get(result.checkItemId) ?? result.checkItemId);
   }
-  for (const id of superseded) logical.delete(id);
+  // `supersedes` may name the plan item id the author wrote, while the row is
+  // keyed by its criterion — resolve through the plan ids seen above.
+  for (const id of superseded)
+    logical.delete(logical.has(id) ? id : (logicalByItemId.get(id) ?? id));
 
   return logical.size;
+};
+
+/**
+ * `supersedes` ids in an incoming plan that name no check the acceptance has
+ * seen — no plan item id or row id an earlier round wrote, no result-only check
+ * id, no item of the incoming round itself — or the item itself, which the union
+ * never folds into its own row. Such an entry folds nothing, so
+ * the author is told instead of the old row silently staying on the page.
+ */
+export const findUnresolvedSupersedes = (
+  plan: VerifyCheckItem[] | null | undefined,
+  priorRuns: Pick<VerifyRunItem, 'plan'>[],
+  /** Result check ids of earlier rounds and the incoming run; a direct ingest may carry no plan item. */
+  priorResultCheckItemIds: Iterable<string> = [],
+): string[] => {
+  const identities = (item: VerifyCheckItem) => [
+    item.id,
+    item.sourceFlowNode ? item.id : (item.sourceCriterionId ?? item.id),
+  ];
+  const known = new Set<string>(priorResultCheckItemIds);
+  for (const run of priorRuns) {
+    for (const item of (run.plan ?? []) as VerifyCheckItem[]) {
+      for (const id of identities(item)) known.add(id);
+    }
+  }
+  // An item may also replace another item of the same incoming round.
+  for (const item of plan ?? []) for (const id of identities(item)) known.add(id);
+
+  const unresolved = new Set<string>();
+  for (const item of plan ?? []) {
+    // The union never folds a row into itself, so naming yourself replaces nothing.
+    const self = new Set(identities(item));
+    for (const id of item.supersedes ?? []) {
+      if (id && (self.has(id) || !known.has(id))) unresolved.add(id);
+    }
+  }
+  return [...unresolved];
 };
 
 /**

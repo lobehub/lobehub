@@ -10,18 +10,34 @@ import {
   getThumbnailMaxWidth,
 } from './utils';
 
+const successfulGeneration = (): Generation => ({
+  id: 'test-gen-id',
+  seed: 12345,
+  createdAt: new Date(),
+  asyncTaskId: null,
+  task: {
+    id: 'task-id',
+    status: 'success' as any,
+  },
+});
+
+const configuredGenerationBatch = (): GenerationBatch => ({
+  id: 'batch-id',
+  provider: 'test',
+  model: 'test-model',
+  prompt: 'test prompt',
+  config: {
+    prompt: 'test',
+    width: 1024,
+    height: 768,
+  },
+  createdAt: new Date(),
+  generations: [],
+});
+
 describe('getImageDimensions', () => {
   // Mock base generation object
-  const baseGeneration: Generation = {
-    id: 'test-gen-id',
-    seed: 12345,
-    createdAt: new Date(),
-    asyncTaskId: null,
-    task: {
-      id: 'task-id',
-      status: 'success' as any,
-    },
-  };
+  const baseGeneration: Generation = successfulGeneration();
 
   describe('with asset dimensions', () => {
     it('should return width, height and aspect ratio from asset', () => {
@@ -84,19 +100,7 @@ describe('getImageDimensions', () => {
         asset: null,
       };
 
-      const generationBatch: GenerationBatch = {
-        id: 'batch-id',
-        provider: 'test',
-        model: 'test-model',
-        prompt: 'test prompt',
-        config: {
-          prompt: 'test',
-          width: 1024,
-          height: 768,
-        },
-        createdAt: new Date(),
-        generations: [],
-      };
+      const generationBatch: GenerationBatch = configuredGenerationBatch();
 
       const result = getImageDimensions(generation, generationBatch);
       expect(result).toEqual({
@@ -277,19 +281,7 @@ describe('getImageDimensions', () => {
         },
       };
 
-      const generationBatch: GenerationBatch = {
-        id: 'batch-id',
-        provider: 'test',
-        model: 'test-model',
-        prompt: 'test prompt',
-        config: {
-          prompt: 'test',
-          width: 1024,
-          height: 768,
-        },
-        createdAt: new Date(),
-        generations: [],
-      };
+      const generationBatch: GenerationBatch = configuredGenerationBatch();
 
       const result = getImageDimensions(generation, generationBatch);
       expect(result).toEqual({
@@ -374,16 +366,7 @@ describe('getImageDimensions', () => {
 });
 
 describe('getAspectRatio (isolated unit testing)', () => {
-  const mockGeneration: Generation = {
-    id: 'test-gen-id',
-    seed: 12345,
-    createdAt: new Date(),
-    asyncTaskId: null,
-    task: {
-      id: 'task-id',
-      status: 'success' as any,
-    },
-  };
+  const mockGeneration: Generation = successfulGeneration();
   const mockGenerationBatch: GenerationBatch = {
     id: 'test-batch-id',
     provider: 'test-provider',
@@ -437,16 +420,7 @@ describe('getAspectRatio (isolated unit testing)', () => {
 });
 
 describe('getThumbnailMaxWidth (isolated unit testing)', () => {
-  const mockGeneration: Generation = {
-    id: 'test-gen-id',
-    seed: 12345,
-    createdAt: new Date(),
-    asyncTaskId: null,
-    task: {
-      id: 'task-id',
-      status: 'success' as any,
-    },
-  };
+  const mockGeneration: Generation = successfulGeneration();
   const mockGenerationBatch: GenerationBatch = {
     id: 'test-batch-id',
     provider: 'test-provider',
@@ -482,15 +456,6 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
     const mockGen: Generation = {
       ...mockGeneration,
       // No asset with width/height, should fall back to default
-    };
-    const result = getThumbnailMaxWidth(mockGen);
-    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH * 2);
-  });
-
-  it('should return DEFAULT_MAX_ITEM_WIDTH when height is missing', () => {
-    const mockGen: Generation = {
-      ...mockGeneration,
-      // No asset with valid dimensions
     };
     const result = getThumbnailMaxWidth(mockGen);
     expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH * 2);

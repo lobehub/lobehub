@@ -20,6 +20,7 @@ import {
   ELEMENT_PICKER_CANCEL_SCRIPT,
   elementPickerScript,
 } from '@/modules/browser/elementPickerScript';
+import { guestViewportScale } from '@/modules/browser/guestViewport';
 import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
 import { createLogger } from '@/utils/logger';
 
@@ -36,6 +37,10 @@ const DEFAULT_BROWSER_URL = 'about:blank';
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const LOCAL_URL_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?(?:[/?#].*)?$/i;
 const SUPPORTED_PROTOCOLS = new Set(['about:', 'http:', 'https:']);
+/** How long `navigate` waits for the load to finish before reporting it as still loading. */
+const NAVIGATION_SETTLE_TIMEOUT_MS = 15_000;
+/** net::ERR_ABORTED — the navigation was superseded rather than failed. */
+const NAVIGATION_ABORTED_ERRNO = -3;
 
 const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
   controlling: 'Agent is controlling this page',
@@ -205,10 +210,13 @@ export default class BrowserSidebarCtr extends ControllerModule {
     const { rect, viewport } = payload;
     if (!rect || !viewport) return undefined;
 
-    const x = Math.max(0, Math.floor(rect.x));
-    const y = Math.max(0, Math.floor(rect.y));
-    const width = Math.floor(Math.min(rect.x + rect.width, viewport.width) - x);
-    const height = Math.floor(Math.min(rect.y + rect.height, viewport.height) - y);
+    // The picker measures in page (CSS) pixels; under an agent's fixed viewport
+    // the panel draws the page shrunk, and the capture is in panel pixels.
+    const scale = guestViewportScale(webContents);
+    const x = Math.max(0, Math.floor(rect.x * scale));
+    const y = Math.max(0, Math.floor(rect.y * scale));
+    const width = Math.floor(Math.min(rect.x + rect.width, viewport.width) * scale - x);
+    const height = Math.floor(Math.min(rect.y + rect.height, viewport.height) * scale - y);
     if (width < 4 || height < 4) return undefined;
 
     try {
@@ -296,13 +304,135 @@ export default class BrowserSidebarCtr extends ControllerModule {
     page.url = url;
     page.error = undefined;
 
-    await webContents.loadURL(url).catch((error: Error) => {
-      // A superseded navigation rejects here; the did-fail-load handler already
-      // records anything worth surfacing.
-      logger.debug(`Navigation to ${url} did not settle cleanly: ${error.message}`);
-    });
+    // `loadURL` only settles once every subresource has loaded, which never
+    // happens on pages with a hanging request — the tool call then sat until
+    // the gateway timeout. Past the cap, report the page as still loading, but
+    // only once the requested document has committed: before that, getURL()
+    // and the main frame still belong to the previous page. Only a cross-document
+    // commit counts: `did-navigate-in-page` also fires for hash changes and
+    // pushState on the old page, and a same-document target settles loadURL
+    // right away anyway.
+    let committed = false;
+    let onCommit: (() => void) | undefined;
+    let committedUrl: string | undefined;
+    const onNavigate = (_event: unknown, navigatedUrl: string) => {
+      committed = true;
+      committedUrl = navigatedUrl;
+      onCommit?.();
+    };
+    webContents.on('did-navigate', onNavigate);
+    const deadline = Date.now() + NAVIGATION_SETTLE_TIMEOUT_MS;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const waitUntilDeadline = () =>
+      new Promise<{ status: 'pending' }>((resolve) => {
+        settleTimer = setTimeout(
+          () => resolve({ status: 'pending' }),
+          Math.max(0, deadline - Date.now()),
+        );
+      });
+    let outcome:
+      { error: Error & { errno?: number }; status: 'failed' } | { status: 'loaded' | 'pending' };
+    try {
+      outcome = await Promise.race([
+        webContents.loadURL(url).then(
+          () => ({ status: 'loaded' as const }),
+          (error: Error & { errno?: number }) => ({ error, status: 'failed' as const }),
+        ),
+        waitUntilDeadline(),
+      ]);
+      clearTimeout(settleTimer);
+
+      // ERR_ABORTED can reject as soon as the replacement navigation (a redirect
+      // or a newer load) starts, before it commits. Wait for that replacement
+      // within the same budget rather than reporting the document it replaces —
+      // the previous page, or the requested one when it committed and then
+      // redirected (script or meta refresh) before finishing its load.
+      if (
+        outcome.status === 'failed' &&
+        outcome.error.errno === NAVIGATION_ABORTED_ERRNO &&
+        webContents.isLoading()
+      ) {
+        // Only a commit after the abort is the replacement's.
+        const committedBeforeAbort = committed;
+        committed = false;
+        // The replacement can also fail, return a 204 or be cancelled; it then
+        // stops loading without ever committing.
+        let failure: string | undefined;
+        const onFailLoad = (
+          _event: unknown,
+          errorCode: number,
+          errorDescription: string,
+          _validatedURL: string,
+          isMainFrame: boolean,
+        ) => {
+          if (isMainFrame && errorCode !== NAVIGATION_ABORTED_ERRNO) {
+            failure = `${errorDescription} (${errorCode})`;
+          }
+        };
+        let onStop: (() => void) | undefined;
+        webContents.on('did-fail-load', onFailLoad);
+        try {
+          outcome = await Promise.race([
+            new Promise<{ status: 'loaded' }>((resolve) => {
+              onCommit = () => resolve({ status: 'loaded' });
+            }),
+            new Promise<{ error: Error; status: 'failed' } | { status: 'loaded' }>((resolve) => {
+              onStop = () => {
+                if (committed) return;
+                // A redirect that was cancelled or got a 204 leaves the requested
+                // document showing; one that failed outright shows its error page,
+                // possibly under the same URL.
+                if (committedBeforeAbort && !failure && webContents.getURL() === committedUrl) {
+                  resolve({ status: 'loaded' });
+                  return;
+                }
+                resolve({
+                  error: new Error(failure ?? 'the page stopped loading before it opened'),
+                  status: 'failed',
+                });
+              };
+              webContents.on('did-stop-loading', onStop);
+            }),
+            waitUntilDeadline(),
+          ]);
+          // A slow replacement after the requested document committed is the
+          // ordinary still-loading case.
+          committed ||= committedBeforeAbort;
+        } finally {
+          webContents.removeListener('did-fail-load', onFailLoad);
+          if (onStop) webContents.removeListener('did-stop-loading', onStop);
+        }
+      }
+    } finally {
+      clearTimeout(settleTimer);
+      webContents.removeListener('did-navigate', onNavigate);
+    }
 
     this.updateSnapshot(params.sessionId);
+
+    // ERR_ABORTED means another navigation took over (a redirect or a newer
+    // load); the page that replaced it is the real outcome. Anything else —
+    // connection refused, a 204 or a download — left the requested page
+    // unopened, so say so instead of reporting whatever page is still showing.
+    if (outcome.status === 'failed' && outcome.error.errno !== NAVIGATION_ABORTED_ERRNO) {
+      logger.debug(`Navigation to ${url} failed: ${outcome.error.message}`);
+      const current = webContents.getURL();
+      // A refused connection commits Chromium's error page under the requested URL.
+      const showing =
+        current === url ? 'showing its error page' : `still showing ${current || 'a blank page'}`;
+      return {
+        error: `Could not open ${url}: ${outcome.error.message}. The browser is ${showing}.`,
+        success: false,
+      };
+    }
+
+    if (outcome.status === 'pending' && !committed) {
+      return {
+        error: `${url} has not responded within ${NAVIGATION_SETTLE_TIMEOUT_MS / 1000}s, so the browser is still showing ${webContents.getURL() || 'a blank page'}. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.`,
+        success: false,
+      };
+    }
+
     return { success: true };
   }
 

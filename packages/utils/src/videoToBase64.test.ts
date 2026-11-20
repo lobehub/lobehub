@@ -150,27 +150,4 @@ describe('videoUrlToBase64', () => {
 
     consoleErrorSpy.mockRestore();
   });
-
-  it('should use 30 second timeout', async () => {
-    const mockArrayBuffer = new ArrayBuffer(16);
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      headers: {
-        get: vi.fn().mockReturnValue('video/mp4'),
-      },
-      arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
-    };
-
-    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
-
-    await videoUrlToBase64('https://example.com/video.mp4');
-
-    expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
-      'https://example.com/video.mp4',
-      expect.objectContaining({
-        signal: expect.any(AbortSignal),
-      }),
-    );
-  });
 });

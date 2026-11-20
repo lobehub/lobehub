@@ -1,3 +1,4 @@
+import { GOAL_CLARIFICATION_TITLE, GOAL_MACHINE_GATE_TITLE } from '@lobechat/const/goal';
 import type {
   GoalGraphDecision,
   GoalGraphEdge,
@@ -6,9 +7,13 @@ import type {
   GoalGraphSnapshot,
   GoalItem,
   GoalNodeAcceptance,
+  GoalNodeWorkVersionRelation,
+  GoalReportState,
+  GoalSpend,
   WorkType,
 } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
 
 /**
  * Read model for the Goal process-control surface.
@@ -31,6 +36,16 @@ const VERIFY_SETTLE_GRACE_MS = 60 * 60 * 1000;
 export const RECENT_DONE = 2;
 
 const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+
+/**
+ * A retired node's delivery is discarded, so its acceptance no longer waits on
+ * anyone. The server closes it on retirement; this covers rows retired before
+ * it did, and a round that landed after — neither should ask for a sign-off.
+ */
+const nodeAcceptance = (node: GoalGraphNode, acceptance: GoalNodeAcceptance): GoalNodeAcceptance =>
+  node.status === 'retired' && isClosedByRetirement(acceptance.status)
+    ? { ...acceptance, status: 'closed' }
+    : acceptance;
 
 export type GoalAttemptOutcome = 'passed' | 'failed' | 'retired' | 'running';
 
@@ -57,9 +72,21 @@ export interface GoalArtifactView {
    */
   agentDocumentId?: string;
   createdAt: Date;
+  /** `file` Work only — its file-store id, which acceptance evidence cites. */
+  fileId?: string;
+  /** `file` Work only — size in bytes. */
+  fileSize?: number;
   identifier: string | null;
+  /** `file` Work only — MIME type. */
+  mimeType?: string;
   /** The task node that produced it — the goal-level list has no other owner. */
   nodeId: string;
+  /**
+   * How the node relates to the version: `produced` it, or took it as `input`.
+   * One version can be linked to several nodes; its producer is the one that
+   * owns it on a goal-level list.
+   */
+  relation?: GoalNodeWorkVersionRelation;
   /** Canonical resource identity; the document id an in-app link addresses. */
   resourceId: string | null;
   title: string | null;
@@ -68,6 +95,28 @@ export interface GoalArtifactView {
   workId: string;
   workVersionId: string;
 }
+
+/**
+ * What a decision node asks of the person.
+ *
+ * - `machine`       — the setup is broken or the automatic retries ran out; fix it and retry.
+ * - `clarification` — the planner needs an answer before it can plan.
+ * - `judgment`      — a call about the work itself.
+ */
+export type GoalDecisionCategory = 'clarification' | 'judgment' | 'machine';
+
+/**
+ * Read off the coordinator's fixed node titles, the same contract the server
+ * uses to recognise its clarification gate.
+ */
+export const decisionCategoryOf = (
+  node: Pick<GoalGraphNode, 'kind' | 'title'>,
+): GoalDecisionCategory | undefined => {
+  if (node.kind !== 'decision') return undefined;
+  if (node.title === GOAL_MACHINE_GATE_TITLE) return 'machine';
+  if (node.title === GOAL_CLARIFICATION_TITLE) return 'clarification';
+  return 'judgment';
+};
 
 export interface GoalNodeView {
   /** This task's own verification, when it has been dispatched. */
@@ -81,24 +130,46 @@ export interface GoalNodeView {
   attempts: GoalAttempt[];
   /** Unresolved `depends_on` targets — why this node cannot start. */
   blockers: GoalGraphNode[];
+  /**
+   * Why a rejected / retired node was given up: the reason on its closing
+   * event, else the last note recorded before it. Read off the trail directly
+   * so a node closed without ever starting an attempt still says why.
+   */
+  closedReason?: string;
   /** Pending user decision opened on this node. */
   decision?: GoalGraphDecision;
+  /** Decision nodes only: what the decision asks of the person. */
+  decisionCategory?: GoalDecisionCategory;
   dependsOn: string[];
   /** Findings produced by this Task. */
   findings: GoalGraphNode[];
   /** Decision only: the Task this gate was opened for — its ledger is the case. */
   gateSubjectId?: string;
+  /**
+   * Still `active` on a goal that has ended (achieved / canceled / failed).
+   * Closing a goal interrupts its runs but leaves the node where it was so a
+   * reopen can pick it up, so the row must not keep claiming it is running.
+   */
+  halted?: boolean;
   /** Latest liveness signal: node row update or the run operation's lease heartbeat. */
   heartbeatAt: Date;
   /** Decisions on this node a human already resolved. */
   humanTouches: GoalGraphDecision[];
-  /** Active for longer than the lease window with no heartbeat — the coordinator would reclaim it. */
+  /**
+   * Active for longer than the lease window with no heartbeat — the coordinator
+   * would reclaim it. Never set while the Task waits out a usage window.
+   */
   isStale: boolean;
   /** Delivered and waiting for its Acceptance judgment to settle. */
   isVerifying: boolean;
   node: GoalGraphNode;
   /** The Task that produced this finding. */
   producedBy?: GoalGraphNode;
+  /**
+   * When the coordinator retries a Task a usage window refused. The Task is
+   * held on purpose, so it is neither running nor stalled.
+   */
+  quotaRetryAt?: Date;
   /** Stable 1-based number over task nodes in graph creation order. */
   seq?: number;
   /** When the current attempt started, for the running clock. */
@@ -135,19 +206,6 @@ export const hasReviewableResult = (view: GoalNodeView): boolean => {
 };
 
 /**
- * Whether clicking a Task node opens its result surface rather than the
- * original Task detail. A delivery to read opens there, and so does a healthy
- * run in flight: the result panel shows the live run as it happens, and the
- * same panel turns into the report once the run settles — one place to watch
- * and then read. Troubled Tasks still open the original Task detail.
- */
-export const opensOnResultSurface = (view: GoalNodeView): boolean => {
-  if (view.node.kind !== 'task') return false;
-  if (isTroubledTaskNode(view)) return false;
-  return hasReviewableResult(view) || isRunningNode(view);
-};
-
-/**
  * Whether a node reads as "running" on the map — the animated ring, the chip
  * and the elapsed clock all hang off this.
  *
@@ -157,10 +215,16 @@ export const opensOnResultSurface = (view: GoalNodeView): boolean => {
  */
 export const isRunningNode = (view: GoalNodeView): boolean => {
   if (view.node.kind === 'problem') return false;
-  return view.node.status === 'active' && !view.isStale;
+  return view.node.status === 'active' && !view.isStale && !view.halted && !view.quotaRetryAt;
 };
 
-export type FrontierItemKind = 'gate' | 'stale' | 'verifying' | 'running' | 'ready' | 'done';
+/** A goal in one of these states runs nothing, whatever its nodes still say. */
+const CLOSED_GOAL_STATUSES = new Set<string>(['achieved', 'canceled', 'failed']);
+/** Ended by a person or by success: `GoalService.decide` refuses gates until a reopen. */
+const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
+
+export type FrontierItemKind =
+  'gate' | 'stale' | 'quota' | 'verifying' | 'running' | 'ready' | 'done';
 
 export interface FrontierItem {
   key: string;
@@ -188,6 +252,10 @@ export interface GoalGraphView {
   needsYou: number;
   /** Views in graph creation order. */
   nodes: GoalNodeView[];
+  /** The wrap-up report, once the Goal-level acceptance has ended. */
+  report?: GoalReportState;
+  /** Runs and dollars spent so far; absent on write-path snapshots. */
+  spend?: GoalSpend;
 }
 
 const leaseTimeoutMs = (goal: GoalItem) =>
@@ -273,6 +341,15 @@ const buildAttempts = (node: GoalGraphNode, events: GoalGraphEvent[]): GoalAttem
   return attempts;
 };
 
+const closedReasonOf = (node: GoalGraphNode, events: GoalGraphEvent[]): string | undefined => {
+  if (node.status !== 'rejected' && node.status !== 'retired') return undefined;
+  const own = events.filter(
+    (e) => e.entityType === 'node' && e.entityId === node.id && !!e.reason?.trim(),
+  );
+  const closing = own.findLast((e) => e.eventType === 'rejected' || e.eventType === 'retired');
+  return (closing ?? own.findLast((e) => e.eventType === 'updated'))?.reason?.trim();
+};
+
 export const buildGoalGraphView = (
   snapshot: GoalGraphSnapshot,
   now: number = Date.now(),
@@ -286,11 +363,15 @@ export const buildGoalGraphView = (
     events,
     goal,
     nodes,
+    quotaRetryAt: quotaRetryAtByNode,
+    report,
     runHeartbeats,
+    spend,
     workVersions,
   } = snapshot;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lease = leaseTimeoutMs(goal);
+  const goalClosed = CLOSED_GOAL_STATUSES.has(goal.status);
 
   const dependsOn = new Map<string, string[]>();
   const producesByTask = new Map<string, GoalGraphNode[]>();
@@ -316,14 +397,17 @@ export const buildGoalGraphView = (
 
   // Only Works that were named by the read-time join can be shown, and the
   // responsible task's own `task` Work is execution bookkeeping rather than a
-  // deliverable — it would otherwise head every task's list with itself.
+  // deliverable — it would otherwise head every task's list with itself. The
+  // wrap-up `goal_report` describes the result rather than being part of it;
+  // the page reads it from `report`, never as a deliverable.
   const artifactsByNode = new Map<string, GoalArtifactView[]>();
   for (const link of workVersions) {
-    if (!link.work || link.work.type === 'task') continue;
+    if (!link.work || link.work.type === 'task' || link.work.type === 'goal_report') continue;
     const artifact: GoalArtifactView = {
       createdAt: link.createdAt,
       identifier: link.work.identifier,
       nodeId: link.nodeId,
+      relation: link.relation,
       resourceId: link.work.resourceId,
       title: link.work.title,
       type: link.work.type,
@@ -332,6 +416,9 @@ export const buildGoalGraphView = (
       workId: link.work.workId,
       workVersionId: link.workVersionId,
       ...(link.work.agentDocumentId ? { agentDocumentId: link.work.agentDocumentId } : {}),
+      ...(link.work.fileId ? { fileId: link.work.fileId } : {}),
+      ...(link.work.fileSize !== undefined ? { fileSize: link.work.fileSize } : {}),
+      ...(link.work.mimeType ? { mimeType: link.work.mimeType } : {}),
     };
     artifactsByNode.set(link.nodeId, [...(artifactsByNode.get(link.nodeId) ?? []), artifact]);
   }
@@ -352,8 +439,16 @@ export const buildGoalGraphView = (
       node.kind === 'experiment' ? experimentMembers(snapshot, node.id) : new Set<string>();
     const nodeDecisions = decisionsByNode.get(node.id) ?? [];
     const attempts = buildAttempts(node, events);
+    const closedReason = closedReasonOf(node, events);
     const open = attempts.at(-1);
-    const isRunningAttempt = node.status === 'active' && open?.outcome === 'running';
+    const halted = goalClosed && node.kind === 'task' && node.status === 'active';
+    const live = node.status === 'active' && !goalClosed;
+    // The goal ended under this attempt: it was interrupted, not still going.
+    if (halted && open?.outcome === 'running') {
+      open.endedAt = goal.updatedAt;
+      open.outcome = 'retired';
+    }
+    const isRunningAttempt = live && open?.outcome === 'running';
     // Liveness = the newer of the node row (moves on observations / status
     // changes) and the run operation's lease heartbeat (refreshed ~90s while
     // the agent works). Judging from the node row alone flags any long quiet
@@ -377,8 +472,15 @@ export const buildGoalGraphView = (
       acceptances?.[node.id]?.status === 'repairing';
     const isVerifying =
       node.kind === 'task' &&
-      node.status === 'active' &&
+      live &&
       (acceptanceVerifying || (!!delivered && now - delivered.getTime() <= VERIFY_SETTLE_GRACE_MS));
+    // A usage window refused the run and the coordinator holds the Task until it
+    // reopens. Its run has ended, so the heartbeat ages past the lease while
+    // nothing is wrong — read as lost, it showed a failure badge on a Task that
+    // resumes by itself.
+    const quotaRetry = quotaRetryAtByNode?.[node.id];
+    const quotaRetryAt =
+      node.kind === 'task' && live && !isVerifying && quotaRetry ? new Date(quotaRetry) : undefined;
 
     return {
       answers: supportsByFinding.get(node.id) ?? [],
@@ -386,13 +488,15 @@ export const buildGoalGraphView = (
         node.kind === 'experiment'
           ? [...members].flatMap((id) => artifactsByNode.get(id) ?? [])
           : (artifactsByNode.get(node.id) ?? []),
-      ...(acceptances?.[node.id] ? { acceptance: acceptances[node.id] } : {}),
+      ...(acceptances?.[node.id] ? { acceptance: nodeAcceptance(node, acceptances[node.id]) } : {}),
       ...(assignees?.[node.id] ? { assigneeAgentId: assignees[node.id] } : {}),
       attempts,
+      ...(closedReason ? { closedReason } : {}),
       blockers: (dependsOn.get(node.id) ?? [])
         .map((id) => nodeById.get(id))
         .filter((dep): dep is GoalGraphNode => !!dep && !TERMINAL_NODE_STATUSES.has(dep.status)),
       decision: nodeDecisions.find((d) => d.status === 'pending'),
+      ...(node.kind === 'decision' ? { decisionCategory: decisionCategoryOf(node) } : {}),
       dependsOn: dependsOn.get(node.id) ?? [],
       findings:
         node.kind === 'experiment'
@@ -403,12 +507,15 @@ export const buildGoalGraphView = (
       humanTouches: nodeDecisions.filter((d) => d.status === 'resolved' && !!d.resolvedByUserId),
       isStale:
         node.kind === 'task' &&
-        node.status === 'active' &&
+        live &&
         !isVerifying &&
+        !quotaRetryAt &&
         now - heartbeatAt.getTime() > lease,
       isVerifying,
+      ...(halted ? { halted } : {}),
       node,
       producedBy: producedByFinding.get(node.id),
+      ...(quotaRetryAt ? { quotaRetryAt } : {}),
       seq: node.kind === 'experiment' ? ++experimentSeq : node.kind === 'task' ? ++seq : undefined,
       startedAt: isRunningAttempt ? open.startedAt : undefined,
     };
@@ -422,14 +529,25 @@ export const buildGoalGraphView = (
   for (const view of views) {
     const { node } = view;
     if (node.kind === 'decision' && node.status === 'waiting' && view.decision) {
-      frontier.push({ key: node.id, kind: 'gate', rank: 0, view });
+      // An ended goal refuses answers until it is reopened, so its gates are
+      // not something the reader can act on.
+      if (!GOAL_ENDED_STATUSES.has(goal.status))
+        frontier.push({ key: node.id, kind: 'gate', rank: 0, view });
       continue;
     }
     if (node.kind !== 'task') continue;
     if (node.status === 'active') {
+      // Stopped by the goal ending: nothing can advance it until a reopen.
+      if (goalClosed) continue;
       frontier.push({
         key: node.id,
-        kind: view.isStale ? 'stale' : view.isVerifying ? 'verifying' : 'running',
+        kind: view.isStale
+          ? 'stale'
+          : view.quotaRetryAt
+            ? 'quota'
+            : view.isVerifying
+              ? 'verifying'
+              : 'running',
         rank: view.isStale ? 0 : 1,
         view,
       });
@@ -468,10 +586,33 @@ export const buildGoalGraphView = (
     findings: views.filter((view) => view.node.kind === 'finding'),
     frontier: [...done, ...frontier],
     goal,
-    needsYou: frontier.filter((item) => item.rank === 0).length,
+    // A stalled Task leads the list, but the coordinator restarts it on its own:
+    // only a gate actually waits on the person.
+    needsYou: frontier.filter((item) => item.kind === 'gate').length,
     nodes: views,
+    report,
+    spend,
   };
 };
+
+/**
+ * The same graph narrowed to a set of nodes: edges, frontier and blocked rows
+ * keep only what stays inside. `edges` overrides the edge set for a host that
+ * already projected its own (the experiment scope).
+ */
+export const scopeGraphView = (
+  graph: GoalGraphView,
+  nodeIds: ReadonlySet<string>,
+  edges?: GoalGraphEdge[],
+): GoalGraphView => ({
+  ...graph,
+  blocked: graph.blocked.filter((view) => nodeIds.has(view.node.id)),
+  edges:
+    edges ??
+    graph.edges.filter((edge) => nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId)),
+  frontier: graph.frontier.filter((item) => nodeIds.has(item.view.node.id)),
+  nodes: graph.nodes.filter((view) => nodeIds.has(view.node.id)),
+});
 
 const resolvedTime = (node: GoalGraphNode) =>
   (node.resolvedAt ?? node.updatedAt ?? node.createdAt).getTime();

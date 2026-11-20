@@ -5,6 +5,7 @@ import type { DataSyncConfig, DesktopBootstrapIdentity } from '@lobechat/electro
 import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { refreshAppSignIn, withdrawAppSignIn } from '@/modules/cliEmbedding/appSignInFile';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
@@ -52,20 +53,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   /**
    * Normalize legacy config that used local storageMode.
    * Local mode has been removed; fall back to cloud.
+   * Persistence belongs to explicit configuration updates, not reads.
    */
   private normalizeConfig = (config: DataSyncConfig): DataSyncConfig => {
     // Use type assertion to handle legacy 'local' value from stored data
     if ((config.storageMode as string) !== 'local') return config;
 
-    const nextConfig: DataSyncConfig = {
+    return {
       ...config,
       remoteServerUrl: config.remoteServerUrl || OFFICIAL_CLOUD_SERVER,
       storageMode: 'cloud',
     };
-
-    this.app.storeManager.set('dataSyncConfig', nextConfig);
-
-    return nextConfig;
   };
 
   /**
@@ -132,6 +130,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Save configuration with legacy local storage fallback
     const merged = this.normalizeConfig({ ...prev, ...config });
     storeManager.set('dataSyncConfig', merged);
+
+    // The device gateway connection belongs to the login it was opened for.
+    // Pointing at another server, or deactivating this one, ends that login:
+    // close it and drop whatever was resolved for it before anything reconnects.
+    const [prevServerUrl, nextServerUrl] = await Promise.all([
+      this.getRemoteServerUrl(prev),
+      this.getRemoteServerUrl(merged),
+    ]);
+    if (prevServerUrl !== nextServerUrl || (prev.active && !merged.active)) {
+      await this.app.getService(GatewayConnectionService)?.disconnect();
+    }
 
     this.broadcastRemoteServerConfigUpdated();
 
@@ -251,6 +260,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         lastRefreshAt: this.lastRefreshAt,
         refreshToken: this.encryptedRefreshToken,
       });
+      this.pushRefreshedAccessToken(accessToken);
       return;
     }
 
@@ -272,6 +282,25 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       lastRefreshAt: this.lastRefreshAt,
       refreshToken: this.encryptedRefreshToken,
     });
+
+    this.pushRefreshedAccessToken(accessToken);
+  }
+
+  /**
+   * Hand a freshly stored access token to everything that holds a copy of it:
+   * the live device-gateway socket, and the sign-in file `lh` reads inside
+   * local agent runs (which would otherwise keep the expired token).
+   *
+   * The gateway client caches the token it was constructed with and replays it
+   * on every backoff / heartbeat reconnect, while the token itself is rotated
+   * here (AuthCtr's auto-refresh timer). Without this push the refresh only
+   * became visible after the connection had already been torn down and rejected
+   * — the socket dropped, the client replayed the stale token, and `auth_failed`
+   * left the device offline.
+   */
+  private pushRefreshedAccessToken(accessToken: string) {
+    this.app.getService(GatewayConnectionService)?.updatePersonalToken(accessToken);
+    void refreshAppSignIn(accessToken);
   }
 
   /**
@@ -353,6 +382,8 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Also clear from persistent storage
     logger.debug(`Deleting tokens from store key: ${this.encryptedTokensKey}`);
     this.app.storeManager.delete(this.encryptedTokensKey);
+    // Signed out: agent runs must not keep acting as the previous user.
+    await withdrawAppSignIn();
 
     // Disconnect gateway when tokens are cleared (logout / token refresh failure)
     const gatewaySrv = this.app.getService(GatewayConnectionService);

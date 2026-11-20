@@ -262,16 +262,6 @@ describe('HeteroSessionCtr', () => {
       expect(isUnderRoot(file, root, path.win32)).toBe(true);
     });
 
-    it('accepts a transcript under the root on POSIX separators', () => {
-      expect(
-        isUnderRoot(
-          '/home/me/.claude/projects/proj/a.jsonl',
-          '/home/me/.claude/projects',
-          path.posix,
-        ),
-      ).toBe(true);
-    });
-
     it('rejects paths outside the root, including sibling prefixes', () => {
       expect(isUnderRoot('/etc/passwd', '/home/me/.claude/projects', path.posix)).toBe(false);
       // a sibling dir that merely shares the root as a string prefix

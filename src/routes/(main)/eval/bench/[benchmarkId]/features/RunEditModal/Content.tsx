@@ -2,29 +2,34 @@
 
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, ActionIcon, Avatar, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Space } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Accordion,
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Input,
+  InputNumber,
+  Select,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 const MAX_TIMEOUT_MINUTES = 240;
 
 const styles = createStaticStyles(({ css }) => ({
-  agentSelect: css`
-    .ant-select-content-value {
-      height: 22px !important;
-    }
-  `,
   hint: css`
     display: inline-block;
     margin-block-start: 4px;
@@ -63,10 +68,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
   const updateRun = useEvalStore((s) => s.updateRun);
-  const datasetList = useEvalStore((s) => s.datasetList);
-  const [form] = Form.useForm();
-  const kValue = Form.useWatch('k', form) ?? 1;
-
+  const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
 
@@ -82,22 +84,12 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
     if (!canChangeConfig) return;
     setLoadingAgents(true);
     agentService
-      .queryAgents()
+      // The inbox is added locally as `inboxAgent` just below; asking the query
+      // for it as well would offer Lobe AI twice under two different ids.
+      .queryAgents({ includeInbox: false })
       .then((list) => setAgents(list as AgentOption[]))
       .finally(() => setLoadingAgents(false));
   }, [canChangeConfig]);
-
-  useEffect(() => {
-    if (run) {
-      form.setFieldsValue({
-        k: run.config?.k,
-        maxSteps: run.config?.maxSteps,
-        name: run.name,
-        targetAgentId: run.targetAgentId,
-        timeoutMinutes: run.config?.timeout ? run.config.timeout / 60_000 : undefined,
-      });
-    }
-  }, [run, form]);
 
   const inboxAgent: AgentOption = useMemo(
     () => ({
@@ -115,9 +107,12 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
       allAgents.map((agent) => ({
         label: (
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <Avatar
+            <AgentAvatar
+              agentId={agent.id}
               avatar={agent.avatar || undefined}
               background={agent.backgroundColor || undefined}
+              name={agent.title || undefined}
+              shape={'circle'}
               size={20}
               title={agent.title || ''}
             />
@@ -168,10 +163,22 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
     }
   };
 
+  const form = useForm({
+    initialValues: {
+      k: run.config?.k,
+      maxSteps: run.config?.maxSteps,
+      name: run.name,
+      targetAgentId: run.targetAgentId,
+      timeoutMinutes: run.config?.timeout ? run.config.timeout / 60_000 : undefined,
+    },
+    onSubmit: handleFinish,
+  });
+  const kValue = useWatch(form, 'k') ?? 1;
+
   return (
-    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
-      <Form.Item label={t('run.create.dataset')}>
-        <Space>
+    <Form form={form} id={formId} layout="vertical">
+      <Form.Field label={t('run.create.dataset')}>
+        <Flexbox horizontal align={'center'} gap={8}>
           <span>{currentDataset?.name || run.datasetId}</span>
           {currentDataset?.testCaseCount !== undefined && (
             <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
@@ -186,23 +193,22 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
               onClick={() => navigate(`/eval/bench/${benchmarkId}/datasets/${run.datasetId}`)}
             />
           )}
-        </Space>
-      </Form.Item>
+        </Flexbox>
+      </Form.Field>
 
-      <Form.Item label={t('run.create.name')} name="name">
+      <Form.Field label={t('run.create.name')} name="name">
         <Input placeholder={t('run.create.name.placeholder')} variant="filled" />
-      </Form.Item>
+      </Form.Field>
 
       {canChangeConfig && (
-        <Form.Item
+        <Form.Field
           label={t('run.create.agent')}
           name="targetAgentId"
-          rules={[{ message: t('run.create.agent.required'), required: true }]}
+          required={t('run.create.agent.required')}
         >
           <Select
             allowClear
             showSearch
-            className={styles.agentSelect}
             loading={loadingAgents}
             options={agentOptions}
             placeholder={t('run.create.agent.placeholder')}
@@ -225,7 +231,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
               </span>
             )}
           />
-        </Form.Item>
+        </Form.Field>
       )}
 
       <Accordion
@@ -237,10 +243,10 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
           {
             children: (
               <Flexbox gap={16} style={{ paddingTop: 8 }}>
-                <Form.Item
+                <Form.Field
                   label={t('run.config.k')}
                   name="k"
-                  style={{ marginBottom: 0 }}
+                  style={{ paddingBlock: 0 }}
                   extra={
                     <span className={styles.hint}>{t('run.config.k.hint', { k: kValue })}</span>
                   }
@@ -253,12 +259,12 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                     style={{ width: '100%' }}
                     variant="filled"
                   />
-                </Form.Item>
-                <Form.Item
+                </Form.Field>
+                <Form.Field
                   extra={<span className={styles.hint}>{t('run.config.maxSteps.hint')}</span>}
                   label={t('run.config.maxSteps')}
                   name="maxSteps"
-                  style={{ marginBottom: 0 }}
+                  style={{ paddingBlock: 0 }}
                 >
                   <InputNumber
                     disabled={isFinished}
@@ -268,11 +274,11 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                     style={{ width: '100%' }}
                     variant="filled"
                   />
-                </Form.Item>
-                <Form.Item
+                </Form.Field>
+                <Form.Field
                   label={t('run.config.timeout')}
                   name="timeoutMinutes"
-                  style={{ marginBottom: 0 }}
+                  style={{ paddingBlock: 0 }}
                 >
                   <InputNumber
                     disabled={isFinished}
@@ -282,7 +288,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                     suffix={t('run.config.timeout.unit')}
                     variant="filled"
                   />
-                </Form.Item>
+                </Form.Field>
               </Flexbox>
             ),
             key: 'advanced',

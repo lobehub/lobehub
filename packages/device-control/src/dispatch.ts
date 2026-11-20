@@ -1,3 +1,6 @@
+import { lstat, realpath } from 'node:fs/promises';
+
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
   createLocalDirectory,
@@ -8,7 +11,9 @@ import {
 } from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
+  assertLinkedWorktree,
   checkoutGitBranch,
+  cleanupOwnedWorktree,
   deleteGitBranch,
   getGitAheadBehind,
   getGitBranch,
@@ -28,6 +33,7 @@ import {
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
+  restoreOwnedWorktree,
   revertGitFile,
   runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
@@ -36,30 +42,44 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
+import type { DeviceCliRestartParams } from '@lobechat/types';
 
+import { getAntigravityQuota } from './antigravityQuota';
+import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
-import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import {
+  defaultCopyAssetForPublish,
+  defaultGetLocalFilePreview,
+  defaultReadExternalAssetForPublish,
+} from './filePreview';
 import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
 import { listListeningPorts, type ListListeningPortsParams } from './listeningPorts';
 import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
   BrowseDirectoryParams,
+  CloseTerminalParams,
   CopyAssetForPublishParams,
+  CreateTerminalSessionParams,
   DeviceControlDeps,
   EnrollWorkspaceParams,
   ExternalAssetForPublishParams,
   InitWorkspaceParams,
+  ListClaudeCodeMemoryParams,
   ListHeterogeneousAgentModelsParams,
+  ListMcpToolsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  ReadTerminalParams,
+  ResizeTerminalParams,
   TrashLocalFilesParams,
   UnenrollWorkspaceParams,
+  WriteTerminalParams,
 } from './types';
 import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
 import { assertEntriesWithinWorkspace, WORKSPACE_ESCAPE_MESSAGE } from './workspaceGuard';
@@ -75,10 +95,13 @@ export const DEVICE_RPC_METHODS = [
   'unenrollWorkspace',
   'initWorkspace',
   'listHeterogeneousAgentModels',
+  'listMcpTools',
+  'getAntigravityQuota',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
   'listProjectSkills',
+  'listClaudeCodeMemory',
   'prepareSkillDirectory',
   'browseDirectory',
   'statPath',
@@ -86,6 +109,7 @@ export const DEVICE_RPC_METHODS = [
   'listProjectDirectory',
   'searchProjectFiles',
   'getLocalFilePreview',
+  'runWorktreeFileOperation',
   'readExternalAssetForPublish',
   'copyAssetForPublish',
   'moveLocalFiles',
@@ -101,6 +125,7 @@ export const DEVICE_RPC_METHODS = [
   'getPullRequestActivity',
   'getPullRequestMergeContext',
   'runPullRequestAction',
+  'runPullRequestActionByUrl',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
   'getGitWorkingTreePatches',
@@ -114,6 +139,8 @@ export const DEVICE_RPC_METHODS = [
   'deleteGitBranch',
   'removeGitWorktree',
   'addGitWorktree',
+  'cleanupOwnedWorktree',
+  'restoreOwnedWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -121,15 +148,41 @@ export const DEVICE_RPC_METHODS = [
   'getAppUpdateState',
   'checkAppUpdate',
   'installAppUpdate',
+  // Interactive terminal (PTY). One session, drained by cursor — see
+  // `CreateTerminalSessionParams` for why this is polling and not a stream.
+  'createTerminalSession',
+  'writeTerminal',
+  'readTerminal',
+  'resizeTerminal',
+  'closeTerminal',
+  'getCliUpdateState',
+  'checkCliUpdate',
+  'restartCli',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
 
+export { deviceRpcClients } from './rpcClients';
+
 /** Why a client without the app-update handlers rejects those RPCs. */
 export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
 
+export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
+  'This device client does not support remote CLI updates';
+
+/** Why a client that runs no MCP servers rejects `listMcpTools`. */
+export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
+
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
 export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
+
+/**
+ * Why a client without PTY handlers rejects the terminal RPCs. Hosts opt in by
+ * providing the `*Terminal*` deps; the desktop app serves its own terminal over
+ * IPC instead, so until it opts in a terminal opened against it is refused here
+ * rather than left waiting for a session.
+ */
+export const TERMINAL_UNSUPPORTED_MESSAGE = 'This device client does not support a terminal';
 
 /** File-mutation params carry the approved workspace root they must stay inside. */
 type WorkspaceScoped<T> = T & { workspaceRoot?: string };
@@ -151,6 +204,17 @@ const guardMutation = async (workspaceRoot: string | undefined, targets: string[
 const guardLegacyMutation = async (workspaceRoot: string | undefined, targets: string[]) => {
   if (workspaceRoot) await assertEntriesWithinWorkspace(workspaceRoot, targets);
 };
+
+const worktreeFileMethods = new Set([
+  'copyLocalFiles',
+  'createLocalDirectory',
+  'createLocalFile',
+  'getLocalFilePreview',
+  'moveLocalFiles',
+  'renameLocalFile',
+  'trashLocalFiles',
+  'writeLocalFile',
+]);
 
 /**
  * Dispatch a generic server-internal device RPC by method name. This is the
@@ -195,8 +259,17 @@ export const executeDeviceRpc = async (
       return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
     }
 
+    case 'listMcpTools': {
+      if (!deps.listMcpTools) throw new Error(MCP_UNSUPPORTED_MESSAGE);
+      return deps.listMcpTools(params as ListMcpToolsParams);
+    }
+
     case 'getClaudeCodeQuota': {
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
+    }
+
+    case 'getAntigravityQuota': {
+      return getAntigravityQuota(params as AntigravityQuotaParams);
     }
 
     case 'getCodexQuota': {
@@ -209,6 +282,10 @@ export const executeDeviceRpc = async (
 
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
+    }
+
+    case 'listClaudeCodeMemory': {
+      return listClaudeCodeMemory(params as ListClaudeCodeMemoryParams, deps);
     }
 
     case 'prepareSkillDirectory': {
@@ -241,6 +318,44 @@ export const executeDeviceRpc = async (
 
     case 'getLocalFilePreview': {
       return deps.getLocalFilePreview(params as LocalFilePreviewUrlParams);
+    }
+
+    case 'runWorktreeFileOperation': {
+      const { approvedRoot, rpc, sourcePath, worktreePath } = params as {
+        approvedRoot: string;
+        rpc: {
+          method: string;
+          params: { path?: string; workingDirectory?: string; workspaceRoot?: string };
+        };
+        sourcePath: string;
+        worktreePath: string;
+      };
+      const isPreview = rpc.method === 'getLocalFilePreview';
+      const root = isPreview ? rpc.params.workingDirectory : rpc.params.workspaceRoot;
+      if (!worktreePath || !worktreeFileMethods.has(rpc.method) || root !== worktreePath)
+        throw new Error('Invalid worktree file operation');
+      const [realApprovedRoot, realSourcePath] = await Promise.all([
+        realpath(approvedRoot),
+        realpath(sourcePath),
+      ]);
+      if (realSourcePath !== realApprovedRoot) {
+        await guardMutation(realApprovedRoot, [realSourcePath]);
+      }
+      await assertLinkedWorktree(realSourcePath, worktreePath, realApprovedRoot);
+
+      // The Git check authorizes this request only. Use the contained reader
+      // without adding the worktree to the desktop preview approval cache.
+      if (isPreview) return defaultGetLocalFilePreview(rpc.params as LocalFilePreviewUrlParams);
+      if (rpc.method === 'writeLocalFile' && rpc.params.path) {
+        // Writes follow the final symlink. Other file mutations act on the entry itself.
+        const file = rpc.params.path;
+        const entry = await lstat(file).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return undefined;
+        });
+        if (entry?.isSymbolicLink()) await guardMutation(worktreePath, [await realpath(file)]);
+      }
+      return executeDeviceRpc(rpc.method, rpc.params, deps);
     }
 
     case 'readExternalAssetForPublish': {
@@ -322,7 +437,12 @@ export const executeDeviceRpc = async (
 
     case 'getLinkedPullRequest': {
       return getLinkedPullRequest(
-        params as { branch: string; path: string; pullRequestNumber?: number },
+        params as {
+          branch: string;
+          path: string;
+          pullRequestNumber?: number;
+          state?: 'all' | 'open';
+        },
       );
     }
 
@@ -351,12 +471,21 @@ export const executeDeviceRpc = async (
       );
     }
 
+    case 'runPullRequestActionByUrl': {
+      return runPullRequestAction(
+        params as { action: GitPullRequestAction; number: number; path: string; url: string },
+      );
+    }
+
     case 'getGitWorkingTreeStatus': {
       return getGitWorkingTreeStatus((params as { path: string }).path);
     }
 
     case 'getGitWorkingTreeFiles': {
-      return getGitWorkingTreeFiles((params as { path: string }).path);
+      // The client persists this overlay. A failed or timed-out `git status`
+      // must reject (the gateway answers the client with nothing), not report
+      // a confirmed clean working tree — same contract as the desktop GitCtr.
+      return getGitWorkingTreeFiles((params as { path: string }).path, { throwOnError: true });
     }
 
     case 'getGitWorkingTreePatches': {
@@ -368,7 +497,8 @@ export const executeDeviceRpc = async (
     }
 
     case 'getGitAheadBehind': {
-      return getGitAheadBehind((params as { path: string }).path);
+      const { branch, path } = params as { branch?: string; path: string };
+      return getGitAheadBehind(path, { branch });
     }
 
     case 'listGitBranches': {
@@ -384,7 +514,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'checkoutGitBranch': {
-      return checkoutGitBranch(params as { branch: string; create?: boolean; path: string });
+      return checkoutGitBranch(
+        params as { branch: string; create?: boolean; path: string; startPoint?: string },
+      );
     }
 
     case 'renameGitBranch': {
@@ -400,15 +532,50 @@ export const executeDeviceRpc = async (
     }
 
     case 'addGitWorktree': {
-      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
+      return addGitWorktree(
+        params as {
+          branch: string;
+          ownerToken?: string;
+          path: string;
+          startPoint?: string;
+          worktreePath: string;
+        },
+      );
+    }
+
+    // Only the named fields are forwarded: the guard root is the device's own
+    // `~/.lobehub/worktrees`, never something a request can widen.
+    case 'cleanupOwnedWorktree': {
+      const { discard, ownerToken, sourcePath, worktreePath } = params as {
+        discard?: boolean;
+        ownerToken?: string;
+        sourcePath: string;
+        worktreePath: string;
+      };
+      return cleanupOwnedWorktree({
+        discard: discard === true,
+        ownerToken,
+        sourcePath,
+        worktreePath,
+      });
+    }
+
+    case 'restoreOwnedWorktree': {
+      const { branch, ownerToken, sourcePath, worktreePath } = params as {
+        branch: string;
+        ownerToken?: string;
+        sourcePath: string;
+        worktreePath: string;
+      };
+      return restoreOwnedWorktree({ branch, ownerToken, sourcePath, worktreePath });
     }
 
     case 'pullGitBranch': {
-      return pullGitBranch(params as { path: string });
+      return pullGitBranch(params as { branch?: string; path: string });
     }
 
     case 'pushGitBranch': {
-      return pushGitBranch(params as { path: string });
+      return pushGitBranch(params as { branch?: string; path: string });
     }
 
     case 'revertGitFile': {
@@ -430,6 +597,49 @@ export const executeDeviceRpc = async (
     case 'installAppUpdate': {
       if (!deps.installAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
       return deps.installAppUpdate();
+    }
+
+    // Interactive terminal. All five handlers are host-injected together, so a
+    // host that provides none of them refuses every one of these with the same
+    // reason instead of exposing a half-working session.
+    case 'createTerminalSession': {
+      if (!deps.createTerminalSession) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.createTerminalSession(params as CreateTerminalSessionParams);
+    }
+
+    case 'writeTerminal': {
+      if (!deps.writeTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.writeTerminal(params as WriteTerminalParams);
+    }
+
+    case 'readTerminal': {
+      if (!deps.readTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.readTerminal(params as ReadTerminalParams);
+    }
+
+    case 'resizeTerminal': {
+      if (!deps.resizeTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.resizeTerminal(params as ResizeTerminalParams);
+    }
+
+    case 'closeTerminal': {
+      if (!deps.closeTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.closeTerminal(params as CloseTerminalParams);
+    }
+
+    case 'getCliUpdateState': {
+      if (!deps.getCliUpdateState) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.getCliUpdateState();
+    }
+
+    case 'checkCliUpdate': {
+      if (!deps.checkCliUpdate) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.checkCliUpdate();
+    }
+
+    case 'restartCli': {
+      if (!deps.restartCli) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.restartCli(params as DeviceCliRestartParams);
     }
 
     default: {

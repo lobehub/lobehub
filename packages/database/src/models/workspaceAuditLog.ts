@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, inArray, lt, lte, or } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from 'drizzle-orm';
 
 import { workspaceAuditLogs } from '../schemas/workspace';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -19,12 +19,15 @@ export type WorkspaceAuditAction =
   | 'member.invited'
   | 'member.removed'
   | 'member.role_updated'
+  | 'member.profile_updated'
   | 'member.joined'
   | 'member.left'
   | 'member.promoted_to_owner'
   | 'member.demoted_from_owner'
   | 'invitation.revoked'
   | 'invitation.resent'
+  | 'invitation.link_created'
+  | 'invitation.link_revoked'
   | 'budget.default_member_limit_updated'
   | 'budget.member_limit_updated'
   | 'budget.member_override_created'
@@ -33,6 +36,14 @@ export type WorkspaceAuditAction =
   | 'budget.pool_created'
   | 'budget.pool_updated'
   | 'budget.pool_deleted'
+  | 'budget.team_created'
+  | 'budget.team_updated'
+  | 'budget.team_deleted'
+  | 'team.created'
+  | 'team.updated'
+  | 'team.deleted'
+  | 'team.members_added'
+  | 'team.member_removed'
   | 'auto_top_up.enabled'
   | 'auto_top_up.updated'
   | 'auto_top_up.disabled'
@@ -126,6 +137,30 @@ export class WorkspaceAuditLogModel {
       })
       .returning();
     return row;
+  };
+
+  /**
+   * How many members joined through each of the given invitations, read from
+   * `member.joined` entries (`metadata.invitationId`). Ids with no joins are
+   * absent from the map.
+   */
+  countJoinsByInvitation = async (workspaceId: string, invitationIds: string[]) => {
+    const result = new Map<string, number>();
+    if (invitationIds.length === 0) return result;
+    const invitationId = sql<string>`${workspaceAuditLogs.metadata}->>'invitationId'`;
+    const rows = await this.db
+      .select({ invitationId, value: count() })
+      .from(workspaceAuditLogs)
+      .where(
+        and(
+          eq(workspaceAuditLogs.workspaceId, workspaceId),
+          eq(workspaceAuditLogs.action, 'member.joined'),
+          inArray(invitationId, invitationIds),
+        ),
+      )
+      .groupBy(invitationId);
+    for (const row of rows) result.set(row.invitationId, row.value);
+    return result;
   };
 
   list = async (params: ListAuditLogParams) => {

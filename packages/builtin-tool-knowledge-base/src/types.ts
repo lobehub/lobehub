@@ -50,6 +50,11 @@ export interface SearchKnowledgeBaseState {
    * card hydrates the real hits when the row is expanded.
    */
   resultCount?: number;
+  /**
+   * `'none'` when no knowledge base was in scope, so nothing was searched at
+   * all — distinct from a search that ran and matched nothing.
+   */
+  scope?: 'none';
   totalResults: number;
 }
 

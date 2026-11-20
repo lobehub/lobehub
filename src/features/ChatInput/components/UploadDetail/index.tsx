@@ -1,6 +1,5 @@
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,12 +9,9 @@ import { type FileUploadState, type FileUploadStatus } from '@/types/files';
 
 import UploadStatus from './UploadStatus';
 
-const styles = createStaticStyles(({ css }) => ({
-  status: css`
-    padding-inline: 0;
-    background: none;
-  `,
-}));
+const styles = stylex.create({
+  status: { paddingInline: '0', backgroundColor: 'transparent', backgroundImage: 'none' },
+});
 
 interface UploadDetailProps {
   error?: string;
@@ -37,7 +33,11 @@ const UploadDetail = memo<UploadDetailProps>(({ error, uploadState, status, size
         </Text>
       ) : (
         <div>
-          <FileParsingStatus {...tasks} hideEmbeddingButton className={styles.status} />
+          <FileParsingStatus
+            {...tasks}
+            hideEmbeddingButton
+            className={stylex.props(styles.status).className}
+          />
         </div>
       )}
     </Flexbox>

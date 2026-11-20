@@ -8,6 +8,7 @@ import {
   createLocalFileScopeKey,
   createSandboxLocalFileScopeKey,
   getLocalFileTabId,
+  isRemoteLocalFile,
 } from './helpers';
 import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
@@ -80,6 +81,8 @@ const agentDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.AgentDetail);
   return view?.agentId;
 };
+
+const memoryDetailView = (s: ChatStoreState) => getViewData(s, PortalViewType.MemoryDetail);
 
 // Artifact selectors
 const currentArtifact = (s: ChatStoreState): PortalArtifact | undefined => {
@@ -159,6 +162,9 @@ const currentFile = (s: ChatStoreState): PortalFile | undefined => {
 
 const previewFileId = (s: ChatStoreState) => currentFile(s)?.fileId;
 const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
+const previewFileSource = (s: ChatStoreState) => currentFile(s)?.source;
+const previewFileSourceTopicId = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.FilePreview)?.sourceTopicId;
 
 // Local File selectors
 const currentLocalFileScopeWorkingDirectory = (s: ChatStoreState): string | undefined =>
@@ -227,6 +233,9 @@ const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => 
   );
 };
 
+const isCurrentLocalFileRemote = (s: ChatStoreState): boolean =>
+  isRemoteLocalFile(currentLocalFile(s));
+
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
@@ -257,16 +266,25 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const taskDetailWorkspace = (s: ChatStoreState) =>
+  getStackViewData(s, PortalViewType.TaskDetail)?.workspace;
+
 const taskResultId = (s: ChatStoreState): string | undefined => {
   const view = getStackViewData(s, PortalViewType.TaskResult);
   return view?.taskId;
 };
+
+const dashboardWidgetView = (s: ChatStoreState) => getViewData(s, PortalViewType.DashboardWidget);
 
 // Goal detail drill-down selectors
 const goalPortalId = (s: ChatStoreState): string | undefined =>
   getViewData(s, PortalViewType.Goal)?.goalId;
 const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
 const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
+const goalNorthStarView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNorthStar);
+const goalReportView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalReport);
+const goalReportChapterView = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.GoalReportChapter);
 
 // Topic chat selectors — the second, side-by-side topic opened in the portal
 const portalTopicId = (s: ChatStoreState): string | undefined => {
@@ -300,6 +318,7 @@ const verifyReportRunId = (s: ChatStoreState) => getViewData(s, PortalViewType.V
 const acceptancePortalId = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.Acceptance)?.acceptanceId;
 const acceptanceCheckPortal = (s: ChatStoreState) => getViewData(s, PortalViewType.AcceptanceCheck);
+const browserPortal = (s: ChatStoreState) => getViewData(s, PortalViewType.Browser);
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -346,17 +365,24 @@ export const chatPortalSelectors = {
   // File preview data
   currentFile,
   previewFileId,
+  previewFileSource,
+  previewFileSourceTopicId,
   chunkText,
 
   // Goal drill-down data
   goalMetricView,
+  goalNorthStarView,
+  dashboardWidgetView,
   goalNodeView,
   goalPortalId,
+  goalReportChapterView,
+  goalReportView,
 
   // Local file data
   activeLocalFileId,
   activeLocalFilePath,
   currentLocalFile,
+  isCurrentLocalFileRemote,
   dirtyLocalFileContents,
   isLocalFileDirty,
   localFileBuffer,
@@ -364,11 +390,15 @@ export const chatPortalSelectors = {
   localFileWorkingDirectory,
   openLocalFiles,
 
+  // Memory detail data
+  memoryDetailView,
+
   // Message detail data
   messageDetailId,
 
   // Task detail data
   taskDetailId,
+  taskDetailWorkspace,
   taskResultId,
 
   // Topic chat data
@@ -393,6 +423,9 @@ export const chatPortalSelectors = {
   // Acceptance data
   acceptanceCheckPortal,
   acceptancePortalId,
+
+  // Browser data
+  browserPortal,
 };
 
 export * from './selectors/thread';

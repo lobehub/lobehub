@@ -1,6 +1,7 @@
 import type { RuntimeSelectedTool } from '@lobechat/types';
 
 import { getToolStoreState } from '@/store/tool';
+import { pluginSelectors } from '@/store/tool/selectors';
 
 // Match <tool name="..." label="..." /> and legacy <action type="..." category="tool" ... />
 const TOOL_TAG_REGEX = /<tool\b([^>]*)\/>/g;
@@ -79,7 +80,9 @@ const loadToolContent = (identifier: string): string | undefined => {
     return content || undefined;
   }
 
-  const installedPlugin = (toolState.installedPlugins || []).find(
+  // Full records only: a plugin painted from the cached display projection is
+  // not in the tool set yet, so it has nothing to preload.
+  const installedPlugin = (pluginSelectors.confirmedInstalledPlugins(toolState) || []).find(
     (p) => p.identifier === identifier,
   );
 

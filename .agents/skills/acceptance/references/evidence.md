@@ -20,6 +20,10 @@ instructions merely to learn how to submit an artifact.
 The declared `requiredEvidence` type is binding. Do not replace a required video
 with a final screenshot or a required DOM snapshot with prose.
 
+Every `video` you capture carries chapters — your steps, the claims you verified
+on specific frames, and the anomalies you noticed — so the reviewer can seek to
+each one instead of watching the whole clip: [video-chapters.md](./video-chapters.md).
+
 ## Audio deliverables
 
 A sound cannot be verified in prose, and a waveform screenshot proves only that
@@ -27,11 +31,17 @@ a file exists. Upload the clip itself with `--type audio` and the acceptance
 page gives the reviewer a player.
 
 ```bash
-# The generated file is the evidence — attach the artifact the feature produced,
+# The generated file is the evidence — keep the artifact the feature produced,
 # not a re-encode and not a screenshot of the player.
-lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
-  --type audio --file ./out/tts-zh-female.mp3 --by program \
-  --desc "TTS output for 「今天天气不错」, zh-CN female voice, 2.4s"
+cp ./out/tts-zh-female.mp3 "$REPORT_DIR/assets/"
+```
+
+```jsonc
+// its case in result.json
+"evidence": [
+  { "path": "assets/tts-zh-female.mp3",
+    "description": "TTS output for 「今天天气不错」, zh-CN female voice, 2.4s" }
+]
 ```
 
 - `mp3` / `wav` / `m4a` / `aac` / `flac` / `ogg` / `opus` are recognized by
@@ -61,12 +71,14 @@ join an explanation from an older round with fresh execution output.
 
 ## File versus inline content
 
-- Use `--file` for binary artifacts and larger text/DOM/transcript files.
-- Use `--content` for short text assertions. Pass exactly one of `--file` and
-  `--content`.
-- **Description is mandatory for every file artifact.** Always supply a non-empty
-  `--desc` when using `--file`, and a `description` when attaching a `fileId` or
-  adding a file to an ingest manifest. Small text files converted to inline
+- Save binary artifacts and larger text/DOM/transcript files into the round's
+  `assets/` and list them in the case's `evidence`; ingest inlines small text
+  files itself.
+- When supplementing a single artifact with `result submit`, use `--file` for a
+  file and `--content` for a short text assertion — exactly one of them.
+- **Description is mandatory for every file artifact.** Always supply a
+  `description` on each `evidence` entry in `result.json`, and a non-empty
+  `--desc` when supplementing with `--file` or attaching a `fileId`. Small text files converted to inline
   content still require it; do not rely on the filename fallback.
 - Write a concise, factual sentence identifying the file's contents and their
   relevance to the criterion, including the action, observed state, or target
@@ -79,15 +91,11 @@ join an explanation from an older round with fresh execution output.
   separately instead of repeating the criterion title for every file.
 
 ```bash
-# File artifact captured by the selected surface.
+# Supplementing one artifact after the round was published.
 lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type "$EVIDENCE_TYPE" --file "$ARTIFACT_PATH" --by "$PROVENANCE" \
   --desc "Observed state after the planned action"
-
-# Short text assertion.
-lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
-  --type text --content "$ASSERTION_OUTPUT" --by cli \
-  --desc "Machine-readable assertion output"
+# A video carries its chapters: add --chapters "$CHAPTERS_JSON".
 ```
 
 ## Provenance (`--by`)

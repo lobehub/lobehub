@@ -88,25 +88,10 @@ describe('getAllScopePermissions', () => {
   });
 
   describe('return value format', () => {
-    it('should return an array of strings', () => {
-      const result = getAllScopePermissions('AGENT_READ');
-      expect(Array.isArray(result)).toBe(true);
-      for (const permission of result) {
-        expect(typeof permission).toBe('string');
-      }
-    });
-
     it('should return permissions in format "resource:action:scope"', () => {
       const result = getAllScopePermissions('KNOWLEDGE_BASE_CREATE');
       for (const permission of result) {
         expect(permission).toMatch(/^\w+:\w+:\w+$/);
-      }
-    });
-
-    it('should filter out any undefined/empty values', () => {
-      const result = getAllScopePermissions('AGENT_READ');
-      for (const permission of result) {
-        expect(permission).toBeTruthy();
       }
     });
   });

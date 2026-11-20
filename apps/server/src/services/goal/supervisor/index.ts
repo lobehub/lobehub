@@ -21,7 +21,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { resolveGoalModelConfig } from '../modelConfig';
-import { scheduleGoalAdvance } from '../scheduler';
+import { countUnchargedRuns } from '../recoveryPolicy';
+import { goalPollDelay, scheduleGoalAdvance } from '../scheduler';
 import { claimGoalTask } from '../taskClaim';
 import {
   RECOVERABLE_TASK_STATUSES,
@@ -123,9 +124,10 @@ export class GoalSupervisorService {
   ): Promise<GoalTickResult | null> => {
     if (!graph.goal.config?.supervision?.enabled) return null;
     const goalId = graph.goal.id;
-    const waiting = async (message: string): Promise<GoalTickResult> => {
+    const waiting = async (message: string, since?: string): Promise<GoalTickResult> => {
       await scheduleGoalAdvance({
-        delay: 5,
+        delay: goalPollDelay(since),
+        poll: true,
         goalId,
         userId: this.userId,
         workspaceId: this.workspaceId,
@@ -142,11 +144,29 @@ export class GoalSupervisorService {
     // identity and settlement redesigned, so it still reaches a person for now.
     if (!latest?.operationId) return null;
     const failedOperation = await operations.findById(latest.operationId);
-    const state = graph.goal.config.supervisorState ?? (await this.initialize(graph));
+    let state = graph.goal.config.supervisorState ?? (await this.initialize(graph));
     let incident = state.incidents.find((item) => item.failedOperationId === latest.operationId);
     if (!incident) {
-      if (state.incidents.some((item) => item.status === 'diagnosing'))
-        return waiting('Another interruption is being diagnosed');
+      // An incident is only re-read while its own Task is the failing one, so a
+      // diagnosis abandoned by a Task that later finished stays `diagnosing` for
+      // good. Waiting on it unbounded polled every five seconds and, with the
+      // sweep seeding another chain each pass, took the database pool down.
+      const diagnosing = state.incidents.filter((item) => item.status === 'diagnosing');
+      const expired = diagnosing.filter(
+        (item) => Date.now() - new Date(item.createdAt).getTime() > SUPERVISOR_DIAGNOSIS_TIMEOUT_MS,
+      );
+      if (expired.length < diagnosing.length)
+        return waiting('Another interruption is being diagnosed', diagnosing[0].createdAt);
+      if (expired.length > 0) {
+        for (const stale of expired) {
+          await this.updateIncident(goalId, stale.id, {
+            reason: 'Supervisor diagnosis never settled; no recovery was applied',
+            status: 'escalated',
+          });
+        }
+        const fresh = await new GoalModel(this.db, this.userId, this.workspaceId).findById(goalId);
+        state = fresh?.config?.supervisorState ?? state;
+      }
       if (state.incidents.length >= supervisionLimit(graph.goal)) {
         for (const previous of state.incidents.filter(
           (item) => item.taskId === task.id && item.status === 'retrying',
@@ -164,6 +184,7 @@ export class GoalSupervisorService {
         task,
         failedOperation,
         statusAuthoredByActor(await taskModel.getActivities(task.id, 20), task.status),
+        countUnchargedRuns(runs),
       );
       if (eligibility.eligible && (await this.budgetBlocked(graph))) {
         eligibility = {
@@ -197,7 +218,8 @@ export class GoalSupervisorService {
           incident,
         ],
       });
-      if (!claimed) return waiting('Another supervisor advance claimed this incident');
+      if (!claimed)
+        return waiting('Another supervisor advance claimed this incident', incident.createdAt);
       if (!incident.eligible) return null;
       // The durable incident precedes dispatch. If the process dies afterwards,
       // a sweep adopts the topic operation instead of starting another diagnosis.
@@ -276,7 +298,7 @@ export class GoalSupervisorService {
     const expired =
       Date.now() - new Date(incident.createdAt).getTime() > SUPERVISOR_DIAGNOSIS_TIMEOUT_MS;
     if (!operation || ['idle', 'running'].includes(operation.status)) {
-      if (!expired) return waiting('Waiting for supervisor diagnosis');
+      if (!expired) return waiting('Waiting for supervisor diagnosis', incident.createdAt);
       await this.updateIncident(goalId, incident.id, {
         reason: 'Supervisor diagnosis timed out; no recovery was applied',
         status: 'escalated',
@@ -339,6 +361,7 @@ export class GoalSupervisorService {
             await new TaskModel(tx, this.userId, this.workspaceId).getActivities(task.id, 20),
             currentTask.status,
           ),
+          countUnchargedRuns(currentRuns),
         ).eligible ||
         (await new GoalSupervisorService(tx, this.userId, this.workspaceId).budgetBlocked(
           currentGraph,
@@ -385,7 +408,7 @@ export class GoalSupervisorService {
         fresh?.config?.supervisorState?.incidents.find((item) => item.id === incident.id)
           ?.status === 'retrying'
       ) {
-        return waiting('Supervisor recovery already queued');
+        return waiting('Supervisor recovery already queued', incident.createdAt);
       }
       await this.updateIncident(goalId, incident.id, {
         reason: 'Recovery preconditions changed; no recovery was applied',

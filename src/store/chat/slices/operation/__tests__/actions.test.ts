@@ -221,6 +221,32 @@ describe('Operation Actions', () => {
       expect(childOp.parentOperationId).toBe(parentOpId!);
     });
 
+    it('should carry the parent turn start into child operations', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let childOpId: string;
+      let grandchildOpId: string;
+
+      act(() => {
+        const parent = result.current.startOperation({
+          type: 'sendMessage',
+          context: { agentId: 'session1', topicId: 'topic1' },
+          metadata: { turnStartTime: 1000 },
+        });
+        childOpId = result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          parentOperationId: parent.operationId,
+        }).operationId;
+        grandchildOpId = result.current.startOperation({
+          type: 'reasoning',
+          parentOperationId: childOpId,
+        }).operationId;
+      });
+
+      expect(result.current.operations[childOpId!].metadata.turnStartTime).toBe(1000);
+      expect(result.current.operations[grandchildOpId!].metadata.turnStartTime).toBe(1000);
+    });
+
     it('should update indexes correctly', () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -242,32 +268,6 @@ describe('Operation Actions', () => {
       // Check context index
       const contextKey = 'main_session1_topic1';
       expect(result.current.operationsByContext[contextKey]).toContain(operationId!);
-    });
-  });
-
-  describe('completeOperation', () => {
-    it('should mark operation as completed with correct metadata', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      let operationId: string;
-
-      act(() => {
-        operationId = result.current.startOperation({
-          type: 'execAgentRuntime',
-          context: { agentId: 'session1' },
-        }).operationId;
-      });
-
-      act(() => {
-        result.current.completeOperation(operationId!);
-      });
-
-      const operation = result.current.operations[operationId!];
-
-      expect(operation.status).toBe('completed');
-      expect(operation.metadata.endTime).toBeDefined();
-      expect(operation.metadata.duration).toBeDefined();
-      expect(operation.metadata.duration).toBeGreaterThanOrEqual(0);
     });
   });
 

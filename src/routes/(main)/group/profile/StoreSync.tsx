@@ -43,18 +43,10 @@ const StoreSync = memo(() => {
   useRegisterFilesHotkeys();
   useSaveDocumentHotkey(flushSave);
 
-  // Clear state when unmounting
+  // Clear state when unmounting: the store action drops the save-state view and
+  // its replica bookkeeping together.
   useUnmount(() => {
-    useGroupProfileStore.setState(
-      {
-        activeTabId: 'group',
-        editor: undefined,
-        editorState: undefined,
-        saveStateMap: {},
-      },
-      false,
-      'GroupProfileUnmounted',
-    );
+    useGroupProfileStore.getState().clearProfileState();
   });
 
   return null;

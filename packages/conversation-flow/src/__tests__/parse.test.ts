@@ -1712,4 +1712,43 @@ describe('parse', () => {
       });
     });
   });
+
+  describe('thread scope', () => {
+    const base = { createdAt: 1, role: 'assistant', updatedAt: 1 } as const;
+    // Shape of `MessageModel.query({ threadId })`: the unthreaded ancestors the thread hangs
+    // off, followed by the thread's own replies.
+    const threadQuery: Message[] = [
+      { ...base, content: 'Question', id: 'user-1', role: 'user' },
+      { ...base, content: 'Answer', createdAt: 2, id: 'asst-1', parentId: 'user-1' },
+      {
+        ...base,
+        content: 'Thread question',
+        createdAt: 3,
+        id: 'thr-1',
+        parentId: 'asst-1',
+        role: 'user',
+        threadId: 'thd-1',
+      },
+      {
+        ...base,
+        content: 'Thread answer',
+        createdAt: 4,
+        id: 'thr-2',
+        parentId: 'thr-1',
+        threadId: 'thd-1',
+      },
+    ];
+
+    it('should keep thread replies when parsing a thread view', () => {
+      const { flatList } = parse(threadQuery, undefined, { threadId: 'thd-1' });
+
+      expect(flatList.map((m) => m.id)).toEqual(['user-1', 'asst-1', 'thr-1', 'thr-2']);
+    });
+
+    it('should leave threads out of the main flow by default', () => {
+      const { flatList } = parse(threadQuery);
+
+      expect(flatList.map((m) => m.id)).toEqual(['user-1', 'asst-1']);
+    });
+  });
 });

@@ -1,0 +1,58 @@
+name: CodeQL
+
+# CodeQL previously ran through GitHub's *default setup*, which scans every
+# pull request and every push to the default branch. This repository produces
+# several hundred workflow runs a day, and those per-PR scans were around a
+# fifth of them for very little signal on a codebase this size. Advanced setup
+# keeps the same analysis and the same `security-events` reporting, but runs it
+# on a schedule instead.
+#
+# The switch is completed outside this file: once this workflow is on `canary`,
+# turn default setup off, otherwise both would run.
+#   gh api -X PATCH repos/lobehub/lobehub/code-scanning/default-setup \
+#     -f state=not-configured
+
+on:
+  schedule:
+    # Mondays at 04:27 UTC.
+    - cron: '27 4 * * 1'
+  # Lets anyone re-run the scan on demand without waiting for the schedule.
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      # Required to upload the analysis results to the Security tab.
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - javascript-typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{ matrix.language }}'

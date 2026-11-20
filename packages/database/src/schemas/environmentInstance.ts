@@ -21,7 +21,15 @@ import { timestamps } from './_helpers';
 import { devices } from './device';
 import { environments } from './environment';
 
-/** A concrete materialization of an abstract environment, independent of any project or agent. */
+/**
+ * A concrete materialization of an abstract environment, independent of any project or agent.
+ *
+ * A managed cloud device's instance is a `cluster` row: `provider` is
+ * `MANAGED_CLOUD_CLUSTER_PROVIDER_V1`, `providerScope` the region it runs in,
+ * and `providerResourceId` the managed device id (equal to `devices.deviceId`
+ * of its device row, which is unique only within the owner's scope). See
+ * `@lobechat/types` `managedDevice`.
+ */
 export const environmentInstances = pgTable(
   'environment_instances',
   {
@@ -34,11 +42,11 @@ export const environmentInstances = pgTable(
     kind: text('kind').$type<EnvironmentInstanceKind>().notNull(),
     /** Internal devices.id, including remote machines enrolled through lh connect. */
     deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'restrict' }),
-    /** Sandbox adapter identifier, or rc for a cluster binding. */
+    /** Sandbox adapter identifier, or the cluster provider (e.g. `MANAGED_CLOUD_CLUSTER_PROVIDER_V1`). */
     provider: text('provider'),
-    /** Non-secret provider account/cluster scope; external IDs are unique only within this scope. */
+    /** Non-secret provider account, cluster or region scope; external IDs are unique only within this scope. */
     providerScope: text('provider_scope'),
-    /** Sandbox or rc-controlled resource reference; never an access token or a signed URL. */
+    /** Sandbox or cluster resource reference; never an access token or a signed URL. */
     providerResourceId: text('provider_resource_id'),
     /** Physical working path in this instance, not a repository URL. */
     workingDirectory: text('working_directory').notNull(),
@@ -50,6 +58,18 @@ export const environmentInstances = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     /** Last recorded instance state; ready is not proof that a device is currently online. */
     status: text('status').$type<EnvironmentInstanceStatus>().notNull().default('pending'),
+    /**
+     * The build that last materialized this instance, while it is worth
+     * polling. Its log is the only place a failed bootstrap explains itself,
+     * and the runtime keeps that log under an id, so losing the id loses the
+     * reason — which is exactly when someone needs it.
+     *
+     * Cleared when a build settles into {@link status}: a stale id would have
+     * the UI poll a log the runtime has already dropped.
+     */
+    buildId: text('build_id'),
+    /** Why the last build failed, in the runtime's own words. Null on success. */
+    buildError: text('build_error'),
     ...timestamps,
   },
   (t) => [

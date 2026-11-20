@@ -1,12 +1,12 @@
 'use client';
 
-import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
 import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Alert, Button, Select, Spin } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Alert, Button, Flexbox, Highlighter, Select, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,15 +14,12 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
+import { aiProviderService } from '@/services/aiProvider';
 import { chatService } from '@/services/chat';
-import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
-const styles = createStaticStyles(({ css }) => ({
-  popup: css`
-    width: 380px;
-  `,
-}));
+const styles = stylex.create({ popup: { width: '380px' } });
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error.body?.provider);
@@ -63,6 +60,11 @@ export type CheckErrorRender = (props: {
 
 interface ConnectionCheckerProps {
   checkErrorRender?: CheckErrorRender;
+  /**
+   * `credentials`: verify the key on the server without a check model, for providers that
+   * serve no chat models. Defaults to a chat round-trip with `model`.
+   */
+  checkMode?: 'chat' | 'credentials';
   model: string;
   onAfterCheck: () => Promise<void>;
   onBeforeCheck: () => Promise<boolean>;
@@ -70,7 +72,14 @@ interface ConnectionCheckerProps {
 }
 
 const Checker = memo<ConnectionCheckerProps>(
-  ({ model, provider, checkErrorRender: CheckErrorRender, onBeforeCheck, onAfterCheck }) => {
+  ({
+    checkMode = 'chat',
+    model,
+    provider,
+    checkErrorRender: CheckErrorRender,
+    onBeforeCheck,
+    onAfterCheck,
+  }) => {
     const { t } = useTranslation('setting');
     const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
@@ -78,7 +87,9 @@ const Checker = memo<ConnectionCheckerProps>(
       aiProviderSelectors.isProviderConfigUpdating(provider)(s),
       s.updateAiProviderConfig,
     ]);
-    const aiProviderModelList = useAiInfraStore((s) => s.aiProviderModelList);
+    const aiProviderModelList = useAiInfraStore((s) =>
+      aiModelSelectors.getAiProviderModelList(provider)(s),
+    );
 
     // Sort models for better UX:
     // 1. checkModel first (provider's recommended test model)
@@ -120,10 +131,40 @@ const Checker = memo<ConnectionCheckerProps>(
       setCheckModel(model);
     }, [model]);
 
+    const checkCredentials = async () => {
+      setLoading(true);
+      try {
+        const result = await aiProviderService.checkProviderConnectivity(provider);
+        if (result.ok) {
+          setPass(true);
+          return;
+        }
+
+        const errorType =
+          ('errorType' in result && typeof result.errorType === 'string' && result.errorType) ||
+          'ConnectionCheckFailed';
+        setError({
+          body: { error: result.error, provider },
+          message: result.error,
+          type: errorType as ChatMessageError['type'],
+        });
+      } catch (error) {
+        setError({
+          body: { provider },
+          message: (error as Error)?.message,
+          type: 'ConnectionCheckFailed',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
     const checkConnection = async () => {
       // Clear previous check results immediately
       setPass(false);
       setError(undefined);
+
+      if (checkMode === 'credentials') return checkCredentials();
 
       let isError = false;
 
@@ -135,7 +176,11 @@ const Checker = memo<ConnectionCheckerProps>(
         },
 
         onFinish: async (value) => {
-          if (!isError && value) {
+          // A provider error inside a 200 stream (a relayed device call, or any
+          // in-stream error) also finishes the stream: keep that error.
+          if (isError) return;
+
+          if (value) {
             setError(undefined);
             setPass(true);
           } else {
@@ -180,51 +225,45 @@ const Checker = memo<ConnectionCheckerProps>(
     return (
       <Flexbox gap={8}>
         <Flexbox horizontal gap={8}>
-          <Select
-            virtual
-            disabled={!canManageProvider}
-            listItemHeight={36}
-            options={sortedModels.map((id) => ({ label: id, value: id }))}
-            popupClassName={cx(styles.popup)}
-            suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
-            value={checkModel}
-            optionRender={({ value }) => {
-              return (
-                <Flexbox horizontal align={'center'} gap={6}>
-                  <ModelIcon model={value as string} size={20} />
-                  {value}
-                </Flexbox>
-              );
-            }}
-            style={{
-              flex: 1,
-              overflow: 'hidden',
-            }}
-            onSelect={async (value) => {
-              if (!canManageProvider) return;
+          {checkMode !== 'credentials' && (
+            <Select
+              virtual
+              disabled={!canManageProvider}
+              listItemHeight={36}
+              options={sortedModels.map((id) => ({ label: id, value: id }))}
+              popupClassName={stylex.props(styles.popup).className}
+              suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
+              value={checkModel}
+              optionRender={({ value }) => {
+                return (
+                  <Flexbox horizontal align={'center'} gap={6}>
+                    <ModelIcon model={value as string} size={20} />
+                    {value}
+                  </Flexbox>
+                );
+              }}
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+              }}
+              onSelect={async (value) => {
+                if (!canManageProvider) return;
 
-              // Update local state
-              setCheckModel(value);
-              setPass(false);
-              setError(undefined);
+                // Update local state
+                setCheckModel(value);
+                setPass(false);
+                setError(undefined);
 
-              // Persist the selected model to provider config
-              // This allows the model to be retained after page refresh
-              await updateAiProviderConfig(provider, { checkModel: value });
-            }}
-          />
+                // Persist the selected model to provider config
+                // This allows the model to be retained after page refresh
+                await updateAiProviderConfig(provider, { checkModel: value });
+              }}
+            />
+          )}
           <Button
             disabled={!canManageProvider || isProviderConfigUpdating}
+            icon={pass ? CircleCheckIcon : undefined}
             loading={loading}
-            icon={
-              pass ? (
-                <CheckCircleFilled
-                  style={{
-                    color: cssVar.colorSuccess,
-                  }}
-                />
-              ) : undefined
-            }
             style={
               pass
                 ? {

@@ -31,9 +31,10 @@ if ! have_compatible_node; then
   install_node
 fi
 
-if ! command -v supervisord >/dev/null 2>&1; then
+# tree-kill uses ps to enumerate child processes on Linux.
+if ! command -v supervisord >/dev/null 2>&1 || ! command -v ps >/dev/null 2>&1; then
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y supervisor
+  DEBIAN_FRONTEND=noninteractive apt-get install -y supervisor procps
 fi
 
 for bin in node npm; do
@@ -41,6 +42,16 @@ for bin in node npm; do
   [[ "$bin_path" == "/usr/local/bin/$bin" ]] || ln -sf "$bin_path" "/usr/local/bin/$bin"
 done
 
+{% if not use_system_cli %}
+cat >/opt/lh-dev/run-lh.sh <<'LH_RUNNER'
+#!/usr/bin/env bash
+set -euo pipefail
+exec node /opt/lh-dev/dist/index.js "$@"
+LH_RUNNER
+chmod +x /opt/lh-dev/run-lh.sh
+{% endif %}
+
+{% if install_cli %}
 {% if use_system_cli %}
 npm install -g "$CLI_PACKAGE"
 lh_path="$(command -v lh)"
@@ -49,11 +60,27 @@ lh_path="$(command -v lh)"
 {% else %}
 test -f /opt/lh-dev/package.json
 test -f /opt/lh-dev/dist/index.js
-cat >/opt/lh-dev/run-lh.sh <<'LH_RUNNER'
-#!/usr/bin/env bash
-set -euo pipefail
-exec node /opt/lh-dev/dist/index.js "$@"
-LH_RUNNER
-chmod +x /opt/lh-dev/run-lh.sh
 /opt/lh-dev/run-lh.sh --version
+{% endif %}
+{% endif %}
+
+{% if not use_system_cli %}
+{% if install_cli %}
+install_runtime=true
+{% else %}
+install_runtime=false
+{% endif %}
+if [[ "$install_runtime" == true || "${1:-}" == --install-runtime ]]; then
+  node --input-type=module <<'LH_DEPENDENCIES'
+import fs from 'node:fs/promises';
+const manifest = JSON.parse(await fs.readFile('/opt/lh-dev/package.json', 'utf8'));
+await fs.writeFile('/opt/lh-dev/package.json', JSON.stringify({
+  name: manifest.name,
+  version: manifest.version,
+  type: manifest.type,
+  dependencies: manifest.dependencies,
+}));
+LH_DEPENDENCIES
+  npm install --prefix /opt/lh-dev --omit=dev --no-audit --no-fund --package-lock=false
+fi
 {% endif %}

@@ -1,8 +1,7 @@
 'use client';
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { Fragment, memo, useEffect, useRef } from 'react';
 
@@ -70,7 +69,7 @@ const GenerationFeed = memo<GenerationFeedProps>(({ batches, renderBatchItem }) 
       <Flexbox gap={16} ref={parent} style={{ paddingBottom: 48 }} width="100%">
         {batches.map((batch, index) => (
           <Fragment key={batch.id}>
-            {Boolean(index !== 0) && <Divider dashed style={{ margin: 0 }} />}
+            {Boolean(index !== 0) && <Divider dashed />}
             {renderBatchItem(batch)}
           </Fragment>
         ))}

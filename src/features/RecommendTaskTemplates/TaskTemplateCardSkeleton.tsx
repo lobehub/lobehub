@@ -1,7 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import { Block, cssVar, cx, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { styles as briefStyles } from '@/features/DailyBrief/style';
@@ -70,7 +67,7 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
           <Skeleton.Avatar shape={'circle'} size={24} style={{ flex: 'none' }} />
         </Flexbox>
 
-        <Divider dashed style={{ marginBlock: 0 }} />
+        <Divider dashed />
 
         <Skeleton.Text fontSize={14} rows={descriptionRows} style={{ marginBottom: 0 }} />
 

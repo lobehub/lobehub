@@ -41,7 +41,7 @@ describe('createRealtimeAsrSession', () => {
     );
     expect(fetcher).toHaveBeenCalledOnce();
     const [url, init] = fetcher.mock.calls[0];
-    expect(url).toBe('/api/asr/realtime/session');
+    expect(url).toBe('/webapi/asr/realtime/session');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ platform: 'web' });
     expect(init.headers.get('X-Test-Scope')).toBe('scope-1');

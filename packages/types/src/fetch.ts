@@ -10,12 +10,14 @@ export const ChatErrorType = {
   WorkspaceFrozenByAdmin: 'WorkspaceFrozenByAdmin', // Workspace manually frozen by admin (reason is operator-written, safe to surface)
   WorkspaceFrozenByRiskControl: 'WorkspaceFrozenByRiskControl', // Workspace auto-frozen by risk control (reason is engineer debug text, hide from user)
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
-  ShareTurnLimitExceeded: 'ShareTurnLimitExceeded', // Shared-agent topic hit shareConfig.maxTurnsPerTopic — visitor can start a new topic
-  ShareTopicLimitExceeded: 'ShareTopicLimitExceeded', // Visitor hit shareConfig.maxTopicsPerVisitor on this shared agent
+  ShareMessageLimitExceeded: 'ShareMessageLimitExceeded', // Visitor hit shareConfig.maxMessagesPerVisitor on this shared agent
   ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
+  ShareHeteroDeviceUnavailable: 'ShareHeteroDeviceUnavailable', // The shared Claude Code / Codex agent's device is offline or not set — visitor can retry later
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
+  AgentConcurrencyLimitExceeded: 'AgentConcurrencyLimitExceeded', // The user already has as many agent runs in flight as allowed — recovers when one finishes
+  InsufficientBudgetForAgentRunFee: 'InsufficientBudgetForAgentRunFee', // The user's credits cannot pay the per-run agent fee — refused before the run starts, also on the user's own provider key
 
   InvalidUserKey: 'InvalidUserKey', // is not valid User key
   CreateMessageError: 'CreateMessageError',
@@ -30,6 +32,7 @@ export const ChatErrorType = {
   SystemTimeNotMatchError: 'SystemTimeNotMatchError',
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
   DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
+  DeviceResponseTimeout: 'DeviceResponseTimeout', // Run reached the device, which did not answer in time
 
   // ******* Desktop Backend-Proxy Network Errors ******* //
   // Emitted by the Electron backend proxy when the upstream fetch fails at the

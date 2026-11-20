@@ -3,8 +3,10 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import type {
   ChatMessagePluginError,
   CreateMessageParams,
@@ -15,10 +17,18 @@ import { ChatErrorType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { type MessageBatchOperation, messageService } from '@/services/message';
+import {
+  mergeStoredToolPayloads,
+  selectProjectedToolIds,
+  type StoredToolPayload,
+} from '@/services/message/hydrateProjectedTools';
 import type { ChatStore } from '@/store/chat/store';
 
 /** Client message adapter backed by the optimistic chat store. */
 export class ClientMessageTransport implements MessageTransport {
+  /** Stored tool payloads refilled for this run — see `withStoredToolPayloads`. */
+  private readonly storedToolPayloads = new Map<string, StoredToolPayload>();
+
   constructor(
     private readonly get: () => ChatStore,
     private readonly messageKey: string,
@@ -49,14 +59,22 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.createMessage(params);
+    return this.createToolMessageForOperation(params, this.operationId);
   }
 
   createToolMessageForOperation(
     params: CreateMessageParams,
     operationId: string,
   ): Promise<RuntimeMessageRef> {
-    return this.createMessage(params, operationId);
+    return this.createMessage(
+      {
+        ...params,
+        ...(params.pluginIntervention && {
+          pluginIntervention: { ...params.pluginIntervention, runtimeType: 'client' },
+        }),
+      },
+      operationId,
+    );
   }
 
   async deleteMessage(id: string): Promise<void> {
@@ -74,11 +92,20 @@ export class ClientMessageTransport implements MessageTransport {
     return undefined;
   }
 
+  async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
+    const messages = await this.withStoredToolPayloads(this.getMessages());
+    const message = messages.find((message) => message.id === id && message.role === 'tool');
+    if (message?.payloadOmitted && !this.storedToolPayloads.has(id)) {
+      throw new Error(`Cannot restore tool result for ${id}`);
+    }
+    return message;
+  }
+
   async query(
     _params?: QueryMessagesInput,
     _options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
-    return this.getMessages();
+    return (await this.withStoredToolPayloads(this.getMessages())).map(omitToolWorkRegistration);
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {
@@ -158,6 +185,7 @@ export class ClientMessageTransport implements MessageTransport {
     store.internal_dispatchMessage(
       { id, type: 'createMessage', value: { ...message } },
       optimisticContext,
+      { creationOrigin: 'client' },
     );
 
     try {
@@ -180,6 +208,7 @@ export class ClientMessageTransport implements MessageTransport {
       );
       throw createError;
     }
+    store.internal_confirmClientMessages([id]);
 
     return message;
   }
@@ -207,5 +236,40 @@ export class ClientMessageTransport implements MessageTransport {
 
   private getMessages(): UIChatMessage[] {
     return this.get().dbMessagesMap[this.messageKey] ?? [];
+  }
+
+  /**
+   * Put the stored tool payloads back before this list becomes an LLM context.
+   *
+   * A browser-executed run reads its history from the same store the UI
+   * renders, and that store can be holding a list fetched while the read path
+   * was projecting tool payloads to view models (`payloadOmitted`) — Gateway
+   * mode was on for this agent when the list was cached and has since been
+   * turned off, or another surface seeded the bucket. Rendering is happy with
+   * the view model; the model is not, and would silently lose the tool output
+   * it is supposed to reason about.
+   *
+   * The fetched payloads are cached per operation: a run queries once per step,
+   * the map is keyed by row id and so stays valid as the conversation grows. A
+   * failed refill leaves the row projected — a degraded context still beats a
+   * step that cannot run at all.
+   */
+  private async withStoredToolPayloads(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
+    const missing = selectProjectedToolIds(messages).filter(
+      (id) => !this.storedToolPayloads.has(id),
+    );
+
+    if (missing.length > 0) {
+      try {
+        const fetched = await messageService.getToolResultPayloads(missing);
+        for (const [id, payload] of Object.entries(fetched)) {
+          this.storedToolPayloads.set(id, payload);
+        }
+      } catch (error) {
+        console.error('[ClientMessageTransport] failed to restore tool payloads:', error);
+      }
+    }
+
+    return mergeStoredToolPayloads(messages, Object.fromEntries(this.storedToolPayloads)).messages;
   }
 }

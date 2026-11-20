@@ -11,12 +11,173 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      "Claude Fable 5.2 is Anthropic's latest model for demanding reasoning and long-horizon agentic work, priced below Fable 5.1.",
+    displayName: 'Claude Fable 5.2',
+    enabled: true,
+    family: 'claude-mythos',
+    generation: 'mythos-5.2',
+    id: 'claude-fable-5-2',
+    isOfficial: true,
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 16, '5m': 10 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-11-09',
+    // Like Fable 5.1, adaptive thinking is always on, so the `enableAdaptiveThinking` toggle is
+    // intentionally omitted.
+    // https://platform.claude.com/docs/en/models/fable-5-2/overview
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'opus47Effort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      "Claude Haiku 5.5 is Anthropic's fastest and most cost-efficient model, built for high-volume, latency-sensitive work such as classification, extraction, routing, and subagent tasks, with adaptive thinking and adjustable effort.",
+    displayName: 'Claude Haiku 5.5',
+    enabled: true,
+    family: 'claude-haiku',
+    generation: 'claude-5.5',
+    id: 'claude-haiku-5-5',
+    isOfficial: true,
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    // Priced by prompt length: once a prompt (cache reads and writes included) exceeds 100K
+    // tokens, every unit of the request is billed at the higher tier.
+    // https://platform.claude.com/docs/en/about-claude/pricing#long-context-pricing
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.01, upTo: 100_000 },
+            { rate: 0.05, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.1, upTo: 100_000 },
+            { rate: 0.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 100_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheWrite',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.125, upTo: 100_000 },
+            { rate: 0.625, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-10-07',
+    // Unlike Opus 5.5 / Sonnet 5.5, thinking can still be disabled (at effort `high` or below),
+    // so the `enableAdaptiveThinking` toggle stays.
+    // https://platform.claude.com/docs/en/models/haiku-5-5/whats-new-haiku-5-5
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Claude Sonnet 5.5 is a smarter, more efficient Sonnet that improves on Sonnet 5 in coding and knowledge work at the same base price, with cache reads at half the cost.',
+    displayName: 'Claude Sonnet 5.5',
+    enabled: true,
+    family: 'claude-sonnet',
+    generation: 'claude-5.5',
+    id: 'claude-sonnet-5-5',
+    isOfficial: true,
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    // https://platform.claude.com/docs/en/about-claude/pricing
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 4, '5m': 2.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-09-28',
+    // Like Opus 5.5, thinking is always on (`thinking.type: disabled` is rejected), so the
+    // `enableAdaptiveThinking` toggle is intentionally omitted.
+    // https://platform.claude.com/docs/en/models/sonnet-5-5/migration-guide#thinking-runs-by-default
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'opus47Effort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       'Claude Opus 5.5 is built for long-running agentic coding and knowledge work, outperforming Claude Fable 5.1 on Terminal-Bench 4.0 at a lower price than Claude Opus 5.',
     displayName: 'Claude Opus 5.5',
     enabled: true,
     family: 'claude-opus',
     generation: 'claude-5.5',
     id: 'claude-opus-5-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,
     pricing: {
@@ -24,7 +185,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 8, '5m': 5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-09-22',
@@ -54,6 +220,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-mythos',
     generation: 'mythos-5.1',
     id: 'claude-fable-5-1',
+    isOfficial: true,
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,
     pricing: {
@@ -61,7 +228,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 50, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 12.5, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 20, '5m': 12.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-09-01',
@@ -91,6 +263,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-mythos',
     generation: 'mythos-5',
     id: 'claude-fable-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
@@ -98,7 +271,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 50, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 12.5, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 20, '5m': 12.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-06-09',
@@ -125,6 +303,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-5',
     id: 'claude-opus-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-05',
     maxOutput: 128_000,
     pricing: {
@@ -132,7 +311,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 6.25, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 10, '5m': 6.25 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-07-24',
@@ -159,17 +343,23 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-5',
     id: 'claude-sonnet-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
-    // Introductory pricing, in effect through 2026-08-31. From 2026-09-01 standard rates apply:
-    // input 3 / output 15 / cacheRead 0.3 / cacheWrite 3.75 (per million tokens).
-    // See https://platform.claude.com/docs/en/about-claude/pricing
+    // The $2 / $10 launch pricing became the standard price; the increase to $3 / $15 that was
+    // scheduled for 2026-09-01 did not happen.
+    // https://platform.claude.com/docs/en/about-claude/pricing
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 4, '5m': 2.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-06-30',
@@ -196,6 +386,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-4.8',
     id: 'claude-opus-4-8',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
@@ -203,7 +394,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 6.25, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 10, '5m': 6.25 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-05-28',
@@ -230,6 +426,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-4.7',
     id: 'claude-opus-4-7',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
@@ -237,7 +434,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 6.25, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 10, '5m': 6.25 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-04-16',
@@ -263,6 +465,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-4.6',
     id: 'claude-opus-4-6',
+    isOfficial: true,
     knowledgeCutoff: '2025-05',
     maxOutput: 128_000,
     pricing: {
@@ -300,6 +503,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-4.6',
     id: 'claude-sonnet-4-6',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 64_000,
     pricing: {
@@ -379,6 +583,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-4.5',
     id: 'claude-sonnet-4-5-20250929',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
@@ -386,7 +591,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 6, '5m': 3.75 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2025-09-29',
@@ -412,6 +622,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-haiku',
     generation: 'claude-4.5',
     id: 'claude-haiku-4-5-20251001',
+    isOfficial: true,
     knowledgeCutoff: '2025-02',
     maxOutput: 64_000,
     pricing: {

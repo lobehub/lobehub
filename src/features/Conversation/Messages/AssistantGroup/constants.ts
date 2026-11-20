@@ -86,7 +86,9 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
 
   // Agent documents
   copyDocument: 'workflow.toolDisplayName.copyDocument',
+  createFolder: 'workflow.toolDisplayName.createFolder',
   listDocuments: 'workflow.toolDisplayName.listDocuments',
+  moveDocuments: 'workflow.toolDisplayName.moveDocuments',
   readDocument: 'workflow.toolDisplayName.readDocument',
   removeDocument: 'workflow.toolDisplayName.removeDocument',
   renameDocument: 'workflow.toolDisplayName.renameDocument',
@@ -161,6 +163,7 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   updateAgent: 'workflow.toolDisplayName.updateAgent',
 
   // Page agent
+  bash: 'workflow.toolDisplayName.runCommand',
   editTitle: 'workflow.toolDisplayName.editTitle',
   getPageContent: 'workflow.toolDisplayName.getPageContent',
   initPage: 'workflow.toolDisplayName.initPage',
@@ -191,3 +194,19 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   showAgentMarketplace: 'workflow.toolDisplayName.showAgentMarketplace',
   submitAgentPick: 'workflow.toolDisplayName.submitAgentPick',
 };
+
+/**
+ * Steps an opened workflow list mounts at first. A long turn can run hundreds
+ * of steps; mounting them all in one commit froze the page, so the list starts
+ * from its tail and earlier steps load on demand.
+ */
+export const WORKFLOW_LIST_INITIAL_STEPS = 50;
+
+/** Steps one "show earlier steps" click adds above the loaded ones. */
+export const WORKFLOW_LIST_LOAD_MORE_STEPS = 100;
+
+/**
+ * Above this many tool calls the workflow skips its open/close height
+ * animation: animating the height re-lays out the whole list on every frame.
+ */
+export const WORKFLOW_ANIMATED_MAX_TOOLS = 100;

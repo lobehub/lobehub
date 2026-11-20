@@ -1,7 +1,6 @@
 import { type ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
+import { createStaticStyles, cssVar, Flexbox, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
+import { ChevronRight, ExternalLink, Settings, Store, UserRoundPlus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,7 +23,10 @@ const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
         const filtered = item.children.filter((child) => {
           if (!child) return false;
           const key = String(child.key || '').toLowerCase();
-          return key.includes(lower);
+          return (
+            key.includes(lower) ||
+            ('searchText' in child && String(child.searchText).toLowerCase().includes(lower))
+          );
         });
         if (filtered.length === 0) return null;
         return { ...item, children: filtered };
@@ -60,10 +62,14 @@ const styles = createStaticStyles(({ css }) => ({
 interface PopoverContentProps {
   items: ItemType[];
   onClose?: () => void;
+  /** Connects an app for this agent alone, with an account the library does not hold. */
+  onConnectForAgent?: () => void;
   onOpenStore: () => void;
+  toolsOnly?: boolean;
 }
 
-const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose }) => {
+const PopoverContent = memo<PopoverContentProps>((props) => {
+  const { items, onOpenStore, onClose, onConnectForAgent, toolsOnly } = props;
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -80,7 +86,7 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
       <div className={styles.header} onClick={stopPropagation}>
         <SearchBar
           allowClear
-          placeholder={t('tools.search')}
+          placeholder={t(toolsOnly ? 'tools.picker.search' : 'tools.search')}
           size="small"
           style={{ flex: 1 }}
           value={searchKeyword}
@@ -93,6 +99,22 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
         {isEmpty ? <Empty /> : <ToolsList items={filteredItems} />}
       </ScrollSignalProvider>
       <div className={styles.footer}>
+        {onConnectForAgent ? (
+          <div
+            className={toolsListStyles.item}
+            role="button"
+            tabIndex={0}
+            onClick={onConnectForAgent}
+          >
+            <div className={toolsListStyles.itemIcon}>
+              <Icon icon={UserRoundPlus} size={SKILL_ICON_SIZE} />
+            </div>
+            <div className={toolsListStyles.itemContent}>
+              {t('settingAgent.tools.connection.connectForAgent')}
+            </div>
+            <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
+          </div>
+        ) : null}
         <div className={toolsListStyles.item} role="button" tabIndex={0} onClick={onOpenStore}>
           <div className={toolsListStyles.itemIcon}>
             <Icon icon={Store} size={SKILL_ICON_SIZE} />
@@ -112,7 +134,9 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
           <div className={toolsListStyles.itemIcon}>
             <Icon icon={Settings} size={SKILL_ICON_SIZE} />
           </div>
-          <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
+          <div className={toolsListStyles.itemContent}>
+            {t(toolsOnly ? 'tools.picker.management' : 'tools.plugins.management')}
+          </div>
           <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
         </div>
       </div>

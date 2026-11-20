@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -11,10 +11,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
+    height: ${densityVars.rowHeight};
     padding-block: 4px;
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
+    border-radius: ${densityVars.radius};
   `,
 }));
 

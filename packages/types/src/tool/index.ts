@@ -25,7 +25,6 @@ export type LobeToolRenderType = ToolManifestType;
 export * from './builtin';
 export * from './crawler';
 export * from './error';
-export * from './interpreter';
 export * from './intervention';
 export * from './manifest';
 export * from './plugin';

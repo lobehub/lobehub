@@ -1,8 +1,9 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
+
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import CountBadge from '../CountBadge';
 import { homeType } from '../homeType';
@@ -12,7 +13,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // the pane as a soft silhouette instead of being clipped away.
   card: css`
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
 
@@ -47,18 +48,26 @@ interface RailCardProps {
    */
   collapsed?: boolean;
   count?: number;
+  /**
+   * The rows on screen are the local copy and a refresh is in flight: a small
+   * spinner beside the count, so the user knows newer data may still arrive.
+   */
+  loading?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   title?: ReactNode;
 }
 
 const RailCard = memo<RailCardProps>(
-  ({ action, children, collapsed = false, count, onCollapsedChange, title }) => {
+  ({ action, children, collapsed = false, count, loading, onCollapsedChange, title }) => {
+    const { contentGap } = useDensityTokens();
+
     const heading = (
       <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
         <Text ellipsis className={homeType.sectionLabel}>
           {title}
         </Text>
         {count !== undefined && <CountBadge count={count} />}
+        {loading && <Spin size="small" variant="network" />}
         {onCollapsedChange && (
           <Icon
             className={'home-rail-card-chevron'}
@@ -71,7 +80,7 @@ const RailCard = memo<RailCardProps>(
     );
 
     return (
-      <Flexbox className={styles.card} data-testid={'home-rail-card'} gap={12}>
+      <Flexbox className={styles.card} data-testid={'home-rail-card'} gap={contentGap}>
         {title && (
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             {onCollapsedChange ? (

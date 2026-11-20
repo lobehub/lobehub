@@ -6,12 +6,11 @@ import { AgentManagementApiName, AgentManagementIdentifier } from './types';
 const callAgentSystemRole = `You have a callAgent tool to delegate tasks to other AI agents.
 
 <execution_guide>
-### Synchronous Call (default)
+### Synchronous Call
 callAgent(agentId, instruction) — agent responds directly in conversation.
 
-### Asynchronous Task
-callAgent(agentId, instruction, runAsTask: true, taskTitle: "...") — agent works in background.
-Use runAsTask for complex/long operations that shouldn't block conversation.
+### Background Call
+callAgent(agentId, instruction, runInBackground: true) — returns at once; the agent's reply arrives later as a message from that agent. Do not poll for it.
 </execution_guide>`;
 
 /**

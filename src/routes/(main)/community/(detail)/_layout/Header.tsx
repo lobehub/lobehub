@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, cssVar, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
@@ -13,6 +12,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
 import UserAvatar from '@/routes/(main)/community/features/UserAvatar';
 import { useDiscoverStore } from '@/store/discover';
+import { userSelectors } from '@/store/discover/selectors';
 
 import { styles } from './Header/style';
 
@@ -29,7 +29,9 @@ const Header = memo(() => {
       : '';
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
-  const { data: detailProfile } = useUserProfile({ username: profileUsername });
+  const { queryKey: detailProfileQueryKey } = useUserProfile({ username: profileUsername });
+  // The replica view of this profile; the sync hook only reports the fetch flags.
+  const detailProfile = useDiscoverStore(userSelectors.userProfile(detailProfileQueryKey));
   const detailAvatar =
     detailProfile?.user.avatarUrl || detailProfile?.user.userName || detailProfile?.user.namespace;
 
@@ -57,7 +59,7 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      className={styles.headerContainer}
+      className={stylex.props(styles.headerContainer).className}
       right={<UserAvatar avatarOverride={detailAvatar} />}
       style={cssVariables}
       left={

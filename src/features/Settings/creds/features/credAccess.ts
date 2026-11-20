@@ -1,50 +1,66 @@
 import { type UserCredSummary } from '@lobechat/types';
 
 /**
- * Ownership routing for a row from an org-scoped credential list
- * (`workspaceCreds.list`). Extracted from {@link CredsList} as plain,
- * dependency-free functions so the routing decision has direct unit
- * coverage independent of React/tRPC test scaffolding — see
- * `credAccess.test.ts`.
+ * What the signed-in member may do with a row of a workspace credential list
+ * (`workspaceCreds.list`). Plain functions so the rules have direct unit
+ * coverage — see `credAccess.test.ts`.
  *
- * A row can be:
- * - the org's own credential (`ownerType: 'organization'`);
- * - the SIGNED-IN member's own credential, published/draft-linked into the
- *   org (`ownerType: 'user'` AND `ownerAccountId === myAccountId`);
- * - ANOTHER member's published credential (`ownerType: 'user'` AND
- *   `ownerAccountId !== myAccountId`) — `ownerType` alone conflates this
- *   with the previous case.
+ * A row is one of:
+ * - a workspace credential (`ownerType: 'organization'`), shared with every
+ *   member (`visibility: 'public'`) or private to the member who created it;
+ * - the member's own personal credential shared into the workspace
+ *   (`ownerType: 'user'`, `ownerAccountId` is theirs);
+ * - another member's published personal credential.
  *
- * Market's org-scoped write endpoints (`/organizations/:orgId/creds/:id`
- * PATCH/DELETE/GET?decrypt) resolve ownership by the *org's* account id
- * only — they 404 (or refuse to decrypt) on ANY member-owned row, mine or
- * someone else's. So:
- * - org-owned → the workspace API (context-bound) is correct;
- * - my own row → must go through my personal `market.creds` endpoint
- *   instead, which is scoped to my own account;
- * - another member's row → no endpoint this UI can reach at all; actions
- *   for it must be hidden rather than misrouted (routing to my personal API
- *   would 404 too, since that row isn't mine).
+ * Market enforces the same rules; these only decide which actions to offer.
  */
-type CredRowOwnership = Pick<UserCredSummary, 'ownerAccountId' | 'ownerType'>;
+type CredRow = Pick<
+  UserCredSummary,
+  'createdByAccountId' | 'ownerAccountId' | 'ownerType' | 'visibility'
+>;
 
-export const isOwnCredRow = (cred: CredRowOwnership, myAccountId: number | undefined): boolean =>
-  cred.ownerType === 'user' && cred.ownerAccountId === myAccountId;
+export interface CredRowViewer {
+  /** Holds the workspace's credential-management permission. */
+  isAdmin: boolean;
+  /** The member's Market account id. */
+  myAccountId: number | undefined;
+}
 
-export const isActionableCredRow = (
-  cred: CredRowOwnership,
-  myAccountId: number | undefined,
-): boolean => cred.ownerType !== 'user' || isOwnCredRow(cred, myAccountId);
+export interface CredRowAccess {
+  /** Make it private to its creator / owner again. */
+  makePrivate: boolean;
+  /** Edit, view and delete the credential itself. */
+  manage: boolean;
+  /** Publish it to every member. */
+  publish: boolean;
+  /** Remove a shared personal credential from the workspace. */
+  unshare: boolean;
+}
 
-/**
- * Which API binding (`personalApi` vs `contextApi`) a row's mutations should
- * go through. Only meaningful for an {@link isActionableCredRow} row — the
- * caller must gate on that first, since another member's row has no correct
- * binding to return here.
- */
-export const credsApiForRow = <T>(
-  cred: CredRowOwnership,
-  myAccountId: number | undefined,
-  contextApi: T,
-  personalApi: T,
-): T => (isOwnCredRow(cred, myAccountId) ? personalApi : contextApi);
+const NONE: CredRowAccess = { makePrivate: false, manage: false, publish: false, unshare: false };
+
+export const isOwnCredRow = (cred: CredRow, myAccountId: number | undefined): boolean =>
+  cred.ownerType === 'user' && myAccountId !== undefined && cred.ownerAccountId === myAccountId;
+
+export const workspaceCredRowAccess = (cred: CredRow, viewer: CredRowViewer): CredRowAccess => {
+  const isPublic = cred.visibility === 'public';
+
+  if (cred.ownerType === 'user') {
+    // A personal credential is edited where it lives, on the owner's personal
+    // page; here its owner only decides how it is shared, and an admin may
+    // take it out of the workspace.
+    if (!isOwnCredRow(cred, viewer.myAccountId)) return { ...NONE, unshare: viewer.isAdmin };
+    return { makePrivate: isPublic, manage: false, publish: !isPublic, unshare: true };
+  }
+
+  // Visibility is the creator's call alone, as with a device: an admin making
+  // someone's credential private would move it into that member's private list.
+  const isCreator =
+    viewer.myAccountId !== undefined && cred.createdByAccountId === viewer.myAccountId;
+  return {
+    makePrivate: isCreator && isPublic,
+    manage: isCreator || viewer.isAdmin,
+    publish: isCreator && !isPublic,
+    unshare: false,
+  };
+};

@@ -39,8 +39,8 @@ export function assembleCore({
   copy(inputs['node_modules/electron-log'], 'node_modules/electron-log');
   writeFileSync(path.join(out, 'package.json'), JSON.stringify({ type: 'commonjs' }));
 
-  mkdirSync(path.join(out, 'cli'), { recursive: true });
-  cpSync(inputs['apps/cli/dist/index.js'], path.join(out, 'cli/lobe-cli.js'));
+  mkdirSync(path.join(out, 'cli/dist'), { recursive: true });
+  cpSync(inputs['apps/cli/dist/index.js'], path.join(out, 'cli/dist/index.js'));
   const { name, version } = JSON.parse(readFileSync(path.join(cliDir, 'package.json'), 'utf8'));
   writeFileSync(
     path.join(out, 'cli/package.json'),

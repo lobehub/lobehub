@@ -17,7 +17,15 @@ export interface BinaryStatus {
 /**
  * Binary categories
  */
-export type BinaryCategory = 'content-search' | 'custom' | 'file-search' | 'system';
+export type BinaryCategory =
+  | 'ast-search'
+  | 'browser-automation'
+  | 'cli-agents'
+  | 'content-search'
+  | 'custom'
+  | 'file-search'
+  | 'runtime-environment'
+  | 'system';
 
 /**
  * Binary info for display

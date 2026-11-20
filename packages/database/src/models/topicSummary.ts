@@ -22,6 +22,8 @@ import {
 import { messages, topics, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
+import { notTrashed } from '../utils/softDelete';
+import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 
 export interface TopicSummaryCandidateCursor {
   id: string;
@@ -46,12 +48,21 @@ export interface TopicSummaryCandidate {
 // Mirrors `DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM.enabled`: users who have
 // never touched the setting are opted out, so the missing-value default is false.
 const isTopicAutoSummaryEnabled = sql<boolean>`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, false) = true`;
-const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const SYSTEM_TOPIC_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+];
 
 export const topicSummaryEligibleMessage = and(
   isNotNull(messages.content),
   ne(messages.content, ''),
   inArray(messages.role, ['assistant', 'user']),
+  // A message sitting in the recycle bin must neither feed nor date the summary.
+  notTrashed(messages.isDeleted),
 );
 
 const getAutoSummaryWatermark = () =>
@@ -65,6 +76,29 @@ const mergeAutoSummaryMetadata = (marker: NonNullable<ChatTopicMetadata['autoSum
 /** System-scoped queries used only by the authenticated background summary workflow. */
 export class TopicSummaryModel {
   constructor(private readonly db: LobeChatDatabase) {}
+
+  /** An eligible message that arrived after the given snapshot. */
+  private newerEligibleMessage = (input: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: Date;
+    topicId: string;
+  }) =>
+    this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, input.topicId),
+          topicSummaryEligibleMessage,
+          or(
+            gt(messages.updatedAt, input.lastMessageUpdatedAt),
+            and(
+              eq(messages.updatedAt, input.lastMessageUpdatedAt),
+              gt(messages.id, input.lastMessageId),
+            ),
+          ),
+        ),
+      );
 
   listCandidates = async ({
     cursor,
@@ -94,6 +128,10 @@ export class TopicSummaryModel {
       .where(
         and(
           gte(topics.createdAt, topicCreatedAfter),
+          // System-scoped read — no `buildWorkspaceWhere` funnel here, so the
+          // recycle-bin gate is spelled out: never spend an LLM call on a
+          // trashed topic.
+          notTrashed(topics.isDeleted),
           topicSummaryEligibleMessage,
           or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
           or(isNull(topics.status), notInArray(topics.status, ['running', 'scheduled'])),
@@ -141,22 +179,7 @@ export class TopicSummaryModel {
           eq(messages.updatedAt, input.lastMessageUpdatedAt),
         ),
       );
-    const newerMessage = this.db
-      .select({ id: messages.id })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.topicId, input.topicId),
-          topicSummaryEligibleMessage,
-          or(
-            gt(messages.updatedAt, input.lastMessageUpdatedAt),
-            and(
-              eq(messages.updatedAt, input.lastMessageUpdatedAt),
-              gt(messages.id, input.lastMessageId),
-            ),
-          ),
-        ),
-      );
+    const newerMessage = this.newerEligibleMessage(input);
 
     const rows = await this.db
       .update(topics)
@@ -174,8 +197,49 @@ export class TopicSummaryModel {
           // `notShareVisitorTopic`): the write fence itself refuses to touch
           // a share-visitor topic keyed only by id.
           notShareVisitorTopic(),
+          // Trashed between candidate selection and commit → leave it alone.
+          notTrashed(topics.isDeleted),
           exists(snapshotMessage),
           notExists(newerMessage),
+        ),
+      )
+      .returning({ id: topics.id });
+
+    return rows.length > 0;
+  };
+
+  /**
+   * Advance the watermark without a summary when the model failed for a reason
+   * only the user can fix, so the dispatch stops re-queueing the topic every run
+   * until a new message arrives. A summary written earlier is kept.
+   */
+  markSummaryFailed = async (input: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: Date;
+    reason: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const failure = {
+      failedAt: new Date().toISOString(),
+      failureReason: input.reason,
+      lastMessageId: input.lastMessageId,
+      lastMessageUpdatedAt: input.lastMessageUpdatedAt.toISOString(),
+      version: 1,
+    };
+
+    const rows = await this.db
+      .update(topics)
+      .set({
+        // Merge into the existing marker: `summarizedAt` from an earlier summary survives.
+        metadata: sql`jsonb_set(COALESCE(${topics.metadata}, '{}'::jsonb), '{autoSummary}', COALESCE(${topics.metadata}->'autoSummary', '{}'::jsonb) || ${JSON.stringify(failure)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(topics.id, input.topicId),
+          notShareVisitorTopic(),
+          notTrashed(topics.isDeleted),
+          // A newer message means a later run owns the watermark; never rewind it.
+          notExists(this.newerEligibleMessage(input)),
         ),
       )
       .returning({ id: topics.id });

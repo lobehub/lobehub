@@ -60,6 +60,32 @@ describe('createStreamExecutionError', () => {
     expect((error as { errorType?: string }).errorType).toBeUndefined();
   });
 
+  // Shape a provider runtime throws (`AgentRuntimeError.chat`) and a relayed
+  // device call reports: the human text sits under `error.message`.
+  const ollamaMissingModel = {
+    error: { message: "model 'smollm2:135m' not found", name: 'ResponseError', status_code: 404 },
+    errorType: AgentRuntimeErrorType.OllamaBizError,
+    provider: 'ollama',
+  };
+
+  it('reads the message of a provider error from its nested error', () => {
+    const error = createStreamExecutionError(ollamaMissingModel);
+
+    expect(error.message).toBe("LLM stream error: model 'smollm2:135m' not found");
+  });
+
+  it('keeps a provider error under body.error so the provider error card can read it', () => {
+    // The Ollama card reads `body.error.message` to offer downloading the
+    // missing model; a stringified payload there left the message blank.
+    const formatted = formatErrorForState(createStreamExecutionError(ollamaMissingModel));
+
+    expect(formatted.type).toBe(AgentRuntimeErrorType.OllamaBizError);
+    expect(formatted.body).toMatchObject({
+      error: { message: "model 'smollm2:135m' not found", status_code: 404 },
+      provider: 'ollama',
+    });
+  });
+
   it('falls back to stringifying when no message can be found anywhere', () => {
     const error = createStreamExecutionError({ code: 42 });
 

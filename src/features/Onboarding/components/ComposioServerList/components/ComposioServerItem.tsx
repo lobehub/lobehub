@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { type ComposioAppType } from '@/const/index';

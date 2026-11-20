@@ -1,6 +1,24 @@
+import { act, renderHook } from '@testing-library/react';
+import type { AiProviderModelListItem } from 'model-bank';
+import type { PropsWithChildren } from 'react';
+import { createElement } from 'react';
+import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderService } from '@/services/aiProvider';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+
+const wrapper = ({ children }: PropsWithChildren) =>
+  createElement(SWRConfig, { value: { dedupingInterval: 0, provider: () => new Map() } }, children);
+
+const model = (id: string) =>
+  ({
+    abilities: {},
+    enabled: true,
+    id,
+    source: 'builtin',
+    type: 'chat',
+  }) as AiProviderModelListItem;
 
 describe('AiProviderAction', () => {
   describe('ensureAiProviderRuntimeStateReady', () => {
@@ -62,6 +80,51 @@ describe('AiProviderAction', () => {
       await expect(
         useAiInfraStore.getState().ensureAiProviderRuntimeStateReady(),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('useFetchAiProviderItem', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      act(() => {
+        useAiInfraStore.setState({ activeAiProvider: undefined, aiModelListMap: {} });
+      });
+    });
+
+    const navigateFromAToB = () => {
+      act(() => {
+        useAiInfraStore.setState({
+          activeAiProvider: 'provider-a',
+          aiModelListMap: { 'provider-a': [model('a-model')], 'provider-b': [model('b-model')] },
+        });
+      });
+
+      return renderHook(() => useAiInfraStore.getState().useFetchAiProviderItem('provider-b'), {
+        wrapper,
+      });
+    };
+
+    it('activates the routed provider while its detail request is still in flight', () => {
+      vi.spyOn(aiProviderService, 'getAiProviderById').mockImplementation(
+        () => new Promise(() => {}),
+      );
+
+      navigateFromAToB();
+
+      const state = useAiInfraStore.getState();
+      expect(state.activeAiProvider).toBe('provider-b');
+      expect(aiModelSelectors.filteredAiProviderModelList(state).map((m) => m.id)).toEqual([
+        'b-model',
+      ]);
+    });
+
+    it('activates the routed provider even when its detail request fails', async () => {
+      vi.spyOn(aiProviderService, 'getAiProviderById').mockRejectedValue(new Error('boom'));
+
+      navigateFromAToB();
+      await act(async () => {});
+
+      expect(useAiInfraStore.getState().activeAiProvider).toBe('provider-b');
     });
   });
 });

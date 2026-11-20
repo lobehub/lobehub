@@ -33,6 +33,7 @@ import {
   type GetAgentDetailParams,
   type InstallPluginParams,
   type SearchAgentParams,
+  type SearchMarketToolsParams,
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from './types';
@@ -103,60 +104,25 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     return runtime.searchAgents(params);
   };
 
+  searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
+    return runtime.searchMarketTools(params);
+  };
+
   // ==================== Execution ====================
 
   callAgent = async (
     params: CallAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const {
-      agentId,
-      instruction,
-      runAsTask,
-      taskTitle,
-      timeout,
-      skipCallSupervisor = false,
-    } = params;
+    const { agentId, instruction, skipCallSupervisor = false } = params;
 
-    if (runAsTask) {
-      // Dispatch as a legacy async agent invocation.
-      // Pre-load target agent config to ensure it exists
-      const targetAgentExists = useAgentStore.getState().agentMap[agentId];
-      if (!targetAgentExists) {
-        try {
-          const config = await agentService.getAgentConfigById(agentId);
-          if (!config) {
-            return {
-              content: `Agent "${agentId}" not found in your workspace. Please check the agent ID and try again.`,
-              success: false,
-            };
-          }
-          useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
-        } catch (error) {
-          console.error('[callAgent] Failed to load agent config:', error);
-          return {
-            content: `Failed to load agent "${agentId}": ${(error as Error).message}`,
-            success: false,
-          };
-        }
-      }
-
-      // Return special state recognized by AgentRuntime's exec_sub_agent executor.
-      // callAgent keeps this alias until it is redesigned as an explicit agent invocation.
+    // Background delivery wakes the caller through the server runtime, which
+    // this runtime does not have.
+    if (params.runInBackground) {
       return {
-        content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
-        state: {
-          parentMessageId: ctx.messageId,
-          task: {
-            description: taskTitle || `Call agent ${agentId}`,
-            instruction,
-            targetAgentId: agentId, // Special field for callAgent - indicates target agent
-            timeout: timeout || 1_800_000,
-          },
-          type: 'execSubAgent',
-        },
-        stop: true,
-        success: true,
+        content:
+          'Background agent calls (runInBackground) are not supported in this runtime. Call callAgent again without runInBackground to wait for the reply.',
+        success: false,
       };
     }
 

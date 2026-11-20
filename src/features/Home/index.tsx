@@ -1,11 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
+// Deep import, not the feature barrel: Home only needs the provider here.
+import { EntityLinkHostProvider } from '@/features/EntityLink/host';
+/**
+ * Static on purpose: HomeModeContent already imports the inbox statically, so a
+ * `lazy` wrapper saved no bytes and only suspended the rail for one frame on
+ * every refresh, painting it empty before the cards arrived.
+ */
+import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -14,8 +21,9 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { densityVars } from '@/styles/densityVars';
 
-import { isAcceptancePortalView } from './acceptancePortalView';
+import { HOME_ENTITY_PORTAL_SCOPE, isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
@@ -60,9 +68,6 @@ const clearOnboardingHomeModeParam = () => {
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
-// The inbox renders markdown, briefs and an editor; keeping it lazy leaves the
-// greeting and the input box as the only static content of the home route.
-const HomeInbox = lazy(() => import('@/features/HomeInbox'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -139,11 +144,13 @@ const styles = createStaticStyles(({ css }) => ({
   // on what is left, so the page reads wider without going full-bleed.
   contentCollapsed: css`
     @media (width > 1100px) {
-      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
-      width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
+      &[data-rail-collapsed='true'] {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+        width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
 
-      &:dir(rtl) {
-        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        &:dir(rtl) {
+          transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        }
       }
     }
   `,
@@ -151,7 +158,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-area: 1 / 1 / 2 / -1;
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: end;
 
     width: 100%;
@@ -169,10 +176,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   heroCollapsed: css`
     @media (width > 1100px) {
-      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+      &[data-rail-collapsed='true'] {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
 
-      &:dir(rtl) {
-        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        &:dir(rtl) {
+          transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        }
       }
     }
   `,
@@ -193,7 +202,7 @@ const styles = createStaticStyles(({ css }) => ({
     --home-portrait-overlap: -${COMPACT_PORTRAIT_OVERLAP}px;
 
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: flex-end;
     justify-self: end;
 
@@ -352,6 +361,15 @@ const Home = memo(() => {
   if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail, usageActive });
   const railCollapsed = !railVisible;
+  /**
+   * An enabled rail can settle with no cards; the main column then reclaims its
+   * space without changing the preference. Only the loaded inbox may report it:
+   * judging by an empty DOM node also matched while the lazy inbox was
+   * suspended and while its feeds were still loading, so every refresh painted one column first and
+   * slid back once the cards arrived.
+   */
+  const [railEmpty, setRailEmpty] = useState(false);
+  const contentCollapsed = railCollapsed || (isLogin && railEmpty);
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   useEffect(() => {
@@ -374,6 +392,24 @@ const Home = memo(() => {
     [handleInputValueChange],
   );
 
+  // FloatingPanel portals to the app element, so where this sits in the tree
+  // doesn't affect its viewport-anchored position. Mounted in both layouts: the
+  // team board opens runs here even when the personal page is minimal.
+  const drawers = (
+    <>
+      {drawerMounted && (
+        <Suspense fallback={null}>
+          <TopicChatDrawer />
+        </Suspense>
+      )}
+      {acceptanceDrawerMounted && (
+        <Suspense fallback={null}>
+          <AcceptancePortalDrawer />
+        </Suspense>
+      )}
+    </>
+  );
+
   if (minimal)
     return (
       <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP}>
@@ -386,23 +422,21 @@ const Home = memo(() => {
             onModeChange={setMode}
           />
         </div>
+        {drawers}
       </Flexbox>
     );
 
   return (
     <Flexbox className={styles.grid}>
       <div
-        className={cx(
-          styles.hero,
-          portraitVisible && styles.heroWithSpeech,
-          railCollapsed && styles.heroCollapsed,
-        )}
+        className={cx(styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed)}
+        data-rail-collapsed={contentCollapsed}
       >
         <div className={styles.header}>
           <HomeHeader />
         </div>
         {portraitVisible && (
-          <div className={styles.speech} data-collapsed={railCollapsed}>
+          <div className={styles.speech} data-collapsed={contentCollapsed}>
             {/* Keep the agent's line and artwork together in both header layouts. */}
             <div className={styles.bubbleSlot}>
               <PortraitBubble promo={promo} />
@@ -415,7 +449,8 @@ const Home = memo(() => {
       </div>
 
       <Flexbox
-        className={cx(styles.main, styles.content, railCollapsed && styles.contentCollapsed)}
+        className={cx(styles.main, styles.content, styles.contentCollapsed)}
+        data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
         gap={24}
       >
@@ -444,24 +479,15 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <Suspense fallback={null}>
-            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
-          </Suspense>
+          {/* The inbox reads assistant replies, which carry internal entity
+              links; only the acceptance drawer can show a detail here. */}
+          <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
+          </EntityLinkHostProvider>
         </aside>
       )}
 
-      {/* FloatingPanel portals to the app element, so where this sits in the
-          tree doesn't affect its viewport-anchored position. */}
-      {drawerMounted && (
-        <Suspense fallback={null}>
-          <TopicChatDrawer />
-        </Suspense>
-      )}
-      {acceptanceDrawerMounted && (
-        <Suspense fallback={null}>
-          <AcceptancePortalDrawer />
-        </Suspense>
-      )}
+      {drawers}
     </Flexbox>
   );
 });
