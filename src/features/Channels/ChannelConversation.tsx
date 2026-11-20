@@ -2,7 +2,7 @@ import type { ChannelPublicMessage } from '@lobechat/types';
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { MessageSquare } from 'lucide-react';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -44,6 +44,11 @@ interface ChannelConversationProps {
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   /**
+   * Opens the main conversation's history, like the profile header at the start of an IM direct
+   * message. Shown once the earliest page is loaded, so it also fills a conversation's blank start.
+   */
+  intro?: ReactNode;
+  /**
    * Caps the feed and composer column width, centered. A Channel spans the full width by default;
    * a standalone chat page (an Agent share) caps it like a regular Agent conversation.
    */
@@ -59,6 +64,7 @@ interface ChannelConversationProps {
 const Timeline = ({
   channelId,
   inert,
+  intro,
   maxWidth,
   starter,
   threadId = null,
@@ -236,6 +242,7 @@ const Timeline = ({
                     {failureRows(detail.rootMessage.id)}
                   </>
                 )}
+                {!threadId && !detail.hasMore && intro}
                 {/* A new direct conversation starts blank, like an IM chat. */}
                 {!timeline.length &&
                   (threadId ? (
