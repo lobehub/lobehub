@@ -51,7 +51,7 @@ const AuthorChip = memo<AuthorChipProps>(({ avatarOnly, userId, trigger }) => {
   const profile = userId ? profiles.get(userId) : undefined;
   if (!profile) return null;
 
-  const name = profile.fullName || profile.username || '';
+  const name = profile.nickname || profile.fullName || profile.username || '';
 
   return (
     <Flexbox horizontal align={'center'} className={styles.chip} gap={4}>

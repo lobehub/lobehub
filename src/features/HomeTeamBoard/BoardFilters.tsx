@@ -48,7 +48,10 @@ const BoardFilters = ({
           { label: t('team.filter.allMembers'), value: ALL },
           ...options.memberIds.map((id) => {
             const member = profiles.get(id);
-            return { label: member?.fullName || member?.username || id, value: id };
+            return {
+              label: member?.nickname || member?.fullName || member?.username || id,
+              value: id,
+            };
           }),
         ]}
         onChange={(value) => onUserChange(value === ALL ? undefined : String(value))}

@@ -54,10 +54,16 @@ const userCandidates = async (
 ) => {
   if (workspaceId) await requireWorkspaceMember(tx, workspaceId, userId);
   const query = search.trim();
+  // Inside a workspace a person goes by their nickname there; the membership join below makes
+  // `workspace_members` available only in that case.
+  const nickname = sql<string | null>`nullif(trim(${workspaceMembers.nickname}), '')`;
+  const name = workspaceId
+    ? sql<string | null>`coalesce(${nickname}, ${users.fullName})`
+    : users.fullName;
   const base = tx
     .select({
       avatar: users.avatar,
-      fullName: users.fullName,
+      fullName: name,
       userId: users.id,
       username: users.username,
     })
@@ -79,11 +85,15 @@ const userCandidates = async (
         ne(users.id, userId),
         exclude,
         query
-          ? or(ilikeContains(users.fullName, query), ilikeContains(users.username, query))
+          ? or(
+              workspaceId ? ilikeContains(workspaceMembers.nickname, query) : undefined,
+              ilikeContains(users.fullName, query),
+              ilikeContains(users.username, query),
+            )
           : undefined,
       ),
     )
-    .orderBy(asc(users.fullName), asc(users.id))
+    .orderBy(asc(name), asc(users.id))
     .limit(50);
 };
 

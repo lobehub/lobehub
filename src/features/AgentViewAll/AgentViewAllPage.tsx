@@ -49,6 +49,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { useInterfaceDensity } from '@/styles/density';
 import { densityVars } from '@/styles/densityVars';
+import { getWorkspaceMemberNickname } from '@/utils/workspaceMemberName';
 
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -310,7 +311,12 @@ const AgentViewAllPage = memo(() => {
       if (!profile) continue;
       map.set(member.userId, {
         avatar: profile.avatar,
-        name: profile.fullName || profile.username || profile.email || undefined,
+        name:
+          getWorkspaceMemberNickname(member) ||
+          profile.fullName ||
+          profile.username ||
+          profile.email ||
+          undefined,
       });
     }
     return map;

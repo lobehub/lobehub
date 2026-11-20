@@ -268,6 +268,25 @@ describe('WorkspaceMemberModel', () => {
       expect(await ids('_')).toEqual([]);
     });
 
+    it('matches and orders by the workspace nickname, scoped to this workspace', async () => {
+      const model = await seedDirectory();
+      await model.addMember({ userId: otherUserId, workspaceId: otherWorkspaceId });
+      // Bob goes by "Aaron" here, so he now sorts ahead of Alice.
+      await model.updateMemberProfile(workspaceId, otherUserId, { nickname: 'Aaron' });
+      await model.updateMemberProfile(otherWorkspaceId, otherUserId, { nickname: 'Zed' });
+
+      const { rows } = await model.searchAssignableMembers(workspaceId, { limit: 50 });
+      expect(rows.map((r) => r.userId)).toEqual([otherUserId, memberId, inviterId]);
+
+      const ids = async (query: string) =>
+        (await model.searchAssignableMembers(workspaceId, { limit: 50, query })).rows.map(
+          (r) => r.userId,
+        );
+      expect(await ids('aaron')).toEqual([otherUserId]);
+      // Another workspace's nickname does not match here.
+      expect(await ids('zed')).toEqual([]);
+    });
+
     it('caps the page with limit and reports the total before the cap', async () => {
       const model = await seedDirectory();
 
@@ -289,6 +308,31 @@ describe('WorkspaceMemberModel', () => {
     });
   });
 
+  describe('getNicknames', () => {
+    it('maps active members of this workspace to their nickname', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.addMember({ userId: otherUserId, workspaceId });
+      await model.addMember({ userId: otherUserId, workspaceId: otherWorkspaceId });
+      await model.updateMemberProfile(workspaceId, memberId, { nickname: 'Kuro' });
+      await model.updateMemberProfile(otherWorkspaceId, otherUserId, { nickname: 'Elsewhere' });
+
+      const nicknames = await model.getNicknames(workspaceId, [memberId, otherUserId, 'nobody']);
+
+      expect([...nicknames]).toEqual([[memberId, 'Kuro']]);
+      expect(await model.getNicknames(workspaceId, [])).toEqual(new Map());
+    });
+
+    it('drops a removed member', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.updateMemberProfile(workspaceId, memberId, { nickname: 'Kuro' });
+      await model.removeMember(workspaceId, memberId);
+
+      expect((await model.getNicknames(workspaceId, [memberId])).size).toBe(0);
+    });
+  });
+
   describe('removeMember', () => {
     it('soft-deletes an active member', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
@@ -305,11 +349,12 @@ describe('WorkspaceMemberModel', () => {
       expect(row.deletedAt).not.toBeNull();
     });
 
-    it('clears their job title, responsibilities and config so a re-invite starts without them', async () => {
+    it('clears their nickname, job title, responsibilities and config so a re-invite starts without them', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       await model.addMember({ userId: memberId, workspaceId });
       await model.updateMemberProfile(workspaceId, memberId, {
         badgeColor: '#1f8a5b',
+        nickname: 'Ally',
         title: 'Designer',
         responsibilities: 'Design system',
       });
@@ -317,6 +362,7 @@ describe('WorkspaceMemberModel', () => {
       await model.removeMember(workspaceId, memberId);
       const revived = await model.addMember({ userId: memberId, workspaceId });
 
+      expect(revived.nickname).toBeNull();
       expect(revived.title).toBeNull();
       expect(revived.responsibilities).toBeNull();
       expect(revived.config).toEqual({});
@@ -591,7 +637,17 @@ describe('WorkspaceMemberModel', () => {
       expect(updated?.title).toBe('Product Manager');
       expect(updated?.responsibilities).toBe('Owns the mobile roadmap');
 
-      const cleared = await model.updateMemberProfile(workspaceId, memberId, { title: null });
+      const nicknamed = await model.updateMemberProfile(workspaceId, memberId, {
+        nickname: 'Kuro',
+      });
+      expect(nicknamed?.nickname).toBe('Kuro');
+      expect(nicknamed?.title).toBe('Product Manager');
+
+      const cleared = await model.updateMemberProfile(workspaceId, memberId, {
+        nickname: null,
+        title: null,
+      });
+      expect(cleared?.nickname).toBeNull();
       expect(cleared?.title).toBeNull();
       // an omitted field is left untouched
       expect(cleared?.responsibilities).toBe('Owns the mobile roadmap');
@@ -630,11 +686,13 @@ describe('WorkspaceMemberModel', () => {
       await model.addMember({ userId: memberId, workspaceId });
       await model.addMember({ userId: memberId, workspaceId: otherWorkspaceId });
 
-      await model.updateMemberProfile(workspaceId, memberId, { title: 'Engineer' });
+      await model.updateMemberProfile(workspaceId, memberId, { nickname: 'Al', title: 'Engineer' });
       await model.updateMemberProfile(otherWorkspaceId, memberId, { title: 'Advisor' });
 
       expect((await model.getMember(workspaceId, memberId))?.title).toBe('Engineer');
       expect((await model.getMember(otherWorkspaceId, memberId))?.title).toBe('Advisor');
+      expect((await model.getMember(workspaceId, memberId))?.nickname).toBe('Al');
+      expect((await model.getMember(otherWorkspaceId, memberId))?.nickname).toBeNull();
     });
 
     it('does not update a soft-deleted member', async () => {

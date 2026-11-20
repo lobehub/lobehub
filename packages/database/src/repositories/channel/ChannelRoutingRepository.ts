@@ -3,7 +3,7 @@ import {
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, lte, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -20,6 +20,7 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { findThread, memberNotMuted } from './delivery';
+import { channelUserNameSql } from './nickname';
 import { resolveRouting } from './routing';
 import { audit, withChannelLock } from './transaction';
 
@@ -190,7 +191,7 @@ export class ChannelRoutingRepository {
           agentTitle: agentTitleSql(),
           content: channelMessages.content,
           createdAt: channelMessages.createdAt,
-          fullName: users.fullName,
+          fullName: channelUserNameSql(channelMessages.channelId, channelMessages.userId),
           id: channelMessages.id,
           routingStatus: channelMessages.routingStatus,
           userId: channelMessages.userId,
@@ -209,7 +210,10 @@ export class ChannelRoutingRepository {
         .orderBy(desc(channelMessages.sequence))
         .limit(20);
       const [author] = await tx
-        .select({ fullName: users.fullName, username: users.username })
+        .select({
+          fullName: channelUserNameSql(sql`${channelId}`, users.id),
+          username: users.username,
+        })
         .from(users)
         .where(eq(users.id, message.userId));
       const attachments = await fileIdsByMessage(tx, [messageId]);
