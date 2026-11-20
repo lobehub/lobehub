@@ -4,9 +4,11 @@ import { Block, Button, Empty, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui'
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
+import VisibilityFilter, { type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
 import MarketSignInGate from '@/features/Settings/creds/features/MarketSignInGate';
 import { type CredsApi } from '@/features/Settings/creds/features/useCredsApi';
@@ -66,7 +68,7 @@ const WorkspaceCredsSetting = () => {
 
   // Shares its query key with the list inside WorkspaceCredsList, so
   // `refetch` here refreshes the list.
-  const { error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
+  const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
     // Cap retries for other errors (500s, network) so failures surface instead of looping.
@@ -78,6 +80,10 @@ const WorkspaceCredsSetting = () => {
   });
 
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
+
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+  const credentials = data?.data ?? [];
+  const privateCount = credentials.filter((cred) => cred.visibility === 'private').length;
 
   // New credentials are private, which any non-viewer member may create.
   const canCreate = !isViewer;
@@ -103,17 +109,32 @@ const WorkspaceCredsSetting = () => {
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
         <Text className={stylex.props(styles.desc).className}>{t('creds.listDesc')}</Text>
-        {isAuthenticated &&
-          !orgMissing &&
-          // Disabled buttons swallow hover events, so the tooltip needs the
-          // span wrapper to fire (see the usePermission docstring pattern).
-          (createBlockedReason ? (
-            <Tooltip title={createBlockedReason}>
-              <span>{createButton}</span>
-            </Tooltip>
-          ) : (
-            createButton
-          ))}
+        {isAuthenticated && !orgMissing && (
+          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+            {credentials.length > 0 && (
+              <VisibilityFilter
+                value={visibilityFilter}
+                counts={{
+                  all: credentials.length,
+                  private: privateCount,
+                  workspace: credentials.length - privateCount,
+                }}
+                onChange={setVisibilityFilter}
+              />
+            )}
+            {
+              // Disabled buttons swallow hover events, so the tooltip needs the
+              // span wrapper to fire (see the usePermission docstring pattern).
+              createBlockedReason ? (
+                <Tooltip title={createBlockedReason}>
+                  <span>{createButton}</span>
+                </Tooltip>
+              ) : (
+                createButton
+              )
+            }
+          </Flexbox>
+        )}
       </Flexbox>
       <Block className={stylex.props(styles.container).className} variant={'outlined'}>
         <MarketSignInGate>
@@ -122,7 +143,7 @@ const WorkspaceCredsSetting = () => {
               <Empty description={t('creds.orgSetupRequired')} />
             </Flexbox>
           ) : (
-            <WorkspaceCredsList credsApi={credsApi} />
+            <WorkspaceCredsList credsApi={credsApi} visibilityFilter={visibilityFilter} />
           )}
         </MarketSignInGate>
       </Block>

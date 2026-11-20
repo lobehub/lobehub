@@ -7,6 +7,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
 import { cacheScope } from '@/libs/replica';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 
@@ -45,6 +49,7 @@ const SubscriptionAccounts = () => {
   const loaded = useAgentQuotaStore(agentQuotaSelectors.accounts);
   const [provider, setProvider] = useState<SubscriptionProvider | typeof ALL>(ALL);
   const [keyword, setKeyword] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
   const [openId, setOpenId] = useState<string>();
   const accounts = sortAccounts(
     (loaded ?? []).filter((a): a is ProviderAccount => isSubscriptionProvider(a.provider)),
@@ -52,8 +57,15 @@ const SubscriptionAccounts = () => {
   const present = SUBSCRIPTION_PROVIDERS.filter((p) => accounts.some((a) => a.provider === p));
   // A provider filter that no longer has accounts falls back to everything.
   const active = provider !== ALL && present.includes(provider) ? provider : ALL;
+  // Only workspace accounts carry a visibility, so the filter shows only in a
+  // workspace, where shared and the caller's private accounts list together.
+  const isPrivateAccount = (a: ProviderAccount) => !!a.workspaceId && a.visibility === 'private';
+  const showVisibilityFilter = accounts.some((a) => !!a.workspaceId);
   const visible = accounts.filter(
-    (a) => (active === ALL || a.provider === active) && matchesKeyword(a, keyword),
+    (a) =>
+      (active === ALL || a.provider === active) &&
+      (!showVisibilityFilter || matchesVisibilityFilter(isPrivateAccount(a), visibilityFilter)) &&
+      matchesKeyword(a, keyword),
   );
   const openAccount = accounts.find((a) => a.id === openId);
   const inRotation = accounts.filter((a) => a.enabled !== false).length;
@@ -148,6 +160,17 @@ const SubscriptionAccounts = () => {
                 variant={'filled'}
                 onChange={(e) => setKeyword(e.target.value)}
               />
+              {showVisibilityFilter && (
+                <VisibilityFilter
+                  value={visibilityFilter}
+                  counts={{
+                    all: accounts.length,
+                    private: accounts.filter(isPrivateAccount).length,
+                    workspace: accounts.filter((a) => !isPrivateAccount(a)).length,
+                  }}
+                  onChange={setVisibilityFilter}
+                />
+              )}
               <Select
                 style={{ minWidth: 168 }}
                 value={active}

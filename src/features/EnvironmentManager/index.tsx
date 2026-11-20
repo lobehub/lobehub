@@ -16,6 +16,10 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import EnvironmentItem from './EnvironmentItem';
@@ -86,6 +90,15 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
     const [refreshing, setRefreshing] = useState(false);
 
     const list = environments ?? [];
+    // Workspace pages only (where a new environment has a pool to land in):
+    // narrow the one list to private or published environments.
+    const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+    const isPrivateEnvironment = (environment: (typeof list)[number]) =>
+      !!environment.workspaceId && environment.visibility === 'private';
+    const showVisibilityFilter = !!createVisibility && list.length > 0;
+    const visibleList = showVisibilityFilter
+      ? list.filter((e) => matchesVisibilityFilter(isPrivateEnvironment(e), visibilityFilter))
+      : list;
 
     // Open what was just made. Nothing is built: an environment is applied to
     // a working directory when a conversation picks it.
@@ -116,6 +129,17 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
       // names the list. Left shrinkable, the group gets compressed by a wide
       // neighbour.
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+        {showVisibilityFilter && (
+          <VisibilityFilter
+            value={visibilityFilter}
+            counts={{
+              all: list.length,
+              private: list.filter(isPrivateEnvironment).length,
+              workspace: list.filter((e) => !isPrivateEnvironment(e)).length,
+            }}
+            onChange={setVisibilityFilter}
+          />
+        )}
         <Button
           icon={<Icon icon={RefreshCwIcon} />}
           loading={refreshing}
@@ -171,7 +195,12 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
         onRetry={refresh}
       >
         <Flexbox className={styles.listCol} gap={2} padding={4}>
-          {list.map((environment) => (
+          {visibleList.length === 0 && (
+            <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
+              <Empty description={t('visibilityFilter.empty', { ns: 'common' })} />
+            </Center>
+          )}
+          {visibleList.map((environment) => (
             <EnvironmentItem
               environment={environment}
               key={environment.id}

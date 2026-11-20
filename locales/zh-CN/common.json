@@ -603,5 +603,10 @@
   "visibilityConfirm.publish.itemLoaded": "改回私人后对方已加载的内容无法收回",
   "visibilityConfirm.publish.itemReversible": "之后可以在同一菜单里改回私人",
   "visibilityConfirm.publish.itemVisible": "工作区所有成员会立即可以看到",
+  "visibilityFilter.all": "全部",
+  "visibilityFilter.empty": "没有符合筛选条件的条目",
+  "visibilityFilter.label": "按可见范围筛选",
+  "visibilityFilter.private": "私人",
+  "visibilityFilter.workspace": "工作区",
   "zoom": "缩放"
 }

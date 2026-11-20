@@ -603,5 +603,10 @@
   "visibilityConfirm.publish.itemLoaded": "After switching back, content others have already loaded can’t be pulled back",
   "visibilityConfirm.publish.itemReversible": "You can switch it back to private later from the same menu",
   "visibilityConfirm.publish.itemVisible": "All workspace members will see this immediately",
+  "visibilityFilter.all": "All",
+  "visibilityFilter.empty": "Nothing matches this filter",
+  "visibilityFilter.label": "Filter by visibility",
+  "visibilityFilter.private": "Private",
+  "visibilityFilter.workspace": "Workspace",
   "zoom": "Zoom"
 }

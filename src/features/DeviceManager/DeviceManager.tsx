@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import {
   ChevronRightIcon,
   FolderCogIcon,
@@ -14,11 +14,15 @@ import {
   TerminalIcon,
   ZapIcon,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCreateEntry';
 import AsyncBoundary from '@/components/AsyncBoundary';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
 import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
@@ -248,6 +252,13 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   // surface to its own. In a workspace the server already strips other
   // members' private devices, so both visibility pools list here together.
   const devices = (data ?? []).filter((d) => d.scope === scope);
+  // Workspace only: narrow the one list to private or shared devices.
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+  const isPrivateDevice = (d: (typeof devices)[number]) => d.visibility === 'private';
+  const showVisibilityFilter = isWorkspace && devices.length > 0;
+  const visibleDevices = showVisibilityFilter
+    ? devices.filter((d) => matchesVisibilityFilter(isPrivateDevice(d), visibilityFilter))
+    : devices;
   // A device connected from here starts private; its card menu publishes it.
   const createVisibility: DeviceVisibility | undefined = isWorkspace ? 'private' : undefined;
   // A persisted copy with no row for this scope is not proof the pool is
@@ -330,6 +341,17 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   // only; the personal wizard also offers the desktop app.
   const renderActions = (size?: 'small') => (
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+      {showVisibilityFilter && (
+        <VisibilityFilter
+          value={visibilityFilter}
+          counts={{
+            all: devices.length,
+            private: devices.filter(isPrivateDevice).length,
+            workspace: devices.filter((d) => !isPrivateDevice(d)).length,
+          }}
+          onChange={setVisibilityFilter}
+        />
+      )}
       <Button
         icon={<Icon icon={RefreshCwIcon} />}
         loading={isValidating}
@@ -390,16 +412,23 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
       loading={<DeviceGridSkeleton />}
       onRetry={() => mutate()}
     >
-      <DeviceGrid>
-        {devices.map((device) => (
-          <DeviceCard
-            device={device}
-            isCurrent={isCurrent(device.deviceId)}
-            key={device.deviceId}
-            onOpen={() => onOpenDevice(device.deviceId)}
-          />
-        ))}
-      </DeviceGrid>
+      {visibleDevices.length === 0 ? (
+        <Empty
+          description={t('visibilityFilter.empty', { ns: 'common' })}
+          style={{ paddingBlock: 48 }}
+        />
+      ) : (
+        <DeviceGrid>
+          {visibleDevices.map((device) => (
+            <DeviceCard
+              device={device}
+              isCurrent={isCurrent(device.deviceId)}
+              key={device.deviceId}
+              onOpen={() => onOpenDevice(device.deviceId)}
+            />
+          ))}
+        </DeviceGrid>
+      )}
     </AsyncBoundary>
   );
 
