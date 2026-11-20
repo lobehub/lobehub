@@ -6,6 +6,7 @@ import {
   findLiteXMLEditStepProblem,
   findMalformedLiteXML,
   indexLiteXMLDocument,
+  MarkdownRootDocumentPlugin,
   normalizeLiteXMLFragment,
   planLiteXMLEditSteps,
   RichListDocumentPlugin,
@@ -118,8 +119,12 @@ const DOCUMENT_HEADLESS_PLUGINS = DEFAULT_HEADLESS_EDITOR_PLUGINS.map(
 
 // Pages hold what PageEditor's own plugins put in them. A headless editor that
 // lacks one of those exports Markdown that disagrees with the page, and drops
-// the plugin's node state when it seeds a collaboration room.
-const PAGE_DOCUMENT_PLUGINS = [RichListDocumentPlugin as unknown as HeadlessEditorPlugin];
+// the plugin's node state when it seeds a collaboration room. The Markdown root
+// plugin keeps a raw HTML block from cutting off the rest of the document.
+const PAGE_DOCUMENT_PLUGINS = [
+  RichListDocumentPlugin as unknown as HeadlessEditorPlugin,
+  MarkdownRootDocumentPlugin as unknown as HeadlessEditorPlugin,
+];
 
 export const createDocumentHeadlessEditor = (
   options?: Pick<HeadlessEditorOptions, 'additionalPlugins'>,
@@ -223,21 +228,68 @@ const createEditorWithState = (
   };
 };
 
-export const createMarkdownEditorSnapshot = async (
+/**
+ * Hydrates Markdown and returns the first error Lexical reported while doing so.
+ * Lexical's `parseEditorState` does not throw for a node it cannot place: it
+ * reports the error and keeps the state built so far, so every block after that
+ * node is missing from the editor while the hydrate call itself succeeds.
+ */
+const hydrateMarkdownReportingErrors = (
+  editor: ReturnType<typeof createHeadlessEditor>,
   content: string,
-): Promise<AgentDocumentEditorSnapshot> =>
+): Error | undefined => {
+  let parseError: Error | undefined;
+  const capture = (error: Error) => {
+    parseError ??= error;
+  };
+
+  editor.kernel.on('error', capture);
+  try {
+    hydrateMarkdownOrEmptyState(editor, content);
+  } finally {
+    editor.kernel.off('error', capture);
+  }
+
+  return parseError;
+};
+
+const parseMarkdownSnapshot = (content: string) =>
   withHeadlessEditorLock(() => {
     const editor = createDocumentHeadlessEditor();
 
     try {
-      hydrateMarkdownOrEmptyState(editor, content);
-      return exportSnapshot(editor);
+      const parseError = hydrateMarkdownReportingErrors(editor, content);
+      return { parseError, snapshot: exportSnapshot(editor) };
     } finally {
       editor.destroy();
     }
   });
 
+export const createMarkdownEditorSnapshot = async (
+  content: string,
+): Promise<AgentDocumentEditorSnapshot> => (await parseMarkdownSnapshot(content)).snapshot;
+
+/**
+ * The first line whose inclusion makes the Markdown fail to parse, found by
+ * parsing ever shorter prefixes. Only runs once a parse has already failed.
+ */
+const findFirstUnparsableLine = async (lines: string[]): Promise<number> => {
+  let low = 1;
+  let high = lines.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const { parseError } = await parseMarkdownSnapshot(lines.slice(0, middle).join('\n'));
+
+    if (parseError) high = middle;
+    else low = middle + 1;
+  }
+
+  return low;
+};
+
 const LITEXML_DOCUMENT_PATTERN = /^\s*(?:<\?xml[\s?]|<root[\s>])/;
+const HTML_PAGE_PATTERN = /^\s*(?:<!doctype\s+html|<html[\s>])/i;
 
 const isJsonValueDocument = (content: string): boolean => {
   const trimmed = content.trim();
@@ -254,7 +306,8 @@ const isJsonValueDocument = (content: string): boolean => {
 /**
  * Markdown snapshot for content written by an agent. Rejects input that would
  * silently become an empty document — most often LiteXML sent to a Markdown
- * write API — instead of saving the empty result and reporting success.
+ * write API — or one cut off where the editor stopped parsing, instead of
+ * saving the damaged result and reporting success.
  */
 export const createAgentMarkdownSnapshot = async (
   content: string,
@@ -262,6 +315,14 @@ export const createAgentMarkdownSnapshot = async (
   if (LITEXML_DOCUMENT_PATTERN.test(content)) {
     throw new Error(
       'Document content looks like LiteXML, but this API expects Markdown. Send Markdown, or use modifyNodes to edit nodes by id.',
+    );
+  }
+
+  // A whole page (a crawl the extractor could not convert, most often) would
+  // be stored as one block of raw markup rather than as a document.
+  if (HTML_PAGE_PATTERN.test(content)) {
+    throw new Error(
+      'Document content is a full HTML page, but this API stores Markdown. Nothing was saved. Send the page text as Markdown.',
     );
   }
 
@@ -274,7 +335,19 @@ export const createAgentMarkdownSnapshot = async (
     );
   }
 
-  const snapshot = await createMarkdownEditorSnapshot(content);
+  const { parseError, snapshot } = await parseMarkdownSnapshot(content);
+
+  // Saving the partial state would store a document cut off at the failing
+  // block and still report success.
+  if (parseError) {
+    const lines = content.split('\n');
+    const line = await findFirstUnparsableLine(lines);
+    const fragment = lines[line - 1]?.trim().slice(0, 120);
+
+    throw new Error(
+      `Document content could not be parsed past line ${line}${fragment ? ` (\`${fragment}\`)` : ''}; saving it would have dropped everything from there on, so nothing was saved. Rewrite that part as plain Markdown and retry.`,
+    );
+  }
 
   if (content.trim().length > 0 && snapshot.content.trim().length === 0) {
     throw new Error(
