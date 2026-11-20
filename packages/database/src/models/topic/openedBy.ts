@@ -16,6 +16,9 @@ import type { TopicModelContext } from './context';
 
 export type { OpenedTopicItem } from '@lobechat/types';
 
+/** Statuses that take a topic out of the sidebar tree (archive writes `completed`). */
+const RETIRED_STATUSES: ChatTopicStatus[] = ['completed', 'archived'];
+
 export interface ListOpenedTopicsParams {
   /** Statuses that hide a sub-topic (and stop the walk below it). */
   excludeStatuses?: ChatTopicStatus[];
@@ -273,7 +276,7 @@ export const openedFromLiveParentCondition = (
         visibleOpenerOwner,
         or(
           isNull(opener.status),
-          not(inArray(opener.status, ['completed', 'archived', ...(excludeStatuses ?? [])])),
+          not(inArray(opener.status, [...RETIRED_STATUSES, ...(excludeStatuses ?? [])])),
         ),
         excludeTriggers && excludeTriggers.length > 0
           ? or(isNull(opener.trigger), not(inArray(opener.trigger, excludeTriggers)))
@@ -287,6 +290,9 @@ export const openedFromLiveParentCondition = (
 
   return and(
     sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
+    // The tree leaves out retired sub-topics, so a completed or archived one
+    // keeps its own row: "show completed" can still reveal it.
+    or(isNull(topics.status), not(inArray(topics.status, RETIRED_STATUSES))),
     exists(liveOpener),
   );
 };

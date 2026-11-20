@@ -10,6 +10,7 @@ import { issueWorktreeReceipt } from '@/server/services/worktreeCleanup/receipt'
 import { resolveForegroundInterventionConfig } from '../foregroundIntervention';
 import type { InternalExecAgentParams } from '../types';
 import { createFirstSendWorktree } from './createFirstSendWorktree';
+import { assertCanOpenSubTopicsFrom } from './newTopicMetadata';
 import { pickSandboxPlacement } from './sandboxPlacement';
 
 const log = debug('lobe-server:ai-agent:parent-workspace');
@@ -96,6 +97,8 @@ export const prepareParentWorkspace = async (
   const parent = await topicModel.findById(openedByTopicId);
   // An unknown parent records no link either (see `resolveTopicOpenedBy`).
   if (!parent) return { params };
+  // Before any worktree is made for it.
+  assertCanOpenSubTopicsFrom(parent);
 
   const metadata = parent.metadata as ChatTopicMetadata | null | undefined;
   // A sub-topic is a conversation the user follows: it asks for approvals the

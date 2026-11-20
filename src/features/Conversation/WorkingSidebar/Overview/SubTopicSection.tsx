@@ -2,17 +2,13 @@
 
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  isInFlight,
-  type SubTopicNode,
-} from '@/features/AgentSidebar/Topic/SubTopic/buildSubTopicTree';
 import SubTopicRows from '@/features/AgentSidebar/Topic/SubTopic/SubTopicRows';
+import { useSubTopicTreeSync } from '@/features/AgentSidebar/Topic/SubTopic/useSubTopicTreeSync';
 import { useChatStore } from '@/store/chat';
-import { subTopicSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -33,9 +29,13 @@ const SubTopicSection = memo<SubTopicSectionProps>(({ afterBreak, agentId, topic
   const { t } = useTranslation('topic');
   const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
   const openers = useMemo(() => [topicId], [topicId]);
-  const useFetchSubTopics = useChatStore((s) => s.useFetchSubTopics);
-  const nodes = useChatStore(subTopicSelectors.treeOf(openers), isEqual) as SubTopicNode[];
-  useFetchSubTopics(enabled, openers, nodes.some(isInFlight));
+  // While this conversation runs it may open a sub-topic at any moment.
+  const parentRunning = useChatStore(
+    (s) =>
+      topicSelectors.getTopicById(topicId)(s)?.status === 'running' ||
+      (!!agentId && operationSelectors.isAgentRuntimeRunningByContext({ agentId, topicId })(s)),
+  );
+  const nodes = useSubTopicTreeSync(enabled, openers, parentRunning);
 
   if (!enabled || nodes.length === 0) return null;
 
