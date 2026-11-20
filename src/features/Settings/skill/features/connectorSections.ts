@@ -6,6 +6,13 @@ export type IntegrationItem =
   | { provider: LobehubSkillProviderType; type: 'lobehub' }
   | { serverType: ComposioAppType; type: 'composio' };
 
+export const countConnectorTabItems = (items: {
+  customConnectors: readonly unknown[];
+  integrations: readonly IntegrationItem[];
+  marketplaceConnectors: readonly unknown[];
+}) =>
+  items.customConnectors.length + items.marketplaceConnectors.length + items.integrations.length;
+
 /** A page group shows this many rows before "Show all" (the first screen stays scannable). */
 export const SECTION_PREVIEW_LIMIT = 6;
 
