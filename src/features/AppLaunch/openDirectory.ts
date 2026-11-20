@@ -43,8 +43,9 @@ export const openDirectoryInApp = async ({
 
   if (!match) {
     console.warn(`[openDirectory] No project directory is bound to ${target}`);
-    // Nothing to open, so land where binding happens instead of a silent no-op.
-    navigate('/project');
+    // Land where binding happens instead of a silent no-op. The list route is
+    // `/projects` — `/project` renders the not-found page.
+    navigate('/projects');
     return { status: 'directory-not-bound' };
   }
 
@@ -63,7 +64,7 @@ export const openDirectoryInApp = async ({
   const agentId = project?.coordinatorAgentId;
   if (!agentId) {
     console.warn(`[openDirectory] Project ${directory.projectId} has no coordinator agent`);
-    navigate('/project');
+    navigate('/projects');
     return { directory, matchedParent, status: 'directory-not-bound' };
   }
 
