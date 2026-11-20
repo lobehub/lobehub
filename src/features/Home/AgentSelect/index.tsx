@@ -23,6 +23,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useDensity } from '@/styles/density';
 import { densityVars } from '@/styles/densityVars';
 
 import AgentList from './AgentList';
@@ -74,6 +75,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const AgentSelect = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const [open, setOpen] = useState(false);
+  const { compact } = useDensity();
   const { error, mutate } = useFetchAgentList();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const selectHomeAgent = useSelectHomeAgent();
@@ -129,7 +131,7 @@ const AgentSelect = memo(() => {
             background={displayMeta?.backgroundColor || undefined}
             name={displayTitle}
             shape={'square'}
-            size={24}
+            size={compact ? 20 : 24}
           />
           <Text ellipsis className={styles.name} style={{ minWidth: 0 }} weight={600}>
             {displayTitle}
