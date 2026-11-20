@@ -4870,7 +4870,7 @@ When I am ___, I need ___
   'environments.instances.create': 'New copy',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',
-  'environments.form.sources': 'Source code',
+  'environments.form.sources': 'Repositories',
   'environments.form.sourcesHint':
     'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',

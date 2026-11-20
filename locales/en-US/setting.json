@@ -984,7 +984,7 @@
   "environments.form.runtime": "Runtime and storage",
   "environments.form.saved": "Saved",
   "environments.form.setup": "Setup",
-  "environments.form.sources": "Source code",
+  "environments.form.sources": "Repositories",
   "environments.form.sourcesHint": "Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.",
   "environments.github.connect": "Connect GitHub",
   "environments.github.label": "Repository",
