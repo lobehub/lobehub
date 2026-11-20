@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   type BoundDirectoryLike,
-  loadBoundDirectories,
   normalizeComparablePath,
   pickDirectoryForPath,
   pickLatestTopic,
