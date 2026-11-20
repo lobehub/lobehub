@@ -78,6 +78,14 @@ export class TopicToolExecutionRuntime {
 
   async openTopic(params: OpenTopicParams): Promise<BuiltinServerRuntimeOutput> {
     try {
+      // A detached topic has no parent, so it has no parent workspace to share
+      // or branch from: refuse rather than start it somewhere it was not asked
+      // to work (as `lh topic send --new --detach --where` does).
+      if (params.detach && (params.workspace || params.baseBranch)) {
+        throw new Error(
+          "workspace and baseBranch apply to a linked sub-topic, which works from this conversation's directory; a detached topic has none. Drop detach, or drop workspace / baseBranch.",
+        );
+      }
       const started = await this.service.open({
         ...params,
         openerTopicId: this.requireTopic(),

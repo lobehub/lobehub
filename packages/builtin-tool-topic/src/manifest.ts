@@ -31,7 +31,7 @@ export const TopicToolManifest: BuiltinToolManifest = {
           },
           detach: {
             description:
-              'Open a plain, unlinked topic instead of a sub-topic: it is not listed under this conversation and never reports back. Use only when the user wants the new conversation to stand on its own.',
+              'Open a plain, unlinked topic instead of a sub-topic: it is not listed under this conversation and never reports back. Use only when the user wants the new conversation to stand on its own. Not combined with workspace / baseBranch, which need the link.',
             type: 'boolean',
           },
           deviceId: {

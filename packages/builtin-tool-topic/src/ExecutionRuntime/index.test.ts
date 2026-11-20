@@ -102,4 +102,21 @@ describe('TopicToolExecutionRuntime', () => {
 
     expect(result.content).toMatch(/detached: it is not linked/);
   });
+
+  // Regression: `detach` with `workspace: 'new-worktree'` silently dropped the
+  // isolation request and started the topic in the agent's default directory.
+  it('refuses a detached topic that asks for a parent workspace, starting nothing', async () => {
+    const service = createService();
+    const runtime = new TopicToolExecutionRuntime(service, { topicId: 'tpc_parent' });
+
+    const result = await runtime.openTopic({
+      detach: true,
+      prompt: 'x',
+      workspace: 'new-worktree',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toMatch(/detached topic has none/);
+    expect(service.open).not.toHaveBeenCalled();
+  });
 });
