@@ -41,6 +41,14 @@ const matchesRunningTurnSettings = (
 ): boolean => {
   const runDeviceId = state.binding?.device?.id;
   if (request.deviceId && request.deviceId !== runDeviceId) return false;
+  // Queued by a run that may not use devices: it joins only a turn that is
+  // itself off devices, or it would be acted on with the owner's devices.
+  if (
+    request.delegatedDeviceAccessDenied &&
+    state.principal?.policy?.deviceAccess?.canUseDevice !== false
+  ) {
+    return false;
+  }
   if (request.localDeviceId && request.localDeviceId !== runDeviceId) return false;
 
   if (request.clientProtocol && request.clientProtocol !== (state.host?.clientProtocol ?? 1)) {

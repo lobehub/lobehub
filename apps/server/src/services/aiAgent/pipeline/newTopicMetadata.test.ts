@@ -108,6 +108,14 @@ describe('sub-topic link (metadata.openedBy)', () => {
         'tpc_group',
       ),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // A task run from a group conversation reports through its task: unlinked, not refused.
+    expect(
+      await resolveTopicOpenedBy(
+        { findById: vi.fn().mockResolvedValue({ groupId: 'grp_1', id: 'tpc_group' }) } as any,
+        'tpc_group',
+        { groupParent: 'unlinked' },
+      ),
+    ).toBeUndefined();
   });
 });
 

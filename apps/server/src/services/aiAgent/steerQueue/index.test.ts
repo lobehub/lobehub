@@ -65,6 +65,19 @@ const finished = (scope: { threadId?: string | null; topicId: string }) => ({
 });
 
 describe('mergeQueuedFollowUps', () => {
+  it('keeps a device denial when any merged follow-up carries it', () => {
+    const merged = mergeQueuedFollowUps([
+      followUp('a', 1, {}),
+      followUp('b', 2, { delegatedDeviceAccessDenied: true }),
+      followUp('c', 3, {}),
+    ]);
+
+    expect(merged.delegatedDeviceAccessDenied).toBe(true);
+    expect(
+      mergeQueuedFollowUps([followUp('a', 1, {})]).delegatedDeviceAccessDenied,
+    ).toBeUndefined();
+  });
+
   it('joins the texts in queue order and keeps every attachment and selection', () => {
     const merged = mergeQueuedFollowUps([
       followUp('second', 2, { fileIds: ['f2'], selectedSkillIds: ['s1'] }),

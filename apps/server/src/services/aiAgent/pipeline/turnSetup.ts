@@ -22,6 +22,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { TopicTrigger } from '@/const/topic';
 import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
@@ -647,7 +648,10 @@ export const setupTurn = async (
         await routeToProjectDirectory(projectDirectory);
       }
 
-      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId);
+      // A task run reports through its task, so a group origin just stays unlinked.
+      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId, {
+        groupParent: trigger === TopicTrigger.RunTask ? 'unlinked' : 'refuse',
+      });
       const metadata = buildNewTopicMetadata({
         appContext,
         botContext,

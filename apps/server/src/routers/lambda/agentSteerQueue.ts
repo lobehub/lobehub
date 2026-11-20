@@ -22,6 +22,10 @@ import {
   SteerQueueWriteUnknownError,
 } from '@/server/services/redis/steerQueue';
 
+import {
+  assertNoDeviceForDeniedRun,
+  delegatedDeviceAccessDeniedOf,
+} from './_helpers/delegatedDeviceAccess';
 import { ExecAgentFieldsSchema, foldLegacyUserMessageFields } from './aiAgent/execSchemas';
 import { assertCanUseAgentRunConversation } from './aiAgent/guards';
 import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './aiAgent/utils';
@@ -126,6 +130,9 @@ export const agentSteerQueueRouter = router({
     const { sourceOperationId, streamFeatures, ...request } = input.request;
     const topicId = request.appContext?.topicId;
     if (!topicId) return { queued: false as const, reason: 'idle' as const };
+    // Queued by a run that may not use devices: the turn it becomes keeps that.
+    const delegatedDeviceAccessDenied = delegatedDeviceAccessDeniedOf(ctx);
+    assertNoDeviceForDeniedRun(delegatedDeviceAccessDenied, request.deviceId);
 
     await assertCanUseWorkspaceAgent({
       agentId: request.agentId,
@@ -195,6 +202,7 @@ export const agentSteerQueueRouter = router({
         ...foldLegacyUserMessageFields(request),
         acceptsFileWorks: acceptsFileWorksOf(streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(streamFeatures),
+        ...(delegatedDeviceAccessDenied && { delegatedDeviceAccessDenied }),
         // A follow-up continues the conversation it was typed into; it never
         // branches or creates one.
         appContext: {
