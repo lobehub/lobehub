@@ -54,6 +54,25 @@ describe('devStartupSequence', () => {
       }
     });
 
+    it('reports permission failures without treating node_modules as missing', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-permission-');
+      try {
+        const permissionError = Object.assign(new Error('permission denied'), { code: 'EPERM' });
+
+        const issue = getWorkspaceDependencyIssue(projectRoot, {
+          lstat: () => {
+            throw permissionError;
+          },
+          realpath: (targetPath) => targetPath,
+        });
+
+        expect(issue).toContain('node_modules cannot be inspected');
+        expect(issue).toContain('EPERM');
+      } finally {
+        cleanup(projectRoot);
+      }
+    });
+
     it('rejects node_modules linked outside the worktree', () => {
       const projectRoot = makeTempDir('lobehub-dev-preflight-project-');
       const externalRoot = makeTempDir('lobehub-dev-preflight-external-');

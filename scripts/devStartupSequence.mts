@@ -297,25 +297,44 @@ const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
 const WORKTREE_DEPENDENCIES_HINT =
   'Install dependencies inside this worktree with `pnpm install`. Next.js Turbopack rejects a node_modules link that escapes the project root and panics at startup.';
 
+interface WorkspaceDependencyFs {
+  lstat: (targetPath: string) => ReturnType<typeof fs.lstatSync>;
+  realpath: (targetPath: string) => string;
+}
+
+const defaultWorkspaceDependencyFs: WorkspaceDependencyFs = {
+  lstat: (targetPath) => fs.lstatSync(targetPath),
+  realpath: (targetPath) => fs.realpathSync(targetPath),
+};
+
 /**
  * Validate that this workspace can be served by Next/Turbopack.
  * A linked node_modules (Conductor/Orca-style worktree sharing) points outside the
  * project root, which Turbopack refuses with an opaque panic before any route loads.
  * Fail early with the actionable cause instead of starting a dev server that dies.
  */
-export const getWorkspaceDependencyIssue = (projectRoot: string): string | undefined => {
+export const getWorkspaceDependencyIssue = (
+  projectRoot: string,
+  dependencyFs: WorkspaceDependencyFs = defaultWorkspaceDependencyFs,
+): string | undefined => {
   const nodeModulesPath = path.join(projectRoot, 'node_modules');
-  const realProjectRoot = fs.realpathSync(projectRoot);
 
   try {
-    fs.lstatSync(nodeModulesPath);
-  } catch {
-    return `node_modules is missing at ${nodeModulesPath}. ${WORKTREE_DEPENDENCIES_HINT}`;
+    dependencyFs.lstat(nodeModulesPath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return `node_modules is missing at ${nodeModulesPath}. ${WORKTREE_DEPENDENCIES_HINT}`;
+    }
+
+    return `node_modules cannot be inspected at ${nodeModulesPath} (${code ?? 'UNKNOWN'}). Check file permissions or a process holding it open.`;
   }
+
+  const realProjectRoot = dependencyFs.realpath(projectRoot);
 
   let realNodeModules: string;
   try {
-    realNodeModules = fs.realpathSync(nodeModulesPath);
+    realNodeModules = dependencyFs.realpath(nodeModulesPath);
   } catch {
     return `node_modules at ${nodeModulesPath} cannot be resolved. ${WORKTREE_DEPENDENCIES_HINT}`;
   }

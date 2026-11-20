@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Conductor workspace setup script
-# This script creates symlinks for .env and all node_modules directories
+# This script prepares .env files and installs dependencies inside this worktree.
 
 LOG_FILE="$PWD/.conductor-setup.log"
 
@@ -70,24 +70,83 @@ log "--- Ensuring workspace dependencies ---"
 # node_modules must be installed inside this worktree. Next.js Turbopack refuses a
 # node_modules link that escapes the project root ("Symlink [project]/node_modules
 # is invalid, it points out of the filesystem root") and the dev server panics.
-# Remove escaping links without following them. This makes repeated setup
-# idempotent for worktrees created by the old Conductor symlink strategy.
-if node -e "const fs=require('fs'); try { const s=fs.lstatSync('node_modules'); if (s.isSymbolicLink()) fs.unlinkSync('node_modules'); } catch (error) { if (error.code !== 'ENOENT') throw error; }"; then
-  log "SUCCESS: escaping node_modules link removed (if present)"
+# Dev preflight only validates the root node_modules. Setup additionally cleans
+# stale nested links left by the old Conductor symlink strategy.
+WORKTREE_REAL_PATH=$(realpath "$PWD" 2>/dev/null)
+
+is_inside_worktree() {
+  case "$1" in
+    "$WORKTREE_REAL_PATH"|"$WORKTREE_REAL_PATH"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+remove_escaping_node_modules_link() {
+  local link="$1"
+
+  # find -type l is not followed, and this guard keeps racing paths from deleting
+  # a real directory. unlink is intentionally used instead of rm.
+  if [ ! -L "$link" ]; then
+    return 0
+  fi
+
+  local resolved
+  if ! resolved=$(realpath "$link" 2>/dev/null); then
+    log "WARNING: Cannot resolve node_modules link at $link; leaving it in place"
+    return 0
+  fi
+
+  if is_inside_worktree "$resolved"; then
+    log "Keeping node_modules link inside worktree: $link -> $resolved"
+  elif unlink "$link"; then
+    log "SUCCESS: Removed escaping node_modules link: $link -> $resolved"
+  else
+    log "ERROR: Failed to remove escaping node_modules link: $link"
+  fi
+}
+
+if [ -z "$WORKTREE_REAL_PATH" ]; then
+  log "ERROR: Cannot resolve the worktree path; skipping node_modules link cleanup"
 else
-  log "ERROR: Failed to remove node_modules link"
+  # The root link is handled explicitly because it is also the only path checked
+  # by the Dev startup preflight; nested links are setup-only cleanup.
+  remove_escaping_node_modules_link "node_modules"
+
+  for SCAN_ROOT in packages packages/business apps e2e; do
+    [ -d "$SCAN_ROOT" ] || continue
+    while IFS= read -r -d '' link; do
+      remove_escaping_node_modules_link "$link"
+    done < <(find "$SCAN_ROOT" -maxdepth 4 -type l -name node_modules -print0 2>/dev/null)
+  done
 fi
 
-if [ -d node_modules ]; then
-  log "node_modules already present in this worktree, skipping install"
-elif command -v pnpm >/dev/null 2>&1; then
+NEEDS_INSTALL=false
+if [ -e node_modules/.modules.yaml ] || [ -e node_modules/.pnpm ]; then
+  log "node_modules is complete in this worktree, skipping install"
+else
+  NEEDS_INSTALL=true
+  if [ -e node_modules ]; then
+    log "node_modules exists but has neither .modules.yaml nor .pnpm; treating it as a partial install and reinstalling"
+  fi
+fi
+
+if [ "$NEEDS_INSTALL" = true ] && command -v pnpm >/dev/null 2>&1; then
   log "Installing dependencies with pnpm install (this can take a few minutes)..."
-  if pnpm install --registry=https://registry.npmjs.org/ >> "$LOG_FILE" 2>&1; then
+
+  # Do not hard-code a public registry: that overrides a user's pnpm config,
+  # including company/private mirrors and proxies. PNPM_REGISTRY is an explicit opt-in.
+  PNPM_INSTALL_ARGS=()
+  if [ -n "${PNPM_REGISTRY:-}" ]; then
+    log "Using explicit PNPM_REGISTRY override for pnpm install"
+    PNPM_INSTALL_ARGS=(--registry "$PNPM_REGISTRY")
+  fi
+
+  if pnpm install "${PNPM_INSTALL_ARGS[@]}" >> "$LOG_FILE" 2>&1; then
     log "SUCCESS: pnpm install finished"
   else
     log "ERROR: pnpm install failed; run it manually to see the full error"
   fi
-else
+elif [ "$NEEDS_INSTALL" = true ]; then
   log "ERROR: pnpm not found; install dependencies manually before starting dev"
 fi
 
@@ -101,9 +160,10 @@ log ""
 # List created symlinks for verification
 log "--- Verification: Listing symlinks in workspace ---"
 find . -maxdepth 1 -type l -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./packages -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./apps -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./e2e -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./packages -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./packages/business -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./apps -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./e2e -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
 
 log ""
 log "Log file saved to: $LOG_FILE"
