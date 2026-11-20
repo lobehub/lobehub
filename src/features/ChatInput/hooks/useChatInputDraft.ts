@@ -2,6 +2,8 @@ import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import { isMobileSurface } from '@/utils/mobileSurface';
+
 import { getDraftEntry, removeDraftIfUnchanged, saveDraft } from '../draftStorage';
 import { canSerialize, writeDocument } from '../editorDocument';
 import { useStoreApi } from '../store';
@@ -89,7 +91,8 @@ export const useChatInputDraft = () => {
   // (cancelling the pending debounce, which would otherwise save it under the
   // new key), then swap the editor document in place. Focus last — the
   // document swap would drop any focus applied earlier in the switch, and on
-  // mobile focusing would pop the keyboard on every switch.
+  // mobile focusing would pop the keyboard (and let iOS zoom the page) on every
+  // switch. Ask the bundle, not the store: no provider sets the store's `mobile`.
   useEffect(
     () =>
       storeApi.subscribe((state, prevState) => {
@@ -102,7 +105,7 @@ export const useChatInputDraft = () => {
         if (!canSerialize(editor)) return;
         editor!.cleanDocument();
         restoreDraft(editor!);
-        if (!state.mobile) editor!.focus();
+        if (!isMobileSurface()) editor!.focus();
       }),
     [persistDraftFor, restoreDraft, saveDraftDebounced, storeApi],
   );

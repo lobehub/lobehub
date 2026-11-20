@@ -96,6 +96,17 @@ html.desktop[data-window-fullscreen] body {
   -webkit-app-region: no-drag;
 }
 
+/* iOS zooms the page when focus lands on a field below 16px and never zooms back.
+   -webkit-touch-callout exists only on iOS, so other platforms keep their sizes. */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: 16px !important;
+  }
+}
+
 /* CLASSNAMES.ContextTrigger / CLASSNAMES.DropdownMenuTrigger from @lobehub/ui */
 .lobe-context-trigger[data-popup-open]:not([data-no-highlight]),
 .lobe-dropdown-menu-trigger[data-popup-open]:not([data-no-highlight]) {
