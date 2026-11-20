@@ -12,6 +12,7 @@ import { sx } from '@/styles/sx';
 
 import { useDragUploadContext } from './DragUploadProvider';
 import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
+import { useWindowPasteFile } from './usePasteFile';
 
 const BLOCK_SIZE = 48;
 const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
@@ -109,6 +110,12 @@ export interface DragUploadZoneProps {
    */
   enableLocalPathReference?: boolean;
   /**
+   * Whether pasting files anywhere on the page (window-level `paste` event)
+   * routes them into `onUploadFiles`. Text pastes are never intercepted.
+   * @default false
+   */
+  enablePasteUpload?: boolean;
+  /**
    * Callback when top-level local files/folders are dropped and local path
    * reference mode is on.
    */
@@ -134,6 +141,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     disabled = false,
     enabledFiles = true,
     enableLocalPathReference = false,
+    enablePasteUpload = false,
     onLocalPaths,
     overlayMinHeight = 160,
     onUploadFiles,
@@ -151,6 +159,10 @@ const DragUploadZone = memo<DragUploadZoneProps>(
       onLocalPaths,
       onUploadFiles,
     });
+
+    // Window-level paste upload - opt-in so existing consumers (which handle
+    // paste through their editor instance) keep their current behavior.
+    useWindowPasteFile(onUploadFiles, { disabled: disabled || !enablePasteUpload });
 
     // Show overlay when files are being dragged anywhere on the page
     const showOverlay = isDraggingGlobally && !disabled;
@@ -268,6 +280,6 @@ const DragUploadZone = memo<DragUploadZoneProps>(
 DragUploadZone.displayName = 'DragUploadZone';
 
 export type { DroppedLocalPath } from './useLocalDragUpload';
-export { usePasteFile } from './usePasteFile';
+export { usePasteFile, useWindowPasteFile } from './usePasteFile';
 export { useUploadFiles } from './useUploadFiles';
 export default DragUploadZone;
