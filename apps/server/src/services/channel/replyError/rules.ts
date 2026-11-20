@@ -123,14 +123,15 @@ export const isChineseLocale = (locale: string) => locale.toLowerCase().startsWi
 
 /**
  * The raw failure as the card shows it under "details". A shared Agent runs under its owner's
- * credentials, so unless the share owner opted into showing error details, its visitor gets the
- * same projection `toVisitorMessage` applies — as the job's own fields do.
+ * credentials, so a shared card never persists that text: it takes the share page's projection
+ * (`sanitizeVisitorError`), the same one `view.ts` reapplies when it hands the card to a reader —
+ * the stored card is read by every member of the Channel, not only by the share's visitor.
  */
 const visibleError = (facts: ChannelReplyErrorFacts) => {
   const raw = facts.operation?.error;
   if (!raw?.message && !raw?.type) return { errorMessage: null, errorType: null };
   const error = { message: raw.message ?? '', type: raw.type } as ChatMessageError;
-  const shown = facts.share && !facts.share.showErrorDetails ? sanitizeVisitorError(error) : error;
+  const shown = facts.share ? sanitizeVisitorError(error) : error;
   return {
     errorMessage: shown?.message ? shown.message.slice(0, 2000) : null,
     errorType: shown?.type?.toString() ?? null,

@@ -147,7 +147,7 @@ describe('rule-based reply error cards', () => {
     expect(card.actions).not.toContain('switch_device');
   });
 
-  it("keeps the owner's detail for a share visitor once the owner opts in", () => {
+  it("never persists a shared Agent's owner detail, even with the share's details enabled", () => {
     const card = ruleBasedReplyError(
       facts(
         { error: { message: 'Owner key sk-123 was rejected', type: 'InvalidProviderAPIKey' } },
@@ -155,7 +155,7 @@ describe('rule-based reply error cards', () => {
       ),
       'en-US',
     );
-    expect(card.errorMessage).toContain('sk-123');
+    expect(card.errorMessage ?? '').not.toContain('sk-123');
     expect(card.actions).not.toContain('switch_device');
   });
 });
