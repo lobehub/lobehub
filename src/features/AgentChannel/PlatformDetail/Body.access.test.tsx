@@ -288,6 +288,30 @@ describe('channel settings form: access tab', () => {
     ).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('also asks when the saved channel list was hidden under "Any channel"', () => {
+    state.copy = en;
+    vi.mocked(confirmModal).mockClear();
+
+    render(
+      <Harness
+        settings={{
+          deviceChannelAllowFrom: [{ id: 'ops', name: '#ops' }],
+          deviceChannelPolicy: 'any',
+          userId: 'owner-1',
+        }}
+      />,
+    );
+
+    const who = screen.getByRole('radiogroup', { name: en['channel.access.device.label'] });
+    fireEvent.click(
+      within(who).getByRole('radio', {
+        name: new RegExp(en['channel.access.device.channelMembers']),
+      }),
+    );
+
+    expect(confirmModal).toHaveBeenCalledTimes(1);
+  });
+
   it('warns that nobody can use the devices until the owner ID is filled', () => {
     state.copy = en;
 

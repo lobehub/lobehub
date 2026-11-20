@@ -14,7 +14,7 @@
   "channel.access.device.channelMembersRisk": "这些频道里的任何人都能让机器人在你的设备上读写文件、执行命令。只列出成员都可信的频道。",
   "channel.access.device.grant.listEmpty": "尚未添加频道，目前仅你本人可以使用设备。",
   "channel.access.device.grant.listHint": "这些频道里的所有成员都能使用你的设备。填写与对话「允许的频道」相同的频道 / 群组 / 会话 ID。",
-  "channel.access.device.grantConfirmContent": "你为限制设备使用而列出的 {{count}} 个频道将改为授权：这些频道里的所有人都能让机器人操作你的设备。",
+  "channel.access.device.grantConfirmContent": "设备频道名单里已有 {{count}} 个频道。切换后它们将改为授权：这些频道里的所有人都能让机器人操作你的设备。",
   "channel.access.device.grantConfirmOk": "授权",
   "channel.access.device.grantConfirmTitle": "授权这些频道？",
   "channel.access.device.label": "谁可以使用你的设备",

@@ -111,15 +111,13 @@ export const AccessSection = memo<AccessSectionProps>(
     const handleDevicePolicy = useCallback(
       (next: DevicePolicy) => {
         if (next === devicePolicy) return;
-        // A channel list saved to limit device use would start granting every
-        // member of those channels. Say so before it changes meaning.
-        const limitedChannels =
-          settings.deviceChannelPolicy === 'allowlist'
-            ? countListed(settings.deviceChannelAllowFrom)
-            : 0;
-        if (next === 'channel' && limitedChannels > 0) {
+        // Channels already saved on the list, whether they limited device use or
+        // sat hidden after "Any channel", would start granting every member of
+        // those channels. Say so before they change meaning.
+        const savedChannels = countListed(settings.deviceChannelAllowFrom);
+        if (next === 'channel' && savedChannels > 0) {
           confirmModal({
-            content: t('channel.access.device.grantConfirmContent', { count: limitedChannels }),
+            content: t('channel.access.device.grantConfirmContent', { count: savedChannels }),
             okText: t('channel.access.device.grantConfirmOk'),
             onOk: () => write({ devicePolicy: next }),
             title: t('channel.access.device.grantConfirmTitle'),

@@ -724,7 +724,7 @@ export default {
     'Everyone in these channels can use your devices. Use the same channel / group / chat IDs as Allowed Channels for conversations.',
   'channel.access.device.grantConfirmTitle': 'Grant these channels?',
   'channel.access.device.grantConfirmContent':
-    'The {{count}} channel(s) you listed to limit device use will now grant access instead: everyone in them can have the bot operate your devices.',
+    '{{count}} channel(s) are already on the device channel list. They will now grant access: everyone in them can have the bot operate your devices.',
   'channel.access.device.grantConfirmOk': 'Grant access',
   'channel.access.device.ownerMissing':
     'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, and no one can use your devices.',

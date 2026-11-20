@@ -14,7 +14,7 @@
   "channel.access.device.channelMembersRisk": "Anyone in these channels can have the bot read and write files and run commands on your devices. List only channels whose members you all trust.",
   "channel.access.device.grant.listEmpty": "No channels added yet, so only you can use your devices.",
   "channel.access.device.grant.listHint": "Everyone in these channels can use your devices. Use the same channel / group / chat IDs as Allowed Channels for conversations.",
-  "channel.access.device.grantConfirmContent": "The {{count}} channel(s) you listed to limit device use will now grant access instead: everyone in them can have the bot operate your devices.",
+  "channel.access.device.grantConfirmContent": "{{count}} channel(s) are already on the device channel list. They will now grant access: everyone in them can have the bot operate your devices.",
   "channel.access.device.grantConfirmOk": "Grant access",
   "channel.access.device.grantConfirmTitle": "Grant these channels?",
   "channel.access.device.label": "Who can use your devices",
