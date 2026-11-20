@@ -59,6 +59,21 @@ const ownsRow = (row: ScmChangeRequestItem, scope: LinkScope) =>
 const findRow = (db: LobeChatDatabase, pr: PullRequestIdentity) =>
   ScmChangeRequestModel.findByIdentityIgnoringCase(db, 'github', pr.repoFullName, pr.number);
 
+/** The generation of the claim `topicId`'s own link holds on the row, if it holds one. */
+const linkClaimOf = (row: ScmChangeRequestItem, topicId: string): string | null => {
+  const held = row.metadata?.topicLink;
+  return row.topicId === topicId && held?.topicId === topicId ? (held.claimId ?? null) : null;
+};
+
+const listsPullRequest = async (
+  topicModel: TopicModel,
+  topicId: string,
+  pr: PullRequestIdentity,
+): Promise<boolean> => {
+  const topic = await topicModel.findById(topicId);
+  return isTopicPullRequestListed(topic?.metadata?.pullRequests, `${pr.repoFullName}#${pr.number}`);
+};
+
 /**
  * Make the topic that just kept a PR on its list (branch match or Link a PR)
  * the conversation the PR's Auto-fix wakes, as a Work registration would.
@@ -68,8 +83,13 @@ const findRow = (db: LobeChatDatabase, pr: PullRequestIdentity) =>
  * links, so the next run-end branch match or a fresh Link a PR binds it once
  * the App tracks the PR.
  *
- * Call it only once the topic lists the PR. A removal racing the bind is
- * caught after the claim, and the claim is undone.
+ * Call it only once the topic lists the PR. Binds and removals of the same
+ * PR can interleave, so both sides follow one protocol. A bind first stamps
+ * a new claim generation (also when this topic's link already holds the
+ * slot) and only then reads the topic's list. A release first reads the
+ * generation, then the list, and clears only that generation. Whichever
+ * side reads the list last sees the other's write, and a release decided
+ * before a relink finds the relink's newer generation and does nothing.
  */
 export const bindTopicPullRequestWake = async (params: {
   db: LobeChatDatabase;
@@ -81,29 +101,33 @@ export const bindTopicPullRequestWake = async (params: {
   const row = await findRow(params.db, params.pr);
   if (!row) return 'untracked';
   if (!ownsRow(row, params.scope)) return 'foreign';
-  if (row.topicId === params.topicId) return 'kept';
-  if (row.topicId) return 'taken';
+  if (row.topicId && row.topicId !== params.topicId) return 'taken';
+  // An acceptance or a Work already wakes this topic. No marker to keep, and
+  // no removal of the link will clear it.
+  if (row.topicId === params.topicId && !linkClaimOf(row, params.topicId)) return 'kept';
 
-  const claimed = await ScmChangeRequestModel.claimTopicFromLink(
+  const claimId = await ScmChangeRequestModel.claimTopicFromLink(
     params.db,
     row.id,
     params.scope,
     params.topicId,
   );
-  // A concurrent ingest filled or re-routed the row first. Whatever it chose
-  // came from a source the events trust, so it stays.
-  if (!claimed) return 'taken';
+  if (!claimId) {
+    // The row changed between the read and the claim: a concurrent ingest
+    // filled or re-routed it. Whatever it chose came from a source the
+    // events trust, so it stays.
+    const fresh = await ScmChangeRequestModel.findById(params.db, row.id);
+    if (fresh?.topicId === params.topicId) return 'kept';
+    return fresh && !ownsRow(fresh, params.scope) ? 'foreign' : 'taken';
+  }
 
-  // A removal that committed between the topic write and this claim found
-  // nothing to release yet, so check the list again now that the claim is
-  // visible.
-  const topic = await params.topicModel.findById(params.topicId);
-  const identifier = `${params.pr.repoFullName}#${params.pr.number}`;
-  if (!isTopicPullRequestListed(topic?.metadata?.pullRequests, identifier)) {
-    await ScmChangeRequestModel.releaseTopicFromLink(params.db, row.id, params.topicId);
+  // A removal that committed before this claim may have found nothing to
+  // release yet, so read the list again now that the claim is visible.
+  if (!(await listsPullRequest(params.topicModel, params.topicId, params.pr))) {
+    await ScmChangeRequestModel.releaseTopicFromLink(params.db, row.id, params.topicId, claimId);
     return 'withdrawn';
   }
-  return 'bound';
+  return row.topicId === params.topicId ? 'kept' : 'bound';
 };
 
 /**
@@ -111,14 +135,20 @@ export const bindTopicPullRequestWake = async (params: {
  * topic's link made Auto-fix wake. A conversation an acceptance or a Work
  * supplied stays: those sources are re-resolved on every provider event, so
  * clearing them here would only last until the next push. Turning Auto-fix
- * off is how to stop those wakes. `true` when something was released.
+ * off is how to stop those wakes. Call it after the removal is saved; see
+ * {@link bindTopicPullRequestWake} for how it is fenced against a relink.
+ * `true` when something was released.
  */
 export const releaseTopicPullRequestWake = async (params: {
   db: LobeChatDatabase;
   pr: PullRequestIdentity;
   topicId: string;
+  topicModel: TopicModel;
 }): Promise<boolean> => {
   const row = await findRow(params.db, params.pr);
-  if (row?.topicId !== params.topicId) return false;
-  return ScmChangeRequestModel.releaseTopicFromLink(params.db, row.id, params.topicId);
+  const claimId = row && linkClaimOf(row, params.topicId);
+  if (!row || !claimId) return false;
+  // Relinked since the removal: that link's bind owns the slot now.
+  if (await listsPullRequest(params.topicModel, params.topicId, params.pr)) return false;
+  return ScmChangeRequestModel.releaseTopicFromLink(params.db, row.id, params.topicId, claimId);
 };

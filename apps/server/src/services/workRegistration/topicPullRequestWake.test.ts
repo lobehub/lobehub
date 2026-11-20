@@ -57,12 +57,16 @@ afterEach(async () => {
   await serverDB.delete(users);
 });
 
+const identifier = `${pasted.repoFullName}#${pasted.number}`;
+
 /** The provider row the GitHub App keeps for the PR, routed like the ingest does. */
 const trackedRow = (
   owner: { userId: string; workspaceId: string | null },
   links: { topicId?: string } = {},
+  eventAt?: Date,
 ) =>
   ScmChangeRequestModel.upsert(serverDB, {
+    eventAt,
     links,
     metadata: { routedBy: 'author' },
     number: pr.number,
@@ -79,20 +83,41 @@ const topicModelFor = (scope: { userId: string; workspaceId: string | null }) =>
 /** Keep the PR on the topic's own list, as `work.linkTopicPullRequest` does first. */
 const listOn = (scope: { userId: string; workspaceId: string | null }, topicId: string) =>
   linkTopicPullRequest(topicModelFor(scope), topicId, {
-    identifier: `${pasted.repoFullName}#${pasted.number}`,
+    identifier,
     source: 'manual',
     url,
     vouched: true,
   });
 
-const bind = (scope: { userId: string; workspaceId: string | null }, topicId: string) =>
+const bind = (
+  scope: { userId: string; workspaceId: string | null },
+  topicId: string,
+  topicModel: Pick<TopicModel, 'findById'> = topicModelFor(scope),
+) =>
   bindTopicPullRequestWake({
     db: serverDB,
     pr: pasted,
     scope,
     topicId,
-    topicModel: topicModelFor(scope),
+    topicModel: topicModel as TopicModel,
   });
+
+const release = (
+  topicId: string,
+  topicModel: Pick<TopicModel, 'findById'> = topicModelFor(personal),
+) =>
+  releaseTopicPullRequestWake({
+    db: serverDB,
+    pr: pasted,
+    topicId,
+    topicModel: topicModel as TopicModel,
+  });
+
+/** "Remove from this topic", as `work.setTopicPullRequestDismissed` does it. */
+const removeFrom = async (topicId: string) => {
+  await setTopicPullRequestDismissed(topicModelFor(personal), topicId, identifier, true);
+  return release(topicId);
+};
 
 const rowNow = async () => {
   const [row] = await serverDB.select().from(scmChangeRequests);
@@ -203,55 +228,117 @@ describe('bindTopicPullRequestWake', () => {
   it('undoes its claim when the PR was removed from the topic meanwhile', async () => {
     await trackedRow(personal);
     await listOn(personal, 'tpc-personal');
-    await setTopicPullRequestDismissed(
-      topicModelFor(personal),
-      'tpc-personal',
-      'ImSingee/aidy-tophant#46',
-      true,
-    );
+    await setTopicPullRequestDismissed(topicModelFor(personal), 'tpc-personal', identifier, true);
 
     expect(await bind(personal, 'tpc-personal')).toBe('withdrawn');
     const row = await rowNow();
     expect(row.topicId).toBeNull();
     expect(row.metadata.topicLink).toBeUndefined();
   });
+  it('cannot undo a relink with a withdraw it decided before the relink', async () => {
+    await trackedRow(personal);
+    await listOn(personal, 'tpc-personal');
+    const real = topicModelFor(personal);
+    // The removal lands after this bind's claim (its own release ran first and
+    // found nothing), so the bind reads a list without the PR. Before it
+    // releases, the person links the PR again.
+    const racing = {
+      findById: async (id: string) => {
+        await setTopicPullRequestDismissed(real, 'tpc-personal', identifier, true);
+        const seen = await real.findById(id);
+        await listOn(personal, 'tpc-personal');
+        expect(await bind(personal, 'tpc-personal')).toBe('kept');
+        return seen;
+      },
+    };
+
+    expect(await bind(personal, 'tpc-personal', racing)).toBe('withdrawn');
+    // The relink restamped the claim, so the stale withdraw released nothing.
+    const row = await rowNow();
+    expect(row.topicId).toBe('tpc-personal');
+    expect(row.metadata.topicLink).toMatchObject({ topicId: 'tpc-personal' });
+  });
+
+  it('restamps the claim when the link already holds the slot', async () => {
+    const row = await trackedRow(personal);
+    const first = await ScmChangeRequestModel.claimTopicFromLink(
+      serverDB,
+      row.id,
+      personal,
+      'tpc-personal',
+    );
+    const second = await ScmChangeRequestModel.claimTopicFromLink(
+      serverDB,
+      row.id,
+      personal,
+      'tpc-personal',
+    );
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+
+    expect(
+      await ScmChangeRequestModel.releaseTopicFromLink(serverDB, row.id, 'tpc-personal', first!),
+    ).toBe(false);
+    expect(
+      await ScmChangeRequestModel.releaseTopicFromLink(serverDB, row.id, 'tpc-personal', second!),
+    ).toBe(true);
+  });
 });
 
 describe('releaseTopicPullRequestWake', () => {
-  it("clears the conversation this topic's link set", async () => {
+  it("clears the conversation this topic's link set once the PR left its list", async () => {
     await trackedRow(personal);
     await listOn(personal, 'tpc-personal');
     await bind(personal, 'tpc-personal');
 
-    expect(
-      await releaseTopicPullRequestWake({ db: serverDB, pr: pasted, topicId: 'tpc-personal' }),
-    ).toBe(true);
+    // Still listed: nothing to release.
+    expect(await release('tpc-personal')).toBe(false);
+    expect((await rowNow()).topicId).toBe('tpc-personal');
+
+    expect(await removeFrom('tpc-personal')).toBe(true);
     const row = await rowNow();
     expect(row.topicId).toBeNull();
     expect(row.metadata.topicLink).toBeUndefined();
     expect(row.metadata.routedBy).toBe('author');
   });
 
+  it('cannot undo a relink with a removal it decided before the relink', async () => {
+    await trackedRow(personal);
+    await listOn(personal, 'tpc-personal');
+    await bind(personal, 'tpc-personal');
+    const real = topicModelFor(personal);
+    await setTopicPullRequestDismissed(real, 'tpc-personal', identifier, true);
+    // The removal reads a list without the PR; the relink and its bind land
+    // before the removal's release.
+    const racing = {
+      findById: async (id: string) => {
+        const seen = await real.findById(id);
+        await listOn(personal, 'tpc-personal');
+        expect(await bind(personal, 'tpc-personal')).toBe('kept');
+        return seen;
+      },
+    };
+
+    expect(await release('tpc-personal', racing)).toBe(false);
+    expect((await rowNow()).topicId).toBe('tpc-personal');
+  });
+
   it('leaves a conversation an acceptance or a Work set, and other topics', async () => {
     await trackedRow(personal, { topicId: 'tpc-personal' });
-    expect(
-      await releaseTopicPullRequestWake({ db: serverDB, pr: pasted, topicId: 'tpc-personal' }),
-    ).toBe(false);
+    await listOn(personal, 'tpc-personal');
+    expect(await removeFrom('tpc-personal')).toBe(false);
     expect((await rowNow()).topicId).toBe('tpc-personal');
 
     await serverDB.update(scmChangeRequests).set({ topicId: null });
     await listOn(personal, 'tpc-work');
     await bind(personal, 'tpc-work');
-    expect(
-      await releaseTopicPullRequestWake({ db: serverDB, pr: pasted, topicId: 'tpc-personal' }),
-    ).toBe(false);
+    expect(await removeFrom('tpc-personal')).toBe(false);
     expect((await rowNow()).topicId).toBe('tpc-work');
   });
 
   it('does nothing for an untracked PR', async () => {
-    expect(
-      await releaseTopicPullRequestWake({ db: serverDB, pr: pasted, topicId: 'tpc-personal' }),
-    ).toBe(false);
+    expect(await removeFrom('tpc-personal')).toBe(false);
   });
 });
 
@@ -273,9 +360,7 @@ describe('provider events and a link-held conversation', () => {
     row = await rowNow();
     expect(row.topicId).toBe('tpc-work');
     expect(row.metadata.topicLink).toBeUndefined();
-    expect(
-      await releaseTopicPullRequestWake({ db: serverDB, pr: pasted, topicId: 'tpc-personal' }),
-    ).toBe(false);
+    expect(await removeFrom('tpc-personal')).toBe(false);
   });
 
   it('hands a link-held conversation over to an event that names the same one', async () => {
@@ -288,9 +373,46 @@ describe('provider events and a link-held conversation', () => {
     expect(row.topicId).toBe('tpc-personal');
     expect(row.metadata.topicLink).toBeUndefined();
     // Removing the PR no longer clears it: the next event would resolve it again.
-    expect(
-      await releaseTopicPullRequestWake({ db: serverDB, pr: pasted, topicId: 'tpc-personal' }),
-    ).toBe(false);
+    expect(await removeFrom('tpc-personal')).toBe(false);
+  });
+
+  describe('out of order', () => {
+    const newer = new Date('2026-11-20T10:00:00Z');
+    const older = new Date('2026-11-20T09:00:00Z');
+
+    it("hands over to a stale delivery that finds the topic's own Work", async () => {
+      await trackedRow(personal, {}, newer);
+      await listOn(personal, 'tpc-personal');
+      await bind(personal, 'tpc-personal');
+
+      // A replayed delivery from before the link, resolving the Work the
+      // topic's agent registered: the stored conversation stays, but it is
+      // no longer only the link's.
+      await trackedRow(personal, { topicId: 'tpc-personal' }, older);
+      const row = await rowNow();
+      expect(row.topicId).toBe('tpc-personal');
+      expect(row.metadata.topicLink).toBeUndefined();
+      expect(row.metadata.lastProviderEventAt).toBe(newer.toISOString());
+
+      expect(await removeFrom('tpc-personal')).toBe(false);
+      expect((await rowNow()).topicId).toBe('tpc-personal');
+    });
+
+    it("keeps the link's claim when a stale delivery names another conversation", async () => {
+      await trackedRow(personal, {}, newer);
+      await listOn(personal, 'tpc-personal');
+      await bind(personal, 'tpc-personal');
+
+      // A stale delivery cannot replace the stored conversation, so the slot
+      // is still the link's and removing the PR still releases it.
+      await trackedRow(personal, { topicId: 'tpc-work' }, older);
+      const row = await rowNow();
+      expect(row.topicId).toBe('tpc-personal');
+      expect(row.metadata.topicLink).toMatchObject({ topicId: 'tpc-personal' });
+
+      expect(await removeFrom('tpc-personal')).toBe(true);
+      expect((await rowNow()).topicId).toBeNull();
+    });
   });
 });
 
@@ -313,5 +435,13 @@ describe('ScmChangeRequestModel.claimTopicFromLink', () => {
       await ScmChangeRequestModel.claimTopicFromLink(serverDB, row.id, personal, 'tpc-personal'),
     ).toBeNull();
     expect((await rowNow()).topicId).toBeNull();
+  });
+
+  it('does not take over a conversation a resolver set for the same topic', async () => {
+    const row = await trackedRow(personal, { topicId: 'tpc-personal' });
+    expect(
+      await ScmChangeRequestModel.claimTopicFromLink(serverDB, row.id, personal, 'tpc-personal'),
+    ).toBeNull();
+    expect((await rowNow()).metadata.topicLink).toBeUndefined();
   });
 });

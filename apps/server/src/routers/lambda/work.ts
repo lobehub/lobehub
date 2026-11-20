@@ -685,6 +685,7 @@ export const workRouter = router({
             db: ctx.serverDB,
             pr: { number: Number(number), repoFullName },
             topicId: input.topicId,
+            topicModel: ctx.topicModel,
           });
         } catch (error) {
           log('releasing %s from topic %s failed: %O', input.identifier, input.topicId, error);

@@ -164,6 +164,7 @@ describe('workRouter — topic PR links honour conversation access', () => {
       db: {},
       pr: { number: 12, repoFullName: 'Owner.x/repo-y' },
       topicId: 't1',
+      topicModel: expect.anything(),
     });
 
     mocks.releaseTopicPullRequestWake.mockClear();
