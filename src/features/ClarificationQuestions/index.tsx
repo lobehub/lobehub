@@ -6,8 +6,7 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,6 +26,7 @@ import {
   readClarificationDraft,
   writeClarificationDraft,
 } from './draftStorage';
+import { ClarificationAnswerDeclined, submitClarification } from './submit';
 import { useAskUserLabels } from './useAskUserLabels';
 
 export type { ClarificationAnswer, ClarificationQuestion } from './answers';
@@ -47,7 +47,11 @@ export interface ClarificationQuestionsProps {
    * no skip at all.
    */
   onSkip?: () => Promise<void> | void;
-  onSubmit: (answers: ClarificationAnswer[]) => Promise<void> | void;
+  /**
+   * Sends the answers. Return `false` to decline them unsent (after telling the
+   * user why): the form stays editable and keeps the draft.
+   */
+  onSubmit: (answers: ClarificationAnswer[]) => Promise<boolean | void> | boolean | void;
   questions: ClarificationQuestion[];
   /** Defaults to `true`; pass `false` when every question is optional. */
   requireAllAnswered?: boolean;
@@ -114,11 +118,15 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
             if (!onSkip) return;
             await onSkip();
           } else if (action.type === 'submit')
-            await onSubmit(toClarificationAnswers(questions, action.payload ?? {}));
+            await submitClarification(
+              onSubmit,
+              toClarificationAnswers(questions, action.payload ?? {}),
+            );
           // Sent: nothing left to restore. A failed send keeps the draft.
           if (storageKey) clearClarificationDraft(storageKey);
         } catch (error) {
-          setFailed(true);
+          // A declined answer was never sent: the host already said why.
+          if (!(error instanceof ClarificationAnswerDeclined)) setFailed(true);
           // Rethrow so the form leaves its submitting state and can be retried.
           throw error;
         }

@@ -106,6 +106,9 @@ export const tasks = pgTable(
     // Timestamps
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
+    // Set when the user archives the task ("truly done"); orthogonal to
+    // `status`, null = not archived.
+    archivedAt: timestamptz('archived_at'),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
     ...timestamps,

@@ -4,12 +4,12 @@ import type {
   TaskWorkListItem,
   TaskWorkSummaryItem,
 } from '@lobechat/types';
-import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
-import { taskOwnership, type WorkContext, workOwnership } from './context';
+import { TaskModel } from '../task';
+import { type WorkContext, workOwnership } from './context';
 import {
   currentTaskSummaryFields,
   currentWorkListFields,
@@ -24,12 +24,6 @@ import {
   type WorkTypeAdapter,
 } from './internal';
 import { registerWorkVersion } from './writes';
-
-const normalizeTaskLookup = (value?: string) => {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  return trimmed.startsWith('task_') ? trimmed : trimmed.toUpperCase();
-};
 
 /**
  * Task display fields captured by each immutable version. Live data stays on
@@ -48,31 +42,9 @@ const resolveTask = async (
   ctx: WorkContext,
   params: RegisterTaskWorkParams,
 ): Promise<TaskItem | null> => {
-  const filters: SQL[] = [];
-  const taskId = normalizeTaskLookup(params.taskId);
-  const taskIdentifier = normalizeTaskLookup(params.taskIdentifier);
-
-  if (taskId) {
-    filters.push(taskId.startsWith('task_') ? eq(tasks.id, taskId) : eq(tasks.identifier, taskId));
-  }
-
-  if (taskIdentifier) {
-    filters.push(
-      taskIdentifier.startsWith('task_')
-        ? eq(tasks.id, taskIdentifier)
-        : eq(tasks.identifier, taskIdentifier),
-    );
-  }
-
-  if (filters.length === 0) return null;
-
-  const [task] = await ctx.db
-    .select()
-    .from(tasks)
-    .where(and(taskOwnership(ctx), filters.length === 1 ? filters[0] : or(...filters)))
-    .limit(1);
-
-  return task ?? null;
+  const ref = params.taskId ?? params.taskIdentifier;
+  if (!ref) return null;
+  return new TaskModel(ctx.db, ctx.userId, ctx.workspaceId).resolve(ref);
 };
 
 export const registerTaskWork = async (ctx: WorkContext, params: RegisterTaskWorkParams) => {

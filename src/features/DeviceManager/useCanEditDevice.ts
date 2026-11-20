@@ -2,6 +2,7 @@ import type { DeviceListItem } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -35,5 +36,27 @@ export const useCanEditDevice = () => {
       return device.enroller.userId === currentUserId;
     },
     [isOwner, currentUserId],
+  );
+};
+
+/**
+ * Predicate for "can the current user operate this machine?" — update its app
+ * or CLI, open a terminal, browse folders. Mirrors the server-side
+ * `canOperateWorkspaceDevice` gate: a public workspace device is shared infra
+ * every member works on, so any non-viewer member may operate it; otherwise it
+ * falls back to {@link useCanEditDevice}.
+ */
+export const useCanOperateDevice = () => {
+  const canEdit = useCanEditDevice();
+  const isViewer = useIsWorkspaceViewer();
+
+  return useCallback(
+    (device: DeviceListItem): boolean =>
+      (!isViewer &&
+        device.scope === 'workspace' &&
+        device.registered &&
+        device.visibility === 'public') ||
+      canEdit(device),
+    [canEdit, isViewer],
   );
 };

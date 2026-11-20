@@ -4,14 +4,14 @@ import {
   buildAgentSkillIdentifier,
   EMPTY_ARRAY,
 } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Spin, Text, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Center, confirmModal, Empty, Flexbox, Spin, Text, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';
-import { EyeIcon, FileTextIcon, GlobeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, GlobeIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties, DragEvent, MouseEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,93 +19,132 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { withErrorBoundary } from '@/components/ErrorBoundary';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
-import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
-import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
-  openRenameSkillModal,
+  type AgentDocumentListMutator,
+  DocumentExplorerTree,
+} from '@/features/AgentDocumentsExplorer';
+import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
+import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
+import { startDocumentDrag } from '@/features/ChatInput/InputEditor/ReferDocument/documentDragData';
+import {
+  filterSkillItems,
   type SkillListItem,
-  type SkillRowAction,
   SkillSection,
   SkillsList,
+  SkillsSearchBar,
   useProjectSkills,
 } from '@/features/SkillsList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
+import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentDocumentActions,
+  agentDocumentSelectors,
+  useAgentDocumentStore,
+} from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { standardizeIdentifier } from '@/utils/identifier';
 
 import DeviceLevelSkills from './DeviceLevelSkills';
+import { webDocumentRowMarker } from './markers.stylex';
 import ProjectLevelSkills from './ProjectLevelSkills';
+import { useCanManageUserSkills } from './useCanManageUserSkills';
 import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
+import { useSelectSkill } from './useSelectSkill';
 
 dayjs.extend(relativeTime);
 
 export type ResourceFilter = 'skills' | 'documents' | 'web';
 type DocumentOpenMode = 'portal' | 'route';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    cursor: pointer;
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  containerActive: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  pillActive: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  pillTab: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition:
-      background ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut},
-      color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  title: css`
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    cursor: 'pointer',
+    position: 'relative',
+    display: 'flex',
+    gap: sidebarRow.gap,
+    alignItems: 'flex-start',
+    paddingBlock: '5px',
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+  },
+  rowIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.textLineHeight,
+    color: cssVar.colorTextTertiary,
+  },
+  rowText: { display: 'flex', flex: '1', flexDirection: 'column', minWidth: 0 },
+  rowTitle: {
+    overflow: 'hidden',
+    paddingInlineEnd: {
+      default: 0,
+      [stylex.when.ancestor(':hover', webDocumentRowMarker)]:
+        `calc(24px + ${sidebarRow.paddingInline})`,
+      [stylex.when.ancestor(':focus-within', webDocumentRowMarker)]:
+        `calc(24px + ${sidebarRow.paddingInline})`,
+    },
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowMeta: {
+    fontSize: sidebarRow.metaFontSize,
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+  },
+  rowActions: {
+    position: 'absolute',
+    insetBlockStart: '3px',
+    insetInlineEnd: sidebarRow.paddingInline,
+    pointerEvents: {
+      default: 'none',
+      [stylex.when.ancestor(':hover', webDocumentRowMarker)]: 'auto',
+      [stylex.when.ancestor(':focus-within', webDocumentRowMarker)]: 'auto',
+    },
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', webDocumentRowMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', webDocumentRowMarker)]: 1,
+    },
+    transition: 'opacity 0.12s',
+  },
+  pillActive: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  pillTab: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    paddingBlock: '4px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+    borderRadius: '999px',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: `background ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut},
+      color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut}`,
+  },
+});
 
 const FILTER_OPTIONS = [
   { labelKey: 'workingPanel.resources.filter.skills', value: 'skills' },
@@ -141,6 +180,7 @@ const DocumentItem = memo<DocumentItemProps>(
     onOpenDocument,
   }) => {
     const { t } = useTranslation(['chat', 'common']);
+    const { iconSize } = useDensityTokens();
 
     const [deleting, setDeleting] = useState(false);
 
@@ -176,6 +216,7 @@ const DocumentItem = memo<DocumentItemProps>(
               agentId,
               documentId: document.documentId,
               id: document.id,
+              withChildren: true,
             });
             await mutate();
             if (isActive) onCurrentDeleted?.();
@@ -194,38 +235,38 @@ const DocumentItem = memo<DocumentItemProps>(
       });
     };
 
+    const meta = [description, updatedAtLabel].filter(Boolean).join(' · ');
+
     return (
-      <Flexbox
-        horizontal
-        align={'flex-start'}
-        className={`${styles.container} ${isActive ? styles.containerActive : ''}`}
-        gap={8}
+      <div
+        {...stylex.props(styles.row, isActive && styles.rowActive, webDocumentRowMarker)}
         onClick={handleOpen}
       >
-        <IconComponent size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-        <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
-          <Flexbox horizontal align={'center'} distribution={'space-between'}>
-            <Text ellipsis className={styles.title}>
-              {title}
-            </Text>
-            {!hideDelete && (
-              <ActionIcon
-                icon={Trash2Icon}
-                loading={deleting}
-                size={'small'}
-                title={t('delete', { ns: 'common' })}
-                onClick={handleDelete}
-              />
-            )}
-          </Flexbox>
-          {description && (
-            <Text className={styles.description} ellipsis={{ rows: 2 }}>
-              {description}
+        <span {...stylex.props(styles.rowIcon)}>
+          <IconComponent size={iconSize} />
+        </span>
+        <span {...stylex.props(styles.rowText)}>
+          <span {...stylex.props(styles.rowTitle)} title={title}>
+            {title}
+          </span>
+          {meta && (
+            <Text className={stylex.props(styles.rowMeta).className} ellipsis={{ rows: 2 }}>
+              {meta}
             </Text>
           )}
-          {updatedAtLabel && <Text className={styles.meta}>{updatedAtLabel}</Text>}
-        </Flexbox>
-      </Flexbox>
+        </span>
+        {!hideDelete && (
+          <span {...stylex.props(styles.rowActions)}>
+            <ActionIcon
+              icon={Trash2Icon}
+              loading={deleting}
+              size={'small'}
+              title={t('delete', { ns: 'common' })}
+              onClick={handleDelete}
+            />
+          </span>
+        )}
+      </div>
     );
   },
 );
@@ -274,6 +315,8 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
 
 interface AgentDocumentsGroupProps {
   activeFilter?: ResourceFilter;
+  /** The WorkingSidebar row system for the document tree and the loading / error states. */
+  compact?: boolean;
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
   /**
@@ -293,6 +336,7 @@ interface AgentDocumentsGroupProps {
 const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
   ({
     activeFilter: controlledFilter,
+    compact,
     deviceId,
     enabled = true,
     openMode,
@@ -302,13 +346,14 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
-    const { t: tCommon } = useTranslation('common');
 
     const agentId = useAgentStore((s) => s.activeAgentId);
+    const canManageUserSkills = useCanManageUserSkills(agentId || '');
     const { docId } = useParams<{ docId?: string }>();
     const navigate = useWorkspaceAwareNavigate();
     const openDocument = useChatStore((s) => s.openDocument);
     const isDocumentMode = !!docId;
+    const canManageSkills = !isDocumentMode && canManageUserSkills;
     const resolvedOpenMode = openMode ?? (isDocumentMode ? 'route' : 'portal');
     const isLocalEnabled = useAgentStore((s) =>
       agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
@@ -316,6 +361,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const [filter, setFilter] = useState<ResourceFilter>(() =>
       isDocumentMode ? 'documents' : 'skills',
     );
+    const [skillSearchQuery, setSkillSearchQuery] = useState('');
     const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
     const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
     const resolvedFilter = controlledFilter ?? filter;
@@ -338,7 +384,8 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     // Mirror what each child component reads so the parent can decide the
     // section layout (flat when a single source has items, sectioned otherwise).
     // Both hooks are SWR-deduped against their respective child fetches.
-    const userSkillItems = useUserSkills(enabled);
+    // Include disabled inventory so the management entry survives disabling every skill.
+    const userSkillItems = useUserSkills(enabled, canManageSkills);
     const {
       deviceItems: deviceSkillItems,
       error: projectSkillsError,
@@ -346,14 +393,20 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       projectItems: projectSkillItems,
     } = useProjectSkills(showProjectSkills ? workingDirectory : undefined, deviceId);
 
-    const {
-      data = EMPTY_ARRAY,
-      error,
-      isLoading,
-      mutate,
-    } = useClientDataSWR(
-      enabled && agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
-      () => agentDocumentService.listDocuments({ agentId: agentId! }),
+    // The agent's document-list replica: on a reload the persisted list paints
+    // the panel at once and the network only confirms it.
+    const { error: listError } = agentDocumentActions.useFetchDocumentList(agentId, { enabled });
+    const list = useAgentDocumentStore(agentDocumentSelectors.getDocumentList(agentId));
+    const data = list ?? EMPTY_ARRAY;
+    // Loading / error take over the panel only while there is nothing to show.
+    const isLoading = !list && !listError;
+    const error = list ? undefined : listError;
+    const mutate = useCallback<AgentDocumentListMutator>(
+      (edit, options) =>
+        agentId
+          ? agentDocumentActions.mutateDocumentList(agentId, edit, options)
+          : Promise.resolve(),
+      [agentId],
     );
 
     const webData = useMemo(
@@ -372,12 +425,16 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       () =>
         skillBundleViews.map(({ bundle, files }) => ({
           description: bundle.description ?? undefined,
-          fileCount: files.length,
           files,
           id: bundle.documentId,
           name: bundle.title || bundle.filename || '',
         })),
       [skillBundleViews],
+    );
+
+    const matchedSkillItems = useMemo(
+      () => filterSkillItems(skillItems, skillSearchQuery),
+      [skillItems, skillSearchQuery],
     );
 
     const openAgentDocument = useCallback(
@@ -393,6 +450,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         navigate(buildAgentDocumentPath(agentId, documentId));
       },
       [agentId, data, navigate, openDocument, resolvedOpenMode],
+    );
+
+    // Dragging a document into the chat input inserts a `<refer_document>` chip;
+    // the server resolves it against this agent's documents when sending.
+    const handleDocumentDragStart = useCallback(
+      (doc: { filename?: string | null; id: string; title?: string | null }, event: DragEvent) => {
+        startDocumentDrag(event, { documentId: doc.id, title: doc.title || doc.filename || '' });
+      },
+      [],
     );
 
     // Open the SKILL.md (skills/index child) when present; fall back to the
@@ -417,105 +483,36 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       [openAgentDocument, skillBundleViews],
     );
 
+    const getAgentSkillIdentifier = useCallback(
+      (item: SkillListItem) => {
+        const filename = skillBundleViews.find((view) => view.bundle.documentId === item.id)?.bundle
+          .filename;
+        return filename ? buildAgentSkillIdentifier(filename) : undefined;
+      },
+      [skillBundleViews],
+    );
+    const selectAgentSkill = useSelectSkill('agentSkill', getAgentSkillIdentifier);
+
     // The runtime resolves these via the `agent-skills:<filename>` identifier
     // (built from the shared const helper so the prefix stays in lockstep with
     // the server-side resolver). Display label keeps the human-readable title.
     const handleAgentSkillDragStart = useCallback(
       (item: SkillListItem, event: DragEvent) => {
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const filename = view?.bundle.filename;
-        if (!filename) return;
+        const type = getAgentSkillIdentifier(item);
+        if (!type) return;
         startSkillDrag(event, {
           category: 'agentSkill',
           label: item.name,
-          type: buildAgentSkillIdentifier(filename),
+          type,
         });
       },
-      [skillBundleViews],
-    );
-
-    // Agent skills are document bundles, so view / rename / delete map onto the
-    // agent-document service (`item.id` is the bundle's documentId; the service
-    // keys off the row id carried on the bundle).
-    const getAgentSkillActions = useCallback(
-      (item: SkillListItem): SkillRowAction[] => {
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const rowId = view?.bundle.id;
-        return [
-          {
-            icon: EyeIcon,
-            key: 'view',
-            label: t('workingPanel.skills.actions.view'),
-            onClick: openAgentSkill,
-            sfSymbol: 'eye',
-          },
-          {
-            disabled: !rowId,
-            icon: PencilIcon,
-            key: 'rename',
-            label: t('workingPanel.skills.actions.rename'),
-            onClick: () => {
-              if (!rowId) return;
-              openRenameSkillModal({
-                currentName: item.name,
-                onSubmit: async (newName) => {
-                  try {
-                    await agentDocumentService.renameDocument({
-                      agentId: agentId!,
-                      id: rowId,
-                      newTitle: newName,
-                    });
-                    await mutate();
-                    return undefined;
-                  } catch (error) {
-                    return error instanceof Error
-                      ? error.message
-                      : t('workingPanel.skills.rename.error');
-                  }
-                },
-              });
-            },
-            sfSymbol: 'pencil',
-          },
-          {
-            danger: true,
-            disabled: !rowId,
-            icon: Trash2Icon,
-            key: 'delete',
-            label: t('workingPanel.skills.actions.delete'),
-            onClick: () => {
-              if (!rowId) return;
-              confirmModal({
-                cancelText: tCommon('cancel'),
-                content: t('workingPanel.skills.delete.agentConfirm', { name: item.name }),
-                okButtonProps: { danger: true },
-                okText: tCommon('delete'),
-                onOk: async () => {
-                  try {
-                    await agentDocumentService.removeDocument({ agentId: agentId!, id: rowId });
-                    await mutate();
-                    toast.success(t('workingPanel.skills.delete.success'));
-                  } catch (error) {
-                    toast.error(
-                      error instanceof Error
-                        ? error.message
-                        : t('workingPanel.skills.delete.error'),
-                    );
-                  }
-                },
-                title: t('workingPanel.skills.delete.title'),
-              });
-            },
-            sfSymbol: 'trash',
-          },
-        ];
-      },
-      [agentId, mutate, openAgentSkill, skillBundleViews, t, tCommon],
+      [getAgentSkillIdentifier],
     );
 
     if (!agentId) return null;
 
     if (isLoading) {
+      if (compact) return <SkeletonList compact rows={6} />;
       return (
         <Center flex={1} paddingBlock={24}>
           <Spin size="large" />
@@ -524,6 +521,17 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     }
 
     if (error) {
+      if (compact)
+        return (
+          <AsyncError
+            align={'start'}
+            error={error}
+            variant={'inline'}
+            onRetry={() => {
+              void mutate();
+            }}
+          />
+        );
       return (
         <Center flex={1} paddingBlock={24}>
           <AsyncError
@@ -544,15 +552,19 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
     const renderAgentSkillsList = () => (
       <SkillsList
-        getRowActions={getAgentSkillActions}
-        items={skillItems}
+        compact
+        items={matchedSkillItems}
         onOpenFile={openAgentSkillFile}
         onOpenSkill={openAgentSkill}
+        onSelectSkill={isDocumentMode ? undefined : selectAgentSkill}
         onSkillDragStart={handleAgentSkillDragStart}
       />
     );
 
     const renderSkills = () => {
+      // This is an invocation picker for agent/project/device/user skills, not a
+      // full capability inventory. Builtin bundles intentionally keep their existing
+      // slash/profile entry points instead of being copied into this sidebar.
       // Sections render in fixed order — agent → project → device → user — and each one
       // hides itself when it has nothing to show. When exactly one source has
       // items we drop the group header and render the list flat (no redundant
@@ -567,62 +579,81 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
       if (activeCount === 0) {
         if (showProjectSkills && projectSkillsError) {
-          return (
-            <Center flex={1} paddingBlock={24}>
-              <AsyncError error={projectSkillsError} variant={'block'} />
-            </Center>
-          );
+          return <AsyncError align={'start'} error={projectSkillsError} variant={'inline'} />;
         }
 
         // Project skills refetch on a working-directory switch (new SWR key →
         // empty items while in flight). Show the loader instead of flashing the
         // empty placeholder when there's nothing else to render yet.
         if (showProjectSkills && isProjectSkillsLoading) {
-          return (
-            <Center flex={1} paddingBlock={24}>
-              <Spin size="large" />
-            </Center>
-          );
+          return <SkeletonList compact rows={6} />;
         }
         return (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
           </Center>
         );
       }
 
+      // `flat` keys off the unfiltered sources so typing doesn't make headers jump.
       const flat = activeCount === 1;
+      const hasMatchedAgent = matchedSkillItems.length > 0;
+      const hasMatchedProject =
+        hasProject && filterSkillItems(projectSkillItems, skillSearchQuery).length > 0;
+      const hasMatchedDevice =
+        hasDevice && filterSkillItems(deviceSkillItems, skillSearchQuery).length > 0;
+      const hasMatchedUser = filterSkillItems(userSkillItems, skillSearchQuery).length > 0;
+      const hasMatch = hasMatchedAgent || hasMatchedProject || hasMatchedDevice || hasMatchedUser;
 
       return (
-        <Flexbox gap={16} style={{ paddingBottom: 16 }}>
-          {hasAgent &&
+        <Flexbox gap={12}>
+          <SkillsSearchBar onSearch={setSkillSearchQuery} />
+          {!hasMatch && !(hasUser && canManageSkills) && (
+            <Center flex={1} paddingBlock={24}>
+              <Empty description={t('workingPanel.skills.noSearchResults')} icon={SkillsIcon} />
+            </Center>
+          )}
+          {hasMatchedAgent &&
             (flat ? (
               renderAgentSkillsList()
             ) : (
               <SkillSection
+                compact
                 sectionHeader={{
-                  count: skillItems.length,
+                  count: matchedSkillItems.length,
                   title: t('workingPanel.skills.section.agent'),
                 }}
               >
                 {renderAgentSkillsList()}
               </SkillSection>
             ))}
-          {hasProject && (
+          {hasMatchedProject && (
             <ProjectLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
+              searchQuery={skillSearchQuery}
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasDevice && (
+          {hasMatchedDevice && (
             <DeviceLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
+              searchQuery={skillSearchQuery}
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasUser && <UserLevelSkills hideHeader={flat} />}
+          {hasUser && (
+            <UserLevelSkills
+              hideHeader={flat}
+              searchQuery={skillSearchQuery}
+              onManage={
+                canManageSkills
+                  ? () => navigate(buildAgentProfileTabPath(agentId, 'skills'))
+                  : undefined
+              }
+            />
+          )}
         </Flexbox>
       );
     };
@@ -634,8 +665,10 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         <DocumentExplorerTree
           agentId={agentId}
           data={documentsData}
+          density={compact ? 'compact' : 'default'}
           mutate={mutate}
           style={{ height: '100%' }}
+          onDocumentDragStart={handleDocumentDragStart}
           onOpenDocument={openAgentDocument}
         />
       </Flexbox>
@@ -644,13 +677,13 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const renderWeb = () => {
       if (webData.length === 0) {
         return (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             <Empty description={t('workingPanel.resources.empty')} icon={GlobeIcon} />
           </Center>
         );
       }
       return (
-        <Flexbox gap={8}>
+        <Flexbox gap={1}>
           {webData.map((doc) => (
             <DocumentItem
               activeDocumentIdentifier={activeDocumentIdentifier}
@@ -675,7 +708,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
               return (
                 <div
                   aria-selected={active}
-                  className={cx(styles.pillTab, active && styles.pillActive)}
+                  {...stylex.props(styles.pillTab, active && styles.pillActive)}
                   key={option.value}
                   role={'tab'}
                   onClick={() => setFilter(option.value)}

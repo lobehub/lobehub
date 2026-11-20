@@ -9,3 +9,6 @@ export const MESSAGE_WELCOME_GUIDE_ID = 'welcome';
 export const THREAD_DRAFT_ID = '__THREAD_DRAFT_ID__';
 
 export const MESSAGE_FLAGGED_THINKING = 'FLAGGED_THINKING';
+
+/** Upper bound of one find-in-topic read; the result list says when it is reached. */
+export const TOPIC_MESSAGE_SEARCH_LIMIT = 200;

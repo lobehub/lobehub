@@ -1,9 +1,10 @@
-import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { getNewAgentPlugins } from '@/database/utils/agentConfig';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
@@ -43,7 +44,23 @@ export class AgentService extends BaseService {
       title,
     );
     if (!result) throw this.createNotFoundError('Agent not found');
-    return this.getAgentById(result.agentId);
+
+    // AgentModel.duplicate copies an explicit field list without metadata, and the
+    // rest of metadata is private, so only the public personal flag is carried over.
+    const source = await this.db.query.agents.findFirst({ where: eq(agents.id, id) });
+    if (source?.metadata?.personal === true) {
+      const copy = await this.db.query.agents.findFirst({ where: eq(agents.id, result.agentId) });
+      await this.db
+        .update(agents)
+        .set({ metadata: { ...copy?.metadata, personal: true } })
+        .where(eq(agents.id, result.agentId));
+    }
+
+    // The copy was just written in the caller's scope, so it is readable; a
+    // miss here would mean the copy vanished, which is still "not found".
+    const duplicated = await this.getAgentById(result.agentId);
+    if (!duplicated) throw this.createNotFoundError('Duplicated agent not found');
+    return duplicated;
   }
 
   /**
@@ -55,7 +72,7 @@ export class AgentService extends BaseService {
   async queryAgents(request: GetAgentsRequest): ServiceResult<AgentListResponse> {
     this.log('info', 'get agent list', { request });
 
-    const { keyword } = request;
+    const { keyword, personal } = request;
 
     try {
       // Base filter: current user + exclude virtual agents (inbox, supervisor, etc.)
@@ -64,9 +81,12 @@ export class AgentService extends BaseService {
         or(eq(agents.virtual, false), isNull(agents.virtual)),
       );
 
-      const whereConditions = keyword
-        ? and(baseConditions, ilike(agents.title, `%${keyword}%`))
-        : baseConditions;
+      const personalCondition = sql`coalesce(${agents.metadata} -> 'personal' = 'true'::jsonb, false)`;
+      const whereConditions = and(
+        baseConditions,
+        keyword ? ilike(agents.title, `%${keyword}%`) : undefined,
+        personal === undefined ? undefined : personal ? personalCondition : not(personalCondition),
+      );
 
       const query = this.db.query.agents.findMany({
         ...processPaginationConditions(request),
@@ -108,10 +128,10 @@ export class AgentService extends BaseService {
           createdAt: new Date(),
           description: request.description || null,
           id: idGenerator('agents'),
+          metadata: request.personal ? { personal: true } : null,
           model: request.model || null,
           params: request.params ?? {},
-          // JSONB accepts mixed plugin entries; the legacy DB column remains string[].
-          plugins: request.plugins as unknown as string[] | undefined,
+          plugins: getNewAgentPlugins(request),
           provider: request.provider || null,
           slug: randomSlug(4), // Auto-generated slug
           systemRole: request.systemRole || null,
@@ -212,12 +232,15 @@ export class AgentService extends BaseService {
               : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
         }
         if (request.description !== undefined) updateData.description = request.description ?? null;
-        if (request.plugins !== undefined)
-          updateData.plugins = request.plugins as unknown as string[];
+        if (request.plugins !== undefined) updateData.plugins = request.plugins;
         if (request.model !== undefined) updateData.model = request.model ?? null;
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
         if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;
         if (request.title !== undefined) updateData.title = request.title;
+
+        if (request.personal !== undefined) {
+          updateData.metadata = { ...existingAgent.metadata, personal: request.personal };
+        }
 
         // Merge params instead of fully overwriting
         if (request.params !== undefined) {

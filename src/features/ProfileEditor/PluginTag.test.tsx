@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +23,11 @@ const mocks = vi.hoisted(() => ({
     authorizedByName?: string | null;
     identifier: string;
   }>,
+  marketplaceConnectors: [] as Array<Record<string, unknown>>,
+  agentSkills: [] as Array<{ identifier: string; source: 'market' | 'user' }>,
+  builtinList: [] as Array<{ identifier: string; meta: { avatar: string; title: string } }>,
+  marketSkillDetail: undefined as { icon?: string } | undefined,
+  fetchSkillDetail: vi.fn(() => ({ queryKey: 'market-skill' })),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -32,41 +37,64 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/hooks/useIsDark', () => ({ useIsDark: () => false }));
 
-vi.mock('antd-style', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createStaticStyles: () => ({}),
-  cssVar: new Proxy({}, { get: () => 'var(--x)' }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createStaticStyles: () => ({}),
+      cssVar: new Proxy({}, { get: () => 'var(--x)' }),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ avatar, title }: { avatar?: string; title?: string }) => (
+        <span data-avatar={avatar} data-testid="author-avatar">
+          {title}
+        </span>
+      ),
+      Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
+        <div data-testid="author-tooltip" data-title={title}>
+          {children}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 vi.mock('@lobechat/const', () => ({ resolveConnectorCatalogItem: () => undefined }));
-vi.mock('@lobehub/ui/icons', () => ({ McpIcon: () => null }));
+vi.mock('@lobehub/ui/icons', () => ({
+  McpIcon: () => null,
+  SkillsIcon: () => <svg data-testid="default-skill-icon" />,
+}));
 vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-}));
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-  Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
-    <div data-testid="author-tooltip" data-title={title}>
-      {children}
-    </div>
-  ),
-}));
 
 // Run selectors against controlled state (the mocked selectors ignore state).
 vi.mock('@/store/tool', () => ({
-  useToolStore: (sel: (s: unknown) => unknown) => sel({}),
+  useToolStore: (sel: (s: unknown) => unknown) => sel({ builtinTools: [] }),
 }));
 vi.mock('@/store/tool/slices/connector/selectors', () => ({
   connectorSelectors: {
     agentConnectors: () => () => mocks.agentConnectors,
     connectorList: () => mocks.connectorList,
     customConnectors: () => [],
+    marketplaceMcpConnectors: () => mocks.marketplaceConnectors,
   },
 }));
 vi.mock('@/store/tool/selectors', () => ({
-  builtinToolSelectors: { allMetaList: () => [], metaList: () => [] },
+  agentSkillsSelectors: {
+    getAgentSkillByIdentifier: (identifier: string) => () =>
+      mocks.agentSkills.find((skill) => skill.identifier === identifier),
+  },
+  builtinToolSelectors: { allMetaList: () => mocks.builtinList, metaList: () => mocks.builtinList },
   composioStoreSelectors: { getServers: () => [] },
   lobehubSkillStoreSelectors: { getServers: () => [] },
   pluginSelectors: { installedPluginMetaList: () => [], isPluginInstalled: () => () => false },
@@ -77,8 +105,22 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 vi.mock('@/store/discover', () => ({
   useDiscoverStore: (sel: (s: unknown) => unknown) =>
-    sel({ usePluginDetail: () => ({ data: undefined, isLoading: false }) }),
+    sel({
+      useFetchPluginDetail: () => ({ isLoading: false, queryKey: undefined }),
+      useFetchSkillDetail: mocks.fetchSkillDetail,
+    }),
 }));
+vi.mock('@/store/discover/selectors', () => ({
+  pluginSelectors: { pluginDetail: () => () => undefined },
+  skillSelectors: { skillDetail: () => () => mocks.marketSkillDetail },
+}));
+
+beforeEach(() => {
+  mocks.agentSkills = [];
+  mocks.builtinList = [];
+  mocks.marketSkillDetail = undefined;
+  mocks.fetchSkillDetail.mockClear();
+});
 
 describe('PluginTag author attribution', () => {
   beforeEach(() => {
@@ -124,5 +166,201 @@ describe('PluginTag author attribution', () => {
     render(<PluginTag showAuthor agentId="agt-1" pluginId="gmail" />);
 
     expect(screen.queryByTestId('author-avatar')).toBeNull();
+  });
+});
+
+describe('PluginTag row variant', () => {
+  beforeEach(() => {
+    mocks.agentConnectors = [];
+    mocks.connectorList = [];
+    mocks.marketplaceConnectors = [];
+  });
+
+  // `isPluginInstalled` counts it, so no remote lookup would fill the gap
+  it('resolves a marketplace MCP installed as a connector alone, with its tools', () => {
+    mocks.marketplaceConnectors = [
+      {
+        identifier: 'github-mcp',
+        metadata: { avatar: '🐙', description: 'Work with GitHub' },
+        name: 'GitHub',
+        tools: [
+          { description: 'Open an issue', displayName: null, toolName: 'create_issue' },
+          { description: null, displayName: null, toolName: 'search' },
+        ],
+      },
+    ];
+    const onOpen = vi.fn();
+    render(<PluginTag pluginId="github-mcp" variant="row" onOpen={onOpen} />);
+
+    expect(screen.queryByText(/tools\.notInstalled/)).toBeNull();
+    expect(screen.getByText('settingAgent.tools.type.plugin')).toBeTruthy();
+    expect(screen.getByText('settingAgent.tools.toolCount')).toBeTruthy();
+    fireEvent.click(screen.getByText('GitHub'));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Work with GitHub',
+        identifier: 'github-mcp',
+        tools: [
+          { description: 'Open an issue', name: 'create_issue' },
+          { description: null, name: 'search' },
+        ],
+      }),
+    );
+  });
+
+  it('shows the publisher icon for a community skill on the skill settings page', () => {
+    mocks.agentSkills = [{ identifier: 'writing', source: 'market' }];
+    mocks.builtinList = [{ identifier: 'writing', meta: { avatar: '🧩', title: 'Writing' } }];
+    mocks.marketSkillDetail = { icon: 'https://example.com/writing.png' };
+    render(<PluginTag isSkill pluginId="writing" variant="row" />);
+
+    expect(screen.getByTestId('author-avatar')).toHaveAttribute(
+      'data-avatar',
+      'https://example.com/writing.png',
+    );
+    expect(screen.queryByTestId('default-skill-icon')).toBeNull();
+  });
+
+  it.each([undefined, {}])('uses the default skill icon without a publisher icon: %j', (detail) => {
+    mocks.agentSkills = [{ identifier: 'writing', source: 'market' }];
+    mocks.builtinList = [{ identifier: 'writing', meta: { avatar: '🧩', title: 'Writing' } }];
+    mocks.marketSkillDetail = detail;
+    render(<PluginTag isSkill pluginId="writing" variant="row" />);
+
+    expect(screen.getByTestId('default-skill-icon')).toBeInTheDocument();
+    expect(screen.queryByTestId('author-avatar')).toBeNull();
+  });
+
+  it.each([
+    { isSkill: true, source: 'user' as const, variant: 'row' as const },
+    { isSkill: false, source: 'market' as const, variant: 'row' as const },
+    { isSkill: true, source: 'market' as const, variant: 'chip' as const },
+  ])('leaves other row and chip icons unchanged: %j', (props) => {
+    mocks.agentSkills = [{ identifier: 'writing', source: props.source }];
+    mocks.builtinList = [{ identifier: 'writing', meta: { avatar: '🧩', title: 'Writing' } }];
+    render(<PluginTag isSkill={props.isSkill} pluginId="writing" variant={props.variant} />);
+
+    expect(screen.getByTestId('author-avatar')).toHaveAttribute('data-avatar', '🧩');
+    expect(mocks.fetchSkillDetail).not.toHaveBeenCalled();
+  });
+
+  it('names the kind of tool and shows whose credentials it runs under', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: '张三', identifier: 'gmail' },
+    ];
+    render(<PluginTag showAuthor agentId="agt-1" pluginId="gmail" variant="row" />);
+
+    expect(screen.getByText('settingAgent.tools.type.custom-connector')).toBeTruthy();
+    expect(screen.getByTestId('author-avatar')).toHaveTextContent('张三');
+  });
+
+  it('names the kind as a skill when the row sits in the skills list', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: '张三', identifier: 'gmail' },
+    ];
+    render(<PluginTag isSkill pluginId="gmail" variant="row" />);
+
+    expect(screen.getByText('settingAgent.tools.type.skill')).toBeTruthy();
+    expect(screen.queryByText('settingAgent.tools.type.custom-connector')).toBeNull();
+  });
+
+  it('shows how many tools an item brings, and opens its details on click', () => {
+    mocks.agentConnectors = [
+      {
+        authorizedByAvatar: null,
+        authorizedByName: null,
+        identifier: 'gmail',
+        name: 'Gmail',
+        tools: [
+          { description: 'Send a mail', displayName: null, toolName: 'send' },
+          { description: null, displayName: 'Read', toolName: 'read' },
+        ],
+      },
+    ];
+    const onOpen = vi.fn();
+    render(<PluginTag agentId="agt-1" pluginId="gmail" variant="row" onOpen={onOpen} />);
+
+    expect(screen.getByText('settingAgent.tools.toolCount')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: 'gmail',
+        tools: [
+          { description: 'Send a mail', name: 'send' },
+          { description: null, name: 'Read' },
+        ],
+      }),
+    );
+  });
+
+  it('switches an item on and off without opening its details', () => {
+    const onToggle = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <PluginTag enabled pluginId="gmail" variant="row" onOpen={onOpen} onToggle={onToggle} />,
+    );
+
+    fireEvent.click(screen.getByRole('switch'));
+    expect(onToggle).toHaveBeenCalledWith(false);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('labels a row with the given source instead of the stored kind', () => {
+    render(<PluginTag isSkill pluginId="gmail" tagLabel="Community" variant="row" />);
+
+    expect(screen.getByText('Community')).toBeTruthy();
+  });
+
+  it('says when the agent runs an item on its own connection, in the row and its details', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: null, identifier: 'gmail', name: 'Gmail' },
+    ];
+    const connection = { desc: 'Signs in separately', label: 'Own connection', title: 'Own' };
+    const onOpen = vi.fn();
+    render(
+      <PluginTag
+        agentId="agt-1"
+        connection={connection}
+        pluginId="gmail"
+        variant="row"
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.getByText('Own connection')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ connection }));
+  });
+
+  it('keeps the usual connection out of the row and says it in the details only', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: null, identifier: 'gmail', name: 'Gmail' },
+    ];
+    const connection = { desc: 'Shared by your agents', title: 'Library connection' };
+    const onOpen = vi.fn();
+    render(
+      <PluginTag
+        agentId="agt-1"
+        connection={connection}
+        pluginId="gmail"
+        variant="row"
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.queryByText('Library connection')).toBeNull();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ connection }));
+  });
+
+  it('offers removal only when the row is removable and editable', () => {
+    const { rerender } = render(<PluginTag pluginId="gmail" variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeTruthy();
+
+    rerender(<PluginTag disabled pluginId="gmail" variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeNull();
+
+    rerender(<PluginTag pluginId="gmail" removable={false} variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeNull();
   });
 });

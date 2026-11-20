@@ -1,4 +1,8 @@
-import { findDueOccurrence } from '@lobechat/utils/cronEval';
+import {
+  findDueOccurrence,
+  findUpcomingOccurrence,
+  isCronOccurrence,
+} from '@lobechat/utils/cronEval';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -18,6 +22,8 @@ export interface ScheduleDispatchPayload {
 }
 
 interface DueTask {
+  /** Set when the occurrence is still ahead: deliver it at that exact minute. */
+  deliverAtOccurrence?: boolean;
   /** The cron occurrence (ISO) this dispatch fires. */
   occurrence: string;
   pattern: string;
@@ -36,8 +42,10 @@ interface DueTask {
  *
  *   1. Loads all schedule-mode tasks in dispatchable status (`scheduled`/`backlog`).
  *   2. Filters by cron pattern + timezone + last-run dedup (`findDueOccurrence`).
- *   3. Reserves each due occurrence on the task row, then fans out one QStash
- *      message per reserved task to `/schedule-execute`.
+ *      In queue mode, an occurrence before the next tick is taken too
+ *      (`findUpcomingOccurrence`), so a time between ticks still fires on the minute.
+ *   3. Reserves each occurrence on the task row, then fans out one QStash message
+ *      per reserved task to `/schedule-execute`, delayed for one still ahead.
  *
  * No per-user authentication: this is a global sweep. Signature verification is
  * handled by the `qstashAuth` middleware on the route.
@@ -66,16 +74,30 @@ export async function scheduleDispatch(c: Context) {
       // spans several ticks, so an occurrence whose delivery is still queued
       // is covered by the reservation made when it was dispatched.
       const previousOccurrence = scheduler?.lastDispatchedOccurrenceAt ?? null;
-      const coveredUntil = latest(task.lastHeartbeatAt, previousOccurrence);
-      const occurrence = findDueOccurrence({
+      // A reservation can sit ahead of `now`. If the pattern has since changed it
+      // no longer stands for a run of this schedule, so it must not swallow an
+      // earlier occurrence of the new pattern.
+      const reservationCurrent =
+        !!previousOccurrence &&
+        isCronOccurrence(task.schedulePattern, task.scheduleTimezone, new Date(previousOccurrence));
+      const scan = {
         armedAt: scheduleStartedAt ? new Date(scheduleStartedAt) : null,
         cronPattern: task.schedulePattern,
         currentTime: now,
-        lastExecutedAt: coveredUntil,
+        lastExecutedAt: latest(
+          task.lastHeartbeatAt,
+          reservationCurrent ? previousOccurrence : null,
+        ),
         timezone: task.scheduleTimezone,
-      });
+      };
+      const dueOccurrence = findDueOccurrence(scan);
+      // Only QStash can hold a message until the minute; inline mode fires on the next tick.
+      const upcoming =
+        !dueOccurrence && appEnv.enableQueueAgentRuntime ? findUpcomingOccurrence(scan) : null;
+      const occurrence = dueOccurrence ?? upcoming;
       if (!occurrence) continue;
       due.push({
+        deliverAtOccurrence: !!upcoming,
         occurrence: occurrence.toISOString(),
         pattern: task.schedulePattern,
         previousOccurrence,
@@ -207,10 +229,15 @@ const fanout = async (db: ServerDB, due: DueTask[]): Promise<number> => {
 
     const results = await Promise.allSettled(
       due.map((d) =>
-        qstashClient.publishJSON({
-          body: { taskId: d.taskId, userId: d.userId },
-          url,
-        }),
+        qstashClient.publishJSON(
+          d.deliverAtOccurrence
+            ? {
+                body: { occurrence: d.occurrence, taskId: d.taskId, userId: d.userId },
+                notBefore: Math.floor(new Date(d.occurrence).getTime() / 1000),
+                url,
+              }
+            : { body: { taskId: d.taskId, userId: d.userId }, url },
+        ),
       ),
     );
 

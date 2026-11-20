@@ -14,9 +14,11 @@ export const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
 
 export const AgentDocumentsApiName = {
   createDocument: 'createDocument',
+  createFolder: 'createFolder',
   copyDocument: 'copyDocument',
   listDocuments: 'listDocuments',
   modifyNodes: 'modifyNodes',
+  moveDocuments: 'moveDocuments',
   readDocument: 'readDocument',
   removeDocument: 'removeDocument',
   renameDocument: 'renameDocument',
@@ -40,7 +42,7 @@ export const AGENT_SHARE_DOCUMENT_API_NAMES = new Set<string>([
 export interface CreateDocumentArgs {
   content: string;
   hintIsSkill?: boolean;
-  /** Parent folder's underlying `documents.id`, as returned by listDocuments.documentId. */
+  /** Parent folder or document — its `documentId` (or `id`) from listDocuments. */
   parentId?: string;
   scope?: 'agent' | 'currentTopic';
   title: string;
@@ -137,6 +139,8 @@ export interface ModifyDocumentNodesState {
 
 export interface RemoveDocumentArgs {
   id: string;
+  /** Also delete everything nested under it. Without it, a parent with children is refused. */
+  withChildren?: boolean;
 }
 
 export interface RemoveDocumentState {
@@ -223,18 +227,60 @@ export interface AgentDocumentReference {
 }
 
 export interface ListDocumentsArgs {
-  /**
-   * Restrict the listing to the direct children of this folder document
-   * (the folder's `documentId`). The progressive index collapses folders and
-   * surfaces this id so the model can expand a folder on demand.
-   */
   /** Page size; defaults to {@link LIST_DOCUMENTS_DEFAULT_LIMIT}. */
   limit?: number;
   /** Number of documents to skip, for paging past the first page. */
   offset?: number;
+  /**
+   * Restrict the listing to the direct children of this parent — a folder or a
+   * document. Either id works; the progressive index surfaces its `documentId`.
+   */
   parentId?: string;
   scope?: 'agent' | 'currentTopic';
   sourceType?: 'all' | 'file' | 'web';
+  /** Case-insensitive substring filter on the title, applied before paging. */
+  titleContains?: string;
+}
+
+export interface CreateFolderArgs {
+  /** Parent folder or document (either id); omit to create at the root. */
+  parentId?: string;
+  title: string;
+}
+
+export interface CreateFolderState {
+  agentDocumentId?: string;
+  agentId?: string;
+  /** False when a folder with this name already existed and was reused. */
+  created: boolean;
+  documentId?: string;
+  title: string;
+}
+
+/** Upper bound on ids per moveDocuments call. */
+export const MOVE_DOCUMENTS_MAX_IDS = 200;
+
+export interface MoveDocumentsArgs {
+  /** Documents or folders to move; either id of each works. */
+  ids: string[];
+  /** Destination folder or document (either id), or null to move to the root. */
+  parentId: string | null;
+}
+
+export interface MoveDocumentResultItem {
+  documentId?: string;
+  error?: string;
+  id: string;
+  status: 'failed' | 'moved' | 'unchanged';
+  title?: string;
+}
+
+export interface MoveDocumentsState {
+  agentId?: string;
+  failedCount: number;
+  movedCount: number;
+  parentId: string | null;
+  results: MoveDocumentResultItem[];
 }
 
 /**
@@ -251,5 +297,19 @@ export interface ListDocumentsState {
    * and a count is all it shows.
    */
   documentCount?: number;
-  documents: { documentId?: string; filename: string; id: string; title?: string }[];
+  documents: ListedAgentDocument[];
+}
+
+export interface ListedAgentDocument {
+  /** Entries nested directly under this one; documents can hold children too. */
+  childCount?: number;
+  documentId?: string;
+  filename: string;
+  id: string;
+  /** `documentId` of the folder or document this entry sits under; null at the root. */
+  parentId?: string | null;
+  title?: string;
+  type?: 'file' | 'folder';
+  /** ISO timestamp of the last change. */
+  updatedAt?: string;
 }

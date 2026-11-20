@@ -13,7 +13,9 @@ import {
 } from '@lobechat/builtin-tool-self-iteration';
 
 import type { AgentSignalSourceEventInput } from '@/server/services/agentSignal/emitter';
+import { redisService } from '@/server/services/redis';
 
+import { AGENT_SIGNAL_DEFAULTS } from '../constants';
 import { buildSelfFeedbackIntentSourceId } from './selfIteration/types';
 
 export type {
@@ -31,6 +33,73 @@ type MaybePromise<TValue> = TValue | Promise<TValue>;
 export type SelfFeedbackIntentSourceEventInput =
   AgentSignalSourceEventInput<'agent.self_feedback_intent.declared'>;
 
+/**
+ * Counts accepted declarations per scope so a fast-looping agent cannot flood the queue.
+ */
+export interface SelfFeedbackIntentDeclarationLimiter {
+  /**
+   * Takes one declaration slot for the scope.
+   *
+   * Returns:
+   * - `true` when the scope is still within `limit`, otherwise `false`
+   */
+  acquire: (scopeKey: string, limit: number) => Promise<boolean>;
+  /** Returns a slot taken by `acquire` when the declaration was not enqueued. */
+  release: (scopeKey: string) => Promise<void>;
+}
+
+/**
+ * Creates a process-local declaration limiter.
+ *
+ * Use when:
+ * - Tests or single-process tools need the declaration limit without Redis
+ */
+export const createInMemoryDeclarationLimiter = (): SelfFeedbackIntentDeclarationLimiter => {
+  const counts = new Map<string, number>();
+
+  return {
+    acquire: async (scopeKey, limit) => {
+      const next = (counts.get(scopeKey) ?? 0) + 1;
+      counts.set(scopeKey, next);
+
+      return next <= limit;
+    },
+    release: async (scopeKey) => {
+      counts.set(scopeKey, Math.max(0, (counts.get(scopeKey) ?? 0) - 1));
+    },
+  };
+};
+
+/**
+ * Creates the Redis-backed declaration limiter shared by every server process.
+ *
+ * Use when:
+ * - The declaration tool runs on serverless instances that do not share memory
+ *
+ * Returns:
+ * - A limiter that fails closed (rejects) when Redis is missing or errors, because each
+ *   accepted declaration can spawn a background run billed to the user
+ */
+export const createRedisDeclarationLimiter = (): SelfFeedbackIntentDeclarationLimiter => ({
+  acquire: async (scopeKey, limit) => {
+    try {
+      const count = await redisService.agentSignal.takeDeclarationSlot(scopeKey);
+
+      return count !== undefined && count <= limit;
+    } catch (error) {
+      console.error('[AgentSignal] Failed to read self-feedback intent limit:', error);
+      return false;
+    }
+  },
+  release: async (scopeKey) => {
+    try {
+      await redisService.agentSignal.releaseDeclarationSlot(scopeKey);
+    } catch (error) {
+      console.error('[AgentSignal] Failed to release self-feedback intent slot:', error);
+    }
+  },
+});
+
 /** Dependencies used by the pure self-feedback intent declaration service. */
 export interface SelfFeedbackIntentServiceDependencies {
   /**
@@ -46,6 +115,12 @@ export interface SelfFeedbackIntentServiceDependencies {
    * @default Allows enqueueing.
    */
   canEnqueue?: (input: SelfFeedbackIntentSourceEventInput) => MaybePromise<boolean>;
+  /**
+   * Per-scope declaration limiter.
+   *
+   * @default A process-local limiter. Production wiring passes the Redis-backed limiter.
+   */
+  declarationLimiter?: SelfFeedbackIntentDeclarationLimiter;
   /** Enqueues one self-feedback intent source event. */
   enqueueSource: (input: SelfFeedbackIntentSourceEventInput) => Promise<unknown>;
   /** Creates a stable tool-call id when the caller did not provide one. */
@@ -73,7 +148,8 @@ export interface SelfFeedbackIntentService {
   ) => Promise<DeclareSelfFeedbackIntentResult>;
 }
 
-const DECLARATION_LIMIT_PER_SCOPE = 3;
+const DECLARATION_LIMIT_PER_SCOPE =
+  AGENT_SIGNAL_DEFAULTS.selfFeedbackIntentDeclarationLimitPerScope;
 const STRONG_CONFIDENCE_THRESHOLD = 0.75;
 
 const validActions = new Set<SelfFeedbackIntentAction>(SELF_FEEDBACK_INTENT_ACTIONS);
@@ -114,7 +190,7 @@ const isValidConfidence = (confidence: number) =>
  *
  * Expects:
  * - `enqueueSource` owns durable dedupe and async execution
- * - The service instance owns only in-memory fast-loop rate limiting
+ * - `declarationLimiter` owns fast-loop rate limiting (in-memory unless injected)
  *
  * Returns:
  * - A service that emits accepted declarations and never mutates memory or skill resources
@@ -122,7 +198,7 @@ const isValidConfidence = (confidence: number) =>
 export const createSelfFeedbackIntentService = (
   deps: SelfFeedbackIntentServiceDependencies,
 ): SelfFeedbackIntentService => {
-  const acceptedCounts = new Map<string, number>();
+  const limiter = deps.declarationLimiter ?? createInMemoryDeclarationLimiter();
 
   return {
     declareIntent: async (input) => {
@@ -145,9 +221,9 @@ export const createSelfFeedbackIntentService = (
       }
 
       const rateLimitScopeKey = getRateLimitScopeKey(input);
-      const acceptedCount = acceptedCounts.get(rateLimitScopeKey) ?? 0;
 
-      if (acceptedCount >= DECLARATION_LIMIT_PER_SCOPE) {
+      if (!(await limiter.acquire(rateLimitScopeKey, DECLARATION_LIMIT_PER_SCOPE))) {
+        await limiter.release(rateLimitScopeKey);
         return { accepted: false, reason: 'rate_limited', strength };
       }
 
@@ -181,12 +257,18 @@ export const createSelfFeedbackIntentService = (
         sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfFeedbackIntentDeclared,
       };
 
-      if (deps.canEnqueue && !(await deps.canEnqueue(sourceEvent))) {
-        return { accepted: false, reason: 'enqueue_gate_rejected', sourceId, strength };
-      }
+      // Only accepted declarations keep their slot; rejected or failed ones give it back.
+      try {
+        if (deps.canEnqueue && !(await deps.canEnqueue(sourceEvent))) {
+          await limiter.release(rateLimitScopeKey);
+          return { accepted: false, reason: 'enqueue_gate_rejected', sourceId, strength };
+        }
 
-      await deps.enqueueSource(sourceEvent);
-      acceptedCounts.set(rateLimitScopeKey, acceptedCount + 1);
+        await deps.enqueueSource(sourceEvent);
+      } catch (error) {
+        await limiter.release(rateLimitScopeKey);
+        throw error;
+      }
 
       return { accepted: true, sourceId, strength };
     },

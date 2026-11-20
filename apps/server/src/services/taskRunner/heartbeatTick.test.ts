@@ -105,6 +105,15 @@ describe('runHeartbeatTick', () => {
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 
+  it('skips an archived task without running it', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ archivedAt: new Date() })]);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'archived' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
   it('skips a stale tick whose generation token no longer matches', async () => {
     mockSelectTask.mockResolvedValue([
       baseTask({ context: { scheduler: { tickToken: 'tick-current' } } }),

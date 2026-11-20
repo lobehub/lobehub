@@ -4,7 +4,6 @@ import { appEnv } from '@/envs/app';
 
 import { AgentStateManager } from './AgentStateManager';
 import { GatewayStreamNotifier, type GatewayStreamNotifierOptions } from './GatewayStreamNotifier';
-import { FULL_STRIP_REDACTION } from './gatewayVisitorRedaction';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
@@ -22,7 +21,7 @@ export const isRedisAvailable = (): boolean => {
 
 /**
  * Check if queue-based agent runtime is enabled
- * When disabled (default), use InMemory implementations for local/simple deployments
+ * Controls execution scheduling independently of the state/stream storage backend
  */
 const isQueueModeEnabled = (): boolean => {
   return appEnv.enableQueueAgentRuntime === true;
@@ -32,20 +31,19 @@ const isQueueModeEnabled = (): boolean => {
  * Create AgentStateManager based on configuration
  */
 export const createAgentStateManager = (): IAgentStateManager => {
-  // When queue mode is disabled, always use InMemory for simplicity
+  // Share state and interrupt sentinels across web/worker replicas even when
+  // execution stays inline. Storage selection must match the shared stream bus.
+  if (isRedisAvailable()) {
+    log('Redis available, using AgentStateManager');
+    return new AgentStateManager();
+  }
+
   if (!isQueueModeEnabled()) {
-    log('Queue mode disabled, using InMemoryAgentStateManager');
+    log('Redis unavailable and queue mode disabled, using InMemoryAgentStateManager');
     return inMemoryAgentStateManager;
   }
 
-  // Queue mode enabled, Redis is required
-  if (!isRedisAvailable()) {
-    throw new Error(
-      'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
-    );
-  }
-
-  return new AgentStateManager();
+  throw new Error('Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.');
 };
 
 /**
@@ -101,7 +99,7 @@ export const createStreamEventManager = (
     // Resolver lets a queue worker (which never ran the member op's init) mirror
     // its stream events onto the supervisor channel by reading the persisted
     // `mirrorToOperationId` from op metadata. Shares the same state manager
-    // backing the runtime (in-memory singleton locally, Redis in queue mode).
+    // backing the runtime (Redis when configured, otherwise the in-memory singleton).
     const stateManager = createAgentStateManager();
     return new GatewayStreamNotifier(
       manager,
@@ -114,11 +112,10 @@ export const createStreamEventManager = (
       // Same reasoning as the mirror resolver above, but for share-visitor
       // detection: a queue worker that never ran `publishAgentRuntimeInit` for
       // this op still needs to know whether its events must be scrubbed of the
-      // creator's identity, and under which owner-configured policy.
+      // creator's identity.
       async (operationId) => {
         const meta = await stateManager.getOperationMetadata(operationId);
-        if (!meta?.streamOwnerUserId) return null;
-        return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
+        return !!meta?.streamOwnerUserId;
       },
       {
         ...notifierOptions,

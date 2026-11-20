@@ -1,25 +1,33 @@
 'use client';
 
-import { Tabs } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Tabs } from '@lobehub/ui';
 import { memo, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 import { useCategory } from '@/features/AgentSetting/AgentCategory/useCategory';
 import AgentSettings from '@/features/AgentSetting/AgentSettings';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import Footer from '@/features/Setting/Footer';
 import { usePermission } from '@/hooks/usePermission';
 import MobileHeader from '@/routes/(mobile)/chat/settings/_layout/Header';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
-import { useSessionStore } from '@/store/session';
 
 export default memo(() => {
-  const [tab, setTab] = useState(ChatSettingsTabs.Prompt);
   const cateItems = useCategory();
-  const id = useSessionStore((s) => s.activeId);
+  const navigate = useNavigate();
+  // The agent profile (identity, model, instructions) is edited on the profile
+  // page; the settings sheet only renders the tabs below it.
+  const [tab, setTab] = useState(
+    () =>
+      (cateItems?.find((item) => item?.key !== ChatSettingsTabs.Prompt)?.key ??
+        ChatSettingsTabs.Opening) as ChatSettingsTabs,
+  );
+  const id = useAgentStore((s) => s.activeAgentId);
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
 
   const [updateAgentConfig, updateAgentMeta, config, meta] = useAgentStore((s) => [
     s.updateAgentConfig,
@@ -38,11 +46,17 @@ export default memo(() => {
         style={{
           borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
         }}
-        onChange={(value) => setTab(value as ChatSettingsTabs)}
+        onChange={(value) => {
+          if (value === ChatSettingsTabs.Prompt) {
+            navigate('../profile', { relative: 'path' });
+            return;
+          }
+          setTab(value as ChatSettingsTabs);
+        }}
       />
       <AgentSettings
         config={config}
-        disabled={!canEdit}
+        disabled={!canEdit || !isAccessResolved || !canEditResource}
         id={id}
         loading={isLoading}
         meta={meta}

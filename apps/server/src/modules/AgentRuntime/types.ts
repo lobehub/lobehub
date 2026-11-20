@@ -7,7 +7,11 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
-import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
+import {
+  type StreamChunkData,
+  type StreamEvent,
+  type StreamHistoryPage,
+} from './StreamEventManager';
 
 export interface PublishAgentRuntimeEndParams {
   finalState: any;
@@ -49,7 +53,6 @@ export interface IAgentStateManager {
       /** See {@link AgentOperationMetadata.acceptsMemberRuntimeEnd}. */
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       /**
@@ -115,6 +118,13 @@ export interface IAgentStateManager {
    * Load Agent state
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
+
+  /**
+   * Read only the persisted state's `status`. Use it instead of
+   * `loadAgentState` when the status is all the caller needs: the Redis
+   * implementation reads one hash field rather than the whole state blob.
+   */
+  loadAgentStatus: (operationId: string) => Promise<AgentState['status'] | null>;
 
   /** Read the inline step loop's parked envelope, if any. */
   loadInlineResume: (operationId: string) => Promise<null | string>;
@@ -196,6 +206,17 @@ export interface IStreamEventManager {
   /** Optional: the relayed attempt is over; the gateway stops replaying it. */
   closeLlmCall?: (operationId: string, callId: string) => Promise<void>;
 
+  /** Optional: end a one-shot relay channel's gateway session. */
+  closeLlmRelayChannel?: (channel: string) => Promise<void>;
+
+  /**
+   * Remove entries from an operation's stream. Used to drop a snapshot chunk
+   * once a newer one supersedes it, so a stream retains one copy instead of
+   * every intermediate version. Live consumers are unaffected: they already
+   * received the removed entries.
+   */
+  deleteStreamEvents: (operationId: string, eventIds: string[]) => Promise<void>;
+
   /**
    * Close connections
    */
@@ -217,6 +238,41 @@ export interface IStreamEventManager {
    * Get stream event history
    */
   getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
+
+  getStreamHistoryPage: (
+    operationId: string,
+    cursor?: string,
+    limit?: number,
+  ) => Promise<StreamHistoryPage>;
+
+  /**
+   * Optional: tell the gateway that this operation is deliberately silent
+   * because it is waiting on a deferred tool result.
+   *
+   * The gateway's inactivity watchdog treats silence as a dead agent-runtime
+   * function. A parked operation emits nothing until its result arrives — for a
+   * shell command that can be tens of minutes — so without this it is rewritten
+   * as `Operation abandoned: inactivity_watchdog` mid-wait. The deadline
+   * replaces the watchdog window until the first real event clears it.
+   *
+   * Absent on managers without a gateway (local/desktop runs have no watchdog
+   * to satisfy). Resolves to `false` when the gateway does not implement the
+   * route, so callers can fall back to their own timeout.
+   */
+  markOperationParked?: (
+    operationId: string,
+    /**
+     * `stepIndex` is the parking step: its own later events must not end the
+     * park, only a later step (the resume) or the run ending does.
+     */
+    params: { parkedUntil: number; reason?: string; stepIndex?: number },
+  ) => Promise<boolean>;
+
+  /**
+   * Optional: open a one-shot relay channel on the gateway, owned by `userId`.
+   * Present only with a gateway, like {@link sendLlmExecute}.
+   */
+  openLlmRelayChannel?: (channel: string, userId: string) => Promise<void>;
 
   /**
    * Publish Agent runtime end event.

@@ -1,8 +1,16 @@
+export { getAntigravityQuota } from './antigravityQuota';
+export {
+  listClaudeCodeMemory,
+  resolveClaudeCodeMemoryDir,
+  resolveClaudeCodeProjectRoot,
+  toClaudeCodeProjectKey,
+} from './claudeCodeMemory';
 export { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 export {
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
   DEVICE_RPC_METHODS,
+  deviceRpcClients,
   type DeviceRpcMethod,
   executeDeviceRpc,
   TERMINAL_UNSUPPORTED_MESSAGE,
@@ -13,6 +21,7 @@ export {
   defaultGetLocalFilePreview,
   defaultReadExternalAssetForPublish,
   EXTERNAL_PUBLISH_ASSET_MAX_BYTES,
+  localFilePreviewFailureCode,
 } from './filePreview';
 export { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
 export {

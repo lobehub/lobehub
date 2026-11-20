@@ -62,14 +62,16 @@ export class CustomWorld extends World {
     return this.testContext;
   }
 
-  async init() {
+  get baseUrl(): string {
     const PORT = process.env.PORT ? Number(process.env.PORT) : 3006;
-    const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+    return process.env.BASE_URL || `http://localhost:${PORT}`;
+  }
 
+  async init() {
     this.browser = await getSharedBrowser();
 
     this.browserContext = await this.browser.newContext({
-      baseURL: BASE_URL,
+      baseURL: this.baseUrl,
       viewport: { height: 720, width: 1280 },
     });
 

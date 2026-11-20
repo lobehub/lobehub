@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "复制链接",
+  "popover.copyLinkSuccess": "链接已复制",
+  "popover.linkHint": "拥有链接的任何人都可查看和下载此文件",
+  "popover.permissionLink": "拥有链接者",
+  "popover.permissionPrivate": "私密",
+  "popover.privateHint": "仅你可打开此文件",
+  "popover.sectionViews_one": "{{count}} 次浏览",
+  "popover.sectionViews_other": "{{count}} 次浏览",
+  "popover.title": "分享文件",
+  "popover.updateError": "更新分享设置失败",
+  "popover.visibility": "可见性",
+  "popover.visibilityUpdated": "可见性已更新",
+  "shareButton.label": "分享"
+}

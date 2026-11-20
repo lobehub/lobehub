@@ -1,0 +1,30 @@
+name = "no-inferred-service-types"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub web client (`src/`).
+
+Team rule, from the owner's review rejection of `type ProjectListResponse = Awaited<ReturnType<typeof projectService.listAll>>`: "这类写法是不合理的， 应该都换成写到 types 包里面，然后直接声明，而不是用Await 。"
+
+Why: a type carved out of a service's inferred return value has no name and no home. Every store, component and test re-derives it, the shape silently follows whatever the router happens to return, and a reader has to chase service → TRPC router → model to learn what a project row is. The shape of data the client receives is a contract, so it is declared once in the types package (`packages/types/src/<domain>`, imported as `@lobechat/types`), the server and the client service annotate their return with it, and client code imports that name.
+
+Report every type position in this file whose type is INFERRED from what a client service or the TRPC client returns:
+1. `ReturnType<typeof X>` or `Awaited<ReturnType<typeof X>>` — alone or wrapped in `NonNullable<…>`, `Partial<…>`, `Pick<…>`, `Omit<…>`, indexed (`['data']`, `[number]`), or used as a `Promise<…>` argument — where `X` is a method of a client service (`projectService.listAll`, `taskService.list`, `agentEvalService.getRunDetails`, any `<name>Service.<method>`, including one imported with `import type`) or a TRPC client procedure (`lambdaClient.acceptance.getBundle.query`, `edgeClient.*`, `trpc.*`, or a procedure called on a `createWorkspaceLambdaClient(...)` client);
+2. `inferRouterOutputs<…>`, `inferProcedureOutput<…>`, or an indexed access into a router-output type (`RouterOutput['project']['list']`).
+This covers type aliases, interface fields, variable and parameter annotations (`let result: Awaited<ReturnType<typeof taskService.run>>`), function return annotations and `as` casts.
+A local constant that is itself a service method or procedure (`const mutate = lambdaClient.aiAgent.resolve.mutate; let result: Awaited<ReturnType<typeof mutate>>`) counts as that procedure.
+Anchor each finding on the line that contains `ReturnType<typeof …>` or the router-output type — one finding per occurrence, never folded into the first one. A multi-line type is anchored on the line where `ReturnType` appears. Only those lines are findings: a later line that merely uses an alias declared above (`defineReplica<…, ProjectListResponse>`) is not another finding.
+The message must name the service method or procedure the type is inferred from. The suggestion must name a type to declare in `packages/types/src/<domain>` (e.g. `ProjectListItem` in `packages/types/src/project`), say that the service method (and the router behind it) should annotate its return with that type, and that this file should import it from `@lobechat/types` instead of inferring it. When the inferred type is only indexed into (`['data'][number]`), the declared type is the element, not the envelope.
+
+Do not report — these are not service-response inference:
+- types already imported from `@lobechat/types`, `@lobechat/*` packages, or a local declared `interface` / `type` literal, even when they describe a server payload;
+- importing or using a type alias that another file inferred (`import type { TaskListItem } from '@/store/task/...'`): the finding belongs to the declaring line in that other file;
+- `ReturnType<typeof f>` where `f` is NOT a service method or TRPC procedure: a function or closure this file declares with its own body, even one whose body only returns a service call (`const requestSave = () => documentService.updateDocument(…)`; `Awaited<ReturnType<typeof requestSave>>`) — never follow a local function's body to find a service call inside it, a store action or selector (`typeof store.internal_*`, `typeof useChatStore.getState`), a React hook (`typeof useForm`, `typeof useXxxSWR`), a timer (`typeof setTimeout`, `typeof setInterval`), a factory or third-party function (`typeof createStore`, `typeof dayjs`);
+- the type of a client or service OBJECT rather than of data it returns: `ReturnType<typeof createWorkspaceLambdaClient>`, `typeof lambdaClient`, `typeof projectService`;
+- plain helper functions exported from a `@/services/*` module that are not methods of a `<name>Service` instance and do not call the server (`transcriptBucketOf`, `buildCursorKey`) — only `<name>Service.<method>` and TRPC procedures count;
+- a bare `typeof service.method` used as a FUNCTION type, without `ReturnType` (an injected dependency such as `deps: { createMessage: typeof messageService.createMessage }`);
+- `Parameters<typeof service.method>` and other input-side inference — this rule is about returned data only;
+- local bridges that are not server responses: anything from `@/services/electron/*`, `window.electron`, `ipcRenderer`;
+- test files, stories, fixtures and mocks.
+
+If an exclusion applies, return no finding. If you cannot tell from this file whether `X` is a client service or TRPC procedure, return no finding rather than a low-confidence guess.
+"""

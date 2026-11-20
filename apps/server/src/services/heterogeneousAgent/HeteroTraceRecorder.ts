@@ -53,6 +53,19 @@ const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : und
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
 /**
+ * Every hetero step is one model turn: a turn that calls tools is retyped
+ * `call_tool` but still made the LLM call, so counting `call_llm` steps alone
+ * reported one call for a 284-step run.
+ */
+const isModelTurn = (step: StepSnapshot): boolean =>
+  step.stepType === 'call_llm' ||
+  !!step.toolsCalling?.length ||
+  !!step.content ||
+  !!step.reasoning ||
+  step.inputTokens !== undefined ||
+  step.outputTokens !== undefined;
+
+/**
  * Hetero-native execution-trace recorder. Unlike the built-in
  * {@link OperationTraceRecorder} — which is coupled to the homogeneous runtime's
  * `AgentState` / `StepPresentationData` — this folds the raw `AgentStreamEvent`
@@ -209,7 +222,7 @@ export class HeteroTraceRecorder {
       await this.store.removePartial(operationId);
 
       return {
-        llmCalls: steps.filter((s) => s.stepType === 'call_llm').length,
+        llmCalls: steps.filter(isModelTurn).length,
         model: partial.model ?? null,
         provider: partial.provider ?? null,
         stepCount: steps.length,

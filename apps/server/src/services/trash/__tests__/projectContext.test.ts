@@ -178,7 +178,7 @@ describe('trash project context', () => {
     expect((await service.restore([fresh.id])).failed).toEqual([]);
     const [last] = await service.trashTopics([topic.id]);
     expect(last.projectId).toBeNull();
-    expect(await service.purge([last.id])).toEqual({ purged: 1 });
+    expect(await service.purge([last.id])).toEqual({ blocked: [], purged: 1 });
   });
 
   it('rolls back both source stamps and project registration when a batch insert fails', async () => {
@@ -302,7 +302,7 @@ describe('trash project context', () => {
       await model.trash(source.id);
       const fresh = await registry.findByResource(kind, source.id);
       expect(fresh?.projectId).toBe('ctx-b');
-      expect(await service.purge([fresh!.id])).toEqual({ purged: 1 });
+      expect(await service.purge([fresh!.id])).toEqual({ blocked: [], purged: 1 });
       const next = await model.create({ projectId: 'ctx-b', title: kind });
       await db.execute(
         sql`ALTER TABLE trash_items ADD CONSTRAINT reject_ctx_project CHECK (project_id IS NULL)`,

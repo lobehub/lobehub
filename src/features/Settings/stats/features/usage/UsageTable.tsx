@@ -1,18 +1,17 @@
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { type TableColumn, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { Flexbox, type TableColumn, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import InlineTable from '@/components/InlineTable';
 import { ProviderIcon } from '@/components/LobeIcons';
 import SpendType, { type SpendTypeValue } from '@/components/SpendType';
 import TablePagination from '@/components/TablePagination';
 import TotalToken from '@/components/TotalToken';
 import { parseAsInteger, useQueryStates } from '@/hooks/useQueryParam';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { usageService } from '@/services/usage';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatNumber, formatSpendTime } from '@/utils/format';
 
 import { type UsageChartProps } from '../../types';
@@ -37,12 +36,10 @@ interface SortState {
   order: 'ascend' | 'descend';
 }
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // Line the footer up with InlineTable's first/last cells.
-  pagination: css`
-    padding-inline: 24px;
-  `,
-}));
+  pagination: { paddingInline: '24px' },
+});
 
 const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   const { t } = useTranslation('auth');
@@ -50,9 +47,11 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   // namespace, so the two tables stay worded alike.
   const { t: tSpend } = useTranslation('spend');
 
-  const { data, isLoading, mutate } = useClientDataSWR(statsKeys.usageLogs(), async () =>
-    usageService.findByMonth(dateStrings),
-  );
+  const { error, revalidate } = statsActions.useFetchUsageLogs(dateStrings);
+  // A restored empty month stays unsettled until the server confirms it, so a
+  // failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledUsageLogs(dateStrings));
+  const isLoading = !data;
 
   // Page and page size move together — the size picker keeps the first visible
   // row in view, so it recalculates the page as well. One update, one
@@ -65,12 +64,6 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
     { clearOnDefault: true },
   );
   const [sort, setSort] = useState<SortState | null>(null);
-
-  useEffect(() => {
-    if (dateStrings) {
-      mutate();
-    }
-  }, [dateStrings]);
 
   const sorted = useMemo(() => {
     const getValue = sort && SORT_VALUES[sort.field];
@@ -170,16 +163,18 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   ];
 
   return (
-    <>
+    <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => revalidate()}>
       <InlineTable
         columns={columns}
         dataSource={pageData}
         loading={isLoading}
         rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
         size="small"
-        onChange={(_pagination, _filters, sorter) => {
-          const field = String(sorter.columnKey ?? '');
-          setSort(sorter.order && SORT_VALUES[field] ? { field, order: sorter.order } : null);
+        onChange={(_pagination, _filters, sorterResult) => {
+          // Columns sort one at a time; the array form only exists for `multiple` sorters.
+          const sorter = Array.isArray(sorterResult) ? sorterResult[0] : sorterResult;
+          const field = String(sorter?.columnKey ?? '');
+          setSort(sorter?.order && SORT_VALUES[field] ? { field, order: sorter.order } : null);
           // A re-sort makes the current page a different set of rows; start
           // from the top rather than dropping the reader into the middle.
           setPagination({ current: 1 });
@@ -187,7 +182,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
       />
       {total > 0 && (
         <TablePagination
-          className={styles.pagination}
+          className={stylex.props(styles.pagination).className}
           current={page}
           pageSize={pageSize}
           pageSizeOptions={PAGE_SIZE_OPTIONS}
@@ -197,7 +192,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
           }
         />
       )}
-    </>
+    </AsyncBoundary>
   );
 });
 

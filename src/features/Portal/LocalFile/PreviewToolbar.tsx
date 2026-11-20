@@ -1,8 +1,9 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Loader2Icon, type LucideIcon } from 'lucide-react';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 import PathBreadcrumb from './PathBreadcrumb';
 
@@ -65,7 +66,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     height: 40px;
-    padding-inline: 12px 8px;
+    padding-inline: ${densityVars.contentGap} 8px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};

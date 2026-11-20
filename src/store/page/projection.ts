@@ -1,8 +1,14 @@
-import { PAGE_DOCUMENT_FILE_TYPES, PAGE_DOCUMENT_SOURCE_TYPES } from '@lobechat/const';
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
+  PAGE_DOCUMENT_FILE_TYPES,
+  PAGE_DOCUMENT_SOURCE_TYPES,
+} from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
 
 import { definePagedReplica, defineReplica, type ReplicaPagedData } from '@/libs/replica';
 import { documentService } from '@/services/document';
+import type { DocsPageSectionKey, DocsPageSectionView } from '@/store/global/initialState';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
 /**
@@ -132,6 +138,105 @@ export const pageListResource = definePagedReplica<
 export const pageDetailResource = defineReplica<string, LobeDocument, LobeDocument | undefined>({
   key: (pageId) => pageId,
   name: 'pageDetail',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * The Docs sidebar's page sections: `mine` lists the caller's own pages outside
+ * every library, `shared` the workspace pages other members created and shared
+ * (private ones never reach another member). Both narrow inside the query, so a
+ * section shows a full head page instead of whatever survives a client filter.
+ */
+export type PageSectionScope = DocsPageSectionKey;
+
+/** What a section lists and in which order; the section's view settings decide it. */
+export interface PageSectionFilter {
+  sortBy: DocsPageSectionView['sortBy'];
+  type: DocsPageSectionView['type'];
+}
+
+export interface PageSectionParams extends PageSectionFilter {
+  /** Rows shown; one more is fetched so the section knows whether to offer "View all". */
+  limit: number;
+  scope: PageSectionScope;
+}
+
+/**
+ * Source types the page sections list. Only authored pages: `api` covers both
+ * plain pages and pages written into a library (those carry a mirror `fileId`,
+ * so `fileId` cannot tell them apart from uploads). Parsed uploads are `file`
+ * rows with `custom/document` and must stay in the Drive, not here.
+ */
+const PAGE_SECTION_SOURCE_TYPES: string[] = [DocumentSourceType.API];
+
+const SECTION_FILE_TYPES: Record<PageSectionFilter['type'], string[]> = {
+  all: PAGE_DOCUMENT_FILE_TYPES,
+  artifact: [HTML_DOCUMENT_FILE_TYPE],
+  page: [CUSTOM_DOCUMENT_FILE_TYPE],
+};
+
+/** One offset page of a section's rows, narrowed by scope and type on the server. */
+const fetchSectionPage = async (
+  { scope, sortBy, type }: PageSectionFilter & { scope: PageSectionScope },
+  current: number,
+  pageSize: number,
+): Promise<{ items: LobeDocument[]; total: number }> => {
+  const result = await documentService.queryDocuments({
+    creator: scope === 'mine' ? 'self' : 'others',
+    current,
+    fileTypes: SECTION_FILE_TYPES[type],
+    pageSize,
+    sortBy,
+    sourceTypes: PAGE_SECTION_SOURCE_TYPES,
+    standaloneOnly: true,
+  });
+
+  return {
+    items: result.items
+      .filter((doc) => PAGE_SECTION_SOURCE_TYPES.includes(doc.sourceType))
+      .filter(isAllowedPageDocument)
+      .map(documentItemToLobeDocument),
+    total: result.total,
+  };
+};
+
+export const pageSectionResource = defineReplica<PageSectionParams, LobeDocument[]>({
+  fetcher: async ({ limit, ...params }) => (await fetchSectionPage(params, 0, limit + 1)).items,
+  key: ({ scope }) => scope,
+  name: 'pageSection',
+  // The cached head only paints for the list options it was fetched under.
+  query: ({ limit, sortBy, type }) => ({ limit, sortBy, type }),
+  storage: 'localStorage',
+  // v3 keys the cache by the section's list options.
+  version: 3,
+});
+
+/** Rows per page of a section's full list. */
+export const PAGE_SECTION_LIST_PAGE_SIZE = 30;
+
+export interface PageSectionListParams extends PageSectionFilter {
+  scope: PageSectionScope;
+}
+
+export type PageSectionListValue = ReplicaPagedData<LobeDocument, number>;
+
+/**
+ * Every page of one section, paged forward for the full-list panel. The
+ * sidebar section only carries its capped head; this is how an older page is
+ * still reachable.
+ */
+export const pageSectionListResource = definePagedReplica<
+  PageSectionListParams,
+  LobeDocument,
+  number,
+  PageSectionListValue
+>({
+  fetchPage: (params, cursor) => fetchSectionPage(params, cursor ?? 0, PAGE_SECTION_LIST_PAGE_SIZE),
+  key: ({ scope }) => scope,
+  name: 'pageSectionList',
+  paging: pagePaging,
+  query: ({ sortBy, type }) => ({ sortBy, type }),
   storage: 'indexedDB',
   version: 1,
 });

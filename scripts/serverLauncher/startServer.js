@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/no-require-imports -- Docker launcher runs as CommonJS. */
 const dns = require('node:dns').promises;
 const fs = require('node:fs').promises;
 const path = require('node:path');
@@ -177,6 +178,11 @@ const startGateway = async () => {
 // forever with nothing to notice. The sweep is what makes that recoverable.
 const QSTASH_SCHEDULES = [
   {
+    cron: '*/5 * * * *',
+    id: 'lobe-inbound-webhook-sweep',
+    path: '/api/workflows/inbound-webhook/sweep',
+  },
+  {
     cron: '*/10 * * * *',
     id: 'lobe-task-schedule-dispatch',
     path: '/api/workflows/task/schedule-dispatch',
@@ -185,11 +191,6 @@ const QSTASH_SCHEDULES = [
     cron: '*/5 * * * *',
     id: 'lobe-goal-sweep',
     path: '/api/workflows/goal/sweep',
-  },
-  {
-    cron: '* * * * *',
-    id: 'lobe-widget-tick',
-    path: '/api/workflows/widget/tick',
   },
 ];
 

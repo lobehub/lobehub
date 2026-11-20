@@ -6,7 +6,7 @@ import { type BuiltinSkillEnvironment, isBuiltinSkillEnabled } from './builtinSk
 const log = debug('mecha:skillPool');
 
 export type { BuiltinSkillEnvironment };
-export { isBuiltinSkillEnabled, USER_HIDDEN_BUILTIN_SKILLS } from './builtinSkillGate';
+export { isBuiltinSkillEnabled } from './builtinSkillGate';
 
 /**
  * The skill sources of a run, in precedence order. A host that has no such
@@ -24,6 +24,8 @@ export interface SkillPoolSources {
 }
 
 export interface AssembleSkillPoolOptions {
+  /** Builtin and library skills explicitly enabled for on-demand loading. */
+  autoSkillIds?: readonly string[];
   /** Gates the device-only builtin skills. */
   canExecuteOnDevice?: boolean;
   /** Skills the agent explicitly disabled; neither listed nor activatable. */
@@ -33,6 +35,8 @@ export interface AssembleSkillPoolOptions {
    * skill matching one is auto-activated and its content injected directly.
    */
   enabledPluginIds?: readonly string[];
+  /** Builtins implicitly offered by a legacy Auto profile. */
+  implicitBuiltinSkillIds?: readonly string[];
   /**
    * Identifiers a share configuration allows. `undefined` means the run is not
    * shared; an empty list collapses the pool to nothing.
@@ -46,6 +50,12 @@ export interface AssembleSkillPoolOptions {
    * always-on `lobe-skills` tool and resolves against this pool.
    */
   skillActivateMode?: 'auto' | 'manual';
+  /**
+   * Skills this turn needs to stay selectable even in `manual` mode (e.g. the
+   * lobehub skill for a `<refer_topic>` turn). They are not pinned, so their
+   * content is only loaded through `activateSkill`.
+   */
+  turnSkillIds?: readonly string[];
 }
 
 /**
@@ -61,20 +71,32 @@ export const assembleSkillPool = (
   options: AssembleSkillPoolOptions = {},
 ): OperationSkillSet => {
   const enabledPluginIds = new Set(options.enabledPluginIds ?? []);
+  const turnSkillIds = new Set(options.turnSkillIds ?? []);
   // Manual mode exposes only what the user picked. Project / device skills are
   // discovered from the run's working directory and can never be picked in the
   // UI, so the mode does not speak about them and they stay.
   const selectable =
     options.skillActivateMode === 'manual'
       ? (skills: readonly SkillMeta[] = []) =>
-          skills.filter((skill) => enabledPluginIds.has(skill.identifier))
+          skills.filter(
+            (skill) => enabledPluginIds.has(skill.identifier) || turnSkillIds.has(skill.identifier),
+          )
       : (skills: readonly SkillMeta[] = []) => skills;
+
+  // Profile-managed skills are opt-in. A legacy pin and explicit auto both
+  // make a skill discoverable, even on agents with the old manual setting.
+  const on = new Set([...enabledPluginIds, ...turnSkillIds, ...(options.autoSkillIds ?? [])]);
+  const offered = (skills: readonly SkillMeta[] = []) =>
+    skills.filter((skill) => on.has(skill.identifier));
 
   const ordered = [
     ...(sources.project ?? []),
-    ...selectable(sources.db),
+    ...offered(sources.db),
     ...selectable(sources.agentSkills),
-    ...selectable(sources.builtin),
+    ...(sources.builtin ?? []).filter(
+      (skill) =>
+        on.has(skill.identifier) || options.implicitBuiltinSkillIds?.includes(skill.identifier),
+    ),
   ];
   const disabled = new Set(options.disabledIds ?? []);
   const shareAllowed = options.shareAllowedIds ? new Set(options.shareAllowedIds) : undefined;

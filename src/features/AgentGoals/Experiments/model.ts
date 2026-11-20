@@ -6,6 +6,16 @@ import type { GoalGraphView, GoalNodeView } from '../ProcessControl/goalGraphVie
 export const isExperiment = (_graph: GoalGraphView, view: GoalNodeView) =>
   view.node.kind === 'experiment';
 
+/**
+ * Container kinds fold their members and stand in for them when collapsed: an
+ * `experiment` (a candidate answer under test) and a `batch` (one repeated
+ * mould delivered as a class). Both are containment, not a second graph.
+ */
+export const isContainerKind = (kind: GoalNodeKind) => kind === 'experiment' || kind === 'batch';
+
+export const isContainer = (_graph: GoalGraphView, view: GoalNodeView) =>
+  isContainerKind(view.node.kind);
+
 /** Provenance is independent of execution dependencies and retry attempts. */
 export const experimentRelations = (graph: GoalGraphView, nodeId: string) => {
   const parents = new Set<string>();

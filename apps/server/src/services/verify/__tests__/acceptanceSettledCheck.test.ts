@@ -162,6 +162,37 @@ describe('attaching a round that targets an accepted check', () => {
     expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
   });
 
+  it('refuses a new id that supersedes the settled check by its authored plan id', async () => {
+    // Authored ingests keep the harness's plan id but key the row by a minted
+    // criterion. Naming the settled check by that plan id still folds it.
+    mocks.listByAcceptance.mockResolvedValue([
+      {
+        acceptanceId: 'acc-1',
+        id: 'run-1',
+        plan: [{ id: 'settled-check', index: 0, sourceCriterionId: 'crit-s', title: 'settled' }],
+        roundIndex: 1,
+      },
+    ]);
+    mocks.listByRuns.mockResolvedValue([acceptedResult('settled-check', 'run-1')]);
+    mocks.runFindById.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-2',
+      plan: [
+        {
+          id: 'replacement',
+          index: 0,
+          sourceCriterionId: 'crit-r',
+          supersedes: ['settled-check'],
+          title: 'replacement',
+        },
+      ],
+      userId: 'u1',
+    });
+
+    await expect(service().attachRun('run-2', 'acc-1')).rejects.toThrow(/replacement/);
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
   it('attaches a round that only touches unreviewed or brand-new checks', async () => {
     mocks.runFindById.mockResolvedValue({
       acceptanceId: null,
@@ -172,5 +203,58 @@ describe('attaching a round that targets an accepted check', () => {
 
     await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ roundIndex: 2 });
     expect(mocks.attachToAcceptance).toHaveBeenCalledOnce();
+  });
+
+  it('reports unresolved supersedes again when an already-attached run is re-attached', async () => {
+    // The first attach committed but its response was lost; the retry takes
+    // the idempotent path and must still carry the warning.
+    mocks.runFindById.mockResolvedValue({
+      acceptanceId: 'acc-1',
+      id: 'run-2',
+      plan: [{ id: 'replacement', index: 0, supersedes: ['typo-id'], title: 'replacement' }],
+      roundIndex: 2,
+      userId: 'u1',
+    });
+    mocks.listByAcceptance.mockResolvedValue([
+      { acceptanceId: 'acc-1', id: 'run-1', plan: planned('settled-check'), roundIndex: 1 },
+      {
+        acceptanceId: 'acc-1',
+        id: 'run-2',
+        plan: [{ id: 'replacement', index: 0, supersedes: ['typo-id'], title: 'replacement' }],
+        roundIndex: 2,
+      },
+    ]);
+
+    await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({
+      id: 'run-2',
+      unresolvedSupersedes: ['typo-id'],
+    });
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
+  it("resolves a supersedes that names the attached run's own result-only check", async () => {
+    // An executed run carries a result for `result-only` without a plan item,
+    // and another item replaces it; the union folds that row, so no warning.
+    mocks.runFindById.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-2',
+      plan: [{ id: 'replacement', index: 0, supersedes: ['result-only'], title: 'replacement' }],
+      userId: 'u1',
+    });
+    mocks.listByRuns.mockImplementation(async (runIds: string[]) =>
+      runIds.includes('run-2')
+        ? [
+            {
+              ...acceptedResult('result-only', 'run-2'),
+              userDecision: null,
+              userDecisionDetail: null,
+            },
+          ]
+        : [],
+    );
+
+    const attached = await service().attachRun('run-2', 'acc-1');
+
+    expect(attached).not.toHaveProperty('unresolvedSupersedes');
   });
 });

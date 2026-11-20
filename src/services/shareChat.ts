@@ -1,4 +1,9 @@
-import type { ExecAgentResult, UIChatMessage, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ExecAgentClientIds,
+  ExecAgentResult,
+  UIChatMessage,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import type {
@@ -10,7 +15,7 @@ import type {
 
 export interface ShareChatExecParams {
   /** Client-minted ids for the rows this run creates (fresh sends only). */
-  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
+  clientIds?: ExecAgentClientIds;
   /**
    * Files the visitor uploaded through {@link ShareChatService.createFile} to
    * attach to this turn. The server re-checks each id's share provenance, so
@@ -186,6 +191,25 @@ class ShareChatService {
     return await lambdaClient.shareChat.setQueuedMessages.mutate({
       operationId,
       pending,
+      shareId,
+      topicId,
+    });
+  }
+
+  /**
+   * The visitor counterpart of `aiAgent.submitHeteroIntervention`: answers a
+   * question Claude Code / Codex asked during the visitor's run.
+   */
+  async submitHeteroIntervention(
+    shareId: string,
+    topicId: string,
+    resolution: Omit<
+      Parameters<typeof lambdaClient.shareChat.submitHeteroIntervention.mutate>[0],
+      'shareId' | 'topicId'
+    >,
+  ) {
+    return await lambdaClient.shareChat.submitHeteroIntervention.mutate({
+      ...resolution,
       shareId,
       topicId,
     });

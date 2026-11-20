@@ -1,6 +1,6 @@
 // Fixture: "Rename" opens a modal form.
 import { Flexbox } from '@lobehub/ui';
-import { DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

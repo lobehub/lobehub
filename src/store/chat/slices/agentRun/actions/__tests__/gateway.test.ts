@@ -54,9 +54,9 @@ vi.mock('@/services/topic', () => ({
   },
 }));
 
-const moveChatContextSelections = vi.hoisted(() => vi.fn());
+const moveChatComposerAttachments = vi.hoisted(() => vi.fn());
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections }),
+  getFileStoreState: () => ({ moveChatComposerAttachments }),
 }));
 
 const mockUserDefaultConfig = vi.hoisted(() => ({
@@ -78,8 +78,6 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  // Lab flag off: this suite pins the v1 per-operation socket path.
-  labPreferSelectors: { enableGatewayMux: () => false },
   settingsSelectors: {
     defaultAgentConfig: () => ({
       chatConfig: { disableGatewayMode: mockUserDefaultConfig.disableGatewayMode },
@@ -126,6 +124,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgencyConfigById: (agentId: string) => (state: any) =>
       state.agentMap?.[agentId]?.agencyConfig,
+    getAgentModelById: (agentId: string) => (state: any) => state.agentMap?.[agentId]?.model ?? '',
     getAgentById: (agentId: string) => (state: any) => state.agentMap?.[agentId],
   },
   agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
@@ -190,7 +189,7 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
-    moveChatContextSelections.mockClear();
+    moveChatComposerAttachments.mockClear();
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(null as never);
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
@@ -884,6 +883,7 @@ describe('GatewayActionImpl', () => {
       const onOperationCancel = vi.fn();
       const replaceMessages = vi.fn();
       const refreshTopic = vi.fn().mockResolvedValue(undefined);
+      const refreshTopicDetail = vi.fn().mockResolvedValue(undefined);
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const switchTopic = vi.fn();
       const updateTopicStatus = vi.fn();
@@ -906,6 +906,7 @@ describe('GatewayActionImpl', () => {
         onOperationCancel,
         replaceMessages,
         refreshTopic,
+        refreshTopicDetail,
         startOperation,
         switchTopic,
         updateTopicStatus,
@@ -936,6 +937,7 @@ describe('GatewayActionImpl', () => {
         onOperationCancel,
         replaceMessages,
         refreshTopic,
+        refreshTopicDetail,
         set,
         startOperation,
         state,
@@ -984,6 +986,75 @@ describe('GatewayActionImpl', () => {
       expect(onTopicCreated).toHaveBeenCalledWith('target-topic');
       expect(onTopicCreated).toHaveBeenCalledTimes(1);
       expect(switchTopic).not.toHaveBeenCalled();
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
+    /** @example A run dispatched by this client may recover from one live overloaded error. */
+    it('grants one automatic heterogeneous retry to a run started from this client', async () => {
+      const { action, startOperation } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'topic-1',
+        userMessageId: 'user-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+        message: 'run it',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ heteroAutoRetryAvailable: true }),
+          type: 'execServerAgentRuntime',
+        }),
+      );
+    });
+
+    it('refreshes the Topic detail key after heterogeneous follow-up dispatch', async () => {
+      const { action, state, connectToGateway, refreshTopicDetail } = createExecuteTestAction();
+      state.topicDetailMap = {
+        'target-topic': {
+          id: 'target-topic',
+          metadata: {
+            heteroRuntimeConfig: { fields: [], operationId: 'old-operation' },
+          },
+        },
+      };
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'target-agent',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        heteroType: 'codex',
+        message: 'ok',
+        operationId: 'new-operation',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'target-topic',
+        userMessageId: 'user-1',
+      });
+      await action.executeGatewayAgent({
+        context: {
+          agentId: 'target-agent',
+          isolatedTopic: true,
+          scope: 'main',
+          topicId: 'target-topic',
+        },
+        message: 'Continue after changing Agent speed',
+      });
+      expect(refreshTopicDetail).toHaveBeenCalledWith('target-topic');
       expect(connectToGateway).toHaveBeenCalled();
     });
 
@@ -1408,7 +1479,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'user-msg-123',
           prompt: 'Original question',
         }),
-        expect.anything(),
       );
     });
 
@@ -1660,7 +1730,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: undefined,
           prompt: 'Hello',
         }),
-        expect.anything(),
       );
     });
 
@@ -1705,7 +1774,6 @@ describe('GatewayActionImpl', () => {
           agentId: 'target-agent',
           appContext: expect.objectContaining({ scope: 'sub_agent', topicId: 'topic-1' }),
         }),
-        expect.anything(),
       );
       expect(startOperation).toHaveBeenCalledWith(
         expect.objectContaining({ context: messageContext }),
@@ -1787,7 +1855,7 @@ describe('GatewayActionImpl', () => {
           title: '666',
         },
       });
-      expect(moveChatContextSelections).toHaveBeenCalledWith(
+      expect(moveChatComposerAttachments).toHaveBeenCalledWith(
         messageMapKey({
           agentId: 'agent-1',
           scope: 'main',
@@ -1882,7 +1950,6 @@ describe('GatewayActionImpl', () => {
           prompt: 'Hello',
           trigger: 'onboarding',
         }),
-        expect.anything(),
       );
     });
 
@@ -1915,7 +1982,6 @@ describe('GatewayActionImpl', () => {
 
       expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({ prompt: 'Follow up', steer: true }),
-        expect.anything(),
       );
     });
 
@@ -1952,7 +2018,6 @@ describe('GatewayActionImpl', () => {
             approvalMode: 'allow-list',
           },
         }),
-        expect.anything(),
       );
     });
 
@@ -1993,8 +2058,66 @@ describe('GatewayActionImpl', () => {
             taskId: 'T-1',
           }),
         }),
-        expect.anything(),
       );
+    });
+
+    // Regression: the directory a project group "+" staged never reached the
+    // server, so the first send created the topic outside the project.
+    it('forwards the staged project directory when creating a topic', async () => {
+      const { action } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-new',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main' },
+        message: 'Start in the directory',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({ projectWorkingDirectoryId: 'dir-1' }),
+        }),
+      );
+    });
+
+    it('does not forward a project directory for a send into an existing topic', async () => {
+      const { action } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+        message: 'Keep going',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+
+      const appContext = vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)![0].appContext;
+      expect(appContext).not.toHaveProperty('projectWorkingDirectoryId');
     });
 
     it('should forward empty prompt for continue generation', async () => {
@@ -2026,7 +2149,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'assistant-msg-456',
           prompt: '',
         }),
-        expect.anything(),
       );
     });
 
@@ -2037,12 +2159,12 @@ describe('GatewayActionImpl', () => {
       const connectToGateway = vi.fn();
       const moveQueuedMessages = vi.fn();
       const onOperationCancel = vi.fn();
-      const onMessageAccepted = vi.fn();
-      const replaceMessages = vi.fn();
-
       const controller = new AbortController();
-
-      const mockClient = createMockClient();
+      // The Stop lands exactly as the persisted response arrives: the server
+      // task exists and this client already knows its operation id.
+      const onMessageAccepted = vi.fn(() => controller.abort('user cancelled'));
+      const replaceMessages = vi.fn();
+      const internalDispatchMessage = vi.fn();
       const internalDispatchTopic = vi.fn();
       const internalPinTopicStatus = vi.fn();
       // `refreshTopic` has already pulled in the server's running row: this
@@ -2076,6 +2198,7 @@ describe('GatewayActionImpl', () => {
         completeOperation,
         connectToGateway,
         getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_dispatchMessage: internalDispatchMessage,
         internal_dispatchTopic: internalDispatchTopic,
         internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages,
@@ -2085,15 +2208,13 @@ describe('GatewayActionImpl', () => {
         startOperation,
         switchTopic: vi.fn(),
       })) as any;
-
       (globalThis as any).window = {
         global_serverConfigStore: {
           getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
         },
       };
-
       const action = new GatewayActionImpl(set as any, get, undefined);
-      action.createClient = vi.fn(() => mockClient);
+      action.createClient = vi.fn(() => createMockClient());
       const interruptTaskSpy = vi
         .mocked(aiAgentService.interruptTask)
         .mockResolvedValue({ operationId: 'server-op-cancel', success: true });
@@ -2126,15 +2247,10 @@ describe('GatewayActionImpl', () => {
         parentOperationId: 'parent-send-msg-op',
       });
       await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
-      controller.abort('user cancelled');
       resolvePersistence(persistedResult);
 
       await expect(execution).resolves.toEqual(persistedResult);
 
-      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ signal: controller.signal }),
-      );
       // Server task was created before the signal flipped — best-effort
       // interrupt must fire so the agent run stops server-side.
       await vi.waitFor(() =>
@@ -2162,6 +2278,8 @@ describe('GatewayActionImpl', () => {
           value: { metadata: { runningOperation: null } },
         }),
       );
+      const [mirrored] = internalDispatchMessage.mock.calls[0];
+      expect(mirrored).toMatchObject({ id: 'ast-1', value: { interruptedMidStream: true } });
     });
 
     /**
@@ -2216,6 +2334,7 @@ describe('GatewayActionImpl', () => {
         completeOperation: vi.fn(),
         connectToGateway: vi.fn(),
         getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_dispatchMessage: vi.fn(),
         internal_dispatchTopic: internalDispatchTopic,
         internal_pinTopicStatus: internalPinTopicStatus,
         internal_replaceTopicId: vi.fn(),
@@ -2227,13 +2346,11 @@ describe('GatewayActionImpl', () => {
         startOperation: vi.fn(),
         switchTopic: vi.fn(),
       })) as any;
-
       (globalThis as any).window = {
         global_serverConfigStore: {
           getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
         },
       };
-
       const action = new GatewayActionImpl(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
       vi.mocked(aiAgentService.interruptTask).mockResolvedValue({
@@ -2264,10 +2381,10 @@ describe('GatewayActionImpl', () => {
       const execution = action.executeGatewayAgent({
         context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: null },
         message: 'Hello',
+        onMessageAccepted: () => controller.abort('user cancelled'),
         parentOperationId: 'parent-send-msg-op',
       });
       await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
-      controller.abort('user cancelled');
       resolvePersistence(persisted);
       await execution;
 
@@ -2291,6 +2408,136 @@ describe('GatewayActionImpl', () => {
         }),
       );
     });
+
+    /**
+     * @example A Stop while the start request is in flight stops the run and keeps the turn.
+     */
+    it.each(['owner', 'share'] as const)(
+      'interrupts the %s server run when cancel aborts the in-flight start request',
+      async (surface) => {
+        // ROOT CAUSE:
+        //
+        // The caller abort signal was forwarded into the execAgentTask fetch.
+        // Aborting it rejected only the client promise; the server still
+        // persisted the turn and dispatched the run (for a connected device it
+        // spawned the native CLI). The client never learned the operation id,
+        // so nothing stopped that run, and the next send on the same Codex
+        // thread failed with "already has an active writer".
+        //
+        // Before: no interrupt ever reached the orphaned server run.
+        // After: it is interrupted when the result arrives, and the send keeps the
+        // persisted turn (rejecting it put the sent text back in the composer).
+        const controller = new AbortController();
+        const connectToGateway = vi.fn();
+        const [onMessageAccepted, onStartRequestSent] = [vi.fn(), vi.fn()];
+        const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
+        const set = vi.fn((updater: any) => {
+          if (typeof updater === 'function') Object.assign(state, updater(state));
+          else Object.assign(state, updater);
+        });
+        const get = vi.fn(() => ({
+          ...state,
+          associateMessageWithOperation: vi.fn(),
+          completeOperation: vi.fn(),
+          connectToGateway,
+          getOperationAbortSignal: vi.fn(() => controller.signal),
+          internal_dispatchMessage: vi.fn(),
+          internal_dispatchTopic: vi.fn(),
+          internal_pinTopicStatus: vi.fn(),
+          moveQueuedMessages: vi.fn(),
+          moveVoiceMessages: vi.fn(),
+          onOperationCancel: vi.fn(),
+          replaceMessages: vi.fn(),
+          startOperation: vi.fn(() => ({ operationId: 'gw-op-local' })),
+          switchTopic: vi.fn(),
+        })) as any;
+        (globalThis as any).window = {
+          global_serverConfigStore: {
+            getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+          },
+        };
+        const action = new GatewayActionImpl(set as any, get, undefined);
+        action.createClient = vi.fn(() => createMockClient());
+
+        const persisted = {
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'ok',
+          operationId: 'server-op-inflight',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'test-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        } as const;
+        let finishOnServer!: () => void;
+        const serverFinished = new Promise<void>((resolve) => {
+          finishOnServer = resolve;
+        });
+        // Models fetch: an abort rejects the client promise immediately, while
+        // the server keeps executing the request it already received.
+        const startRequest = (_params: unknown, options?: { signal?: AbortSignal }) =>
+          new Promise<typeof persisted>((resolve, reject) => {
+            options?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('The operation was aborted.', 'AbortError')),
+            );
+            void serverFinished.then(() => resolve(persisted));
+          });
+        vi.mocked(aiAgentService.execAgentTask).mockImplementation(startRequest as any);
+        vi.mocked(shareChatService.execAgentTask).mockImplementation(startRequest as any);
+        vi.mocked(aiAgentService.interruptTask).mockResolvedValue({
+          deviceCancellationConfirmed: true,
+          operationId: 'server-op-inflight',
+          success: true,
+        });
+        vi.mocked(shareChatService.interruptTask).mockResolvedValue({ success: true } as any);
+
+        const execution = action.executeGatewayAgent({
+          context: {
+            agentId: 'agent-1',
+            ...(surface === 'share' ? { agentShareId: 'share-1' } : {}),
+            scope: 'main',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: 'Hello',
+          onMessageAccepted,
+          onStartRequestSent,
+          parentOperationId: 'parent-send-msg-op',
+        });
+        const start =
+          surface === 'share' ? shareChatService.execAgentTask : aiAgentService.execAgentTask;
+        await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+        expect(onStartRequestSent).toHaveBeenCalledOnce();
+
+        controller.abort('user cancelled');
+        finishOnServer();
+        await expect(execution).resolves.toEqual(persisted);
+        expect(connectToGateway).not.toHaveBeenCalled();
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
+        /** @example The orphaned server run is interrupted by its real operation id. */
+        if (surface === 'share') {
+          await vi.waitFor(() =>
+            expect(shareChatService.interruptTask).toHaveBeenCalledWith(
+              'share-1',
+              'topic-1',
+              'server-op-inflight',
+            ),
+          );
+          expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+        } else {
+          await vi.waitFor(() =>
+            expect(aiAgentService.interruptTask).toHaveBeenCalledWith({
+              operationId: 'server-op-inflight',
+              topicId: 'topic-1',
+            }),
+          );
+        }
+      },
+    );
 
     /**
      * @example Send now receives the server's physical device cancellation result.
@@ -2853,6 +3100,7 @@ describe('GatewayActionImpl', () => {
           moveQueuedMessages: vi.fn(),
           moveVoiceMessages: vi.fn(),
           onOperationCancel: vi.fn(),
+          refreshTopicDetail: vi.fn().mockResolvedValue(undefined),
           startOperation,
           updateTopicStatus: vi.fn(),
         })) as any;
@@ -3401,193 +3649,6 @@ describe('GatewayActionImpl', () => {
       });
       expect(internalPinTopicStatus).not.toHaveBeenCalled();
     });
-
-    // When the desktop runs against 本机 (effective runtime mode 'local'), the
-    // client must forward this machine's own gateway deviceId so the server can
-    // preset activeDeviceId and inject lobe-local-system into the first LLM
-    // payload — skipping the activateDevice round-trip. It must NOT do so for a
-    // cloud/none run, otherwise that run would be wrongly routed to the device.
-    describe('local device activation (本机)', () => {
-      const successResult = {
-        agentId: 'agent-1',
-        assistantMessageId: 'ast-1',
-        autoStarted: true,
-        createdAt: new Date().toISOString(),
-        message: 'ok',
-        operationId: 'server-op-1',
-        status: 'created' as const,
-        success: true,
-        timestamp: new Date().toISOString(),
-        token: 'test-token',
-        topicId: 'topic-1',
-        userMessageId: 'usr-1',
-      };
-
-      afterEach(() => {
-        mockEnv.isDesktop = false;
-        mockRuntime.isLocal = false;
-        mockRuntime.isChatMode = false;
-        mockGateway.getDeviceInfo.mockReset();
-        mockAgentStore.state.agentMap = {};
-        mockUserState.workspaceUserPreference.agentDeviceOverrides = {};
-      });
-
-      const send = async () => {
-        mockAgentStore.state.agentMap['agent-1'] ??= {
-          agencyConfig: { executionTarget: mockRuntime.isLocal ? 'local' : 'sandbox' },
-          userId: 'user-1',
-        };
-        const { action } = createExecuteTestAction();
-        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(successResult);
-        await action.executeGatewayAgent({
-          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
-          message: 'list files in cwd',
-        });
-      };
-
-      it('forwards this desktop as both the route and local capability hint', async () => {
-        mockEnv.isDesktop = true;
-        mockRuntime.isLocal = true;
-        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
-
-        await send();
-
-        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({
-            deviceId: 'device-local-1',
-            localDeviceId: 'device-local-1',
-          }),
-          expect.anything(),
-        );
-      });
-
-      // Regression guard: an explicit sandbox/none/device target must not
-      // preset this machine's deviceId — only a `local` target does.
-      it('does not resolve a deviceId when a non-local runtime mode is selected', async () => {
-        mockEnv.isDesktop = true;
-        mockRuntime.isLocal = false;
-
-        await send();
-
-        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
-          'deviceId',
-        );
-      });
-
-      // Regression guard (chat mode → no execution environment): chat mode must
-      // not resolve this machine's deviceId even on a local target, otherwise
-      // the server presets activeDeviceId and re-injects lobe-local-system.
-      it('does not resolve a deviceId in chat mode, even when local mode is set', async () => {
-        mockEnv.isDesktop = true;
-        mockRuntime.isLocal = true;
-        mockRuntime.isChatMode = true;
-
-        await send();
-
-        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
-          'deviceId',
-        );
-      });
-
-      it('never resolves a deviceId off desktop, even when local mode is set', async () => {
-        mockEnv.isDesktop = false;
-        mockRuntime.isLocal = true;
-
-        await send();
-
-        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
-          'deviceId',
-        );
-      });
-
-      it('uses a workspace member local override instead of the shared remote device', async () => {
-        mockEnv.isDesktop = true;
-        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-member' });
-        mockAgentStore.state.agentMap['agent-1'] = {
-          agencyConfig: { boundDeviceId: 'workspace-device', executionTarget: 'device' },
-          userId: 'workspace-owner',
-          visibility: 'public',
-          workspaceId: 'workspace-1',
-        };
-        mockUserState.workspaceUserPreference.agentDeviceOverrides['agent-1'] = {
-          boundDeviceId: 'device-local-member',
-          executionTarget: 'local',
-        };
-
-        await send();
-
-        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ deviceId: 'device-local-member' }),
-          expect.anything(),
-        );
-      });
-
-      it('does not preset this desktop for a workspace member remote override', async () => {
-        mockEnv.isDesktop = true;
-        mockAgentStore.state.agentMap['agent-1'] = {
-          agencyConfig: { executionTarget: 'local' },
-          userId: 'workspace-owner',
-          visibility: 'public',
-          workspaceId: 'workspace-1',
-        };
-        mockUserState.workspaceUserPreference.agentDeviceOverrides['agent-1'] = {
-          boundDeviceId: 'remote-device',
-          executionTarget: 'device',
-        };
-
-        await send();
-
-        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
-          'deviceId',
-        );
-      });
-
-      it('sends a distinct local device hint for a local platform agent', async () => {
-        mockEnv.isDesktop = true;
-        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'this-desktop' });
-        mockAgentStore.state.agentMap['agent-1'] = {
-          agencyConfig: {
-            executionTarget: 'local',
-            heterogeneousProvider: { type: 'openclaw' },
-          },
-          userId: 'user-1',
-        };
-
-        await send();
-
-        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ localDeviceId: 'this-desktop' }),
-          expect.anything(),
-        );
-        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
-          'deviceId',
-        );
-      });
-
-      it('sends a harmless desktop hint without overriding a remote platform target', async () => {
-        mockEnv.isDesktop = true;
-        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'this-desktop' });
-        mockAgentStore.state.agentMap['agent-1'] = {
-          agencyConfig: {
-            boundDeviceId: 'remote-device',
-            executionTarget: 'device',
-            heterogeneousProvider: { type: 'hermes' },
-          },
-          userId: 'user-1',
-        };
-
-        await send();
-
-        expect(mockGateway.getDeviceInfo).toHaveBeenCalled();
-        const request = vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0];
-        expect(request).not.toHaveProperty('deviceId');
-        expect(request).toHaveProperty('localDeviceId', 'this-desktop');
-      });
-    });
   });
 
   describe('reconnectToGatewayOperation', () => {
@@ -3731,6 +3792,23 @@ describe('GatewayActionImpl', () => {
           metadata: expect.objectContaining({ startTime: createdAtMs }),
         }),
       );
+    });
+
+    // ROOT CAUSE:
+    // Reconnecting only observes a server run that another client or an earlier
+    // page load started; it must not authorize re-executing its tool steps.
+    /** @example Reconnect never grants an automatic heterogeneous retry. */
+    it('does not grant automatic retry to a reconnected run', async () => {
+      const { action, startOperation } = createReconnectTestAction({ id: 'ast-1' });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      const [[params]] = startOperation.mock.calls as unknown as [[{ metadata: object }]];
+      expect(params.metadata).not.toHaveProperty('heteroAutoRetryAvailable');
     });
 
     it('shares one attempt between concurrent reconnects to the same run', async () => {
@@ -4094,7 +4172,9 @@ describe('GatewayActionImpl', () => {
       const action = new GatewayActionImpl(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
-      return { action, captured, completeOperation, updateTopicStatus };
+      // `state` is returned live so a test can mutate the topic map mid-stream —
+      // modelling another run claiming the topic after this reconnect attached.
+      return { action, captured, completeOperation, state, updateTopicStatus };
     }
 
     // The core black-hole guard: a reconnect that closes WITHOUT witnessing a
@@ -4192,6 +4272,64 @@ describe('GatewayActionImpl', () => {
       });
       expect(rawHetero.completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
       expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+    });
+
+    // One settle this tab's own topic map must not be able to veto.
+    //
+    // The map is only a guess about whether another run claimed the topic, while
+    // the call it used to skip is authoritative in a way the guess cannot be: the
+    // server compares the operation id itself and answers `conflict` for a newer
+    // run, which `#restoreRunningOnSettleConflict` already consumes. Skipping on
+    // the guess dropped the settle whenever the map was stale or the newer run
+    // never landed its server-side mark — and nothing retried it, so the row kept
+    // `status='running'` with a `runningOperation` naming a finished operation.
+    // Observed 2026-10-13: a topic shown "running" for 45 minutes whose operation
+    // row had been `interrupted` since 03:33:58Z, `topics.updated_at` frozen at
+    // the run's start (settling always bumps it, so that is proof no settle ever
+    // reached the row), 16 rows of the same shape in the database.
+    //
+    // Reconnect is the path a page refresh takes, which is why the symptom read
+    // as "still spinning after a reload". `executeGatewayAgent`'s
+    // onSessionComplete — the path this one mirrors — has never had the guard.
+    it('settles the server row even when this tab already names a newer operation', async () => {
+      const { action, captured, state } = createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        heteroType: null,
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      // A newer run claims the topic while this reconnect is streaming. The
+      // pre-attach re-check already bails when the map names another operation
+      // BEFORE the connect, so this is the only window in which the removed guard
+      // could still fire.
+      state.topicDataMap['agent_agent-1'] = {
+        items: [
+          {
+            id: 'topic-1',
+            metadata: { runningOperation: { operationId: 'server-newer-op' } },
+            status: 'running',
+          },
+        ],
+      };
+
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: false,
+        terminalReceived: false,
+      });
+
+      // Issued, and left to the server to arbitrate: it writes only while its own
+      // mark still names this operation, so the newer run above keeps its mark.
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
     });
 
     // A genuine terminal event (agent_runtime_end / error) still finalizes the
@@ -4448,31 +4586,14 @@ describe('GatewayActionImpl', () => {
       expect(connectToGateway).toHaveBeenCalled();
     });
 
-    // The operation is created optimistically off the marker, so every bail-out
-    // has to retire it — otherwise a stale marker leaves the composer spinning
-    // on a run that nothing will ever settle.
-    it('retires the optimistic operation when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, completeOperation } = createSeededReconnectHarness();
-      vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
-        data: { code: 'NOT_FOUND' },
-      });
-
-      await action.reconnectToGatewayOperation({
-        assistantMessageId: 'ast-1',
-        operationId: 'server-op-1',
-        topicId: 'topic-1',
-      });
-
-      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-    });
-
     // Regression: a stale local runningOperation fires a reconnect,
     // but the server already cleared its marker and answers refreshGatewayToken
     // with TRPC NOT_FOUND. The reconnect must clear the local marker and bail
     // silently (no connect, no throw) so the SWR fetcher resolves instead of
     // looping 404s.
-    it('clears the local marker and bails when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, connectToGateway, internalDispatchTopic } = createSeededReconnectHarness();
+    it('retires the local operation and clears the marker on NOT_FOUND', async () => {
+      const { action, completeOperation, connectToGateway, internalDispatchTopic } =
+        createSeededReconnectHarness();
       vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
         data: { code: 'NOT_FOUND' },
       });
@@ -4484,6 +4605,11 @@ describe('GatewayActionImpl', () => {
           topicId: 'topic-1',
         }),
       ).resolves.toBeUndefined();
+
+      // The operation is created optimistically off the marker, so every bail-out
+      // has to retire it — otherwise a stale marker leaves the composer spinning
+      // on a run that nothing will ever settle.
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
 
       expect(internalDispatchTopic).toHaveBeenCalledWith({
         id: 'topic-1',

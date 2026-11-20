@@ -1,6 +1,4 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createModal, DropdownMenu } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createModal, createStaticStyles, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { t } from 'i18next';
 import { ChevronDownIcon, ChevronUpIcon, InfoIcon, PlusIcon, XIcon } from 'lucide-react';
 import type { ModelRating } from 'model-bank';
@@ -10,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModelRating';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { densityVars } from '@/styles/densityVars';
 
 import type { RatingDimensionKey } from '../ModelRatingRadar';
 import { RATING_DIMENSION_ORDER, RATING_SOURCE_NAMES } from '../ModelRatingRadar';
@@ -122,7 +121,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   rulesList: css`
     margin: 0;
-    padding-inline-start: 16px;
+    padding-inline-start: ${densityVars.cardPadding};
   `,
   rulesToggle: css`
     cursor: pointer;

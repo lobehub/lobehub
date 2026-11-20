@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReviewTools } from '../review';
-import { createToolSet, ToolSetFacade } from '../shared';
+import { ToolSetFacade } from '../shared';
 
 const createToolSetFacade = () =>
   new ToolSetFacade({
@@ -58,13 +58,5 @@ describe('ReviewTools', () => {
     ).resolves.toEqual({ resourceId: 'idea-1', status: 'applied' });
 
     expect(recordSelfReviewIdea).toHaveBeenCalledOnce();
-  });
-
-  /**
-   * @example
-   * expect(createToolSet).toBeTypeOf('function');
-   */
-  it('exports the shared factory used by concrete review tools', () => {
-    expect(createToolSet).toBeTypeOf('function');
   });
 });

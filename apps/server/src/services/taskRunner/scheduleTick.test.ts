@@ -114,6 +114,15 @@ describe('runScheduleTick', () => {
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 
+  it('skips an archived task without running it', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ archivedAt: new Date() })]);
+
+    const outcome = await runScheduleTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'archived' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
   it('skips terminal / paused tasks before checking maxExecutions', async () => {
     mockSelectTask.mockResolvedValue([baseTask({ status: 'paused' })]);
 
@@ -203,5 +212,23 @@ describe('runScheduleTick', () => {
       excludeTypes: ['error'],
     });
     expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  describe('delayed delivery', () => {
+    const task = {
+      automationMode: 'schedule',
+      schedulePattern: '15 9 * * *',
+      scheduleTimezone: 'UTC',
+      status: 'scheduled',
+    };
+
+    it('skips an occurrence the schedule no longer includes', async () => {
+      mockSelectTask.mockResolvedValue([task]);
+
+      await expect(
+        runScheduleTick(taskId, userId, { occurrence: '2026-09-21T09:17:00.000Z' }),
+      ).resolves.toEqual({ ran: false, reason: 'schedule-changed' });
+      expect(mockRunner.runTask).not.toHaveBeenCalled();
+    });
   });
 });

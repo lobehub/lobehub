@@ -28,6 +28,33 @@ import {
   hashAgentInterventionRequestRevision,
 } from '../agentIntervention';
 
+const createLeaseClaim = (
+  inputHash: string,
+  leaseDurationMs: number,
+  resolutionRequestId: string,
+): Parameters<AgentInterventionModel['claimCustomExecution']>[0] => ({
+  inputHash,
+  leaseDurationMs,
+  resolutionRequestId,
+});
+
+const createCompletion = (
+  inputHash: string,
+  leaseToken: string,
+  resolutionRequestId: string,
+  result: Parameters<AgentInterventionModel['completeCustomExecution']>[0]['result'],
+): Parameters<AgentInterventionModel['completeCustomExecution']>[0] => ({
+  inputHash,
+  leaseToken,
+  resolutionRequestId,
+  result,
+});
+
+const createInstallRequest = () => ({
+  apiName: 'installMarketplaceItem',
+  fields: [{ id: 'confirm', label: 'Install', required: true, type: 'boolean' }],
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const ownerId = 'agent-intervention-owner';
@@ -146,10 +173,7 @@ const createCustomResolution = async (resolutionRequestId = randomUUID()) => {
       questionItem({
         allowedActions: ['submit_custom'],
         interactionKind: 'custom',
-        sanitizedRequest: {
-          apiName: 'installMarketplaceItem',
-          fields: [{ id: 'confirm', label: 'Install', required: true, type: 'boolean' }],
-        },
+        sanitizedRequest: createInstallRequest(),
         toolCallId: `custom-execution-tool-${hashSequence + 1}`,
       }),
     ],
@@ -176,10 +200,7 @@ const createMixedCustomResolution = async (resolutionRequestId = randomUUID()) =
       questionItem({
         allowedActions: ['submit_custom'],
         interactionKind: 'custom',
-        sanitizedRequest: {
-          apiName: 'installMarketplaceItem',
-          fields: [{ id: 'confirm', label: 'Install', required: true, type: 'boolean' }],
-        },
+        sanitizedRequest: createInstallRequest(),
         toolCallId: `mixed-custom-execution-tool-${hashSequence + 1}`,
       }),
       questionItem({ toolCallId: `mixed-custom-sibling-${hashSequence + 1}` }),
@@ -399,6 +420,90 @@ describe('AgentInterventionModel', () => {
       status: 'timed_out',
       workspaceId,
     });
+  });
+
+  // ROOT CAUSE:
+  // The operation/tool uniqueness constraint prevented another native approval
+  // for the same item, even after its first batch had settled. Scope uniqueness
+  // to the sealed batch so every callback retains its original review history.
+  /** @example Native callbacks can reuse one item while their durable rows remain distinct. */
+  it('preserves separate batches for repeated approvals of the same tool item', async () => {
+    const [first] = await createQuestionBatch({
+      batchId: 'native-first',
+      items: [questionItem({ toolCallId: 'native-item' })],
+    });
+    const [second] = await createQuestionBatch({
+      batchId: 'native-second',
+      items: [questionItem({ toolCallId: 'native-item' })],
+    });
+    /** @example The second callback gets a new durable identity. */
+    expect(second.id).not.toBe(first.id);
+    const original = await serverDB
+      .select()
+      .from(agentInterventions)
+      .where(eq(agentInterventions.id, first.id));
+    /** @example The prior batch and its review-token hash are preserved. */
+    expect(original).toEqual([first]);
+  });
+
+  // ROOT CAUSE:
+  // Codex can ask again for one native item. Looking up only operation/tool
+  // identity selected the earlier durable row and could settle the wrong card.
+  // The callback and batch now fence each individual native request.
+  /** @example Two approvals for one item remain distinct after a server restart. */
+  it('locates an exact native callback when the tool item is reused', async () => {
+    const firstItem = questionItem({ toolCallId: 'native-item' });
+    const secondItem = questionItem({ toolCallId: 'native-item' });
+    const [first] = await createQuestionBatch({
+      batchId: 'native-first',
+      items: [
+        {
+          ...firstItem,
+          sanitizedRequest: { ...firstItem.sanitizedRequest, interventionId: 'callback-first' },
+        },
+      ],
+    });
+    const [second] = await createQuestionBatch({
+      batchId: 'native-second',
+      items: [
+        {
+          ...secondItem,
+          sanitizedRequest: { ...secondItem.sanitizedRequest, interventionId: 'callback-second' },
+        },
+      ],
+    });
+
+    /** @example A pair-only legacy lookup must reject ambiguous native history. */
+    await expect(
+      AgentInterventionModel.locateByOperationAndToolCall(serverDB, operationId, 'native-item'),
+    ).rejects.toThrow('Ambiguous intervention callback');
+    /** @example A cold producer receipt locates the second callback precisely. */
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(
+        serverDB,
+        operationId,
+        'native-item',
+        { interventionId: 'callback-second' },
+      ),
+    ).toMatchObject({ id: second.id });
+    /** @example A review token's batch keeps its original item identity. */
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(
+        serverDB,
+        operationId,
+        'native-item',
+        { batchId: 'native-first' },
+      ),
+    ).toMatchObject({ id: first.id });
+    /** @example Mixing an old callback with a new batch cannot resolve either item. */
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(
+        serverDB,
+        operationId,
+        'native-item',
+        { batchId: 'native-second', interventionId: 'callback-first' },
+      ),
+    ).toBeUndefined();
   });
 
   it('requires complete identity equality for idempotent create', async () => {
@@ -675,10 +780,7 @@ describe('AgentInterventionModel', () => {
         questionItem({
           allowedActions: ['submit_custom'],
           interactionKind: 'custom',
-          sanitizedRequest: {
-            apiName: 'installMarketplaceItem',
-            fields: [{ id: 'confirm', label: 'Install', required: true, type: 'boolean' }],
-          },
+          sanitizedRequest: createInstallRequest(),
           toolCallId: 'custom-1',
         }),
         questionItem({ toolCallId: 'question-2' }),
@@ -739,11 +841,7 @@ describe('AgentInterventionModel', () => {
       const results = await Promise.all(
         Array.from({ length: 8 }, () =>
           model.claimCustomExecution(
-            {
-              inputHash,
-              leaseDurationMs,
-              resolutionRequestId: resolution.resolutionRequestId,
-            },
+            createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId),
             now,
           ),
         ),
@@ -758,11 +856,7 @@ describe('AgentInterventionModel', () => {
     it('returns in_progress without exposing the live lease token', async () => {
       const { resolution } = await createCustomResolution();
       const now = new Date('2026-08-26T10:00:00.000Z');
-      const params = {
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId);
       expect(await model.claimCustomExecution(params, now)).toMatchObject({
         attempt: 1,
         outcome: 'applied',
@@ -780,11 +874,9 @@ describe('AgentInterventionModel', () => {
       );
 
       expect(
-        await model.claimCustomExecution({
-          inputHash,
-          leaseDurationMs,
-          resolutionRequestId: resolution.resolutionRequestId,
-        }),
+        await model.claimCustomExecution(
+          createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId),
+        ),
       ).toEqual({ outcome: 'conflict' });
       expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
         customExecutionAttempt: 0,
@@ -802,11 +894,9 @@ describe('AgentInterventionModel', () => {
       );
       expect(terminalRows[0].status).toBe('session_ended');
       expect(
-        await model.claimCustomExecution({
-          inputHash,
-          leaseDurationMs,
-          resolutionRequestId: resolution.resolutionRequestId,
-        }),
+        await model.claimCustomExecution(
+          createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId),
+        ),
       ).toEqual({ outcome: 'conflict' });
       expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
         customExecutionState: 'pending',
@@ -817,11 +907,7 @@ describe('AgentInterventionModel', () => {
     it('protects an executing winner while terminalizing its pending sibling', async () => {
       const { resolution, rows } = await createMixedCustomResolution();
       const now = new Date('2026-08-26T10:00:00.000Z');
-      const params = {
-        inputHash,
-        leaseDurationMs: 1000,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, 1000, resolution.resolutionRequestId);
       const claimed = await model.claimCustomExecution(params, now);
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
 
@@ -849,11 +935,9 @@ describe('AgentInterventionModel', () => {
 
     it('replays the exact completed result and conflicts on input or result drift', async () => {
       const { resolution, row } = await createCustomResolution();
-      const claimed = await model.claimCustomExecution({
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      });
+      const claimed = await model.claimCustomExecution(
+        createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId),
+      );
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
 
       const result = {
@@ -861,12 +945,9 @@ describe('AgentInterventionModel', () => {
         pluginState: { agentIds: ['agent-a', 'agent-b'], source: 'marketplace' },
       };
       expect(
-        await model.completeCustomExecution({
-          inputHash,
-          leaseToken: claimed.leaseToken,
-          resolutionRequestId: resolution.resolutionRequestId,
-          result,
-        }),
+        await model.completeCustomExecution(
+          createCompletion(inputHash, claimed.leaseToken, resolution.resolutionRequestId, result),
+        ),
       ).toEqual({ outcome: 'completed', result });
       expect(
         await model.completeCustomExecution({
@@ -888,11 +969,9 @@ describe('AgentInterventionModel', () => {
         }),
       ).toEqual({ outcome: 'conflict' });
       expect(
-        await model.claimCustomExecution({
-          inputHash,
-          leaseDurationMs,
-          resolutionRequestId: resolution.resolutionRequestId,
-        }),
+        await model.claimCustomExecution(
+          createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId),
+        ),
       ).toEqual({ outcome: 'completed', result });
       expect(
         await model.claimCustomExecution({
@@ -914,11 +993,7 @@ describe('AgentInterventionModel', () => {
     it('takes over an expired lease and fences the stale completion', async () => {
       const { resolution } = await createCustomResolution();
       const now = new Date('2026-08-26T10:00:00.000Z');
-      const params = {
-        inputHash,
-        leaseDurationMs: 1000,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, 1000, resolution.resolutionRequestId);
       const first = await model.claimCustomExecution(params, now);
       if (first.outcome !== 'applied') throw new Error('first execution lease claim failed');
       const second = await model.claimCustomExecution(params, new Date(now.getTime() + 1000));
@@ -947,21 +1022,14 @@ describe('AgentInterventionModel', () => {
 
     it('protects a completed winner from terminal teardown and replays its result', async () => {
       const { resolution, rows } = await createMixedCustomResolution();
-      const params = {
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId);
       const claimed = await model.claimCustomExecution(params);
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
       const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
       expect(
-        await model.completeCustomExecution({
-          inputHash,
-          leaseToken: claimed.leaseToken,
-          resolutionRequestId: resolution.resolutionRequestId,
-          result,
-        }),
+        await model.completeCustomExecution(
+          createCompletion(inputHash, claimed.leaseToken, resolution.resolutionRequestId, result),
+        ),
       ).toEqual({ outcome: 'completed', result });
 
       await model.markBatchTerminal(
@@ -978,21 +1046,14 @@ describe('AgentInterventionModel', () => {
 
     it('keeps a heterogeneous completed result replayable after producer ACK', async () => {
       const { resolution } = await createCustomResolution();
-      const params = {
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId);
       const claimed = await model.claimCustomExecution(params);
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
       const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
       expect(
-        await model.completeCustomExecution({
-          inputHash,
-          leaseToken: claimed.leaseToken,
-          resolutionRequestId: resolution.resolutionRequestId,
-          result,
-        }),
+        await model.completeCustomExecution(
+          createCompletion(inputHash, claimed.leaseToken, resolution.resolutionRequestId, result),
+        ),
       ).toEqual({ outcome: 'completed', result });
 
       expect((await model.markResolutionPublished(resolution.resolutionRequestId)).outcome).toBe(
@@ -1010,11 +1071,7 @@ describe('AgentInterventionModel', () => {
 
     it('keeps the original execution active when its claim wins before rollback', async () => {
       const { resolution } = await createCustomResolution();
-      const params = {
-        inputHash,
-        leaseDurationMs: 1000,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, 1000, resolution.resolutionRequestId);
       const now = new Date('2026-08-26T10:00:00.000Z');
       const claimed = await model.claimCustomExecution(params, now);
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
@@ -1027,31 +1084,24 @@ describe('AgentInterventionModel', () => {
         await model.claimCustomExecution(params, new Date(now.getTime() + 1000)),
       ).toMatchObject({ attempt: 2, outcome: 'applied' });
       expect(
-        await model.completeCustomExecution({
-          inputHash,
-          leaseToken: claimed.leaseToken,
-          resolutionRequestId: resolution.resolutionRequestId,
-          result,
-        }),
+        await model.completeCustomExecution(
+          createCompletion(inputHash, claimed.leaseToken, resolution.resolutionRequestId, result),
+        ),
       ).toEqual({ outcome: 'conflict' });
     });
 
     it('replays the durable result when completion wins before rollback', async () => {
       const { resolution, row } = await createCustomResolution();
-      const params = {
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId);
       const claimed = await model.claimCustomExecution(params);
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
       const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
-      const completion = {
+      const completion = createCompletion(
         inputHash,
-        leaseToken: claimed.leaseToken,
-        resolutionRequestId: resolution.resolutionRequestId,
+        claimed.leaseToken,
+        resolution.resolutionRequestId,
         result,
-      };
+      );
 
       expect(await model.completeCustomExecution(completion)).toEqual({
         outcome: 'completed',
@@ -1082,11 +1132,9 @@ describe('AgentInterventionModel', () => {
 
     it('rejects terminal writes from old instances once custom execution has started', async () => {
       const { resolution } = await createCustomResolution();
-      const claimed = await model.claimCustomExecution({
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      });
+      const claimed = await model.claimCustomExecution(
+        createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId),
+      );
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
 
       const oldTerminalWrite = (status: 'rolled_back' | 'session_ended' | 'timed_out') =>
@@ -1100,12 +1148,9 @@ describe('AgentInterventionModel', () => {
 
       const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
       expect(
-        await model.completeCustomExecution({
-          inputHash,
-          leaseToken: claimed.leaseToken,
-          resolutionRequestId: resolution.resolutionRequestId,
-          result,
-        }),
+        await model.completeCustomExecution(
+          createCompletion(inputHash, claimed.leaseToken, resolution.resolutionRequestId, result),
+        ),
       ).toEqual({ outcome: 'completed', result });
       for (const status of ['rolled_back', 'session_ended', 'timed_out'] as const) {
         await expect(oldTerminalWrite(status)).rejects.toThrow();
@@ -1118,11 +1163,7 @@ describe('AgentInterventionModel', () => {
 
     it('rejects the wrong lease, wrong owner, invalid hash, and out-of-bounds duration', async () => {
       const { resolution } = await createCustomResolution();
-      const params = {
-        inputHash,
-        leaseDurationMs,
-        resolutionRequestId: resolution.resolutionRequestId,
-      };
+      const params = createLeaseClaim(inputHash, leaseDurationMs, resolution.resolutionRequestId);
       const claimed = await model.claimCustomExecution(params);
       if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
       const result = { content: 'Installed', pluginState: {} };

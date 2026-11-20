@@ -2,7 +2,12 @@ import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { describe, expect, it } from 'vitest';
 
 import type { QuotaReadingRow } from './quotaViewModel';
-import { buildClaudePanelSnapshot, isQuotaStale, newestCapturedAt } from './quotaViewModel';
+import {
+  buildClaudePanelSnapshot,
+  isQuotaStale,
+  isScopedQuotaModel,
+  newestCapturedAt,
+} from './quotaViewModel';
 
 const reset = Date.parse('2026-07-21T14:00:00Z');
 const sessionReset = Date.parse('2026-07-18T20:50:00Z');
@@ -170,6 +175,31 @@ describe('buildClaudePanelSnapshot — folding in a live sample', () => {
     expect(snap.weekly).toMatchObject({ usedPercent: 9 }); // live 07:00 beats persisted 06:00
   });
 
+  it('drops a persisted session the live sample no longer reports (Max upgraded to Ultra)', () => {
+    // Persisted while the account was on Max; that window ended hours before
+    // the live Ultra sample, which reports no 5-hour limit at all.
+    const afterSessionReset = sessionReset + 60 * 60_000;
+    const ultraLive: ClaudeCodeQuotaSnapshot = {
+      ...live,
+      readings: [
+        liveReading({
+          capturedAt: afterSessionReset,
+          limitType: 'weekly_all',
+          resetsAt: reset,
+          utilization: 9,
+        }),
+      ],
+      scopedWeekly: null,
+      session: null,
+      updatedAt: afterSessionReset,
+    };
+
+    const snap = buildClaudePanelSnapshot(account, readings, ultraLive, afterSessionReset);
+
+    expect(snap.session).toBeNull();
+    expect(snap.weekly).toMatchObject({ usedPercent: 9 });
+  });
+
   it('fills a limit the account has no reading for from the sample', () => {
     const snap = buildClaudePanelSnapshot(account, [readings[1]], live, now);
 
@@ -244,5 +274,26 @@ describe('isQuotaStale', () => {
 
     expect(snap.updatedAt).toBe(Date.parse('2026-07-18T08:50:00Z'));
     expect(isQuotaStale(new Date(snap.updatedAt), now, 5 * 60_000)).toBe(true);
+  });
+});
+
+describe('isScopedQuotaModel', () => {
+  it('matches the selected model by alias or full id', () => {
+    expect(isScopedQuotaModel('fable', 'Fable')).toBe(true);
+    expect(isScopedQuotaModel('claude-fable-5-2', 'Fable')).toBe(true);
+  });
+
+  it('matches a multi-word display name by its model family', () => {
+    expect(isScopedQuotaModel('fable', 'Claude Fable 5')).toBe(true);
+    expect(isScopedQuotaModel('opus', 'Claude Fable 5')).toBe(false);
+  });
+
+  it('does not treat the CLI default as selecting the scoped model', () => {
+    expect(isScopedQuotaModel('default', 'Fable')).toBe(false);
+  });
+
+  it('does not match another model or no selection', () => {
+    expect(isScopedQuotaModel('opus', 'Fable')).toBe(false);
+    expect(isScopedQuotaModel(undefined, 'Fable')).toBe(false);
   });
 });

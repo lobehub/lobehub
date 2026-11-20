@@ -141,6 +141,32 @@ describe('builtin agent replica', () => {
     expect(sync.result.current.isLoading).toBe(false);
   });
 
+  it('never exposes a builtin id before its config is in agentMap', async () => {
+    const id = `agent-builder-${randomUUID()}`;
+    vi.mocked(agentService.getBuiltinAgent).mockResolvedValue(builtin(id, { avatar: '🤖' }));
+
+    // Readers such as AgentBuilderWelcome render `agentMap[builtinAgentIdMap[slug]]`
+    // in the same render that first sees the id, before any layout effect runs.
+    const missingConfig: string[] = [];
+    const unsubscribe = useAgentStore.subscribe((state) => {
+      const builtinId = state.builtinAgentIdMap['agent-builder'];
+      if (builtinId && !state.agentMap[builtinId]) missingConfig.push(builtinId);
+    });
+
+    renderHook(
+      () => useAgentStore.getState().useInitBuiltinAgent('agent-builder', { isLogin: true }),
+      { wrapper },
+    );
+
+    await waitFor(() =>
+      expect(useAgentStore.getState().builtinAgentIdMap['agent-builder']).toBe(id),
+    );
+    unsubscribe();
+
+    expect(missingConfig).toEqual([]);
+    expect(useAgentStore.getState().agentMap[id]).toMatchObject({ avatar: '🤖' });
+  });
+
   it('drops the previous identity’s builtin before the next one paints', async () => {
     vi.mocked(agentService.getBuiltinAgent).mockResolvedValue(builtin('inbox-a'));
     const sync = renderHook(
@@ -203,6 +229,32 @@ describe('builtin agent replica', () => {
     expect(
       (await builtinAgentResource.storage!.get({ queryKey: PERSIST_KEY, scope: switched }))?.data,
     ).toBeUndefined();
+  });
+
+  it('does not let a sync request from before an edit overwrite the post-edit refresh', async () => {
+    const answers: ((value: any) => void)[] = [];
+    vi.mocked(agentService.getBuiltinAgent).mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+
+    // The mounted sync asks first, then an edit refreshes the builtin.
+    renderHook(() => useAgentStore.getState().useInitBuiltinAgent('inbox', { isLogin: true }), {
+      wrapper,
+    });
+    await waitFor(() => expect(answers).toHaveLength(1));
+    const refresh = useAgentStore.getState().refreshBuiltinAgent('inbox');
+    // The refresh never reuses the pre-edit request.
+    expect(answers).toHaveLength(2);
+
+    await act(async () => {
+      answers[1](builtin('inbox-1', { name: 'Edited chief' }));
+      await refresh;
+    });
+    // The pre-edit read answers last.
+    await act(async () => answers[0](builtin('inbox-1', { name: 'Old chief' })));
+
+    expect(useAgentStore.getState().builtinAgentMap.inbox).toMatchObject({ name: 'Edited chief' });
+    expect(useAgentStore.getState().agentMap['inbox-1']).toMatchObject({ name: 'Edited chief' });
   });
 
   it('confirms a meta-edit response on the builtin without a network round-trip', () => {

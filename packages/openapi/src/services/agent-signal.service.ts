@@ -6,7 +6,11 @@ import type {
 import type { LobeChatDatabase } from '@/database/type';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
-import { buildTriggerSourceEvent } from '@/server/services/agentSignal/triggerSourceEvent';
+import { assertAgentSignalTriggerRateLimit } from '@/server/services/agentSignal/triggerRateLimit';
+import {
+  buildTriggerSourceEvent,
+  resolveTriggerSourceEventAgentId,
+} from '@/server/services/agentSignal/triggerSourceEvent';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
@@ -51,8 +55,13 @@ export class AgentSignalRestService extends BaseService {
       userId: this.userId,
     });
 
+    // Authorize the agent the payload targets, including one set via `payloadOverride.agentId`.
+    const agentId = resolveTriggerSourceEventAgentId(sourceEvent, input.agentId);
+
+    await assertAgentSignalTriggerRateLimit(this.userId);
+
     return enqueueAgentSignalSourceEvent(sourceEvent, {
-      agentId: input.agentId,
+      agentId,
       userId: this.userId,
       workspaceId: this.workspaceId,
     });

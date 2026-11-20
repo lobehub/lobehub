@@ -1,17 +1,20 @@
+import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { BrowserIdentifier } from '@lobechat/builtin-tool-browser';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
 } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { SkillsApiName, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
-import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
@@ -36,7 +39,6 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
       'lobe-local-system',
       'lobe-creds',
       'lobe-task',
-      TopicReferenceIdentifier,
     ]) {
       expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier)).toBe(false);
     }
@@ -188,6 +190,30 @@ describe('isShareBlockedBuiltinDispatch', () => {
     expect(isShareBlockedBuiltinDispatch({}, CalculatorIdentifier, 'evalExpression')).toBe(true);
   });
 
+  it('decides device builtins by the share device grant alone, not toolGrants', () => {
+    for (const identifier of [BrowserIdentifier, LocalSystemIdentifier]) {
+      expect(
+        isShareBlockedBuiltinDispatch({ toolGrants: [{ identifier }] }, identifier, 'anyApi'),
+      ).toBe(true);
+      expect(isShareBlockedBuiltinDispatch({ canUseDevice: true }, identifier, 'anyApi')).toBe(
+        false,
+      );
+      expect(isShareBlockedDataToolCall({ canUseDevice: true }, identifier, 'anyApi')).toBe(false);
+      expect(isShareBlockedDataToolCall({}, identifier, 'anyApi')).toBe(true);
+    }
+  });
+
+  // The visitor runs on the device the Agent's execution environment routes
+  // to; the picker would let the visitor's model switch to the creator's
+  // other machines.
+  it('blocks the remote-device picker even under the share device grant', () => {
+    for (const apiName of ['listOnlineDevices', 'activateDevice']) {
+      expect(
+        isShareBlockedBuiltinDispatch({ canUseDevice: true }, RemoteDeviceIdentifier, apiName),
+      ).toBe(true);
+    }
+  });
+
   it('passes an enabled builtin with no intervention semantics', () => {
     expect(
       isShareBlockedBuiltinDispatch(
@@ -220,6 +246,13 @@ describe('isShareBlockedBuiltinDispatch', () => {
         { toolGrants: [{ identifier: LobeAgentIdentifier }] },
         LobeAgentIdentifier,
         LobeAgentApiName.callSubAgent,
+      ),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: LobeAgentIdentifier }] },
+        LobeAgentIdentifier,
+        LobeAgentApiName.cancelSubAgent,
       ),
     ).toBe(true);
   });
@@ -333,6 +366,65 @@ describe('isShareBlockedBuiltinDispatch', () => {
     // per-API scoping is what blocks it here.
     expect(
       isShareBlockedBuiltinDispatch(enabled, LobeAgentIdentifier, LobeAgentApiName.updatePlan),
+    ).toBe(true);
+  });
+});
+
+describe('isShareBlockedBuiltinDispatch — lobe-activator', () => {
+  it('allows activateTools once the share grants any tool', () => {
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: CalculatorIdentifier }] },
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateTools,
+      ),
+    ).toBe(false);
+  });
+
+  it('blocks the activator on a share that grants no tool', () => {
+    expect(
+      isShareBlockedBuiltinDispatch({}, LobeActivatorIdentifier, ActivatorApiName.activateTools),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { skillGrants: ['pdf-report'] },
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateTools,
+      ),
+    ).toBe(true);
+  });
+
+  it('blocks the runtime-only activateSkill method even under a stored toolset-level entry', () => {
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: LobeActivatorIdentifier }, { identifier: 'mcp-github' }] },
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateSkill,
+      ),
+    ).toBe(true);
+  });
+
+  it('still blocks an ungranted builtin called after an activation in the same run', () => {
+    // Activation only changes what the model is offered. The call itself is
+    // re-checked against the share grant at dispatch.
+    const permissions = { toolGrants: [{ identifier: CalculatorIdentifier }] };
+
+    expect(
+      isShareBlockedBuiltinDispatch(
+        permissions,
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateTools,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        permissions,
+        LobeAgentIdentifier,
+        LobeAgentApiName.analyzeMedia,
+      ),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(permissions, AgentManagementIdentifier, 'searchAgent'),
     ).toBe(true);
   });
 });

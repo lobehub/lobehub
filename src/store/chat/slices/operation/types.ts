@@ -4,6 +4,9 @@ import type {
   MessageMetadata,
   UploadFileItem,
 } from '@lobechat/types';
+import { mergeMcpAppSource } from '@lobechat/types';
+
+import type { QueuedFollowUpRequest } from '@/services/aiAgent';
 
 /**
  * Operation Type Definitions
@@ -132,6 +135,12 @@ export interface OperationMetadata {
   // Cancel information
   cancelReason?: string;
   duration?: number;
+  /**
+   * The run ended without completing — stopped from another tab, device or the
+   * API — though it settles as `completed` here. Nothing drains its queue next.
+   */
+  endedWithoutCompletion?: boolean;
+
   endTime?: number;
 
   // Error information
@@ -142,16 +151,45 @@ export interface OperationMetadata {
     details?: any;
   };
 
+  /**
+   * One-use automatic retry grant for a run explicitly dispatched by this client.
+   * Consumed by the error card; absent for restored/reconnected operations.
+   * @default undefined
+   */
+  heteroAutoRetryAvailable?: boolean;
+
+  /**
+   * External heterogeneous producer (e.g. `claude-code`) the server dispatched
+   * this Gateway run to. `null` denotes the native AgentRuntime; `undefined`
+   * means an older server or topic marker did not report it, so it may still
+   * be an external producer.
+   * @default undefined
+   */
+  heteroType?: string | null;
+
   // UI state (for sendMessage operation)
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
-
   inputSendErrorMsg?: string; // Error message to display in UI
+  /**
+   * A heterogeneous CLI run (Claude Code) whose producer types queued follow-ups
+   * into its live session, so its queue drains at the next step, not the run end.
+   */
+  liveSteer?: boolean;
+  /**
+   * User-facing LLM-call total for the running operation.
+   *
+   * Counts only actual model invocations — tool-only runtime iterations do not
+   * increment it. `stepCount` in operation metadata remains the internal
+   * scheduling/execution index.
+   */
+  llmCalls?: number;
   // Progress information
   progress?: {
     current: number;
     total: number;
     percentage?: number;
   };
+
   // Runtime hooks (collected during execution, executed after completion)
   runtimeHooks?: RuntimeHooks;
 
@@ -164,6 +202,13 @@ export interface OperationMetadata {
 
   // Performance information
   startTime: number;
+
+  /**
+   * Follow-up behavior is Steer, but this run cannot take a message mid-run
+   * (an agent with no native steer): its queue waits for the run end, and the
+   * tray says so.
+   */
+  steerUnsupported?: boolean;
 
   /**
    * Upstream stream retry state surfaced by heterogeneous agents while no
@@ -240,6 +285,8 @@ export interface QueuedFile {
   /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
   mimeType: string;
   name: string;
+  /** Byte size, so the sent bubble's file card shows it before the server answers. */
+  size?: number;
   /** Preview URL — S3 URL for uploaded files, blob/base64 for in-memory items */
   url: string;
 }
@@ -248,18 +295,51 @@ export interface QueuedFile {
  * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
  * `sendMessage` can derive audioList/imageList/videoList AND so we can repopulate
  * `chatUploadFileList` when the user edits a queued message. The synthesized
- * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
- * read `file.name`, `file.type`, plus the URL fields we set below.
+ * `File` carries only `name`, `type` and the snapshotted `size` (zero bytes of
+ * content) — the consumers we hit only read `file.name`, `file.type`,
+ * `file.size`, plus the URL fields we set below.
  *
  * We mirror the snapshotted `url` into both `fileUrl` and `previewUrl`: the
  * optimistic-message path uses the `fileUrl || base64Url || previewUrl` fallback
  * chain, while the desktop chat-input file preview only reads `previewUrl`.
  */
+/**
+ * Snapshot file previews so the tray can render thumbnails and the resumed
+ * sendMessage can rebuild audioList/imageList/videoList — by the time the
+ * queue drains, chatUploadFileList has long been cleared.
+ */
+export const snapshotQueuedFiles = (files?: UploadFileItem[]): QueuedFile[] | undefined => {
+  if (!files?.length) return undefined;
+
+  return files.map((f) => ({
+    audioMetadata: f.audioMetadata,
+    id: f.id,
+    mimeType: f.fileType || f.file?.type || '',
+    name: f.file?.name ?? f.id,
+    size: f.file?.size,
+    url: f.fileUrl || f.base64Url || f.previewUrl || '',
+  }));
+};
+
+/** Placeholders rebuilt from a queued preview saved without its size (older clients). */
+const sizeUnknownPlaceholders = new WeakSet<File>();
+
+/** Whether `file` stands in for a queued upload whose real size was never recorded. */
+export const isSizeUnknownPlaceholder = (file: File) => sizeUnknownPlaceholders.has(file);
+
+/** A zero-byte `File` that reports the original upload's size. */
+const placeholderFile = ({ mimeType, name, size }: QueuedFile) => {
+  const file = new File([], name, { type: mimeType });
+  if (size === undefined) sizeUnknownPlaceholders.add(file);
+  else Object.defineProperty(file, 'size', { value: size });
+  return file;
+};
+
 export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
   files.map((f) => ({
     audioMetadata: f.audioMetadata,
     id: f.id,
-    file: new File([], f.name, { type: f.mimeType }),
+    file: placeholderFile(f),
     fileUrl: f.url || undefined,
     previewUrl: f.url || undefined,
     status: 'success',
@@ -279,10 +359,68 @@ export interface QueuedMessage {
   /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
    *  keeps its gateway pin when the queue drains. */
   forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /**
+   * The untracked heterogeneous run this follow-up was handed to the server
+   * behind. A later refusal releases exactly that run's marker, so the local
+   * fallback send does not queue behind it again.
+   */
+  heldBehindOperationId?: string;
   id: string;
   interruptMode: 'soft' | 'hard';
+  /**
+   * A merged steer being written into a local agent session (Follow-up
+   * behavior: Steer): `delivering` until the agent reads it, `unknown` when
+   * the write failed and it may or may not have arrived. An `unknown` one is
+   * never sent on its own; the user sends it again or deletes it.
+   */
+  localSteer?: 'delivering' | 'unknown';
   metadata?: MessageMetadata;
+  /**
+   * A run already took this follow-up from the server queue and is handing it
+   * to the agent (a live Claude Code session reads it after its current step).
+   * It can no longer be edited, sent now or deleted; it leaves the tray once
+   * the agent confirms it, or turns back into a waiting entry if that fails.
+   */
+  serverDelivering?: boolean;
+  /**
+   * Where the server holds this follow-up: `appending` while it is being
+   * handed to the server queue behind the running Gateway run, `server` once
+   * it is there. The server then joins it into that run or starts it as the
+   * next turn, so this client never sends it. Unset: only this client has it.
+   */
+  serverDelivery?: 'appending' | 'server';
+  /**
+   * The run request the server starts this follow-up with. Set when the send
+   * could be queued on the server; such an item may be handed over later.
+   */
+  serverRequest?: QueuedFollowUpRequest;
+  /**
+   * The append's answer was lost, so it may or may not be on the server. It
+   * stays the server's — never sent from here — until the same id is appended
+   * again and the server says where it is.
+   */
+  serverUnconfirmed?: boolean;
 }
+
+/**
+ * Whether the queued message is one a send can take: a steer that may already
+ * be with the agent (`localSteer: 'unknown'`) is never sent on its own, so it
+ * holds no turn and no queue hand-off back.
+ */
+export const isSendableQueuedMessage = (message: QueuedMessage): boolean =>
+  message.localSteer !== 'unknown';
+
+/** Whether only this client holds the queued message, so only it can send it. */
+export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
+  !message.serverDelivery;
+
+/**
+ * Whether a run already took the queued message from the server and is
+ * handing it to the agent. Only a message the server still holds counts: one
+ * taken back to this client is waiting here again, whatever flag it kept.
+ */
+export const isServerDeliveringQueuedMessage = (message: QueuedMessage): boolean =>
+  message.serverDelivery === 'server' && !!message.serverDelivering;
 
 /**
  * Merged message ready for injection
@@ -338,6 +476,7 @@ const normalizeQueuedEditorData = (message: QueuedMessage): Record<string, any> 
 };
 
 const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> | undefined => {
+  if (!messages.some((message) => message.editorData?.root)) return undefined;
   const mergedChildren: any[] = [];
   let baseRoot: Record<string, any> | undefined;
 
@@ -400,6 +539,13 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
       ...(pageSelections.length ? { pageSelections } : undefined),
     };
   }, undefined);
+  // The spread above keeps the last view; a merge keeps it only when every
+  // message came from that view.
+  if (metadata) {
+    delete metadata.mcpAppSource;
+    const mcpAppSource = mergeMcpAppSource(sorted.map((m) => m.metadata?.mcpAppSource));
+    if (mcpAppSource) metadata.mcpAppSource = mcpAppSource;
+  }
 
   // If any queued message pins the runtime, propagate it — a "server topic"
   // follow-up must stay on its rails even after merge.
@@ -420,7 +566,7 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
  */
 export interface OperationFilter {
   agentId?: string;
-  groupId?: string;
+  groupId?: string | null;
   isNew?: boolean;
   messageId?: string;
   scope?: MessageMapScope;
@@ -488,12 +634,13 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // after the round-trips. See INTERIM_LOADING_OPERATION_TYPES for the bridge
   // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
   //
-  // Known limitation (accepted): this also makes Stop appear during the pre-
-  // generation window. The approve/submit/skip gateway branches don't forward
-  // `parentOperationId` to `executeGatewayAgent`, so hitting Stop in that
-  // narrow window doesn't actually abort the in-flight request (loading
-  // briefly flickers, generation proceeds). No stuck state; wiring the abort
-  // handoff through those branches is deferred. The `regenerate` branch DOES
+  // This also makes Stop appear during the pre-generation window. The approve
+  // gateway branches forward `parentOperationId` to `executeGatewayAgent`, so
+  // Stop there interrupts the resumed run: approval cards resolve instantly
+  // and no longer cover the composer, which keeps this window reachable.
+  // Known limitation (accepted): the submit/skip gateway branches don't
+  // forward it yet, so Stop in that narrow window doesn't abort (loading
+  // briefly flickers, generation proceeds). The `regenerate` branch DOES
   // forward it — an unsettled regenerate wrapper is what the retry guard
   // reads, so it must never outlive phase-1 (a WS drop before session end
   // would otherwise brick retry for that turn permanently).

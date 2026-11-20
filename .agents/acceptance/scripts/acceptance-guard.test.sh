@@ -88,23 +88,23 @@ assert_contains "$(stub_args)" "start --state-dir $TEST_TMP/state"
 assert_contains "$(stub_args)" "--run-tag lobehub-acceptance-test"
 assert_contains "$(stub_args)" "--group browser=Google Chrome for Testing"
 assert_contains "$(stub_args)" "--group devserver=next-server|vite"
-assert_contains "$(stub_args)" "--group typecheck=tsgo"
-assert_contains "$(stub_args)" "--yellow swap=60,free=20"
-assert_contains "$(stub_args)" "--red swap=80,free=8"
+assert_contains "$(stub_args)" "--group typecheck=tsrs"
+assert_contains "$(stub_args)" "--yellow free=20"
+assert_contains "$(stub_args)" "--red free=8"
 assert_contains "$(stub_args)" "--on-red stop-owned"
 
 # A run may retune the thresholds without editing the adapter.
-export ACCEPTANCE_GUARD_RED='swap=95,free=4'
+export ACCEPTANCE_GUARD_RED='free=4'
 adapter start
-assert_contains "$(stub_args)" "--red swap=95,free=4"
-export ACCEPTANCE_GUARD_RED='swap=80,free=8'
+assert_contains "$(stub_args)" "--red free=4"
+export ACCEPTANCE_GUARD_RED='free=8'
 
 # check tiers on the same thresholds as the watcher, so a run cannot read one tier
 # from the one-shot and be acted on by another.
 adapter check --json
 assert_contains "$(stub_args)" "check --state-dir $TEST_TMP/state"
-assert_contains "$(stub_args)" "--yellow swap=60,free=20"
-assert_contains "$(stub_args)" "--red swap=80,free=8"
+assert_contains "$(stub_args)" "--yellow free=20"
+assert_contains "$(stub_args)" "--red free=8"
 assert_contains "$(stub_args)" "--json"
 
 # Every claimed pid is forwarded, and an empty claim is a usage error.

@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Flexbox, useTheme } from '@lobehub/ui';
 import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
 
@@ -7,6 +6,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { useIsDark } from '@/hooks/useIsDark';
 
 import HomeAgentIdSync from './HomeAgentIdSync';
+import { isHomePathname } from './isHomePathname';
 import RecentSync from './RecentSync';
 import { styles } from './style';
 
@@ -19,9 +19,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const { pathname } = useLocation();
   const activeSlug = useActiveWorkspaceSlug();
-  const isHomeRoute =
-    pathname === '/' ||
-    (!!activeSlug && (pathname === `/${activeSlug}` || pathname === `/${activeSlug}/`));
+  const isHomeRoute = isHomePathname(pathname, activeSlug);
   const [hasActivated, setHasActivated] = useState(isHomeRoute);
   const content = children ?? <Outlet />;
 

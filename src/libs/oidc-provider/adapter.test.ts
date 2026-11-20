@@ -95,6 +95,20 @@ describe('OIDCAdapter (DrizzleAdapter)', () => {
       expect(result).toBeUndefined();
     });
 
+    it('returns undefined for a web app whose secret has not been generated yet', async () => {
+      const db = createSelectDb([
+        {
+          ...clientRow,
+          applicationType: 'web',
+          clientSecret: null,
+          tokenEndpointAuthMethod: 'client_secret_post',
+        },
+      ]);
+      const adapter = new DrizzleAdapter('Client', db as any);
+
+      expect(await adapter.find('lca_client_1')).toBeUndefined();
+    });
+
     it('hands oidc-provider the decrypted client secret', async () => {
       mockDecrypt.mockResolvedValue({ plaintext: 'lcs_plain', wasAuthentic: true });
       const db = createSelectDb([{ ...clientRow, clientSecret: 'iv:tag:cipher' }]);

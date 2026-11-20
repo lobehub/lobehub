@@ -75,9 +75,13 @@ export const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
   {
     apiName: 'press',
     description:
-      'Send a keyboard key to the in-app browser page, e.g. Enter, Tab, Escape, ArrowDown.',
+      'Send a key or key combination to the focused element in the in-app browser, e.g. Enter, Tab, ArrowDown, Control+a, Shift+Tab. Use ControlOrMeta for shortcuts that are Cmd on macOS and Ctrl elsewhere (select all, copy, paste, undo).',
     inputSchema: {
-      key: z.string().describe('KeyboardEvent.key value (Enter, Tab, Escape, ArrowDown, ...).'),
+      key: z
+        .string()
+        .describe(
+          'Enter, Tab, Escape, Backspace, Delete, Space, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1–F12 or a single character, optionally prefixed with Control/Alt/Shift/Meta/ControlOrMeta joined by "+", e.g. "ControlOrMeta+a".',
+        ),
     },
     name: 'browser_press',
     title: 'Press key in in-app browser',
@@ -92,6 +96,17 @@ export const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
     },
     name: 'browser_scroll',
     title: 'Scroll in-app browser page',
+  },
+  {
+    apiName: 'setViewport',
+    description:
+      'Lay the in-app browser page out at a fixed viewport size in CSS pixels, e.g. 1440×900 to see the desktop layout or 390×844 for a phone; the panel shows it scaled down to fit. The size stays for later pages in this conversation. Omit width and height to go back to the panel size.',
+    inputSchema: {
+      height: z.number().int().optional().describe('Viewport height in CSS pixels (240–2160).'),
+      width: z.number().int().optional().describe('Viewport width in CSS pixels (320–3840).'),
+    },
+    name: 'browser_set_viewport',
+    title: 'Set in-app browser viewport',
   },
   {
     apiName: 'screenshot',

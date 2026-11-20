@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Icon, Text } from '@lobehub/ui';
 import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,15 +41,10 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
 
   const data = useMessengerData('discord');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'discord',
   });
-  const disconnectInstallation = useDisconnectInstallation({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
-  });
+  const disconnectInstallation = useDisconnectInstallation();
 
   const handleDisconnectInstallation = (id: string) =>
     canEdit &&
@@ -63,7 +57,8 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'discord'} />;
 
   const { installations, links } = data;
   const hasInstallations = installations.length > 0;

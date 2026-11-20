@@ -9,13 +9,12 @@ import {
   chatGroups,
   messages,
   projects,
-  sessions,
   topics,
   users,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { TopicModel } from '../topic';
+import { getTopicDeviceId, TopicModel } from '../topic';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -151,60 +150,6 @@ describe('TopicModel', () => {
       expect(topic.agentId).toBeNull();
       expect(topic.groupId).toBeNull();
       expect(topic.sessionId).toBeNull();
-    });
-
-    it('attaches given messages to the new topic in a transaction', async () => {
-      await serverDB.insert(messages).values([
-        { content: 'm1', id: 'msg-1', role: 'user', userId },
-        { content: 'm2', id: 'msg-2', role: 'assistant', userId },
-      ]);
-
-      const topic = await topicModel.create({ messages: ['msg-1', 'msg-2'], title: 'with msgs' });
-
-      const linked = await serverDB
-        .select({ id: messages.id, topicId: messages.topicId })
-        .from(messages)
-        .where(eq(messages.topicId, topic.id));
-
-      expect(linked.map((m) => m.id).sort()).toEqual(['msg-1', 'msg-2']);
-    });
-  });
-
-  describe('batchCreate', () => {
-    it('keeps a session topic session-scoped and a group topic group-scoped', async () => {
-      await serverDB.insert(agents).values({ id: 'agent-b', userId });
-      await serverDB.insert(sessions).values({ id: 'session-x', userId });
-      await serverDB.insert(chatGroups).values({ id: 'group-b', userId });
-
-      const created = await topicModel.batchCreate([
-        { agentId: 'agent-b', sessionId: 'session-x', title: 'session topic' },
-        { groupId: 'group-b', title: 'group topic' },
-      ]);
-
-      const bySession = created.find((t) => t.title === 'session topic')!;
-      const byGroup = created.find((t) => t.title === 'group topic')!;
-
-      // sessionId given (no groupId) → sessionId kept, groupId stays null
-      expect(bySession.sessionId).toBe('session-x');
-      expect(bySession.groupId).toBeNull();
-
-      // groupId given (no sessionId) → groupId kept, sessionId stays null
-      expect(byGroup.groupId).toBe('group-b');
-      expect(byGroup.sessionId).toBeNull();
-    });
-
-    it('drops both owner ids when sessionId and groupId are passed together', async () => {
-      await serverDB.insert(sessions).values({ id: 'session-both', userId });
-      await serverDB.insert(chatGroups).values({ id: 'group-both', userId });
-
-      // Each field is nulled based on the *other* being present, so passing both
-      // detaches the topic from both — callers must pick exactly one.
-      const [created] = await topicModel.batchCreate([
-        { groupId: 'group-both', sessionId: 'session-both', title: 'ambiguous' },
-      ]);
-
-      expect(created.sessionId).toBeNull();
-      expect(created.groupId).toBeNull();
     });
   });
 
@@ -705,6 +650,55 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('findRunInitiators', () => {
+    it("returns the member who started each topic's current run", async () => {
+      await serverDB.insert(topics).values([
+        { id: 'ri-run', status: 'running', title: 'run', userId },
+        { id: 'ri-client', status: 'running', title: 'client run', userId },
+        { id: 'ri-done', status: 'active', title: 'done', userId },
+      ]);
+      await serverDB.insert(agentOperations).values([
+        // A crashed earlier run by the creator; the live, later one wins.
+        {
+          id: 'ri-op-stale',
+          startedAt: new Date('2026-01-01T00:00:00Z'),
+          status: 'running',
+          topicId: 'ri-run',
+          userId,
+        },
+        // A teammate continued the topic the creator started.
+        {
+          id: 'ri-op-live',
+          startedAt: new Date('2026-01-02T00:00:00Z'),
+          status: 'running',
+          topicId: 'ri-run',
+          userId: otherUserId,
+        },
+        // A sub-operation never names the run's initiator.
+        {
+          id: 'ri-op-sub',
+          parentOperationId: 'ri-op-live',
+          startedAt: new Date('2026-01-03T00:00:00Z'),
+          status: 'running',
+          topicId: 'ri-run',
+          userId,
+        },
+        {
+          id: 'ri-op-done',
+          startedAt: new Date('2026-01-02T00:00:00Z'),
+          status: 'completed',
+          topicId: 'ri-done',
+          userId: otherUserId,
+        },
+      ]);
+
+      const initiators = await topicModel.findRunInitiators(['ri-run', 'ri-client', 'ri-done']);
+
+      expect([...initiators]).toEqual([['ri-run', otherUserId]]);
+      expect(await topicModel.findRunInitiators([])).toEqual(new Map());
+    });
+  });
+
   describe('queryTopics', () => {
     it('filters by the given statuses and is scoped to the owner', async () => {
       await serverDB.insert(topics).values([
@@ -715,6 +709,76 @@ describe('TopicModel', () => {
 
       const result = await topicModel.queryTopics({ statuses: ['running'] });
       expect(result.map((t) => t.id)).toEqual(['t-running']);
+    });
+
+    it('narrows to topics pinned to or dispatched on the given device', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 't-bound',
+          metadata: { boundDeviceId: 'device-a' },
+          status: 'running',
+          title: 'bound',
+          userId,
+        },
+        {
+          id: 't-dispatched',
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'msg-1',
+              deviceId: 'device-a',
+              operationId: 'op-1',
+            },
+          },
+          status: 'running',
+          title: 'dispatched',
+          userId,
+        },
+        {
+          id: 't-other-device',
+          metadata: { boundDeviceId: 'device-b' },
+          status: 'running',
+          title: 'other device',
+          userId,
+        },
+        {
+          id: 't-pinned-a-dispatched-b',
+          metadata: {
+            boundDeviceId: 'device-a',
+            runningOperation: {
+              assistantMessageId: 'msg-2',
+              deviceId: 'device-b',
+              operationId: 'op-2',
+            },
+          },
+          status: 'running',
+          title: 'dispatch wins',
+          userId,
+        },
+        { id: 't-unbound', status: 'running', title: 'unbound', userId },
+        {
+          id: 't-bound-idle',
+          metadata: { boundDeviceId: 'device-a' },
+          status: 'active',
+          title: 'idle',
+          userId,
+        },
+        {
+          id: 't-bound-other-user',
+          metadata: { boundDeviceId: 'device-a' },
+          status: 'running',
+          title: 'other user',
+          userId: otherUserId,
+        },
+      ]);
+
+      const result = await topicModel.queryTopics({ deviceId: 'device-a', statuses: ['running'] });
+      expect(result.map((t) => t.id).sort()).toEqual(['t-bound', 't-dispatched']);
+      // A run sent away from the topic's pinned device counts where it went,
+      // and only there.
+      const onB = await topicModel.queryTopics({ deviceId: 'device-b', statuses: ['running'] });
+      expect(onB.map((t) => t.id).sort()).toEqual(['t-other-device', 't-pinned-a-dispatched-b']);
+      expect(onB.map((t) => getTopicDeviceId(t.metadata))).toEqual(onB.map(() => 'device-b'));
+      expect(result.map((t) => getTopicDeviceId(t.metadata))).toEqual(result.map(() => 'device-a'));
     });
 
     it('returns all owned topics when no statuses filter is given', async () => {
@@ -1476,6 +1540,22 @@ describe('TopicModel', () => {
 
       expect(updated.metadata).toEqual({ heteroEffort: 'high' });
     });
+
+    it('writes a speed pin with the model and keeps it when a later switch omits it', async () => {
+      const topic = await topicModel.create({ model: 'a', provider: 'codex', title: 'pin' });
+
+      await topicModel.updateModelPin(topic.id, {
+        metadata: { heteroSpeed: 'fast' },
+        model: 'b',
+        provider: 'codex',
+      });
+      const [updated] = await topicModel.updateModelPin(topic.id, {
+        model: 'c',
+        provider: 'codex',
+      });
+
+      expect(updated.metadata).toEqual({ heteroSpeed: 'fast' });
+    });
   });
 
   describe('updateMetadata', () => {
@@ -1540,6 +1620,19 @@ describe('TopicModel', () => {
       expect(remaining.map((t) => t.id)).toEqual(['b3']);
     });
 
+    it('batchDeleteIncludingTrashed also removes topics sitting in the recycle bin', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'bt-live', title: 'live', userId },
+        { id: 'bt-trash', isDeleted: true, title: 'trashed', userId },
+        { id: 'bt-other', title: 'keep', userId },
+      ]);
+
+      await topicModel.batchDeleteIncludingTrashed(['bt-live', 'bt-trash']);
+
+      const remaining = await serverDB.select().from(topics);
+      expect(remaining.map((t) => t.id)).toEqual(['bt-other']);
+    });
+
     it('deleteAll removes only the calling user rows', async () => {
       await serverDB.insert(topics).values([
         { id: 'mine-1', title: '1', userId },
@@ -1568,251 +1661,6 @@ describe('TopicModel', () => {
 
       const remaining = await topicModel.queryTopics();
       expect(remaining.map((t) => t.id)).toEqual(['k1']);
-    });
-  });
-
-  describe('duplicate', () => {
-    it('copies the topic and its messages under a new id', async () => {
-      const topic = await topicModel.create({ title: 'original' });
-      await serverDB.insert(messages).values([
-        { content: 'hi', id: 'dup-m1', role: 'user', topicId: topic.id, userId },
-        { content: 'yo', id: 'dup-m2', role: 'assistant', topicId: topic.id, userId },
-      ]);
-
-      const { topic: cloned, messages: clonedMessages } = await topicModel.duplicate(
-        topic.id,
-        'copy',
-      );
-
-      expect(cloned.id).not.toBe(topic.id);
-      expect(cloned.title).toBe('copy');
-      expect(clonedMessages).toHaveLength(2);
-      expect(clonedMessages.every((m) => m.topicId === cloned.id)).toBe(true);
-      expect(clonedMessages.map((m) => m.id)).not.toContain('dup-m1');
-    });
-
-    it('marks duplicated messages and resets the topic-level rollups', async () => {
-      const usage = { cost: 0.05, totalInputTokens: 100, totalOutputTokens: 50 };
-      const topic = await topicModel.create({ title: 'billed' });
-      await serverDB
-        .update(topics)
-        .set({ totalCost: '0.05' as any, totalTokens: 150 })
-        .where(eq(topics.id, topic.id));
-      await serverDB.insert(messages).values([
-        {
-          content: 'answer',
-          id: 'dup-billed',
-          metadata: { performance: { tps: 42 }, usage },
-          role: 'assistant',
-          topicId: topic.id,
-          usage,
-          userId,
-        },
-      ]);
-
-      const { topic: cloned, messages: clonedMessages } = await topicModel.duplicate(topic.id);
-
-      // per-message figures are transcript facts and survive the copy...
-      const clone = clonedMessages[0];
-      expect(clone.usage).toEqual(usage);
-      const metadata = clone.metadata as Record<string, unknown>;
-      expect(metadata.usage).toEqual(usage);
-      expect(metadata.performance).toEqual({ tps: 42 });
-      // ...but the row is marked, so usage reports skip it
-      expect(metadata.copied).toBe(true);
-
-      // the topic rollup answers "what did this topic cost this scope", and a
-      // fresh duplicate has spent nothing yet
-      const clonedTopic = await serverDB.query.topics.findFirst({
-        where: (t, { eq: is }) => is(t.id, cloned.id),
-      });
-      expect(clonedTopic?.totalCost).toBeNull();
-      expect(clonedTopic?.totalTokens).toBeNull();
-    });
-
-    it('throws when the source topic does not exist', async () => {
-      await expect(topicModel.duplicate('nope')).rejects.toThrow('not found');
-    });
-
-    it('copies only the ancestor chain when forking up to a message', async () => {
-      const topic = await topicModel.create({ title: 'fork source' });
-      await serverDB.insert(messages).values([
-        { content: 'q1', id: 'fork-m1', role: 'user', topicId: topic.id, userId },
-        {
-          content: 'a1',
-          id: 'fork-m2',
-          parentId: 'fork-m1',
-          role: 'assistant',
-          topicId: topic.id,
-          userId,
-        },
-        {
-          content: 'q2',
-          id: 'fork-m3',
-          parentId: 'fork-m2',
-          role: 'user',
-          topicId: topic.id,
-          userId,
-        },
-      ]);
-
-      const { topic: forked, messages: forkedMessages } = await topicModel.duplicate(
-        topic.id,
-        'forked',
-        { upToMessageId: 'fork-m2' },
-      );
-
-      // only the selected prefix is copied, in root → selected order
-      expect(forkedMessages.map((m) => m.content)).toEqual(['q1', 'a1']);
-      expect(forkedMessages.every((m) => m.topicId === forked.id)).toBe(true);
-
-      // the chain is re-parented inside the fork: root stays root, child points at the copy
-      const [root, child] = forkedMessages;
-      expect(root.parentId).toBeNull();
-      expect(child.parentId).toBe(root.id);
-
-      // the unselected tail stays behind in the source topic
-      const sourceMessages = await serverDB
-        .select()
-        .from(messages)
-        .where(eq(messages.topicId, topic.id));
-      expect(sourceMessages.map((m) => m.id).sort()).toEqual(['fork-m1', 'fork-m2', 'fork-m3']);
-    });
-
-    it('leaves sibling branches out of the fork', async () => {
-      const topic = await topicModel.create({ title: 'branched source' });
-      await serverDB.insert(messages).values([
-        { content: 'q1', id: 'br-m1', role: 'user', topicId: topic.id, userId },
-        {
-          content: 'draft',
-          id: 'br-m2a',
-          parentId: 'br-m1',
-          role: 'assistant',
-          topicId: topic.id,
-          userId,
-        },
-        {
-          content: 'regenerated',
-          id: 'br-m2b',
-          parentId: 'br-m1',
-          role: 'assistant',
-          topicId: topic.id,
-          userId,
-        },
-      ]);
-
-      const { messages: forkedMessages } = await topicModel.duplicate(topic.id, 'forked', {
-        upToMessageId: 'br-m2b',
-      });
-
-      expect(forkedMessages.map((m) => m.content)).toEqual(['q1', 'regenerated']);
-    });
-
-    it('throws when the fork anchor message is not in the topic', async () => {
-      const topic = await topicModel.create({ title: 'no anchor' });
-
-      await expect(
-        topicModel.duplicate(topic.id, 'forked', { upToMessageId: 'missing' }),
-      ).rejects.toThrow('not found in topic');
-    });
-
-    it('stamps the copy with fresh activity time instead of inheriting the source date', async () => {
-      const sourceDate = new Date('2020-01-02T03:04:05Z');
-      const topic = await topicModel.create({ title: 'stale source' });
-      await serverDB.insert(messages).values([
-        {
-          content: 'old q',
-          createdAt: sourceDate,
-          id: 'stale-m1',
-          role: 'user',
-          topicId: topic.id,
-          updatedAt: sourceDate,
-          userId,
-        },
-        {
-          content: 'old a',
-          createdAt: new Date(sourceDate.getTime() + 1000),
-          id: 'stale-m2',
-          parentId: 'stale-m1',
-          role: 'assistant',
-          topicId: topic.id,
-          updatedAt: new Date(sourceDate.getTime() + 1000),
-          userId,
-        },
-      ]);
-
-      const before = Date.now();
-      const { topic: cloned, messages: clonedMessages } = await topicModel.duplicate(
-        topic.id,
-        'fresh copy',
-        { upToMessageId: 'stale-m2' },
-      );
-
-      // A copy is new activity: its own row and every copied message carry the
-      // copy moment. The sidebar keys topics by the newest message activity, so
-      // inheriting the source's 2020 timestamps would re-file the copy under the
-      // source's date group instead of today.
-      expect(new Date(cloned.createdAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
-      for (const message of clonedMessages) {
-        expect(new Date(message.updatedAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
-      }
-
-      // The retained order survives retiming: rows still increase root → leaf.
-      const [root, child] = clonedMessages;
-      expect(new Date(root.createdAt).getTime()).toBeLessThan(new Date(child.createdAt).getTime());
-
-      // The source keeps its own timestamps untouched.
-      const sourceMessages = await serverDB
-        .select()
-        .from(messages)
-        .where(eq(messages.topicId, topic.id));
-      expect(sourceMessages.every((m) => new Date(m.updatedAt).getTime() < before)).toBe(true);
-    });
-  });
-
-  describe('batchMoveToAgent', () => {
-    it('reassigns agentId, clears sessionId, and moves child messages', async () => {
-      await serverDB.insert(agents).values([
-        { id: 'agent-src', userId },
-        { id: 'agent-dst', userId },
-      ]);
-      await serverDB.insert(topics).values({
-        agentId: 'agent-src',
-        id: 'move-1',
-        sessionId: null,
-        title: 'movable',
-        userId,
-      });
-      await serverDB.insert(messages).values({
-        agentId: 'agent-src',
-        content: 'm',
-        id: 'move-msg',
-        role: 'user',
-        topicId: 'move-1',
-        userId,
-      });
-
-      await topicModel.batchMoveToAgent(['move-1'], 'agent-dst');
-
-      const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'move-1'));
-      expect(topic.agentId).toBe('agent-dst');
-      expect(topic.sessionId).toBeNull();
-
-      const [msg] = await serverDB.select().from(messages).where(eq(messages.id, 'move-msg'));
-      expect(msg.agentId).toBe('agent-dst');
-    });
-
-    it('throws when the target agent is not accessible', async () => {
-      await serverDB.insert(agents).values({ id: 'agent-foreign', userId: otherUserId });
-      await serverDB.insert(topics).values({ id: 'move-x', title: 'x', userId });
-
-      await expect(topicModel.batchMoveToAgent(['move-x'], 'agent-foreign')).rejects.toThrow(
-        'not found or not accessible',
-      );
-    });
-
-    it('is a no-op for an empty id list', async () => {
-      await expect(topicModel.batchMoveToAgent([], 'whatever')).resolves.toBeUndefined();
     });
   });
 

@@ -1,9 +1,9 @@
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Accordion } from '@lobehub/ui/base-ui';
+import { Accordion, Flexbox, Markdown } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
 import MarkdownRender from '@/routes/(main)/community/(detail)/features/MakedownRender';
 import McpList from '@/routes/(main)/community/(list)/mcp/features/List';
 import Title from '@/routes/(main)/community/features/Title';
@@ -44,7 +44,7 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
               query: {
                 category,
               },
-              url: '/community/mcp',
+              url: MARKETPLACE_CONNECTOR_PATH,
             })}
           >
             {t('mcp.details.related.listTitle')}

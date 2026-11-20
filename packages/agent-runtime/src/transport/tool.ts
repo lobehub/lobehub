@@ -27,6 +27,12 @@ export interface ToolRunResult {
   stop?: boolean;
   success: boolean;
   /**
+   * The tool message the tool already created for this call (e.g. a background
+   * sub-agent's placeholder). Transports lift it onto
+   * {@link ToolRunExecution.toolMessageId} so the result lands in that row.
+   */
+  toolMessageId?: string;
+  /**
    * Work-registration intent produced by the tool execution (task / skill /
    * document identity). The executor forwards it to
    * {@link ToolTransport.registerWork} once cumulative cost is known.
@@ -37,6 +43,13 @@ export interface ToolRunResult {
 export interface ToolForwardingRequest {
   data: Pick<ChatToolPayload, 'apiName' | 'identifier'> & { args: Record<string, unknown> };
   metadata: {
+    /**
+     * The eval attempt this call belongs to. One attempt is one case run (or
+     * one pass@k thread of it) including every sub-agent it forks, so a mock
+     * keys its session on this, not on `operationId`, which changes per
+     * sub-agent.
+     */
+    attemptId?: string;
     caseId?: string;
     callIndex: number;
     operationId: string;

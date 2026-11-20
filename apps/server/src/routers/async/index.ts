@@ -1,16 +1,22 @@
 import { asyncRouter as router, publicProcedure } from '@/libs/trpc/async';
 
+import { dataExportRouter } from './dataExport';
 import { documentRouter } from './document';
 import { fileRouter } from './file';
 import { imageRouter } from './image';
+import { linearRouter } from './linear';
+import { musicRouter } from './music';
 import { ragEvalRouter } from './ragEval';
 import { videoRouter } from './video';
 
 export const asyncRouter = router({
+  dataExport: dataExportRouter,
   document: documentRouter,
   file: fileRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   image: imageRouter,
+  linear: linearRouter,
+  music: musicRouter,
   ragEval: ragEvalRouter,
   video: videoRouter,
 });

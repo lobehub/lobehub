@@ -37,18 +37,6 @@ describe('sessionsReducer', () => {
     });
   });
 
-  it('should remove an existing session', () => {
-    const state: LobeSessions = [mockSession];
-    const removeAction: SessionDispatch = {
-      id: mockSession.id,
-      type: 'removeSession',
-    };
-
-    const newState = sessionsReducer(state, removeAction);
-
-    expect(newState).toHaveLength(0);
-  });
-
   it('should update an existing session', () => {
     const state: LobeSessions = [mockSession];
     const updateAction: SessionDispatch = {

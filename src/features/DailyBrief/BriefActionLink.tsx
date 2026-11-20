@@ -2,8 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { Button } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Button, cssVar } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
 import { memo, useCallback } from 'react';
@@ -25,6 +24,7 @@ interface BriefActionLinkProps {
   /** Renders the filled primary variant used for a card's leading action. */
   primary?: boolean;
   taskId?: string | null;
+  taskIdentifier?: string | null;
   url?: string;
   /**
    * `quiet`: a small secondary text button, the same as the card's "View run"
@@ -49,7 +49,7 @@ interface BriefActionLinkProps {
  * click is already claimed.
  */
 export const BriefActionLink = memo<BriefActionLinkProps>(
-  ({ agentId, children, className, icon, primary, taskId, url, variant }) => {
+  ({ agentId, children, className, icon, primary, taskId, taskIdentifier, url, variant }) => {
     const navigate = useWorkspaceAwareNavigate();
     const workspaces = useWorkspaces();
     const openAcceptance = useChatStore((s) => s.openAcceptance);
@@ -85,7 +85,7 @@ export const BriefActionLink = memo<BriefActionLinkProps>(
           // page and reads this state on its first render.
           toggleTaskAgentPanel(true);
           openAcceptance(reference.acceptanceId);
-          navigate(taskDetailPath(taskId, agentId ?? undefined));
+          navigate(taskDetailPath(taskIdentifier ?? taskId, agentId ?? undefined));
           return;
         }
 
@@ -102,6 +102,7 @@ export const BriefActionLink = memo<BriefActionLinkProps>(
         openAcceptance,
         reference,
         taskId,
+        taskIdentifier,
         toggleTaskAgentPanel,
       ],
     );

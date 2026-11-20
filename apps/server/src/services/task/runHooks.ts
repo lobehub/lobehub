@@ -54,7 +54,11 @@ export const createTaskRunHooks = (params: TaskRunHookParams): AgentHook[] => {
         // `runTrigger` rides in the static body so the production webhook
         // callback (which reconstructs onTopicComplete params server-side)
         // knows whether this was a manual run or an automation tick.
-        body: { runTrigger: trigger, taskId, taskIdentifier, userId },
+        // `workspaceId` rides along for the same reason: the runner is not
+        // always the Task's creator (a teammate or a bot running someone
+        // else's Task), so the callback cannot rebuild the scope from the
+        // Task's creator alone.
+        body: { runTrigger: trigger, taskId, taskIdentifier, userId, workspaceId },
         delivery: 'qstash' as const,
         fallback: 'none' as const,
         url: '/api/workflows/task/on-topic-complete',

@@ -1,13 +1,16 @@
-import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import { CURRENT_VERSION, hasCallableMcpEndpoint, isDesktop } from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { type PluginItem } from '@lobehub/market-sdk';
 import { type TRPCClientError } from '@trpc/client';
 import debug from 'debug';
+import { omit } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
 
+import { buildCloudMcpManifest } from '@/libs/mcp/cloudManifest';
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
+import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import {
   createReplicaSlice,
   type ReplicaLens,
@@ -16,7 +19,6 @@ import {
 } from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
-import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
 import { type StoreSetter } from '@/store/types';
@@ -28,12 +30,20 @@ import {
   type MCPInstallProgress,
 } from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
+import { ConnectorOAuthError, openConnectorOAuthPopup } from '@/utils/connectorOAuth';
 import { getPlatform } from '@/utils/platform';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
+import {
+  type ConnectorSnapshot,
+  restoreConnector,
+  snapshotReplacedConnector,
+} from '../connector/replaceConnector';
 import { type MCPPluginListData, type MCPStoreState } from './initialState';
+import { installMarketplaceConnector } from './installMarketplaceConnector';
+import { installOAuthPlugin } from './installOAuthPlugin';
 import { MCP_PLUGIN_LIST_KEY, type MCPPluginListParams, mcpPluginListResource } from './projection';
 
 const log = debug('lobe-mcp:store:action');
@@ -71,70 +81,6 @@ const toNonEmptyStringRecord = (input?: Record<string, any>) => {
   }, {});
 };
 
-/**
- * Build manifest for cloud MCP connection from market data
- */
-const buildCloudMcpManifest = (params: {
-  data: any;
-  plugin: { description?: string; icon?: string; identifier: string };
-}): ToolManifest => {
-  const { data, plugin } = params;
-
-  log('Using cloud connection, building manifest from market data');
-
-  // Get tools (MCP format) or api (LobeChat format) from data
-  const mcpTools = data.tools;
-  const lobeChatApi = data.api;
-
-  // If MCP format tools, need to convert to LobeChat api format
-  // MCP: { name, description, inputSchema }
-  // LobeChat: { name, description, parameters }
-  let apiArray: any[] = [];
-
-  if (lobeChatApi) {
-    // Already in LobeChat format, use directly
-    apiArray = lobeChatApi;
-    log('[Cloud MCP] Using existing LobeChat API format');
-  } else if (mcpTools && Array.isArray(mcpTools)) {
-    // Convert MCP tools format to LobeChat api format
-    apiArray = mcpTools.map((tool: any) => ({
-      description: tool.description || '',
-      name: tool.name,
-      parameters: tool.inputSchema || {},
-    }));
-    log('[Cloud MCP] Converted %d MCP tools to LobeChat API format', apiArray.length);
-  } else {
-    console.warn('[Cloud MCP] No tools or api found in manifest data');
-  }
-
-  // Build complete manifest
-  const manifest: ToolManifest = {
-    api: apiArray,
-    author: data.author?.name || data.author || '',
-    createAt: data.createdAt || new Date().toISOString(),
-    homepage: data.homepage || '',
-    identifier: plugin.identifier,
-    manifest: data.manifestUrl || '',
-    meta: {
-      avatar: data.icon || plugin.icon,
-      description: plugin.description || data.description,
-      tags: data.tags || [],
-      title: data.name || plugin.identifier,
-    },
-    name: data.name || plugin.identifier,
-    type: 'mcp',
-    version: data.version,
-  } as unknown as ToolManifest;
-
-  log('[Cloud MCP] Final manifest built:', {
-    apiCount: manifest.api?.length,
-    identifier: manifest.identifier,
-    version: manifest.version,
-  });
-
-  return manifest;
-};
-
 // Test connection result type
 export interface TestMcpConnectionResult {
   error?: string;
@@ -163,7 +109,7 @@ export const createMCPPluginStoreSlice = (set: Setter, get: () => ToolStore, _ap
 export class PluginMCPStoreActionImpl {
   readonly #get: () => ToolStore;
   /**
-   * The MCP marketplace list is a `@lobechat/replica` paged resource: the
+   * The MCP marketplace list is a `local-replica` paged resource: the
    * persisted head page paints before the network answers, and "load more"
    * appends further pages through the engine instead of a hand-rolled
    * `currentPage` + accumulator.
@@ -248,9 +194,15 @@ export class PluginMCPStoreActionImpl {
 
   installMCPPlugin = async (
     identifier: string,
-    options: { config?: Record<string, any>; resume?: boolean; skipDepsCheck?: boolean } = {},
+    options: {
+      authorize?: boolean;
+      config?: Record<string, any>;
+      oauthPopup?: Window | null;
+      resume?: boolean;
+      skipDepsCheck?: boolean;
+    } = {},
   ): Promise<boolean | undefined> => {
-    const { resume = false, config, skipDepsCheck } = options;
+    const { authorize = false, resume = false, config, skipDepsCheck } = options;
     const normalizedConfig = toNonEmptyStringRecord(config);
     let plugin = mcpStoreSelectors.getPluginById(identifier)(this.#get());
 
@@ -266,7 +218,7 @@ export class PluginMCPStoreActionImpl {
     // Extract haveCloudEndpoint after plugin is loaded
     const { haveCloudEndpoint } = plugin || {};
 
-    const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
+    const { updateInstallLoadingState, updateMCPInstallProgress } = this.#get();
 
     // Create AbortController for canceling installation
     const abortController = new AbortController();
@@ -287,6 +239,7 @@ export class PluginMCPStoreActionImpl {
     let result: CheckMcpInstallResult | undefined;
     let connection: any;
     const userAgent = `LobeHub Desktop/${CURRENT_VERSION}`;
+    const oauthPopup = options.oauthPopup;
 
     try {
       // Check if already cancelled
@@ -351,7 +304,15 @@ export class PluginMCPStoreActionImpl {
         // Web: endpoint only (stdio not supported)
         const shouldUseHttpDeployment = !!httpOption;
 
-        if (hasCloudEndpoint) {
+        // The cloud gateway sends a hosted runtime only the tool call, never the user's config.
+        // On desktop, a hosted plugin that needs config runs its package locally instead, where
+        // the config is passed as env.
+        const runHostedPackageLocally =
+          isDesktop &&
+          !!hasCloudEndpoint &&
+          doesConfigSchemaRequireInput(stdioOption?.connection?.configSchema);
+
+        if (hasCloudEndpoint && !runHostedPackageLocally) {
           // Use cloudEndPoint, create cloud type connection
           log('Using cloudEndPoint for stdio plugin: %s', haveCloudEndpoint);
 
@@ -383,7 +344,7 @@ export class PluginMCPStoreActionImpl {
             updateInstallLoadingState(identifier, undefined);
             return false;
           }
-        } else if (shouldUseHttpDeployment && httpOption) {
+        } else if (shouldUseHttpDeployment && httpOption && !runHostedPackageLocally) {
           // HTTP type: skip system dependency check, use URL directly
           log('HTTP MCP detected, skipping system dependency check');
 
@@ -426,7 +387,17 @@ export class PluginMCPStoreActionImpl {
             return;
           }
 
-          result = await mcpService.checkInstallation(data, abortController.signal);
+          // A hosted plugin's `none` option is its runtime URL, not callable directly: check
+          // only the package options
+          result = await mcpService.checkInstallation(
+            runHostedPackageLocally
+              ? {
+                  ...data,
+                  deploymentOptions: deploymentOptions.filter((option) => !option?.connection?.url),
+                }
+              : data,
+            abortController.signal,
+          );
 
           if (!result.success) {
             updateMCPInstallProgress(identifier, undefined);
@@ -472,16 +443,23 @@ export class PluginMCPStoreActionImpl {
       }
 
       let mergedHttpHeaders: Record<string, string> | undefined;
+      let httpUrl: string | undefined;
       let mergedStdioEnv: Record<string, string> | undefined;
       let mergedCloudHeaders: Record<string, string> | undefined;
 
       if (connection?.type === 'http') {
         const baseHeaders = toNonEmptyStringRecord(connection.headers);
+        // Config values the URL asks for (`{{KEY}}`) go into the URL; the rest are headers
+        const rendered = renderMcpUrlTemplate(connection.url ?? '', normalizedConfig);
+        httpUrl = rendered.url;
+        const headerConfig = toNonEmptyStringRecord(
+          normalizedConfig && omit(normalizedConfig, rendered.usedKeys),
+        );
 
-        if (baseHeaders || normalizedConfig) {
+        if (baseHeaders || headerConfig) {
           mergedHttpHeaders = {
             ...baseHeaders,
-            ...normalizedConfig,
+            ...headerConfig,
           };
         }
       }
@@ -523,11 +501,15 @@ export class PluginMCPStoreActionImpl {
       }
 
       let manifest: ToolManifest | undefined;
+      // The marketplace row an OAuth install authorizes over, read before the
+      // authorization rewrites it, so a cancel while finishing can restore it
+      let oauthReplaced: ConnectorSnapshot | undefined;
 
       if (connection?.type === 'stdio') {
         manifest = await mcpService.getStdioMcpServerManifest(
           {
-            args: connection.args,
+            // Config placeholders in args are filled here and in the stored connector
+            args: renderMcpArgs(connection.args, normalizedConfig),
             command: connection.command!,
             env: mergedStdioEnv,
             name: identifier, // Pass config as environment variables (in resume mode)
@@ -537,19 +519,62 @@ export class PluginMCPStoreActionImpl {
         );
       }
       if (connection?.type === 'http') {
-        manifest = await mcpService.getStreamableMcpServerManifest(
-          {
-            auth: connection.auth,
-            headers: mergedHttpHeaders,
-            identifier,
-            metadata: {
-              avatar: plugin.icon,
+        if (connection.auth?.type === 'oauth2') {
+          if (!authorize) {
+            updateMCPInstallProgress(identifier, {
+              connection: { ...connection, headers: mergedHttpHeaders },
+              manifest: data,
+              progress: 50,
+              step: MCPInstallStep.AUTHORIZATION_REQUIRED,
+            });
+            updateInstallLoadingState(identifier, undefined);
+            return false;
+          }
+
+          if (oauthPopup === null) throw new ConnectorOAuthError('blocked');
+          updateMCPInstallProgress(identifier, {
+            progress: 70,
+            step: MCPInstallStep.AUTHORIZING,
+          });
+          const replaced = await snapshotReplacedConnector(identifier, 'marketplace', this.#get);
+          oauthReplaced = replaced;
+          manifest = await installOAuthPlugin(
+            {
+              connection: { ...connection, headers: mergedHttpHeaders },
               description: plugin.description,
+              icon: plugin.icon,
+              identifier,
+              name: data.name || identifier,
+              popup: oauthPopup,
+              signal: abortController.signal,
             },
-            url: connection.url!,
-          },
-          abortController.signal,
-        );
+            this.#get,
+          ).catch(async (error: unknown) => {
+            // The row was rewritten before the popup opened: an authorization
+            // that is denied, dismissed, timed out or canceled puts back the one
+            // it replaced. A row it created stays unmarked, so uncallable.
+            if (replaced) {
+              await restoreConnector(replaced, this.#get).catch((restoreError) => {
+                log('restore of connector %s failed: %O', identifier, restoreError);
+              });
+            }
+            throw error;
+          });
+        } else {
+          manifest = await mcpService.getStreamableMcpServerManifest(
+            {
+              auth: connection.auth,
+              headers: mergedHttpHeaders,
+              identifier,
+              metadata: {
+                avatar: plugin.icon,
+                description: plugin.description,
+              },
+              url: httpUrl!,
+            },
+            abortController.signal,
+          );
+        }
       }
       if (connection?.type === 'cloud') {
         // Cloud type: build manifest directly from market data
@@ -598,9 +623,18 @@ export class PluginMCPStoreActionImpl {
       }
 
       // Update connection object, write merged configuration
-      const finalConnection = { ...connection };
-      if (finalConnection.type === 'http' && mergedHttpHeaders) {
+      const isOAuth = connection?.type === 'http' && connection.auth?.type === 'oauth2';
+      const finalConnection = isOAuth
+        ? { auth: { type: 'oauth2' }, type: 'http', url: connection.url }
+        : { ...connection };
+      if (finalConnection.type === 'http' && mergedHttpHeaders && !isOAuth) {
         finalConnection.headers = mergedHttpHeaders;
+      }
+      // A connector has no plugin settings to fill `{{KEY}}` placeholders on
+      // each call: it stores the URL and args this install connected with.
+      if (finalConnection.type === 'http' && !isOAuth && httpUrl) finalConnection.url = httpUrl;
+      if (finalConnection.type === 'stdio') {
+        finalConnection.args = renderMcpArgs(connection.args, normalizedConfig);
       }
       if (finalConnection.type === 'stdio' && mergedStdioEnv) {
         finalConnection.env = mergedStdioEnv;
@@ -609,21 +643,26 @@ export class PluginMCPStoreActionImpl {
         finalConnection.headers = mergedCloudHeaders;
       }
 
-      await pluginService.installPlugin({
-        // For mcp, store connection info in customParams field first
-        customParams: { mcp: finalConnection },
-        identifier: plugin.identifier,
-        manifest,
-        settings: normalizedConfig,
-        type: 'plugin',
-      });
+      // The install lands in `user_connectors`; no `user_installed_plugins` row is written.
+      await installMarketplaceConnector(
+        {
+          connection: finalConnection,
+          description: plugin.description,
+          icon: plugin.icon,
+          identifier: plugin.identifier,
+          isOAuth,
+          oauthReplaced,
+          manifest,
+          name: manifest.meta?.title || data.name || plugin.identifier,
+          signal: abortController.signal,
+        },
+        this.#get,
+      );
 
       // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
-
-      await refreshPlugins();
 
       // Step 7: Complete installation
       updateMCPInstallProgress(identifier, {
@@ -722,11 +761,41 @@ export class PluginMCPStoreActionImpl {
         };
       }
 
+      // Some marketplace manifests omit auth. A 401 from an unauthenticated
+      // endpoint can still lead into the connector's OAuth discovery flow.
+      if (
+        !authorize &&
+        connection?.type === 'http' &&
+        connection.auth?.type === 'none' &&
+        errorInfo.type === 'AUTHORIZATION_ERROR'
+      ) {
+        updateMCPInstallProgress(identifier, {
+          connection: {
+            ...connection,
+            auth: { type: 'oauth2' },
+            headers: { ...connection.headers, ...normalizedConfig },
+          },
+          manifest: data,
+          progress: 50,
+          step: MCPInstallStep.AUTHORIZATION_REQUIRED,
+        });
+        updateInstallLoadingState(identifier, undefined);
+        return false;
+      }
+
       // Set error status, display structured error info
       updateMCPInstallProgress(identifier, {
         errorInfo,
+        ...(authorize && {
+          connection,
+          manifest: data,
+          errorInfo: {
+            message: e instanceof ConnectorOAuthError ? e.reason : errorInfo.message,
+            type: 'AUTHORIZATION_ERROR' as const,
+          },
+        }),
         progress: 0,
-        step: MCPInstallStep.ERROR,
+        step: authorize ? MCPInstallStep.AUTHORIZATION_REQUIRED : MCPInstallStep.ERROR,
       });
 
       // Report installation failure result
@@ -753,6 +822,17 @@ export class PluginMCPStoreActionImpl {
         false,
         n('installMCPPlugin/clearController'),
       );
+    }
+  };
+
+  authorizeMCPPlugin = async (identifier: string): Promise<boolean | undefined> => {
+    if (this.#get().mcpInstallProgress[identifier]?.step !== MCPInstallStep.AUTHORIZATION_REQUIRED)
+      return false;
+    const oauthPopup = openConnectorOAuthPopup();
+    try {
+      return await this.installMCPPlugin(identifier, { authorize: true, oauthPopup, resume: true });
+    } finally {
+      oauthPopup?.close();
     }
   };
 
@@ -802,6 +882,10 @@ export class PluginMCPStoreActionImpl {
         manifest = await mcpService.getStreamableMcpServerManifest(
           {
             auth: connection.auth,
+            // Tested from where its calls will run: the bound device, or the
+            // device when chosen
+            boundDeviceId: connection.boundDeviceId,
+            connectVia: connection.connectVia,
             headers: connection.headers,
             identifier,
             metadata,
@@ -817,6 +901,7 @@ export class PluginMCPStoreActionImpl {
         manifest = await mcpService.getStdioMcpServerManifest(
           {
             args: connection.args,
+            boundDeviceId: connection.boundDeviceId,
             command: connection.command,
             env: connection.env,
             name: identifier,
@@ -878,8 +963,23 @@ export class PluginMCPStoreActionImpl {
   };
 
   uninstallMCPPlugin = async (identifier: string): Promise<void> => {
-    await pluginService.uninstallPlugin(identifier);
-    await this.#get().refreshPlugins();
+    // The install's connector: every install since connectors, and the OAuth
+    // credentials of older ones. Endpoint-less rows are only tool projections.
+    // Best effort: with the list unavailable, match what the store already holds.
+    await this.#get()
+      .fetchConnectors()
+      .catch(() => {});
+    const connector = this.#get().connectors.find(
+      (item) =>
+        item.identifier === identifier &&
+        item.sourceType === 'marketplace' &&
+        hasCallableMcpEndpoint(item),
+    );
+    if (connector) await this.#get().deleteConnector(connector.id);
+
+    // Installs made before connectors also keep a legacy plugin row; removing
+    // a missing one is a no-op on the server.
+    await this.#get().uninstallPlugin(identifier);
 
     discoverService.reportMcpEvent({
       event: 'uninstall',

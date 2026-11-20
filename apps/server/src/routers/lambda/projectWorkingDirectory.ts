@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -9,6 +10,7 @@ import { ProjectModel } from '@/database/models/project';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import { TopicModel } from '@/database/models/topic';
 import { ProjectDirectoryRepository } from '@/database/repositories/projectDirectory';
+import { ProjectEnvironmentRepository } from '@/database/repositories/projectEnvironment';
 import { agents } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
@@ -18,12 +20,16 @@ import {
   resolvePrecreatedTopicSnapshot,
 } from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveProjectTopicSandbox } from '@/server/services/sandbox/projectPlacement';
 
 import {
   assertCanUseConversationTargets,
   assertCanUseTopicTargets,
   assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
+import { getResourceConfigAccess } from './_helpers/resourceConfigGuard';
+import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
+import { configurationSchema } from './_schema/environment';
 
 const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { serverDB, userId, workspaceId } = opts.ctx;
@@ -32,6 +38,7 @@ const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
       directoryModel: new ProjectWorkingDirectoryModel(serverDB, userId, workspaceId ?? undefined),
       directoryRepo: new ProjectDirectoryRepository(serverDB, userId, workspaceId ?? undefined),
       environmentModel: new EnvironmentModel(serverDB, userId, workspaceId ?? undefined),
+      environmentRepo: new ProjectEnvironmentRepository(serverDB, userId, workspaceId ?? undefined),
       projectModel: new ProjectModel(serverDB, userId, workspaceId ?? undefined),
       topicModel: new TopicModel(serverDB, userId, workspaceId ?? undefined),
       // Topics written here exist before any run does, so they have to pin their
@@ -50,6 +57,61 @@ const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 const write = procedure.use(withScopedPermission('agent:update'));
+
+/** A project the caller cannot reach answers as not found, not as a server error. */
+const notFound = (error: unknown): never => {
+  if (error instanceof Error && /not found or access denied/i.test(error.message))
+    throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+  throw error;
+};
+
+/** Per-agent permission lookups each hit the database; a large project must not fan out unbounded. */
+const CONFIG_ACCESS_LOOKUP_CONCURRENCY = 5;
+
+/**
+ * An agent's bound device is edit-level config (see `redactAgentConfig`): a
+ * reader without full config access keeps the pin's policy but not its device,
+ * so the sidebar offers that agent no device starts instead of leaking the id.
+ */
+const redactAgentDevicePins = async <
+  T extends { agentBoundDeviceId: string | null; agentId: string | null },
+>(
+  ctx: {
+    serverDB: Parameters<typeof getResourceConfigAccess>[0]['db'];
+    userId: string;
+    workspaceId?: string | null;
+    workspacePermissionCodes?: string[];
+  },
+  rows: T[],
+): Promise<T[]> => {
+  if (!ctx.workspaceId) return rows;
+  const pinnedAgentIds = [
+    ...new Set(rows.flatMap((row) => (row.agentId && row.agentBoundDeviceId ? [row.agentId] : []))),
+  ];
+  const fullAccess = new Set<string>();
+  await pMap(
+    pinnedAgentIds,
+    async (agentId) => {
+      const access = await getResourceConfigAccess(
+        {
+          db: ctx.serverDB,
+          grantedPermissions: ctx.workspacePermissionCodes,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        'agent',
+        agentId,
+      );
+      if (access === 'full') fullAccess.add(agentId);
+    },
+    { concurrency: CONFIG_ACCESS_LOOKUP_CONCURRENCY },
+  );
+  return rows.map((row) =>
+    row.agentBoundDeviceId && !(row.agentId && fullAccess.has(row.agentId))
+      ? { ...row, agentBoundDeviceId: null }
+      : row,
+  );
+};
 const idInput = z.object({ id: z.string().uuid() });
 
 export const projectWorkingDirectoryRouter = router({
@@ -62,10 +124,11 @@ export const projectWorkingDirectoryRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertCanUseTopicTargets(
-        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
-        [input.topicId],
-      );
+      const guardCtx = { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId };
+      await assertCanUseTopicTargets(guardCtx, [input.topicId]);
+      // Same visitor guard as `moveTopic`: a share-visitor topic is not the
+      // member's conversation to file into a project.
+      await assertCreatorTopicTargets(guardCtx, [input.topicId]);
       return {
         data: await ctx.directoryRepo.associateTopic(
           input.projectId,
@@ -81,7 +144,14 @@ export const projectWorkingDirectoryRouter = router({
       z.object({
         projectId: z.string(),
         agentId: z.string(),
+        /** Ignored: a project has one environment. Kept for older clients. */
+        environmentId: z.string().optional(),
         title: z.string().trim().min(1).max(255),
+        /**
+         * Start in an empty working directory instead of one the project's
+         * environment initializes — the composer's "No environment".
+         */
+        withoutEnvironment: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -89,16 +159,29 @@ export const projectWorkingDirectoryRouter = router({
         { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
         [{ agentId: input.agentId }],
       );
-      if (!(await ctx.projectModel.findManageableById(input.projectId)))
+      // Everyone who can read a project collaborates in it, so starting a
+      // project conversation needs read access, not ownership.
+      if (!(await ctx.projectModel.findById(input.projectId)))
         throw new Error('Project not found or access denied');
-      const { snapshot } = await resolvePrecreatedTopicSnapshot(
-        ctx.precreatedTopicDeps,
-        input.agentId,
-      );
+      const [{ snapshot }, sandbox] = await Promise.all([
+        resolvePrecreatedTopicSnapshot(ctx.precreatedTopicDeps, input.agentId),
+        // A project with a repository works in it from the first message: the
+        // topic is written before any run, so no later pick would reach it.
+        input.withoutEnvironment
+          ? {}
+          : resolveProjectTopicSandbox({
+              agentId: input.agentId,
+              db: ctx.serverDB,
+              projectId: input.projectId,
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId ?? undefined,
+            }),
+      ]);
       return {
         data: await ctx.topicModel.create({
           ...snapshot,
           agentId: input.agentId,
+          metadata: { ...snapshot.metadata, ...sandbox },
           projectId: input.projectId,
           title: input.title,
         }),
@@ -113,19 +196,103 @@ export const projectWorkingDirectoryRouter = router({
         { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
         data.map((topic) => topic.id),
       );
-      return { data, success: true };
+      return { data: await redactAgentDevicePins(ctx, data), success: true };
     }),
-  attachEnvironment: write
-    .input(z.object({ projectId: z.string(), environmentId: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => ({
-      data: await ctx.projectModel.attachEnvironment(input.projectId, input.environmentId),
+  /**
+   * The project's environment — every project has exactly one. A project from
+   * before that rule is brought to it on this first read (see
+   * `ProjectEnvironmentRepository.ensure`), silently.
+   */
+  getEnvironment: procedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.environmentRepo.get(input.projectId).catch(notFound),
       success: true,
     })),
+  /**
+   * Edits the project's environment: its repositories (any number, or none),
+   * setup and variables. A folder already built keeps the definition it was
+   * built from; the next one takes this.
+   */
+  updateEnvironment: write
+    .input(
+      z.object({
+        configuration: configurationSchema.optional(),
+        description: z.string().max(2000).nullable().optional(),
+        projectId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { projectId, ...patch } }) => ({
+      data: await ctx.environmentRepo.update(projectId, patch).catch(notFound),
+      success: true,
+    })),
+  /**
+   * Compatibility for clients built before a project had exactly one
+   * environment (a tab left open across the deploy, a released desktop app).
+   * Each maps onto the single environment rather than failing as an unknown
+   * procedure; remove once no supported client calls them.
+   *
+   * - `attachRepository` adds the repository to the project's environment.
+   * - `attachEnvironment` adds the repositories of an environment the caller
+   *   can read to it; nothing is linked.
+   * - `detachEnvironment` has nothing to undo and returns the environment.
+   */
+  attachRepository: write
+    .input(
+      z.object({
+        projectId: z.string(),
+        repository: z.object({
+          defaultBranch: z.string().max(255).optional(),
+          name: z.string().trim().min(1).max(255),
+          url: z.string().min(1).max(2048),
+        }),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { projectId, repository } }) => {
+      const parsed = configurationSchema.safeParse({
+        sources: [
+          {
+            kind: 'git',
+            url: repository.url,
+            ...(repository.defaultBranch && { ref: repository.defaultBranch }),
+          },
+        ],
+      });
+      if (!parsed.success)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unsupported repository URL' });
+      return {
+        data: await ctx.environmentRepo.addRepositories(projectId, [parsed.data]).catch(notFound),
+        success: true,
+      };
+    }),
+  attachEnvironment: write
+    .input(z.object({ environmentId: z.string().uuid(), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const source = await ctx.environmentModel.findById(input.environmentId);
+      if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      return {
+        data: await ctx.environmentRepo
+          .addRepositories(input.projectId, [source.configuration])
+          .catch(notFound),
+        success: true,
+      };
+    }),
+  detachEnvironment: write
+    .input(z.object({ environmentId: z.string().uuid(), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.environmentRepo.get(input.projectId).catch(notFound),
+      success: true,
+    })),
+  /**
+   * The project's environment as a one-row list, the shape the directory and
+   * location pickers read; without a project, the caller's standalone ones.
+   */
   listEnvironments: procedure
     .input(z.object({ projectId: z.string().optional() }))
     .query(async ({ ctx, input }) => ({
       data: input.projectId
-        ? await ctx.projectModel.listEnvironments(input.projectId)
+        ? [await ctx.environmentRepo.get(input.projectId).catch(notFound)]
         : await ctx.environmentModel.list(),
       success: true,
     })),
@@ -160,6 +327,22 @@ export const projectWorkingDirectoryRouter = router({
           { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
           input.topicIds,
         );
+      // A binding pairs a device with a path on that device. Legacy topic
+      // metadata can pair one machine's device with another machine's path, and
+      // persisting that leaves every topic under it failing with
+      // `working_directory_not_found`. An unreachable device can't be verified
+      // and stays bindable; only a definite "not there" is rejected.
+      const stat = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (stat && (!stat.exists || !stat.isDirectory))
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Working directory does not exist on this device',
+        });
       return { data: await ctx.directoryRepo.bind(input), success: true };
     }),
   list: procedure
@@ -176,6 +359,83 @@ export const projectWorkingDirectoryRouter = router({
     );
     return { data, success: true };
   }),
+  /** Switch a project-directory conversation to its project's directory on another device. */
+  moveTopic: procedure
+    .use(withScopedPermission('topic:update'))
+    .input(z.object({ directoryId: z.string().uuid(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [input.topicId],
+      );
+      // Same visitor guard as `updateTopicMetadata`: a share-visitor topic is not
+      // the member's conversation to move.
+      await assertCreatorTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [input.topicId],
+      );
+      // Same reachability gate as `startTopic`: the move drops the session that
+      // only holds on the old machine, so a destination the device cannot see
+      // must fail here, while the existing binding and session are still intact.
+      const directory = await ctx.directoryModel.resolve(input.directoryId);
+      const stat = await deviceGateway.statPath({
+        deviceId: directory.deviceId,
+        path: directory.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (!stat?.exists || !stat.isDirectory)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Device is offline or working directory is unavailable',
+        });
+      return {
+        data: await ctx.directoryRepo.moveTopic(input.topicId, input.directoryId),
+        success: true,
+      };
+    }),
+  /** Repoint a directory bound with the wrong device or path; its topics follow it. */
+  relocate: write
+    .input(
+      idInput.extend({
+        deviceId: z.string().min(1),
+        path: z.string().min(1),
+        projectId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // The same gate as `moveTopic`: the conversations move with the directory,
+      // so a destination the device cannot see must fail before anything moves.
+      const stat = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (!stat?.exists || !stat.isDirectory)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Device is offline or working directory is unavailable',
+        });
+      // Relocating rewrites each topic's execution target and drops its CLI
+      // session, which is a write to every one of them: the caller needs `use`
+      // access to each, as `moveTopic` requires for one.
+      const topicIds = (await ctx.directoryModel.listTopics(input.id)).map((topic) => topic.id);
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        topicIds,
+      );
+      return {
+        data: await ctx.directoryRepo.relocate({ ...input, authorizedTopicIds: topicIds }),
+        success: true,
+      };
+    }),
+  remove: write
+    .input(idInput.extend({ projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.directoryRepo.remove(input.projectId, input.id),
+      success: true,
+    })),
   resolve: procedure.input(idInput).query(async ({ ctx, input }) => ({
     data: await ctx.directoryModel.resolve(input.id),
     success: true,

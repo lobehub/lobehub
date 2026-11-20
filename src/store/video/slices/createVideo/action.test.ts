@@ -19,8 +19,12 @@ const omniModel: AIVideoModelCard = {
   type: 'video',
 };
 
-vi.mock('@/business/client/handleGenerationPromptModerationError', () => ({
-  handleGenerationPromptModerationError: vi.fn(),
+const { isGenerationPromptModerationErrorMock } = vi.hoisted(() => ({
+  isGenerationPromptModerationErrorMock: vi.fn(),
+}));
+
+vi.mock('@/business/client/isGenerationPromptModerationError', () => ({
+  isGenerationPromptModerationError: isGenerationPromptModerationErrorMock,
 }));
 vi.mock('@/business/client/handleLobeHubModelDeprecatedError', () => ({
   handleLobeHubModelDeprecatedError: vi.fn(),
@@ -50,6 +54,7 @@ describe('CreateVideoAction', () => {
 
     useVideoStore.setState({
       activeGenerationTopicId: 'topic-1',
+      blockedPrompt: undefined,
       editingDraftSnapshot: undefined,
       editingGenerationId: undefined,
       isCreating: false,
@@ -161,6 +166,25 @@ describe('CreateVideoAction', () => {
 
     expect(result.current.editingGenerationId).toBe('generation-source');
     expect(result.current.parameters.prompt).toBe('Keep the subject still');
+  });
+
+  it('should keep a moderation-rejected prompt for the inline notice and clear it on resubmit', async () => {
+    vi.mocked(videoService.createVideo).mockRejectedValueOnce(new Error('blocked'));
+    isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+
+    await expect(useVideoStore.getState().createVideo()).rejects.toThrow('blocked');
+    expect(useVideoStore.getState().blockedPrompt).toBe('An unrelated draft');
+    expect(useVideoStore.getState().parameters?.prompt).toBe('An unrelated draft');
+
+    await useVideoStore.getState().createVideo();
+    expect(useVideoStore.getState().blockedPrompt).toBeUndefined();
+  });
+
+  it('should not mark the prompt as blocked for other errors', async () => {
+    vi.mocked(videoService.createVideo).mockRejectedValueOnce(new Error('Service error'));
+
+    await expect(useVideoStore.getState().createVideo()).rejects.toThrow('Service error');
+    expect(useVideoStore.getState().blockedPrompt).toBeUndefined();
   });
 
   it('should restore the original draft when editing is cancelled', () => {

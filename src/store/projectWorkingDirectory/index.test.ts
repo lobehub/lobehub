@@ -4,7 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 
-import { PROJECT_TOPICS_POLL_INTERVAL, useProjectDirectoryStore } from './index';
+import {
+  findProjectDirectory,
+  PROJECT_TOPICS_POLL_INTERVAL,
+  type ProjectDirectory,
+  useProjectDirectoryStore,
+} from './index';
 
 vi.mock('@/libs/swr', () => ({ mutate: vi.fn(), useClientDataSWR: vi.fn() }));
 
@@ -40,6 +45,78 @@ const invalidates = (name: string, entryKey: string) =>
     );
 
 describe('projectWorkingDirectory store', () => {
+  describe('relocateDirectory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('relocates through the service and refreshes the project listings', async () => {
+      const relocate = vi
+        .spyOn(projectWorkingDirectoryService, 'relocate')
+        .mockResolvedValue({ data: { id: 'directory-2' }, success: true } as never);
+      const input = { deviceId: 'device-2', id: 'directory-1', path: '/work', projectId: 'p-1' };
+
+      await useProjectDirectoryStore.getState().relocateDirectory(input);
+
+      expect(relocate).toHaveBeenCalledWith(input);
+      expect(invalidates('projectTopics', 'p-1')).toBe(true);
+    });
+  });
+
+  describe('removeDirectory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('removes through the service and refreshes the project listings', async () => {
+      const remove = vi
+        .spyOn(projectWorkingDirectoryService, 'remove')
+        .mockResolvedValue({ data: {}, success: true } as never);
+
+      await useProjectDirectoryStore.getState().removeDirectory('project-1', 'directory-1');
+
+      expect(remove).toHaveBeenCalledWith({ id: 'directory-1', projectId: 'project-1' });
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+    });
+
+    it('rejects so the caller can report a refused removal', async () => {
+      vi.spyOn(projectWorkingDirectoryService, 'remove').mockRejectedValue(new Error('conflict'));
+
+      await expect(
+        useProjectDirectoryStore.getState().removeDirectory('project-1', 'directory-1'),
+      ).rejects.toThrow('conflict');
+    });
+  });
+
+  describe('updateProjectEnvironment', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("saves through the service and refreshes only that project's environment and folders", async () => {
+      vi.mocked(mutate).mockClear();
+      const update = vi
+        .spyOn(projectWorkingDirectoryService, 'updateEnvironment')
+        .mockResolvedValue({ data: { id: 'env-1' }, success: true } as never);
+      const configuration = { sources: [{ kind: 'git' as const, url: 'https://github.com/a/b' }] };
+
+      await useProjectDirectoryStore
+        .getState()
+        .updateProjectEnvironment({ configuration, projectId: 'project-1' });
+
+      expect(update).toHaveBeenCalledWith({ configuration, projectId: 'project-1' });
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'project-1')).toBe(true);
+      // Standalone environments are untouched.
+      expect(invalidates('projectEnvironments', 'all')).toBe(false);
+    });
+  });
+
+  describe('refreshEnvironments', () => {
+    it('refreshes every environment and directory projection', async () => {
+      vi.mocked(mutate).mockClear();
+
+      await useProjectDirectoryStore.getState().refreshEnvironments();
+
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
+    });
+  });
+
   describe('useFetchProjectTopics polling', () => {
     afterEach(() => {
       vi.restoreAllMocks();
@@ -147,5 +224,109 @@ describe('projectWorkingDirectory store', () => {
       expect(invalidates('projectTopics', 'project-2')).toBe(false);
       expect(invalidates('projectDirectories', 'project-1')).toBe(false);
     });
+
+    it('moves a conversation and refreshes both directories it touched', async () => {
+      const moveTopic = vi
+        .spyOn(projectWorkingDirectoryService, 'moveTopic')
+        .mockResolvedValue({ data: { projectId: 'project-1' } } as never);
+
+      await useProjectDirectoryStore
+        .getState()
+        .moveTopic({ directoryId: 'directory-2', topicId: 'topic-1' });
+
+      expect(moveTopic).toHaveBeenCalledWith({ directoryId: 'directory-2', topicId: 'topic-1' });
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+      // Left one directory for another: every directory projection is stale.
+      expect(invalidates('directoryTopics', 'directory-1')).toBe(true);
+      expect(invalidates('directoryTopics', 'directory-2')).toBe(true);
+      // The directory rows themselves did not change.
+      expect(invalidates('projectDirectories', 'project-1')).toBe(false);
+    });
+
+    it('refreshes every projection of a project conversation after its agent changed', async () => {
+      await useProjectDirectoryStore.getState().refreshProjectTopics('project-1');
+
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+      expect(invalidates('projectTopics', 'project-2')).toBe(false);
+      // Directory and environment rows denormalize the topic's agent.
+      expect(invalidates('directoryTopics', 'directory-1')).toBe(true);
+      expect(invalidates('environmentTopics', 'directory-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'project-1')).toBe(false);
+    });
+  });
+});
+
+describe('findProjectDirectory', () => {
+  const stale = { id: 'dir-1', permission: 'read', projectId: 'project-1' } as ProjectDirectory;
+  const fresh = { ...stale, permission: 'readWrite' } as ProjectDirectory;
+
+  afterEach(() => {
+    useProjectDirectoryStore.setState({
+      directoriesMap: {},
+      directoriesReplica: { entries: {} } as any,
+    });
+  });
+
+  const seed = (projections: [key: string, row: ProjectDirectory, updatedAt: number][]) =>
+    useProjectDirectoryStore.setState({
+      directoriesMap: Object.fromEntries(projections.map(([key, row]) => [key, [row]])),
+      directoriesReplica: {
+        entries: Object.fromEntries(
+          projections.map(([key, , updatedAt]) => [
+            key,
+            { pending: [], source: 'network', updatedAt },
+          ]),
+        ),
+      } as any,
+    });
+
+  // Regression: the lookup returned whichever projection was loaded first, so a
+  // stale scope-wide copy could shadow a per-project copy refreshed after a
+  // permission change (and the reverse).
+  it('returns the most recently confirmed copy regardless of load order', () => {
+    seed([
+      ['all', stale, 1000],
+      ['project-1', fresh, 2000],
+    ]);
+    expect(findProjectDirectory('dir-1')?.permission).toBe('readWrite');
+
+    seed([
+      ['project-1', stale, 1000],
+      ['all', fresh, 2000],
+    ]);
+    expect(findProjectDirectory('dir-1')?.permission).toBe('readWrite');
+  });
+
+  // Regression: a newer projection that dropped the row (directory deleted) was
+  // skipped, so a stale copy in an older projection still passed the preflight.
+  it('treats a newer covering projection that omits the row as authoritative', () => {
+    useProjectDirectoryStore.setState({
+      directoriesMap: { 'all': [fresh], 'project-1': [] },
+      directoriesReplica: {
+        entries: {
+          'all': { pending: [], source: 'network', updatedAt: 1000 },
+          'project-1': { pending: [], source: 'network', updatedAt: 2000 },
+        },
+      } as any,
+    });
+    expect(findProjectDirectory('dir-1')).toBeUndefined();
+  });
+
+  it('ignores another project projection that would never list the row', () => {
+    useProjectDirectoryStore.setState({
+      directoriesMap: { 'all': [fresh], 'project-2': [] },
+      directoriesReplica: {
+        entries: {
+          'all': { pending: [], source: 'network', updatedAt: 1000 },
+          'project-2': { pending: [], source: 'network', updatedAt: 2000 },
+        },
+      } as any,
+    });
+    expect(findProjectDirectory('dir-1')?.permission).toBe('readWrite');
+  });
+
+  it('returns undefined when no projection holds the row', () => {
+    seed([['all', fresh, 1000]]);
+    expect(findProjectDirectory('missing')).toBeUndefined();
   });
 });

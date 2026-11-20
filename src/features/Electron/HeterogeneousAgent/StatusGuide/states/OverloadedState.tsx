@@ -1,8 +1,8 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Button, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
 import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
@@ -11,7 +11,7 @@ import type { HeterogeneousAgentGuideStateProps } from '../types';
 const styles = createStaticStyles(({ css }) => ({
   errorDetails: css`
     && pre {
-      padding: 12px;
+      padding: ${densityVars.contentGap};
     }
   `,
 }));

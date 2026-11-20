@@ -1,13 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Button, Flexbox, Input, Text } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { type OAuthAppItem, type UpdateOAuthAppParams } from '@/types/oauthApp';
 
 import {
@@ -18,28 +19,31 @@ import {
 } from '../../redirectUris';
 import SectionCard from './SectionCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  fieldError: css`
-    font-size: 12px;
-    color: ${cssVar.colorError};
-  `,
-  listError: css`
-    font-size: 14px;
-    line-height: 1.5;
-    color: ${cssVar.colorError};
-  `,
-  uri: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    overflow-wrap: anywhere;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  empty: {
+    padding: densityTokens['--lobe-density-card-padding'],
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  fieldError: { fontSize: '12px', color: cssVar.colorError },
+  listError: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: 1.5,
+    color: cssVar.colorError,
+  },
+  uri: {
+    paddingBlock: '8px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    overflowWrap: 'anywhere',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface RedirectUrisValues {
   redirectUris: string[];
@@ -53,8 +57,9 @@ interface RedirectUrisCardProps {
 
 /**
  * The redirect URIs a web app may send users back to. A freshly created app has
- * none, which is a legitimate "not yet configured" state shown as a warning;
- * once the user opens the editor, a save needs at least one URI.
+ * none, which is a legitimate "not yet configured" state: it reads as the next
+ * setup step with its own button, not as a warning competing with the one-time
+ * secret card above it. Once the editor is open, a save needs at least one URI.
  */
 const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit }) => {
   const { t } = useTranslation('auth');
@@ -83,14 +88,15 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
     <SectionCard
       title={t('oauthApp.redirectUris.title')}
       extra={
-        !editing && (
+        !editing &&
+        saved.length > 0 && (
           <Button
             disabled={!canEdit}
             icon={<PencilIcon size={14} />}
             size={'small'}
             onClick={startEditing}
           >
-            {t(saved.length > 0 ? 'oauthApp.detail.edit' : 'oauthApp.redirectUris.configure')}
+            {t('oauthApp.detail.edit')}
           </Button>
         )
       }
@@ -119,7 +125,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                               onBlur={onBlur}
                               onChange={(e) => onChange(e.target.value)}
                             />
-                            {error && <div className={styles.fieldError}>{error}</div>}
+                            {error && <div {...stylex.props(styles.fieldError)}>{error}</div>}
                           </Flexbox>
                         )}
                         validate={(value?: string) => {
@@ -141,7 +147,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                     bare
                     name={'redirectUris'}
                     render={({ error }) =>
-                      error ? <div className={styles.listError}>{error}</div> : null
+                      error ? <div {...stylex.props(styles.listError)}>{error}</div> : null
                     }
                     validate={(values?: (string | undefined)[]) => {
                       const messageKey = redirectUriListMessageKey(values);
@@ -159,6 +165,11 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                   >
                     {t('oauthApp.redirectUris.add')}
                   </Button>
+                  {fields.length >= MAX_OAUTH_REDIRECT_URIS && (
+                    <Text style={{ fontSize: 12 }} type={'secondary'}>
+                      {t('oauthApp.redirectUris.limitReached', { count: MAX_OAUTH_REDIRECT_URIS })}
+                    </Text>
+                  )}
                 </Flexbox>
               )}
             </Form.List>
@@ -174,13 +185,29 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
       ) : saved.length > 0 ? (
         <Flexbox gap={6}>
           {saved.map((uri) => (
-            <div className={styles.uri} key={uri}>
+            <div {...stylex.props(styles.uri)} key={uri}>
               {uri}
             </div>
           ))}
         </Flexbox>
       ) : (
-        <Alert showIcon message={t('oauthApp.redirectUris.empty')} type={'warning'} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.empty).className}
+          gap={16}
+          justify={'space-between'}
+        >
+          <Text type={'secondary'}>{t('oauthApp.redirectUris.empty')}</Text>
+          <Button
+            disabled={!canEdit}
+            icon={<PlusIcon size={14} />}
+            style={{ flex: 'none' }}
+            onClick={startEditing}
+          >
+            {t('oauthApp.redirectUris.add')}
+          </Button>
+        </Flexbox>
       )}
     </SectionCard>
   );

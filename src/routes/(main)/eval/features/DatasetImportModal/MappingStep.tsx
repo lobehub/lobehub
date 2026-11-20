@@ -1,8 +1,15 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Checkbox, Input, Select, Table, type TableColumn, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  Checkbox,
+  cssVar,
+  Flexbox,
+  Input,
+  Select,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -291,13 +298,13 @@ const MappingStep = memo<MappingStepProps>(
 
         {/* Data preview table */}
         <Table
-          bordered
           columns={columns}
           dataSource={preview.map((row, i) => ({ ...row, _key: i }))}
           pagination={false}
           rowKey="_key"
           scroll={{ x: scrollX, y: 'calc(95vh - 280px)' }}
           size="small"
+          variant="outlined"
         />
       </Flexbox>
     );

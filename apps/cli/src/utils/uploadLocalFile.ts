@@ -11,6 +11,8 @@ import { rasterDimensions } from './rasterDimensions';
 export interface UploadLocalFileOptions {
   knowledgeBaseId?: string;
   parentId?: string;
+  /** File source stored on the record, e.g. `tool-result` for a run's own output. */
+  source?: string;
 }
 
 export interface UploadFileBufferInput {
@@ -102,6 +104,7 @@ export const uploadFileBuffer = async (
       name: fileName,
       parentId: options.parentId,
       size: buffer.length,
+      source: options.source,
       url: pathname,
     });
   } catch (error) {

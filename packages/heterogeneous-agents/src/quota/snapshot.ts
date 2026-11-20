@@ -62,10 +62,12 @@ export type CodexRateLimitResetOutcome =
 /**
  * Why the quota can't be shown. `external-auth` means the agent is configured
  * with an API key / custom base url, so subscription quota does not apply;
- * the credential reasons mean no fresh OAuth login was found on this machine.
+ * the credential reasons mean no fresh OAuth login was found on this machine;
+ * `request-blocked` means Anthropic refused the sampling machine's network
+ * (region / missing proxy) before checking the login.
  */
 export type ClaudeCodeQuotaUnavailableReason =
-  'credentials-expired' | 'credentials-not-found' | 'external-auth';
+  'credentials-expired' | 'credentials-not-found' | 'external-auth' | 'request-blocked';
 
 export interface ClaudeCodeScopedWeekly {
   /** Display name of the model the window is scoped to, e.g. "Fable". */
@@ -75,6 +77,19 @@ export interface ClaudeCodeScopedWeekly {
 
 /** Account identity resolved from the local CLI config, for DB persistence. */
 export type ClaudeCodeAccountIdentity = QuotaAccountIdentity;
+
+/**
+ * A Claude Code login on one machine. `configDir: null` is the default login
+ * (no `CLAUDE_CONFIG_DIR` override); otherwise the account's own profile.
+ */
+export interface ClaudeCodeLocalAccount {
+  configDir: string | null;
+  identity: ClaudeCodeAccountIdentity;
+}
+
+/** Which local login a run for one provider account must spawn with. */
+export type ClaudeCodeAccountResolution =
+  { kind: 'default' } | { configDir: string; kind: 'profile' } | { kind: 'missing' };
 
 /** One raw limit reading, for fossilizing into the quota data layer. */
 export type ClaudeCodeQuotaReading = QuotaLimitReading;

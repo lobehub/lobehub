@@ -7,6 +7,7 @@ import {
   AI_RUNTIME_OPERATION_TYPES,
   INPUT_LOADING_OPERATION_TYPES,
   isQueueBlockingOperation,
+  isSendableQueuedMessage,
   QUEUE_BLOCKING_OPERATION_TYPES,
   SEND_NOW_CANCEL_REASON,
   TOPIC_VISIBLY_RUNNING_OPERATION_TYPES,
@@ -329,6 +330,49 @@ const getRunningQueueBlockingOperationIds =
       .map((op) => op.id);
   };
 
+/**
+ * Whether the run a context's queue waits behind sends it only once the whole
+ * run ends, instead of at the next step boundary.
+ *
+ * Heterogeneous CLI runs (Claude Code, Codex, …) cannot hand the turn back
+ * mid-run: a local `execHeterogeneousAgent` drains the queue after the CLI
+ * exits, and a Gateway run the server dispatched to an external producer
+ * (`heteroType`) drains it in `heteroFinish`. Read from the running operation,
+ * not the conversation's agent config, which can differ from what actually
+ * runs (an `@Agent` route, a legacy CLI agent recovered from its model id).
+ *
+ * A Gateway run whose producer went unreported (`heteroType` undefined: an
+ * older server or topic marker) may be a CLI run, so it promises the later
+ * timing, as the Gateway lifecycle treats it (`heteroType !== null`). A group
+ * member's run is skipped: its supervisor's run owns the queue.
+ *
+ * With nothing holding the queue locally, the queue still waits behind its
+ * idle host: a Gateway CLI socket that closes without its terminal completes
+ * the local op, yet the server keeps the producer running until `heteroFinish`.
+ */
+const isQueueDrainedAtRunEnd =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
+    const isCliRun = (op: Operation) => {
+      if (op.metadata.liveSteer) return false;
+      if (op.type === 'execHeterogeneousAgent') return true;
+      if (op.type !== 'execServerAgentRuntime') return false;
+
+      const parent = op.parentOperationId ? s.operations[op.parentOperationId] : undefined;
+      return parent?.type !== 'execServerAgentRuntime' && op.metadata.heteroType !== null;
+    };
+
+    const blocking = getOperationsByContext(context)(s).filter((op) =>
+      isQueueBlockingOperation(op, { hasQueuedMessages }),
+    );
+    if (blocking.length > 0) return blocking.some(isCliRun);
+
+    const host = getIdleQueueHost(context)(s);
+    return !!host && isCliRun(host);
+  };
+
 const getOperationTurnStartTime = (op: Operation) =>
   op.metadata.turnStartTime ?? op.metadata.startTime;
 
@@ -453,6 +497,32 @@ const isInputVisiblyLoadingByContext =
     return isSteerHandoffPending(context)(s);
   };
 
+/**
+ * Whether a sent message is still on its way to the agent in a specific context.
+ *
+ * Use when:
+ * - The composer decides between a loading Send and Stop. While `sendMessage`
+ *   creates the message (and, for a new conversation, its topic) no run exists
+ *   yet, so the send is shown as pending rather than as a run to stop.
+ *
+ * Returns:
+ * - `true` while a `sendMessage` op runs with no AI runtime op running beside it.
+ *   `sendMessage` completes right as it hands off to its runtime op, so the two
+ *   only overlap for that hand-off.
+ */
+const isSendDispatchPendingByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const running = getOperationsByContext(context)(s).filter(isRunningOperation);
+
+    return (
+      running.some((op) => op.type === 'sendMessage') &&
+      !running.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type))
+    );
+  };
+
 // === Backward Compatibility ===
 
 /**
@@ -486,6 +556,23 @@ const isAgentVisiblyRunning =
         return op && isVisiblyRunningOperation(op) && op.context.agentId === agentId;
       });
       if (hasRunning) return true;
+    }
+    return false;
+  };
+
+/** Check visible runtime loading across all agents and topics in a chat group. */
+const isGroupVisiblyRunning =
+  (groupId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      if (
+        operationIds.some((id) => {
+          const op = s.operations[id];
+          return op && isVisiblyRunningOperation(op) && op.context.groupId === groupId;
+        })
+      )
+        return true;
     }
     return false;
   };
@@ -950,7 +1037,8 @@ const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) =
 };
 
 const getIdleQueueHost = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
-  if (getQueuedMessages(context)(s).length === 0) return;
+  // A steer that may already be with the agent waits for the user, not a hand-off.
+  if (!getQueuedMessages(context)(s).some(isSendableQueuedMessage)) return;
 
   let latest: Operation | undefined;
   for (const op of getOperationsByContext(context)(s)) {
@@ -965,14 +1053,17 @@ const getIdleQueueHost = (context: MessageMapKeyInput) => (s: ChatStoreState) =>
 
 // A successful top-level run always drains its queue into a steered send, so a
 // queue sitting behind a completed run is the hand-off window, not a stale queue.
+const isDrainingQueueHost = (host?: Operation): boolean =>
+  host?.status === 'completed' && !host.metadata.endedWithoutCompletion;
+
 const isQueueDrainPending = (context: MessageMapKeyInput) => (s: ChatStoreState) =>
-  getIdleQueueHost(context)(s)?.status === 'completed';
+  isDrainingQueueHost(getIdleQueueHost(context)(s));
 
 // Send now keeps its item queued until the interrupt is confirmed; that wait is
 // part of the hand-off too, but its own send must not be re-queued.
 const isSteerHandoffPending = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
   const host = getIdleQueueHost(context)(s);
-  if (host?.status === 'completed') return true;
+  if (isDrainingQueueHost(host)) return true;
 
   return host?.status === 'cancelled' && host.metadata.cancelReason === SEND_NOW_CANCEL_REASON;
 };
@@ -1014,6 +1105,7 @@ export const operationSelectors = {
 
   isAgentRunning,
   isAgentVisiblyRunning,
+  isGroupVisiblyRunning,
   isAgentRuntimeRunning,
   isAgentRuntimeVisiblyRunning,
   isAgentUnreadCompleted,
@@ -1021,6 +1113,7 @@ export const operationSelectors = {
   isAgentRuntimeVisiblyRunningByContext,
   isInputLoadingByContext,
   isInputVisiblyLoadingByContext,
+  isSendDispatchPendingByContext,
   isAnyMessageLoading,
   isContinuing,
   isInSearchWorkflow,
@@ -1035,6 +1128,7 @@ export const operationSelectors = {
   isMessageProcessing,
   isMessageRegenerating,
   isRegenerating,
+  isQueueDrainedAtRunEnd,
   isQueueDrainPending,
   isSendingMessage,
   isSteerHandoffPending,
@@ -1045,6 +1139,7 @@ export const operationSelectors = {
   visiblyRunningTopicIds,
 
   // Message Queue
+  getIdleQueueHost,
   getQueuedMessages,
   queuedMessageCount,
 };

@@ -92,3 +92,47 @@ export const formatUpdateLoadRuleResult = ({
 /** A removed document has no live url to share, so only the id is reported. */
 export const formatRemoveDocumentResult = ({ id }: { id: string }): string =>
   `Removed document ${id}.`;
+
+export interface FormatCreateFolderResultParams {
+  /** False when an existing folder with the same name was reused. */
+  created: boolean;
+  /** The folder's `documents` id — what createDocument / moveDocuments take as `parentId`. */
+  folderId: string;
+  title: string;
+}
+
+export const formatCreateFolderResult = ({
+  created,
+  folderId,
+  title,
+}: FormatCreateFolderResultParams): string =>
+  `${created ? 'Created' : 'Reused existing'} folder "${title}" (folder id: ${folderId}). ` +
+  'Pass this id as parentId to createDocument, moveDocuments or listDocuments. ' +
+  'It is an internal handle; never show it to the user.';
+
+export interface FormatMoveDocumentsResultParams {
+  /** Destination folder id, or null for the root. */
+  parentId: string | null;
+  results: Array<{
+    error?: string;
+    id: string;
+    status: 'failed' | 'moved' | 'unchanged';
+    title?: string;
+  }>;
+}
+
+export const formatMoveDocumentsResult = ({
+  parentId,
+  results,
+}: FormatMoveDocumentsResultParams): string => {
+  const count = (status: string) => results.filter((r) => r.status === status).length;
+  const destination = parentId ? `folder ${parentId}` : 'the root';
+  const summary =
+    `Moved ${count('moved')} item(s) to ${destination}; ` +
+    `${count('unchanged')} already there; ${count('failed')} failed.`;
+  const failures = results
+    .filter((r) => r.status === 'failed')
+    .map((r) => `- ${r.title ? `"${r.title}" (${r.id})` : r.id}: ${r.error ?? 'unknown error'}`);
+
+  return failures.length > 0 ? `${summary}\nFailed:\n${failures.join('\n')}` : summary;
+};

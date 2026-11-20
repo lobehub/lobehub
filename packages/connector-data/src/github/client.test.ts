@@ -445,7 +445,11 @@ describe('createGitHubConnectorClient', () => {
     };
     const client = createGitHubConnectorClient({ transport });
     const first = client.getUserProfile();
-    const firstRejection = expect(first).rejects.toMatchObject({ retryable: true });
+    // Retries exhaust on the transient status, and the original failure surfaces.
+    const firstRejection = expect(first).rejects.toMatchObject({
+      message: 'temporary outage',
+      status: 503,
+    });
 
     await vi.runAllTimersAsync();
     await firstRejection;
@@ -511,11 +515,12 @@ describe('createGitHubConnectorClient', () => {
 
   it('does not expose repository input in contributor errors', async () => {
     const sensitiveRepository = 'token-sensitive-owner/private-repository';
+    const upstreamError = { status: 401 };
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
       listAccessibleRepositories: async () => [],
       listRepositoryBranches: async () => [],
-      listRepositoryContributors: vi.fn().mockRejectedValue({ status: 401 }),
+      listRepositoryContributors: vi.fn().mockRejectedValue(upstreamError),
       listUserOrganizations: async () => [],
       request: vi.fn(),
     };
@@ -525,10 +530,8 @@ describe('createGitHubConnectorClient', () => {
       .listRepositoryContributors(sensitiveRepository)
       .catch((reason) => reason);
 
-    expect(error).toMatchObject({
-      message: 'github listRepositoryContributors failed',
-      operation: 'listRepositoryContributors',
-    });
+    // The upstream failure is rethrown as-is, without the repository input attached.
+    expect(error).toBe(upstreamError);
     expect(JSON.stringify(error)).not.toContain(sensitiveRepository);
   });
 

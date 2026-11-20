@@ -87,6 +87,27 @@ const stage = async (builtin, remote, current = null) =>
     remote: remote.manifest,
   });
 describe('v4 pack OTA', () => {
+  it('reports startup download progress before applying a v4 update', async () => {
+    const builtin = await build('1', files);
+    const remote = await build('5', { ...files, 'cli/new.js': Buffer.from('new') });
+    const events = [];
+    const result = await new CoreStore(path.join(root, 'ota'), fetchImpl).stage({
+      builtin,
+      current: null,
+      onApplying: () => events.push({ phase: 'applying' }),
+      onDownloadProgress: (progress) => events.push({ phase: 'downloading', ...progress }),
+      packsBaseUrl: BASE,
+      remote: remote.manifest,
+    });
+    expect(events.length).toBeGreaterThan(1);
+    expect(events.at(-2)).toMatchObject({
+      phase: 'downloading',
+      received: result.downloaded.bytes,
+    });
+    expect(result.downloaded.bytes).toBeGreaterThan(0);
+    expect(events.at(-1)).toEqual({ phase: 'applying' });
+    expect(await readFile(path.join(result.dir, 'cli/new.js'), 'utf8')).toBe('new');
+  });
   it('reuses builtin renderer content when the current version is an overlay', async () => {
     const v1 = await build('1', files);
     const v5 = await build('5', { ...files, 'cli/new.js': Buffer.from('new') });

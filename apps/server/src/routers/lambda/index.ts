@@ -3,6 +3,7 @@
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { artifactShareRouter } from '@/business/server/lambda-routers/artifactShare';
+import { fileShareRouter } from '@/business/server/lambda-routers/fileShare';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
@@ -17,13 +18,17 @@ import { workspaceCreditsRouter } from '@/business/server/lambda-routers/workspa
 import { workspaceCredsRouter } from '@/business/server/lambda-routers/workspaceCreds';
 import { workspaceDataRouter } from '@/business/server/lambda-routers/workspaceData';
 import { workspaceMemberRouter } from '@/business/server/lambda-routers/workspaceMember';
+import { workspaceTeamRouter } from '@/business/server/lambda-routers/workspaceTeam';
 import { workspaceUsageRouter } from '@/business/server/lambda-routers/workspaceUsage';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
+import { agentAccountRouter } from './agentAccount';
+import { agentAvailabilityRouter } from './agentAvailability';
 import { agentBotProviderRouter } from './agentBotProvider';
+import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
@@ -31,55 +36,70 @@ import { agentGroupRouter } from './agentGroup';
 import { agentLabelRouter } from './agentLabel';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
+import { agentRunBoardRouter } from './agentRunBoard';
 import { agentShareRouter } from './agentShare';
 import { agentSignalRouter } from './agentSignal';
 import { agentSkillsRouter } from './agentSkills';
+import { agentSteerQueueRouter } from './agentSteerQueue';
 import { agentTraceRouter } from './agentTrace';
 import { aiAgentRouter } from './aiAgent';
 import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
+import { artboardRouter } from './artboard';
 import { asrRouter } from './asr';
+import { authRouter } from './auth';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
+import { canvasRouter } from './canvas';
 import { changelogRouter } from './changelog';
+import { channelRouter } from './channel';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
 import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
+import { contactRouter } from './contact';
 import { dashboardRouter } from './dashboard';
 import { deviceRouter } from './device';
 import { deviceMetricRouter } from './deviceMetric';
 import { documentRouter } from './document';
 import { documentCommentRouter } from './documentComment';
 import { documentLikeRouter } from './documentLike';
+import { environmentRouter } from './environment';
 import { expertiseRouter } from './expertise';
 import { exporterRouter } from './exporter';
+import { favoriteRouter } from './favorite';
 import { fileRouter } from './file';
 import { followUpActionRouter } from './followUpAction';
 import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
 import { goalRouter } from './goal';
+import { goalShareRouter } from './goalShare';
 import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
+import { inboundWebhookRouter } from './inboundWebhook';
 import { klavisRouter } from './klavis';
 import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
+import { linearRouter } from './linear';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
+import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
+import { musicRouter } from './music';
 import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
 import { projectRouter } from './project';
+import { projectReviewRouter } from './projectReview';
 import { projectWorkingDirectoryRouter } from './projectWorkingDirectory';
 import { pushTokenRouter } from './pushToken';
 import { ragEvalRouter } from './ragEval';
@@ -94,15 +114,18 @@ import { sessionGroupRouter } from './sessionGroup';
 import { shareRouter } from './share';
 import { shareChatRouter } from './shareChat';
 import { taskRouter } from './task';
+import { taskLabelRouter } from './taskLabel';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { topicCommentRouter } from './topicComment';
 import { trashRouter } from './trash';
+import { ttsRouter } from './tts';
 import { uploadRouter } from './upload';
 import { usageRouter } from './usage';
 import { userRouter } from './user';
 import { userMemoriesRouter } from './userMemories';
 import { userMemoryRouter } from './userMemory';
+import { userSkillRouter } from './userSkill';
 import { verifyRouter } from './verify';
 import { videoRouter } from './video';
 import { webBrowsingRouter } from './webBrowsing';
@@ -114,7 +137,9 @@ export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
+  agentAccount: agentAccountRouter,
   agentBotProvider: agentBotProviderRouter,
+  agentBotWake: agentBotWakeRouter,
   agentNotify: agentNotifyRouter,
   botMessage: botMessageRouter,
   agentDocument: agentDocumentRouter,
@@ -122,20 +147,31 @@ export const lambdaRouter = router({
   agentEvalExternal: agentEvalExternalRouter,
   agentLabel: agentLabelRouter,
   agentSkills: agentSkillsRouter,
+  environment: environmentRouter,
+  favorite: favoriteRouter,
   sandboxStorage: sandboxStorageRouter,
   agentTrace: agentTraceRouter,
   expertise: expertiseRouter,
+  agentRunBoard: agentRunBoardRouter,
   agentSignal: agentSignalRouter,
+  agentSteerQueue: agentSteerQueueRouter,
+  artboard: artboardRouter,
+  canvas: canvasRouter,
   changelog: changelogRouter,
+  channel: channelRouter,
+  contact: contactRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
+  agentAvailability: agentAvailabilityRouter,
   agentQuota: agentQuotaRouter,
   agentShare: agentShareRouter,
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
   asr: asrRouter,
+  auth: authRouter,
+  tts: ttsRouter,
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
   config: configRouter,
@@ -153,27 +189,33 @@ export const lambdaRouter = router({
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,
   goal: goalRouter,
+  goalShare: goalShareRouter,
   group: agentGroupRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
   image: imageRouter,
+  inboundWebhook: inboundWebhookRouter,
   importer: importerRouter,
   composio: composioRouter,
 
   klavis: klavisRouter,
   knowledge: knowledgeRouter,
   knowledgeBase: knowledgeBaseRouter,
+  linear: linearRouter,
   llmGenerationTracing: llmGenerationTracingRouter,
   market: marketRouter,
+  meeting: meetingRouter,
   message: messageRouter,
   messenger: messengerRouter,
   metric: metricRouter,
+  music: musicRouter,
   notebook: notebookRouter,
   notification: notificationRouter,
   oauthApp: oauthAppRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
   project: projectRouter,
+  projectReview: projectReviewRouter,
   projectWorkingDirectory: projectWorkingDirectoryRouter,
   pushToken: pushTokenRouter,
   ragEval: ragEvalRouter,
@@ -187,6 +229,7 @@ export const lambdaRouter = router({
   share: shareRouter,
   shareChat: shareChatRouter,
   task: taskRouter,
+  taskLabel: taskLabelRouter,
   thread: threadRouter,
   topic: topicRouter,
   trash: trashRouter,
@@ -196,6 +239,7 @@ export const lambdaRouter = router({
   user: userRouter,
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
+  userSkill: userSkillRouter,
   verify: verifyRouter,
   video: videoRouter,
   webBrowsing: webBrowsingRouter,
@@ -207,10 +251,12 @@ export const lambdaRouter = router({
   workspaceCredits: workspaceCreditsRouter,
   workspaceData: workspaceDataRouter,
   workspaceMember: workspaceMemberRouter,
+  workspaceTeam: workspaceTeamRouter,
   workspaceUsage: workspaceUsageRouter,
   workspaceUserSettings: workspaceUserSettingsRouter,
   accountDeletion: accountDeletionRouter,
   artifactShare: artifactShareRouter,
+  fileShare: fileShareRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,
   spend: spendRouter,

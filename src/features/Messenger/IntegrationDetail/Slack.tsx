@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Icon } from '@lobehub/ui';
 import { BriefcaseIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,15 +35,10 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
 
   const data = useMessengerData('slack');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'slack',
   });
-  const disconnectInstallation = useDisconnectInstallation({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
-  });
+  const disconnectInstallation = useDisconnectInstallation();
 
   // For Slack, disconnecting an install row freezes the workspace's bot —
   // dispatch is token-gated, so removing the install effectively kills the
@@ -60,7 +54,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton />;
+  if (data.isInitialLoading) return <IntegrationDetailSkeleton platform={'slack'} />;
 
   const { installations, links, tenantNameByTenantId } = data;
   const hasInstallations = installations.length > 0;

@@ -327,6 +327,33 @@ describe('acceptanceCommentRouter workspace scoping', () => {
     expect(data.authorUserId).toBe(visitorId);
   });
 
+  it('hides an only-me delivery from its own workspace', async () => {
+    const [hidden] = await serverDB
+      .insert(acceptances)
+      .values({
+        subjectId: randomUUID(),
+        subjectType: 'standalone',
+        userId: ownerId,
+        visibility: 'owner',
+        workspaceId,
+      })
+      .returning();
+
+    await expect(
+      caller(viewerId).create({
+        acceptanceId: hidden.id,
+        clientId: `c-${randomUUID()}`,
+        content: 'can I see this?',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const { data } = await caller(ownerId).create({
+      acceptanceId: hidden.id,
+      clientId: `c-${randomUUID()}`,
+      content: 'note to self',
+    });
+    expect(data.authorUserId).toBe(ownerId);
+  });
+
   // Read-only in the workspace means read-only on its private deliveries, the
   // same rule topic and document comments enforce.
   it('keeps a workspace viewer read-only on a private delivery', async () => {

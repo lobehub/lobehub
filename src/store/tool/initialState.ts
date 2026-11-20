@@ -19,6 +19,10 @@ import {
 } from './slices/lobehubSkillStore/initialState';
 import { initialMCPStoreState, type MCPStoreState } from './slices/mcpStore/initialState';
 import { initialPluginState, type PluginState } from './slices/plugin/initialState';
+import {
+  initialProjectSkillsState,
+  type ProjectSkillsState,
+} from './slices/projectSkills/initialState';
 
 export type ToolStoreState = ConnectorState &
   PluginState &
@@ -28,7 +32,8 @@ export type ToolStoreState = ConnectorState &
   ComposioStoreState &
   LobehubSkillStoreState &
   AgentSkillsState &
-  AgentDocumentSkillsState;
+  AgentDocumentSkillsState &
+  ProjectSkillsState;
 
 export const initialState: ToolStoreState = {
   ...initialConnectorState,
@@ -40,4 +45,5 @@ export const initialState: ToolStoreState = {
   ...initialLobehubSkillStoreState,
   ...initialAgentSkillsState,
   ...initialAgentDocumentSkillsState,
+  ...initialProjectSkillsState,
 };

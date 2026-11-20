@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * `topicComment` is a `@lobechat/replica`-backed store. The root feed, the
+ * `topicComment` is a `local-replica`-backed store. The root feed, the
  * reply feed, the per-topic counts and one comment by id each paint their
  * persisted row before the network answers, are confirmed and persisted by the
  * response, page further through the engine, and are re-partitioned when the
@@ -364,6 +364,46 @@ describe('topicComment replicas', () => {
       });
       expect(row).toBeUndefined();
     });
+  });
+
+  it('stops warming replies of the previous identity once the cache scope changed', async () => {
+    // Five roots warm in two batches (four, then one). The identity changes
+    // while the first batch is in flight: the second batch's root belongs to
+    // the previous identity and must not be fetched — let alone written —
+    // under the new one.
+    const roots = ['root-1', 'root-2', 'root-3', 'root-4', 'root-5'];
+    const resolvers: ((page: unknown) => void)[] = [];
+    listThreadsSpy.mockResolvedValue({
+      items: roots.map((id) => thread(id, 1)),
+      nextCursor: null,
+    });
+    listRepliesSpy.mockImplementation(
+      () => new Promise((resolve) => resolvers.push(resolve)) as any,
+    );
+
+    const prefetch = useTopicCommentStore.getState().prefetchTopicComments('topic-1');
+    await waitFor(() => expect(resolvers).toHaveLength(4));
+
+    const nextScope = `topic-user-${randomUUID()}:personal`;
+    useScope(nextScope);
+
+    await act(async () => {
+      for (const [index, resolve] of resolvers.entries())
+        resolve({
+          items: [comment(`reply-${index}`, { parentCommentId: roots[index] })],
+          nextCursor: null,
+          total: 1,
+        });
+      await prefetch;
+    });
+
+    expect(listRepliesSpy).toHaveBeenCalledTimes(4);
+    expect(useTopicCommentStore.getState().replyFeedMap).toEqual({});
+    const row = await topicCommentReplyResource.storage!.get({
+      queryKey: 'root-5',
+      scope: nextScope,
+    });
+    expect(row).toBeUndefined();
   });
 
   it('keeps one comment by id in the detail view and drops it from view and storage', async () => {

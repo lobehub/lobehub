@@ -7,12 +7,14 @@ import {
  * What one All-tasks row says about its Task. The glyph, its hover label and
  * whether the duration clock ticks all read this one value, so the icon, the
  * word and the clock can never disagree — an `active` node that lost its lease
- * is `lost`, not "Running".
+ * is `stalled`, not "Running".
  */
-export type TaskRowState = 'decision' | 'done' | 'lost' | 'queued' | 'retired' | 'running';
+export type TaskRowState =
+  'decision' | 'done' | 'queued' | 'retired' | 'running' | 'stalled' | 'waitingQuota';
 
 export const taskRowState = (view: GoalNodeView): TaskRowState => {
-  if (view.isStale) return 'lost';
+  if (view.isStale) return 'stalled';
+  if (view.quotaRetryAt) return 'waitingQuota';
   if (view.decision) return 'decision';
   if (isRunningNode(view)) return 'running';
   if (view.node.status === 'resolved') return 'done';
@@ -21,7 +23,8 @@ export const taskRowState = (view: GoalNodeView): TaskRowState => {
 };
 
 export const taskRowStateLabelKey = (view: GoalNodeView, state: TaskRowState) => {
-  if (state === 'lost') return 'goalProcess.tag.lost' as const;
+  if (state === 'stalled') return 'goalProcess.tag.stalled' as const;
+  if (state === 'waitingQuota') return 'goalProcess.tag.waitingQuota' as const;
   if (state === 'decision') return 'goalProcess.tag.needsDecision' as const;
   return `goalProcess.nodeStatus.${view.node.status}` as const;
 };
@@ -48,3 +51,11 @@ export const taskRowSpan = (
   const endedAt = last.endedAt ?? (state === 'running' ? undefined : view.heartbeatAt);
   return { endedAt, startedAt: first.startedAt };
 };
+
+/**
+ * A metric row backed by a real Task opens that Task's detail directly — the
+ * node drill-down would only repeat the row and add one more click. Other node
+ * kinds (findings, decisions…) have no Task to open and keep the drill-down.
+ */
+export const metricRowTaskId = (view: GoalNodeView): string | undefined =>
+  view.node.kind === 'task' ? (view.node.taskId ?? undefined) : undefined;

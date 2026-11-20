@@ -1,5 +1,18 @@
 import type { CoreManifest } from '@/core/infrastructure/coreOta/manifest';
 
+export interface StartupUpdateProgress {
+  phase: 'checking' | 'downloading' | 'applying';
+  received?: number;
+  total?: number;
+}
+
+export interface SecurityUpdateCheck {
+  check: () => Promise<boolean>;
+  isInstallerSafe: (version: string) => boolean;
+}
+
+export type StartupUpdateOutcome = 'ready' | 'relaunch' | 'full-update';
+
 export interface ShellGlobal {
   readonly abi: string;
   readonly builtinDir: string;
@@ -11,6 +24,13 @@ export interface ShellGlobal {
   readonly publicKey: string;
   readonly shellVersion: string;
   readonly source: 'builtin' | 'external';
+  readonly startupUpdate?: {
+    checkSecurity: (security: SecurityUpdateCheck) => Promise<boolean>;
+    pending: boolean;
+    run: (
+      check: (update: (state: StartupUpdateProgress) => void) => Promise<StartupUpdateOutcome>,
+    ) => Promise<boolean>;
+  };
 }
 
 declare global {

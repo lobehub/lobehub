@@ -32,7 +32,7 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   system-only tools whose every API WRITES agent-document rows under the
   creator's account. No write grant exists to honor.
 
-- `lobe-task` / `lobe-goal`: `TaskModel`/`taskRouter` are scoped only by
+- `lobe-task` / `builtin-goal`: `TaskModel`/`taskRouter` are scoped only by
   `userId`/`workspaceId` — the CREATOR's. Every mutating and single-task-read
   API takes a model-supplied identifier resolved with no topic/conversation
   check, letting a visitor read, edit, delete, reschedule or RUN (spending
@@ -63,19 +63,6 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   with no share-run scoping designed in — same risk class as
   `lobe-agent-management`.
 
-- `lobe-topic-reference`: `topicReferenceRuntime.getTopicContext`
-  (`apps/server/src/services/toolExecution/serverRuntimes/topicReference.ts`)
-  resolves a free-form model-supplied `topicId` via
-  `TopicModel.findOwnTopicById`, scoped only to the creator's `userId` — not
-  to this share or agent — letting a visitor's model read the summary or
-  recent messages of ANY other topic the creator owns by guessing/enumerating
-  ids. `DATA_TOOL_ACCESS_RULES` has no entry for it (it isn't a
-  memory/knowledge-base/agent-documents style store), so nothing narrows the
-  allowlist grant. The automatic `<refer_topic>` injection path
-  (`serverCallLlmContextBuilder.ts`) is separately share-scoped via
-  `isTopicVisibleToRun` and is unaffected by this denial — only the
-  model-invokable tool-call path is unsafe.
-
 Denied for lack of positive safety evidence (no confirmed exploit was
 required to withhold access — the point of default-deny is that an unproven
 tool does not ship):
@@ -84,7 +71,23 @@ tool does not ship):
   through `deviceGateway` to the creator's own registered physical
   device(s). A visitor executing arbitrary commands or driving a live
   browser session on the CREATOR's own machine is a far larger blast radius
-  than any single data store.
+  than any single data store, so they are never offered through the tool
+  picker. They are granted only by `shareConfig.deviceAccess`: `contacts`
+  admits everyone currently in the address book of the Agent's scope
+  (personal contacts, or the workspace's members and external contacts),
+  including people added later; `allowlist` admits only visitors named in
+  `deviceAllowUserIds`, and only while they are still in that address book.
+  There is no "every visitor" value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  `canUseDevice` and re-applied at dispatch. The same grant admits
+  device-only MCP servers (which still need their own tool grant). The device
+  is always the Agent's configured execution environment; a visitor never
+  picks it, and project directories stay denied. The grant covers the
+  engine's device tools (`DEVICE_TOOL_IDENTIFIERS`, so computer use too)
+  except the `lobe-remote-device` picker: with it the visitor's model could
+  list and activate the creator's other machines, so it stays default-denied
+  even under the grant. The same grant lets the visitor run a heterogeneous
+  Agent that runs locally (Claude Code, Codex and the other local CLIs) on that device; without it the run is refused,
+  and a share run never falls back to the cloud sandbox.
 
 - `lobe-web-onboarding`: reads and WRITES the creator's own onboarding
   `SOUL.md` document and persona.
@@ -99,19 +102,18 @@ tool does not ship):
   it would only let the owner-facing tool picker confirm a grant no visitor
   conversation can ever exercise.
 
-- `lobe-user-interaction` / `lobe-activator`: originally denied because
-  share runs were forced headless, so neither could ever honestly complete.
-  Share runs now honor the visitor's approval flow, but both stay denied
-  until audited on their own: `lobe-activator` can widen the run's tool
-  surface at runtime, which must be proven not to escape the share grant.
+- `lobe-user-interaction`: originally denied because share runs were forced
+  headless, so it could never honestly complete. Share runs now honor the
+  visitor's approval flow, but it stays denied until audited on its own.
 
 - Device-only MCP servers (stdio, or an HTTP endpoint on localhost / a
   private network): not builtin identifiers, so the allowlist above never
-  sees them, but a visitor run must still never reach them — the server can
-  only call them by tunneling to the creator's online desktop app (or, with
-  no device gateway, by spawning the binary on the server itself).
-  `applyShareGateToToolSet` drops them regardless of `toolGrants`, and
-  `ToolExecutionService.executeMCPTool` refuses the dispatch.
+  sees them — the server can only call them by tunneling to the creator's
+  online desktop app (or, with no device gateway, by spawning the binary on
+  the server itself), exactly as it would for the creator. Without the
+  share's device grant, `applyShareGateToToolSet` drops them regardless of
+  `toolGrants` and `ToolExecutionService.executeMCPTool` refuses the
+  dispatch; with it, they follow their ordinary `toolGrants` entry.
 
 ## Allowed builtins with general reach
 
@@ -129,7 +131,55 @@ absence of a known exploit.
   `agentShareVisitor` runs (`serverRuntimes/cloudSandbox.ts`), and
   `lobe-creds` stays denied above so nothing ever writes `~/.creds/env`
   into that session either. No creator credential or JWT is therefore
-  reachable from inside a visitor's sandbox command.
+  reachable from inside a visitor's sandbox command. The kept manifest's
+  `systemRole` also gets `shareVisitorSystemPrompt` appended
+  (`applyShareGateToCloudSandbox` in `toolSet.ts`), so the model knows `lh`
+  is refused before it plans a flow the agent prompt or a skill routes
+  through the CLI.
+
+- `lobe-activator`: widens the run's tool surface at runtime, so it is
+  allowed only because every source it reads is already the gated set.
+  Never picked by the owner: any tool grant implies it, and so does the
+  device grant (Computer Use is discoverable, not enabled), scoped to
+  `activateTools` (`shareGate/grants.ts:132`, which also overrides a stored entry so
+  nothing widens it to the runtime's unlisted `activateSkill`), and assembly
+  drops it again when no granted tool is left to activate, counting restored
+  historical activations as already enabled (`shareGate/toolSet.ts:166`). A
+  kept activator gets the share-visitor `systemRole`
+  (`getSystemPromptForShareVisitor`), which omits the default prompt's push
+  to activate `lobe-skill-store` first and keeps its `activateSkill` lines
+  only when `lobe-skills` itself survived the gate. Credential discovery
+  lives in the `lobe-creds` manifest, which the gate excludes.
+
+  1. What it can see. `<available_tools>` is the operation's `manifestMap`
+     minus enabled tools (`apps/server/src/modules/AgentRuntime/executorHelpers.ts:644`), and
+     that map is the one `applyShareGateToToolSet` pruned in place
+     (`apps/server/src/services/aiAgent/pipeline/operationPrep.ts:559`). An ungranted MCP server or plugin
+     contributes no name or description.
+  2. What it can activate. `activateTools` only resolves ids present in
+     `context.toolManifestMap` (`apps/server/src/services/toolExecution/serverRuntimes/activator.ts:166`),
+     which is the step's `effectiveManifestMap`
+     (`apps/server/src/modules/AgentRuntime/adapters/ServerToolTransport.ts:310`): the gated
+     operation map plus manifests of earlier activations, themselves copied
+     from the same map (`packages/agent-runtime/src/executors/tool.ts:117`,
+     `:567`). An ungranted id comes back as "Not found".
+  3. Calls in the same step. The tool-call resolver only accepts a call the
+     step offered, or one whose identifier and API exist in the step's
+     prompt manifests (`packages/context-engine/src/engine/tools/ToolNameResolver.ts:284`);
+     a tool activated in this response is not offered until the next step,
+     so a same-response call to it is dropped. Whatever does reach dispatch
+     still meets the dispatch-time gates: `isShareBlockedBuiltinDispatch` for
+     builtins (`apps/server/src/services/toolExecution/builtin.ts:192`) and the gated manifest lookup
+     for MCP (`apps/server/src/services/toolExecution/index.ts:253`).
+  4. Activations restored from history. `operationPrep` re-derives them into
+     `activatableToolIds` (`apps/server/src/services/aiAgent/pipeline/operationPrep.ts:535`) before the share
+     gate prunes that list, and `AgentRuntimeService` restores only ids still
+     in it (`apps/server/src/services/agentRuntime/AgentRuntimeService/createOperation.ts:182`).
+  5. Its skill fallback. `activateTools` retries a non-tool id as a skill
+     name. That lookup re-checks `shareConfig.skillGrants` on every source it
+     opens (`apps/server/src/services/toolExecution/serverRuntimes/activator.ts:97`), the same rule the
+     skills runtime enforces, so it cannot reach a skill the share did not
+     grant.
 
 - `lobe-skills`: the tool DOES resolve skills out of the creator's personal
   catalog — that is what it is for, and it was denied for exactly that reason
@@ -157,3 +207,26 @@ absence of a known exploit.
   a creator who opens a skill opens that skill's instructions, and that is
   the premise of Agent Share, not a hole in it. The gate's job is to execute
   the grant exactly, not to second-guess which skills a creator should share.
+
+- `lobe-work`: the one builtin a visitor run gets WITHOUT a creator grant
+  (`AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS`): `resolveEffectiveShareToolGrants`
+  implies it, `getShareGrantActivatedPluginIds` enables it, and
+  `filterPluginsByShareGate` keeps it, so the owner's picker shows no toggle
+  for it. It only registers what the run produced as Work cards:
+
+  1. the run (operation, topic, tool call, assistant message) comes from the
+     execution context, never from model arguments;
+  2. writes go through `WorkModel` under the share scope pinned to the
+     visitor topic (`resolveRunWorkAccessScope`), so the Works never reach the
+     creator's ordinary lists; a visitor run without a topic is refused;
+  3. `updateWork` / `deleteWork` reach only Works this conversation created
+     through the tool or `lh work` (`agentEditable`), never ones collected
+     automatically or made in another conversation;
+  4. collection images must be images of the run's account
+     (`resolveAgentWorkCollectionItems`): a generated image or run output must
+     also appear in a tool result of the visitor topic, and any other image must
+     come from an `exportFile` call of that topic (its state's `fileId`), so a
+     guessed id of another creator image is refused as not found.
+
+  Its implied grant is added after the activator check, so it never implies
+  `lobe-activator` on its own.

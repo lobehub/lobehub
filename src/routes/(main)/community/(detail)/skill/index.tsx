@@ -2,13 +2,14 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { SkillDetailView, SkillNavKey } from '@/features/CommunitySkillDetail';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 
 import NotFound from '../components/NotFound';
 
@@ -31,6 +32,7 @@ const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
 
   const { version } = useQuery() as { version?: string };
   const [searchParams, setSearchParams] = useSearchParams();
+  const { state } = useLocation();
   const activeTabParam = searchParams.get('activeTab');
   const activeTab = Object.values(SkillNavKey).includes(activeTabParam as SkillNavKey)
     ? (activeTabParam as SkillNavKey)
@@ -44,13 +46,14 @@ const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
       } else {
         next.set('activeTab', tab);
       }
-      setSearchParams(next, { replace: true });
+      setSearchParams(next, { replace: true, state });
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, state],
   );
 
   const useSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-  const { data, error, isLoading, mutate } = useSkillDetail({ identifier, version });
+  const { error, isLoading, mutate, queryKey } = useSkillDetail({ identifier, version });
+  const data = useDiscoverStore(skillSelectors.skillDetail(queryKey));
   if (data === undefined) {
     if (isLoading) return <RouteLoading />;
     if (error) return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;

@@ -2,8 +2,10 @@ import type {
   AgentAccountCapabilities,
   AgentAccountCredentialHint,
   AgentAccountKind,
+  AgentAccountSettings,
   AgentAccountStatus,
 } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -13,8 +15,8 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * The identity assets an agent owns: its `mail` address, `phone` number,
- * `wallet`, or a third-party `service` login.
+ * The identity assets an agent owns: its `mail` address, a `wallet`, or a
+ * third-party `service` login.
  *
  * This is deliberately **not** `agent_bot_providers`. A bot provider models
  * "our bot inside someone else's platform" — the address belongs to the
@@ -59,7 +61,7 @@ export const agentAccounts = pgTable(
     /** Human label, e.g. "Work mailbox". */
     displayName: text('display_name'),
 
-    /** Who issues/owns this account: `agent-mail`, `linq`, `user`, … */
+    /** Who issues/owns this account: `agent-mail`, `user`, … */
     provider: text('provider').notNull(),
 
     status: text('status').$type<AgentAccountStatus>().notNull().default('provisioning'),
@@ -89,21 +91,30 @@ export const agentAccounts = pgTable(
     /** Provider-side non-secret handles (inboxId, chatId, walletId, …). */
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
 
+    /**
+     * The owner's own settings for the account, such as its wake rules. Kept
+     * apart from `metadata`, which a managed provider owns and the owner may
+     * not rewrite.
+     */
+    settings: jsonb('settings').$type<AgentAccountSettings>().notNull().default({}),
+
     /** When the account was released. Kept for audit; the row is not deleted. */
     revokedAt: timestamptz('revoked_at'),
 
     ...timestamps,
   },
   (t) => [
-    // One agent cannot mount the same account twice.
-    uniqueIndex('agent_accounts_agent_kind_provider_identifier_unique').on(
-      t.agentId,
-      t.kind,
-      t.provider,
-      t.identifier,
-    ),
-    // Inbound routing: an incoming message/call resolves to exactly one account.
-    uniqueIndex('agent_accounts_provider_identifier_unique').on(t.provider, t.identifier),
+    // One agent cannot mount the same live account twice. Revoked rows stay
+    // for audit but no longer hold the handle, so it can be bound again.
+    uniqueIndex('agent_accounts_agent_kind_provider_identifier_unique')
+      .on(t.agentId, t.kind, t.provider, t.identifier)
+      .where(sql`${t.status} <> 'revoked'`),
+    // Inbound routing: an incoming message/call resolves to exactly one live
+    // account. Partial for the same reason — a released number or address must
+    // not stay locked to the agent that gave it up.
+    uniqueIndex('agent_accounts_provider_identifier_unique')
+      .on(t.provider, t.identifier)
+      .where(sql`${t.status} <> 'revoked'`),
     index('agent_accounts_agent_id_idx').on(t.agentId),
     index('agent_accounts_user_id_idx').on(t.userId),
     index('agent_accounts_workspace_id_idx').on(t.workspaceId),

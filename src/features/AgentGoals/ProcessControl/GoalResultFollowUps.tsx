@@ -1,21 +1,21 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowRight, CircleSlash, Flag, MessageCircleQuestion, XCircle } from 'lucide-react';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useDensityTokens } from '@/styles/density';
 
 import { createGoalModal } from '../CreateGoalModal';
 import {
   coordinatorGateKind,
   coordinatorGateReason,
-  coordinatorReasonCopy,
+  gateOptionLabelKey,
   gateTitleKey,
+  localizedCoordinatorReason,
 } from './coordinatorCopy';
 import { pickFinalDeliverable } from './goalAcceptanceReport';
 import type { GoalGraphView } from './goalGraphViewModel';
@@ -50,14 +50,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const SectionTitle = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => (
-  <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-    <Text fontSize={16} weight={600}>
-      {children}
-    </Text>
-    {extra}
-  </Flexbox>
-);
+export const SectionTitle = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => {
+  const { pageTitleFontSize } = useDensityTokens();
+  return (
+    <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+      <Text fontSize={pageTitleFontSize} weight={600}>
+        {children}
+      </Text>
+      {extra}
+    </Flexbox>
+  );
+};
 
 /** A group inside a section — one step below `SectionTitle`, same row grammar. */
 export const GroupLabel = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => (
@@ -84,27 +87,35 @@ const DecisionTime = ({ at }: { at: Date }) => {
  * recognized gate reads as its localized title, the task it was about and the
  * localized reason. Any other decision keeps the wording it was asked in.
  */
-const useDecisionCopy = (graph: GoalGraphView) => {
+export const useDecisionCopy = (graph: GoalGraphView) => {
   const { t } = useTranslation('chat');
 
   return (view: UserDecisionView) => {
     const { decision } = view;
     const kind = coordinatorGateKind(decision);
-    if (!kind) return { choice: view.choice, question: view.question };
+    const optionsOf = (labelOf: (id: string) => string | undefined) =>
+      (decision.options ?? []).map((option) => ({
+        ...(option.description ? { description: option.description } : {}),
+        id: option.id,
+        label: labelOf(option.id) ?? option.label,
+      }));
+    if (!kind)
+      return { choice: view.choice, options: optionsOf(() => undefined), question: view.question };
 
     const subjectId = graph.byId[decision.nodeId]?.gateSubjectId;
     const subject = subjectId ? graph.byId[subjectId]?.node.title : undefined;
     const rawReason = coordinatorGateReason(decision.question);
-    const reasonCopy = coordinatorReasonCopy(rawReason);
     const optionId = decision.resolvedOptionId;
-    const choice =
-      optionId === 'retry' || optionId === 'retire' || optionId === 'fail'
-        ? t(`goalProcess.gate.option.${optionId}`)
-        : view.choice;
+    const optionKey = optionId ? gateOptionLabelKey({ id: optionId }, kind) : undefined;
+    const choice = optionKey ? t(optionKey as any) : view.choice;
 
     return {
       choice,
-      detail: reasonCopy ? t(reasonCopy.key as any, reasonCopy.params) : rawReason,
+      detail: localizedCoordinatorReason(rawReason, t as any),
+      options: optionsOf((id) => {
+        const key = gateOptionLabelKey({ id }, kind);
+        return key ? t(key as any) : undefined;
+      }),
       question: subject
         ? `${t(gateTitleKey(kind) as any)} · ${subject}`
         : t(gateTitleKey(kind) as any),

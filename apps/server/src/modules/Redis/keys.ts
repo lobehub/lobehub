@@ -1,0 +1,453 @@
+/**
+ * Centralized Redis key definitions
+ *
+ * All Redis keys should be defined here for easy management and consistency.
+ *
+ * Structure:
+ * - RedisKeyNamespace: Contains all available prefixes
+ * - RedisKeys: Contains key builders organized by namespace/scope
+ */
+
+/**
+ * Redis key namespace prefixes
+ *
+ * Each prefix creates an isolated keyspace in Redis.
+ * When using `createRedisWithPrefix`, pass one of these as the prefix parameter.
+ */
+export const RedisKeyNamespace = {
+  /**
+   * Whether Agents can take work: device presence per principal pool and each agent's quota
+   * verdict per caller, read by the dispatch layer and the contact card's status.
+   */
+  AGENT_AVAILABILITY: 'agent-availability',
+  /**
+   * Agent Signal keys — the same `agent-signal` keyspace the Agent Signal runtime
+   * stores (receipts, dedupe, policy state) already use.
+   */
+  AGENT_SIGNAL: 'agent-signal',
+  /**
+   * Leases on the agent runs a user has in flight, used to cap how many run at once.
+   */
+  AGENT_RUN: 'agentRun',
+  /**
+   * Follow-ups a user queued behind a running agent turn ("steer"). The server
+   * drains them into the next turn itself when the running one hands back.
+   */
+  AGENT_STEER: 'agentSteer',
+  /**
+   * Agent identity keys — replay claims for agent-account provider webhooks,
+   * shared by every instance that may receive a delivery.
+   */
+  AGENT_IDENTITY: 'agent-identity',
+  INBOUND_WEBHOOK: 'inbound-webhook',
+  /**
+   * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
+   * silent-wake budget and the per-channel wake scheduler.
+   */
+  BOT_WAKE: 'bot-wake',
+  /**
+   * Replay bookkeeping for bot messages parked while their topic was busy: how many times each
+   * parked message reached a run, so one that keeps coming back stops looping.
+   */
+  BOT_DEFERRED: 'bot-deferred',
+  /**
+   * Short-lived reply routes an IM platform hands out with an inbound message
+   * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
+   * can use them even when another one received the message.
+   */
+  BOT_REPLY: 'bot-reply',
+  /**
+   * QQ passive-reply windows: the inbound message a bot may answer, the replies spent, and the
+   * text a closed window could not carry.
+   */
+  QQ_PASSIVE: 'qq-passive',
+  /**
+   * AI generation related keys (agent welcome, placeholders, etc.)
+   */
+  AI_GENERATION: 'aiGeneration',
+  /**
+   * Third-party integrations (Linear, GitHub, …): OAuth hand-off state and
+   * short-lived answers from their APIs.
+   */
+  INTEGRATIONS: 'integrations',
+  /**
+   * Core LOBEHUB application keys (sessions, cache, etc.)
+   */
+  LOBEHUB: 'lobechat',
+  /**
+   * Public REST API (`packages/openapi`): per-API-key rate-limit windows and
+   * the first response stored for each `Idempotency-Key`.
+   */
+  OPENAPI: 'openapi',
+  /**
+   * Short-lived derived answers the send path would otherwise re-fetch per
+   * turn (device system info, a skill's live tool list) and the one-shot
+   * claims that keep their background refreshes from piling up.
+   */
+  SEND_PATH_CACHE: 'sendPathCache',
+} as const;
+
+/**
+ * Redis key builders organized by namespace/scope
+ *
+ * Usage:
+ * ```ts
+ * // Get full key: agent_welcome:{agentId}
+ * const key = RedisKeys.aiGeneration.agentWelcome(agentId);
+ *
+ * // Use with Redis client (prefix is added by createRedisWithPrefix)
+ * const redis = await createRedisWithPrefix(config, RedisKeyNamespace.AI_GENERATION);
+ * await redis.get(key);
+ * // Actual Redis key: aiGeneration:agent_welcome:{agentId}
+ * ```
+ */
+export const RedisKeys = {
+  /** Agent availability scope — see {@link RedisKeyNamespace.AGENT_AVAILABILITY}. */
+  agentAvailability: {
+    /**
+     * One device's presence (connected, managed phase) as one principal pool sees it.
+     * Full key: agent-availability:device:v1:{pool}:{deviceId}
+     */
+    device: (pool: string, deviceId: string): string => `device:v1:${pool}:${deviceId}`,
+    /**
+     * Whether one agent's quota is spent where it runs, as one caller sees its accounts.
+     * Full key: agent-availability:quota:v1:{userId}:{pool}:{agentId}:{deviceId|none}
+     */
+    quota: (userId: string, pool: string, agentId: string, deviceId?: string): string =>
+      `quota:v1:${userId}:${pool}:${agentId}:${deviceId ?? 'none'}`,
+  },
+  inboundWebhook: {
+    wake: (id: string) => `wake:v1:${id}`,
+    check: (id: string) => `check:v1:${id}`,
+    maintenance: (id: string) => `maintenance:v1:${id}`,
+    sweep: () => 'sweep:v1:slot',
+    /** Ingress counter of a scope (workspace or personal space) for the current minute, all kinds. */
+    deliveries: (scope: string, minute: number) => `deliveries:v2:${scope}:${minute}`,
+    /** Active member count of a workspace, cached for the per-scope delivery limit. */
+    members: (workspaceId: string) => `members:v1:${workspaceId}`,
+  },
+  /**
+   * Agent Signal spend bounds — see {@link RedisKeyNamespace.AGENT_SIGNAL}. Per-user
+   * counters and quotas that keep background self-iteration work within its limits.
+   */
+  agentSignal: {
+    /**
+     * Feedback-classifier calls one user made on one UTC day.
+     * Full key: agent-signal:classifier_calls:v1:{userId}:{utcDay}
+     */
+    classifierCalls: (userId: string, utcDay: string): string =>
+      `classifier_calls:v1:${userId}:${utcDay}`,
+    /**
+     * Self-feedback declarations accepted in one topic scope.
+     * Full key: agent-signal:declaration_slots:v1:{scopeKey}
+     */
+    declarationSlots: (scopeKey: string): string => `declaration_slots:v1:${scopeKey}`,
+    /**
+     * Manual Agent Signal triggers one user sent in the current hourly window.
+     * Full key: agent-signal:manual_triggers:v1:{userId}
+     */
+    manualTriggers: (userId: string): string => `manual_triggers:v1:${userId}`,
+    /**
+     * Distinct topics one user's nightly review covered on one local night.
+     * Full key: agent-signal:nightly_topics:v1:{userId}:{localDate}
+     */
+    nightlyTopics: (userId: string, localDate: string): string =>
+      `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot deferred-replay scope — see {@link RedisKeyNamespace.BOT_DEFERRED}. */
+  botDeferred: {
+    /**
+     * Times one parked message (by its origin platform id) was replayed into a run.
+     * Full key: bot-deferred:replays:v1:{applicationId}:{threadId}:{messageId}
+     */
+    replays: (applicationId: string, threadId: string, messageId: string): string =>
+      `replays:v1:${applicationId}:${threadId}:${messageId}`,
+  },
+  /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
+  botReply: {
+    /**
+     * Latest DingTalk `sessionWebhook` for one conversation of one bot.
+     * Full key: bot-reply:dingtalk_session_webhook:v1:{applicationId}:{threadId}
+     */
+    dingtalkSessionWebhook: (applicationId: string, threadId: string): string =>
+      `dingtalk_session_webhook:v1:${applicationId}:${threadId}`,
+  },
+  /**
+   * Bot-wake scope — see {@link RedisKeyNamespace.BOT_WAKE}. `{key}` is a channel or thread key
+   * built by the bot-wake scenario (`platform:applicationId:channel[:thread]`).
+   */
+  botWake: {
+    /**
+     * Classifier calls one bot made in one UTC hour.
+     * Full key: bot-wake:classifier_calls:v1:{applicationId}:{utcHour}
+     */
+    classifierCalls: (applicationId: string, utcHour: string): string =>
+      `classifier_calls:v1:${applicationId}:${utcHour}`,
+    /**
+     * Who spoke last in one channel or thread, the follow-up window and the silent-wake count.
+     * Full key: bot-wake:channel:v1:{key}
+     */
+    channel: (key: string): string => `channel:v1:${key}`,
+    /**
+     * The wake a bot already decided to start for one message, kept while the message is parked
+     * so its replay runs on that decision instead of judging the message a second time.
+     * Full key: bot-wake:initiation:v1:{applicationId}:{messageId}
+     */
+    initiation: (applicationId: string, messageId: string): string =>
+      `initiation:v1:${applicationId}:${messageId}`,
+    /**
+     * Set once a message has engaged a bot: it @-mentioned the bot when sent, the bot replied to
+     * it, or an edit already woke the bot on it. An edit that newly @-mentions the bot wakes it only
+     * while this key is absent, so one message never wakes the same bot twice.
+     * Full key: bot-wake:edit_wake:v1:{applicationId}:{messageId}
+     */
+    editWake: (applicationId: string, messageId: string): string =>
+      `edit_wake:v1:${applicationId}:${messageId}`,
+    /**
+     * The last messages said in one channel or thread, shared by every bot listening there, so it
+     * carries no application id.
+     * Full key: bot-wake:conversation_log:v1:{key}
+     */
+    conversationLog: (key: string): string => `conversation_log:v1:${key}`,
+    /**
+     * Wake scheduler state machine of one channel.
+     * Full key: bot-wake:scheduler:v1:{key}
+     */
+    scheduler: (key: string): string => `scheduler:v1:${key}`,
+    /**
+     * Short lock held while one writer updates a channel's scheduler state.
+     * Full key: bot-wake:scheduler_lock:v1:{key}
+     */
+    schedulerLock: (key: string): string => `scheduler_lock:v1:${key}`,
+  },
+  /**
+   * Run lease scope — see {@link RedisKeyNamespace.AGENT_RUN}.
+   */
+  agentRun: {
+    /**
+     * One user's in-flight run leases (field = holder id, value = expiry in ms).
+     * Full key: agentRun:run_slots:v1:{userId}
+     */
+    runSlots: (userId: string): string => `run_slots:v1:${userId}`,
+    /**
+     * Whether one operation's `onComplete` delivery is settling or has settled
+     * its Task run, so a redelivery is not applied a second time.
+     * Full key: agentRun:task_run_delivery:v1:{operationId}
+     */
+    taskRunDelivery: (operationId: string): string => `task_run_delivery:v1:${operationId}`,
+  },
+  /**
+   * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
+   */
+  agentSteer: {
+    /**
+     * Follow-ups one user queued behind their running turn on one conversation
+     * surface. Per user: workspace members can each have a run on the same topic.
+     * Full key: agentSteer:follow_ups:v1:{userId}:{topicId}:{threadId|main}
+     */
+    followUps: (userId: string, topicId: string, threadId?: string | null): string =>
+      `follow_ups:v1:${userId}:${topicId}:${threadId || 'main'}`,
+    /**
+     * Set when a Channel Thread watch (`lobe-channel.watchThreads`) is stopped, so its next
+     * scheduled report is dropped. Full key: agentSteer:channel_watch_stopped:v1:{watchId}
+     */
+    channelWatchStopped: (watchId: string): string => `channel_watch_stopped:v1:${watchId}`,
+    /**
+     * Ids of follow-ups a drain already took from that queue, so a retried
+     * append of the same id is recognized instead of queued again.
+     * Full key: agentSteer:follow_ups_taken:v1:{userId}:{topicId}:{threadId|main}
+     */
+    takenFollowUps: (userId: string, topicId: string, threadId?: string | null): string =>
+      `follow_ups_taken:v1:${userId}:${topicId}:${threadId || 'main'}`,
+    /**
+     * Follow-ups a run drained from that queue but has not settled yet, one
+     * batch per drain (field = drain id). A batch whose lease lapses goes back
+     * to the queue, so an interrupted delivery never loses an entry.
+     * Full key: agentSteer:follow_ups_drained:v1:{userId}:{topicId}:{threadId|main}
+     */
+    drainedFollowUps: (userId: string, topicId: string, threadId?: string | null): string =>
+      `follow_ups_drained:v1:${userId}:${topicId}:${threadId || 'main'}`,
+    /**
+     * Short fence around starting a run on an existing thread. Thread starts
+     * skip the topic-start reservation, so this is what lets a queued
+     * follow-up check "no run is live here" and start as one step.
+     * Full key: agentSteer:thread_start:v1:{threadId}
+     */
+    threadStartFence: (threadId: string): string => `thread_start:v1:${threadId}`,
+    /**
+     * Follow-ups a heterogeneous run (Claude Code) took into its live session
+     * and has not picked up yet (field = user message id). Their drained batch
+     * stays leased until the agent replays the message.
+     * Full key: agentSteer:hetero_deliveries:v1:{operationId}
+     */
+    heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Control messages waiting for a heterogeneous run's poller, oldest first.
+     * Each one is popped exactly once, when a poller claims it.
+     * Full key: agentSteer:hetero_control:v1:{operationId}
+     */
+    heteroControl: (operationId: string): string => `hetero_control:v1:${operationId}`,
+    /**
+     * Where each control message of that run stands (field = control id):
+     * pending, claimed, expired, or the result the run reported.
+     * Full key: agentSteer:hetero_control_state:v1:{operationId}
+     */
+    heteroControlState: (operationId: string): string => `hetero_control_state:v1:${operationId}`,
+    /**
+     * Marks a sub-agent run whose final queue read came back empty: it ends
+     * without reading again, so a steer appended behind it must be taken back.
+     * Full key: agentSteer:sealed_run:v1:{operationId}
+     */
+    sealedRun: (operationId: string): string => `sealed_run:v1:${operationId}`,
+  },
+  /**
+   * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
+   */
+  agentIdentity: {
+    /**
+     * Replay claim on one provider webhook delivery.
+     * Full key: agent-identity:webhook_event:v1:{provider}:{eventId}
+     */
+    webhookEvent: (provider: string, eventId: string): string =>
+      `webhook_event:v1:${provider}:${eventId}`,
+  },
+  /**
+   * AI generation scope - for AI-generated content like welcome messages
+   */
+  aiGeneration: {
+    /**
+     * Agent welcome message and open questions
+     * Full key: aiGeneration:agent_welcome:{agentId}
+     */
+    agentWelcome: (agentId: string): string => `agent_welcome:${agentId}`,
+    /**
+     * Per-user paired { welcome, hint } objects shown on the home page
+     * Full key: aiGeneration:home_brief:{userId}
+     */
+    homeBrief: (userId: string): string => `home_brief:${userId}`,
+  },
+  /**
+   * Integrations scope — see {@link RedisKeyNamespace.INTEGRATIONS}.
+   */
+  integrations: {
+    /**
+     * How one connector OAuth flow ended, read back by the window that started it.
+     * Full key: integrations:connector_oauth_completion:v1:{flowId}
+     */
+    connectorOAuthCompletion: (flowId: string): string => `connector_oauth_completion:v1:${flowId}`,
+    /**
+     * The commit a public GitHub ref pointed at when it was last resolved.
+     * Full key: integrations:github_ref_commit:v1:{owner}/{repo}:{ref}
+     */
+    gitHubRefCommit: (owner: string, repo: string, ref: string): string =>
+      `github_ref_commit:v1:${owner}/${repo}:${ref}`,
+    /**
+     * Single-use state of one "Connect Linear" OAuth hand-off.
+     * Full key: integrations:linear_oauth_state:v1:{state}
+     */
+    linearOAuthState: (state: string): string => `linear_oauth_state:v1:${state}`,
+  },
+  /**
+   * Lobechat core scope - for application-level caching
+   */
+  lobechat: {
+    /**
+     * The agent-document index snapshot one conversation renders from, and its change notes.
+     * Full key: lobechat:agent_document_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
+    /**
+     * Digest of the body the last projection of a page's collaboration room wrote.
+     * Full key: lobechat:page_projection:v1:{documentId}
+     */
+    pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
+  },
+  /**
+   * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.
+   * Every key carries the identity the answer depends on (user, pool, device,
+   * connection), never a shared one.
+   */
+  sendPathCache: {
+    /**
+     * A routed device's system info, per principal pool.
+     * Full key: sendPathCache:device_system_info:v1:{userId}:{pool}:{deviceId}
+     */
+    deviceSystemInfo: (userId: string, pool: string, deviceId: string): string =>
+      `device_system_info:v1:${userId}:${pool}:${deviceId}`,
+    /**
+     * One connected LobeHub skill's live tool list, per connection identity.
+     * Full key: sendPathCache:lobehub_skill_tools:v1:{userId}:{providerId}:{identity}
+     */
+    lobehubSkillTools: (userId: string, providerId: string, identity: string): string =>
+      `lobehub_skill_tools:v1:${userId}:${providerId}:${identity}`,
+    /**
+     * Claim held by the one background rescan of a bound directory.
+     * Full key: sendPathCache:workspace_rescan_claim:v1:{userId}:{pool}:{deviceId}:{cwd}
+     */
+    workspaceRescanClaim: (userId: string, pool: string, deviceId: string, cwd: string): string =>
+      `workspace_rescan_claim:v1:${userId}:${pool}:${deviceId}:${cwd}`,
+  },
+  /**
+   * Public REST API scope — see {@link RedisKeyNamespace.OPENAPI}.
+   */
+  openapi: {
+    /**
+     * Requests one caller identity sent to one rate-limit bucket in one fixed window.
+     * Full key: openapi:rate_limit:v1:{identity}:{bucket}:{windowStart}
+     */
+    rateLimit: (identity: string, bucket: string, windowStart: number): string =>
+      `rate_limit:v1:${identity}:${bucket}:${windowStart}`,
+    /**
+     * The claim, then the stored first response, of one user's `Idempotency-Key`.
+     * `{keyHash}` hashes the client key so arbitrary header bytes never reach the key.
+     * Full key: openapi:idempotency:v1:{userId}:{keyHash}
+     */
+    idempotency: (userId: string, keyHash: string): string => `idempotency:v1:${userId}:${keyHash}`,
+  },
+  /**
+   * QQ passive-reply scope — see {@link RedisKeyNamespace.QQ_PASSIVE}. `{key}` is
+   * `{applicationId}:{threadId}`.
+   */
+  qqPassive: {
+    /**
+     * The inbound message that opened the current window, the replies spent in it.
+     * Full key: qq-passive:window:v1:{applicationId}:{threadId}
+     */
+    window: (key: string): string => `window:v1:${key}`,
+    /**
+     * The reply a closed window could not carry, waiting for the next inbound message.
+     * Full key: qq-passive:pending:v1:{applicationId}:{threadId}
+     */
+    pending: (key: string): string => `pending:v1:${key}`,
+  },
+} as const;
+
+/**
+ * The namespace (key prefix) each {@link RedisKeys} scope lives under. A scope's keys are
+ * only read and written through a client prefixed with its namespace, so a key can never
+ * land under another scope's prefix. Every scope must be mapped.
+ */
+export const RedisKeyScopeNamespace = {
+  agentAvailability: RedisKeyNamespace.AGENT_AVAILABILITY,
+  inboundWebhook: RedisKeyNamespace.INBOUND_WEBHOOK,
+  agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
+  agentRun: RedisKeyNamespace.AGENT_RUN,
+  agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
+  agentSteer: RedisKeyNamespace.AGENT_STEER,
+  aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botDeferred: RedisKeyNamespace.BOT_DEFERRED,
+  botReply: RedisKeyNamespace.BOT_REPLY,
+  botWake: RedisKeyNamespace.BOT_WAKE,
+  integrations: RedisKeyNamespace.INTEGRATIONS,
+  lobechat: RedisKeyNamespace.LOBEHUB,
+  openapi: RedisKeyNamespace.OPENAPI,
+  qqPassive: RedisKeyNamespace.QQ_PASSIVE,
+  sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,
+} as const satisfies Record<
+  keyof typeof RedisKeys,
+  (typeof RedisKeyNamespace)[keyof typeof RedisKeyNamespace]
+>;
+
+/** A {@link RedisKeys} scope, e.g. `sendPathCache` or `agentSignal`. */
+export type RedisKeyScope = keyof typeof RedisKeyScopeNamespace;

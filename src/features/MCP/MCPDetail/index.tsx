@@ -1,5 +1,4 @@
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Center, Empty, Flexbox, useTheme } from '@lobehub/ui';
 import { Boxes } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +12,7 @@ import Overview from '@/features/MCPPluginDetail/Overview';
 import Schema from '@/features/MCPPluginDetail/Schema';
 import Score from '@/features/MCPPluginDetail/Score';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { McpNavKey } from '@/types/discover';
 
@@ -36,7 +36,8 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
   const identifier = defaultIdentifier ?? list?.items?.[0]?.identifier;
 
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
-  const { data, isLoading } = useMcpDetail({ identifier });
+  const { isLoading, queryKey } = useMcpDetail({ identifier });
+  const data = useDiscoverStore(mcpSelectors.mcpDetail(queryKey));
 
   // An explicit identifier never waits on the list; otherwise wait for it to paint.
   if ((!defaultIdentifier && !list) || isLoading) return <Loading />;

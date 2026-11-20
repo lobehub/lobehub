@@ -79,7 +79,7 @@ describe('DocumentStore - persisted node ids', () => {
         });
       });
 
-      await act(() => result.current.onEditorInit(editor));
+      await act(() => result.current.onEditorInit(editor, 'doc-persisted-ids'));
 
       expect(topLevelIds(editor)).toEqual(['6w5t9drdmo', '7oxxhtqflo']);
     },

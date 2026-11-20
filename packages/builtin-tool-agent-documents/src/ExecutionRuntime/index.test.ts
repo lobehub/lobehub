@@ -6,10 +6,12 @@ const createRuntime = (overrides = {}) =>
   new AgentDocumentsExecutionRuntime({
     copyDocument: vi.fn(),
     createDocument: vi.fn(),
+    createFolder: vi.fn(),
     createTopicDocument: vi.fn(),
     listDocuments: vi.fn(),
     listTopicDocuments: vi.fn(),
     modifyNodes: vi.fn(),
+    moveDocuments: vi.fn(),
     readDocument: vi.fn(),
     removeDocument: vi.fn(),
     renameDocument: vi.fn(),
@@ -67,6 +69,214 @@ describe('AgentDocumentsExecutionRuntime', () => {
         docs.slice(100).map((d) => d.id),
       );
       expect(result.content).not.toContain('Showing documents');
+    });
+  });
+
+  // A flat listing used to give no way to tell folders from files or what was
+  // already filed, so an agent organizing documents had to fall back to a CLI.
+  describe('listDocuments folder metadata', () => {
+    const docs = [
+      {
+        documentId: 'docs_folder',
+        fileType: 'custom/folder',
+        filename: 'P95 Reports',
+        id: 'row-folder',
+        parentId: null,
+        title: 'P95 Reports',
+        updatedAt: new Date('2026-10-11T03:54:00.000Z'),
+      },
+      {
+        documentId: 'docs_a',
+        fileType: 'agent/document',
+        filename: 'P95 Report 2026-10-10',
+        id: 'row-a',
+        parentId: 'docs_folder',
+        title: 'P95 Report 2026-10-10',
+        updatedAt: '2026-10-10T04:24:52.758Z',
+      },
+      {
+        documentId: 'docs_b',
+        fileType: 'agent/document',
+        filename: 'Tick log',
+        id: 'row-b',
+        parentId: null,
+        title: 'Tick log',
+      },
+    ];
+
+    it('reports type, parentId and updatedAt for each entry', async () => {
+      const runtime = createRuntime({ listDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments({}, { agentId: 'agent-1' });
+
+      expect(result.state?.documents).toEqual([
+        expect.objectContaining({
+          id: 'row-folder',
+          parentId: null,
+          type: 'folder',
+          updatedAt: '2026-10-11T03:54:00.000Z',
+        }),
+        expect.objectContaining({
+          id: 'row-a',
+          parentId: 'docs_folder',
+          type: 'file',
+          updatedAt: '2026-10-10T04:24:52.758Z',
+        }),
+        expect.objectContaining({ id: 'row-b', parentId: null, type: 'file' }),
+      ]);
+    });
+
+    it('filters by title before paging and keeps the filter in the next-page arguments', async () => {
+      const many = Array.from({ length: 30 }, (_, i) => ({
+        documentId: `docs_${i}`,
+        filename: `doc-${i}`,
+        id: `row-${i}`,
+        title: i % 2 === 0 ? `LobeHub Cloud P95 Report ${i}` : `Tick log ${i}`,
+      }));
+      const runtime = createRuntime({ listDocuments: vi.fn().mockResolvedValue(many) });
+
+      const result = await runtime.listDocuments(
+        { limit: 10, titleContains: 'p95 report' },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.state?.documents).toHaveLength(10);
+      expect(result.state?.documents.every((d: { title: string }) => d.title.includes('P95'))).toBe(
+        true,
+      );
+      expect(result.content).toContain(
+        'Showing documents 1-10 of 15. For the next page call listDocuments with {"limit":10,"offset":10,"scope":"agent","sourceType":"all","titleContains":"p95 report"}.',
+      );
+    });
+  });
+
+  describe('createFolder', () => {
+    it('returns the folder id to use as parentId', async () => {
+      const createFolder = vi.fn().mockResolvedValue({
+        created: true,
+        folder: { documentId: 'docs_folder', id: 'row-folder', title: 'P95 Reports' },
+      });
+      const runtime = createRuntime({ createFolder });
+
+      const result = await runtime.createFolder(
+        { parentId: 'docs_parent', title: ' P95 Reports ' },
+        { agentId: 'agent-1' },
+      );
+
+      expect(createFolder).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        parentId: 'docs_parent',
+        title: ' P95 Reports ',
+      });
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Created folder "P95 Reports" (folder id: docs_folder)');
+      expect(result.state).toEqual({
+        agentDocumentId: 'row-folder',
+        agentId: 'agent-1',
+        created: true,
+        documentId: 'docs_folder',
+        title: 'P95 Reports',
+      });
+    });
+
+    it('says when an existing folder was reused', async () => {
+      const runtime = createRuntime({
+        createFolder: vi.fn().mockResolvedValue({
+          created: false,
+          folder: { documentId: 'docs_folder', id: 'row-folder', title: 'P95 Reports' },
+        }),
+      });
+
+      const result = await runtime.createFolder({ title: 'P95 Reports' }, { agentId: 'agent-1' });
+
+      expect(result.content).toContain('Reused existing folder "P95 Reports"');
+    });
+
+    it('rejects an empty title without calling the service', async () => {
+      const createFolder = vi.fn();
+      const runtime = createRuntime({ createFolder });
+
+      const result = await runtime.createFolder({ title: '  ' }, { agentId: 'agent-1' });
+
+      expect(result.success).toBe(false);
+      expect(createFolder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('moveDocuments', () => {
+    it('moves every id in one service call and summarizes the outcome', async () => {
+      const moveDocuments = vi.fn().mockResolvedValue([
+        { documentId: 'docs_a', id: 'row-a', status: 'moved', title: 'A' },
+        { documentId: 'docs_b', id: 'row-b', status: 'unchanged', title: 'B' },
+        { error: 'Document not found: missing', id: 'missing', status: 'failed' },
+      ]);
+      const runtime = createRuntime({ moveDocuments });
+
+      const result = await runtime.moveDocuments(
+        { ids: ['row-a', 'docs_b', 'missing', ''], parentId: 'docs_folder' },
+        { agentId: 'agent-1' },
+      );
+
+      expect(moveDocuments).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        ids: ['row-a', 'docs_b', 'missing'],
+        parentId: 'docs_folder',
+      });
+      // A partial move changed the tree, so the call is still a success.
+      expect(result.success).toBe(true);
+      expect(result.content).toContain(
+        'Moved 1 item(s) to folder docs_folder; 1 already there; 1 failed.',
+      );
+      expect(result.content).toContain('- missing: Document not found: missing');
+      expect(result.state).toMatchObject({ failedCount: 1, movedCount: 1 });
+    });
+
+    it.each([null, '', 'root'])('treats parentId %j as the root', async (parentId) => {
+      const moveDocuments = vi
+        .fn()
+        .mockResolvedValue([{ id: 'row-a', status: 'moved', title: 'A' }]);
+      const runtime = createRuntime({ moveDocuments });
+
+      const result = await runtime.moveDocuments(
+        { ids: ['row-a'], parentId: parentId as string | null },
+        { agentId: 'agent-1' },
+      );
+
+      expect(moveDocuments).toHaveBeenCalledWith(expect.objectContaining({ parentId: null }));
+      expect(result.content).toContain('to the root');
+    });
+
+    it('fails when every move failed', async () => {
+      const runtime = createRuntime({
+        moveDocuments: vi
+          .fn()
+          .mockResolvedValue([
+            { error: 'Skill documents cannot be moved.', id: 'x', status: 'failed' },
+          ]),
+      });
+
+      const result = await runtime.moveDocuments(
+        { ids: ['x'], parentId: 'docs_folder' },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects an empty or oversized id list without calling the service', async () => {
+      const moveDocuments = vi.fn();
+      const runtime = createRuntime({ moveDocuments });
+
+      const empty = await runtime.moveDocuments({ ids: [], parentId: null }, { agentId: 'a' });
+      const oversized = await runtime.moveDocuments(
+        { ids: Array.from({ length: 201 }, (_, i) => `row-${i}`), parentId: null },
+        { agentId: 'a' },
+      );
+
+      expect(empty.success).toBe(false);
+      expect(oversized.success).toBe(false);
+      expect(oversized.content).toContain('at most 200 ids');
+      expect(moveDocuments).not.toHaveBeenCalled();
     });
   });
 

@@ -19,6 +19,9 @@ const saysSomething = (entry: DiscussionEntry) => {
     case 'round': {
       return Boolean(entry.proposal?.content.trim());
     }
+    case 'accessRequest': {
+      return true;
+    }
     case 'roundReject':
     case 'checkReject': {
       return Boolean(entry.comment);

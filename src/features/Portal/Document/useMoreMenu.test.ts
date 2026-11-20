@@ -6,12 +6,17 @@ import { useDocumentMoreMenu } from './useMoreMenu';
 const mocks = vi.hoisted(() => ({
   agentDocumentId: 'adoc_1' as string | undefined,
   agentId: 'agt_1',
+  clearPortalStack: vi.fn(),
   closeDocument: vi.fn(),
   confirmModal: vi.fn(),
   documentId: 'doc_1' as string | undefined,
+  exportHtml: undefined as (() => Promise<void>) | undefined,
+  exportMarkdown: vi.fn() as (() => Promise<void>) | undefined,
   isLoading: false,
   metaLocked: false,
+  navigate: vi.fn(),
   openRenameModal: vi.fn(),
+  path: '/agent/agt_1/docs/doc_1' as string | undefined,
   refresh: vi.fn(),
   removeDocument: vi.fn(),
   saveTitle: vi.fn(),
@@ -20,7 +25,8 @@ const mocks = vi.hoisted(() => ({
   url: 'https://app.lobehub.com/agent/agt_1/docs/doc_1' as string | undefined,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
   toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
@@ -35,7 +41,15 @@ vi.mock('@/services/agentDocument', () => ({
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: unknown) => unknown) =>
-    selector({ closeDocument: mocks.closeDocument }),
+    selector({ clearPortalStack: mocks.clearPortalStack, closeDocument: mocks.closeDocument }),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
+}));
+
+vi.mock('./useHtmlExport', () => ({
+  useHtmlExport: () => mocks.exportHtml,
 }));
 
 vi.mock('./titleContext', () => ({
@@ -47,12 +61,17 @@ vi.mock('./titleContext', () => ({
   }),
 }));
 
+vi.mock('./useMarkdownExport', () => ({
+  useMarkdownExport: () => mocks.exportMarkdown,
+}));
+
 vi.mock('./usePortalDocumentHeader', () => ({
   TITLE_MAX_LENGTH: 100,
   usePortalDocumentHeaderActions: () => ({
     agentDocumentId: mocks.agentDocumentId,
     agentId: mocks.agentId,
     documentId: mocks.documentId,
+    path: mocks.path,
     refresh: mocks.refresh,
     url: mocks.url,
   }),
@@ -63,6 +82,9 @@ describe('useDocumentMoreMenu', () => {
     vi.clearAllMocks();
     mocks.agentDocumentId = 'adoc_1';
     mocks.documentId = 'doc_1';
+    mocks.exportHtml = undefined;
+    mocks.exportMarkdown = vi.fn();
+    mocks.path = '/agent/agt_1/docs/doc_1';
     mocks.isLoading = false;
     mocks.metaLocked = false;
     mocks.url = 'https://app.lobehub.com/agent/agt_1/docs/doc_1';
@@ -117,6 +139,7 @@ describe('useDocumentMoreMenu', () => {
       agentId: 'agt_1',
       documentId: 'doc_1',
       id: 'adoc_1',
+      withChildren: true,
     });
     expect(mocks.closeDocument).toHaveBeenCalledOnce();
   });
@@ -154,5 +177,40 @@ describe('useDocumentMoreMenu', () => {
     const { result } = renderHook(() => useDocumentMoreMenu());
 
     expect(result.current).toBeUndefined();
+  });
+
+  const extraItem = (menu: ReturnType<typeof useDocumentMoreMenu>, key: string) =>
+    menu?.extraItems?.find((item) => item && 'key' in item && item.key === key) as
+      { key: string; onClick: () => void } | undefined;
+
+  it('offers the markdown export as a menu action', () => {
+    const { result } = renderHook(() => useDocumentMoreMenu());
+    extraItem(result.current, 'export')!.onClick();
+
+    expect(mocks.exportMarkdown).toHaveBeenCalledOnce();
+  });
+
+  it('downloads an HTML page as HTML instead of Markdown', () => {
+    mocks.exportHtml = vi.fn();
+    const { result } = renderHook(() => useDocumentMoreMenu());
+    extraItem(result.current, 'export')!.onClick();
+
+    expect(mocks.exportHtml).toHaveBeenCalledOnce();
+    expect(mocks.exportMarkdown).not.toHaveBeenCalled();
+  });
+
+  it('leaves the export out when the document cannot be exported', () => {
+    mocks.exportMarkdown = undefined;
+    const { result } = renderHook(() => useDocumentMoreMenu());
+
+    expect(extraItem(result.current, 'export')).toBeUndefined();
+  });
+
+  it('opens the document as a full page and closes the panel', () => {
+    const { result } = renderHook(() => useDocumentMoreMenu());
+    extraItem(result.current, 'open-as-page')!.onClick();
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_1/docs/doc_1');
+    expect(mocks.clearPortalStack).toHaveBeenCalledOnce();
   });
 });

@@ -169,6 +169,25 @@ describe('pluginSelectors', () => {
       const result = pluginSelectors.isPluginInstalled('non-installed-plugin')(mockState);
       expect(result).toBe(false);
     });
+
+    it('should count a marketplace MCP installed as a connector', () => {
+      const connector = {
+        identifier: 'market-mcp',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com',
+        sourceType: 'marketplace',
+      };
+      const withConnector = (metadata: Record<string, unknown> | null) =>
+        ({ ...mockState, connectors: [{ ...connector, metadata }] }) as ToolStoreState;
+
+      expect(
+        pluginSelectors.isPluginInstalled('market-mcp')(
+          withConnector({ marketplaceInstalled: true }),
+        ),
+      ).toBe(true);
+      // An unfinished install (no mark) is not installed
+      expect(pluginSelectors.isPluginInstalled('market-mcp')(withConnector(null))).toBe(false);
+    });
   });
 
   describe('getInstalledPluginById', () => {

@@ -1,5 +1,6 @@
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
 import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
@@ -223,6 +224,14 @@ describe('decideNextMove', () => {
       expect(
         decide(snapshot, {
           frontierTask: task({ error: ACCEPTANCE_REVIEW_ERRORED_ERROR, status: 'paused' }),
+        }),
+      ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
+
+      // A verifier refused for want of credits refuses every re-delivery too.
+      // Retrying it like any verifier error spent a builder attempt per round.
+      expect(
+        decide(snapshot, {
+          frontierTask: task({ error: VERIFICATION_OUT_OF_CREDITS_ERROR, status: 'paused' }),
         }),
       ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
     });
@@ -621,5 +630,32 @@ describe('exploration terminal phase', () => {
     expect(decide(snapshot, { frontierTask: task({ status: 'running' }) }).branch).not.toBe(
       'explore_graph',
     );
+  });
+});
+
+describe('batch rollout gate', () => {
+  const decideWithGate = (rolloutGate: Parameters<typeof decideNextMove>[0]['rolloutGate']) =>
+    decideNextMove({
+      concurrency: 3,
+      frontier: selectFrontier(graph()),
+      graph: graph(),
+      rolloutGate,
+      tasksById: new Map(),
+    });
+
+  it('releases the next wave when the gate passed', () => {
+    const move = decideWithGate({ blockers: [], met: true, provisional: false });
+    expect(move.branch).toBe('rollout_gate');
+    expect(move.outcome).toBe('advanced');
+  });
+
+  it('hands a blocked gate to a person instead of parking the goal', () => {
+    const move = decideWithGate({
+      blockers: ['1 probe(s) did not succeed'],
+      met: false,
+      provisional: false,
+    });
+    expect(move.branch).toBe('pattern_break');
+    expect(move.outcome).toBe('waiting_human');
   });
 });

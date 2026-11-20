@@ -1,17 +1,18 @@
 'use client';
 
 import { BarChart } from '@lobehub/charts';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import ScatterPlot from './ScatterPlot';
 import StatusDonut from './StatusDonut';
 
 const styles = createStaticStyles(({ css }) => ({
   chartCard: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};

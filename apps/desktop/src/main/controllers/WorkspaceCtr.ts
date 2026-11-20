@@ -1,4 +1,8 @@
-import type { WorkspaceScanDeps } from '@lobechat/device-control';
+import type {
+  ListClaudeCodeMemoryParams,
+  ListClaudeCodeMemoryResult,
+  WorkspaceScanDeps,
+} from '@lobechat/device-control';
 import {
   type InitWorkspaceParams,
   type InitWorkspaceResult,
@@ -33,6 +37,16 @@ export default class WorkspaceCtr extends ControllerModule {
     const { listProjectSkills: runListProjectSkills } =
       await import('@lobechat/device-control/workspace');
     return runListProjectSkills(params, this.scanDeps);
+  }
+
+  /** Claude Code's auto-memory files for a project (`~/.claude/projects/<key>/memory`). */
+  @IpcMethod()
+  async listClaudeCodeMemory(
+    params: ListClaudeCodeMemoryParams,
+  ): Promise<ListClaudeCodeMemoryResult> {
+    const { listClaudeCodeMemory: runListClaudeCodeMemory } =
+      await import('@lobechat/device-control/claude-code-memory');
+    return runListClaudeCodeMemory(params, this.scanDeps);
   }
 
   @IpcMethod()

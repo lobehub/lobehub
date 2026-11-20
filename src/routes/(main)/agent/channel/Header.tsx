@@ -1,9 +1,17 @@
 'use client';
 
 import { exportJSONFile } from '@lobechat/utils/client';
-import { Flexbox, Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, confirmModal, DropdownMenu, Switch, Tag, toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Switch,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import {
   BookOpen,
   Download,
@@ -17,14 +25,16 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
+import SkeletonBar from '@/components/Skeleton/Bar';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { useAgentStore } from '@/store/agent';
 import type { BotProviderItem } from '@/store/agent/slices/bot/action';
+import { useHeaderActionSize } from '@/styles/density';
 
-import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
+import { resolveChannelHeaderView } from './headerView';
 import { isImportableChannel, planChannelImport } from './importPlan';
 
 interface HeaderProps {
@@ -32,21 +42,26 @@ interface HeaderProps {
   currentConfig?: BotProviderItem;
   disabled?: boolean;
   platformDef?: SerializedPlatformDefinition & { comingSoon?: boolean };
+  /** The `:platform` route param; set on a platform detail even before `platformDef` loads. */
+  platformId?: string;
+  /** Platform definitions are still loading. */
+  platformsLoading?: boolean;
   providers?: BotProviderItem[];
-  runtimeStatus?: BotRuntimeStatus;
 }
 
-const STATUS_TAG_COLORS: Partial<Record<BotRuntimeStatus, string>> = {
-  [BOT_RUNTIME_STATUSES.connected]: 'success',
-  [BOT_RUNTIME_STATUSES.dormant]: 'warning',
-  [BOT_RUNTIME_STATUSES.failed]: 'error',
-  [BOT_RUNTIME_STATUSES.queued]: 'processing',
-  [BOT_RUNTIME_STATUSES.starting]: 'processing',
-};
-
 const Header = memo<HeaderProps>(
-  ({ agentId, currentConfig, disabled, platformDef, providers, runtimeStatus }) => {
+  ({
+    agentId,
+    currentConfig,
+    disabled,
+    platformDef,
+    platformId,
+    platformsLoading = false,
+    providers,
+  }) => {
     const { t } = useTranslation(['agent', 'chat', 'common']);
+    const headerActionSize = useHeaderActionSize(true);
+    const view = resolveChannelHeaderView(platformId, platformDef, platformsLoading);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [pendingEnabled, setPendingEnabled] = useState<boolean>();
@@ -200,31 +215,6 @@ const Header = memo<HeaderProps>(
       [agentId, connectBot, currentConfig, disabled, t, updateBotProvider, writeDisabled],
     );
 
-    const statusLabel = (() => {
-      switch (runtimeStatus) {
-        case BOT_RUNTIME_STATUSES.connected: {
-          return t('channel.statusConnected');
-        }
-        case BOT_RUNTIME_STATUSES.failed: {
-          return t('channel.statusFailed');
-        }
-        case BOT_RUNTIME_STATUSES.queued: {
-          return t('channel.statusQueued');
-        }
-        case BOT_RUNTIME_STATUSES.starting: {
-          return t('channel.statusStarting');
-        }
-        case BOT_RUNTIME_STATUSES.dormant: {
-          return t('channel.statusDormant');
-        }
-        case BOT_RUNTIME_STATUSES.disconnected: {
-          return t('channel.statusDisconnected');
-        }
-        default: {
-          return undefined;
-        }
-      }
-    })();
     const menuItems: DropdownItem[] = [];
 
     if (platformDef?.documentation?.portalUrl) {
@@ -284,20 +274,12 @@ const Header = memo<HeaderProps>(
                     : t('channel.paidFeature.badge')}
                 </Tag>
               )}
-              {statusLabel && (
-                <Tag
-                  color={runtimeStatus ? STATUS_TAG_COLORS[runtimeStatus] : undefined}
-                  size={'small'}
-                >
-                  {statusLabel}
-                </Tag>
-              )}
               {currentConfig?.enabled && (
                 <ActionIcon
                   disabled={writeDisabled}
                   icon={RefreshCw}
                   loading={refreshingStatus}
-                  size={'small'}
+                  size={headerActionSize}
                   title={t('channel.refreshStatus')}
                   onClick={handleRefreshStatus}
                 />
@@ -314,12 +296,17 @@ const Header = memo<HeaderProps>(
                 <ActionIcon
                   aria-label={t('channel.documentation')}
                   icon={BookOpen}
+                  size={headerActionSize}
                   title={t('channel.documentation')}
                   onClick={() => window.open(setupGuideUrl, '_blank', 'noopener,noreferrer')}
                 />
               )}
               <DropdownMenu items={menuItems} placement={'bottomRight'}>
-                <ActionIcon icon={MoreHorizontal} title={t('more', { ns: 'common' })} />
+                <ActionIcon
+                  icon={MoreHorizontal}
+                  size={headerActionSize}
+                  title={t('more', { ns: 'common' })}
+                />
               </DropdownMenu>
             </Flexbox>
           }
@@ -331,9 +318,17 @@ const Header = memo<HeaderProps>(
             // is the only way back to the list.
             <AgentBreadcrumb
               agentId={agentId}
-              extraItems={platformDef ? [platformDef.name] : undefined}
+              extraItems={
+                view.detail
+                  ? [
+                      view.platformName ?? (
+                        <SkeletonBar height={14} key="platform-name" width={56} />
+                      ),
+                    ]
+                  : undefined
+              }
               title={
-                platformDef ? (
+                view.detail ? (
                   <Link relative="path" to="..">
                     {t('tab.integration', { ns: 'chat' })}
                   </Link>
@@ -351,7 +346,7 @@ const Header = memo<HeaderProps>(
               On a platform detail (`/channel/:platform`) it is one level too
               deep, so drop it there and let the breadcrumb's Channels link be
               the way back. */}
-          {!platformDef && <AgentProfileTabs active={'channel'} agentId={agentId} />}
+          {!view.detail && <AgentProfileTabs active={'channel'} agentId={agentId} />}
         </NavHeader>
       </>
     );

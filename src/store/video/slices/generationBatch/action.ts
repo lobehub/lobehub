@@ -9,6 +9,7 @@ import { type GetGenerationStatusResult } from '@/server/routers/lambda/generati
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
 import { type StoreSetter } from '@/store/types';
+import { getGenerationStatusPollingInterval } from '@/store/utils/generationStatusPolling';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 import { setNamespace } from '@/utils/storeDebug';
@@ -240,27 +241,12 @@ export class GenerationBatchActionImpl {
             await this.#get().refreshGenerationBatches();
           }
         },
-        refreshInterval: (data: GetGenerationStatusResult | undefined) => {
-          if (data?.status === AsyncTaskStatus.Success || data?.status === AsyncTaskStatus.Error) {
-            return 0;
-          }
-
-          const baseInterval = 1000;
-          const maxInterval = 30_000;
-          const currentCount = requestCountRef.current;
-
-          const backoffMultiplier = Math.floor(currentCount / 5);
-          let dynamicInterval = Math.min(
-            baseInterval * Math.pow(2, backoffMultiplier),
-            maxInterval,
-          );
-
-          if (isErrorRef.current) {
-            dynamicInterval = Math.min(dynamicInterval * 2, maxInterval);
-          }
-
-          return dynamicInterval;
-        },
+        refreshInterval: (data: GetGenerationStatusResult | undefined) =>
+          getGenerationStatusPollingInterval({
+            hasError: isErrorRef.current,
+            requestCount: requestCountRef.current,
+            status: data?.status,
+          }),
         refreshWhenHidden: false,
       },
     );

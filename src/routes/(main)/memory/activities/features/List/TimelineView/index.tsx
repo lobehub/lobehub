@@ -19,13 +19,17 @@ const ActivityTimelineView = memo<ActivityTimelineViewProps>(
   ({ activities, isLoading, onCardClick }) => {
     const loadMoreActivities = useUserMemoryStore((s) => s.loadMoreActivities);
     const activitiesHasMore = useUserMemoryStore((s) => s.activitiesHasMore);
+    // Load-more progress / failure of the query on screen (footer + retry).
+    const isLoadingMore = useUserMemoryStore((s) => Boolean(s.activityListData?.isLoadingMore));
+    const loadMoreError = useUserMemoryStore((s) => s.activityListData?.loadMoreError);
 
     return (
       <GenericTimelineView
         data={activities}
         groupBy="day"
         hasMore={activitiesHasMore}
-        isLoading={isLoading}
+        isLoading={isLoading || isLoadingMore}
+        loadMoreError={loadMoreError}
         renderHeader={(periodKey: string) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(activity: ActivityListItem) => (
           <TimelineItemWrapper>

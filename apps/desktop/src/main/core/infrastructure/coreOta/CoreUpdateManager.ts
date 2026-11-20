@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -7,7 +8,12 @@ import type { UpdateChannel } from '@lobechat/electron-client-ipc';
 import { readBlobWithLimit } from '@lobechat/utils/imageToBase64';
 import { app as electronApp, BrowserWindow, net } from 'electron';
 
-import { type ShellGlobal, shellInfo } from '@/const/shell';
+import {
+  type ShellGlobal,
+  shellInfo,
+  type StartupUpdateOutcome,
+  type StartupUpdateProgress,
+} from '@/const/shell';
 import {
   BUILD_CHANNEL,
   coerceStoredUpdateChannel,
@@ -37,6 +43,7 @@ const DOWNLOAD_TIMEOUT = 15 * 60 * 1000;
 const LOAD_PING_TIMEOUT = 3000;
 const MAX_BOOT_CRASHES = 2;
 const CHECK_INTERVAL = 60 * 60 * 1000;
+const NETWORK_POLL_INTERVAL = 15_000;
 const FIRST_CHECK_DELAY = Number(process.env['RENDERER_OTA_CHECK_DELAY']) || 0;
 const IDLE_APPLY_DELAY = 5 * 60 * 1000;
 const FEED_BASE_URL =
@@ -68,6 +75,8 @@ export class CoreUpdateManager {
   private unloadPrevented = false;
   private rollbackPointer: CorePointer | null = null;
   private rollbackRenderer: RendererSource | null = null;
+  private rendererVersion: string | null = null;
+  private rollbackRendererVersion: string | null = null;
   private pendingBootCheck = false;
   private coldBootCheck = false;
   private deferredColdBootCheck = false;
@@ -80,6 +89,7 @@ export class CoreUpdateManager {
   private loadPingTimer: NodeJS.Timeout | null = null;
   private checkTimer: NodeJS.Timeout | null = null;
   private checkInterval: NodeJS.Timeout | null = null;
+  private networkInterval: NodeJS.Timeout | null = null;
   private scheduledChecksStarted = false;
   private appliedVersion: string | null = null;
   private idleTimer: NodeJS.Timeout | null = null;
@@ -284,6 +294,7 @@ export class CoreUpdateManager {
   handleUnloadPrevented = () => {
     this.unloadPrevented = true;
     if (!this.pendingBootCheck || this.coldBootCheck) return;
+    this.rendererVersion = this.rollbackRendererVersion;
     logger.info('Reload cancelled by renderer, restoring staged update');
     this.app.browserManager.browsers.forEach((browser) => browser.cancelUnloadConfirmation());
     this.unloadConfirmations.clear();
@@ -340,6 +351,8 @@ export class CoreUpdateManager {
       this.staged = null;
       return false;
     }
+    this.rollbackRendererVersion = this.rendererVersion;
+    this.rendererVersion = version;
     this.rollbackPointer = this.pointer;
     this.savePointer({ current: version, previous: this.pointer.current, staged: null });
     this.staged = null;
@@ -354,6 +367,10 @@ export class CoreUpdateManager {
     return true;
   };
 
+  dismissAppliedNotice = () => {
+    this.appliedVersion = null;
+  };
+
   getStatus = () => ({
     appliedVersion: this.appliedVersion,
     applyMode: this.staged?.applyMode ?? null,
@@ -363,17 +380,38 @@ export class CoreUpdateManager {
     lastCheckAt: this.lastCheckAt,
     lastError: this.lastError,
     needsFullRelease: this.needsFullRelease,
-    running: this.shell?.manifest?.version ?? null,
+    running: this.rendererVersion ?? this.shell?.manifest?.version ?? null,
     staged: this.staged?.version ?? null,
   });
 
   checkForUpdates = ({ manual = false }: { manual?: boolean } = {}) => {
     if (manual && this.staged) this.announceStaged();
-    this.checkTask = this.checkTask.catch(() => {}).then(() => this.runCheck());
+    this.checkTask = this.checkTask
+      .catch(() => {})
+      .then(async () => {
+        await this.runCheck();
+      });
     return this.checkTask;
   };
 
-  private async runCheck() {
+  checkBeforeFirstLaunch = async (
+    update: (state: StartupUpdateProgress) => void,
+  ): Promise<StartupUpdateOutcome> => {
+    if (!this.enabled) throw new Error(`Core OTA unavailable: ${this.disabledReasons.join(', ')}`);
+    const outcome = await this.runCheck(update);
+    if (outcome === 'needs-full-release') return 'full-update';
+    if (outcome === 'staged') return 'relaunch';
+    if (
+      outcome === 'up-to-date' ||
+      outcome === 'already-current' ||
+      outcome === 'rollout-excluded'
+    ) {
+      return 'ready';
+    }
+    throw new Error(this.lastError || `Startup update check did not complete: ${outcome}`);
+  };
+
+  private async runCheck(startupProgress?: (state: StartupUpdateProgress) => void) {
     if (!this.enabled || this.busy) {
       logger.info('Core OTA check skipped', { reason: !this.enabled ? 'disabled' : 'busy' });
       return;
@@ -401,6 +439,7 @@ export class CoreUpdateManager {
       if (this.pointer.blacklist.includes(version)) throw new SkipCheck('blacklisted');
       if (!this.inRollout(version, remote.rollout)) throw new SkipCheck('rollout-excluded');
 
+      startupProgress?.({ phase: 'downloading' });
       await this.gcTask;
       let current =
         this.shell!.source === 'external'
@@ -422,6 +461,10 @@ export class CoreUpdateManager {
       const staged = await this.store.stage({
         builtin: { dir: this.shell!.builtinDir, manifest: this.builtinManifest! },
         current,
+        onApplying: startupProgress ? () => startupProgress({ phase: 'applying' }) : undefined,
+        onDownloadProgress: startupProgress
+          ? (progress) => startupProgress({ phase: 'downloading', ...progress })
+          : undefined,
         objectsBaseUrl: remote.schemaVersion === 3 ? remote.objectsBaseUrl : undefined,
         packsBaseUrl: feedUrl,
         remote,
@@ -440,14 +483,14 @@ export class CoreUpdateManager {
           : { staged: version },
       );
       this.lastError = null;
-      this.announceStaged();
+      if (!startupProgress) this.announceStaged();
       this.gc();
-      if (applyMode === 'reload') this.handleWindowBlur();
+      if (!startupProgress && applyMode === 'reload') this.handleWindowBlur();
       outcome = 'staged';
     } catch (error) {
       if (error instanceof SkipCheck) {
         outcome = error.message;
-        return;
+        return outcome;
       }
       outcome = 'failed';
       this.lastError = error instanceof Error ? error.message : String(error);
@@ -459,6 +502,7 @@ export class CoreUpdateManager {
       if (generation === this.checkGeneration) this.busy = false;
       logger.info('Core OTA check finished', { channel: this.activeChannel, outcome });
     }
+    return outcome;
   }
 
   private announceStaged() {
@@ -543,6 +587,15 @@ export class CoreUpdateManager {
     this.checkInterval = setInterval(() => this.checkForUpdates(), CHECK_INTERVAL);
     this.checkTimer.unref?.();
     this.checkInterval.unref?.();
+    if (this.networkInterval) clearInterval(this.networkInterval);
+    let online = net.isOnline();
+    // ponytail: main process has no online event; polling is cheap and catches offline launches.
+    this.networkInterval = setInterval(() => {
+      const next = net.isOnline();
+      if (next && !online) this.checkForUpdates();
+      online = next;
+    }, NETWORK_POLL_INTERVAL);
+    this.networkInterval.unref?.();
   }
 
   private relaunchIntoCore() {
@@ -550,11 +603,16 @@ export class CoreUpdateManager {
     this.app.updaterManager?.captureRestoreRoute();
     this.app.isQuiting = true;
     electronApp.releaseSingleInstanceLock();
-    electronApp.relaunch(
-      process.env.APPIMAGE
-        ? { args: process.argv.slice(1), execPath: process.env.APPIMAGE }
-        : { args: process.argv.slice(1) },
-    );
+    const appImage = process.env.APPIMAGE;
+    if (appImage) {
+      // app.relaunch() starts the new process with PR_SET_NO_NEW_PRIVS on Linux, which stops
+      // the AppImage runtime from using the setuid fusermount to mount itself.
+      spawn(appImage, process.argv.slice(1), { detached: true, stdio: 'ignore' })
+        .on('error', (error) => logger.error('Failed to relaunch AppImage', error))
+        .unref();
+    } else {
+      electronApp.relaunch({ args: process.argv.slice(1) });
+    }
     electronApp.quit();
   }
 
@@ -591,6 +649,7 @@ export class CoreUpdateManager {
     }
     this.app.rendererUrlManager.setActiveRenderer(this.rollbackRenderer);
     this.rollbackRenderer = null;
+    this.rendererVersion = this.rollbackRendererVersion;
     this.rollbackPointer = null;
     this.unloadConfirmations.clear();
     this.gc();

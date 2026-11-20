@@ -38,7 +38,12 @@ import { VerifyCriterionModel } from './verifyCriterion';
  * / verifyStatus) so the router response and every UI / CLI consumer stay
  * unchanged while the storage moves from agent_operations to verify_runs.
  */
+/** What auto-repair decided for a failed round (`verify_runs.metadata.autoRepair`). */
+export type VerifyAutoRepairOutcome = 'declined' | 'spawned';
+
 export interface VerifyRunState {
+  /** `declined` makes a failed round with `auto_repair` checks final. */
+  verifyAutoRepair: VerifyAutoRepairOutcome | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   /** The session id — exposed so a builder holding only its operationId can
@@ -67,6 +72,8 @@ const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null =
 const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =>
   run
     ? {
+        verifyAutoRepair:
+          (run.metadata as { autoRepair?: VerifyAutoRepairOutcome } | null)?.autoRepair ?? null,
         verifyPlan: (run.plan ?? null) as VerifyCheckItem[] | null,
         verifyPlanConfirmedAt: run.planConfirmedAt ?? null,
         verifyRunId: run.id,
@@ -359,6 +366,33 @@ export class VerifyRunModel {
   };
 
   /**
+   * Take a round its run never delivered off the acceptance. Only a `planned`
+   * round with no judged result qualifies — evidence the builder submitted
+   * mid-run sits in `pending` rows and was never verified — so a round that
+   * has started judging keeps its place. The row stays, so a late finish of
+   * the same run can attach it again as a new round.
+   */
+  detachUndeliveredRound = async (runId: string): Promise<boolean> => {
+    const detached = await this.db
+      .update(verifyRuns)
+      .set({ acceptanceId: null, roundIndex: null })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.acceptanceId),
+          sql`not exists (select 1 from ${verifyCheckResults}
+            where ${verifyCheckResults.verifyRunId} = ${verifyRuns.id}
+              and ${verifyCheckResults.status} <> 'pending')`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return detached.length > 0;
+  };
+
+  /**
    * A harness run arriving while the acceptance still holds a draft round must
    * not open another round: its plan folds into the draft, the draft becomes the
    * ingest target (frozen now, since results are about to land) and the
@@ -403,7 +437,7 @@ export class VerifyRunModel {
           plan,
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,
-          source: source.source ?? target.source,
+          source: source.source,
           // The survivor takes over the source's identity, so it takes over its
           // pipeline status too. An ingested round carries none and the report
           // settles it, which is what nulls the draft's own `planned` here. A LIVE
@@ -605,6 +639,26 @@ export class VerifyRunModel {
     return claimed.length > 0;
   };
 
+  /** Record the auto-repair decision without clobbering the rest of `metadata`. */
+  recordAutoRepair = async (runId: string, outcome: VerifyAutoRepairOutcome): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('autoRepair', ${outcome}::text)`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
+  /** Stamp the sweep's one re-drive of this round without clobbering the rest of `metadata`. */
+  recordVerifierRedrive = async (runId: string, at: Date): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('verifierRedrivenAt', ${at.toISOString()}::text)`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
   setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {
     await this.db
       .update(verifyRuns)
@@ -713,10 +767,12 @@ export class VerifyRunModel {
   };
 
   /**
-   * One page of runs stranded in `verifying`, confirmed `planned` rounds whose
-   * child operation aborted, or `repairing` claims left behind by a dead
-   * worker, since before `olderThan`, across all owners — the sweep's input
-   * (see `sweepStuckVerifyRuns`).
+   * One page of runs stranded in `verifying`, confirmed `planned` rounds
+   * whose operation ended without a delivery (a child that aborted, or a
+   * task's own run that errored or was abandoned while still on the
+   * acceptance), or `repairing` claims left behind by a dead worker, since
+   * before `olderThan`, across all owners — the sweep's input (see
+   * `sweepStuckVerifyRuns`).
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
    * cron, and each row carries the owner the recovery is then performed as.
@@ -765,6 +821,14 @@ export class VerifyRunModel {
             where ${agentOperations.id} = ${verifyRuns.operationId}
               and ${agentOperations.parentOperationId} is not null
               and ${agentOperations.completionReason} in ('error', 'interrupted'))`,
+        ),
+        and(
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.acceptanceId),
+          sql`exists (select 1 from ${agentOperations}
+            where ${agentOperations.id} = ${verifyRuns.operationId}
+              and ${agentOperations.parentOperationId} is null
+              and ${agentOperations.status} in ('error', 'abandoned', 'interrupted'))`,
         ),
         // An abandoned repair claim: `triggerAutoRepair` writes `repairing`
         // durably before spawning, so a worker killed in that window leaves the

@@ -8,9 +8,14 @@ export { getDocumentStoreState, useDocumentStore } from './store';
 // Re-export document slice types
 export type {
   DocumentAction,
+  DocumentDetail,
+  DocumentDetailSliceState,
   InitDocumentParams,
+  UseFetchDocumentDetailResult,
   UseFetchDocumentOptions,
+  UseFetchDocumentResult,
 } from './slices/document';
+export { documentDetailResource } from './slices/document';
 
 // Re-export editor slice types
 export type {

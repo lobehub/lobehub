@@ -5,12 +5,15 @@ import CollapsibleContent from '@/components/CollapsibleContent';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { StartTopicConversationContext } from '@/features/LocalFile';
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
+import { parseChannelPrompt } from '@/store/chat/utils/parseChannelPrompt';
 import { splitReferencedMessage } from '@/store/chat/utils/parseReferencedMessage';
 import { type UIChatMessage } from '@/types/index';
 
 import { useStartTopicConversation } from '../../../hooks/useStartTopicConversation';
+import { hasRenderableEditorData } from '../editorData';
 import { useMarkdown } from '../useMarkdown';
 import AudioFileListViewer from './AudioFileListViewer';
+import ChannelPromptContent from './ChannelPromptContent';
 import FileListViewer from './FileListViewer';
 import ImageFileListViewer from './ImageFileListViewer';
 import PageSelections from './PageSelections';
@@ -34,10 +37,14 @@ const UserMessageContent = memo<UIChatMessage>(
       return { displayContent: body, reference };
     }, [content]);
 
-    const hasEditorData =
-      editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
+    // A Channel run's prompt shows as the request it answers, its context folded away.
+    const channelPrompt = useMemo(() => parseChannelPrompt(content), [content]);
 
-    const textBody = hasEditorData ? (
+    const hasEditorData = hasRenderableEditorData(editorData);
+
+    const textBody = channelPrompt ? (
+      <ChannelPromptContent markdownProps={markdownProps} prompt={channelPrompt} />
+    ) : hasEditorData ? (
       // Rich-text folder chips render headlessly, so they receive the
       // conversation through context rather than props.
       <StartTopicConversationContext value={startTopicConversation}>

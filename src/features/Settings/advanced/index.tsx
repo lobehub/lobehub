@@ -1,13 +1,14 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Select, Skeleton, Spin, Switch } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Select, Spin, Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import AdvancedSkeleton from '@/components/Skeleton/Settings/tabs/Advanced';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -17,9 +18,12 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type UserGeneralConfig } from '@/types/user/settings';
 
+import { useDiagnosticsItems } from './useDiagnosticsItems';
+import { useRemoteDebuggingItem } from './useRemoteDebuggingItem';
+
 type UpdateChannelValue = 'canary' | 'stable';
 
-const Page = memo(() => {
+const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }) => {
   const { t } = useTranslation('setting');
 
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
@@ -46,6 +50,8 @@ const Page = memo(() => {
   });
 
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const diagnosticsItems = useDiagnosticsItems<UserGeneralConfig>();
+  const remoteDebuggingItem = useRemoteDebuggingItem<UserGeneralConfig>();
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -82,7 +88,13 @@ const Page = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton.Text rows={5} />;
+    // The registered tab skeleton, so the chunk and data waits show one shape.
+    return (
+      <>
+        {showSettingHeader && <SettingHeader title={t('tab.advanced')} />}
+        <AdvancedSkeleton.Body />
+      </>
+    );
   }
 
   const advancedGroup: FormGroupItem<UserGeneralConfig> = {
@@ -117,6 +129,8 @@ const Page = memo(() => {
             } satisfies FormFieldProps<UserGeneralConfig>,
           ]
         : []),
+      ...diagnosticsItems,
+      ...(remoteDebuggingItem ? [remoteDebuggingItem] : []),
     ],
     extra: loading && <Spin size="small" style={{ opacity: 0.5 }} />,
     title: t('tab.advanced.toolsAndDiagnostics.title'),
@@ -148,7 +162,7 @@ const Page = memo(() => {
 
   return (
     <>
-      <SettingHeader title={t('tab.advanced')} />
+      {showSettingHeader && <SettingHeader title={t('tab.advanced')} />}
       <Form
         collapsible={false}
         form={form}

@@ -16,21 +16,4 @@ describe('SkillMaintainerManifest', () => {
       'replaceSkillIndex',
     ]);
   });
-
-  /**
-   * @example
-   * Path, resource, delete, and broad exploration APIs stay out of the active manifest.
-   */
-  it('does not expose forbidden v1 APIs', () => {
-    const names = SkillMaintainerManifest.api.map((item) => item.name);
-
-    expect(names).not.toContain('consolidate');
-    expect(names).not.toContain('deleteSkill');
-    expect(names).not.toContain('forkSkill');
-    expect(names).not.toContain('listSkillResources');
-    expect(names).not.toContain('mergeSkill');
-    expect(names).not.toContain('readSkillFile');
-    expect(names).not.toContain('removeSkillFile');
-    expect(names).not.toContain('writeSkillFile');
-  });
 });

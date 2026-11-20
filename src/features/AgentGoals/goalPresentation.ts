@@ -6,6 +6,7 @@ import { formatDuration } from '@lobechat/utils';
 const goalStatusKeyMap = {
   achieved: 'goalList.status.achieved',
   canceled: 'goalList.status.canceled',
+  draft: 'goalList.status.draft',
   failed: 'goalList.status.error',
   paused: 'goalList.status.paused',
   planning: 'goalList.status.planning',
@@ -38,6 +39,7 @@ export const goalStatusToTaskStatus = (goalStatus: GoalStatus): TaskStatus => {
     case 'review': {
       return 'paused';
     }
+    case 'draft':
     case 'planning': {
       return 'backlog';
     }

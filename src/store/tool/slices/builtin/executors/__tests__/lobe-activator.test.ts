@@ -1,6 +1,7 @@
 /**
  * Tests for Lobe Tools Executor (activateTools discovery allowlist)
  */
+import { Md5 } from 'ts-md5';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock getToolStoreState
@@ -11,15 +12,16 @@ vi.mock('@/store/tool', () => ({
 
 // Mock toolSelectors.availableToolsForDiscovery
 const mockAvailableToolsForDiscovery = vi.fn();
+const mockConnectorManifests = vi.fn((): unknown[] => []);
 vi.mock('@/store/tool/selectors/tool', () => ({
   toolSelectors: {
     availableToolsForDiscovery: (s: any) => mockAvailableToolsForDiscovery(s),
+    executableConnectorManifests: () => mockConnectorManifests(),
   },
 }));
 
 // Import after mocks
 const { activatorExecutor } = await import('../lobe-activator');
-
 const makeBuiltinTool = (identifier: string, discoverable?: boolean) => ({
   discoverable,
   identifier,
@@ -42,6 +44,7 @@ const makePlugin = (identifier: string) => ({
 describe('lobe-activator executor discovery allowlist', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConnectorManifests.mockReturnValue([]);
   });
 
   it('should only return manifests for discoverable tools', async () => {
@@ -75,6 +78,25 @@ describe('lobe-activator executor discovery allowlist', () => {
     expect(activatedIds).toContain('web-browsing');
     expect(activatedIds).not.toContain('internal-admin');
   }, 10_000);
+
+  it('only activates tools in the operation snapshot, including a contextual attachment reader', async () => {
+    mockGetState.mockReturnValue({
+      builtinTools: [
+        makeBuiltinTool('lobe-attachments', false),
+        makeBuiltinTool('lobe-user-memory'),
+      ],
+      installedPlugins: [],
+    });
+    mockAvailableToolsForDiscovery.mockReturnValue([{ identifier: 'lobe-user-memory' }]);
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: ['lobe-user-memory', 'lobe-attachments'], reason: 'Read an attachment' },
+      { messageId: 'msg', stepContext: { discoverableToolIds: ['lobe-attachments'] } },
+    );
+    expect(result.state?.activatedTools?.map((item) => item.identifier)).toEqual([
+      'lobe-attachments',
+    ]);
+  });
 
   it('should reject all identifiers when none are discoverable', async () => {
     const hiddenTool = makeBuiltinTool('secret-tool', false);
@@ -129,4 +151,178 @@ describe('lobe-activator executor discovery allowlist', () => {
     const activatedIds = state.activatedTools?.map((t: any) => t.identifier) ?? [];
     expect(activatedIds).toContain('community-plugin');
   });
+
+  it('should activate a hashed wire name via the client discoverable list', async () => {
+    // Codex P2 on PR #20791: the client executor did not implement
+    // `listToolManifests`, so `MD5HASH_x____MD5HASH_y` names had no manifests
+    // to resolve against and returned Not found even when the tool was
+    // discoverable. The list must be served from the same discovery
+    // allowlist as `getToolManifests`.
+    const tool = makeBuiltinTool('long-named-plugin');
+
+    mockGetState.mockReturnValue({
+      builtinTools: [tool],
+      installedPlugins: [],
+    });
+
+    mockAvailableToolsForDiscovery.mockReturnValue([
+      { description: 'desc', identifier: 'long-named-plugin', name: 'long-named-plugin' },
+    ]);
+
+    const wireName = `MD5HASH_${Md5.hashStr('long-named-plugin').toString().slice(0, 12)}____run`;
+
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: [wireName], reason: 'Activate via hashed wire name.' },
+      { messageId: 'msg-1', operationId: 'op-1' },
+    );
+
+    expect(result.success).toBe(true);
+
+    const state = result.state as any;
+    const activatedIds = state.activatedTools?.map((t: any) => t.identifier) ?? [];
+    expect(activatedIds).toContain('long-named-plugin');
+  }, 10_000);
+
+  it('should activate a bare API name via the client discoverable list', async () => {
+    // Companion regression for the same P2: separator-free API names need
+    // the full list too — the identifier-keyed probe returns nothing for
+    // them.
+    const tool = makeBuiltinTool('web-browsing');
+
+    mockGetState.mockReturnValue({
+      builtinTools: [tool],
+      installedPlugins: [],
+    });
+
+    mockAvailableToolsForDiscovery.mockReturnValue([
+      { description: 'desc', identifier: 'web-browsing', name: 'web-browsing' },
+    ]);
+
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: ['run'], reason: 'Activate via bare API name.' },
+      { messageId: 'msg-1', operationId: 'op-1' },
+    );
+
+    expect(result.success).toBe(true);
+
+    const state = result.state as any;
+    const activatedIds = state.activatedTools?.map((t: any) => t.identifier) ?? [];
+    expect(activatedIds).toContain('web-browsing');
+  }, 10_000);
+
+  it('should activate a cached Composio server tool while the plugin replica is still pending', async () => {
+    // Codex P2 on PR #20791: discovery exposes connected Composio servers
+    // straight from the cached `composioServers` replica, but manifest lookup
+    // only probed builtin tools, installed plugins and LobeHub Skill servers.
+    // During the startup window before the independent plugin fetch lands,
+    // `getInstalledPluginById` misses and activation failed with `Not found`.
+    mockGetState.mockReturnValue({
+      builtinTools: [],
+      composioServers: [
+        {
+          identifier: 'composio-github',
+          label: 'GitHub',
+          status: 'active',
+          tools: [{ description: 'Create an issue', inputSchema: {}, name: 'create_issue' }],
+        },
+      ],
+      installedPlugins: [],
+    });
+
+    mockAvailableToolsForDiscovery.mockReturnValue([
+      { description: 'GitHub tools', identifier: 'composio-github', name: 'GitHub' },
+    ]);
+
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      {
+        identifiers: ['composio-github____create_issue'],
+        reason: 'Use the Composio GitHub connection.',
+      },
+      { messageId: 'msg-1', operationId: 'op-1' },
+    );
+
+    expect(result.success).toBe(true);
+
+    const state = result.state as any;
+    const activated = state.activatedTools?.find((t: any) => t.identifier === 'composio-github');
+    expect(activated).toBeDefined();
+    expect(activated.name).toBe('GitHub');
+    expect(activated.apiCount).toBe(1);
+  }, 10_000);
+
+  it('should let a connected LobeHub Skill server own a conflicting Composio identifier', async () => {
+    // Discovery's ownership rule: when a connector identifier has both legacy
+    // Composio and current LobeHub connections, the LobeHub Skill server owns
+    // the single visible entry. Manifest resolution must mirror that order.
+    mockGetState.mockReturnValue({
+      builtinTools: [],
+      composioServers: [
+        {
+          identifier: 'notion',
+          label: 'Legacy Composio Notion',
+          status: 'active',
+          tools: [{ description: 'Legacy api', inputSchema: {}, name: 'legacy_api' }],
+        },
+      ],
+      installedPlugins: [],
+      lobehubSkillServers: [
+        {
+          identifier: 'notion',
+          name: 'Notion',
+          status: 'connected',
+          tools: [{ description: 'LobeHub api', name: 'lobehub_api' }],
+        },
+      ],
+    });
+
+    mockAvailableToolsForDiscovery.mockReturnValue([
+      { description: 'Notion tools', identifier: 'notion', name: 'Notion' },
+    ]);
+
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      {
+        identifiers: ['notion____lobehub_api'],
+        reason: 'Use the LobeHub Notion connection.',
+      },
+      { messageId: 'msg-1', operationId: 'op-1' },
+    );
+
+    expect(result.success).toBe(true);
+
+    const state = result.state as any;
+    const activatedIds = state.activatedTools?.map((t: any) => t.identifier) ?? [];
+    expect(activatedIds).toContain('notion');
+  }, 10_000);
+
+  // Marketplace and custom MCP installs land only in `user_connectors` now
+  it('activates a connector-only MCP with its connector manifest', async () => {
+    mockGetState.mockReturnValue({ builtinTools: [], installedPlugins: [] });
+    mockAvailableToolsForDiscovery.mockReturnValue([
+      { description: 'Notes', identifier: 'notes-mcp', name: 'Notes' },
+    ]);
+    mockConnectorManifests.mockReturnValue([
+      {
+        api: [{ description: 'Search notes', name: 'search', parameters: { type: 'object' } }],
+        identifier: 'notes-mcp',
+        meta: { avatar: 'MCP_AVATAR', description: 'Notes connector', title: 'Notes' },
+        type: 'mcp',
+      },
+    ]);
+
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: ['notes-mcp'], reason: 'Search the notes the user asked about.' },
+      { messageId: 'msg-1', operationId: 'op-1' },
+    );
+
+    expect(result.success).toBe(true);
+    const activated = (result.state as any).activatedTools?.find(
+      (t: any) => t.identifier === 'notes-mcp',
+    );
+    expect(activated).toMatchObject({ apiCount: 1, identifier: 'notes-mcp', name: 'Notes' });
+  }, 10_000);
 });

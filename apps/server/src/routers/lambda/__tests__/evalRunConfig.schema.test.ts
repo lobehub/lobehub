@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { evalCaseSelectionSchema } from '../evalRunConfig.schema';
+import {
+  evalCaseSelectionSchema,
+  evalRunChatConfigSchema,
+  evalRunInputConfigSchema,
+} from '../evalRunConfig.schema';
+
+it('does not accept client-authored mock connection snapshots', () => {
+  expect(
+    evalRunInputConfigSchema.parse({
+      connectorSnapshots: { case: { mock: { connectorId: 'foreign', fingerprint: 'forged' } } },
+      model: 'test-model',
+      provider: 'test-provider',
+    }),
+  ).toEqual({ model: 'test-model', provider: 'test-provider' });
+});
 
 describe('evalCaseSelectionSchema', () => {
   describe('canonical "all" — normalizes to omission', () => {
@@ -77,5 +91,25 @@ describe('evalCaseSelectionSchema', () => {
         evalCaseSelectionSchema.safeParse({ caseIds: ['c1', 'c1'], mode: 'exclude' }).success,
       ).toBe(false);
     });
+  });
+});
+
+describe('evalRunChatConfigSchema', () => {
+  it('accepts the model settings the chat model-params panel offers', () => {
+    const input = {
+      enableReasoning: true,
+      gpt5_6ReasoningEffort: 'max',
+      glm5_3ReasoningEffort: 'low',
+      textVerbosity: 'low',
+      thinkingLevel3: 'medium',
+    };
+    expect(evalRunChatConfigSchema.parse(input)).toEqual(input);
+  });
+
+  it('rejects values a model setting does not have, and fields that are not model settings', () => {
+    expect(evalRunChatConfigSchema.safeParse({ glm5_3ReasoningEffort: 'medium' }).success).toBe(
+      false,
+    );
+    expect(evalRunChatConfigSchema.safeParse({ systemRole: 'x' }).success).toBe(false);
   });
 });

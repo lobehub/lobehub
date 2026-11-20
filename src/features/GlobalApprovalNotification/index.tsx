@@ -1,12 +1,15 @@
 'use client';
 
+import { goalClarificationIslandKey } from '@lobechat/const/goal';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
+import { toast } from '@lobehub/ui';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { usePermission } from '@/hooks/usePermission';
 
 import ApprovalCard from './ApprovalCard';
 import GoalClarificationCard from './GoalClarificationCard';
@@ -14,6 +17,7 @@ import GoalDecisionCard from './GoalDecisionCard';
 import { styles } from './styles';
 import { useApprovalIslandCollapse } from './useApprovalIslandCollapse';
 import { useGlobalPendingApprovals } from './useGlobalPendingApprovals';
+import { useIslandDismissals } from './useIslandDismissals';
 import { usePendingGoalClarifications } from './usePendingGoalClarifications';
 import { usePendingGoalDecisions } from './usePendingGoalDecisions';
 
@@ -39,6 +43,21 @@ const GlobalApprovalNotification = memo(() => {
   // Then the gates a running goal stopped on, then finished goals awaiting
   // sign-off — each blocks less than the one before it.
   const goalItems = usePendingGoalDecisions();
+  // Goal asks the user waved off leave the island but stay in the Home inbox,
+  // so they are never lost — a run approval has no such fallback and stays.
+  // The server leaves dismissed asks out of both lists, on every client.
+  const { allowed: canAnswerGoals } = usePermission('create_content');
+  const dismissKey = useIslandDismissals(canAnswerGoals);
+  // Confirm only once the server kept it; on failure the card comes back.
+  const dismiss = async (key: string) => {
+    try {
+      await dismissKey(key);
+      toast.info({ placement: 'top', title: t('globalApproval.dismissed') });
+    } catch (error) {
+      console.error('[island] failed to dismiss', error);
+      toast.error({ placement: 'top', title: t('globalApproval.dismissFailed') });
+    }
+  };
   const total = groups.length + goalGroups.length + goalItems.length;
   const [collapsed, setCollapsed] = useApprovalIslandCollapse(total);
 
@@ -104,7 +123,11 @@ const GlobalApprovalNotification = memo(() => {
                     style={{ pointerEvents: 'auto', width: '100%' }}
                     transition={SPRING}
                   >
-                    <GoalClarificationCard group={topGoal} onCollapse={() => setCollapsed(true)} />
+                    <GoalClarificationCard
+                      group={topGoal}
+                      onCollapse={() => setCollapsed(true)}
+                      onDismiss={() => dismiss(goalClarificationIslandKey(topGoal))}
+                    />
                   </m.div>
                 )}
                 {topGoalItem && (
@@ -117,7 +140,11 @@ const GlobalApprovalNotification = memo(() => {
                     style={{ pointerEvents: 'auto', width: '100%' }}
                     transition={SPRING}
                   >
-                    <GoalDecisionCard item={topGoalItem} onCollapse={() => setCollapsed(true)} />
+                    <GoalDecisionCard
+                      item={topGoalItem}
+                      onCollapse={() => setCollapsed(true)}
+                      onDismiss={() => dismiss(topGoalItem.key)}
+                    />
                   </m.div>
                 )}
               </AnimatePresence>

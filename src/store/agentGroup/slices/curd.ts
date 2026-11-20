@@ -11,10 +11,7 @@ import { agentGroupSelectors } from '../selectors';
 type Setter = StoreSetter<ChatGroupStore>;
 
 type ChatGroupStoreWithInternal = ChatGroupStore & {
-  internal_dispatchChatGroup: (payload: {
-    payload: { id: string; value: Partial<ChatGroupItem> };
-    type: 'updateGroup';
-  }) => void;
+  internal_updateGroupRow: (id: string, value: Partial<ChatGroupItem>) => void;
   refreshGroupDetail: (groupId: string) => Promise<void>;
 };
 
@@ -83,7 +80,7 @@ export class ChatGroupCurdAction {
 
   updateGroup = async (id: string, value: Partial<ChatGroupItem>) => {
     await chatGroupService.updateGroup(id, value);
-    this.#get().internal_dispatchChatGroup({ payload: { id, value }, type: 'updateGroup' });
+    this.#get().internal_updateGroupRow(id, value);
     await this.#get().refreshGroupDetail(id);
   };
 
@@ -103,12 +100,9 @@ export class ChatGroupCurdAction {
     // Update the database first
     await chatGroupService.updateGroup(group.id, { config: mergedConfig });
 
-    // Immediately update the local store to ensure configuration is available
-    // Note: reducer expects payload: { id, value }
-    this.#get().internal_dispatchChatGroup({
-      payload: { id: group.id, value: { config: mergedConfig } },
-      type: 'updateGroup',
-    });
+    // Immediately patch every copy of the group, so the configuration is
+    // available before the refreshed detail lands.
+    this.#get().internal_updateGroupRow(group.id, { config: mergedConfig });
 
     // Refresh groups to ensure consistency
     await this.#get().refreshGroupDetail(group.id);
@@ -129,7 +123,7 @@ export class ChatGroupCurdAction {
 
     await chatGroupService.updateGroup(id, meta);
     // Keep local store in sync immediately
-    this.#get().internal_dispatchChatGroup({ payload: { id, value: meta }, type: 'updateGroup' });
+    this.#get().internal_updateGroupRow(id, meta);
     await this.#get().refreshGroupDetail(id);
   };
 }

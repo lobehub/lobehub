@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 
 import { threads, topics, userInstalledPlugins } from '@/database/schemas';
 
@@ -49,7 +49,10 @@ export class EvalContextService extends BaseService {
     return { threads: rows, total: totals[0].total };
   }
   async listPlugins(query: EvalPagination) {
-    const where = this.buildWorkspaceWhere(userInstalledPlugins);
+    const where = and(
+      this.buildWorkspaceWhere(userInstalledPlugins),
+      sql`COALESCE(${userInstalledPlugins.source}, '') <> 'agent-eval'`,
+    );
     const { limit, offset } = evalPagination(query);
     const [rows, totals] = await Promise.all([
       this.db

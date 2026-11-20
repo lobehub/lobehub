@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImageOptions } from '../../core/openaiCompatible';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import type { TaskResult } from '../../utils/asyncifyPolling';
 import { asyncifyPolling } from '../../utils/asyncifyPolling';

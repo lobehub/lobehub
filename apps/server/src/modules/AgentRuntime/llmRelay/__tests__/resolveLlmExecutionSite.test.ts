@@ -69,6 +69,18 @@ describe('resolveLlmExecutionSite', () => {
     });
   });
 
+  it('relays an inherited executor on the channel its client subscribed to', async () => {
+    const inherited = executor(['ollama']);
+    (inherited.host.llmExecutor as any).channelOperationId = 'parent-op';
+
+    expect(await resolve('ollama', inherited)).toEqual({
+      channelOperationId: 'parent-op',
+      preferredClientId: 'tab-a',
+      runtimeProvider: 'ollama',
+      site: 'client',
+    });
+  });
+
   it('reports unavailable when no client declared it can run the provider', async () => {
     expect(await resolve('ollama')).toEqual({ reason: 'no_executor', site: 'unavailable' });
     expect(await resolve('ollama', executor(['lmstudio']))).toEqual({
@@ -115,9 +127,32 @@ describe('resolveLlmExecutionSite', () => {
     });
   });
 
-  it('keeps a provider without client requests on the server, whatever its endpoint', async () => {
-    providerRow.current = { fetchOnClient: false, keyVaults: { baseURL: 'http://127.0.0.1:1234/v1' } };
+  it('keeps a provider without client requests on the server', async () => {
+    providerRow.current = {
+      fetchOnClient: false,
+      keyVaults: { apiKey: 'sk-local', baseURL: 'http://127.0.0.1:1234/v1' },
+    };
 
     expect(await resolve('my-local-llm', executor(['my-local-llm']))).toEqual({ site: 'server' });
+  });
+
+  // The client store sends a provider with only a base URL from the device
+  // whatever `fetchOnClient` says; the server must relay it the same way, or the
+  // client prepares no executor and the call fails as `no_executor`.
+  it('relays a provider with only a base URL, like the client store does', async () => {
+    providerRow.current = {
+      fetchOnClient: false,
+      keyVaults: { baseURL: 'http://127.0.0.1:1234/v1' },
+    };
+
+    expect(await resolve('my-local-llm', executor(['my-local-llm']))).toMatchObject({
+      site: 'client',
+    });
+  });
+
+  it('keeps a provider whose card disables browser requests on the server', async () => {
+    providerRow.current = { fetchOnClient: true, keyVaults: { baseURL: 'http://127.0.0.1:1/v1' } };
+
+    expect(await resolve('cloudflare', executor(['cloudflare']))).toEqual({ site: 'server' });
   });
 });

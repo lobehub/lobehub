@@ -48,6 +48,19 @@ describe('workspace built-in roles', () => {
     expect(admin).not.toContain('agent:delete:all');
   });
 
+  // Project writes are gated by `withScopedPermission('agent:update')`, which
+  // accepts either scope; the project model itself lets any such member manage
+  // a project they can see, so the viewer exclusion rests on this mapping.
+  it('grants project writes to every role except the viewer', () => {
+    const canUpdateAgents = (role: string) =>
+      WORKSPACE_ROLE_PERMISSIONS[role].some((code) => code.startsWith('agent:update:'));
+
+    expect(canUpdateAgents(WORKSPACE_SYSTEM_ROLES.OWNER)).toBe(true);
+    expect(canUpdateAgents(WORKSPACE_SYSTEM_ROLES.ADMIN)).toBe(true);
+    expect(canUpdateAgents(WORKSPACE_SYSTEM_ROLES.MEMBER)).toBe(true);
+    expect(canUpdateAgents(WORKSPACE_SYSTEM_ROLES.VIEWER)).toBe(false);
+  });
+
   it('allows writable roles but excludes viewers from task assignment', () => {
     expect(canWorkspaceRoleBeTaskAssignee('owner')).toBe(true);
     expect(canWorkspaceRoleBeTaskAssignee('admin')).toBe(true);

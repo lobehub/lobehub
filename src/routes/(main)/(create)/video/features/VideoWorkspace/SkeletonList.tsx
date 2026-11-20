@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Center, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Block, Center, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import PromptInput from '@/routes/(main)/(create)/video/features/PromptInput';

@@ -1,16 +1,16 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { ArrowRightIcon, LockIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
+import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { sandboxStorageService } from '@/services/sandboxStorage';
+import { densityVars } from '@/styles/densityVars';
+
+import { useGithubRepositories } from './useGithubRepositories';
 
 const styles = createStaticStyles(({ css }) => ({
   field: css`
@@ -31,8 +31,8 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 10px;
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -72,7 +72,7 @@ interface GithubRepositoryPickerProps {
   onChange: (selection: GithubRepositorySelection | undefined) => void;
   /**
    * Run before navigating away from this picker. The picker lives in a dialog,
-   * and leaving it open behind the credentials page would strand whatever the
+   * and leaving it open behind the GitHub integration page would strand whatever the
    * person had already typed.
    */
   onLeave?: () => void;
@@ -83,11 +83,11 @@ interface GithubRepositoryPickerProps {
  * The one repository an environment builds from, chosen in two steps:
  * organization, then repository within it.
  *
- * Both lists come from a single `/user/repos` call, which already spans every
- * organization the account belongs to. The organizations are derived from what
- * came back rather than fetched separately: an organization holding nothing
- * this account can reach is not a choice, and listing per organization would
- * be one request per organization for a set already in hand — switching
+ * Both lists come from one listing of what the workspace's GitHub App
+ * installations can read — the same grant a build clones with, so every
+ * choice offered is one the build can check out. The organizations are
+ * derived from what came back rather than fetched separately: an organization
+ * holding nothing the installations can reach is not a choice, and switching
  * organizations costs nothing here.
  *
  * Both are searchable, because either half can be the one the person
@@ -96,7 +96,7 @@ interface GithubRepositoryPickerProps {
  * Choosing nothing is a choice: an environment with no repository is a blank
  * working directory, which is a reasonable thing to want.
  *
- * No GitHub connection is not an error and not a dead end — it is one click
+ * No GitHub App installation is not an error and not a dead end — it is one click
  * from being resolved, so the picker offers that click rather than reporting
  * a state and leaving the person to find the page themselves.
  */
@@ -107,12 +107,10 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
 
   const connectGithub = () => {
     onLeave?.();
-    navigate('/settings/credential');
+    navigate(GITHUB_RETURN_TO);
   };
 
-  const { data, isLoading } = useSWR('sandbox-github-repositories', () =>
-    sandboxStorageService.listGithubRepositories(),
-  );
+  const { data, isLoading, isValidating, retry, state } = useGithubRepositories();
 
   // Memoised, not a bare `??` fallback: a fresh `[]` on every render would
   // make both lists below recompute every time, which is exactly what they are
@@ -131,35 +129,58 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
     [owner, repositories],
   );
 
-  // Both of these are the same kind of answer — "there is nothing to pick from
-  // yet, and here is what to do about it" — so they share one shape. An empty
-  // list on a live connection usually means the connection cannot see the
-  // organization the person is thinking of, which is fixed in the same place.
   const guide =
-    data?.connected === false
-      ? { action: 'connect', text: t('environments.github.notConnected') }
-      : !isLoading && repositories.length === 0
-        ? { action: 'review', text: t('environments.github.noRepositories') }
-        : undefined;
+    state === 'error'
+      ? {
+          action: 'retry',
+          text: t(
+            repositories.length > 0
+              ? 'environments.github.refreshFailed'
+              : 'environments.github.loadFailed',
+          ),
+        }
+      : state === 'unconfigured'
+        ? // Connecting needs the deployment's GitHub App first; the settings
+          // page says what is missing, so the guide still leads somewhere.
+          { action: 'settings', text: t('environments.github.unconfigured') }
+        : state === 'disconnected'
+          ? { action: 'connect', text: t('environments.github.notConnected') }
+          : state === 'empty'
+            ? { action: 'review', text: t('environments.github.noRepositories') }
+            : undefined;
 
-  if (guide)
+  const guideContent = guide && (
+    <div className={styles.guide} role={state === 'error' ? 'alert' : undefined}>
+      <span className={styles.guideText}>{guide.text}</span>
+      {guide.action && (
+        <Button
+          loading={guide.action === 'retry' && isValidating}
+          size={'small'}
+          onClick={guide.action === 'retry' ? () => void retry() : connectGithub}
+        >
+          {guide.action === 'retry'
+            ? t('retry', { ns: 'common' })
+            : t(
+                guide.action === 'connect'
+                  ? 'environments.github.connect'
+                  : guide.action === 'settings'
+                    ? 'environments.github.openIntegrations'
+                    : 'environments.github.reviewAccess',
+              )}
+          {guide.action !== 'retry' && <Icon icon={ArrowRightIcon} size={12} />}
+        </Button>
+      )}
+    </div>
+  );
+
+  if (guide && (state !== 'error' || repositories.length === 0))
     return (
       <Flexbox gap={6}>
         <Flexbox horizontal align={'center'} gap={6}>
           <Github size={13} />
           <span className={styles.label}>{t('environments.github.label')}</span>
         </Flexbox>
-        <div className={styles.guide}>
-          <span className={styles.guideText}>{guide.text}</span>
-          <Button size={'small'} onClick={connectGithub}>
-            {t(
-              guide.action === 'connect'
-                ? 'environments.github.connect'
-                : 'environments.github.reviewAccess',
-            )}
-            <Icon icon={ArrowRightIcon} size={12} />
-          </Button>
-        </div>
+        {guideContent}
       </Flexbox>
     );
 
@@ -173,6 +194,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
         </Text>
       </Flexbox>
 
+      {guideContent}
       <Flexbox horizontal gap={8}>
         <div className={styles.field}>
           <Text fontSize={11} type={'secondary'}>
@@ -233,6 +255,11 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
           />
         </div>
       </Flexbox>
+      {data?.truncated && (
+        <Text fontSize={11} type={'secondary'}>
+          {t('environments.github.truncated', { count: repositories.length })}
+        </Text>
+      )}
     </Flexbox>
   );
 });

@@ -11,8 +11,10 @@ import {
   AgentDocumentsIdentifier,
   type CopyDocumentArgs,
   type CreateDocumentArgs,
+  type CreateFolderArgs,
   type ListDocumentsArgs,
   type ModifyDocumentNodesArgs,
+  type MoveDocumentsArgs,
   type ReadDocumentArgs,
   type RemoveDocumentArgs,
   type RenameDocumentArgs,
@@ -24,6 +26,8 @@ import {
 // visible title). Read-only calls are excluded — they don't alter the list.
 const LIST_MUTATING_APIS = new Set<string>([
   AgentDocumentsApiName.createDocument,
+  AgentDocumentsApiName.createFolder,
+  AgentDocumentsApiName.moveDocuments,
   AgentDocumentsApiName.removeDocument,
   AgentDocumentsApiName.renameDocument,
   AgentDocumentsApiName.copyDocument,
@@ -165,6 +169,20 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     });
   };
 
+  createFolder = async (
+    params: CreateFolderArgs,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.createFolder(params, { agentId: ctx.agentId, scope: ctx.scope });
+  };
+
+  moveDocuments = async (
+    params: MoveDocumentsArgs,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.moveDocuments(params, { agentId: ctx.agentId, scope: ctx.scope });
+  };
+
   renameDocument = async (
     params: RenameDocumentArgs,
     ctx: BuiltinToolContext,
@@ -218,8 +236,12 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
 const fallbackRuntime = new AgentDocumentsExecutionRuntime({
   copyDocument: async ({ agentId: _agentId }) => undefined,
   createDocument: async () => undefined,
+  createFolder: async () => {
+    throw new Error('Agent document folders are unavailable in this runtime.');
+  },
   createTopicDocument: async () => undefined,
   listDocuments: async () => [],
+  moveDocuments: async () => [],
   listTopicDocuments: async () => [],
   modifyNodes: async ({ agentId: _agentId }) => undefined,
   readDocument: async ({ agentId: _agentId }) => undefined,

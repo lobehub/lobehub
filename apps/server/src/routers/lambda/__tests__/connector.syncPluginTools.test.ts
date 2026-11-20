@@ -10,12 +10,24 @@ import { connectorRouter } from '../connector';
 
 const mocks = vi.hoisted(() => ({
   connectedAccountsDelete: vi.fn(),
+  refreshSubscriptions: vi.fn(),
+  removeSubscriptions: vi.fn(),
 }));
 
 // `vi.mock` is hoisted by vitest's transformer above all imports at runtime,
 // so the relative import order doesn't matter functionally — the mocks below
 // are still active when the router module is evaluated. They live below the
 // imports to satisfy `import-x/first` without disabling the rule.
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
+  scheduleRefreshByConnector: mocks.refreshSubscriptions,
+  removeByConnector: mocks.removeSubscriptions,
+}));
+vi.mock('@/database/models/connectorLink', () => ({
+  ConnectorLinkModel: vi.fn(function () {
+    return { listByConnectorIds: async () => [] };
+  }),
+}));
+
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
@@ -42,6 +54,13 @@ vi.mock('@/libs/trpc/lambda/middleware', () => ({
     opts.next({ ctx: { ...opts.ctx, serverDB: opts.ctx.serverDB ?? {} } }),
 }));
 
+const activeGmailAuthConfig = () => ({
+  appSlug: 'GMAIL',
+  authConfigId: 'ac-gmail',
+  connectedAccountId: 'ca-gmail',
+  status: 'ACTIVE',
+});
+
 describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
   let connectorModelMock: any;
   let connectorToolModelMock: any;
@@ -52,6 +71,10 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
 
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'conn-new' } }),
+      findManageableByIdentifier: vi.fn().mockResolvedValue(null),
+      findScopedByIdentifier: vi.fn().mockResolvedValue(null),
+      isComposioAccountPrivateToTeammate: vi.fn().mockResolvedValue(false),
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
     };
@@ -74,6 +97,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
       serverDB: {},
       userId: 'user_test',
       workspaceId: workspaceId ?? null,
+      ...(workspaceId && { workspaceRole: 'member' }),
     } as any);
 
   it('returns { connectorId: null } early for customPlugin rows that own an MCP endpoint', async () => {
@@ -90,7 +114,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     const result = await callerFor().syncPluginTools({ identifier: 'dockpit' });
 
     expect(result).toEqual({ connectorId: null, toolCount: 0 });
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
     expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
   });
 
@@ -117,7 +141,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
 
     expect(result.connectorId).toBe('conn-new');
     expect(result.toolCount).toBe(1);
-    expect(connectorModelMock.create).toHaveBeenCalledTimes(1);
+    expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledTimes(1);
     expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(
       'conn-new',
       expect.arrayContaining([expect.objectContaining({ toolName: 'web_search' })]),
@@ -149,7 +173,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     const result = await callerFor().syncPluginTools({ identifier: 'github' });
 
     expect(result).toEqual({ connectorId: null, toolCount: 0 });
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
     expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
   });
 
@@ -157,19 +181,14 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     pluginModelMock.findById.mockResolvedValueOnce({
       type: 'plugin',
       customParams: {
-        composio: {
-          appSlug: 'GMAIL',
-          authConfigId: 'ac-gmail',
-          connectedAccountId: 'ca-gmail',
-          status: 'ACTIVE',
-        },
+        composio: activeGmailAuthConfig(),
       },
       manifest: { api: [], meta: { title: 'Gmail' } },
     });
 
     await callerFor().syncPluginTools({ identifier: 'gmail' });
 
-    expect(connectorModelMock.create).toHaveBeenCalledWith(
+    expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
           composio: expect.objectContaining({ connectedAccountId: 'ca-gmail' }),
@@ -184,30 +203,18 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     // Opening connector details automatically calls syncPluginTools. The old
     // update replaced metadata with display fields only, erasing the account id
     // needed for execution and remote revocation.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
-      {
-        id: 'conn-existing',
-        metadata: {
-          composio: {
-            appSlug: 'GMAIL',
-            authConfigId: 'ac-gmail',
-            connectedAccountId: 'ca-gmail',
-            status: 'ACTIVE',
-          },
-          mountedByAgentId: 'agent-1',
-        },
-        userId: 'user_test',
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      metadata: {
+        composio: activeGmailAuthConfig(),
+        mountedByAgentId: 'agent-1',
       },
-    ]);
+      userId: 'user_test',
+    });
     pluginModelMock.findById.mockResolvedValueOnce({
       type: 'plugin',
       customParams: {
-        composio: {
-          appSlug: 'GMAIL',
-          authConfigId: 'ac-gmail',
-          connectedAccountId: 'ca-gmail',
-          status: 'ACTIVE',
-        },
+        composio: activeGmailAuthConfig(),
       },
       manifest: { api: [], meta: { description: 'Gmail tools', title: 'Gmail' } },
     });
@@ -220,6 +227,139 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
         description: 'Gmail tools',
         mountedByAgentId: 'agent-1',
       }),
+    });
+  });
+
+  // A marketplace MCP reinstalled on the connector path keeps its plugin row and
+  // that row's old manifest; opening Settings must not sync it over the tools
+  // the reinstall synced from the server
+  it.each([
+    ['an HTTP', { mcpConnectionType: 'http', mcpServerUrl: 'https://mcp.example.com' }],
+    ['a cloud', { mcpConnectionType: 'cloud', mcpServerUrl: null }],
+    ['a stdio', { mcpConnectionType: 'stdio', mcpServerUrl: null }],
+  ])('leaves %s connector installed for the identifier as it is', async (_, endpoint) => {
+    connectorModelMock.queryByIdentifiers.mockResolvedValue([
+      {
+        id: 'conn-installed',
+        metadata: { description: 'Synced from the server' },
+        sourceType: 'marketplace',
+        userId: 'user_test',
+        ...endpoint,
+      },
+    ]);
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      manifest: {
+        api: [{ description: 'Old search', name: 'search', parameters: {} }],
+        meta: { description: 'Old manifest', title: 'Search MCP' },
+      },
+    });
+
+    const result = await callerFor().syncPluginTools({ identifier: 'search-mcp' });
+
+    expect(result).toEqual({ connectorId: 'conn-installed', toolCount: 0 });
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+  });
+
+  it("leaves the caller's private installed connector as it is", async () => {
+    // The shared-only lookup misses a private row, which upsertConnectorEntry
+    // then refreshes in place: the plugin row's old manifest would go back
+    // over the tools the install synced from the server.
+    connectorModelMock.findScopedByIdentifier.mockResolvedValue({
+      id: 'conn-private-installed',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com',
+      sourceType: 'marketplace',
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      manifest: {
+        api: [{ description: 'Old search', name: 'search', parameters: {} }],
+        meta: { description: 'Old manifest', title: 'Search MCP' },
+      },
+    });
+
+    const result = await callerFor('ws-1').syncPluginTools({ identifier: 'search-mcp' });
+
+    expect(connectorModelMock.findScopedByIdentifier).toHaveBeenCalledWith(
+      'search-mcp',
+      undefined,
+      undefined,
+      'private',
+    );
+    expect(result).toEqual({ connectorId: 'conn-private-installed', toolCount: 0 });
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a connector switched to private in place, not through a new shared twin', async () => {
+    // Regression: the lookup saw shared rows only, so refreshing a private
+    // Composio connector created an enabled shared row carrying the same
+    // account from the plugin projection, offering it to every workspace agent.
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      agentId: null,
+      id: 'conn-private',
+      metadata: { composio: activeGmailAuthConfig() },
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      customParams: { composio: activeGmailAuthConfig() },
+      manifest: { api: [{ name: 'send' }], meta: { title: 'Gmail' } },
+    });
+
+    const result = await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' });
+
+    expect(connectorModelMock.findManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-gmail',
+    );
+    expect(result).toEqual({ connectorId: 'conn-private', toolCount: 1 });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-private', {
+      metadata: expect.objectContaining({ composio: activeGmailAuthConfig() }),
+    });
+  });
+
+  it("never projects a teammate's private Composio account onto a shared row", async () => {
+    // The plugin projection is workspace-wide, so a teammate still reads the
+    // account of a connector its owner made private.
+    connectorModelMock.isComposioAccountPrivateToTeammate.mockResolvedValue(true);
+    pluginModelMock.findById.mockResolvedValue({
+      type: 'plugin',
+      customParams: { composio: activeGmailAuthConfig() },
+      manifest: { api: [{ name: 'send' }], meta: { description: 'Gmail tools', title: 'Gmail' } },
+    });
+
+    // No row of theirs: nothing is created
+    expect(await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' })).toEqual({
+      connectorId: null,
+      toolCount: 0,
+    });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+
+    // Their own shared row keeps its account; only the display fields refresh
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      agentId: null,
+      id: 'conn-shared',
+      metadata: { composio: { ...activeGmailAuthConfig(), connectedAccountId: 'ca-shared' } },
+      userId: 'user_test',
+      visibility: 'public',
+    });
+    await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' });
+
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-shared', {
+      metadata: {
+        composio: expect.objectContaining({ connectedAccountId: 'ca-shared' }),
+        description: 'Gmail tools',
+      },
     });
   });
 
@@ -236,7 +376,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     const result = await callerFor().syncPluginTools({ identifier: 'x' });
 
     expect(result).toEqual({ connectorId: null, toolCount: 0 });
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
   });
 
   it('throws NOT_FOUND when the plugin row does not exist (unchanged behavior)', async () => {
@@ -261,7 +401,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     const result = await callerFor().syncPluginTools({ identifier: 'dockpit' });
 
     expect(result).toEqual({ connectorId: null, toolCount: 0 });
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
   });
 
   it('still throws NOT_FOUND for non-customPlugin rows with no manifest', async () => {
@@ -295,10 +435,10 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
   beforeEach(() => {
     vi.clearAllMocks();
     connectorModelMock = {
-      create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'conn-new' } }),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
-      update: vi.fn().mockResolvedValue(undefined),
+      update: vi.fn().mockResolvedValue(true),
     };
     connectorToolModelMock = { upsertMany: vi.fn() };
     pluginModelMock = { findById: vi.fn() };
@@ -340,7 +480,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
     const result = await caller().create(baseCustomInput);
 
     expect(result).toEqual({ id: 'conn-existing', isNew: false });
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
     expect(connectorModelMock.update).toHaveBeenCalledTimes(1);
     expect(connectorModelMock.update).toHaveBeenCalledWith(
       'conn-existing',
@@ -372,8 +512,89 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
     const result = await caller().create(baseCustomInput);
 
     expect(result).toEqual({ id: 'conn-new', isNew: true });
-    expect(connectorModelMock.create).toHaveBeenCalledWith(
+    expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
       expect.objectContaining({ identifier: 'legacy-mcp', sourceType: 'custom' }),
+    );
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+  });
+
+  it('re-adds over a base row another writer claimed after the lookup, adding none', async () => {
+    // An Agent Builder install claimed the identifier between this lookup and
+    // the insert: the add takes the claimed row, as if the lookup had found it.
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce(null);
+    connectorModelMock.createUnlessIdentifierHeld.mockResolvedValueOnce({
+      holder: { agentId: null, id: 'conn-claimed', identifier: 'legacy-mcp', userId: 'user_test' },
+    });
+
+    const result = await caller().create(baseCustomInput);
+
+    expect(result).toEqual({ id: 'conn-claimed', isNew: false });
+    expect(connectorModelMock.create).toBeUndefined();
+    expect(connectorModelMock.update).toHaveBeenCalledWith(
+      'conn-claimed',
+      expect.objectContaining({ mcpServerUrl: 'https://mcp.example.com', sourceType: 'custom' }),
+    );
+  });
+
+  it('re-adds over the row that replaced the one it read, not over the deleted one', async () => {
+    // An Agent Builder install took over the stale unfinished row this add read
+    // (deleting it) before the update: the add lands on the install's new row.
+    const stale = {
+      agentId: null,
+      id: 'conn-stale',
+      identifier: 'legacy-mcp',
+      userId: 'user_test',
+    };
+    connectorModelMock.findScopedByIdentifier
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce({ ...stale, id: 'conn-replacement' });
+    connectorModelMock.update.mockResolvedValueOnce(false);
+
+    const result = await caller().create(baseCustomInput);
+
+    expect(result).toEqual({ id: 'conn-replacement', isNew: false });
+    expect(connectorModelMock.update).toHaveBeenLastCalledWith(
+      'conn-replacement',
+      expect.objectContaining({ mcpServerUrl: 'https://mcp.example.com' }),
+    );
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
+  });
+
+  it('reports a conflict instead of a deleted id when the retry misses too', async () => {
+    connectorModelMock.findScopedByIdentifier.mockResolvedValue({
+      agentId: null,
+      id: 'conn-gone',
+      identifier: 'legacy-mcp',
+      userId: 'user_test',
+    });
+    connectorModelMock.update.mockResolvedValue(false);
+
+    await expect(caller().create(baseCustomInput)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(connectorModelMock.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('moves an agent connector to the base scope only through the identifier lock', async () => {
+    const AGENT_ROW_ID = '9f1f6f30-0000-4000-8000-000000000003';
+    connectorModelMock.findById = vi.fn().mockResolvedValue({
+      agentId: 'agent-1',
+      id: AGENT_ROW_ID,
+      identifier: 'legacy-mcp',
+      userId: 'user_test',
+    });
+    connectorModelMock.moveToBaseUnlessIdentifierHeld = vi
+      .fn()
+      .mockResolvedValueOnce({ moved: true })
+      .mockResolvedValueOnce({ holder: { id: 'conn-base' } });
+
+    await expect(caller().unbindAgent({ connectorId: AGENT_ROW_ID })).resolves.toEqual({
+      id: AGENT_ROW_ID,
+    });
+    await expect(caller().unbindAgent({ connectorId: AGENT_ROW_ID })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(connectorModelMock.moveToBaseUnlessIdentifierHeld).toHaveBeenCalledWith(
+      AGENT_ROW_ID,
+      'legacy-mcp',
     );
     expect(connectorModelMock.update).not.toHaveBeenCalled();
   });
@@ -395,13 +616,23 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     connectorModelMock = {
       delete: vi.fn().mockResolvedValue(undefined),
       findById: vi.fn(),
+      // The Composio rows below run their own account and no other row does.
+      queryComposioAccountHolders: vi
+        .fn()
+        .mockResolvedValue([
+          { agentId: null, id: 'c-composio', userId: 'user_test', visibility: 'public' },
+        ]),
     };
     agentModelMock = {
       getAgentConfigById: vi.fn(),
       update: vi.fn().mockResolvedValue(undefined),
     };
-    pluginModelMock = { delete: vi.fn().mockResolvedValue(undefined) };
+    pluginModelMock = {
+      deleteComposioMirrors: vi.fn().mockResolvedValue(undefined),
+      deleteComposioProjectionKeepingPrivate: vi.fn().mockResolvedValue(undefined),
+    };
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
+    mocks.removeSubscriptions.mockResolvedValue(undefined);
     vi.mocked(ConnectorModel).mockImplementation(function () {
       return connectorModelMock;
     });
@@ -440,6 +671,37 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     expect(agentModelMock.update).toHaveBeenCalledWith('agent-1', { plugins: ['notion'] });
   });
 
+  it('waits for remote subscription cleanup before deleting the connector foreign key', async () => {
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: null,
+      id: DELETE_ID,
+      identifier: 'linear',
+      userId: 'user_test',
+    });
+    let finishCleanup!: () => void;
+    mocks.removeSubscriptions.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      }),
+    );
+    const deleting = caller().delete({ id: DELETE_ID });
+    await vi.waitFor(() =>
+      expect(mocks.removeSubscriptions).toHaveBeenCalledWith(
+        {},
+        { userId: 'user_test', workspaceId: undefined },
+        DELETE_ID,
+      ),
+    );
+    expect(connectorModelMock.delete).not.toHaveBeenCalled();
+
+    finishCleanup();
+    await deleting;
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.removeSubscriptions.mock.invocationCallOrder[0]).toBeLessThan(
+      connectorModelMock.delete.mock.invocationCallOrder[0],
+    );
+  });
+
   it('leaves the agent config untouched for a base (non-agent) connector', async () => {
     connectorModelMock.findById.mockResolvedValueOnce({
       agentId: null,
@@ -473,7 +735,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-github');
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('github');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('github');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
@@ -496,9 +758,42 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       '[Composio] Failed to delete remote connection:',
       expect.any(Error),
     );
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('gmail');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
     warn.mockRestore();
+  });
+
+  it('keeps a teammate’s private account when a row of the caller’s merely names it', async () => {
+    // A connector's metadata is client-written, so a member's own row can name
+    // the account of a teammate's private connector. Deleting the row must not
+    // delete that remote account or the projection rows mirroring it.
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: null,
+      id: 'c-forged',
+      identifier: 'gmail',
+      metadata: { composio: { connectedAccountId: 'ca-mate' } },
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    connectorModelMock.queryComposioAccountHolders.mockResolvedValueOnce([
+      { agentId: null, id: 'c-forged', userId: 'user_test', visibility: 'private' },
+      { agentId: null, id: 'c-mate', userId: 'another-user', visibility: 'private' },
+    ]);
+
+    await connectorRouter
+      .createCaller({
+        serverDB: {},
+        userId: 'user_test',
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      } as any)
+      .delete({ id: DELETE_ID });
+
+    expect(connectorModelMock.queryComposioAccountHolders).toHaveBeenCalledWith('ca-mate');
+    expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioMirrors).not.toHaveBeenCalled();
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
   it('does not call Composio or delete a plugin for an ordinary connector', async () => {
@@ -513,7 +808,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
-    expect(pluginModelMock.delete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
@@ -524,6 +819,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     expect(connectorModelMock.delete).not.toHaveBeenCalled();
     expect(agentModelMock.update).not.toHaveBeenCalled();
+    expect(mocks.removeSubscriptions).not.toHaveBeenCalled();
   });
 });
 

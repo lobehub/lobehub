@@ -664,3 +664,111 @@ describe('check assets and round snapshots', () => {
     expect(() => validateFlow({ ...definition, edges: [] })).toThrow('Unreachable');
   });
 });
+
+describe('validation and terminal guards', () => {
+  it('rejects duplicate node ids, duplicate edge ids and unknown edge endpoints', () => {
+    expect(() =>
+      validateFlow({ ...definition, nodes: [...definition.nodes, definition.nodes[0]] }),
+    ).toThrow('Duplicate node ids');
+
+    expect(() =>
+      validateFlow({ ...definition, edges: [...definition.edges, definition.edges[0]] }),
+    ).toThrow('Duplicate edge ids');
+
+    expect(() =>
+      validateFlow({
+        ...definition,
+        edges: [{ ...definition.edges[0], targetNodeId: 'not-a-node' }],
+      }),
+    ).toThrow('Unknown edge endpoint');
+
+    expect(() =>
+      validateFlow({
+        ...definition,
+        edges: [{ ...definition.edges[0], sourceNodeId: 'not-a-node' }],
+      }),
+    ).toThrow('Unknown edge endpoint');
+  });
+
+  it('requires exactly one of criterionId, check or subFlowId per node', () => {
+    expect(() =>
+      validateFlow({
+        ...definition,
+        // A node carrying both a check and a subflow is ambiguous.
+        nodes: [{ ...definition.nodes[0], subFlowId: randomUUID() }, definition.nodes[1]],
+      }),
+    ).toThrow('exactly one');
+
+    expect(() =>
+      validateFlow({
+        ...definition,
+        nodes: [{ id: definition.entryNodeId }, definition.nodes[1]],
+      }),
+    ).toThrow('exactly one');
+  });
+
+  it('refuses to publish into or edit a settled acceptance', async () => {
+    const { flowId } = await model.publish(acceptanceId, definition);
+    await db
+      .update(acceptances)
+      .set({ status: 'accepted' })
+      .where(eq(acceptances.id, acceptanceId));
+
+    await expect(model.publish(acceptanceId, definition)).rejects.toThrow('Reopen acceptance');
+    await expect(model.publish(acceptanceId, definition, flowId)).rejects.toThrow(
+      'Reopen acceptance',
+    );
+  });
+
+  it('guards editing against unknown flows and stale hashes', async () => {
+    const { flowId, hash } = await model.publish(acceptanceId, definition);
+
+    await expect(model.publish(acceptanceId, definition, randomUUID(), hash)).rejects.toThrow(
+      'Flow not found',
+    );
+
+    await expect(model.publish(acceptanceId, definition, flowId, 'stale-hash')).rejects.toThrow(
+      'Flow changed',
+    );
+    // Editing an existing flow without the hash it was read at is rejected too.
+    await expect(model.publish(acceptanceId, definition, flowId)).rejects.toThrow('Flow changed');
+    // Editing with the current hash succeeds and keeps the flow id.
+    await expect(model.publish(acceptanceId, definition, flowId, hash)).resolves.toMatchObject({
+      flowId,
+    });
+  });
+
+  it('guards complete() against unknown, reviewed and unfinished rounds', async () => {
+    await expect(model.complete(acceptanceId, randomUUID())).rejects.toThrow(
+      'Flow round not found',
+    );
+
+    const { flowId } = await model.publish(acceptanceId, definition);
+    const run = await model.start(acceptanceId, flowId);
+
+    await expect(model.complete(acceptanceId, run.id)).rejects.toThrow(
+      'Required flow branches have not passed',
+    );
+
+    await db.update(verifyRuns).set({ userDecision: 'accepted' }).where(eq(verifyRuns.id, run.id));
+    await expect(model.complete(acceptanceId, run.id)).rejects.toThrow('Round already reviewed');
+  });
+
+  it('refuses to review a result outside the acceptance', async () => {
+    await expect(
+      model.review(acceptanceId, randomUUID(), 'accepted', 'Looks right', owner),
+    ).rejects.toThrow('Result not found');
+  });
+
+  it('reports an unknown flow when deleting', async () => {
+    await expect(model.delete(acceptanceId, randomUUID())).rejects.toThrow('Flow not found');
+  });
+
+  it('refuses to delete a flow from a settled acceptance', async () => {
+    const { flowId } = await model.publish(acceptanceId, definition);
+    await db.update(acceptances).set({ status: 'closed' }).where(eq(acceptances.id, acceptanceId));
+
+    await expect(model.delete(acceptanceId, flowId)).rejects.toThrow('Reopen acceptance');
+    expect(await model.list(acceptanceId)).toHaveLength(1);
+  });
+});

@@ -1,17 +1,28 @@
 'use client';
 
 import type { TaskStatus } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, ScrollArea, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  ScrollArea,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { STATUS_META } from './taskStatusMeta';
 
 const styles = createStaticStyles(({ css }) => ({
   actions: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   content: css`
@@ -26,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};

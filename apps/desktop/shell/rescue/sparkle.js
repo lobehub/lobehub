@@ -69,6 +69,7 @@ function createSparkleUpdater({ app, feedUrl, resourcesPath }) {
             rejectDownload = reject;
           }),
     on: events.on.bind(events),
+    removeListener: events.removeListener.bind(events),
     quitAndInstall: () => bridge.installUpdateNow(),
   };
 }

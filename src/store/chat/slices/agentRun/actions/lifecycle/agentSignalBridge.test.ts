@@ -17,7 +17,7 @@ vi.mock('@/store/chat/store', () => ({
 describe('emitClientAgentSignalSourceEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
+    // The retired rollout flag may still sit in a cached server config; it must not decide.
     vi.stubGlobal('window', {
       global_serverConfigStore: {
         getState: () => ({
@@ -35,6 +35,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
 
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: true } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -75,6 +76,7 @@ describe('emitClientAgentSignalSourceEvent', () => {
 
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: true } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -110,21 +112,14 @@ describe('emitClientAgentSignalSourceEvent', () => {
     });
   });
 
-  it('skips emitting when the rollout feature flag is disabled after server config init', async () => {
+  it('skips emitting once the user state says Labs Self-evolving is off', async () => {
     const { agentSignalService } = await import('@/services/agentSignal');
     const { getUserStoreState } = await import('@/store/user/store');
     const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
 
-    vi.stubGlobal('window', {
-      global_serverConfigStore: {
-        getState: () => ({
-          featureFlags: { enableAgentSelfIteration: false },
-          serverConfigInit: true,
-        }),
-      },
-    });
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: false } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -142,13 +137,14 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
   });
 
-  it('emits when the feature flag is enabled and user state is initialized', async () => {
+  it('emits when Labs Self-evolving is on and user state is initialized', async () => {
     const { agentSignalService } = await import('@/services/agentSignal');
     const { getUserStoreState } = await import('@/store/user/store');
     const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
 
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: true } },
     } as never);
 
     await emitClientAgentSignalSourceEvent({
@@ -171,14 +167,6 @@ describe('emitClientAgentSignalSourceEvent', () => {
     const { getUserStoreState } = await import('@/store/user/store');
     const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
 
-    vi.stubGlobal('window', {
-      global_serverConfigStore: {
-        getState: () => ({
-          featureFlags: { enableAgentSelfIteration: false },
-          serverConfigInit: false,
-        }),
-      },
-    });
     vi.mocked(getUserStoreState).mockReturnValue({
       isUserStateInit: false,
     } as never);

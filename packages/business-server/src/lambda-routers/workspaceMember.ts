@@ -46,4 +46,21 @@ export const workspaceMemberRouter = router({
     .query(async (): Promise<WorkspaceMemberSummary[]> => []),
 
   listInvitations: wsCompatAdminProcedure.query(async (): Promise<WorkspaceInvitationItem[]> => []),
+
+  // A member's workspace title and responsibilities. Cloud lets any member edit
+  // their own and Admin or higher edit anyone's; blank clears, omitted keeps.
+  updateProfile: wsCompatProcedure
+    .input(
+      z.object({
+        responsibilities: z.string().nullable().optional(),
+        title: z.string().nullable().optional(),
+        userId: z.string(),
+      }),
+    )
+    .mutation(async (): Promise<WorkspaceMemberItem> => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'Workspace member profiles are a cloud-only feature.',
+      });
+    }),
 });

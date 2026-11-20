@@ -60,10 +60,12 @@ const buildSignJWTChain = () => {
 };
 
 const SignJWTMock = vi.fn();
+const createLocalJWKSetMock = vi.fn().mockReturnValue('mock-key-set');
 const importJWKMock = vi.fn().mockResolvedValue('mock-crypto-key');
 
 vi.mock('jose', () => ({
   SignJWT: SignJWTMock,
+  createLocalJWKSet: (...args: unknown[]) => createLocalJWKSetMock(...args),
   importJWK: (...args: unknown[]) => importJWKMock(...args),
   jwtVerify: vi.fn(),
 }));
@@ -225,6 +227,12 @@ describe('internalJwt', () => {
         ...validClaims,
         capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'goal:manage'],
       };
+      expect(validateHeteroOperationClaims(claims)).toEqual(claims);
+    });
+
+    it('accepts the capability every run carries to register its own Works', async () => {
+      const { validateHeteroOperationClaims } = await import('../internalJwt');
+      const claims = { ...validClaims, capabilities: ['hetero:ingest', 'work:write'] };
       expect(validateHeteroOperationClaims(claims)).toEqual(claims);
     });
 

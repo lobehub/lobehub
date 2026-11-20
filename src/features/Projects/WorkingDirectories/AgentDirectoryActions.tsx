@@ -1,6 +1,12 @@
 import type { ChatTopic } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, toast } from '@lobehub/ui/base-ui';
-import { MoreHorizontalIcon, PlusIcon } from 'lucide-react';
+import { ActionIcon, type DropdownItem, DropdownMenu, Icon, toast } from '@lobehub/ui';
+import {
+  ArrowUpRightIcon,
+  LinkIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  SettingsIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +24,8 @@ export function AgentDirectoryActions({
   topics,
   onLegacyStart,
   hideStartAction = false,
+  pathOnly = false,
+  extraMenuItems,
 }: {
   agentId: string;
   path: string;
@@ -25,6 +33,14 @@ export function AgentDirectoryActions({
   onLegacyStart: (projectWorkingDirectoryId?: string) => Promise<void>;
   /** Render only the binding/menu affordance; the caller provides its own start action. */
   hideStartAction?: boolean;
+  /**
+   * A plain path group: never resolve a project directory by path. A project
+   * that registered the same path must not adopt new topics started here; the
+   * menu offers binding instead so the user files the group explicitly.
+   */
+  pathOnly?: boolean;
+  /** Group-level actions appended to the "more" menu after a divider. */
+  extraMenuItems?: DropdownItem[];
 }) {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
@@ -39,12 +55,14 @@ export function AgentDirectoryActions({
   useProjectDirectoryStore((s) => s.useFetchDirectories)();
   const directories = useProjectDirectories();
   const bindingId = topics[0]?.projectWorkingDirectoryId;
-  const bindings = directories.filter((directory) =>
-    bindingId
-      ? directory.id === bindingId
-      : directory.deviceId === deviceId &&
-        directory.path.replace(/[\\/]+$/, '') === path.replace(/[\\/]+$/, ''),
-  );
+  const bindings = pathOnly
+    ? []
+    : directories.filter((directory) =>
+        bindingId
+          ? directory.id === bindingId
+          : directory.deviceId === deviceId &&
+            directory.path.replace(/[\\/]+$/, '') === path.replace(/[\\/]+$/, ''),
+      );
   const [pending, setPending] = useState(false);
   // "+" opens the new-topic composer for this group; it must never create a
   // topic. The row is persisted on the first message, which is also when the
@@ -69,12 +87,14 @@ export function AgentDirectoryActions({
       <DropdownMenu
         items={[
           ...bindings.map((directory) => ({
+            icon: <Icon icon={ArrowUpRightIcon} />,
             key: `open-${directory.id}`,
             label: t('topics.viewProject'),
             onClick: () => navigate(`/project/${directory.projectSlug ?? directory.projectId}`),
           })),
           ...(bindings.length ? [{ type: 'divider' as const }] : []),
           ...bindings.map((directory) => ({
+            icon: <Icon icon={SettingsIcon} />,
             key: `settings-${directory.id}`,
             label: t('topics.settings'),
             onClick: () =>
@@ -84,6 +104,7 @@ export function AgentDirectoryActions({
             ? []
             : [
                 {
+                  icon: <Icon icon={LinkIcon} />,
                   key: 'bind',
                   label: t('directories.bind'),
                   disabled: !deviceId,
@@ -98,6 +119,7 @@ export function AgentDirectoryActions({
                     }),
                 },
               ]),
+          ...(extraMenuItems?.length ? [{ type: 'divider' as const }, ...extraMenuItems] : []),
         ]}
       >
         <ActionIcon

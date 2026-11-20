@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { EvalController } from '../controllers/eval.controller';
 import { EvalResourceController } from '../controllers/eval-resource.controller';
@@ -11,6 +11,7 @@ import {
   requireAnyPermissionWithApiKeyScope,
   requireApiKeyScope,
 } from '../middleware/permission-check';
+import { DeletedResourceSchema } from '../types/common.type';
 import {
   CreateEvalRunRequestSchema,
   EvalBatchReportSchema,
@@ -33,6 +34,26 @@ import {
   UpdateDatasetSchema,
   UpdateTestCaseSchema,
 } from '../types/eval-resource.type';
+import {
+  EvalBatchReportResultSchema,
+  EvalBenchmarkListSchema,
+  EvalBenchmarkSchema,
+  EvalDatasetListSchema,
+  EvalDatasetSchema,
+  EvalReportResultSchema,
+  EvalRetryErrorsSchema,
+  EvalRunListSchema,
+  EvalRunResultListSchema,
+  EvalRunSchema,
+  EvalRunTopicListSchema,
+  EvalTestCaseListSchema,
+  EvalTestCaseSchema,
+} from '../types/eval-response.type';
+
+const RESOURCE_DESCRIPTION =
+  'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.';
+const LIFECYCLE_DESCRIPTION =
+  'Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.';
 
 const app = new Hono();
 const requireRead = requireAnyPermissionWithApiKeyScope(
@@ -46,8 +67,11 @@ const requireWrite = requireAnyPermissionWithApiKeyScope(
 
 app.post(
   '/runs',
-  describeRoute({
+  routeDoc({
+    data: EvalRunSchema,
     description: 'Queues an asynchronous QStash-backed evaluation run and returns immediately.',
+    errors: [404, 409],
+    status: 202,
     summary: 'Create an eval run',
     tags: ['eval'],
   }),
@@ -65,7 +89,11 @@ app.post(
 
 app.get(
   '/runs',
-  describeRoute({ summary: 'List eval runs', tags: ['eval'] }),
+  routeDoc({
+    data: EvalRunListSchema,
+    summary: 'List eval runs',
+    tags: ['eval'],
+  }),
   requireAuth,
   requireRead,
   zValidator('query', EvalRunListQuerySchema),
@@ -74,7 +102,12 @@ app.get(
 
 app.get(
   '/runs/:id/topics',
-  describeRoute({ summary: 'List topic results of an eval run', tags: ['eval'] }),
+  routeDoc({
+    data: EvalRunTopicListSchema,
+    errors: [404],
+    summary: 'List topic results of an eval run',
+    tags: ['eval'],
+  }),
   requireAuth,
   requireRead,
   zValidator('param', EvalRunIdParamSchema),
@@ -84,6 +117,12 @@ app.get(
 
 app.get(
   '/runs/:id',
+  routeDoc({
+    data: EvalRunSchema,
+    errors: [404],
+    summary: 'Get an eval run',
+    tags: ['eval'],
+  }),
   requireAuth,
   requireRead,
   zValidator('param', EvalRunIdParamSchema),
@@ -92,6 +131,12 @@ app.get(
 
 app.get(
   '/runs/:id/results',
+  routeDoc({
+    data: EvalRunResultListSchema,
+    errors: [404],
+    summary: 'List case results of an eval run',
+    tags: ['eval'],
+  }),
   requireAuth,
   requireRead,
   zValidator('param', EvalRunIdParamSchema),
@@ -101,10 +146,12 @@ app.get(
 
 app.post(
   '/benchmarks',
-  describeRoute({
-    summary: 'createBenchmark',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalBenchmarkSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [409],
+    status: 201,
+    summary: 'Create a benchmark',
     tags: ['eval'],
   }),
   requireAuth,
@@ -115,10 +162,10 @@ app.post(
 
 app.get(
   '/benchmarks',
-  describeRoute({
-    summary: 'listBenchmarks',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalBenchmarkListSchema,
+    description: RESOURCE_DESCRIPTION,
+    summary: 'List benchmarks',
     tags: ['eval'],
   }),
   requireAuth,
@@ -129,10 +176,11 @@ app.get(
 
 app.get(
   '/benchmarks/:id',
-  describeRoute({
-    summary: 'getBenchmark',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalBenchmarkSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Get a benchmark',
     tags: ['eval'],
   }),
   requireAuth,
@@ -143,10 +191,11 @@ app.get(
 
 app.patch(
   '/benchmarks/:id',
-  describeRoute({
-    summary: 'updateBenchmark',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalBenchmarkSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Update a benchmark',
     tags: ['eval'],
   }),
   requireAuth,
@@ -158,10 +207,11 @@ app.patch(
 
 app.delete(
   '/benchmarks/:id',
-  describeRoute({
-    summary: 'deleteBenchmark',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Delete a benchmark',
     tags: ['eval'],
   }),
   requireAuth,
@@ -172,10 +222,12 @@ app.delete(
 
 app.post(
   '/datasets',
-  describeRoute({
-    summary: 'createDataset',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalDatasetSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404, 409],
+    status: 201,
+    summary: 'Create a dataset',
     tags: ['eval'],
   }),
   requireAuth,
@@ -186,10 +238,10 @@ app.post(
 
 app.get(
   '/datasets',
-  describeRoute({
-    summary: 'listDatasets',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalDatasetListSchema,
+    description: RESOURCE_DESCRIPTION,
+    summary: 'List datasets',
     tags: ['eval'],
   }),
   requireAuth,
@@ -200,10 +252,11 @@ app.get(
 
 app.get(
   '/datasets/:id',
-  describeRoute({
-    summary: 'getDataset',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalDatasetSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Get a dataset',
     tags: ['eval'],
   }),
   requireAuth,
@@ -214,10 +267,11 @@ app.get(
 
 app.patch(
   '/datasets/:id',
-  describeRoute({
-    summary: 'updateDataset',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalDatasetSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Update a dataset',
     tags: ['eval'],
   }),
   requireAuth,
@@ -229,10 +283,11 @@ app.patch(
 
 app.delete(
   '/datasets/:id',
-  describeRoute({
-    summary: 'deleteDataset',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Delete a dataset',
     tags: ['eval'],
   }),
   requireAuth,
@@ -243,10 +298,12 @@ app.delete(
 
 app.post(
   '/datasets/:datasetId/test-cases',
-  describeRoute({
-    summary: 'createTestCase',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalTestCaseSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404, 409],
+    status: 201,
+    summary: 'Create a test case',
     tags: ['eval'],
   }),
   requireAuth,
@@ -258,10 +315,11 @@ app.post(
 
 app.get(
   '/datasets/:datasetId/test-cases',
-  describeRoute({
-    summary: 'listTestCases',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalTestCaseListSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'List test cases of a dataset',
     tags: ['eval'],
   }),
   requireAuth,
@@ -273,10 +331,11 @@ app.get(
 
 app.get(
   '/test-cases/:id',
-  describeRoute({
-    summary: 'getTestCase',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalTestCaseSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Get a test case',
     tags: ['eval'],
   }),
   requireAuth,
@@ -287,10 +346,11 @@ app.get(
 
 app.patch(
   '/test-cases/:id',
-  describeRoute({
-    summary: 'updateTestCase',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: EvalTestCaseSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Update a test case',
     tags: ['eval'],
   }),
   requireAuth,
@@ -302,10 +362,11 @@ app.patch(
 
 app.delete(
   '/test-cases/:id',
-  describeRoute({
-    summary: 'deleteTestCase',
-    description:
-      'Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description: RESOURCE_DESCRIPTION,
+    errors: [404],
+    summary: 'Delete a test case',
     tags: ['eval'],
   }),
   requireAuth,
@@ -316,11 +377,12 @@ app.delete(
 
 app.post(
   '/runs/:id/claim',
-  describeRoute({
-    summary: 'claim',
+  routeDoc({
+    data: EvalRunSchema,
+    description: LIFECYCLE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Claim a pending external eval run',
     tags: ['eval'],
-    description:
-      'Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.',
   }),
   requireAuth,
   requireWrite,
@@ -330,11 +392,12 @@ app.post(
 
 app.patch(
   '/runs/:id/status',
-  describeRoute({
-    summary: 'setStatus',
+  routeDoc({
+    data: EvalRunSchema,
+    description: LIFECYCLE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Set the status of an external eval run',
     tags: ['eval'],
-    description:
-      'Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.',
   }),
   requireAuth,
   requireWrite,
@@ -345,11 +408,12 @@ app.patch(
 
 app.post(
   '/runs/:id/retry-errors',
-  describeRoute({
-    summary: 'retryErrors',
+  routeDoc({
+    data: EvalRetryErrorsSchema,
+    description: LIFECYCLE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Retry the errored cases of an eval run',
     tags: ['eval'],
-    description:
-      'Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.',
   }),
   requireAuth,
   requireWrite,
@@ -359,11 +423,12 @@ app.post(
 
 app.put(
   '/runs/:runId/topics/:topicId/result',
-  describeRoute({
-    summary: 'report',
+  routeDoc({
+    data: EvalReportResultSchema,
+    description: LIFECYCLE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Report the result of one run topic',
     tags: ['eval'],
-    description:
-      'Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.',
   }),
   requireAuth,
   requireWrite,
@@ -374,11 +439,12 @@ app.put(
 
 app.post(
   '/runs/:id/results',
-  describeRoute({
-    summary: 'reportBatch',
+  routeDoc({
+    data: EvalBatchReportResultSchema,
+    description: LIFECYCLE_DESCRIPTION,
+    errors: [404, 409],
+    summary: 'Report results for a batch of run topics',
     tags: ['eval'],
-    description:
-      'Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.',
   }),
   requireAuth,
   requireWrite,

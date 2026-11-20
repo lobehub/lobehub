@@ -1,6 +1,6 @@
 'use client';
 
-import WorkspaceLabelsContent from '@/features/WorkspaceSetting/Labels';
+import WorkspaceLabelsContent from '@/features/TaskLabels/Settings/LabelsSettingsTabs';
 
 const WorkspaceLabelsSetting = () => <WorkspaceLabelsContent />;
 

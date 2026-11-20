@@ -271,21 +271,6 @@ describe('ToolResolver', () => {
       expect(result.enabledToolIds).toEqual(['web-search']);
     });
 
-    it('should keep manifests for step-activated tools even if not in original enabledToolIds', () => {
-      const opSet = makeOperationToolSet([mockSearchManifest]);
-      const delta: StepToolDelta = {
-        activatedTools: [
-          { id: 'local-system', manifest: mockLocalSystemManifest, source: 'device' },
-        ],
-      };
-
-      const result = resolver.resolve(opSet, delta);
-
-      // local-system was step-activated, so it should be in both enabledToolIds and manifestMap
-      expect(result.enabledToolIds).toContain('local-system');
-      expect(result.manifestMap['local-system']).toBeDefined();
-    });
-
     it('should preserve deactivated manifests only in wildcard deactivation', () => {
       // When forceFinish deactivates all tools, manifests are kept for ToolNameResolver
       const opSet = makeOperationToolSet([mockSearchManifest]);

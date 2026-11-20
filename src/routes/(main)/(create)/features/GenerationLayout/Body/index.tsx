@@ -1,12 +1,12 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, Tabs, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
 import { LayoutGrid, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -22,6 +22,7 @@ enum GroupKey {
 }
 
 const Body = memo<GenerationLayoutCommonProps>((props) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { namespace, useStore, viewModeStatusKey, generationTopicsSelector } = props;
   const { t } = useTranslation(namespace);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -68,16 +69,16 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
           defaultValue={[GroupKey.PrivateTopics, GroupKey.WorkspaceTopics]}
           gap={2}
           indicatorPlacement="inline"
-          styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+          styles={{ trigger: sectionTriggerStyle }}
           items={[
             {
               action: viewModeTabs,
               key: GroupKey.PrivateTopics,
               title: (
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                <SectionTitle>
                   {t('topic.privateTitle')}
                   {privateCount > 0 && ` ${privateCount}`}
-                </Text>
+                </SectionTitle>
               ),
               children: (
                 <List
@@ -91,10 +92,10 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
             {
               key: GroupKey.WorkspaceTopics,
               title: (
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                <SectionTitle>
                   {t('topic.workspaceTitle')}
                   {workspaceCount > 0 && ` ${workspaceCount}`}
-                </Text>
+                </SectionTitle>
               ),
               children: (
                 <List
@@ -117,16 +118,16 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
         defaultValue={[GroupKey.Topics]}
         gap={2}
         indicatorPlacement="inline"
-        styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+        styles={{ trigger: sectionTriggerStyle }}
         items={[
           {
             action: viewModeTabs,
             key: GroupKey.Topics,
             title: (
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              <SectionTitle>
                 {t('topic.title')}
                 {count > 0 && ` ${count}`}
-              </Text>
+              </SectionTitle>
             ),
             children: (
               <List

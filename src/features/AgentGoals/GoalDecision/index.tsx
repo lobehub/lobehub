@@ -1,24 +1,28 @@
 'use client';
 
+import { GOAL_BATCH_BREAK_OPTION, GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Center, createStaticStyles, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { MonitorCog } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import ClarificationQuestions, {
   type ClarificationAnswer,
 } from '@/features/ClarificationQuestions';
+import { densityVars } from '@/styles/densityVars';
 
 import {
+  type CoordinatorGateKind,
+  coordinatorGateKind,
   coordinatorGateReason,
-  coordinatorReasonCopy,
   gateOptionLabelKey,
+  localizedCoordinatorReason,
 } from '../ProcessControl/coordinatorCopy';
 import {
+  gateAnswerProblem,
   type GoalGateCategory,
   type GoalGateDecision,
   toGateAnswer,
@@ -75,9 +79,11 @@ export const GoalDecisionAsker = ({
           <Icon icon={MonitorCog} size={size * 0.58} />
         </Center>
       ) : (
-        <Avatar
+        <AgentAvatar
+          agentId={agentId}
           avatar={meta?.avatar}
           background={meta?.backgroundColor}
+          name={meta?.title}
           shape={'circle'}
           size={size}
           style={{ flex: 'none' }}
@@ -99,10 +105,31 @@ export const GoalDecisionAsker = ({
 
 /** The coordinator's own answers, in the reader's words, and what each one does. */
 export const useGateOptionCopy = () => {
-  const { t } = useTranslation('chat');
-  return useMemo(
-    () => ({
-      describe: (option: GoalDecisionOption, category: GoalGateCategory) => {
+  const { i18n, t } = useTranslation('chat');
+  return useMemo(() => {
+    const alsoRetiresList = (option: GoalDecisionOption) =>
+      option.alsoRetires?.length
+        ? new Intl.ListFormat(i18n.language).format(
+            option.alsoRetires.map(({ title }) =>
+              t('goalProcess.decision.effect.quotedTask', { title }),
+            ),
+          )
+        : undefined;
+    return {
+      /**
+       * What an option the main Agent wrote also does to dependent tasks. Its
+       * own description is the Agent's words; the cascade is the coordinator's,
+       * so it is added here rather than trusted to the Agent to mention.
+       */
+      cascade: (option: GoalDecisionOption) => {
+        const tasks = alsoRetiresList(option);
+        return tasks ? t('goalProcess.decision.effect.alsoRetires', { tasks }) : undefined;
+      },
+      describe: (
+        option: GoalDecisionOption,
+        category: GoalGateCategory,
+        gateKind?: CoordinatorGateKind,
+      ) => {
         const terminalAcceptance = category === 'goalAcceptance';
         switch (option.id) {
           case 'retry': {
@@ -112,25 +139,45 @@ export const useGateOptionCopy = () => {
               : t('goalProcess.decision.effect.retry');
           }
           case 'retire': {
-            return terminalAcceptance
-              ? t('goalProcess.decision.effect.abandonAcceptance')
+            if (terminalAcceptance) return t('goalProcess.decision.effect.abandonAcceptance');
+            // Dependents leave with it, or they would wait forever on it.
+            const tasks = alsoRetiresList(option);
+            return tasks
+              ? t('goalProcess.decision.effect.retireWithDependents', { tasks })
               : t('goalProcess.decision.effect.retire');
           }
           case 'fail': {
             return t('goalProcess.decision.effect.fail');
+          }
+          // A batch pattern break keeps only its option ids on the payload; the
+          // consequences are written here, in the reader's language, rather than
+          // persisted as English copy the server cannot translate.
+          case GOAL_BATCH_BREAK_OPTION.revise: {
+            return gateKind === 'batchRelease'
+              ? t('goalProcess.decision.effect.sendBackBatch')
+              : t('goalProcess.decision.effect.reviseBatch');
+          }
+          case GOAL_BATCH_BREAK_OPTION.newClass: {
+            return t('goalProcess.decision.effect.newClassBatch');
+          }
+          case GOAL_BATCH_RELEASE_OPTION.release: {
+            return t('goalProcess.decision.effect.releaseBatch');
           }
           default: {
             return undefined;
           }
         }
       },
-      label: (option: GoalDecisionOption, category: GoalGateCategory) => {
-        const key = gateOptionLabelKey(option, category === 'machine' ? 'fixSetup' : undefined);
+      label: (
+        option: GoalDecisionOption,
+        category: GoalGateCategory,
+        gateKind?: CoordinatorGateKind,
+      ) => {
+        const key = gateOptionLabelKey(option, category === 'machine' ? 'fixSetup' : gateKind);
         return key ? t(key as any) : option.label;
       },
-    }),
-    [t],
-  );
+    };
+  }, [i18n.language, t]);
 };
 
 const contextStyles = createStaticStyles(({ css, cssVar }) => ({
@@ -139,7 +186,7 @@ const contextStyles = createStaticStyles(({ css, cssVar }) => ({
     grid-template-columns: max-content 1fr;
     gap: 8px 16px;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 14px;
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -289,29 +336,40 @@ const GoalDecisionCase = ({
   // The coordinator's English reason renders in the reader's language when
   // recognized; an Agent's question is already in the goal's language.
   const rawReason = coordinatorGateReason(decision.question) ?? decision.question;
-  const reasonCopy = coordinatorReasonCopy(rawReason);
-  const questionText = reasonCopy ? t(reasonCopy.key as any, reasonCopy.params) : rawReason;
+  // Every blocker of a compound batch reason, not just a single one.
+  const questionText = localizedCoordinatorReason(rawReason, t as any);
   const basisText = basis && basis.trim() !== rawReason.trim() ? basis.trim() : undefined;
 
-  const questions = useMemo(
-    () => [
+  const questions = useMemo(() => {
+    const gateKind = coordinatorGateKind(decision);
+    return [
       toGateQuestion(decision, {
         basis: basisText,
-        describe: (option) => optionCopy.describe(option, category),
-        label: (option) => optionCopy.label(option, category),
+        cascade: optionCopy.cascade,
+        describe: (option) => optionCopy.describe(option, category, gateKind),
+        label: (option) => optionCopy.label(option, category, gateKind),
         question: questionText,
       }),
-    ],
-    [basisText, category, decision, optionCopy, questionText],
+    ];
+  }, [basisText, category, decision, optionCopy, questionText]);
+
+  // A batch break revises the recipe with the correction written here; without
+  // one the "revision" would re-run the plan that just failed.
+  const batchBreak = !!decision.options?.some(
+    (option) => option.id === GOAL_BATCH_BREAK_OPTION.revise,
   );
 
   const handleSubmit = useCallback(
     async (answers: ClarificationAnswer[]) => {
       const answer = toGateAnswer(decision, answers);
-      if (!answer) return;
+      if (!answer) return false;
+      if (gateAnswerProblem(answer) === 'correctionRequired') {
+        toast.error(t('goalProcess.gate.batchCorrectionRequired'));
+        return false;
+      }
       await onDecide(answer.optionId, answer.resolution?.trim() || undefined);
     },
-    [decision, onDecide],
+    [decision, onDecide, t],
   );
 
   // With links to lay beside it, the card owns the submit row: links on the
@@ -331,7 +389,11 @@ const GoalDecisionCase = ({
           key={decision.id}
           questions={questions}
           submitLabel={t('goalProcess.decision.submit')}
-          supplementPlaceholder={t('goalProcess.gate.notePlaceholder')}
+          supplementPlaceholder={t(
+            batchBreak
+              ? 'goalProcess.gate.batchCorrectionPlaceholder'
+              : 'goalProcess.gate.notePlaceholder',
+          )}
           onSubmit={handleSubmit}
         />
       ) : (

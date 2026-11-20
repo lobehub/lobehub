@@ -1,8 +1,6 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Maximize2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +10,7 @@ import PortalChromeHeader from '@/features/Portal/components/Header';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { useHeaderActionSize } from '@/styles/density';
 
 import AutoSaveHint from './AutoSaveHint';
 import { useResolvedAgentDocumentId } from './documentViewContext';
@@ -24,6 +23,7 @@ import { usePortalDocumentHeaderActions } from './usePortalDocumentHeader';
  * collapses the portal so returning to chat lands on a clean conversation.
  */
 const OpenAsPageAction = memo(() => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('chat');
   const { path } = usePortalDocumentHeaderActions();
   const navigate = useWorkspaceAwareNavigate();
@@ -34,7 +34,7 @@ const OpenAsPageAction = memo(() => {
   return (
     <ActionIcon
       icon={Maximize2Icon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={headerActionSize}
       title={t('agentDocument.openAsPage')}
       onClick={() => {
         navigate(path);

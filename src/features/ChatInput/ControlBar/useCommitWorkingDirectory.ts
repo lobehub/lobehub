@@ -1,6 +1,6 @@
 import type { WorkingDirConfig, WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,9 +12,11 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDeviceStore } from '@/store/device';
-import { useElectronStore } from '@/store/electron';
+import { getElectronStoreState, useElectronStore } from '@/store/electron';
 
-export interface CommitWorkingDirectoryOptions {
+import { stagedProjectDirectoryIdSelector } from './useProjectTopicDirectory';
+
+export interface CommitWorkingDirectoryOptions extends CommitAgentDefaultOptions {
   /**
    * Persist against the `local` execution target on this machine, regardless of
    * what the agent's config currently says. For callers that select the local
@@ -61,6 +63,9 @@ const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | und
 };
 
 const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
+  // Metadata only: the code environment the folder was picked with. Nothing
+  // runs it on a device yet; it travels so the association is not lost.
+  ...(entry.environmentId ? { environmentId: entry.environmentId } : {}),
   ...(entry.git ? { git: entry.git } : {}),
   path: entry.path,
   ...(entry.repoType ? { repoType: entry.repoType } : {}),
@@ -116,6 +121,9 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   const activeTopic = useChatStore((s) =>
     activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s) : undefined,
   );
+  // A blank conversation staged in a project directory has no topic to record
+  // a pick on, and the agent default is not where it will run.
+  const stagedDirectoryId = useChatStore(stagedProjectDirectoryIdSelector(agentId, activeTopicId));
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
@@ -151,7 +159,13 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       // lets it state the destination it is creating, so the cwd lands in the
       // same slot the pending `local` pick will read from.
       const localTarget = options?.localTarget === true;
-      const writeDeviceId = localTarget ? currentDeviceId : targetDeviceId;
+      const writeDeviceId = localTarget
+        ? currentDeviceId
+        : (targetDeviceId ??
+          activeTopic?.metadata?.boundDeviceId ??
+          (entry && activeTopicId
+            ? await getElectronStoreState().resolveGatewayDeviceId()
+            : undefined));
       // A `local` pick on a workspace agent always means this member's own
       // machine, which routes to the per-user slot rather than the shared row.
       const writePersonalSlot = localTarget
@@ -161,6 +175,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       // The session cwd anchors to the source repo for hetero (stable across
       // worktree switches) and to the effective/worktree path otherwise.
       const sessionCwd = isHetero ? getWorkingDirSourcePath(entry) : effectivePath;
+      // Save the reusable device entry before changing the selection. A failed
+      // recent-directory write must not leave a chip that looks successfully saved.
+      if (entry && effectivePath && writeDeviceId) {
+        await updateDeviceCwd(writeDeviceId, entry, { setDefault: false });
+      }
       // Topic override wins once a conversation exists; otherwise persist the
       // agent's per-device choice so a new topic inherits it.
       if (activeTopicId) {
@@ -181,7 +200,9 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           // The pin is a bare path that only holds on the machine it was picked
           // for, and the server skips a topic pin whose `boundDeviceId` names a
           // different device. Re-stamp it with every write so a conversation
-          // moved to another device keeps the directory just chosen there.
+          // moved to another device keeps the directory just chosen there. An
+          // unresolved target keeps the topic's own pin (or this desktop's id)
+          // rather than leaving the new path with no machine at all.
           boundDeviceId: entry ? writeDeviceId : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
           workingDirectory: sessionCwd,
@@ -209,7 +230,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
                 },
               },
             },
-            { replaceWorkingDirDeviceIds: [writeDeviceId] },
+            {
+              replaceWorkingDirDeviceIds: [writeDeviceId],
+              rethrow: options?.rethrow,
+              showErrorMessage: options?.showErrorMessage,
+            },
           );
         }
         // Clearing the agent default must also drop the legacy per-agent value —
@@ -220,11 +245,6 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
         if (!writePersonalSlot && !effectivePath && legacyAgentWorkingDirectory) {
           await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: undefined });
         }
-      }
-      // Record on the target device's recent list (not the device-wide default —
-      // a per-agent pick shouldn't repoint other agents on the same device).
-      if (entry && effectivePath && targetDeviceId) {
-        await updateDeviceCwd(targetDeviceId, entry, { setDefault: false });
       }
     },
     [
@@ -297,6 +317,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       const effectivePath = getWorkingDirEffectivePath(normalizedEntry);
       if (!normalizedEntry || !effectivePath) return;
 
+      if (stagedDirectoryId) throw new Error(t('directories.boundRoot', { ns: 'project' }));
       if (activeTopic?.projectWorkingDirectoryId) {
         const source = getWorkingDirSourcePath(
           activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
@@ -327,7 +348,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       }
       await run();
     },
-    [activeTopic, isHetero, t, writeCwd],
+    [activeTopic, isHetero, stagedDirectoryId, t, writeCwd],
   );
 
   /**

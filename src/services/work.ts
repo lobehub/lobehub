@@ -1,9 +1,11 @@
 import { TaskApiName, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type {
   ListedWorkType,
+  RegisterCanvasWorkParams,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
+  TopicPullRequestItem,
   WorkItem,
   WorkListItem,
   WorkSkillProvider,
@@ -14,9 +16,13 @@ import type {
   WorkVisibility,
 } from '@lobechat/types';
 
+import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
-import { isMessageListKey, matchDomain, workKeys } from '@/libs/swr/keys';
+import { matchDomain, workKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
+import { revalidateConversationMessages } from '@/services/message/replica';
+import { workTypeOptIn } from '@/services/workTypeOptIn';
+import { topicPullRequestsResource } from '@/store/work/projection';
 
 /** One cursor page of the workspace-wide Work list (resource page 产物 gallery). */
 export interface WorkSummaryPage {
@@ -57,8 +63,6 @@ export const didToolMutateWorkView = ({
 };
 
 class WorkService {
-  private readonly workspaceListRefreshers = new Set<() => Promise<unknown>>();
-
   // This client ships the descriptor fallback for every registered Work type, so
   // it always opts into the `file` type (and any future gated type). The flag is
   // set here at the service boundary rather than per call site — an
@@ -69,7 +73,7 @@ class WorkService {
     threadId?: string | null;
     topicId?: string | null;
   }): Promise<WorkListItem[]> =>
-    lambdaClient.work.listByConversation.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByConversation.query({ ...params, ...workTypeOptIn() });
 
   listByWorkspace = async (params: {
     cursor?: string | null;
@@ -79,25 +83,28 @@ class WorkService {
     type?: ListedWorkType | null;
     visibility?: WorkVisibility;
   }): Promise<WorkSummaryPage> =>
-    lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByWorkspace.query({ ...params, ...workTypeOptIn() });
 
   listByRootOperation = async (params: {
     limit?: number;
     rootOperationId?: string | null;
   }): Promise<WorkVersionEventItem[]> =>
-    lambdaClient.work.listByRootOperation.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByRootOperation.query({ ...params, ...workTypeOptIn() });
 
   listByRootOperations = async (params: {
     limit?: number;
     rootOperationIds?: string[] | null;
   }): Promise<WorkVersionEventMap> =>
-    lambdaClient.work.listByRootOperations.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByRootOperations.query({ ...params, ...workTypeOptIn() });
 
   listVersions = async (workId: string): Promise<WorkVersionItem[]> =>
     lambdaClient.work.listVersions.query({ workId });
 
   registerTask = async (params: RegisterTaskWorkParams): Promise<WorkItem | null> =>
     lambdaClient.work.registerTask.mutate(params);
+
+  registerCanvas = async (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
+    lambdaClient.work.registerCanvas.mutate(params);
 
   registerDocument = async (params: RegisterDocumentWorkParams): Promise<WorkItem | null> =>
     lambdaClient.work.registerDocument.mutate(params);
@@ -125,9 +132,61 @@ class WorkService {
   }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
     lambdaClient.work.registerShellWorksForRun.mutate(params);
 
+  /** Better Coding Experience: the pull requests a topic's Work rows link, with App state. */
+  listTopicPullRequests = async (topicId: string): Promise<TopicPullRequestItem[]> =>
+    lambdaClient.work.listTopicPullRequests.query({ topicId });
+
+  /**
+   * Better Coding Experience: link the pull requests a `git push` tool call
+   * updated. `pullRequests` is the execution device's `gh pr list --head`
+   * answer; the server re-reads the push itself and prefers the GitHub App.
+   */
+  linkPushedPullRequests = async (params: {
+    pullRequests: {
+      headRefName: string;
+      headRepoFullName?: string;
+      isDraft?: boolean;
+      number: number;
+      state?: string;
+      title?: string;
+      url: string;
+    }[];
+    toolCallId: string;
+    topicId: string;
+  }) => lambdaClient.work.linkPushedPullRequests.mutate(params);
+
+  /**
+   * Better Coding Experience: keep a PR on the topic itself — found on its own
+   * branch (`branch`) or linked by hand (`manual`). Display-only links: they
+   * never feed the SCM links that accept deliveries or wake agents.
+   */
+  linkTopicPullRequest = async (params: {
+    headRefName?: string;
+    source: 'branch' | 'manual';
+    title?: string;
+    topicId: string;
+    url: string;
+    vouched?: boolean;
+  }): Promise<{ identifier: string; linked: boolean }> =>
+    lambdaClient.work.linkTopicPullRequest.mutate(params);
+
+  /** Better Coding Experience: remove a PR from the topic's lists, or bring it back. */
+  setTopicPullRequestDismissed = async (params: {
+    dismissed: boolean;
+    identifier: string;
+    topicId: string;
+  }): Promise<{ updated: boolean }> =>
+    lambdaClient.work.setTopicPullRequestDismissed.mutate(params);
+
+  /** Revalidate a topic's linked pull requests (mounted reads only). */
+  refreshTopicPullRequests = async (topicId?: string | null) => {
+    if (!topicId) return;
+    await revalidateReplica(topicPullRequestsResource, topicId);
+  };
+
   /**
    * Invalidate everything a Work mutation can change for a conversation:
-   * - the topic's `message:list` entries, since Work summaries (in-message chips
+   * - the topic's transcript syncs, since Work summaries (in-message chips
    *   and the sidebar summary view) ride the message payload
    * - the sidebar history and expanded version views
    */
@@ -141,42 +200,42 @@ class WorkService {
 
   /**
    * Re-pull the message list for a topic so the Work summaries attached to its
-   * message payload become fresh. `mutate` only refetches mounted keys, so this
-   * is a no-op when the topic isn't the active conversation.
+   * message payload become fresh. Only mounted syncs refetch, so this is a
+   * no-op when the topic isn't the active conversation.
    */
   refreshConversationMessages = async (topicId: string) => {
-    await mutate((key) => isMessageListKey(key, (context) => context.topicId === topicId));
+    await revalidateConversationMessages((context) => context.topicId === topicId);
   };
 
   refreshAll = async () => {
+    await this.#collapseWorkspaceTails();
     await mutate(matchDomain('work:'));
   };
 
   /**
-   * Register a mounted workspace gallery's bound SWR Infinite revalidator.
-   *
-   * SWR intentionally skips `$inf$` keys for filter-form global mutations, so
-   * mutations outside the gallery cannot otherwise refresh its aggregate page
-   * cache. The returned cleanup keeps this registry scoped to mounted lists.
+   * Revalidate every mounted workspace Work list (the gallery filters and the
+   * project dashboards). Their replicas sync through `work:workspace` keys.
    */
-  registerWorkspaceListRefresh = (refresh: () => Promise<unknown>) => {
-    this.workspaceListRefreshers.add(refresh);
-
-    return () => {
-      this.workspaceListRefreshers.delete(refresh);
-    };
+  refreshWorkspaceLists = async () => {
+    await this.#collapseWorkspaceTails();
+    await mutate((key) => Array.isArray(key) && key[0] === workKeys.workspace.root);
   };
 
-  /** Refresh every mounted workspace Work list through its bound SWR mutation. */
-  refreshWorkspaceLists = async () => {
-    await Promise.all([...this.workspaceListRefreshers].map((refresh) => refresh()));
+  /**
+   * The gallery replica only re-requests its head page, so loaded tail pages
+   * are dropped first rather than left stale. Imported on demand: the work
+   * store depends on this service.
+   */
+  #collapseWorkspaceTails = async () => {
+    const { workActions } = await import('@/store/work');
+    workActions.collapseWorkspaceWorksTails();
   };
 
   /**
    * Refresh only the sidebar's *lazy* Work caches for a conversation — the
    * history list ({@link workKeys.conversation}) and any expanded version
    * timelines ({@link workKeys.versions}). Deliberately narrower than
-   * {@link refreshAll}: it never touches the `message:list` payload (Work
+   * {@link refreshAll}: it never touches the message payload (Work
    * summaries ride the message list and are refreshed by the message fetch
    * itself) nor the cross-topic workspace gallery (`work:workspace`).
    *
@@ -194,17 +253,19 @@ class WorkService {
     await Promise.all([
       mutate(workKeys.conversation(topicId, threadId ?? null)),
       mutate((key) => Array.isArray(key) && key[0] === workKeys.versions.root),
+      // A run's gh / push commands link pull requests through the same scan.
+      this.refreshTopicPullRequests(topicId),
     ]);
   };
 
   /**
    * Broad invalidation for Work mutations without a single-topic scope (e.g.
    * task deletion, which can orphan Works across topics into a "task deleted"
-   * state). Refreshes every mounted `message:list` — since Work summaries ride
+   * state). Refreshes every mounted transcript sync — since Work summaries ride
    * the message payload — plus the whole work domain for the sidebar caches.
    */
   refreshAllConversations = async () => {
-    await Promise.all([mutate((key) => isMessageListKey(key)), this.refreshAll()]);
+    await Promise.all([revalidateConversationMessages(), this.refreshAll()]);
   };
 
   refreshVersions = async (workId?: string | null) => {

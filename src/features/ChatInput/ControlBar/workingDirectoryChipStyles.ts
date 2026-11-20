@@ -1,4 +1,5 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 /**
  * The composer's working-directory chip — for a run on a machine and for one in
@@ -6,33 +7,33 @@ import { createStaticStyles, cssVar } from 'antd-style';
  * and are read as one control: a second copy drifts (a darker hover here, a
  * wider gap there) into looking like a different kind of thing.
  */
-export const workingDirectoryChipStyles = createStaticStyles(({ css }) => ({
-  chip: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  label: css`
-    overflow: hidden;
-    max-width: 140px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+export const workingDirectoryChipStyles = stylex.create({
+  chip: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    transition: 'background 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  label: {
+    overflow: 'hidden',
+    maxWidth: '140px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  /** Shown, not picked — e.g. a directory owned by the conversation's project. */
+  readonly: {
+    cursor: 'default',
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});

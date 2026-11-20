@@ -57,10 +57,18 @@ export interface SidebarAgentItem {
   backgroundColor?: string | null;
   description?: string | null;
   /**
+   * Market identifier of the community agent this agent was installed from
+   * (`params.forkedFromIdentifier`). Lets pickers tell which market agents
+   * the caller already has. Absent for chat groups and agents created locally.
+   */
+  forkedFromIdentifier?: string | null;
+  /**
    * Group's own avatar (emoji or uploaded image URL)
    * Only present for chat groups (type === 'group')
    */
   groupAvatar?: string | null;
+  /** Sidebar category ID, independent of chat-group identity; null means ungrouped. */
+  groupId?: string | null;
   /**
    * Heterogeneous agent runtime type (e.g. `claude-code`) when the agent is
    * driven by an external CLI. `null` / absent means it's a regular LobeHub
@@ -74,6 +82,8 @@ export interface SidebarAgentItem {
    * agents). Used by the agents list to render label tags and group by label.
    */
   labels?: SidebarAgentLabel[];
+  /** Model shown on mobile list rows. */
+  model?: string | null;
   /**
    * The agent's personal name. Absent for chat groups and for agents created
    * before names existed — resolve the label with `agentDisplayName(item)`.

@@ -9,7 +9,7 @@ import TopicPanel from './TopicPanel';
 
 // Real base-ui ActionIcon only surfaces its title via a hover Tooltip, so the
 // static DOM has no accessible name to query.
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) =>
     createElement('button', { onClick, title }, title),

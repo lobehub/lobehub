@@ -1,7 +1,5 @@
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Button, cssVar, Flexbox } from '@lobehub/ui';
 import { ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,7 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentDocumentIndexSnapshot,
   AgentGroupConfig,
   BotPlatformContext,
   DiscordContext,
@@ -13,10 +14,12 @@ import type {
   UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   AgentSignalOperationMarker,
   ChatToolPayload,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
@@ -79,6 +82,8 @@ export interface AgentRunOrigin {
   // --- Conversation node ---
   /** Effective message owner for this run (the group member when applicable). */
   agentId?: string;
+  /** Assistant row the run streams into: its spinner anchor and error sink. */
+  assistantMessageId?: string;
   /** Set when this run continues a durable human-intervention claim. */
   continuation?: InterventionContinuation;
   // --- Trigger ---
@@ -92,6 +97,8 @@ export interface AgentRunOrigin {
   groupId?: string;
   // --- Run tree ---
   lineage?: AgentRunLineage;
+  /** Project the conversation (or the run's task) belongs to. */
+  projectId?: string;
   scope?: string;
   sessionId?: string;
   /** Run-scoped Agent Signal marker for background self-iteration / memory runs. */
@@ -152,7 +159,17 @@ export interface AgentRunPrincipal {
  */
 export interface AgentRunPlan {
   /** Evaluation execution controls (tool forwarding) for eval runs. */
-  eval?: { caseId?: string; toolForwarding?: EvalToolForwardingConfig };
+  eval?: {
+    connectorSnapshots?: EvalConnectorSnapshots;
+    /** The only tool identifiers the attempt may see or call; see EvalRuntimeContext. */
+    allowedTools?: string[];
+    /** The eval attempt (case run or pass@k thread) this operation serves; inherited by sub-agents. */
+    attemptId?: string;
+    caseId?: string;
+    /** Isolated Memory scope of the eval trial (server-created). */
+    memory?: { fixtureHash: string; runId: string; threadId?: string; topicId: string };
+    toolForwarding?: EvalToolForwardingConfig;
+  };
   /** Where (and whether) the run executes, resolved once at the entry point. */
   execution?: ExecutionPlan;
   /** Operation-level skill set for the skill resolver. */
@@ -168,6 +185,7 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client that started this run renders `file` Works, so the pushed
    * `uiMessages` snapshots and `message_patch` revisions may carry them.
@@ -234,6 +252,13 @@ export interface AgentRunClientLlmWait {
 export interface AgentRunLlmExecutor {
   /** Relay protocol versions the client speaks, e.g. `llm_relay@1`. */
   capabilities: string[];
+  /**
+   * Operation whose gateway channel the client listens on, when it is not the
+   * run's own: a sub-agent inherits its parent's executor, but the tab only
+   * subscribed to the parent's run, so the sub-agent's `llm_execute` rides that
+   * channel. Set by the server, never by the client.
+   */
+  channelOperationId?: string;
   /** Stable id of the declaring client (tab / desktop window), preferred as the executor. */
   clientId: string;
   /** Provider ids this client confirmed it can reach directly. */
@@ -285,6 +310,12 @@ export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
 export interface AgentWorldSnapshot {
   /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
   agent?: RunAgentSnapshot;
+  /**
+   * Library skills the agent set to `auto` (explicit tri-state entries). A
+   * library skill is opt-in per agent and `agent.plugins` is already collapsed
+   * to pinned ids, so the skill pool reads the opted-in ones from here.
+   */
+  autoSkillIds?: string[];
   /** Channel-specific facts the model should know (bot platform, Discord …). */
   channel?: {
     botPlatform?: BotPlatformContext;
@@ -327,6 +358,13 @@ export interface AgentWorldSnapshot {
  */
 export interface AgentRunBinding {
   /**
+   * The agent-document index snapshot (rows + change notes) this run renders
+   * from, pinned on its first step so later steps send the same index and
+   * notes (see `resolveAgentDocumentIndex`). Replaced only when the history is
+   * compressed mid-run.
+   */
+  agentDocumentIndex?: AgentDocumentIndexSnapshot;
+  /**
    * Device routed for this run. `id` stays absent until a device is bound;
    * `systemInfo` may already carry a working directory for runs whose cwd was
    * resolved from a persisted device row.
@@ -349,8 +387,8 @@ export interface AgentState {
   activatedStepTools?: ActivatedStepTool[];
   // --- Late-bound execution facts ---
   /**
-   * Execution facts bound at a step boundary (device routing). The only
-   * business slot the host may write after creation.
+   * Execution facts bound at a step boundary (device routing, agent-document
+   * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
 
@@ -410,6 +448,14 @@ export interface AgentState {
   lastModified: string;
 
   /**
+   * User-facing count of LLM calls made by this operation.
+   *
+   * Kept in sync with `usage.llm.apiCalls` at every step boundary. Unlike
+   * {@link stepCount}, tool-only runtime iterations do not increase it.
+   */
+  llmCalls?: number;
+
+  /**
    * Optional maximum number of steps allowed.
    * If set, execution will stop with error when exceeded.
    */
@@ -461,7 +507,6 @@ export interface AgentState {
       provider: string;
     };
   };
-
   /**
    * Credentials this run listed once when it was created. A step renders
    * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
@@ -472,13 +517,13 @@ export interface AgentState {
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
+
   // --- Origin ---
   /**
    * Where this run came from and where it sits in the run tree. Frozen when
    * the operation is created.
    */
   origin?: AgentRunOrigin;
-
   pendingApprovalBatch?: {
     assistantMessageId: string;
     id: string;
@@ -506,8 +551,8 @@ export interface AgentState {
    * Cleared once consumed.
    */
   pendingAssistantMessageId?: string;
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
@@ -527,8 +572,23 @@ export interface AgentState {
   // --- Principal ---
   /** Under whose authority the run acts and what it may do. Frozen at creation. */
   principal?: AgentRunPrincipal;
+  /**
+   * The turn's raw ask, kept ONLY while the run still owes its init.
+   *
+   * A run can be created before tool discovery and the context assembly have
+   * happened; the step-0 worker does them and clears this in the same write that
+   * saves what they produced. Its presence is therefore the signal:
+   * a state carrying a request has not been initialized yet.
+   *
+   * Everything else the init needs is already on the other slots (`world.agent`,
+   * `world.channel`, `principal.policy`, `host.hooks`, `modelRuntimeConfig` …) —
+   * this is the residue those slots have no claim on.
+   */
+  request?: AgentRunInitRequest;
+
   /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
+
   // --- State Machine ---
   status:
     | 'idle'
@@ -544,6 +604,11 @@ export interface AgentState {
   /**
    * Number of execution steps in this session.
    * Incremented on each runtime.step() call.
+   *
+   * This is the scheduling/idempotency counter (QStash `stepIndex`, stale
+   * delivery guards, resume). It intentionally keeps its original meaning so
+   * workers from the previous build can keep scheduling during a rolling
+   * deploy.
    */
   stepCount: number;
 
@@ -586,8 +651,10 @@ export interface AgentState {
   toolSourceMap?: Record<string, ToolSource>;
 
   /**
-   * How many times this operation has answered unresolvable tool calls with a
-   * rejected tool result. Operation-scoped on purpose: the same rejection rows
+   * How many consecutive LLM turns this operation has answered unresolvable
+   * tool calls with a rejected tool result. Any resolved tool call reaching a
+   * tool executor resets it to 0, so it measures a model stuck on names that do not exist,
+   * not the run's lifetime total of typos. Operation-scoped on purpose: the same rejection rows
    * are also readable from the message history, but that history is rehydrated
    * from the DB on every step and carries earlier operations' rejections, so
    * counting rows there would spend a new operation's budget before it starts.

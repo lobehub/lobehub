@@ -17,6 +17,11 @@ export interface GeneralAgentCallLLMInstructionPayload {
    * placeholder must be filled by this LLM turn rather than orphaned.
    */
   assistantMessageId?: string;
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
   /** Force create a new assistant message (e.g., after compression) */
   createAssistantMessage?: boolean;
   isFirstMessage?: boolean;

@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./confluence": {
+      "types": "./src/confluence/index.ts",
+      "default": "./src/confluence/index.ts"
+    },
     "./github": {
       "types": "./src/github/index.ts",
       "default": "./src/github/index.ts"
@@ -15,6 +19,14 @@
     "./gmail": {
       "types": "./src/gmail/index.ts",
       "default": "./src/gmail/index.ts"
+    },
+    "./jira": {
+      "types": "./src/jira/index.ts",
+      "default": "./src/jira/index.ts"
+    },
+    "./linear": {
+      "types": "./src/linear/index.ts",
+      "default": "./src/linear/index.ts"
     },
     "./notion": {
       "types": "./src/notion/index.ts",

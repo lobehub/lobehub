@@ -5,6 +5,7 @@ import {
   formatSandboxStoragePromptVariables,
   isSafeSandboxCwd,
   isSafeSandboxEnvironmentId,
+  sandboxDriveOfKey,
   type SandboxStoragePromptVariables,
   systemPrompt,
 } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -52,6 +53,42 @@ describe('deriveSandboxStorageKey', () => {
   it('keeps personal and organization namespaces apart', () => {
     expect(deriveSandboxStorageKey({ userId: 'u', workspaceId: 'wsp_42' })).toBe('ws-org-wsp_42');
     expect(deriveSandboxStorageKey({ userId: 'org-wsp_42' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'mem-wsp_42-user_a' })).toBeUndefined();
+  });
+
+  it('gives each workspace member a personal drive of their own', () => {
+    expect(
+      deriveSandboxStorageKey({ drive: 'personal', userId: 'user_a', workspaceId: 'wsp_42' }),
+    ).toBe('ws-mem-wsp_42-user_a');
+    expect(
+      deriveSandboxStorageKey({ drive: 'personal', userId: 'user_b', workspaceId: 'wsp_42' }),
+    ).toBe('ws-mem-wsp_42-user_b');
+    expect(
+      deriveSandboxStorageKey({ drive: 'public', userId: 'user_a', workspaceId: 'wsp_42' }),
+    ).toBe('ws-org-wsp_42');
+  });
+
+  it('ignores the drive outside a workspace', () => {
+    expect(deriveSandboxStorageKey({ drive: 'personal', userId: 'user_a' })).toBe('ws-user_a');
+    expect(deriveSandboxStorageKey({ drive: 'public', userId: 'user_a' })).toBe('ws-user_a');
+  });
+
+  // The first `-` after `ws-mem-` separates the workspace from the member, so
+  // a workspace id with a dash could split two ways and name someone else.
+  it('refuses a member drive for a workspace id that would not split cleanly', () => {
+    expect(
+      deriveSandboxStorageKey({ drive: 'personal', userId: 'b', workspaceId: 'wsp-a' }),
+    ).toBeUndefined();
+  });
+
+  it('names a key as the caller sees it', () => {
+    const scope = { userId: 'user_a', workspaceId: 'wsp_42' };
+
+    expect(sandboxDriveOfKey('ws-org-wsp_42', scope)).toBe('public');
+    expect(sandboxDriveOfKey('ws-mem-wsp_42-user_a', scope)).toBe('personal');
+    expect(sandboxDriveOfKey('ws-mem-wsp_42-user_b', scope)).toBeUndefined();
+    expect(sandboxDriveOfKey('ws-user_a', { userId: 'user_a' })).toBe('personal');
+    expect(sandboxDriveOfKey('ws-org-wsp_42', { userId: 'user_a' })).toBeUndefined();
   });
 });
 
@@ -73,28 +110,31 @@ describe('formatSandboxStoragePromptVariables', () => {
     );
   });
 
-  // Persistence is not enabled yet: until an entitlement claim is issued every
-  // run renders this branch, so it has to reproduce the pre-placeholder prompt
-  // exactly — including the lines surrounding the two spliced sections.
-  it('renders the original ephemeral wording, byte for byte', () => {
+  // Every run without an entitlement renders this branch: the original lines,
+  // then what the temporary sandbox is for — spliced cleanly between the lines
+  // around the placeholder.
+  it('renders the ephemeral wording, with what the temporary sandbox suits', () => {
     const vars = formatSandboxStoragePromptVariables();
     const rendered = render(vars);
 
     for (const key of placeholders) expect(rendered).not.toContain(key);
     expect(rendered).toContain(
-      '- Files created here are temporary and session-specific\n- Each conversation topic has its own isolated session\n- Sessions may expire after inactivity; files will be recreated if needed\n- The sandbox has its own isolated file system starting at the root directory\n- Commands will time out',
+      '- Files created here are temporary and session-specific\n- Each conversation topic has its own isolated session\n- Sessions may expire after inactivity; files will be recreated if needed\n- The sandbox has its own isolated file system starting at the root directory\n- This is a temporary sandbox, discarded after use',
+    );
+    expect(rendered).toContain(
+      'export finished files with `exportFile`.\n- Commands will time out',
     );
     expect(rendered).toContain(
       '- If a session expires, it will be automatically recreated\n- Files from previous sessions may not persist\n- The sessionExpiredAndRecreated flag',
     );
   });
 
-  it('describes a persistent workspace without naming a directory', () => {
-    const vars = formatSandboxStoragePromptVariables({ mode: 'persistent' });
+  it('describes the drive root without naming a directory', () => {
+    const vars = formatSandboxStoragePromptVariables({ mode: 'drive' });
     const rendered = render(vars);
 
     for (const key of placeholders) expect(rendered).not.toContain(key);
-    expect(vars.sandbox_workspace).toContain('persistent workspace');
+    expect(vars.sandbox_workspace).toContain('network drive');
     // Steers heavy work away from the workspace without naming a scratch
     // directory: where installs land is the platform's business, and a path
     // written here would outlive whatever it decides to do with them.
@@ -108,14 +148,14 @@ describe('formatSandboxStoragePromptVariables', () => {
     expect(rendered).not.toContain('Files from previous sessions may not persist');
   });
 
-  it('names the chosen subdirectory and places it under the workspace root', () => {
+  it('names the chosen folder and keeps the run in it', () => {
     const vars = formatSandboxStoragePromptVariables({
       cwd: 'projects/atlas',
-      mode: 'persistent',
+      mode: 'drive',
     });
 
     expect(vars.sandbox_workspace).toContain('`projects/atlas`');
-    expect(vars.sandbox_workspace).toContain('workspace root is above you');
+    expect(vars.sandbox_workspace).toContain('Keep to this folder');
     // The generic "pick your own subdirectory" advice is wrong once one is
     // chosen — the model is already in it.
     expect(vars.sandbox_workspace).not.toContain('its own subdirectory');
@@ -132,8 +172,10 @@ describe('formatSandboxStoragePromptVariables', () => {
   // model that wrote one down would keep using it after the root moved.
   it('never hardcodes a mount path', () => {
     for (const input of [
+      { mode: 'drive' } as const,
+      { cwd: 'a/b', mode: 'drive' } as const,
       { mode: 'persistent' } as const,
-      { cwd: 'a/b', mode: 'persistent' } as const,
+      { cwd: 'a', mode: 'persistent' } as const,
     ]) {
       const vars = formatSandboxStoragePromptVariables(input);
       expect(vars.sandbox_workspace).not.toContain('/mnt/');

@@ -5,15 +5,18 @@ import { type BotSliceState } from './slices/bot';
 import { initialBotSliceState } from './slices/bot';
 import { type BuiltinAgentSliceState } from './slices/builtin';
 import { initialBuiltinAgentSliceState } from './slices/builtin';
+import { initialKnowledgeSliceState, type KnowledgeSliceState } from './slices/knowledge';
 
 export type AgentStoreState = AgentArtworkSliceState &
   AgentSliceState &
   BotSliceState &
-  BuiltinAgentSliceState;
+  BuiltinAgentSliceState &
+  KnowledgeSliceState;
 
 export const initialState: AgentStoreState = {
   ...initialAgentArtworkSliceState,
   ...initialAgentSliceState,
   ...initialBotSliceState,
   ...initialBuiltinAgentSliceState,
+  ...initialKnowledgeSliceState,
 };

@@ -66,6 +66,15 @@ vi.mock('@lobechat/chat-adapter-wechat', () => ({
 
 const { WechatClientFactory } = await import('./client');
 
+const wechatClientConfig = (): Parameters<
+  InstanceType<typeof WechatClientFactory>['createClient']
+>[0] => ({
+  applicationId: 'wechat-app',
+  credentials: { botId: 'bot-id', botToken: 'bot-token' },
+  platform: 'wechat',
+  settings: {},
+});
+
 describe('WechatGatewayClient', () => {
   const runtimeRedis = {
     del: vi.fn(),
@@ -108,15 +117,10 @@ describe('WechatGatewayClient', () => {
         });
       });
 
-    const client = new WechatClientFactory().createClient(
-      {
-        applicationId: 'wechat-app',
-        credentials: { botId: 'bot-id', botToken: 'bot-token' },
-        platform: 'wechat',
-        settings: {},
-      },
-      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
-    );
+    const client = new WechatClientFactory().createClient(wechatClientConfig(), {
+      appUrl: 'https://example.com',
+      redisClient: runtimeRedis as any,
+    });
 
     const backgroundTasks: Promise<any>[] = [];
     let started = false;
@@ -234,15 +238,10 @@ describe('WechatGatewayClient', () => {
   });
 
   it('tracks messages sent directly by the Chat SDK adapter', async () => {
-    const client = new WechatClientFactory().createClient(
-      {
-        applicationId: 'wechat-app',
-        credentials: { botId: 'bot-id', botToken: 'bot-token' },
-        platform: 'wechat',
-        settings: {},
-      },
-      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
-    );
+    const client = new WechatClientFactory().createClient(wechatClientConfig(), {
+      appUrl: 'https://example.com',
+      redisClient: runtimeRedis as any,
+    });
 
     client.createAdapter();
     const adapterConfig = mockCreateWechatAdapter.mock.calls[0][0];
@@ -267,15 +266,10 @@ describe('WechatGatewayClient', () => {
     // recover by walking `message.raw.item_list` and re-running the same
     // download logic via the package-exported helper.
     const createClient = () =>
-      new WechatClientFactory().createClient(
-        {
-          applicationId: 'wechat-app',
-          credentials: { botId: 'bot-id', botToken: 'bot-token' },
-          platform: 'wechat',
-          settings: {},
-        },
-        { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
-      );
+      new WechatClientFactory().createClient(wechatClientConfig(), {
+        appUrl: 'https://example.com',
+        redisClient: runtimeRedis as any,
+      });
 
     /** Build a fake Chat SDK Message with a WeChat raw payload. */
     const makeMessage = (raw: Record<string, unknown>, id = 'wechat-msg-1') =>
@@ -449,15 +443,10 @@ describe('WechatGatewayClient', () => {
 
   describe('messenger.createMessage with attachments', () => {
     const createClient = () =>
-      new WechatClientFactory().createClient(
-        {
-          applicationId: 'wechat-app',
-          credentials: { botId: 'bot-id', botToken: 'bot-token' },
-          platform: 'wechat',
-          settings: {},
-        },
-        { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
-      );
+      new WechatClientFactory().createClient(wechatClientConfig(), {
+        appUrl: 'https://example.com',
+        redisClient: runtimeRedis as any,
+      });
 
     it('forwards inline base64 image attachments to uploadCdnMedia + sendItem', async () => {
       const client = createClient();

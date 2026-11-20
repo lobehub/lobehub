@@ -105,7 +105,7 @@ export class ProviderActionImpl {
       pageSize: params.pageSize ? Number(params.pageSize) : 21,
     };
     const queryKey = providerListQueryKey(normalized);
-    const sync = this.#list.useSync(normalized, { enabled });
+    const sync = this.#list.useSync(normalized, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(sync, queryKey, !!this.#get().providerListMap[queryKey], enabled);
   };
 
@@ -125,7 +125,7 @@ export class ProviderActionImpl {
       withReadme: params.withReadme,
     };
     const queryKey = providerDetailQueryKey(normalized);
-    const sync = this.#detail.useSync(normalized, { enabled });
+    const sync = this.#detail.useSync(normalized, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(
       sync,
       queryKey,
@@ -139,7 +139,7 @@ export class ProviderActionImpl {
     const { enabled = true } = options;
     const params: ProviderIdentifiersParams = {};
     const queryKey = providerIdentifiersQueryKey(params);
-    const sync = this.#identifiers.useSync(params, { enabled });
+    const sync = this.#identifiers.useSync(params, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(
       sync,
       queryKey,

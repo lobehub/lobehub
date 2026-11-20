@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The experiment list and detail are `@lobechat/replica` resources whose views
+ * The experiment list and detail are `local-replica` resources whose views
  * are the eval store's flat `experimentList` / `experimentDetailMap` fields.
  * These tests pin the fetch orchestration and the write paths (create / update
  * / delete) at the boundary: which service call each action makes and that the
@@ -192,6 +192,23 @@ describe('ExperimentAction replica wiring', () => {
       });
 
       await expect(useEvalStore.getState().deleteExperiment('e1')).rejects.toThrow('boom');
+      expect(useEvalStore.getState().experimentList).toEqual([{ id: 'e1', name: 'Sweep' }]);
+    });
+
+    it('treats a refused delete ({ success: false }) like a rejection and keeps the row', async () => {
+      const { agentEvalService } = await import('@/services/agentEval');
+      vi.mocked(agentEvalService.deleteExperiment).mockResolvedValue({
+        error: 'Experiment not found',
+        success: false,
+      } as any);
+      useEvalStore.setState({
+        experimentList: [{ id: 'e1', name: 'Sweep' } as any],
+        experimentListInit: true,
+      });
+
+      await expect(useEvalStore.getState().deleteExperiment('e1')).rejects.toThrow(
+        'Experiment not found',
+      );
       expect(useEvalStore.getState().experimentList).toEqual([{ id: 'e1', name: 'Sweep' }]);
     });
   });

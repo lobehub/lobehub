@@ -613,7 +613,7 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
     });
 
-    it('should use any schema tool choice for always-thinking Kimi models', async () => {
+    it('should use auto schema tool choice for always-thinking Kimi models', async () => {
       await instance.generateObject({
         messages: [{ content: 'Extract the result', role: 'user' }],
         model: 'kimi-k3',
@@ -621,11 +621,11 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
 
       const payload = getLastRequestPayload();
-      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tool_choice).toEqual({ type: 'auto' });
       expect(payload.thinking).toBeUndefined();
     });
 
-    it('should enable thinking and use any tool choice for Kimi thinking-toggle models', async () => {
+    it('should enable thinking and use auto tool choice for Kimi thinking-toggle models', async () => {
       await instance.generateObject({
         messages: [{ content: 'Get the result', role: 'user' }],
         model: 'kimi-k2.6',
@@ -643,7 +643,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
       expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
-      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tool_choice).toEqual({ type: 'auto' });
     });
 
     it('should explicitly enable thinking for native K2.x models', async () => {
@@ -655,7 +655,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
       expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
-      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tool_choice).toEqual({ type: 'auto' });
     });
 
     it('should normalize assistant history when thinking is enabled', async () => {

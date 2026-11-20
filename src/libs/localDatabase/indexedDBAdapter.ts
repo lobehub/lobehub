@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 import {
   INDEXED_DB_NAME,
   INDEXED_DB_RECORD_STORE,
@@ -7,7 +9,11 @@ import {
 import type {
   LocalDatabaseAdapter,
   LocalDatabaseBatchOperation,
+  LocalDatabaseCollectionInfo,
   LocalDatabaseEntry,
+  LocalDatabaseKeyGroup,
+  LocalDatabaseKeyPage,
+  LocalDatabaseKeyQuery,
 } from './types';
 
 interface IndexedDBRecord {
@@ -19,6 +25,11 @@ const COLLECTION_SEPARATOR = '\u0000';
 
 const collectionPrefix = (collection: string) => `${collection}${COLLECTION_SEPARATOR}`;
 const storageKey = (collection: string, key: string) => `${collectionPrefix(collection)}${key}`;
+const collectionFromStorageKey = (key: IDBValidKey): string | undefined => {
+  if (typeof key !== 'string') return undefined;
+  const separatorIndex = key.indexOf(COLLECTION_SEPARATOR);
+  return separatorIndex < 0 ? undefined : key.slice(0, separatorIndex);
+};
 const storageRange = (collection: string, prefix: string) => {
   const lowerBound = storageKey(collection, prefix);
   return IDBKeyRange.bound(lowerBound, `${lowerBound}\uFFFF`);
@@ -46,7 +57,7 @@ const openDatabase = (onVersionChange: () => void): Promise<IDBDatabase> =>
 
     request.onblocked = () => {
       settled = true;
-      reject(new Error('IndexedDB upgrade was blocked by another LobeHub tab'));
+      reject(new Error(`IndexedDB upgrade was blocked by another ${BRANDING_NAME} tab`));
     };
     request.onerror = () => {
       settled = true;
@@ -114,6 +125,15 @@ export const createIndexedDBLocalDatabaseAdapter = (): LocalDatabaseAdapter => {
     return result;
   };
 
+  const keysInRange = async (collection: string, prefix: string): Promise<string[]> => {
+    const storageKeys = await runTransaction<IDBValidKey[]>('readonly', (store) =>
+      store.getAllKeys(storageRange(collection, prefix)),
+    );
+    const keyOffset = collectionPrefix(collection).length;
+
+    return storageKeys.map((storageKey) => String(storageKey).slice(keyOffset));
+  };
+
   return {
     batch: async (operations: LocalDatabaseBatchOperation[]): Promise<void> => {
       if (operations.length === 0) return;
@@ -170,6 +190,54 @@ export const createIndexedDBLocalDatabaseAdapter = (): LocalDatabaseAdapter => {
 
     initialize: async (): Promise<void> => {
       await getDatabase();
+    },
+
+    keyGroupsByPrefix: async (
+      collection: string,
+      prefix: string,
+      delimiter: string,
+    ): Promise<LocalDatabaseKeyGroup[]> => {
+      const counts = new Map<string, number>();
+
+      for (const key of await keysInRange(collection, prefix)) {
+        const delimiterIndex = key.indexOf(delimiter, prefix.length);
+        if (delimiterIndex < 0) continue;
+
+        const name = key.slice(prefix.length, delimiterIndex);
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+
+      return [...counts.entries()]
+        .map(([name, entryCount]) => ({ entryCount, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    keysByPrefix: async (
+      collection: string,
+      prefix: string,
+      { limit, search }: LocalDatabaseKeyQuery = {},
+    ): Promise<LocalDatabaseKeyPage> => {
+      const term = search?.trim().toLowerCase();
+      const keys = (await keysInRange(collection, prefix)).filter(
+        (key) => !term || key.toLowerCase().includes(term),
+      );
+
+      return { keys: limit === undefined ? keys : keys.slice(0, limit), total: keys.length };
+    },
+
+    listCollections: async (): Promise<LocalDatabaseCollectionInfo[]> => {
+      const keys = await runTransaction<IDBValidKey[]>('readonly', (store) => store.getAllKeys());
+      const counts = new Map<string, number>();
+
+      for (const key of keys) {
+        const collection = collectionFromStorageKey(key);
+        if (collection === undefined) continue;
+        counts.set(collection, (counts.get(collection) ?? 0) + 1);
+      }
+
+      return [...counts.entries()]
+        .map(([name, entryCount]) => ({ entryCount, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
 
     set: async (collection: string, key: string, value: unknown): Promise<void> => {

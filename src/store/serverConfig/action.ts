@@ -50,6 +50,7 @@ export class ServerConfigActionImpl {
               featureFlags: data.serverFeatureFlags,
               serverConfig: data.serverConfig,
               serverConfigInit: true,
+              serverConfigLoaded: true,
             },
             false,
             'initServerConfig',

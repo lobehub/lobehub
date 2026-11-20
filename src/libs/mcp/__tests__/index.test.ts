@@ -1,9 +1,14 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { inspect } from 'node:util';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from '../index';
+
+const debugLog = vi.hoisted(() => vi.fn());
+
+vi.mock('debug', () => ({ default: () => debugLog }));
 
 const require = createRequire(import.meta.url);
 const mcpHelloWorldRoot = dirname(require.resolve('mcp-hello-world/package.json'));
@@ -185,6 +190,188 @@ describe('MCPClient', () => {
       expect(() => new MCPClient(connection as any)).toThrow(
         'Unsupported MCP connection type: invalid',
       );
+    });
+  });
+
+  // Session expiration handling (remote MCP server restarted → stale session id)
+  describe('Session expiration', () => {
+    const sessionError = new Error(
+      'Error POSTing to endpoint (HTTP 400): Bad Request: No valid session ID provided',
+    );
+
+    const buildClient = (mcp: Record<string, any>) => {
+      const client = new MCPClient({
+        name: 'HTTP Test Connection',
+        type: 'http',
+        url: 'https://example.com/mcp',
+      });
+      // Replace the underlying SDK client with a stub that simulates an expired session
+      (client as any).mcp = { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp };
+      return client;
+    };
+
+    it('callTool should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ callTool: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.callTool('echo', {})).rejects.toThrow('NoValidSessionId');
+    });
+
+    it('callTool should rethrow non-session errors untouched', async () => {
+      const otherError = new Error('boom');
+      const client = buildClient({ callTool: vi.fn().mockRejectedValue(otherError) });
+
+      await expect(client.callTool('echo', {})).rejects.toBe(otherError);
+    });
+
+    it('listTools should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ listTools: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.listTools()).rejects.toThrow('NoValidSessionId');
+    });
+
+    it('listTools should return [] for non-session errors', async () => {
+      const client = buildClient({ listTools: vi.fn().mockRejectedValue(new Error('boom')) });
+
+      await expect(client.listTools()).resolves.toEqual([]);
+    });
+
+    it('listResources should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ listResources: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.listResources()).rejects.toThrow('NoValidSessionId');
+    });
+
+    it('listPrompts should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ listPrompts: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.listPrompts()).rejects.toThrow('NoValidSessionId');
+    });
+  });
+
+  describe('Log redaction', () => {
+    const remoteErrorSecret = 'remote-generated-secret';
+    const remoteErrorCodeSecret = 'remote-error-code-secret';
+    const remoteErrorNameSecret = 'remote-error-name-secret';
+    const sensitiveConnection = {
+      auth: {
+        accessToken: 'oauth-access-token-secret',
+        refreshToken: 'oauth-refresh-token-secret',
+        type: 'oauth2' as const,
+      },
+      headers: {
+        Authorization: 'Bearer authorization-header-secret',
+        Cookie: 'session=cookie-header-secret',
+      },
+      name: 'HTTP Test Connection',
+      type: 'http' as const,
+      url: 'https://url-user:url-password@example.com/path-token-secret?api_key=query-token-secret#fragment-token-secret',
+    };
+    const sensitiveValues = [
+      remoteErrorSecret,
+      remoteErrorCodeSecret,
+      remoteErrorNameSecret,
+      'oauth-access-token-secret',
+      'oauth-refresh-token-secret',
+      'authorization-header-secret',
+      'cookie-header-secret',
+      'url-user',
+      'url-password',
+      'path-token-secret',
+      'query-token-secret',
+      'fragment-token-secret',
+    ];
+
+    const buildClient = (mcp: Record<string, unknown>) => {
+      const client = new MCPClient(sensitiveConnection);
+      (client as any).mcp = { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp };
+      return client;
+    };
+
+    const expectLogsToBeRedacted = (consoleError: ReturnType<typeof vi.spyOn>) => {
+      const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+      for (const sensitiveValue of sensitiveValues) {
+        expect(logOutput).not.toContain(sensitiveValue);
+      }
+      expect(logOutput).toContain('https://example.com');
+      return logOutput;
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('redacts connection and remote error details during initialization', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const remoteError = Object.assign(new Error(remoteErrorSecret), {
+        code: remoteErrorCodeSecret,
+        name: remoteErrorNameSecret,
+      });
+      const client = buildClient({
+        connect: vi.fn().mockRejectedValue(remoteError),
+      });
+
+      await expect(client.initialize()).rejects.toThrow(remoteErrorSecret);
+
+      const logOutput = expectLogsToBeRedacted(consoleError);
+      expect(logOutput).toContain("name: 'Error'");
+    });
+
+    it.each([
+      {
+        invoke: (client: MCPClient) => client.listTools(),
+        method: 'listTools',
+      },
+      {
+        invoke: (client: MCPClient) => client.listResources(),
+        method: 'listResources',
+      },
+      {
+        invoke: (client: MCPClient) => client.listPrompts(),
+        method: 'listPrompts',
+      },
+    ])('redacts remote errors from $method logs', async ({ invoke, method }) => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const client = buildClient({
+        [method]: vi.fn().mockRejectedValue(new Error(remoteErrorSecret)),
+      });
+
+      await expect(invoke(client)).resolves.toEqual([]);
+
+      expectLogsToBeRedacted(consoleError);
+    });
+
+    it('does not log tool argument or result values', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const client = buildClient({
+        callTool: vi.fn().mockResolvedValue({
+          content: [{ text: 'tool-result-secret', type: 'text' }],
+        }),
+      });
+
+      await client.callTool('read_records', { apiKey: 'tool-argument-secret' });
+
+      const logOutput = expectLogsToBeRedacted(consoleError);
+      expect(logOutput).not.toContain('tool-argument-secret');
+      expect(logOutput).not.toContain('tool-result-secret');
+    });
+
+    it('does not log stdio args or environment values', () => {
+      new MCPClient({
+        args: ['--token', 'stdio-argument-secret'],
+        command: 'local-mcp',
+        env: { PRIVATE_KEY: 'stdio-env-secret' },
+        name: 'Stdio Test Connection',
+        type: 'stdio',
+      });
+
+      const logOutput = inspect(debugLog.mock.calls, { depth: null });
+      expect(logOutput).not.toContain('stdio-argument-secret');
+      expect(logOutput).not.toContain('stdio-env-secret');
+      expect(logOutput).toContain('stdio transport');
     });
   });
 });

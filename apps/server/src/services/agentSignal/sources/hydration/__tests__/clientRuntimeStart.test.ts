@@ -111,6 +111,53 @@ describe('resolveClientRuntimeStartFeedbackSource', { timeout: 15_000 }, () => {
 
   /**
    * @example
+   * A user message that opens its topic is marked as the conversation root; a reply is not.
+   */
+  it('marks only a parentless, threadless user message as the conversation root', async () => {
+    const db = await getTestDB();
+    const userId = `user_${uuid()}`;
+    const topicId = `topic_${uuid()}`;
+    const rootId = `msg_${uuid()}`;
+    const assistantId = `msg_${uuid()}`;
+    const replyId = `msg_${uuid()}`;
+
+    await db.insert(users).values({ id: userId });
+    await db.insert(topics).values({ id: topicId, title: 'Root Topic', userId });
+    await db.insert(messages).values([
+      { content: 'Remember that I use pnpm.', id: rootId, role: 'user', topicId, userId },
+      {
+        content: 'Noted.',
+        id: assistantId,
+        parentId: rootId,
+        role: 'assistant',
+        topicId,
+        userId,
+      },
+      {
+        content: 'Remember that I also use bun.',
+        id: replyId,
+        parentId: assistantId,
+        role: 'user',
+        topicId,
+        userId,
+      },
+    ]);
+
+    const root = await resolveClientRuntimeStartFeedbackSource(
+      createStartSource({ parentMessageId: rootId, topicId }),
+      { db, userId },
+    );
+    const reply = await resolveClientRuntimeStartFeedbackSource(
+      createStartSource({ parentMessageId: replyId, topicId }),
+      { db, userId },
+    );
+
+    expect(root.source?.payload.isConversationRoot).toBe(true);
+    expect(reply.source?.payload.isConversationRoot).toBeUndefined();
+  });
+
+  /**
+   * @example
    * client.runtime.start({ triggerMessageId }) keeps the explicit trigger instead of replacing it.
    */
   it('hydrates runtime start with the explicit triggerMessageId from the source payload', async () => {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import shlex
 from collections.abc import Callable
 from pathlib import Path
@@ -148,6 +150,21 @@ class LhAdapter:
             f" --supervisor-config {shlex.quote(_SUPERVISOR_CONFIG)}"
         )
         return [login, connect, ready, run]
+
+    async def run(self, environment: Any, exec_as_agent: Callable, instruction: str) -> None:
+        try:
+            for command in self.run_commands(instruction):
+                await exec_as_agent(environment, command=command)
+        except asyncio.CancelledError:
+            try:
+                await exec_as_agent(
+                    environment,
+                    command=f"node {RUN_AGENT_PATH} --stop",
+                    timeout_sec=180,
+                )
+            except Exception:
+                logging.getLogger(__name__).exception("Failed to stop LobeHub agent after cancellation")
+            raise
 
     @staticmethod
     def populate_context(logs_dir: Path, context: Any) -> None:

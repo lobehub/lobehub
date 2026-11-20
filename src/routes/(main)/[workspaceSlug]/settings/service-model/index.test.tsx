@@ -14,7 +14,11 @@ vi.mock('@/business/client/hooks/useIsWorkspaceLoading', () => ({
 }));
 
 vi.mock('@/features/Settings/service-model', () => ({
-  default: () => <div data-testid="service-model-page">service model settings</div>,
+  default: ({ scope }: { scope?: 'personal' | 'workspace' }) => (
+    <div data-scope={scope} data-testid="service-model-page">
+      service model settings
+    </div>
+  ),
 }));
 
 describe('WorkspaceServiceModelSetting', () => {
@@ -23,6 +27,13 @@ describe('WorkspaceServiceModelSetting', () => {
     render(<WorkspaceServiceModelSetting />);
 
     expect(screen.getByTestId('service-model-page')).toHaveTextContent('service model settings');
+  });
+
+  it('renders the service model page in workspace scope', () => {
+    managePermission.allowed = true;
+    render(<WorkspaceServiceModelSetting />);
+
+    expect(screen.getByTestId('service-model-page')).toHaveAttribute('data-scope', 'workspace');
   });
 
   it('renders forbidden screen without manage_settings permission', () => {

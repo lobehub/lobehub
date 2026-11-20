@@ -13,9 +13,23 @@ const IMAGE_EXT_BY_MEDIA_TYPE: Record<string, string> = {
 export interface FileStoreCreateFileInput {
   fileType: string;
   hash: string;
-  metadata: { date: string; dirname: string; filename: string; path: string };
+  metadata: {
+    date: string;
+    dirname: string;
+    filename: string;
+    height?: number;
+    path: string;
+    ratio?: number;
+    width?: number;
+  };
   name: string;
   size: number;
+  /**
+   * `tool-result`: the image is an attachment of its tool message, not a
+   * library resource, and it is the only kind of file a run's operation token
+   * may create outside a Task run.
+   */
+  source: 'tool-result';
   url: string;
 }
 
@@ -45,7 +59,7 @@ export interface FileStorePort {
  */
 export const createFileStoreImageUploader =
   (resolvePort: () => Promise<FileStorePort | undefined>): UploadHeterogeneousImage =>
-  async ({ data, mediaType }) => {
+  async ({ data, height, mediaType, width }) => {
     const port = await resolvePort();
     if (!port) return undefined;
 
@@ -86,9 +100,19 @@ export const createFileStoreImageUploader =
       const record = await port.createFile({
         fileType: mediaType,
         hash,
-        metadata: { date, dirname: '', filename: fileName, path: pathname },
+        metadata: {
+          date,
+          dirname: '',
+          filename: fileName,
+          path: pathname,
+          // Same shape the web uploader records, so any file consumer can reserve layout.
+          ...(width && height
+            ? { height, ratio: Math.round((width / height) * 10_000) / 10_000, width }
+            : {}),
+        },
         name: fileName,
         size: buffer.length,
+        source: 'tool-result',
         url: pathname,
       });
 

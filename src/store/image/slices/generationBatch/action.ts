@@ -9,6 +9,7 @@ import { type GetGenerationStatusResult } from '@/server/routers/lambda/generati
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
 import { type StoreSetter } from '@/store/types';
+import { getGenerationStatusPollingInterval } from '@/store/utils/generationStatusPolling';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 import { setNamespace } from '@/utils/storeDebug';
@@ -195,32 +196,12 @@ export class GenerationBatchActionImpl {
       },
       {
         refreshWhenHidden: false,
-        refreshInterval: (data: GetGenerationStatusResult | undefined) => {
-          // If status is success or error, stop polling
-          if (data?.status === AsyncTaskStatus.Success || data?.status === AsyncTaskStatus.Error) {
-            return 0; // Stop polling
-          }
-
-          // Dynamically adjust interval based on request count: use exponential backoff algorithm
-          // Base interval 1 second, max interval 30 seconds
-          const baseInterval = 1000;
-          const maxInterval = 30_000;
-          const currentCount = requestCountRef.current;
-
-          // Exponential backoff: double the interval every 5 requests
-          const backoffMultiplier = Math.floor(currentCount / 5);
-          let dynamicInterval = Math.min(
-            baseInterval * Math.pow(2, backoffMultiplier),
-            maxInterval,
-          );
-
-          // If there was a previous error, use a longer interval (multiply by 2)
-          if (isErrorRef.current) {
-            dynamicInterval = Math.min(dynamicInterval * 2, maxInterval);
-          }
-
-          return dynamicInterval;
-        },
+        refreshInterval: (data: GetGenerationStatusResult | undefined) =>
+          getGenerationStatusPollingInterval({
+            hasError: isErrorRef.current,
+            requestCount: requestCountRef.current,
+            status: data?.status,
+          }),
         onError: (error) => {
           // Set error state when an error occurs
           isErrorRef.current = true;

@@ -7,7 +7,6 @@ import { z } from 'zod';
 
 import { checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
 import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
-import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { EmbeddingModel } from '@/database/models/embedding';
@@ -16,15 +15,22 @@ import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { isSharedLimitFailure, toAsyncTaskErrorType } from '@/server/services/fileParse/failure';
+import { resolveFileEmbeddingModel } from '@/server/services/knowledgeBase/fileEmbeddingModel';
 import { type IAsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
+
+/**
+ * How long a failed embedding task waits for its in-flight batches before it is marked
+ * failed. Keep it below the margin any quota reservation tied to the `processing` state allows.
+ */
+const IN_FLIGHT_BATCH_GRACE_MS = 30_000;
 
 const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
   const { ctx } = opts;
@@ -41,6 +47,50 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
     },
   });
 });
+
+/**
+ * Parsing and splitting run on the file-parse worker thread (one at a time per process), but every
+ * running task still keeps a whole file (up to MAX_FILE_PARSE_SIZE) in memory here. A folder
+ * upload fires one task per file at once, so they queue here instead of all running together and
+ * starving every other request served by this process.
+ */
+const PARSE_CONCURRENCY = 2;
+let activeParses = 0;
+const waitingParses: (() => void)[] = [];
+
+interface ParseSlot {
+  /** Keeps the slot until `work` settles, even when the caller stops waiting for it. */
+  holdUntil: (work: Promise<unknown>) => void;
+  release: () => void;
+}
+
+const withParseSlot = async <T>(fn: (slot: ParseSlot) => Promise<T>): Promise<T> => {
+  if (activeParses < PARSE_CONCURRENCY) activeParses++;
+  // a finishing task hands its slot straight to the next waiter
+  else await new Promise<void>((resolve) => waitingParses.push(resolve));
+
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    const next = waitingParses.shift();
+    if (next) next();
+    else activeParses--;
+  };
+
+  let held: Promise<unknown> | undefined;
+  try {
+    return await fn({
+      holdUntil: (work) => {
+        held = work;
+      },
+      release,
+    });
+  } finally {
+    if (held) void held.then(release, release);
+    else release();
+  }
+};
 
 const resolveWorkspaceIdFromFile = async (
   serverDB: LobeChatDatabase,
@@ -87,14 +137,27 @@ export const fileRouter = router({
 
       const asyncTask = await asyncTaskModel.findById(input.taskId);
 
-      const { model, provider } =
-        getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+      const { model, provider } = await resolveFileEmbeddingModel(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      );
 
       if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
+
+      // `Promise.race` and `pMap` only stop waiting: without these, batches already running
+      // keep calling the provider and writing vectors after the task is reported failed, which
+      // is also when the vector quota stops reserving room for this task.
+      let stopped = false;
+      const inFlightBatches = new Set<Promise<void>>();
+      const assertWritable = () => {
+        if (stopped) throw new Error('embedding task already stopped');
+      };
 
       try {
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
+            stopped = true;
             reject(
               new AsyncTaskError(
                 AsyncTaskErrorType.Timeout,
@@ -121,32 +184,47 @@ export const fileRouter = router({
             await pMap(
               requestArray,
               async (chunks) => {
-                // Read user's provider config from database
-                const modelRuntime = await initModelRuntimeFromDB(
-                  ctx.serverDB,
-                  ctx.userId,
-                  provider,
-                  workspaceId,
-                );
+                const batch = (async () => {
+                  assertWritable();
+                  // Read user's provider config from database
+                  const modelRuntime = await initModelRuntimeFromDB(
+                    ctx.serverDB,
+                    ctx.userId,
+                    provider,
+                    workspaceId,
+                  );
 
-                const embeddings = await modelRuntime.embeddings(
-                  {
-                    dimensions: 1024,
-                    input: chunks.map((c) => c.text),
-                    model,
-                  },
-                  { metadata: { trigger: RequestTrigger.FileEmbedding }, user: ctx.userId },
-                );
+                  const embeddings = await modelRuntime.embeddings(
+                    {
+                      dimensions: 1024,
+                      input: chunks.map((c) => c.text),
+                      model,
+                    },
+                    { metadata: { trigger: RequestTrigger.FileEmbedding }, user: ctx.userId },
+                  );
 
-                const items: NewEmbeddingsItem[] =
-                  embeddings?.map((e, idx) => ({
-                    chunkId: chunks[idx].id,
-                    embeddings: e,
-                    fileId: input.fileId,
-                    model,
-                  })) || [];
+                  const items: NewEmbeddingsItem[] =
+                    embeddings?.map((e, idx) => ({
+                      chunkId: chunks[idx].id,
+                      embeddings: e,
+                      fileId: input.fileId,
+                      model,
+                    })) || [];
 
-                await embeddingModel.bulkCreate(items);
+                  assertWritable();
+                  await embeddingModel.bulkCreate(items);
+                })();
+
+                inFlightBatches.add(batch);
+                try {
+                  await batch;
+                } catch (e) {
+                  // One failed batch fails the task: stop its siblings from writing more.
+                  stopped = true;
+                  throw e;
+                } finally {
+                  inFlightBatches.delete(batch);
+                }
               },
               { concurrency: CONCURRENCY },
             );
@@ -171,6 +249,15 @@ export const fileRouter = router({
         return await Promise.race([embeddingPromise(), timeoutPromise]);
       } catch (e) {
         console.error('embeddingChunks error', e);
+
+        // Keep the task processing, which holds its vector reservation, until the batches
+        // already writing settle. Bounded so a hung provider call cannot pin the task; once
+        // `stopped` is set such a batch can no longer write anyway.
+        stopped = true;
+        await Promise.race([
+          Promise.allSettled(inFlightBatches),
+          new Promise((resolve) => setTimeout(resolve, IN_FLIGHT_BATCH_GRACE_MS)),
+        ]);
 
         await asyncTaskModel.update(input.taskId, {
           error: new AsyncTaskError((e as Error).name, (e as Error).message),
@@ -242,146 +329,216 @@ export const fileRouter = router({
         };
       }
 
-      let content: Uint8Array | undefined;
-      try {
-        content = await fileService.getFileByteArray(file.url);
-      } catch (e) {
-        console.error(e);
-        const errorCode = (e as any).Code;
-        // Storage returned NoSuchKey. Do NOT delete the file row — transient S3
-        // outages, IAM misconfig, or already-orphaned DB rows must not cascade
-        // into destroying chunks/embeddings/documents. Mark the task as Error
-        // so users see a clear message and can re-upload or retry.
-        if (errorCode === 'NoSuchKey') {
+      const parse = async (slot: ParseSlot) => {
+        let content: Uint8Array | undefined;
+        try {
+          content = await fileService.getFileByteArray(file.url);
+        } catch (e) {
+          console.error(e);
+          const errorCode = (e as any).Code;
+          // Storage returned NoSuchKey. Do NOT delete the file row — transient S3
+          // outages, IAM misconfig, or already-orphaned DB rows must not cascade
+          // into destroying chunks/embeddings/documents. Mark the task as Error
+          // so users see a clear message and can re-upload or retry.
+          if (errorCode === 'NoSuchKey') {
+            await asyncTaskModel.update(input.taskId, {
+              error: new AsyncTaskError(
+                AsyncTaskErrorType.TaskTriggerError,
+                'File content unavailable in storage. Verify storage access or re-upload.',
+              ),
+              status: AsyncTaskStatus.Error,
+            });
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'File content unavailable in storage.',
+            });
+          }
+          // Other fetch errors (network, IAM, etc.) — mark the task as Error so
+          // the user surface stays consistent, then propagate.
           await asyncTaskModel.update(input.taskId, {
             error: new AsyncTaskError(
               AsyncTaskErrorType.TaskTriggerError,
-              'File content unavailable in storage. Verify storage access or re-upload.',
+              `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
             ),
             status: AsyncTaskStatus.Error,
           });
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'File content unavailable in storage.',
-          });
+          throw e;
         }
-        // Other fetch errors (network, IAM, etc.) — mark the task as Error so
-        // the user surface stays consistent, then propagate.
-        await asyncTaskModel.update(input.taskId, {
-          error: new AsyncTaskError(
-            AsyncTaskErrorType.TaskTriggerError,
-            `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
-          ),
-          status: AsyncTaskStatus.Error,
-        });
-        throw e;
-      }
 
-      if (!content) return;
+        if (!content) return;
 
-      const asyncTask = await asyncTaskModel.findById(input.taskId);
+        const asyncTask = await asyncTaskModel.findById(input.taskId);
 
-      if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
+        if (!asyncTask)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
 
-      try {
-        const startAt = Date.now();
+        try {
+          const startAt = Date.now();
 
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(
-              new AsyncTaskError(
+          // Once the wait has given up the task is recorded as failed: the work behind it must not
+          // write chunks or a success status over that afterwards.
+          let expired = false;
+          let timeoutTimer: NodeJS.Timeout | undefined;
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutTimer = setTimeout(() => {
+              expired = true;
+              reject(
+                new AsyncTaskError(
+                  AsyncTaskErrorType.Timeout,
+                  'chunking task is timeout, please try again',
+                ),
+              );
+            }, ASYNC_TASK_TIMEOUT);
+          });
+          const assertNotExpired = () => {
+            if (expired) {
+              throw new AsyncTaskError(
                 AsyncTaskErrorType.Timeout,
                 'chunking task is timeout, please try again',
-              ),
-            );
-          }, ASYNC_TASK_TIMEOUT);
-        });
+              );
+            }
+          };
 
-        const chunkingPromise = async () => {
-          // update the task status to processing
-          await asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
+          const chunkingPromise = async () => {
+            // The task was created before it queued for a slot, and the stale-task watchdog
+            // expires tasks by `createdAt`. Restart that clock now that parsing really begins,
+            // and clear an expiry the watchdog may have written while the file was waiting.
+            await asyncTaskModel.update(input.taskId, {
+              createdAt: new Date(),
+              error: null,
+              status: AsyncTaskStatus.Processing,
+            });
 
-          // parse file to document record first (for detailed content viewing)
-          try {
-            await documentService.parseFile(input.fileId);
-          } catch (e) {
-            // document parsing failure should not block chunking
-            console.warn(
-              '[parseFileToChunks] document parsing failed, continuing with chunking:',
-              e,
-            );
-          }
+            // parse file to document record first (for detailed content viewing)
+            try {
+              await documentService.parseFile(input.fileId);
+            } catch (e) {
+              // A limit the chunking applies to the same bytes (input size, xlsx ZIP structure)
+              // would refuse it again: stop here. Any other failure is this parser's own (the
+              // document view reads with other libraries than the chunk loader), so chunking
+              // still gets its chance and a failure there is what the task records.
+              if (isSharedLimitFailure(e)) throw e;
+              // document parsing failure should not block chunking
+              console.warn(
+                '[parseFileToChunks] document parsing failed, continuing with chunking:',
+                e,
+              );
+            }
 
-          // partition file to chunks
-          const chunkResult = await chunkService.chunkContent({
-            content,
-            fileType: file.fileType,
-            filename: file.name,
-          });
+            // partition file to chunks
+            const chunkResult = await chunkService.chunkContent({
+              content,
+              fileType: file.fileType,
+              filename: file.name,
+            });
 
-          // after finish partition, we need to filter out some elements
-          const chunks = chunkResult.chunks.map(({ text, ...item }): NewChunkItem => ({
-            ...item,
-            text: text ? sanitizeUTF8(text) : '',
-            userId: ctx.userId,
-            workspaceId,
-          }));
+            assertNotExpired();
 
-          const duration = Date.now() - startAt;
-
-          // if no chunk found, throw error
-          if (chunks.length === 0) {
-            throw {
-              message:
-                'No chunk found in this file. it may due to current chunking method can not parse file accurately',
-              name: AsyncTaskErrorType.NoChunkError,
-            };
-          }
-
-          await chunkModel.bulkCreate(chunks, input.fileId);
-
-          if (chunkResult.unstructuredChunks) {
-            const unstructuredChunks = chunkResult.unstructuredChunks.map((item): NewChunkItem => ({
+            // after finish partition, we need to filter out some elements
+            const chunks = chunkResult.chunks.map(({ text, ...item }): NewChunkItem => ({
               ...item,
-              fileId: input.fileId,
+              text: text ? sanitizeUTF8(text) : '',
               userId: ctx.userId,
               workspaceId,
             }));
-            await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
-          }
 
-          // update the task status to success
+            const duration = Date.now() - startAt;
+
+            // if no chunk found, throw error
+            if (chunks.length === 0) {
+              throw {
+                message:
+                  'No chunk found in this file. it may due to current chunking method can not parse file accurately',
+                name: AsyncTaskErrorType.NoChunkError,
+              };
+            }
+
+            assertNotExpired();
+            await chunkModel.bulkCreate(chunks, input.fileId);
+
+            if (chunkResult.unstructuredChunks) {
+              const unstructuredChunks = chunkResult.unstructuredChunks.map(
+                (item): NewChunkItem => ({
+                  ...item,
+                  fileId: input.fileId,
+                  userId: ctx.userId,
+                  workspaceId,
+                }),
+              );
+              await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
+            }
+
+            // update the task status to success
+            assertNotExpired();
+            await asyncTaskModel.update(input.taskId, {
+              duration,
+              status: AsyncTaskStatus.Success,
+            });
+
+            // if enable auto embedding, trigger the embedding task
+            if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
+              // It is network-bound and can run long: free the parse slot first, so it never
+              // holds back the files still waiting to be parsed.
+              slot.release();
+              await chunkService.asyncEmbeddingFileChunks(input.fileId);
+            }
+
+            return { success: true };
+          };
+          // Race between the chunking process and the timeout
+          // A timeout only stops the wait: the work keeps running and keeps the file in memory,
+          // so the slot stays taken until it is really done.
+          const chunking = chunkingPromise();
+          slot.holdUntil(chunking);
+          try {
+            return await Promise.race([chunking, timeoutPromise]);
+          } finally {
+            clearTimeout(timeoutTimer);
+          }
+        } catch (e) {
+          const error = e as any;
+
+          const asyncTaskError = error.body
+            ? ({
+                body: safeParseJSON(error.body) ?? error.body,
+                name: error.name,
+              } as IAsyncTaskError)
+            : new AsyncTaskError(toAsyncTaskErrorType(e) ?? (error as Error).name, error.message);
+
+          console.error('[Chunking Error]', asyncTaskError);
           await asyncTaskModel.update(input.taskId, {
-            duration,
-            status: AsyncTaskStatus.Success,
+            error: asyncTaskError,
+            status: AsyncTaskStatus.Error,
           });
 
-          // if enable auto embedding, trigger the embedding task
-          if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
-            await chunkService.asyncEmbeddingFileChunks(input.fileId);
-          }
+          return {
+            message: `File ${file.name}(${input.taskId}) failed to chunking: ${(e as Error).message}`,
+            success: false,
+          };
+        }
+      };
 
-          return { success: true };
-        };
-        // Race between the chunking process and the timeout
-        return await Promise.race([chunkingPromise(), timeoutPromise]);
-      } catch (e) {
-        const error = e as any;
-
-        const asyncTaskError = error.body
-          ? ({ body: safeParseJSON(error.body) ?? error.body, name: error.name } as IAsyncTaskError)
-          : new AsyncTaskError((error as Error).name, error.message);
-
-        console.error('[Chunking Error]', asyncTaskError);
-        await asyncTaskModel.update(input.taskId, {
-          error: asyncTaskError,
-          status: AsyncTaskStatus.Error,
+      // Status polling expires tasks by createdAt, even before they get a parse slot.
+      // Keep waiting tasks fresh so the UI never sees a transient timeout and stops polling.
+      const refreshWaitingTask = () =>
+        asyncTaskModel.update(input.taskId, { createdAt: new Date() });
+      await refreshWaitingTask();
+      let refreshing: Promise<unknown> = Promise.resolve();
+      const heartbeat = setInterval(() => {
+        refreshing = refreshing.then(refreshWaitingTask).catch((error) => {
+          console.error('[parseFileToChunks] failed to refresh queued task:', error);
         });
+      }, ASYNC_TASK_TIMEOUT / 2);
 
-        return {
-          message: `File ${file.name}(${input.taskId}) failed to chunking: ${(e as Error).message}`,
-          success: false,
-        };
+      try {
+        return await withParseSlot(async (slot) => {
+          clearInterval(heartbeat);
+          // Drain an in-flight refresh before parsing changes this task's status or clock.
+          await refreshing;
+          return parse(slot);
+        });
+      } finally {
+        clearInterval(heartbeat);
       }
     }),
 });

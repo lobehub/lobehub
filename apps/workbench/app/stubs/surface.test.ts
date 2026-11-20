@@ -13,6 +13,24 @@ import {
 const stubDir = import.meta.dirname;
 
 describe('workbench stub surface', () => {
+  it.each(['trpcClient.ts', 'trpcClient.client.ts', '../../../share/app/stubs/trpcClient.ts'])(
+    'covers the device service imports in %s',
+    (stubFile) => {
+      const source = readFileSync(
+        path.resolve(stubDir, '../../../../src/services/device.ts'),
+        'utf8',
+      );
+      const stub = readFileSync(path.resolve(stubDir, stubFile), 'utf8');
+
+      expect(
+        reportStubSurfaceGaps(
+          [{ rel: 'src/services/device.ts', source }],
+          [{ source: stub, specifier: '@/libs/trpc/client' }],
+        ),
+      ).toEqual([]);
+    },
+  );
+
   it('treats reject() and createTRPCClient() as open members', () => {
     const surface = parseStubSurface(
       readFileSync(path.join(stubDir, 'trpcClient.client.ts'), 'utf8'),
@@ -20,9 +38,11 @@ describe('workbench stub surface', () => {
 
     expect([...surface.exports].sort()).toEqual([
       'asyncClient',
+      'createWorkspaceLambdaClient',
       'lambdaClient',
       'lambdaQuery',
       'toolsClient',
+      'withLlmRelay',
     ]);
     expect(surface.open.has('lambdaClient')).toBe(true);
 
@@ -30,13 +50,13 @@ describe('workbench stub surface', () => {
       stubUsageGaps(
         surface,
         collectStubUsage(
-          `import { lambdaClient, createWorkspaceLambdaClient } from '@/libs/trpc/client';
+          `import { lambdaClient, unavailableWorkspaceClient } from '@/libs/trpc/client';
            void lambdaClient.verify.getBundle.query();
-           void createWorkspaceLambdaClient('ws');`,
+           void unavailableWorkspaceClient('ws');`,
           '@/libs/trpc/client',
         )!,
       ),
-    ).toEqual(['createWorkspaceLambdaClient']);
+    ).toEqual(['unavailableWorkspaceClient']);
   });
 
   it('reports a store method the simplified stub does not implement', () => {
@@ -73,6 +93,19 @@ describe('workbench stub surface', () => {
     expect(stubUsageGaps(surface, usage!)).toEqual([]);
   });
 
+  // Regression: the send path awaits this member on the electron store, so the
+  // SSR build rejected the module graph until the stub carried it.
+  it('covers the device-id resolver the chat send path calls', () => {
+    const surface = parseStubSurface(readFileSync(path.join(stubDir, 'electronStore.ts'), 'utf8'));
+    const usage = collectStubUsage(
+      `import { getElectronStoreState } from '@/store/electron';
+       void getElectronStoreState().resolveGatewayDeviceId();`,
+      '@/store/electron',
+    );
+
+    expect(stubUsageGaps(surface, usage!)).toEqual([]);
+  });
+
   it('does not treat a catch-all selector proxy as covering new methods', () => {
     const surface = parseStubSurface(`
       export const fileChatSelectors = new Proxy({}, { get: () => () => undefined });
@@ -84,6 +117,19 @@ describe('workbench stub surface', () => {
     );
 
     expect(stubUsageGaps(surface, usage!)).toEqual(['fileChatSelectors.chatUploadFileList']);
+  });
+
+  it('covers the file-store surface the tree store reaches through the ResourceManager store', () => {
+    // The tree store imports the ResourceManager store barrel to refresh the
+    // sidebar search, which pulls these modules into the workbench SSR graph.
+    const stub = readFileSync(path.join(stubDir, 'fileStore.ts'), 'utf8');
+    const storeDir = path.resolve(stubDir, '../../../../src/features/ResourceManager/store');
+    const files = ['action.ts', 'index.ts', 'selectors.ts'].map((name) => ({
+      rel: `src/features/ResourceManager/store/${name}`,
+      source: readFileSync(path.join(storeDir, name), 'utf8'),
+    }));
+
+    expect(reportStubSurfaceGaps(files, [{ source: stub, specifier: '@/store/file' }])).toEqual([]);
   });
 
   it('formats graph gaps with the importer path', () => {

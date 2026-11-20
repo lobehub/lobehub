@@ -3,6 +3,7 @@ import type { GoalStatus } from '@lobechat/const/goal';
 export type GoalTaskPhase =
   | 'achieved'
   | 'canceled'
+  | 'draft'
   | 'error'
   | 'paused'
   | 'planning'
@@ -24,6 +25,10 @@ interface GoalTaskProgressInput {
 const resolvePhase = (status?: GoalStatus, pendingDecisions = 0, taskTotal = 0): GoalTaskPhase => {
   if (pendingDecisions > 0) return 'waiting';
   switch (status) {
+    // Arranged but not started: nothing runs until someone starts it.
+    case 'draft': {
+      return 'draft';
+    }
     // A goal adopted from a conversation turns `running` the moment it is
     // created, before its first plan lands any Task — both read as planning.
     case 'planning': {

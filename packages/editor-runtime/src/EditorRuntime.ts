@@ -1,20 +1,14 @@
 import type { PageContentContext } from '@lobechat/prompts';
 import type { IEditor } from '@lobehub/editor';
-import {
-  LITEXML_APPLY_COMMAND,
-  LITEXML_INSERT_COMMAND,
-  LITEXML_MODIFY_COMMAND,
-  LITEXML_REMOVE_COMMAND,
-} from '@lobehub/editor/litexml-commands';
+import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor/litexml-commands';
 import debug from 'debug';
+import { $setSelection, type LexicalEditor } from 'lexical';
 
 import {
   describeLiteXMLEditStep,
   findLiteXMLEditStepProblem,
   indexLiteXMLDocument,
-  normalizeLiteXMLFragment,
   planLiteXMLEditSteps,
-  touchesList,
 } from './liteXMLEditPlan';
 import { findMalformedLiteXML } from './liteXMLWellFormed';
 import type {
@@ -26,7 +20,6 @@ import type {
   InitPageRuntimeResult,
   ModifyNodesArgs,
   ModifyNodesRuntimeResult,
-  ModifyOperation,
   ModifyOperationResult,
   ReplaceTextArgs,
   ReplaceTextRuntimeResult,
@@ -40,7 +33,7 @@ const nextMicrotask = () => new Promise<void>((resolve) => queueMicrotask(resolv
 interface InspectableEditor {
   dataTypeMap?: Map<string, unknown> | Record<string, unknown>;
   editor?: unknown;
-  getLexicalEditor?: () => unknown | null;
+  getLexicalEditor?: () => LexicalEditor | null;
   plugins?: unknown[];
   pluginsInstances?: unknown[];
 }
@@ -448,6 +441,13 @@ export class EditorRuntime {
       throw new Error('modifyNodes failed: LiteXML data source is not ready.');
     }
 
+    // A selection over a node makes the LiteXML diff commands reject edits to
+    // it ("did not change the page"), e.g. the paragraph a user selected for
+    // "Ask Lobe AI". The agent edits by node id, so drop the selection first.
+    (editor as InspectableEditor)
+      .getLexicalEditor?.()
+      ?.update(() => $setSelection(null), { discrete: true });
+
     const results: ModifyOperationResult[] = operations.map((op) => ({
       action: op.action,
       success: false,
@@ -493,7 +493,7 @@ export class EditorRuntime {
           throw new Error(`${describeLiteXMLEditStep(step, operations.length)}: ${problem}`);
 
         log('Dispatching LiteXML operation:', operation);
-        this.dispatchLiteXMLOperation(editor, operation, !touchesList(operation, document));
+        editor.dispatchCommand(LITEXML_MODIFY_COMMAND, [operation]);
         await nextMicrotask();
 
         if (readLiteXML() === before) {
@@ -529,38 +529,6 @@ export class EditorRuntime {
     await this.runAfterMutate();
 
     return result;
-  }
-
-  /**
-   * Edits that touch a list skip the pending review diff: @lobehub/editor's
-   * list-item diffs serialize as empty items and lose list structure.
-   */
-  private dispatchLiteXMLOperation(editor: IEditor, operation: ModifyOperation, delay: boolean) {
-    if (delay) {
-      editor.dispatchCommand(LITEXML_MODIFY_COMMAND, [operation]);
-      return;
-    }
-
-    switch (operation.action) {
-      case 'insert': {
-        const litexml = normalizeLiteXMLFragment(operation.litexml);
-        editor.dispatchCommand(
-          LITEXML_INSERT_COMMAND,
-          'beforeId' in operation
-            ? { beforeId: operation.beforeId, delay: false, litexml }
-            : { afterId: operation.afterId, delay: false, litexml },
-        );
-        return;
-      }
-      case 'modify': {
-        editor.dispatchCommand(LITEXML_APPLY_COMMAND, { delay: false, litexml: operation.litexml });
-        return;
-      }
-      case 'remove': {
-        editor.dispatchCommand(LITEXML_REMOVE_COMMAND, { delay: false, id: operation.id });
-        return;
-      }
-    }
   }
 
   // ==================== Text Operations ====================

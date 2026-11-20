@@ -3,7 +3,12 @@ import { memo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
-import { ChatInput, ChatList } from '@/features/Conversation';
+import {
+  ChatInput,
+  ChatList,
+  conversationSelectors,
+  useConversationStore,
+} from '@/features/Conversation';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -26,7 +31,13 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
   // Get agent's model info for vision support check
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const composerKey = useConversationStore(conversationSelectors.composerKey);
+  const { handleUploadFiles } = useUploadFiles({
+    agentId,
+    contextKey: composerKey,
+    model,
+    provider,
+  });
   const { allowed: canCreate } = usePermission('create_content');
 
   // Resolve usage_in_followup / manual_edit feedback when a suggestion-seeded

@@ -5,8 +5,17 @@ import { toNativeTemplate } from '@/libs/contextMenu/toNativeTemplate';
 
 import { buildTabContextMenuItems } from './tabContextMenu';
 
-const build = (index: number, totalCount: number, pinned = false, pinnedCount = 0) =>
+const onReopenClosed = vi.fn();
+
+const build = (
+  index: number,
+  totalCount: number,
+  pinned = false,
+  pinnedCount = 0,
+  canReopenClosed = false,
+) =>
   buildTabContextMenuItems({
+    canReopenClosed,
     id: 'tab-1',
     index,
     inSplitView: false,
@@ -16,6 +25,7 @@ const build = (index: number, totalCount: number, pinned = false, pinnedCount = 
     onCloseRight: vi.fn(),
     onCloseSplitView: vi.fn(),
     onOpenInSplitView: vi.fn(),
+    onReopenClosed,
     onTogglePin: vi.fn(),
     pinned,
     pinnedCount,
@@ -37,8 +47,32 @@ describe('tab context menu ownership', () => {
     expect(toNativeTemplate(items).template).toMatchSnapshot();
   });
 
-  it('stays native-eligible in the fully disabled single-tab state', () => {
+  it('stays native-eligible in the single-tab state', () => {
     expect(canGoNative(build(0, 1))).toBe(true);
+  });
+});
+
+describe('close entries', () => {
+  it('leaves the whole close group out for a lone tab', () => {
+    const keys = build(0, 1).map((item) => (item && 'key' in item ? item.key : item?.type));
+
+    expect(keys).toEqual(['togglePin', 'openInSplitView', 'divider', 'reopenClosedTab']);
+  });
+});
+
+describe('reopen closed tab entry', () => {
+  it('is disabled until a tab has been closed', () => {
+    expect(isDisabled(build(1, 3), 'reopenClosedTab')).toBe(true);
+    expect(isDisabled(build(1, 3, false, 0, true), 'reopenClosedTab')).toBe(false);
+  });
+
+  it('stays offered for a lone tab, since a close can leave just one', () => {
+    const items = build(0, 1, false, 0, true);
+    const entry = items.find((item) => !!item && 'key' in item && item.key === 'reopenClosedTab');
+
+    expect(isDisabled(items, 'reopenClosedTab')).toBe(false);
+    (entry as { onClick: () => void }).onClick();
+    expect(onReopenClosed).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -55,7 +89,7 @@ describe('pin entry', () => {
     expect(labelOf(true)).toBe('tab.unpin');
   });
 
-  it('stays available when closing is not — a lone tab can still be pinned', () => {
+  it('stays available for a lone tab', () => {
     const items = build(0, 1);
     const pin = items.find((item) => !!item && 'key' in item && item.key === 'togglePin');
 

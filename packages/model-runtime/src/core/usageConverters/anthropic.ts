@@ -30,19 +30,64 @@ export const buildAnthropicInitialUsage = (
   } satisfies ModelUsage;
 };
 
+/** A field the delta reports replaces the earlier value, as the official SDK's MessageStream does. */
+const pickReported = (previous: number | undefined, reported: number | null | undefined) =>
+  typeof reported === 'number' ? reported : previous;
+
+/**
+ * `message_delta.usage` is a cumulative snapshot, not an increment
+ * (https://platform.claude.com/docs/en/build-with-claude/streaming), and the official SDK's
+ * MessageStream overwrites the snapshot with it. Relays differ in where the full usage lives:
+ *
+ * - Native Anthropic / Bedrock: input and cache on `message_start`; the final delta repeats them
+ *   (or omits them) and carries the cumulative output.
+ * - Vercel AI Gateway and MiniMax: `message_start` reports 0/0 and only the final delta carries
+ *   input, cache and output (https://github.com/vercel/ai/issues/17326).
+ * - OpenRouter: both events carry the same full usage, so adding output double counts it.
+ *
+ * Two zeros are treated as "not counted here" instead of a correction, so they cannot erase a
+ * value `message_start` already reported: an output of 0 (cumulative output never shrinks), and a
+ * delta whose input and cache fields are all 0.
+ */
 const mergeDeltaUsage = (
   previousUsage: ModelUsage | undefined,
-  usage: Anthropic.MessageDeltaUsage | null | undefined,
+  deltaUsage: Anthropic.MessageDeltaUsage | null | undefined,
 ): ModelUsage | undefined => {
-  const deltaOutputTokens = usage?.output_tokens || 0;
+  const usage: Partial<Anthropic.MessageDeltaUsage> = deltaUsage ?? {};
+  const reportsInput =
+    typeof usage.input_tokens === 'number' ||
+    typeof usage.cache_read_input_tokens === 'number' ||
+    typeof usage.cache_creation_input_tokens === 'number';
+  const reportedInputTokens =
+    (usage.input_tokens || 0) +
+    (usage.cache_read_input_tokens || 0) +
+    (usage.cache_creation_input_tokens || 0);
 
-  if (!previousUsage && deltaOutputTokens === 0) {
+  if (!previousUsage && !reportsInput && !usage.output_tokens) {
     return undefined;
   }
 
   const base: ModelUsage = previousUsage ? { ...previousUsage } : {};
-  const totalOutputTokens = (previousUsage?.totalOutputTokens || 0) + deltaOutputTokens;
-  const totalInputTokens = previousUsage?.totalInputTokens || 0;
+  const totalOutputTokens = usage.output_tokens || previousUsage?.totalOutputTokens || 0;
+
+  if (reportsInput && (reportedInputTokens > 0 || !previousUsage?.totalInputTokens)) {
+    const initial = buildAnthropicInitialUsage({
+      cache_creation_input_tokens:
+        pickReported(previousUsage?.inputWriteCacheTokens, usage.cache_creation_input_tokens) ??
+        null,
+      cache_read_input_tokens:
+        pickReported(previousUsage?.inputCachedTokens, usage.cache_read_input_tokens) ?? null,
+      input_tokens: pickReported(previousUsage?.inputCacheMissTokens, usage.input_tokens) || 0,
+      output_tokens: totalOutputTokens,
+    } as Anthropic.Messages.Usage)!;
+
+    base.inputCacheMissTokens = initial.inputCacheMissTokens;
+    base.inputCachedTokens = initial.inputCachedTokens;
+    base.inputWriteCacheTokens = initial.inputWriteCacheTokens;
+    base.totalInputTokens = initial.totalInputTokens;
+  }
+
+  const totalInputTokens = base.totalInputTokens || 0;
   const totalTokens = totalInputTokens + totalOutputTokens;
 
   base.totalInputTokens = totalInputTokens;

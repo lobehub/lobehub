@@ -88,6 +88,7 @@ describe('useReasoningEffortControl', () => {
     ['thinkingLevel2', 'gemini-3-pro-preview', ['low', 'high'], 'high'],
     ['thinkingLevel3', 'gemini-3.7-flash', ['low', 'medium', 'high'], 'medium'],
     ['thinkingLevel4', 'gemini-3.1-flash-image', ['minimal', 'high'], 'minimal'],
+    ['thinkingLevel5', 'gemini-4-hydrogen', ['low', 'medium', 'high', 'xhigh'], 'high'],
     ['thinkingLevel', 'gemini-3.1-flash-lite', ['minimal', 'low', 'medium', 'high'], 'minimal'],
   ])('exposes %s choices and the runtime default for %s', (key, model, levels, fallback) => {
     testState.ai.reasoningParams = [key as string];

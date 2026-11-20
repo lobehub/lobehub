@@ -1,7 +1,7 @@
 import { GatewayMuxClient } from '@lobechat/agent-gateway-client';
 
 import { aiAgentService } from '@/services/aiAgent';
-import { getLlmRelayClientId } from '@/services/llmRelay';
+import { getLlmRelayClientId } from '@/services/llmRelay/clientId';
 import { shareChatService } from '@/services/shareChat';
 
 export interface GatewayMuxIdentity {

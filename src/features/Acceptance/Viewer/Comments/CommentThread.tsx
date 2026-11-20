@@ -1,13 +1,14 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, toast } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Button, Flexbox, Icon, Tag, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 
+import { commentAnchorId, commentIdFromHash } from './anchor';
 import CommentCard, { commentAuthorName } from './CommentCard';
 import CommentComposer from './CommentComposer';
 import { styles } from './styles';
@@ -42,10 +43,13 @@ const CommentThread = memo<CommentThreadProps>(
     const [resolving, setResolving] = useState(false);
     const [openOverride, setOpenOverride] = useState<boolean>();
     const { root, replies } = thread;
+    const { hash } = useLocation();
+    const addressed = commentIdFromHash(hash);
+    const anchored = addressed === root.id || replies.some((reply) => reply.id === addressed);
     const resolved = Boolean(root.resolvedAt);
     // Reopening a note should show it again without the reader asking twice,
     // so the override only holds while the resolved state stays put.
-    const open = openOverride ?? !resolved;
+    const open = openOverride ?? (anchored || !resolved);
 
     const toggleResolved = async () => {
       setResolving(true);
@@ -63,7 +67,7 @@ const CommentThread = memo<CommentThreadProps>(
     if (!open)
       return (
         <button
-          className={styles.resolvedSummary}
+          {...stylex.props(styles.resolvedSummary)}
           type={'button'}
           onClick={() => setOpenOverride(true)}
         >
@@ -86,16 +90,23 @@ const CommentThread = memo<CommentThreadProps>(
     );
 
     return (
-      <Flexbox className={cx(resolved && styles.resolvedThread)}>
-        <CommentCard badges={badges} comment={root} variant={'plain'} onDelete={onDelete} />
+      <Flexbox {...stylex.props(resolved && styles.resolvedThread)}>
+        <CommentCard
+          anchored
+          badges={badges}
+          comment={root}
+          variant={'plain'}
+          onDelete={onDelete}
+        />
         {replies.map((reply) => (
-          <div className={styles.panelReply} key={reply.id}>
-            <CommentCard comment={reply} variant={'plain'} onDelete={onDelete} />
+          // A reply link lands on the reply itself, not just its thread.
+          <div id={commentAnchorId(reply.id)} key={reply.id} {...stylex.props(styles.panelReply)}>
+            <CommentCard anchored comment={reply} variant={'plain'} onDelete={onDelete} />
           </div>
         ))}
         {canComment &&
           (replying ? (
-            <Flexbox className={styles.panelActions}>
+            <Flexbox {...stylex.props(styles.panelActions)}>
               <CommentComposer
                 autoFocus
                 compact
@@ -109,7 +120,7 @@ const CommentThread = memo<CommentThreadProps>(
               />
             </Flexbox>
           ) : (
-            <Flexbox horizontal className={styles.panelActions} gap={2}>
+            <Flexbox horizontal gap={2} {...stylex.props(styles.panelActions)}>
               <Button outdent size={'small'} type={'text'} onClick={() => setReplying(true)}>
                 {t('acceptance.comments.reply')}
               </Button>

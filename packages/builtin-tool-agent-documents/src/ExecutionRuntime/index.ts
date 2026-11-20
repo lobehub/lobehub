@@ -1,7 +1,9 @@
 import {
   formatCopyDocumentResult,
   formatCreateDocumentResult,
+  formatCreateFolderResult,
   formatModifyDocumentResult,
+  formatMoveDocumentsResult,
   formatRemoveDocumentResult,
   formatRenameDocumentResult,
   formatReplaceDocumentResult,
@@ -13,9 +15,13 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import type {
   CopyDocumentArgs,
   CreateDocumentArgs,
+  CreateFolderArgs,
   ListDocumentsArgs,
+  ListedAgentDocument,
   ModifyDocumentNodesArgs,
   ModifyDocumentOperation,
+  MoveDocumentResultItem,
+  MoveDocumentsArgs,
   ReadDocumentArgs,
   RemoveDocumentArgs,
   RenameDocumentArgs,
@@ -26,6 +32,7 @@ import {
   LIST_DOCUMENTS_DEFAULT_LIMIT,
   LIST_DOCUMENTS_MAX_LIMIT,
   MAX_READ_DOCUMENT_CONTENT_CHARS,
+  MOVE_DOCUMENTS_MAX_IDS,
 } from '../types';
 
 const clampListLimit = (limit: unknown): number => {
@@ -35,6 +42,8 @@ const clampListLimit = (limit: unknown): number => {
 };
 
 interface AgentDocumentRecord {
+  /** Entries nested directly under this one (folders and documents can both be parents). */
+  childCount?: number;
   content?: string;
   /**
    * The underlying `documents` table id. Used for portal rendering
@@ -44,14 +53,21 @@ interface AgentDocumentRecord {
    */
   documentId?: string;
   filename?: string;
+  /** `custom/folder` marks a folder; anything else is a file. */
+  fileType?: string;
   /**
    * The `agentDocuments` association row id. This is what the LLM receives
    * and uses for subsequent operations (read/edit/remove/...).
    */
   id: string;
   litexml?: string;
+  /** `documentId` of the containing folder or document; null at the root. */
+  parentId?: string | null;
   title?: string;
+  updatedAt?: Date | string;
 }
+
+const FOLDER_FILE_TYPE = 'custom/folder';
 
 interface AgentDocumentOperationContext {
   agentId?: string | null;
@@ -111,6 +127,9 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     } & AgentDocumentToolTriggerInput,
   ) => Promise<AgentDocumentRecord | undefined>;
+  createFolder: (
+    params: CreateFolderArgs & { agentId: string },
+  ) => Promise<{ created: boolean; folder: AgentDocumentRecord }>;
   createTopicDocument: (
     params: CreateDocumentArgs & {
       agentId: string;
@@ -133,6 +152,9 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     } & AgentDocumentToolTriggerInput,
   ) => Promise<AgentDocumentRecord | undefined>;
+  moveDocuments: (
+    params: MoveDocumentsArgs & { agentId: string },
+  ) => Promise<MoveDocumentResultItem[]>;
   readDocument: (
     params: ReadDocumentArgs & {
       agentId: string;
@@ -454,17 +476,32 @@ export class AgentDocumentsExecutionRuntime {
             topicId: topicId!,
           })
         : await this.service.listDocuments({ agentId, parentId, scope, sourceType });
+    const titleQuery = args.titleContains?.trim().toLowerCase();
+    const matched = titleQuery
+      ? docs.filter((d) => (d.title ?? d.filename ?? '').toLowerCase().includes(titleQuery))
+      : docs;
     const limit = clampListLimit(args.limit);
     const offset = Math.max(0, Math.floor(Number(args.offset) || 0));
-    const page = docs.slice(offset, offset + limit);
-    const list = await Promise.all(
+    const page = matched.slice(offset, offset + limit);
+    const list: ListedAgentDocument[] = await Promise.all(
       page.map(async (d) => {
         const url = await this.buildDocumentUrl(agentId, d.documentId);
+        const updatedAt = d.updatedAt ? new Date(d.updatedAt) : undefined;
         return {
           ...(d.documentId ? { documentId: d.documentId } : {}),
           filename: d.filename ?? d.title ?? '',
           id: d.id,
+          // Folder membership lets the agent see what is filed where without a
+          // second listing per folder; null marks a root entry.
+          ...(d.parentId !== undefined ? { parentId: d.parentId } : {}),
+          ...(d.childCount ? { childCount: d.childCount } : {}),
           title: d.title,
+          ...(d.fileType !== undefined
+            ? { type: d.fileType === FOLDER_FILE_TYPE ? 'folder' : 'file' }
+            : {}),
+          ...(updatedAt && !Number.isNaN(updatedAt.getTime())
+            ? { updatedAt: updatedAt.toISOString() }
+            : {}),
           // The clickable link lets the agent reference any listed document to
           // the user; omitted when no url builder is configured.
           ...(url ? { url } : {}),
@@ -481,10 +518,11 @@ export class AgentDocumentsExecutionRuntime {
       ...(parentId ? { parentId } : {}),
       scope,
       sourceType,
+      ...(titleQuery ? { titleContains: args.titleContains } : {}),
     });
     const pagingNote =
-      nextOffset < docs.length
-        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${docs.length}. For the next page call listDocuments with ${nextArgs}.`
+      nextOffset < matched.length
+        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${matched.length}. For the next page call listDocuments with ${nextArgs}.`
         : '';
 
     return {
@@ -552,6 +590,77 @@ export class AgentDocumentsExecutionRuntime {
         ...(this.options.documentReadonly && { readonly: true }),
       },
       success: true,
+    };
+  }
+
+  async createFolder(
+    args: CreateFolderArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return { content: 'Cannot create a folder without agentId context.', success: false };
+    }
+    if (!nonEmptyString(args.title)) {
+      return { content: 'createFolder requires a non-empty `title`.', success: false };
+    }
+
+    const { created, folder } = await this.service.createFolder({
+      agentId,
+      ...(nonEmptyString(args.parentId) ? { parentId: args.parentId } : {}),
+      title: args.title,
+    });
+    const folderId = folder.documentId ?? folder.id;
+    const title = folder.title || args.title.trim();
+
+    return {
+      content: formatCreateFolderResult({ created, folderId, title }),
+      state: {
+        agentDocumentId: folder.id,
+        agentId,
+        created,
+        documentId: folder.documentId,
+        title,
+      },
+      success: true,
+    };
+  }
+
+  async moveDocuments(
+    args: MoveDocumentsArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return { content: 'Cannot move agent documents without agentId context.', success: false };
+    }
+
+    const ids = Array.isArray(args.ids) ? args.ids.filter(nonEmptyString) : [];
+    if (ids.length === 0) {
+      return {
+        content: 'moveDocuments requires `ids`: the ids of the documents or folders to move.',
+        success: false,
+      };
+    }
+    if (ids.length > MOVE_DOCUMENTS_MAX_IDS) {
+      return {
+        content: `moveDocuments accepts at most ${MOVE_DOCUMENTS_MAX_IDS} ids per call; split the rest into another call. Nothing was moved.`,
+        success: false,
+      };
+    }
+
+    // Models send "", "root" or omit the field to mean the root; only a real id targets a folder.
+    const parentId =
+      nonEmptyString(args.parentId) && args.parentId !== 'root' ? args.parentId : null;
+    const results = await this.service.moveDocuments({ agentId, ids, parentId });
+    const movedCount = results.filter((r) => r.status === 'moved').length;
+    const failedCount = results.filter((r) => r.status === 'failed').length;
+
+    return {
+      content: formatMoveDocumentsResult({ parentId, results }),
+      state: { agentId, failedCount, movedCount, parentId, results },
+      // A partial move still changed the tree; only an all-failed call is a failure.
+      success: failedCount < results.length,
     };
   }
 

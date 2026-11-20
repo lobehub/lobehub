@@ -1,4 +1,8 @@
+import { buildHeteroExecArgs, getHeterogeneousTaskModelProvider } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { AgentConfigWithId } from '@/server/services/agent';
+import { resolveMissingTaskModelConfig } from '@/server/services/task/modelSnapshot';
 
 import { resolveRunAgentConfig } from '../pipeline/resolveRunAgentConfig';
 
@@ -48,7 +52,7 @@ describe('resolveRunAgentConfig', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it('keeps a builtin runtime execution target over a saved member device override', async () => {
@@ -71,7 +75,7 @@ describe('resolveRunAgentConfig', () => {
 
   it('reads the reply language for the share visitor, not the owner, on a shared-agent run', async () => {
     getInfoForAIGeneration.mockImplementation(async (_db: unknown, userId: string) => ({
-      responseLanguage: userId === 'visitor-1' ? 'ja-JP' : 'en-US',
+      preferredReplyLanguage: userId === 'visitor-1' ? 'ja-JP' : 'en-US',
     }));
 
     const { agentConfig } = await resolveRunAgentConfig(
@@ -122,5 +126,202 @@ describe('resolveRunAgentConfig', () => {
 
     expect(memberDeviceOverride).toEqual({ boundDeviceId: 'dev-1', executionTarget: 'local' });
     expect(agentConfig.agencyConfig?.executionTarget).toBe('local');
+  });
+
+  // A Channel run with no device picked follows the requester's own device for the Agent, as
+  // their ordinary conversation would; the frozen snapshot still decides the model.
+  describe('a dispatcher snapshot', () => {
+    const regular = () =>
+      ({ ...(webOnboardingRow() as object), id: 'agent-regular', slug: null }) as never;
+    const run = (snapshotFollowsCallerDevice?: boolean) =>
+      resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => regular() },
+        {
+          agentConfigSnapshot: { model: 'gpt-5', provider: 'openai' } as never,
+          identifier: 'agent-regular',
+          snapshotFollowsCallerDevice,
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+    beforeEach(() => {
+      getPreference.mockResolvedValue({
+        agentDeviceOverrides: {
+          'agent-regular': { boundDeviceId: 'dev-1', executionTarget: 'local' },
+        },
+        agentModelOverrides: { 'agent-regular': { model: 'claude', provider: 'anthropic' } },
+      });
+    });
+
+    it("layers the caller's device override when it follows the caller's device", async () => {
+      const { agentConfig, memberDeviceOverride } = await run(true);
+
+      expect(memberDeviceOverride).toEqual({ boundDeviceId: 'dev-1', executionTarget: 'local' });
+      expect(agentConfig.agencyConfig?.executionTarget).toBe('local');
+      expect(agentConfig.model).toBe('gpt-5');
+    });
+
+    it('applies no member override otherwise', async () => {
+      const { agentConfig, memberDeviceOverride } = await run();
+
+      expect(memberDeviceOverride).toBeUndefined();
+      expect(agentConfig.agencyConfig?.executionTarget).not.toBe('local');
+      expect(getPreference).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('Codex Task model overrides', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPreference.mockResolvedValue({});
+    isResourceAuthorOrAdmin.mockResolvedValue(false);
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
+  });
+
+  it.each(['codex', undefined])(
+    'applies a Task model with provider %s before snapshots are built',
+    async (providerOverride) => {
+      const row: AgentConfigWithId = {
+        ...(webOnboardingRow() as AgentConfigWithId),
+        agencyConfig: {
+          heterogeneousProvider: {
+            args: ['--model', 'gpt-5.5'],
+            effort: 'high',
+            speed: 'fast',
+            type: 'codex',
+          },
+        },
+        id: 'agent-codex',
+        slug: null,
+      };
+      const { agentConfig } = await resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => row },
+        {
+          identifier: row.id,
+          modelOverride: 'gpt-5.4',
+          providerOverride,
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+      expect(buildHeteroExecArgs(agentConfig.agencyConfig!.heterogeneousProvider!)).toEqual([
+        '--model',
+        'gpt-5.4',
+        '--effort',
+        'high',
+        '--speed',
+        'fast',
+      ]);
+    },
+  );
+
+  it("keeps an API binding when the Task sends the runtime's own snapshot", async () => {
+    const apiConfig = { model: 'deepseek-v4-pro', providerId: 'deepseek' };
+    const row: AgentConfigWithId = {
+      ...(webOnboardingRow() as AgentConfigWithId),
+      agencyConfig: { heterogeneousProvider: { apiConfig, authMode: 'api', type: 'codex' } },
+      id: 'agent-codex-api',
+      slug: null,
+    };
+    const { agentConfig } = await resolveRunAgentConfig(
+      { ...deps, resolveAgentConfigOrThrow: async () => row },
+      {
+        identifier: row.id,
+        modelOverride: 'codex',
+        providerOverride: 'openai',
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+
+    expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual(apiConfig);
+  });
+  // An Agent row's chat-model snapshot is not an API binding: it must neither
+  // replace the configured binding nor manufacture one when none exists.
+  it.each([[{ model: 'deepseek-v4-pro', providerId: 'deepseek' }], [undefined]])(
+    'ignores a Task chat-model snapshot on an API binding (%o)',
+    async (apiConfig) => {
+      const row: AgentConfigWithId = {
+        ...(webOnboardingRow() as AgentConfigWithId),
+        agencyConfig: { heterogeneousProvider: { apiConfig, authMode: 'api', type: 'codex' } },
+        id: 'agent-codex-api',
+        slug: null,
+      };
+      const { agentConfig } = await resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => row },
+        {
+          identifier: row.id,
+          modelOverride: 'gpt-4o-mini',
+          providerOverride: 'openai',
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+      expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual(apiConfig);
+    },
+  );
+
+  // ROOT CAUSE:
+  // Model-only backfill previously paired a native/API model with the row's
+  // wrapper provider, which the execution resolver treated as a new API binding.
+  /** @example Backfilled personal API Tasks retain the binding during execution resolution. */
+  it('applies model-only backfill without replacing the personal API provider', async () => {
+    const row: AgentConfigWithId = {
+      ...(webOnboardingRow() as AgentConfigWithId),
+      agencyConfig: {
+        heterogeneousProvider: {
+          authMode: 'api',
+          type: 'codex',
+          apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+        },
+      },
+      id: 'agent-codex-api',
+      slug: null,
+    };
+    const missing = resolveMissingTaskModelConfig(
+      { model: 'gpt-5.4-mini' },
+      { model: 'codex', provider: 'openai' },
+      getHeterogeneousTaskModelProvider(row.agencyConfig?.heterogeneousProvider),
+    );
+    const { agentConfig } = await resolveRunAgentConfig(
+      { ...deps, resolveAgentConfigOrThrow: async () => row },
+      {
+        identifier: row.id,
+        modelOverride: 'gpt-5.4-mini',
+        providerOverride: missing.provider,
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    /** @example The requested model and original provider reach the same binding. */
+    expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+      model: 'gpt-5.4-mini',
+      providerId: 'personal-provider',
+    });
+  });
+
+  /** @example Incomplete API configuration cannot be manufactured from the wrapper snapshot. */
+  it('keeps missing API configuration missing after model-only backfill', async () => {
+    const row: AgentConfigWithId = {
+      ...(webOnboardingRow() as AgentConfigWithId),
+      agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'codex' } },
+      id: 'agent-codex-api',
+      slug: null,
+    };
+    const missing = resolveMissingTaskModelConfig(
+      { model: 'gpt-5.4-mini' },
+      { model: 'codex', provider: 'openai' },
+      getHeterogeneousTaskModelProvider(row.agencyConfig?.heterogeneousProvider),
+    );
+    const { agentConfig } = await resolveRunAgentConfig(
+      { ...deps, resolveAgentConfigOrThrow: async () => row },
+      {
+        identifier: row.id,
+        modelOverride: 'gpt-5.4-mini',
+        providerOverride: missing.provider,
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    /** @example The dispatch guard still sees an unconfigured binding. */
+    expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toBeUndefined();
   });
 });

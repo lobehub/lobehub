@@ -1,30 +1,34 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
   Spin,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useDocumentVisibility } from 'ahooks';
-import { cx } from 'antd-style';
 import React, { memo, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import Actions from './Actions';
 import Filter from './Filter';
 import List from './List';
 import ToggleGroups from './ToggleGroups';
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
+import ViewAllAction from './ViewAllAction';
 
 /**
  * Cadence of the candidate-gated stale-run sweep. A run whose terminal frame
@@ -47,6 +51,7 @@ interface TopicProps {
 }
 
 const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation(['topic', 'common']);
   const topicCount = useChatStore((s) => topicSelectors.currentTopicCount(s));
   const cleanupStaleRunningTopics = useChatStore((s) => s.cleanupStaleRunningTopics);
@@ -117,11 +122,9 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
     <AccordionItem value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
-          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionTrigger style={sectionTriggerStyle}>
             <Flexbox horizontal align="center" gap={4}>
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('sidebar.title')}
-              </Text>
+              <SectionTitle>{t('sidebar.title')}</SectionTitle>
               {topicCount > 0 && (
                 <Text fontSize={11} type="secondary">
                   {topicCount}
@@ -135,9 +138,13 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
               'accordion-action',
               accordionStyles.action,
               accordionStyles.actionBorderless,
+              // Touch has no hover to reveal these, and the arrow is the only
+              // entry to the full topic page.
+              isMobileSurface() && accordionStyles.actionAlwaysVisible,
             )}
           >
             <Flexbox horizontal align="center" gap={2}>
+              <ViewAllAction />
               <ToggleGroups />
               <Filter />
               <Actions />

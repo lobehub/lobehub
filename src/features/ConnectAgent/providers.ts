@@ -1,6 +1,7 @@
 import type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import {
@@ -10,14 +11,18 @@ import {
 import {
   DroidIcon,
   HETEROGENEOUS_AGENT_CLIENT_CONFIGS,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CLIENT_CONFIGS,
 } from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
   Cursor,
+  DeepSeek,
   Devin,
+  GithubCopilot,
   Grok,
   HermesAgent,
   Kimi,
@@ -39,12 +44,15 @@ export interface ConnectableProvider {
   /** Compound brand icon module — render via `icon.Avatar`. */
   brand:
     | typeof Amp
+    | typeof Antigravity
     | typeof ClaudeCode
     | typeof CodeBuddy
     | typeof Codex
     | typeof Cursor
+    | typeof DeepSeek
     | typeof DroidIcon
     | typeof Devin
+    | typeof GithubCopilot
     | typeof Grok
     | typeof HermesAgent
     | typeof Kimi
@@ -53,9 +61,9 @@ export interface ConnectableProvider {
     | typeof Pi
     | typeof Qoder
     | typeof Trae;
-  /** Spawn command — cli providers only. */
+  /** Spawn command — cli and runtime providers. */
   command?: string;
-  kind: 'cli' | 'platform';
+  kind: 'cli' | 'platform' | 'runtime';
   title: string;
   type: HeterogeneousAgentType;
 }
@@ -74,10 +82,12 @@ interface BuildConnectAgentConfigOptions {
 }
 
 const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand']> = {
+  'antigravity': Antigravity,
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,
   'codex': Codex,
+  'copilot': GithubCopilot,
   'cursor': Cursor,
   'droid': DroidIcon,
   'devin': Devin,
@@ -94,12 +104,24 @@ const PLATFORM_BRANDS: Record<RemoteHeterogeneousAgentType, ConnectableProvider[
   openclaw: OpenClaw,
 };
 
+const RUNTIME_BRANDS: Record<LocalRuntimeHeterogeneousAgentType, ConnectableProvider['brand']> = {
+  'deepseek-harness': DeepSeek,
+};
+
 export const CONNECTABLE_PROVIDERS: ConnectableProvider[] = [
   ...HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((config) => ({
     avatar: config.avatar,
     brand: CLI_BRANDS[config.type],
     command: config.defaultCommand,
     kind: 'cli' as const,
+    title: config.title,
+    type: config.type,
+  })),
+  ...LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((config) => ({
+    avatar: config.avatar,
+    brand: RUNTIME_BRANDS[config.type],
+    command: config.defaultCommand,
+    kind: 'runtime' as const,
     title: config.title,
     type: config.type,
   })),
@@ -146,6 +168,8 @@ export const buildConnectAgentConfig = ({
     };
   }
 
+  // A runtime's command is only what the scan probes; launch resolves it itself.
+  const command = provider.kind === 'cli' ? provider.command : undefined;
   const base = {
     avatar: provider.avatar,
     description: overrides?.description?.trim() || undefined,
@@ -161,7 +185,7 @@ export const buildConnectAgentConfig = ({
       agencyConfig: {
         boundDeviceId: target.deviceId,
         executionTarget: 'device' as const,
-        heterogeneousProvider: { command: provider.command, type: provider.type },
+        heterogeneousProvider: { command, type: provider.type },
       },
     };
   }
@@ -169,7 +193,7 @@ export const buildConnectAgentConfig = ({
   return {
     ...base,
     agencyConfig: {
-      heterogeneousProvider: { command: provider.command, type: provider.type },
+      heterogeneousProvider: { command, type: provider.type },
     },
   };
 };

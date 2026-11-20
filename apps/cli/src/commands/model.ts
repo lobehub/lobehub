@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
@@ -6,6 +6,27 @@ import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
 const isVisibleModel = (model: { visible?: boolean }) => model.visible !== false;
+
+const DEFAULT_MODEL_LIST_LIMIT = 50;
+
+/**
+ * Use a conservative client batch size instead of mirroring the server's current maximum. This
+ * limits coupling across CLI/server versions; the server must keep accepting this public baseline.
+ */
+const MODEL_LIST_PAGE_SIZE = 50;
+
+const parseModelListLimit = (value: string) => {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new InvalidArgumentError('--limit must be a positive integer');
+  }
+
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit)) {
+    throw new InvalidArgumentError('--limit must be a positive integer');
+  }
+
+  return limit;
+};
 
 // The model type `stt` was renamed to the standard `asr`. Accept the legacy
 // alias on CLI input and forward/compare `asr`, so existing scripts and muscle
@@ -20,31 +41,45 @@ export function registerModelCommand(program: Command) {
   model
     .command('list <providerId>')
     .description('List models for a provider')
-    .option('-L, --limit <n>', 'Maximum number of items', '50')
+    .option(
+      '-L, --limit <n>',
+      'Maximum number of items',
+      parseModelListLimit,
+      DEFAULT_MODEL_LIST_LIMIT,
+    )
     .option('--enabled', 'Only show enabled models')
     .option(
       '--type <type>',
-      'Filter by model type (chat|embedding|tts|asr|image|video|text2music|realtime)',
+      'Filter by model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
     )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (
         providerId: string,
-        options: { enabled?: boolean; json?: string | boolean; limit?: string; type?: string },
+        options: { enabled?: boolean; json?: string | boolean; limit: number; type?: string },
       ) => {
         const client = await getTrpcClient();
 
         const typeFilter = options.type ? normalizeModelType(options.type) : undefined;
 
-        const input: Record<string, any> = { id: providerId };
-        if (options.limit) input.limit = Number.parseInt(options.limit, 10);
-        if (options.enabled) input.enabled = true;
-        if (typeFilter) input.type = typeFilter;
+        const fetchedItems: any[] = [];
+        let offset = 0;
 
-        const result = await client.aiModel.getAiProviderModelList.query(input as any);
-        let items = (Array.isArray(result) ? result : ((result as any).items ?? [])).filter(
-          isVisibleModel,
-        );
+        while (fetchedItems.length < options.limit) {
+          const pageLimit = Math.min(MODEL_LIST_PAGE_SIZE, options.limit - fetchedItems.length);
+          const input: Record<string, any> = { id: providerId, limit: pageLimit, offset };
+          if (options.enabled) input.enabled = true;
+          if (typeFilter) input.type = typeFilter;
+
+          const result = await client.aiModel.getAiProviderModelList.query(input as any);
+          const pageItems = Array.isArray(result) ? result : ((result as any).items ?? []);
+          fetchedItems.push(...pageItems);
+
+          if (pageItems.length < pageLimit) break;
+          offset += pageItems.length;
+        }
+
+        let items = fetchedItems.slice(0, options.limit).filter(isVisibleModel);
 
         if (typeFilter) {
           items = items.filter((m: any) => m.type === typeFilter);
@@ -113,7 +148,7 @@ export function registerModelCommand(program: Command) {
     .option('--display-name <name>', 'Display name')
     .option(
       '--type <type>',
-      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime)',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
       'chat',
     )
     .action(
@@ -139,7 +174,10 @@ export function registerModelCommand(program: Command) {
     .description('Update model info')
     .requiredOption('--provider <providerId>', 'Provider ID')
     .option('--display-name <name>', 'Display name')
-    .option('--type <type>', 'Model type (chat|embedding|tts|asr|image|video|text2music|realtime)')
+    .option(
+      '--type <type>',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
+    )
     .action(
       async (id: string, options: { displayName?: string; provider: string; type?: string }) => {
         if (!options.displayName && !options.type) {

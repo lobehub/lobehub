@@ -2,13 +2,13 @@
 
 import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
 import { HotkeyInput } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { EssentialHotkeysSkeleton } from '@/components/Skeleton/Settings/tabs/Hotkey';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -29,7 +29,7 @@ const HotkeySetting = memo(() => {
     onValuesChange: (values) => save(() => setSettings({ hotkey: values })),
   });
 
-  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
+  if (!isUserStateInit) return <EssentialHotkeysSkeleton />;
 
   const clearHotkeyBinding = (id: HotkeyItem['id']) => {
     if (!hotkey[id]) return;

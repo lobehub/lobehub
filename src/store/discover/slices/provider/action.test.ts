@@ -60,13 +60,28 @@ const syncCalls = async (name: 'providerDetail' | 'providerIdentifiers' | 'provi
       ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[1] === name,
     )
     .map(([key, fetcher, config]) => ({
-      config: config as { onSuccess?: (data: unknown) => void },
+      config: config as { onSuccess?: (data: unknown) => void; revalidateOnFocus?: boolean },
       fetcher: fetcher as () => Promise<any>,
       key: key as unknown[],
     }));
 };
 
 describe('ProviderSlice (replica)', () => {
+  it('does not revalidate any provider read on window focus', async () => {
+    renderHook(() => {
+      const state = useStore.getState();
+      state.useFetchProviderList();
+      state.useFetchProviderDetail({ identifier: 'openai' });
+      state.useFetchProviderIdentifiers();
+    });
+
+    for (const name of ['providerList', 'providerDetail', 'providerIdentifiers'] as const) {
+      const calls = await syncCalls(name);
+      expect(calls.length).toBeGreaterThan(0);
+      for (const call of calls) expect(call.config.revalidateOnFocus).toBe(false);
+    }
+  });
+
   describe('useFetchProviderList', () => {
     it('requests the list with normalized page / pageSize and the locale', async () => {
       const { discoverService } = await import('@/services/discover');

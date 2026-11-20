@@ -22,6 +22,15 @@ import {
   createSelfReflectionSourcePolicyHandler,
 } from '../handler';
 
+const { mockEnqueueSelfIterationRun } = vi.hoisted(() => ({
+  mockEnqueueSelfIterationRun: vi.fn(),
+}));
+
+vi.mock('../../dispatch/enqueueSelfIterationRun', () => ({
+  enqueueSelfIterationRun: mockEnqueueSelfIterationRun,
+}));
+
+// Every Redis counter reads as far past any daily limit; dispatch must not care.
 const reflectionPayload = {
   agentId: 'agent-1',
   operationId: 'operation-1',
@@ -86,6 +95,23 @@ const createDependencies = (
 });
 
 describe('self-reflection source handler', () => {
+  it('dispatches through the self-iteration enqueue by default', async () => {
+    mockEnqueueSelfIterationRun.mockResolvedValue({
+      operationId: 'op-default',
+      topicId: 'topic-1',
+    });
+    const { dispatch: _dispatch, ...deps } = createDependencies();
+    const handler = createSelfReflectionSourceHandler(deps);
+
+    const result = await handler.handle(createReflectionSource());
+
+    expect(mockEnqueueSelfIterationRun).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      operationId: 'op-default',
+      status: ReviewRunStatus.Dispatched,
+    });
+  });
+
   it('dispatches an async self-iteration run under the builtin self-reflection slug', async () => {
     const deps = createDependencies();
     const handler = createSelfReflectionSourceHandler(deps);

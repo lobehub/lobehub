@@ -10,6 +10,5 @@ import type { RecommendedAction } from './types';
  * Recommendations container filters this list against the current
  * {@link ActionContext} and renders the surviving entries.
  */
-export const recommendedActionsRegistry: RecommendedAction[] = [
-  ...HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map(buildHeteroAgentAction),
-];
+export const recommendedActionsRegistry: RecommendedAction[] =
+  HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map(buildHeteroAgentAction);

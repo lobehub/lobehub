@@ -4,7 +4,7 @@ import type {
   WorkspaceHtmlArtifactPublishResult,
 } from '@lobechat/html-artifact';
 import { isPathInsideWorkspace } from '@lobechat/html-artifact';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import debug from 'debug';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

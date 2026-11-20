@@ -1,4 +1,4 @@
-import { stylelint } from '@lobehub/lint';
+import stylelint from '@lobehub/stylelint-config';
 
 export default {
   ...stylelint,
@@ -12,6 +12,10 @@ export default {
           'Do not set text-transform: uppercase; write the label in the case it should read.',
       },
     ],
+    // Custom properties mirror the camelCase antd token names (--colorText).
+    'custom-property-pattern': null,
+    // CSS modules scope selectors with :global / :local.
+    'selector-pseudo-class-no-unknown': [true, { ignorePseudoClasses: ['global', 'local'] }],
     // Temporarily disabled for gradual migration
     'declaration-property-value-keyword-no-deprecated': null,
     'declaration-property-value-no-unknown': null,

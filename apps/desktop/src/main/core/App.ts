@@ -5,7 +5,7 @@ import type { DesktopBootProfilePayload } from '@lobechat/electron-client-ipc';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
 import { enableManagedProcesses, shutdownManagedProcesses } from '@lobechat/utils/managedProcess';
-import { app, ipcMain, nativeTheme, protocol } from 'electron';
+import { app, ipcMain, nativeTheme, net, protocol } from 'electron';
 
 import { name } from '@/../../package.json';
 import { binDir, buildDir } from '@/const/dir';
@@ -25,7 +25,11 @@ import {
   runtimeEnvironmentBinaries,
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
+import { syncDebugLogging } from '@/modules/debugLogging';
+import { PermissionGuide } from '@/modules/permissionGuide/PermissionGuide';
+import { applyRemoteDebuggingSwitch } from '@/modules/remoteDebugging';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
+import { BUILD_CHANNEL, UPDATE_SERVER_URL } from '@/modules/updater/configs';
 import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
 import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
@@ -41,6 +45,7 @@ import { IoCContainer } from './infrastructure/IoCContainer';
 import { LocalFileProtocolManager } from './infrastructure/LocalFileProtocolManager';
 import { ProtocolManager } from './infrastructure/ProtocolManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
+import { SecurityUpdatePolicy } from './infrastructure/SecurityUpdatePolicy';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
 import type { UpdaterManager } from './infrastructure/UpdaterManager';
@@ -60,6 +65,7 @@ type Class<T> = new (...args: any[]) => T;
 const importAll = (r: any) => Object.values(r).map((v: any) => v.default);
 
 export class App {
+  startupUpdatePending = !!shellInfo?.startupUpdate;
   browserManager: BrowserManager;
   menuManager: MenuManager;
   i18n: I18nManager;
@@ -74,6 +80,7 @@ export class App {
   localFileProtocolManager: LocalFileProtocolManager;
   binaryManager: BinaryManager;
   screenCaptureManager: ScreenCaptureManager;
+  permissionGuide: PermissionGuide;
   chromeFlags: string[] = ['OverlayScrollbar', 'FluentOverlayScrollbar', 'FluentScrollbar'];
 
   /**
@@ -123,6 +130,7 @@ export class App {
     logger.debug('Initializing App');
     // Initialize store manager
     this.storeManager = new StoreManager(this);
+    syncDebugLogging(this.storeManager);
 
     this.rendererUrlManager = new RendererUrlManager();
     // Wire the backend reverse-proxy as an `app://` interceptor: keeps
@@ -169,6 +177,7 @@ export class App {
     this.protocolManager = new ProtocolManager(this);
     this.binaryManager = new BinaryManager(this);
     this.screenCaptureManager = new ScreenCaptureManager(this);
+    this.permissionGuide = new PermissionGuide(this);
 
     this.coreUpdateManager = new CoreUpdateManager(this);
     this.coreUpdateManager.initialize();
@@ -260,7 +269,14 @@ export class App {
     const isSingle = app.requestSingleInstanceLock();
     if (!isSingle) {
       logger.info('Another instance is already running, exiting');
+      // `app.exit(0)` only *initiates* shutdown — without returning, the rest
+      // of this async bootstrap kept running: the duplicate instance went on
+      // to start the IPC server, gateway connection and shell services, so a
+      // machine could briefly run two live device processes for one user and
+      // both answered gateway tool calls (observed as the same runCommand
+      // executing twice with two independent process trees). Stop here.
       app.exit(0);
+      return;
     }
 
     this.initDevBranding();
@@ -279,6 +295,13 @@ export class App {
     // Reach Electron ready state, then create the main BrowserWindow before
     // native menus, local-file services, tray and updater initialization.
     await this.makeAppReady();
+    if (shellInfo?.startupUpdate) {
+      const ready = await shellInfo.startupUpdate.run(
+        this.coreUpdateManager.checkBeforeFirstLaunch,
+      );
+      if (!ready) return;
+    }
+    this.startupUpdatePending = false;
     await this.browserManager.initializeBrowsers();
     this.prewarmLocalDatabaseAfterNavigation();
     await this.runControllerHooks('afterAppReady');
@@ -300,9 +323,10 @@ export class App {
 
     app.on('activate', this.onActivate);
 
-    // Deep links should be actionable as soon as the main window exists.
-    void this.protocolManager.processPendingUrls().catch((error) => {
-      logger.error('Failed to process pending protocol URLs:', error);
+    // Deep links and launch directories should be actionable as soon as the
+    // main window exists.
+    void this.protocolManager.processPendingTargets().catch((error) => {
+      logger.error('Failed to process pending launch targets:', error);
     });
 
     // Work that can trigger disk, network, native permission, or UI setup is
@@ -317,6 +341,28 @@ export class App {
 
   private initializeAfterFirstFrame = async (initializeNativeShell: () => Promise<void>) => {
     await this.browserManager.waitForMainWindowFirstFrame();
+
+    // Security policy IO must never delay the first usable window.
+    if (shellInfo?.startupUpdate) {
+      void shellInfo.startupUpdate
+        .checkSecurity(
+          new SecurityUpdatePolicy({
+            channel: BUILD_CHANNEL,
+            coreVersion: () => this.coreUpdateManager.getStatus().running,
+            feedBaseUrl: (UPDATE_SERVER_URL ?? '')
+              .replace(/\/(stable|nightly|canary|beta)\/?$/, '')
+              .replace(/\/$/, ''),
+            fetchImpl: (url, init) => net.fetch(url, init),
+            platform: process.platform as 'darwin' | 'linux' | 'win32',
+            publicKey: shellInfo.publicKey,
+            shellVersion: shellInfo.shellVersion,
+            userData: app.getPath('userData'),
+          }),
+        )
+        .catch((error) => {
+          logger.error('Background security update check failed:', error);
+        });
+    }
 
     // GUI-launched apps do not inherit the user's login-shell PATH. Resolve it
     // asynchronously after the first frame so shell startup never blocks the
@@ -463,6 +509,7 @@ export class App {
 
     app.commandLine.appendSwitch('enable-precise-memory-info');
     app.commandLine.appendSwitch('enable-features', this.chromeFlags.join(','));
+    applyRemoteDebuggingSwitch(this.storeManager.get('remoteDebuggingEnabled', false));
 
     logger.debug('Waiting for app to be ready');
     await app.whenReady();

@@ -3,10 +3,8 @@ import path from 'node:path';
 import type { PipelineEntry, RepoMount } from './types';
 
 /**
- * stylelint's CSS-in-JS parser mangles ordinary template literals in files it
- * was never configured for (it corrupted this very script once): the repos
- * scope stylelint to `{src,tests}/**` in their `lint:style` scripts, so apply
- * the same boundary here instead of lint-staged's blanket `*.{ts,tsx}` glob.
+ * The repos scope stylelint to `{src,tests}/**` in their `lint:style` scripts,
+ * so apply the same boundary here instead of lint-staged's blanket CSS glob.
  */
 export const stylelintApplies = (subPath: string) => /^(?:src|tests)\//.test(subPath);
 
@@ -54,6 +52,25 @@ export const relatedTestCandidates = (relPath: string): string[] => {
     path.join(dir, `${base}.test${ext}`),
     path.join(dir, '__tests__', `${base}.test${ext}`),
   ]);
+};
+
+/**
+ * Scenario suites split from a large test (`<base>.<scenario>.test.*`, see
+ * `source-layout` §2): the directories to list and a matcher for their
+ * entries. Pure — the caller lists the directories.
+ */
+export const scenarioTestLookup = (relPath: string) => {
+  if (isTestFile(relPath) || !/\.[cm]?[jt]sx?$/.test(relPath)) return null;
+
+  const dir = path.dirname(relPath);
+  const base = path.basename(relPath).replace(/\.[^.]+$/, '');
+  const pattern = new RegExp(
+    `^${base.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&')}\\.[^.]+\\.test\\.(?:ts|tsx|mts)$`,
+  );
+  return {
+    dirs: [dir, path.join(dir, '__tests__')],
+    matches: (name: string) => pattern.test(name),
+  };
 };
 
 /**

@@ -4,8 +4,10 @@ export { default as GenerationMediaModeSegment } from './GenerationMediaModeSegm
 export { default as GenerationModelNotice } from './GenerationModelNotice';
 export {
   useImageGenerationModelNotice,
+  useMusicGenerationModelNotice,
   useVideoGenerationModelNotice,
 } from './GenerationModelNotice/useGenerationModelNotice';
+export { default as GenerationPromptBlockedNotice } from './GenerationPromptBlockedNotice';
 export { default as GenerationPromptInput } from './GenerationPromptInput';
 export { default as GenerationVisibilitySelector } from './GenerationVisibilitySelector';
 export { default as ImagePreviewHeader } from './ImagePreviewHeader';

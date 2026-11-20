@@ -30,9 +30,10 @@ export interface MessageToolCall {
    */
   id: string;
 
+  namespace?: string;
   thoughtSignature?: string;
   /**
-   * The type of the tool. Currently, only `function` is supported.
+   * For custom tools, function.arguments carries the raw input instead of JSON.
    */
   type: 'function' | string;
 }
@@ -43,6 +44,7 @@ export const MessageToolCallSchema = z.object({
     name: z.string(),
   }),
   id: z.string(),
+  namespace: z.string().optional(),
   thoughtSignature: z.string().optional(),
   type: z.string(),
 });

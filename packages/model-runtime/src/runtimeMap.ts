@@ -18,8 +18,11 @@ import { LobeCohereAI } from './providers/cohere';
 import { LobeCometAPIAI } from './providers/cometapi';
 import { LobeComfyUI } from './providers/comfyui';
 import { LobeDeepSeekAI } from './providers/deepseek';
+import { LobeDoubaoSpeechAI } from './providers/doubaospeech';
+import { LobeElevenLabsAI } from './providers/elevenlabs';
 import { LobeFalAI } from './providers/fal';
 import { LobeFireworksAI } from './providers/fireworksai';
+import { LobeFishAudioAI } from './providers/fishaudio';
 import { LobeGiteeAI } from './providers/giteeai';
 import { LobeGithubAI } from './providers/github';
 import { LobeGithubCopilotAI } from './providers/githubCopilot';
@@ -36,6 +39,7 @@ import { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 import { LobeLMStudioAI } from './providers/lmstudio';
 import { LobeHubAI } from './providers/lobehub';
 import { LobeLongCatAI } from './providers/longcat';
+import { LobeMagpieAI } from './providers/magpie';
 import { LobeMetaAI } from './providers/meta';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMinimaxCodingPlanAI } from './providers/minimaxCodingPlan';
@@ -69,6 +73,7 @@ import { LobeSuperGrokAI } from './providers/superGrok';
 import { LobeTaichuAI } from './providers/taichu';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
 import { LobeTogetherAI } from './providers/togetherai';
+import { LobeTypeSafeAI } from './providers/typesafe';
 import { LobeUnslothAI } from './providers/unsloth';
 import { LobeUpstageAI } from './providers/upstage';
 import { LobeV0AI } from './providers/v0';
@@ -105,8 +110,11 @@ export const providerRuntimeMap = {
   cometapi: LobeCometAPIAI,
   comfyui: LobeComfyUI,
   deepseek: LobeDeepSeekAI,
+  doubaospeech: LobeDoubaoSpeechAI,
+  elevenlabs: LobeElevenLabsAI,
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
+  fishaudio: LobeFishAudioAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
   githubcopilot: LobeGithubCopilotAI,
@@ -123,6 +131,7 @@ export const providerRuntimeMap = {
   lmstudio: LobeLMStudioAI,
   lobehub: LobeHubAI,
   longcat: LobeLongCatAI,
+  magpie: LobeMagpieAI,
   meta: LobeMetaAI,
   minimax: LobeMinimaxAI,
   minimaxcodingplan: LobeMinimaxCodingPlanAI,
@@ -157,6 +166,7 @@ export const providerRuntimeMap = {
   taichu: LobeTaichuAI,
   tencentcloud: LobeTencentCloudAI,
   togetherai: LobeTogetherAI,
+  typesafe: LobeTypeSafeAI,
   unsloth: LobeUnslothAI,
   upstage: LobeUpstageAI,
   v0: LobeV0AI,

@@ -952,8 +952,9 @@ describe('MessageModel Update Tests', () => {
         .insert(messages)
         .values({ id: 'completion-race', userId, role: 'tool', content: '' });
       await serverDB.insert(messagePlugins).values({ id: 'completion-race', userId });
+      const contents = ['first', 'late'];
       const results = await Promise.all(
-        ['first', 'late'].map((content) =>
+        contents.map((content) =>
           messageModel.updateToolMessage('completion-race', {
             content,
             pluginState: { content },
@@ -962,9 +963,12 @@ describe('MessageModel Update Tests', () => {
         ),
       );
       expect(results.filter((result) => result.applied)).toHaveLength(1);
-      expect((await messageModel.findById('completion-race'))?.content).toBe('first');
+      // Concurrent callbacks commit in either order on a pooled database; the
+      // invariant is that exactly one wins and both tables agree on which.
+      const winner = contents[results.findIndex((result) => result.applied)];
+      expect((await messageModel.findById('completion-race'))?.content).toBe(winner);
       expect((await messageModel.findMessagePlugin('completion-race'))?.state).toEqual({
-        content: 'first',
+        content: winner,
       });
     });
 

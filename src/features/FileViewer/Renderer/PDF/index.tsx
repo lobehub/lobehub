@@ -3,12 +3,12 @@
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-import { Flexbox } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui/base-ui';
+import { Flexbox, Spin } from '@lobehub/ui';
 import { Fragment, memo, useCallback, useState } from 'react';
 
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
 
+import { toSameOriginFileProxyUrl } from '../../fileProxyUrl';
 import HighlightLayer from './HighlightLayer';
 import { styles } from './style';
 import { useChunkHighlights } from './useChunkHighlights';
@@ -66,7 +66,7 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = tru
       >
         <Document
           className={styles.document}
-          file={url}
+          file={url && toSameOriginFileProxyUrl(url)}
           loading={<Spin size="large" />}
           options={options}
           onLoadSuccess={onDocumentLoadSuccess}

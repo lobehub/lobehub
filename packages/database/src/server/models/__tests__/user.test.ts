@@ -19,6 +19,12 @@ const userId = 'user-db';
 const userEmail = 'user@example.com';
 const userModel = new UserModel(serverDB, userId);
 
+// Capture the ambient secret so each test can restore it: assigning `undefined`
+// to `process.env` stores the literal string "undefined", which leaks into the
+// single-worker, non-isolated test process and breaks later KeyVaults consumers
+// (e.g. the OIDC adapter tests) with "must be 16, 24, or 32 bytes".
+const originalKeyVaultsSecret = process.env.KEY_VAULTS_SECRET;
+
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.delete(userSettings);
@@ -28,7 +34,12 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(users);
   await serverDB.delete(userSettings);
-  process.env.KEY_VAULTS_SECRET = undefined;
+
+  if (originalKeyVaultsSecret === undefined) {
+    delete process.env.KEY_VAULTS_SECRET;
+  } else {
+    process.env.KEY_VAULTS_SECRET = originalKeyVaultsSecret;
+  }
 });
 
 describe('UserModel', () => {

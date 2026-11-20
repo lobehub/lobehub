@@ -1,17 +1,25 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { AgentGroupController } from '../controllers/agent-group.controller';
+import {
+  LEGACY_ARRAY_LIST_DESCRIPTION,
+  LegacyArrayListQuerySchema,
+} from '../helpers/legacy-array-list';
+import { paginatedListSchema } from '../helpers/pagination';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import {
   AgentGroupIdParamSchema,
+  AgentGroupSchema,
   CreateAgentGroupRequestSchema,
+  CreatedAgentGroupSchema,
   UpdateAgentGroupRequestSchema,
 } from '../types/agent-group.type';
+import { DeletedResourceSchema } from '../types/common.type';
 
 // AgentGroup-related routes (agent groups)
 const AgentGroupRoutes = new Hono();
@@ -23,12 +31,18 @@ const AgentGroupRoutes = new Hono();
  */
 AgentGroupRoutes.get(
   '/',
-  describeRoute({ summary: 'Get agent group list', tags: ['agent-groups'] }),
+  routeDoc({
+    data: paginatedListSchema(AgentGroupSchema, { total: true }),
+    description: LEGACY_ARRAY_LIST_DESCRIPTION,
+    summary: 'List agent groups',
+    tags: ['agent-groups'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_READ'),
     'You do not have permission to view agent group list',
   ),
+  zValidator('query', LegacyArrayListQuerySchema),
   async (c) => {
     const controller = new AgentGroupController();
     return await controller.getAgentGroups(c);
@@ -42,6 +56,12 @@ AgentGroupRoutes.get(
  */
 AgentGroupRoutes.post(
   '/',
+  routeDoc({
+    data: CreatedAgentGroupSchema,
+    status: 201,
+    summary: 'Create an agent group',
+    tags: ['agent-groups'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_CREATE'),
@@ -61,6 +81,12 @@ AgentGroupRoutes.post(
  */
 AgentGroupRoutes.get(
   '/:id',
+  routeDoc({
+    data: AgentGroupSchema,
+    errors: [404],
+    summary: 'Get an agent group',
+    tags: ['agent-groups'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_READ'),
@@ -80,6 +106,11 @@ AgentGroupRoutes.get(
  */
 AgentGroupRoutes.patch(
   '/:id',
+  routeDoc({
+    data: AgentGroupSchema,
+    summary: 'Update an agent group',
+    tags: ['agent-groups'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_UPDATE'),
@@ -104,6 +135,11 @@ AgentGroupRoutes.patch(
  */
 AgentGroupRoutes.delete(
   '/:id',
+  routeDoc({
+    data: DeletedResourceSchema,
+    summary: 'Delete an agent group',
+    tags: ['agent-groups'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_DELETE'),

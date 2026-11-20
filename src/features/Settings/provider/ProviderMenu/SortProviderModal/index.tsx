@@ -1,6 +1,6 @@
-import { Flexbox, SortableList } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, SortableList, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,18 +11,16 @@ import { type AiProviderListItem } from '@/types/aiProvider';
 
 import GroupItem from './GroupItem';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    height: 36px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    height: '36px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ConfigGroupModalProps {
   defaultItems: AiProviderListItem[];
@@ -52,7 +50,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
             <SortableList.Item
               horizontal
               align={'center'}
-              className={styles.container}
+              className={stylex.props(styles.container).className}
               gap={4}
               id={item.id}
               justify={'space-between'}

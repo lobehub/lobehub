@@ -1,17 +1,21 @@
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
   Input,
   Pagination,
   Table,
   type TableColumn,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import SegmentBar from '../../../../features/SegmentBar';
 
@@ -70,8 +74,8 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   // Summary strip — leads the table with the case total as a mono figure plus a
@@ -83,11 +87,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   summaryRow: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   summaryValue: css`
@@ -373,7 +377,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
         </div>
         <div className={styles.table}>
           <Table
-            classNames={{ header: styles.tableHeader }}
+            classNames={{ header: { cell: styles.tableHeader } }}
             columns={columns}
             dataSource={testCases}
             pagination={false}

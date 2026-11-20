@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import type { SignalFeedbackSatisfaction } from '../../policies/types';
 import { createRuntimeProcessorContext } from '../../runtime/context';
-import { classifyDomain, classifySatisfaction } from '../classifiers';
+import { classifyDomain, classifySatisfaction, NO_PRIOR_REPLY_STOP_REASON } from '../classifiers';
 
 const context = createRuntimeProcessorContext({
   backend: {
@@ -393,5 +393,103 @@ describe('classifier processors', () => {
         },
       }),
     ).rejects.toThrow(error);
+  });
+
+  describe('satisfaction pre-filters', () => {
+    const createPlainSource = (
+      payload: Partial<SourceAgentUserMessage['payload']> = {},
+    ): SourceAgentUserMessage => {
+      const source = createUserMessageSource();
+
+      return {
+        ...source,
+        payload: {
+          agentId: 'agent_1',
+          message: 'remember that I prefer pnpm',
+          messageId: 'msg:source_1',
+          topicId: 'topic_1',
+          ...payload,
+        },
+      };
+    };
+    const classifierOutput = {
+      confidence: 0.9,
+      evidence: [],
+      reason: 'explicit preference',
+      result: 'satisfied' as const,
+    };
+
+    /**
+     * @example
+     * The first message of a conversation has no earlier reply, so the classifier is not called.
+     */
+    it('skips the classifier for a conversation-root message', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+      const satisfactionBudget = vi.fn();
+
+      const result = await classifySatisfaction(
+        createPlainSource({ isConversationRoot: true }),
+        context,
+        { satisfactionBudget, satisfactionClassifier: { classify } },
+      );
+
+      expect(result).toMatchObject({ reason: NO_PRIOR_REPLY_STOP_REASON, type: 'stop' });
+      expect(classify).not.toHaveBeenCalled();
+      expect(satisfactionBudget).not.toHaveBeenCalled();
+    });
+
+    /**
+     * @example
+     * "remember that I..." after an assistant reply still reaches the classifier.
+     */
+    it('classifies explicit memory requests that follow an earlier reply', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+
+      const result = await classifySatisfaction(createPlainSource(), context, {
+        satisfactionClassifier: { classify },
+      });
+
+      expect(classify).toHaveBeenCalledTimes(1);
+      expect(result.type).toBe('continue');
+    });
+
+    it('classifies a conversation-root message that carries explicit client intents', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+
+      await classifySatisfaction(
+        createPlainSource({ intents: ['memory'], isConversationRoot: true }),
+        context,
+        { satisfactionClassifier: { classify } },
+      );
+
+      expect(classify).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * @example
+     * Once the daily feedback-classifier budget is spent, the classifier is not called.
+     */
+    it('skips the classifier when the daily budget denies the call', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+      const satisfactionBudget = vi.fn().mockResolvedValue({
+        allowed: false,
+        count: 201,
+        kind: 'feedback-classifier',
+        limit: 200,
+        reason: 'exceeded',
+      });
+
+      const result = await classifySatisfaction(createPlainSource(), context, {
+        satisfactionBudget,
+        satisfactionClassifier: { classify },
+      });
+
+      expect(result).toMatchObject({
+        reason: 'Daily Agent Signal feedback-classifier budget exceeded (200/day).',
+        type: 'stop',
+      });
+      expect(satisfactionBudget).toHaveBeenCalledTimes(1);
+      expect(classify).not.toHaveBeenCalled();
+    });
   });
 });

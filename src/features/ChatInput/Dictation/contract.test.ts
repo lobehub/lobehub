@@ -4,6 +4,7 @@ import {
   parseRealtimeAsrServerEvent,
   parseRealtimeAsrSessionResponse,
   REALTIME_ASR_AUDIO,
+  REALTIME_ASR_DEFERRED_LIMITS,
   REALTIME_ASR_LIMITS,
 } from './contract';
 
@@ -163,6 +164,25 @@ describe('parseRealtimeAsrSessionResponse', () => {
 });
 
 describe('parseRealtimeAsrServerEvent', () => {
+  it('accepts session.accepted only with the frozen deferred limits', () => {
+    const event = {
+      audio: REALTIME_ASR_AUDIO,
+      deferredLimits: REALTIME_ASR_DEFERRED_LIMITS,
+      limits: REALTIME_ASR_LIMITS,
+      protocolVersion: 1,
+      sequence: 1,
+      sessionId: SESSION_ID,
+      type: 'session.accepted',
+    };
+    expect(parseRealtimeAsrServerEvent(event)).toEqual(event);
+    expect(() =>
+      parseRealtimeAsrServerEvent({
+        ...event,
+        deferredLimits: { ...REALTIME_ASR_DEFERRED_LIMITS, maxPrerollFrames: 100 },
+      }),
+    ).toThrow();
+  });
+
   const terminalEvent = {
     sequence: 1,
     sessionId: SESSION_ID,

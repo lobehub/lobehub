@@ -1,23 +1,24 @@
 'use client';
 
-import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
+  copyToClipboard,
+  createStaticStyles,
+  cssVar,
   DropdownMenu,
+  Flexbox,
   Skeleton,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { MoreHorizontal, XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ShareButton from '@/business/client/features/PageShare/ShareButton';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { DESKTOP_HEADER_ICON_SIZE, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import { useMenu } from '@/features/PageEditor/Header/useMenu';
 import { usePageAgentPanelControl } from '@/features/PageEditor/RightPanel/OverrideContext';
@@ -26,10 +27,9 @@ import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 
 import { buildDocumentModalUrl } from './url';
-
-const HEADER_HEIGHT = 44;
 
 const styles = createStaticStyles(({ css }) => ({
   shareButton: css`
@@ -40,6 +40,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const DocumentModalHeader = memo(() => {
+  const { fontSize, headerHeight } = useDensityTokens();
+  const headerActionSize = useHeaderActionSize();
+  const headerActionSmallSize = useHeaderActionSize(true);
   const { t } = useTranslation(['file', 'common']);
   const { close } = useModalContext();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -65,7 +68,7 @@ const DocumentModalHeader = memo(() => {
       align={'center'}
       flex={'none'}
       gap={4}
-      height={HEADER_HEIGHT}
+      height={headerHeight}
       justify={'space-between'}
       padding={8}
       style={{ borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}` }}
@@ -75,7 +78,7 @@ const DocumentModalHeader = memo(() => {
         {isDocumentLoading && !title ? (
           <Skeleton style={{ height: 14, minWidth: 120, width: 120 }} />
         ) : (
-          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          <Text ellipsis fontSize={fontSize} style={{ minWidth: 0 }} weight={500}>
             {title || t('pageEditor.titlePlaceholder')}
           </Text>
         )}
@@ -88,7 +91,7 @@ const DocumentModalHeader = memo(() => {
           placement={'bottomLeft'}
           popupProps={{ style: { minWidth: 200 } }}
         >
-          <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+          <ActionIcon icon={MoreHorizontal} size={headerActionSmallSize} />
         </DropdownMenu>
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={4}>
@@ -104,7 +107,7 @@ const DocumentModalHeader = memo(() => {
         />
         <ActionIcon
           icon={XIcon}
-          size={DESKTOP_HEADER_ICON_SIZE}
+          size={headerActionSize}
           title={t('close', { ns: 'common' })}
           onClick={close}
         />

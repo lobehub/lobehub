@@ -1,4 +1,4 @@
-import type { DeviceMetricSample } from '@lobechat/types';
+import type { DeviceClient, DeviceMetricSample, HeteroPermissionMode } from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -7,9 +7,11 @@ import {
   type DeviceUnavailableErrorData,
 } from './deviceTransportError';
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
+  GatewayToolCallCompletion,
   GatewayToolCallType,
   GatewayTunnelRegistration,
 } from './types';
@@ -82,17 +84,32 @@ const toFailedToolCallResult = (failure: DeviceTransportFailure): DeviceToolCall
   success: false,
 });
 
+/** What a request asks a device to do, for choosing which client may serve it. */
+export type GatewayDispatchTarget =
+  | { identifier: string; kind: 'tool'; type: GatewayToolCallType }
+  | { kind: 'messageApi'; platform: string }
+  | { kind: 'rpc'; method: string };
+
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
+  /**
+   * Which device clients can serve a request, sent to the gateway as
+   * `clientKinds` so it skips connections of other clients (one device can
+   * hold the desktop app and `lh connect` at once). Return `undefined` when
+   * any client can. A gateway that predates `clientKinds` ignores it.
+   */
+  resolveClientKinds?: (target: GatewayDispatchTarget) => DeviceClient[] | undefined;
   serviceToken: string;
 }
 
 export class GatewayHttpClient {
   private gatewayUrl: string;
+  private resolveClientKinds?: GatewayHttpClientOptions['resolveClientKinds'];
   private serviceToken: string;
 
   constructor(options: GatewayHttpClientOptions) {
     this.gatewayUrl = options.gatewayUrl;
+    this.resolveClientKinds = options.resolveClientKinds;
     this.serviceToken = options.serviceToken;
   }
 
@@ -130,6 +147,17 @@ export class GatewayHttpClient {
 
   async executeToolCall(
     params: {
+      /**
+       * The device clients that may serve this call, when the caller already
+       * knows; otherwise `resolveClientKinds` decides from the tool identifier.
+       */
+      clientKinds?: DeviceClient[];
+      /**
+       * Lets the device deliver this call's final result later. The gateway
+       * keeps `callbackUrl` for `ttlMs` and posts the device's
+       * `tool_call_completion` there; the device only learns `toolCallId`.
+       */
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -153,6 +181,8 @@ export class GatewayHttpClient {
   async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
+    /** The device's client that runs the call; omitted, `resolveClientKinds` decides. */
+    clientKinds?: DeviceClient[];
     deviceId?: string;
     identifier: string;
     params: GatewayMcpParams;
@@ -160,15 +190,17 @@ export class GatewayHttpClient {
     userId: string;
     workspaceId?: string;
   }): Promise<DeviceToolCallResult> {
-    const { deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
+    const { clientKinds, deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
     return this.postToolCall(
-      { deviceId, timeout, userId, workspaceId },
+      { clientKinds, deviceId, timeout, userId, workspaceId },
       { ...toolCall, type: 'mcp' },
     );
   }
 
   private async postToolCall(
     params: {
+      clientKinds?: DeviceClient[];
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -192,6 +224,14 @@ export class GatewayHttpClient {
       res = await this.post(
         '/api/device/tool-call',
         {
+          clientKinds: params.clientKinds?.length
+            ? params.clientKinds
+            : this.clientKindsFor({
+                identifier: toolCall.identifier,
+                kind: 'tool',
+                type: toolCall.type ?? 'tool',
+              }),
+          completion: params.completion,
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,
@@ -256,6 +296,7 @@ export class GatewayHttpClient {
   ): Promise<DeviceMessageApiResult> {
     const res = await this.post('/api/device/message-api', {
       api,
+      clientKinds: this.clientKindsFor({ kind: 'messageApi', platform: api.platform }),
       deviceId: params.deviceId,
       timeout: params.timeout,
       userId: params.userId,
@@ -288,12 +329,18 @@ export class GatewayHttpClient {
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeAccountRouting?: AgentRunRequestMessage['claudeAccountRouting'];
+    claudeCodeEntrypoint?: string;
+    /** Restricts the run to connections of these clients; omitted means any client. */
+    clientKinds?: DeviceClient[];
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    /** Claude Code permission mode; see `AgentRunRequestMessage.permissionMode`. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
@@ -342,10 +389,15 @@ export class GatewayHttpClient {
    * (e.g. `desktop` alongside `cli`). A gateway that predates the hint ignores
    * it and picks by its own channel priority, so callers must still handle an
    * answer from another channel.
+   *
+   * `clientKinds`, when given, replaces the per-method answer of
+   * `resolveClientKinds` — e.g. to keep a terminal session's calls on the
+   * client that created it.
    */
   async invokeRpc<T = unknown>(
     params: {
       channel?: string;
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       timeout?: number;
       userId: string;
@@ -361,6 +413,9 @@ export class GatewayHttpClient {
       '/api/device/rpc',
       {
         channel: params.channel,
+        clientKinds: params.clientKinds?.length
+          ? params.clientKinds
+          : this.clientKindsFor({ kind: 'rpc', method: rpc.method }),
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,
@@ -385,14 +440,19 @@ export class GatewayHttpClient {
     return { data: data.data, error: data.error, success: data.success ?? false };
   }
 
+  /**
+   * `options.clientKinds` asks for the info of a connection of those clients —
+   * e.g. the desktop app's `supportedTools` when `lh connect` is up as well.
+   */
   async getDeviceSystemInfo(
     userId: string,
     deviceId: string,
     workspaceId?: string,
+    options?: { clientKinds?: DeviceClient[] },
   ): Promise<{ error?: string; success: boolean; systemInfo?: DeviceSystemInfo }> {
     const res = await this.post(
       '/api/device/system-info',
-      { deviceId, userId, workspaceId },
+      { clientKinds: options?.clientKinds, deviceId, userId, workspaceId },
       { timeout: DEVICE_QUERY_TIMEOUT_MS },
     );
     if (!res.ok) {
@@ -491,6 +551,11 @@ export class GatewayHttpClient {
       throw new Error(`Device gateway /api/admin/tunnels responded ${res.status}`);
     }
     return true;
+  }
+
+  private clientKindsFor(target: GatewayDispatchTarget): DeviceClient[] | undefined {
+    const kinds = this.resolveClientKinds?.(target);
+    return kinds && kinds.length > 0 ? kinds : undefined;
   }
 
   private post(path: string, body: unknown, options?: { timeout?: number }): Promise<Response> {

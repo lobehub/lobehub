@@ -158,7 +158,9 @@ export class AcpStdioClient {
       if (timeoutMs !== false) {
         pending.timeout = setTimeout(() => {
           this.pendingRequests.delete(String(id));
-          reject(new Error(`ACP request timed out: ${method}`));
+          reject(
+            Object.assign(new Error(`ACP request timed out: ${method}`), { code: 'ETIMEDOUT' }),
+          );
         }, timeoutMs);
         pending.timeout.unref?.();
       }

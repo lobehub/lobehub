@@ -13,6 +13,7 @@ export const KnowledgeBaseApiName = {
   readKnowledge: 'readKnowledge',
   removeFiles: 'removeFiles',
   searchKnowledgeBase: 'searchKnowledgeBase',
+  updateDocument: 'updateDocument',
   viewKnowledgeBase: 'viewKnowledgeBase',
 };
 
@@ -147,6 +148,24 @@ export interface CreateDocumentArgs {
 }
 
 export interface CreateDocumentState {
+  id: string;
+}
+
+/**
+ * Edit an existing knowledge base document in place, keeping its ID. At least
+ * one of `title`, `content` or `parentId` must be set; an omitted field is left
+ * unchanged.
+ */
+export interface UpdateDocumentArgs {
+  /** Full replacement body (Markdown). Omit to keep the current body. */
+  content?: string;
+  documentId: string;
+  /** Folder or document in the same knowledge base to move the document under. */
+  parentId?: string;
+  title?: string;
+}
+
+export interface UpdateDocumentState {
   id: string;
 }
 

@@ -1,13 +1,12 @@
 'use client';
 
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { getSelectedBlocksLiteXML } from '@lobechat/editor-runtime';
 import { nanoid } from '@lobechat/utils';
 import { type IEditor } from '@lobehub/editor';
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Block } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar, Block, createStaticStyles, cssVar } from '@lobehub/ui';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -59,9 +58,12 @@ export const useAskCopilotItem = (
             paddingInline={12}
             variant="borderless"
             onClick={() => {
-              const xml = (editor.getSelectionDocument?.('litexml') as string) || '';
+              const xml =
+                getSelectedBlocksLiteXML(editor) ||
+                (editor.getSelectionDocument?.('litexml') as string) ||
+                '';
               const plainText = (editor.getSelectionDocument?.('text') as string) || '';
-              const content = xml.trim() || plainText.trim();
+              const content = plainText || xml;
 
               if (!content) return;
 
@@ -83,6 +85,7 @@ export const useAskCopilotItem = (
                   preview,
                   title: 'Selection',
                   type: 'text',
+                  xml,
                 },
               });
 

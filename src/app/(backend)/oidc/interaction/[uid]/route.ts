@@ -1,12 +1,24 @@
+import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { getServerDB } from '@/database/core/db-adaptor';
 import { authEnv } from '@/envs/auth';
+import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
+import { describeReviewTarget } from '@/server/services/acceptanceReview/reviewTarget';
 import { OIDCService } from '@/server/services/oidc';
 import type { OidcInteractionDetailsResponse, OidcInteractionErrorResponse } from '@/types/oidc';
 
 const log = debug('lobe-oidc:interaction');
+
+// Site and acceptance details are only revealed once the signed-in reviewer may review them.
+const acceptanceReviewOf = async (
+  resource: unknown,
+): Promise<OidcInteractionDetailsResponse['acceptanceReview']> => {
+  const { userId } = await getUserAuth();
+  return describeReviewTarget(await getServerDB(), userId, resource);
+};
 
 export async function GET(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
   if (!authEnv.ENABLE_OIDC) {
@@ -38,8 +50,13 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
     const scopes = (details.params.scope as string)?.split(' ') || [];
 
     const clientMetadata = await oidcService.getConsentClientMetadata(clientId);
+    const acceptanceReview =
+      details.prompt.name === 'consent' && isAcceptanceReviewClient(clientId)
+        ? await acceptanceReviewOf(details.params.resource)
+        : undefined;
 
     return NextResponse.json<OidcInteractionDetailsResponse>({
+      acceptanceReview,
       clientId,
       clientMetadata,
       prompt: details.prompt.name,

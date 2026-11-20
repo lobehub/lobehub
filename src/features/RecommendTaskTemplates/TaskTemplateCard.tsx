@@ -1,7 +1,16 @@
 import type { TaskTemplate } from '@lobechat/const';
-import { Block, Center, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Divider, Tag, Text } from '@lobehub/ui/base-ui';
-import { cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Center,
+  cssVar,
+  cx,
+  Divider,
+  Flexbox,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Clock, X } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

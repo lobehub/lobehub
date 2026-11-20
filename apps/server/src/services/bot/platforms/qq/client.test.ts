@@ -16,7 +16,53 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
   updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
 }));
 
+const mockGateway = vi.hoisted(() => ({ release: null as null | (() => void) }));
+
+vi.mock('chat', () => ({
+  Chat: class {
+    adapters = new Map([
+      [
+        'qq',
+        {
+          startGatewayListener: () =>
+            new Promise<void>((resolve) => {
+              mockGateway.release = resolve;
+            }),
+        },
+      ],
+    ]);
+    initialize = vi.fn().mockResolvedValue(undefined);
+    shutdown = vi.fn().mockResolvedValue(undefined);
+  },
+  ConsoleLogger: class {},
+}));
+
 const { QQClientFactory } = await import('./client');
+const { updateBotRuntimeStatus } = await import('@/server/services/gateway/runtimeStatus');
+
+describe('QQGatewayClient.start', () => {
+  it('keeps a stop that lands while the gateway listener is starting', async () => {
+    const client = new QQClientFactory().createClient(
+      {
+        applicationId: 'qq-app',
+        credentials: { appSecret: 'sec' },
+        platform: 'qq',
+        settings: { connectionMode: 'websocket' },
+      },
+      { appUrl: 'https://example.com' },
+    );
+
+    const starting = client.start();
+    await vi.waitFor(() => expect(mockGateway.release).toBeTypeOf('function'));
+    await client.stop();
+    mockGateway.release!();
+    await starting;
+
+    const statuses = vi.mocked(updateBotRuntimeStatus).mock.calls.map(([s]) => s.status);
+    expect(statuses.at(-1)).toBe('disconnected');
+    expect(statuses).not.toContain('connected');
+  });
+});
 
 describe('QQGatewayClient.extractFiles', () => {
   // QQ is the simplest case among all platforms — public CDN URLs survive

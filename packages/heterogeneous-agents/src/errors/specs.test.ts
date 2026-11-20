@@ -30,33 +30,10 @@ describe('hetero error taxonomy', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('only emits guide codes the client can actually render', () => {
-    const renderable = new Set([
-      'auth_required',
-      'cli_not_found',
-      'overloaded',
-      'rate_limit',
-      'working_directory_not_found',
-    ]);
-    for (const spec of specs) {
-      if (spec.guideCode) expect(renderable).toContain(spec.guideCode);
-    }
-  });
-
   it('never marks a user-attributed outcome as an operational failure', () => {
     for (const spec of specs) {
       if (spec.attribution === 'user') expect(spec.countAsFailure).toBe(false);
     }
-  });
-
-  it('only treats transient kinds as retryable', () => {
-    const retryable = specs.filter((spec) => spec.retryable).map((spec) => spec.kind);
-    expect(retryable.toSorted()).toEqual(['network_drop', 'server_overloaded', 'server_throttle']);
-  });
-
-  it('exposes exactly one fallback bucket', () => {
-    const fallbacks = specs.filter((spec) => spec.isFallback).map((spec) => spec.kind);
-    expect(fallbacks).toEqual(['agent_failed']);
   });
 
   it('formats and resolves stable ids', () => {

@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { buildInjectCredsResult } from '../injectResult';
 import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
   ConnectComposioServiceParams,
@@ -49,6 +50,8 @@ export interface ICredsService {
       env?: Record<string, string>;
       files?: Array<{ filename: string; key: string; path: string }>;
     };
+    /** Environment variable names each key injected (names only, never values). */
+    envVarsByKey?: Record<string, string[]>;
     notFound?: string[];
     success: boolean;
     unsupportedInSandbox?: string[];
@@ -60,6 +63,19 @@ export interface ICredsService {
   listCreds: () => Promise<{
     data?: Array<{ id: number; key: string }>;
   }>;
+}
+
+export interface CredsExecutionRuntimeContext {
+  /**
+   * Whether this run's commands can reach the cloud sandbox the credentials
+   * are injected into (the `creds_sandbox_reachable` prompt variable). `false`
+   * when the run is routed to a device outside `auto` mode: injection would
+   * still succeed, but nothing this run executes could read the values.
+   * Undefined is treated as reachable.
+   */
+  sandboxReachable?: boolean;
+  topicId?: string;
+  userId?: string;
 }
 
 /**
@@ -75,9 +91,9 @@ export interface ICredsService {
  */
 export class CredsExecutionRuntime {
   private credsService: ICredsService;
-  private context: { topicId?: string; userId?: string };
+  private context: CredsExecutionRuntimeContext;
 
-  constructor(credsService: ICredsService, context: { topicId?: string; userId?: string } = {}) {
+  constructor(credsService: ICredsService, context: CredsExecutionRuntimeContext = {}) {
     this.credsService = credsService;
     this.context = context;
   }
@@ -192,6 +208,18 @@ export class CredsExecutionRuntime {
   async injectCredsToSandbox(
     args: InjectCredsToSandboxParams,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.context.sandboxReachable === false) {
+      return {
+        content:
+          'Cannot inject credentials: this run executes commands on a device, not in the cloud sandbox, so injected credentials would not be visible to any command. Credential injection only works when commands run in the cloud sandbox.',
+        error: {
+          message: 'The cloud sandbox is not reachable in this run',
+          type: 'SandboxUnreachable',
+        },
+        success: false,
+      };
+    }
+
     try {
       const topicId = this.context.topicId;
       if (!topicId) {
@@ -224,34 +252,17 @@ export class CredsExecutionRuntime {
         userId,
       });
 
-      const credentials = result.credentials || {};
-      const notFound = result.notFound || [];
-      const unsupportedInSandbox = result.unsupportedInSandbox || [];
-
-      // Build response content
-      const injectedKeys = args.keys.filter((k) => !notFound.includes(k));
-      let content = '';
-
-      if (injectedKeys.length > 0) {
-        content = `Credentials injected successfully: ${injectedKeys.join(', ')}.`;
-      }
-
-      if (notFound.length > 0) {
-        content += ` Not found: ${notFound.join(', ')}. Please configure them in Settings > Credentials.`;
-      }
-
-      if (unsupportedInSandbox.length > 0) {
-        content += ` Not supported in sandbox: ${unsupportedInSandbox.join(', ')}.`;
-      }
+      const summary = buildInjectCredsResult(args.keys, result);
 
       return {
-        content: content.trim(),
+        content: summary.content,
         state: {
-          credentials,
-          injected: injectedKeys,
-          notFound,
-          success: notFound.length === 0,
-          unsupportedInSandbox,
+          credentials: summary.credentials,
+          envVarsByKey: summary.envVarsByKey,
+          injected: summary.injected,
+          notFound: summary.notFound,
+          success: summary.notFound.length === 0,
+          unsupportedInSandbox: summary.unsupportedInSandbox,
         },
         success: true,
       };

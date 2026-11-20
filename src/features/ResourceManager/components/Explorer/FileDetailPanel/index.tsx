@@ -1,19 +1,19 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, DraggablePanel } from '@lobehub/ui/base-ui';
-import { cssVar, useTheme } from 'antd-style';
+import { ActionIcon, cssVar, DraggablePanel, Flexbox, useTheme } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { DownloadIcon, InfoIcon, PanelRightCloseIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import FileDetail from '@/features/ResourceManager/FileDetail';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import FilePreview from './FilePreview';
 import PagePreview from './PagePreview';
 import { useDetailPanelFile } from './useDetailPanelFile';
+import { DETAIL_PANEL_MIN_WIDTH, useDetailPanelWidth } from './useDetailPanelWidth';
 
 /**
  * In-context right dock for the explorer list: single click on a file row
@@ -24,25 +24,30 @@ import { useDetailPanelFile } from './useDetailPanelFile';
  */
 const FileDetailPanel = memo(() => {
   const theme = useTheme();
+  const { fontSize, headerHeight } = useDensityTokens();
+  const headerActionSize = useHeaderActionSize(true);
   const detailPanelId = useResourceManagerStore((s) => s.detailPanelId);
   const detailPanelIsPage = useResourceManagerStore((s) => s.detailPanelIsPage);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
   const [showProperties, setShowProperties] = useState(false);
+  const { handleSizeChange, width } = useDetailPanelWidth();
 
   const fileDetail = useDetailPanelFile(detailPanelId);
 
   return (
     <DraggablePanel
+      showHandleWideArea
       backgroundColor={cssVar.colorBgContainer}
       expand={!!detailPanelId}
       expandable={false}
-      minWidth={320}
+      minWidth={DETAIL_PANEL_MIN_WIDTH}
       placement={'right'}
-      size={{ height: '100%', width: 480 }}
+      size={{ height: '100%', width }}
       style={{
         borderInlineStart: `1px solid ${cssVar.colorBorderSecondary}`,
         boxShadow: theme.boxShadowTertiary,
       }}
+      onSizeChange={handleSizeChange}
     >
       {fileDetail && (
         <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -55,14 +60,14 @@ const FileDetailPanel = memo(() => {
             style={{
               flexShrink: 0,
               borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
-              minHeight: 48,
+              minHeight: headerHeight,
             }}
           >
             <span
               title={fileDetail.name}
               style={{
                 color: theme.colorText,
-                fontSize: 14,
+                fontSize,
                 fontWeight: 500,
                 minWidth: 0,
                 overflow: 'hidden',
@@ -76,6 +81,7 @@ const FileDetailPanel = memo(() => {
               {fileDetail.url && (
                 <ActionIcon
                   icon={DownloadIcon}
+                  size={headerActionSize}
                   title={i18nT('download', { ns: 'common' })}
                   onClick={() => {
                     if (fileDetail.url) downloadFile(fileDetail.url, fileDetail.name);
@@ -85,11 +91,13 @@ const FileDetailPanel = memo(() => {
               <ActionIcon
                 active={showProperties}
                 icon={InfoIcon}
+                size={headerActionSize}
                 title={i18nT('detail.basic.title', { ns: 'file' })}
                 onClick={() => setShowProperties((value) => !value)}
               />
               <ActionIcon
                 icon={PanelRightCloseIcon}
+                size={headerActionSize}
                 title={i18nT('close', { ns: 'common' })}
                 onClick={closeDetailPanel}
               />

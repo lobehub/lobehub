@@ -4,16 +4,23 @@ import openaiModels from 'model-bank/openai';
 
 /**
  * $ per million tokens for a model, from the model bank. The bank lists the
- * base input/output rates plus the cache-read and 5-minute cache-write rates
- * when the provider has them (OpenAI has no cache-write tier, so it stays
- * undefined); the 1-hour write rate is derived inside `computeTurnCostUsd`
- * (2x base input) when not provided. Returns null for models the bank doesn't
- * know — the caller should then store the tokens without a computed cost
- * rather than guess a price.
+ * base input/output rates plus the cache-read rate and, for Anthropic, the
+ * cache-write rate — either one flat rate or a `ttl` lookup with `5m` / `1h`
+ * prices (OpenAI has no cache-write tier, so it stays undefined). Any rate the
+ * bank omits is derived inside `computeTurnCostUsd` from base input. Returns
+ * null for models the bank doesn't know — the caller should then store the
+ * tokens without a computed cost rather than guess a price.
  */
 interface BankModelCard {
   id: string;
-  pricing?: { units?: { name: string; rate?: number; unit: string }[] };
+  pricing?: {
+    units?: {
+      lookup?: { prices: Record<string, number> };
+      name: string;
+      rate?: number;
+      unit: string;
+    }[];
+  };
 }
 
 const bankModelPrice = (
@@ -24,10 +31,10 @@ const bankModelPrice = (
   const units = model?.pricing?.units;
   if (!units) return null;
 
-  const rate = (name: string) => {
-    const unit = units.find((u) => u.name === name && u.unit === 'millionTokens');
-    return unit && 'rate' in unit ? unit.rate : undefined;
-  };
+  const findUnit = (name: string) =>
+    units.find((u) => u.name === name && u.unit === 'millionTokens');
+  const rate = (name: string) => findUnit(name)?.rate;
+  const cacheWrite = findUnit('textInput_cacheWrite');
 
   const input = rate('textInput');
   const output = rate('textOutput');
@@ -35,7 +42,8 @@ const bankModelPrice = (
 
   return {
     cacheRead: rate('textInput_cacheRead'),
-    cacheWrite5m: rate('textInput_cacheWrite'),
+    cacheWrite1h: cacheWrite?.lookup?.prices['1h'],
+    cacheWrite5m: cacheWrite?.lookup?.prices['5m'] ?? cacheWrite?.rate,
     input,
     output,
   };

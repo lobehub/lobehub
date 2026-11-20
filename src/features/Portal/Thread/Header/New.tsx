@@ -1,5 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Switch, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Switch, Text } from '@lobehub/ui';
 import { GitBranch } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

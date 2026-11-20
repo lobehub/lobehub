@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,28 +13,15 @@ import { ThreadStatus } from '@/types/index';
 import { MetricItem } from './CompletedState';
 import { formatCost, formatDuration } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  separator: css`
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  statusIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-
-    color: ${cssVar.colorErrorText};
-
-    background: ${cssVar.colorErrorBg};
-  `,
-}));
+const styles = stylex.create({
+  separator: {
+    width: '3px',
+    height: '3px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface ErrorStateProps {
   taskDetail: TaskDetail;
@@ -123,7 +110,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
           {/* Tool Calls */}
           {totalToolCalls !== undefined && totalToolCalls > 0 && (
             <>
-              <div className={styles.separator} />
+              <div {...stylex.props(styles.separator)} />
               <MetricItem
                 icon={Wrench}
                 label={t('task.metrics.toolCallsShort', { defaultValue: 'tools' })}
@@ -135,7 +122,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
           {/* Messages */}
           {totalMessages !== undefined && totalMessages > 0 && (
             <>
-              <div className={styles.separator} />
+              <div {...stylex.props(styles.separator)} />
               <MetricItem
                 icon={MessageSquare}
                 label={t('task.metrics.messagesShort', { defaultValue: 'messages' })}
@@ -147,7 +134,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
           {/* Cost */}
           {formattedCost && (
             <>
-              <div className={styles.separator} />
+              <div {...stylex.props(styles.separator)} />
               <MetricItem value={formattedCost} />
             </>
           )}

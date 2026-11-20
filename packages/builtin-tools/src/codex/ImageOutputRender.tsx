@@ -1,8 +1,7 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Image, PreviewGroup } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Image, PreviewGroup, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 interface ImageOutputState {

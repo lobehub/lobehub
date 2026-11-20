@@ -15,6 +15,7 @@ import { userAuth } from '../middleware/userAuth';
 import { trpc } from './init';
 import { apiKeyScopeGuard } from './middleware/apiKeyScope';
 import { heteroOperationAuth } from './middleware/heteroOperationAuth';
+import { llmRelayRequest } from './middleware/llmRelayRequest';
 import { oidcAuth } from './middleware/oidcAuth';
 
 /**
@@ -22,6 +23,13 @@ import { oidcAuth } from './middleware/oidcAuth';
  * @link https://trpc.io/docs/v11/router
  */
 export const router = trpc.router;
+
+/**
+ * Merge sub-routers into one flat router: procedure paths are unchanged and a
+ * duplicate path throws when the router is built.
+ * @link https://trpc.io/docs/v11/merging-routers
+ */
+export const mergeRouters = trpc.mergeRouters;
 
 /**
  * Create an unprotected procedure
@@ -38,7 +46,13 @@ export const publicProcedure = baseProcedure.use(apiKeyScopeGuard);
 // procedure that asserts that the user is logged in
 // `apiKeyScopeGuard` narrows API-key-authenticated calls to the key's scopes;
 // session/OIDC auth and full-access keys pass through untouched.
-export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth).use(apiKeyScopeGuard);
+// `llmRelayRequest` relays the procedure's LLM calls to a device-only provider
+// back to the requesting tab (one-shot relay).
+export const authedProcedure = baseProcedure
+  .use(oidcAuth)
+  .use(userAuth)
+  .use(apiKeyScopeGuard)
+  .use(llmRelayRequest);
 
 // procedure for hetero-agent ingest/finish endpoints — requires a `hetero-operation` JWT
 export const heteroAuthedProcedure = baseProcedure.use(heteroOperationAuth).use(userAuth);

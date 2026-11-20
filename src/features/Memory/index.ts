@@ -1,2 +1,3 @@
 export { MemoryListBoundary } from './MemoryListBoundary';
-export { useResetMemoryList, type ViewMode } from './useResetMemoryList';
+
+export type ViewMode = 'grid' | 'timeline';

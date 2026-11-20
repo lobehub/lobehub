@@ -41,7 +41,7 @@ export class ChatGroupLifecycleAction {
       });
     }
 
-    this.#get().internal_dispatchChatGroup({ payload: group, type: 'addGroup' });
+    this.#get().internal_addGroup(group);
 
     // Fetch full group detail to get supervisorAgentId and agents for tools injection
     await this.#get().internal_fetchGroupDetail(group.id);

@@ -8,8 +8,8 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { memo, useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type InternalEditorProps } from './InternalEditor';
 import InternalEditor from './InternalEditor';
+import { type InternalEditorProps } from './InternalEditor';
 import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
 
 vi.mock('./registerBlockDecoratorCaretGuard', () => ({
@@ -151,6 +151,37 @@ describe('InternalEditor', () => {
 
       expect(editorInstance!.getDocument('text')).toBe('Budget variable: $x$');
       expect(JSON.stringify(editorInstance!.getDocument('json'))).not.toContain('"type":"math"');
+    });
+  });
+
+  describe('video', () => {
+    it('reads a markdown <video> into a video node with the default plugins', async () => {
+      let editorInstance: IEditor | undefined;
+
+      render(
+        <TestWrapper
+          onEditorReady={(editor) => {
+            editorInstance = editor;
+          }}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(editorInstance).toBeDefined();
+      });
+
+      await act(async () => {
+        editorInstance!.setDocument(
+          'markdown',
+          '<video src="https://cdn.test/a.mp4" style="width: 50%" controls></video>',
+        );
+        await moment();
+      });
+
+      expect(JSON.stringify(editorInstance!.getDocument('json'))).toContain('"type":"video"');
+      expect(editorInstance!.getDocument('markdown')).toContain(
+        '<video src="https://cdn.test/a.mp4" style="width: 50%" controls></video>',
+      );
     });
   });
 

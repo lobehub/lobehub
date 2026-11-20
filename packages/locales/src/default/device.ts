@@ -1,5 +1,11 @@
 export default {
+  'workingDirectory.newFolderCreated': 'Created folder: {{path}}',
+  'workingDirectory.newFolderInvalidWindowsName':
+    'Use a Windows folder name without reserved names (such as CON), special characters (< > : " / \\ | ? *), control characters, or a trailing space or period.',
   'workingDirectory.addFolderFailed': 'Could not add this folder. Please try again.',
+  'workingDirectory.useFolderFailed': 'Couldn’t use this folder.',
+  'workingDirectory.errorDetailHide': 'Hide details',
+  'workingDirectory.errorDetailShow': 'Show details',
   'workingDirectory.browseDescription': 'Choose a folder on the connected device.',
   'workingDirectory.browseFolders': 'Browse folders',
   'workingDirectory.enterPathManually': 'Enter path manually',
@@ -8,10 +14,23 @@ export default {
   'workingDirectory.foldersLoadFailed':
     'Could not load folders. Check the device connection and folder permissions, then retry or enter a path manually.',
   'workingDirectory.foldersLoading': 'Loading folders…',
+  'workingDirectory.deviceWaking': 'Waking the cloud device… This can take up to two minutes.',
+  'workingDirectory.deviceWakeFailed': 'Could not wake this cloud device. Try again.',
+  'workingDirectory.deviceWakeSlow': 'The cloud device is still starting. Try again in a moment.',
   'workingDirectory.home': 'Home folder',
   'workingDirectory.loadMoreFolders': 'Load more folders',
+  'workingDirectory.newFolder': 'New folder',
+  'workingDirectory.newFolderCreate': 'Create',
+  'workingDirectory.newFolderExists': 'A file or folder with this name already exists here.',
+  'workingDirectory.newFolderFailed':
+    'Couldn’t create this folder. Check the device connection and folder permissions, then try again.',
+  'workingDirectory.newFolderInvalidName': 'Folder names can’t be “.” or “..”, or contain / or \\.',
+  'workingDirectory.newFolderPlaceholder': 'Folder name',
+  'workingDirectory.newFolderUnsupported':
+    'This device’s app doesn’t support creating folders yet. Update it and try again.',
   'workingDirectory.openPath': 'Open',
   'workingDirectory.parentFolder': 'Parent folder',
+  'workingDirectory.refreshFolders': 'Refresh folders',
   'workingDirectory.useFolder': 'Use this folder',
   'workingDirectory.addFolder': 'Add folder…',
   'workingDirectory.addFolderDesc':
@@ -20,6 +39,7 @@ export default {
   'workingDirectory.agentDescription':
     'Default working directory for all conversations with this Agent',
   'workingDirectory.agentLevel': 'Agent Working Directory',
+  'workingDirectory.branchConfirming': 'Confirming the current branch…',
   'workingDirectory.branchInWorktree': 'In worktree {{name}}',
   'workingDirectory.branchSearchPlaceholder': 'Search branches',
   'workingDirectory.branchesEmpty': 'No local branches',
@@ -28,6 +48,7 @@ export default {
   'workingDirectory.branchesLoading': 'Loading branches…',
   'workingDirectory.branchesNoMatch': 'No matching branches',
   'workingDirectory.cancel': 'Cancel',
+  'workingDirectory.cancelWorktreeSend': 'Cancel send',
   'workingDirectory.checkoutAction': 'Checkout',
   'workingDirectory.checkoutFailed': 'Checkout failed',
   'workingDirectory.chooseDifferentFolder': 'Choose a folder...',
@@ -69,6 +90,8 @@ export default {
   'workingDirectory.pathNotExist': "This path doesn't exist on the device",
   'workingDirectory.placeholder': 'Enter directory path, e.g. /Users/name/projects',
   'workingDirectory.prTooltipWithExtra': '{{title}} (+{{count}} more open PR on this branch)',
+  'workingDirectory.topicPullRequestsTooltip':
+    '{{title}} (+{{count}} more linked to this topic — click to see all)',
   'workingDirectory.pullAction': 'Click to pull {{count}} commit(s) from {{upstream}}',
   'workingDirectory.pullFailed': 'Pull failed',
   'workingDirectory.pullInProgress': 'Pulling…',
@@ -83,6 +106,7 @@ export default {
   'workingDirectory.recent': 'Working directory',
   'workingDirectory.refreshGitStatus': 'Refresh branch & PR status',
   'workingDirectory.removeRecent': 'Remove from recent',
+  'workingDirectory.removeRecentFailed': 'Could not remove this folder. Please try again.',
   'workingDirectory.removed': 'Removed “{{name}}”',
   'workingDirectory.renameBranchAction': 'Rename branch',
   'workingDirectory.renameBranchTitle': 'Rename branch',
@@ -122,4 +146,83 @@ export default {
   'workingDirectory.worktreesEmpty': 'No worktrees found',
   'workingDirectory.worktreesHeading': 'Worktrees',
   'workingDirectory.worktreesNoMatch': 'No matching worktrees',
+  'workingDirectory.environment.label': 'Code environment',
+  'workingDirectory.environment.none': 'No environment',
+  'workingDirectory.drive.pickFailed': 'Could not switch to this folder. Try again.',
+  'workingDirectory.drive.title': 'Choose a folder on your drive',
+  'workingDirectory.drive.rootNotAllowed': 'The drive’s root can’t be a working folder',
+  'workingDirectory.drive.browseDescription': 'Choose a folder on your drive.',
+  'workingDirectory.drive.gitRepository': 'Git',
+  'workingDirectory.drive.pickFolderFirst': 'Choose a folder first',
+  'workingDirectory.drive.environmentBadge': 'Environment',
+  'workingDirectory.drive.state.building': 'Building',
+  'workingDirectory.drive.state.failed': 'Build failed',
+  'workingDirectory.drive.state.inUse': 'In use',
+  'workingDirectory.drive.inUseDesc': 'Another conversation is using this environment directory',
+  'workingDirectory.drive.buildingDesc':
+    'This environment directory is still building. It can be picked once the build finishes',
+  'workingDirectory.drive.privateBlocked': 'Private environment — a shared agent can’t use it',
+  'workingDirectory.drive.createCopy': 'Create copy',
+  'workingDirectory.drive.initializeWith': 'Initialize with',
+  'workingDirectory.drive.initializeHint':
+    'The folder is created at the drive root and set up from this environment: the repository is cloned and its setup runs.',
+  'workingDirectory.drive.rename': 'Rename',
+  'workingDirectory.drive.renameTitle': 'Rename folder',
+  'workingDirectory.drive.renameFailed': 'The folder couldn’t be renamed',
+  'workingDirectory.drive.delete': 'Delete',
+  'workingDirectory.drive.moreActions': 'More actions',
+  'workingDirectory.drive.deleteConfirmTitle': 'Delete “{{name}}”?',
+  'workingDirectory.drive.deleteConfirmContent':
+    'Everything in this folder is deleted from the drive, for everyone who can see it. Conversations working in it fall back to a temporary sandbox.',
+  'workingDirectory.drive.actionFailed': 'That didn’t work. Try again.',
+  'workingDirectory.drive.folderNotEmpty':
+    'This folder already has files in it. Only a new or empty folder can be initialized from an environment.',
+  'workingDirectory.drive.folderTaken': 'An environment directory with this name already exists.',
+  'workingDirectory.drive.foldersLoadFailed':
+    'Could not load this folder on your drive. Retry, or go back to the drive’s top level.',
+  'workingDirectory.drive.readOnly': 'Environment directories are read-only here.',
+  'workingDirectory.drive.drives.public': 'Public drive',
+  'workingDirectory.drive.drives.personal': 'Personal drive',
+  'workingDirectory.drive.rebuildInPersonal':
+    'Private environment folders ({{names}}) are hidden here. Their owners can rebuild them on their personal drives.',
+  // Better Coding Experience: branch picked for a new topic, switched or forked on send.
+  'workingDirectory.branchCheckedOutHere': 'Checked out here',
+  'workingDirectory.deviceOutdated':
+    'The LobeHub app or lh CLI on this device is too old for this. Update it and try again.',
+  'workingDirectory.occupiedBranchConfirm': 'Create branch and send',
+  'workingDirectory.occupiedBranchDesc':
+    '{{branch}} is checked out in worktree {{name}}, so it cannot be checked out here. A new branch will be created from it instead.',
+  'workingDirectory.occupiedBranchNameLabel': 'New branch name',
+  'workingDirectory.occupiedBranchTitle': 'Create a branch from {{branch}}',
+  'workingDirectory.preparingSwitch': 'Switching to {{branch}}…',
+  'workingDirectory.preparingWorktree': 'Creating worktree…',
+  'workingDirectory.pullCheckedOutElsewhere':
+    '{{branch}} is checked out in worktree {{name}}. Pull it there.',
+  'workingDirectory.pullNoUpstream': '{{branch}} has no upstream branch to pull from',
+  'workingDirectory.scheduleGitUnsupported':
+    "Send later can't switch branches or create a worktree. Send now, or pick the current branch and turn off New worktree.",
+  'workingDirectory.switchFailed': 'Could not switch to {{branch}}',
+  'workingDirectory.switchRiskConfirm': 'Switch and send',
+  'workingDirectory.switchRiskRunning_one':
+    '{{count}} topic is still running in this directory. Switching the branch will affect it.',
+  'workingDirectory.switchRiskRunning_other':
+    '{{count}} topics are still running in this directory. Switching the branch will affect them.',
+  'workingDirectory.switchRiskTitle': 'Switch to {{branch}} and send?',
+  'workingDirectory.switchRiskUncommitted_one': 'Uncommitted changes may be lost ({{count}} file).',
+  'workingDirectory.switchRiskUncommitted_other':
+    'Uncommitted changes may be lost ({{count}} files).',
+  'workingDirectory.worktreeCancelFailed': 'Could not cancel the send',
+  'workingDirectory.worktreeCancelTooLate': 'This send can no longer be cancelled',
+  'workingDirectory.worktreeCreateFailed': 'Could not create the worktree',
+  'workingDirectory.worktreeDeviceRequired':
+    'Connect this device before sending with a new worktree.',
+  'workingDirectory.worktreeSendCancelled': 'Send cancelled',
+  'workingDirectory.worktreeToggle': 'New worktree',
+  'workingDirectory.worktreeToggleOffHint':
+    'Turn on to run this topic in a new branch and worktree',
+  'workingDirectory.worktreeToggleOn': 'New worktree: on',
+  'workingDirectory.worktreeToggleOnHint':
+    'Sending creates a new branch and worktree from {{branch}}; this directory stays as it is',
+  'workingDirectory.worktreeToggleSaveFailed': 'Could not save the New worktree setting',
+  'workingDirectory.worktreeWaitingForDevice': 'Waiting for the device to connect…',
 };

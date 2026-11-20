@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The benchmark list and detail are `@lobechat/replica` resources. These tests
+ * The benchmark list and detail are `local-replica` resources. These tests
  * pin the fetch orchestration and the write paths (create / update / delete)
  * at the boundary: which service call each action makes and that the replica
  * network sync is revalidated instead of a hand-written SWR `mutate`.
@@ -159,6 +159,25 @@ describe('BenchmarkAction replica wiring', () => {
 
       expect(agentEvalService.deleteBenchmark).toHaveBeenCalledWith('b1');
       expect(useEvalStore.getState().benchmarkDetailMap.b1).toBeUndefined();
+    });
+
+    it('throws when the server refuses (built-in benchmark) and keeps the detail cache', async () => {
+      const { agentEvalService } = await import('@/services/agentEval');
+      vi.mocked(agentEvalService.deleteBenchmark).mockResolvedValue({
+        error: 'system benchmarks cannot be deleted',
+        success: false,
+      } as any);
+      useEvalStore.setState({
+        benchmarkDetailMap: { b1: { id: 'b1', name: 'Lobe Bench' } as any },
+      });
+
+      await expect(useEvalStore.getState().deleteBenchmark('b1')).rejects.toThrow(
+        'system benchmarks cannot be deleted',
+      );
+      expect(useEvalStore.getState().benchmarkDetailMap.b1).toEqual({
+        id: 'b1',
+        name: 'Lobe Bench',
+      });
     });
   });
 

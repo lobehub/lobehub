@@ -12,6 +12,7 @@ const m = vi.hoisted(() => ({
   claimVerifying: vi.fn(),
   markRepairing: vi.fn(),
   claimRepairing: vi.fn(),
+  recordAutoRepair: vi.fn(),
   updateStatus: vi.fn(),
 }));
 
@@ -40,6 +41,7 @@ vi.mock('@/database/models/verifyRun', () => ({
     return {
       findByOperation: m.runFindByOperation,
       claimRepairing: m.claimRepairing,
+      recordAutoRepair: m.recordAutoRepair,
       updateStatus: m.updateStatus,
     };
   }),
@@ -110,7 +112,7 @@ const failedRun = {
 describe('VerifyRepairService.triggerAutoRepair', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    m.claimRepairing.mockResolvedValue({ previousStatus: 'failed' });
+    m.claimRepairing.mockResolvedValue(true);
     m.updateStatus.mockResolvedValue(undefined);
   });
 
@@ -131,6 +133,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
     expect(spawner).toHaveBeenCalledOnce();
     // The claim lands BEFORE the spawn and covers the same run.
     expect(m.claimRepairing).toHaveBeenCalledWith('run-1', 'failed');
+    expect(m.recordAutoRepair).toHaveBeenCalledWith('run-1', 'spawned');
     expect(m.markRepairing).toHaveBeenCalledWith('op-1');
     expect(m.updateStatus).not.toHaveBeenCalled();
   });
@@ -161,7 +164,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
     m.resultListByRun.mockResolvedValue([
       { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
     ]);
-    m.claimRepairing.mockResolvedValue(null);
+    m.claimRepairing.mockResolvedValue(false);
 
     const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'op-repair' });
 
@@ -180,7 +183,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
       { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
     ]);
     m.findVerifyMessage.mockResolvedValue(null);
-    m.claimRepairing.mockResolvedValue({ previousStatus: 'failed' });
+    m.claimRepairing.mockResolvedValue(true);
 
     const spawner = vi.fn().mockResolvedValue(null);
 
@@ -189,6 +192,26 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
 
     expect(result).toBeNull();
     expect(m.updateStatus).toHaveBeenCalledWith('run-1', 'failed');
+    // The claim goes back first, then the failure stands as the round's verdict.
+    expect(m.recordAutoRepair).toHaveBeenCalledWith('run-1', 'declined');
+    expect(m.updateStatus.mock.invocationCallOrder[0]).toBeLessThan(
+      m.recordAutoRepair.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('declines without taking the claim when no spawner is available', async () => {
+    // Nothing could own a `repairing` stamp, so the run must keep its status.
+    m.runFindByOperation.mockResolvedValue(failedRun);
+    m.resultListByRun.mockResolvedValue([
+      { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
+    ]);
+
+    const service = new VerifyRepairService(db, 'user-1');
+    const result = await service.triggerAutoRepair('op-1');
+
+    expect(result).toBeNull();
+    expect(m.claimRepairing).not.toHaveBeenCalled();
+    expect(m.recordAutoRepair).toHaveBeenCalledWith('run-1', 'declined');
   });
 
   it('releases the claim and rethrows when the spawner throws', async () => {
@@ -199,7 +222,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
       { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
     ]);
     m.findVerifyMessage.mockResolvedValue(null);
-    m.claimRepairing.mockResolvedValue({ previousStatus: 'failed' });
+    m.claimRepairing.mockResolvedValue(true);
     m.updateStatus.mockRejectedValue(new Error('release write failed'));
 
     const spawner = vi.fn().mockRejectedValue(new Error('agent runtime exploded'));
@@ -222,7 +245,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
       { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
     ]);
     m.findVerifyMessage.mockResolvedValue(null);
-    m.claimRepairing.mockResolvedValue({ previousStatus: 'failed' });
+    m.claimRepairing.mockResolvedValue(true);
     m.markRepairing.mockRejectedValue(new Error('recompute exploded'));
 
     const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'op-repair' });
@@ -241,7 +264,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
       { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
     ]);
     m.findVerifyMessage.mockResolvedValue(null);
-    m.claimRepairing.mockResolvedValue({ previousStatus: 'failed' });
+    m.claimRepairing.mockResolvedValue(true);
     m.resultUpdateByCheckItem.mockRejectedValue(new Error('link write failed'));
 
     const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'op-repair' });
@@ -261,7 +284,7 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
       { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
     ]);
     m.findVerifyMessage.mockResolvedValue({ id: 'msg-1' });
-    m.claimRepairing.mockResolvedValue({ previousStatus: 'failed' });
+    m.claimRepairing.mockResolvedValue(true);
     m.messageUpdate.mockRejectedValue(new Error('card write failed'));
 
     const spawner = vi.fn();

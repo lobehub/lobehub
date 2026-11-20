@@ -398,7 +398,7 @@ Follow the structure of existing docs (e.g., `discord.mdx`): Prerequisites → C
 The frontend automatically generates the configuration form from the schema. No frontend code changes are needed unless your platform requires a custom icon. The icon resolution works by matching the platform `name` against known icons in `@lobehub/ui/icons`:
 
 ```
-// src/routes/(main)/agent/channel/const.ts
+// src/features/AgentChannel/const.ts
 const ICON_NAMES = ['Discord', 'GoogleChat', 'Lark', 'Slack', 'Telegram', ...];
 ```
 

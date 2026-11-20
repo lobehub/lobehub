@@ -111,7 +111,7 @@ const MATERIAL_FILE_PREFIX_RULES = [
   { iconName: 'vite', prefixes: ['vite.config.'] },
 ] satisfies { iconName: string; prefixes: string[] }[];
 
-const cssString = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+export const cssString = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 
 const cssUrl = (url: string) => `url("${cssString(url)}")`;
 

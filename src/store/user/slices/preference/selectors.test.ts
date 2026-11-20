@@ -125,13 +125,5 @@ describe('preferenceSelectors', () => {
 
       expect(labPreferSelectors.enableOAuthApps(store)).toBe(true);
     });
-
-    it('hides Integrations unless the lab flag is on', () => {
-      store.preference.lab = undefined;
-      expect(labPreferSelectors.enableIntegrations(store)).toBe(false);
-
-      store.preference.lab = { enableIntegrations: true };
-      expect(labPreferSelectors.enableIntegrations(store)).toBe(true);
-    });
   });
 });

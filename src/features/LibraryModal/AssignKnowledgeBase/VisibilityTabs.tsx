@@ -1,10 +1,11 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Icon } from '@lobehub/ui';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 export type PickerVisibility = 'private' | 'public';
 
@@ -23,7 +24,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     justify-content: center;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: none;
     border-radius: ${cssVar.borderRadius};
 

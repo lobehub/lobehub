@@ -1,19 +1,21 @@
 'use client';
 
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
-import { ActionIcon, type ActionIconProps } from '@lobehub/ui/base-ui';
+import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 import { isMacOS } from '@/utils/platform';
+
+import { useCloseMobileNavDrawer } from './MobileDrawerContext';
 
 export const TOGGLE_BUTTON_ID = 'toggle_left_panel_button';
 
@@ -42,22 +44,36 @@ interface ToggleLeftPanelButtonProps {
 
 const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
   ({ title, showActive, icon, size, id = TOGGLE_BUTTON_ID, forceVisible }) => {
+    const headerActionSize = useHeaderActionSize(true);
     const [expand, togglePanel] = useGlobalStore((s) => [
       systemStatusSelectors.showLeftPanel(s),
       s.toggleLeftPanel,
     ]);
     const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleLeftPanel));
+    const closeMobileDrawer = useCloseMobileNavDrawer();
 
     const { t } = useTranslation(['chat', 'hotkey']);
 
     if (isMacDesktop && !forceVisible) return null;
+
+    // Inside the mobile nav drawer there is no left panel to toggle: the
+    // sidebar is the drawer, so the collapse button closes it.
+    if (closeMobileDrawer)
+      return (
+        <ActionIcon
+          icon={PanelLeftClose}
+          size={size || headerActionSize}
+          title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
+          onClick={closeMobileDrawer}
+        />
+      );
 
     return (
       <ActionIcon
         active={showActive ? expand : undefined}
         icon={icon || (expand ? PanelLeftClose : PanelLeftOpen)}
         id={id ?? undefined}
-        size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={size || headerActionSize}
         title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
         tooltipProps={{
           hotkey,
