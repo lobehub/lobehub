@@ -99,7 +99,10 @@ const readHandMaintainedTail = (root: string): string => {
     );
   }
 
-  return source.slice(markerIndex + HAND_MAINTAINED_MARKER.length).replace(/^\n+/, '').trimEnd();
+  return source
+    .slice(markerIndex + HAND_MAINTAINED_MARKER.length)
+    .replace(/^\n+/, '')
+    .trimEnd();
 };
 
 export interface GeneratedFile {

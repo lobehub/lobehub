@@ -101,7 +101,7 @@ const LeftPanel = memo<LeftPanelProps>(
     const [showAddConnector, setShowAddConnector] = useState(false);
     const [keyword, setKeyword] = useState('');
 
-    const isConnectorView = viewMode === 'connector';
+    const isConnectorView = viewMode !== 'skill';
     // Mobile column only: it has no Discover / Installed tabs, so the store
     // button stays its way to find more.
     const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;

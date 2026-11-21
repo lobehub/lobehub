@@ -17,6 +17,7 @@ import { agents, agentShares, channelMembers, users, userSettings } from '../../
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
+import { agentShareAdmits } from '../../utils/agentShareAdmits';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
@@ -117,8 +118,8 @@ export interface ChannelAddAgentInput {
 }
 
 /**
- * Another person's Agent that `userId` may talk to through its live link share. A link share is
- * open to anyone signed in, so no contact entry is needed; only a direct conversation (personal
+ * Another person's Agent that `userId` may talk to through its live share: a link share, open to
+ * anyone signed in, or a card share its owner granted them. No contact entry is needed; only a direct conversation (personal
  * or in a workspace) can hold one, because the share admits one person at a time and counts its
  * limits per person.
  */
@@ -143,7 +144,7 @@ export const findSharedChannelAgent = async (
     .where(
       and(
         eq(agents.id, agentId),
-        eq(agentShares.visibility, 'link'),
+        agentShareAdmits(userId),
         notTrashed(agents.isDeleted),
         ne(agents.userId, userId),
       ),

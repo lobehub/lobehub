@@ -103,7 +103,7 @@ export interface MessengerPlatformOAuthAdapter {
   buildAuthorizeUrl: (params: OAuthBuildAuthorizeUrlParams) => string;
   /**
    * Final redirect after a successful install. Returning `null` falls back to
-   * the route's default `/settings/messenger?<platform>_installed=ok`.
+   * the route's default `/marketplace/app/<platform>?installed=ok`.
    * Slack uses this to deep-link `slack.com/app/open?team=...&id=...`.
    */
   buildPostInstallRedirect?: (install: NormalizedInstallation, origin: string) => URL | null;

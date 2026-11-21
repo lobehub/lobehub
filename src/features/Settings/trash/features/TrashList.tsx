@@ -79,7 +79,9 @@ const segmentedStyles = { item: { height: controlHeight.small } };
 const styles = stylex.create({
   container: {
     overflow: 'hidden',
-    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    // No top padding: the retention note above already owns the gap, so the card
+    // inset only pushed the filters down off the table's own row baseline.
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
@@ -90,7 +92,9 @@ const styles = stylex.create({
     gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
+    // Exactly one table row tall: the filters and the column heads below them then
+    // sit on the same baseline instead of the filters owning padding the heads do not.
+    minHeight: densityTokens['--lobe-density-row-height'],
     paddingInline: '24px',
   },
   muted: {

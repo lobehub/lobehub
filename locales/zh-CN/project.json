@@ -135,8 +135,6 @@
   "artboard.share.unpublishFailed": "停止分享失败，请重试",
   "artboard.share.unpublished": "已停止分享",
   "artboard.share.update": "更新分享",
-  "artboard.stale.refresh": "刷新",
-  "artboard.stale.title": "画板已有新版本",
   "artboard.submit.action": "提交给 agent",
   "artboard.submit.allPicked": "已选 {{picked}} 个",
   "artboard.submit.commentMessage_one": "在画板上留了 {{count}} 条评论。",

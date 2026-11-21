@@ -18,7 +18,6 @@ import VerifyPanel from '../Verify';
 import CheckTable from '../Verify/CheckTable';
 import Header from './Header';
 import Outline from './Outline';
-import StaleBanner from './StaleBanner';
 import { BoardEmpty, BoardError, BoardLoading } from './States';
 import SubmitBar from './SubmitBar';
 
@@ -131,7 +130,6 @@ const BoardLayout = ({ onClose, onExitFullscreen }: BoardLayoutProps) => {
   return (
     <Flexbox data-artboard-root flex={1} height={'100%'} ref={rootRef} style={{ minWidth: 0 }}>
       <Header narrow={narrow} onClose={onClose} onExitFullscreen={onExitFullscreen} />
-      <StaleBanner />
       <div {...stylex.props(styles.body)}>
         <Stage narrow={narrow} />
         {mode === 'verify' && (

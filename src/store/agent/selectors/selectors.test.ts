@@ -271,23 +271,6 @@ describe('agentSelectors', () => {
     });
   });
 
-  describe('currentAgentDisabledPlugins', () => {
-    it('returns only the disabled identifiers from a mixed-shape plugins array', () => {
-      const state = createState(mixedPluginsInput());
-
-      expect(agentSelectors.currentAgentDisabledPlugins(state)).toEqual(['plugin-2']);
-    });
-
-    it('returns an empty array when there are no plugins', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: { 'agent-1': {} },
-      });
-
-      expect(agentSelectors.currentAgentDisabledPlugins(state)).toEqual([]);
-    });
-  });
-
   describe('currentAgentKnowledgeBases', () => {
     it('should return knowledge bases array', () => {
       const state = createState({

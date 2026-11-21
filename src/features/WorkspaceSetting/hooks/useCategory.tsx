@@ -19,11 +19,9 @@ import {
   KeyboardIcon,
   KeyIcon,
   Map,
-  MessageCircleIcon,
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   ScrollText,
   Sparkles,
   TagIcon,
@@ -103,7 +101,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   return useMemo(
     () =>
       [
-        // Account-level settings (profile / appearance / hotkeys / messenger)
+        // Account-level settings (profile / appearance / hotkeys)
         // follow the user, not the workspace. They are mirrored here so members
         // can reach them without leaving the workspace; the pages are the
         // personal ones.
@@ -135,14 +133,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: MessagesSquareIcon,
               key: WorkspaceSettingsTabs.ChatPreference,
               label: t('tab.chatPreference'),
-            },
-            // The System Bot binding is a per-user identity (owned by userId,
-            // not the workspace); reaching a workspace's agents happens via the
-            // scope selector on the page itself.
-            {
-              icon: MessageCircleIcon,
-              key: WorkspaceSettingsTabs.Messenger,
-              label: t('tab.messenger'),
             },
           ],
           key: WorkspaceSettingsGroupKey.Account,
@@ -242,32 +232,22 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // Outside services the workspace's agents can reach. These bindings
-        // belong to the workspace; Messenger stays in Account because it is a
-        // per-user binding.
-        {
+        enableWebhook && {
           items: [
-            // An installation connected here belongs to the workspace, so
-            // every member sees the same one.
-            {
-              icon: PlugIcon,
-              key: WorkspaceSettingsTabs.Integrations,
-              label: t('tab.integrations'),
-            },
             // Every member sees the workspace's event subscriptions, so it is
             // clear what fires the shared agents; managing one is per row.
-            enableWebhook && {
+            {
               icon: ZapIcon,
               key: WorkspaceSettingsTabs.Automations,
               label: t('tab.automations'),
             },
             // The workspace's agents' webhooks; made on each agent's page, managed here too.
-            enableWebhook && {
+            {
               icon: WebhookIcon,
               key: WorkspaceSettingsTabs.Webhooks,
               label: t('tab.webhooks'),
             },
-          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          ] as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
           title: t('group.connection'),
         },

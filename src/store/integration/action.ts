@@ -26,6 +26,12 @@ export class IntegrationActionImpl {
     this.#set(initialIntegrationState, false, n('reset'));
   };
 
+  useFetchGithubInstallations = (enabled: boolean) =>
+    this.#private.scmInstallations.useSync(INTEGRATION_PARAMS, {
+      dedupingInterval: DEDUPING_INTERVAL,
+      enabled,
+    });
+
   /** Config, identity and installations of the GitHub integration; flags of all three. */
   useFetchGithub = () => {
     const options = { dedupingInterval: DEDUPING_INTERVAL };

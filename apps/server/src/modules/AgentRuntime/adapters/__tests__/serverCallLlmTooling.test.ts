@@ -188,6 +188,59 @@ describe('resolveServerCallLlmTooling', () => {
     ).toEqual([searchTool]);
   });
 
+  it('keeps toolDiscoveryConfig stable across mid-operation tool activations', () => {
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        enabledToolIds: [LobeActivatorManifest.identifier],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+          'lobe-web-browsing': webBrowsing,
+        },
+        sourceMap: {},
+        tools: [],
+      },
+    });
+
+    const before = resolveServerCallLlmTooling(ctx, state);
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          {
+            activatedAtStep: 0,
+            id: 'lobe-web-browsing',
+            manifest: webBrowsing,
+            source: 'discovery',
+          },
+        ],
+      },
+    );
+
+    expect(after.resolved.enabledToolIds).toContain('lobe-web-browsing');
+    expect(after.toolDiscoveryConfig).toEqual(before.toolDiscoveryConfig);
+
+    const forcedFinish = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 2 },
+      {
+        ...state,
+        activatedStepTools: [
+          {
+            activatedAtStep: 0,
+            id: 'lobe-web-browsing',
+            manifest: webBrowsing,
+            source: 'discovery',
+          },
+        ],
+        forceFinish: true,
+      },
+    );
+
+    expect(forcedFinish.toolDiscoveryConfig).toBeUndefined();
+  });
+
   it('leaves the active device id undefined with no binding at all', () => {
     const result = resolveServerCallLlmTooling({ operationId: 'op-1', stepIndex: 0 }, buildState());
 

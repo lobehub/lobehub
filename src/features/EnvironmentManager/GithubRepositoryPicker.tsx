@@ -6,7 +6,7 @@ import { ArrowRightIcon, LockIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { densityVars } from '@/styles/densityVars';
 
@@ -107,7 +107,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
 
   const connectGithub = () => {
     onLeave?.();
-    navigate(GITHUB_RETURN_TO);
+    navigate(buildConnectorPagePath('github'));
   };
 
   const { data, isLoading, isValidating, retry, state } = useGithubRepositories();

@@ -627,8 +627,6 @@ export default {
   'artboard.fullscreen.placeholder': 'The board is open full screen',
   'artboard.header.exitFullscreen': 'Back to panel',
   'artboard.header.fullscreen': 'Full screen',
-  'artboard.stale.refresh': 'Refresh',
-  'artboard.stale.title': 'This board has a newer version',
   'artboard.gallery.openConversation': 'Open conversation',
   'artboard.finalize.pending.goChoose': 'Go to the choice',
   'artboard.finalize.pending.goAnswer': 'Answer',

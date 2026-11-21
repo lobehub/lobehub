@@ -71,10 +71,20 @@ describe('Marketplace page copy', () => {
     }
   });
 
+  it('uses plural collection names for the English Marketplace tabs', () => {
+    expect(readNs('en-US', 'discover')).toMatchObject({
+      'tab.apps': 'Apps',
+      'tab.assistant': 'Agents',
+      'tab.mcp': 'MCP Servers',
+      'tab.skill': 'Skills',
+    });
+  });
+
   it('translates every Marketplace sidebar entry in zh-CN', () => {
     const zh = readNs('zh-CN', 'discover');
-    const navKeys = ['tab.assistant', 'tab.skill', 'tab.connector', 'tab.model', 'tab.provider'];
+    const navKeys = ['tab.assistant', 'tab.skill', 'tab.apps', 'tab.model', 'tab.provider'];
     for (const key of navKeys) expect(zh[key], `zh-CN/discover:${key}`).toMatch(/\p{Script=Han}/u);
+    expect(zh['tab.mcp']).toBe('MCP 服务器');
     expect(zh['tab.skill']).toBe(readNs('zh-CN', 'setting')['tab.skill']);
   });
 

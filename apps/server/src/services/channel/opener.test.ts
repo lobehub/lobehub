@@ -45,7 +45,7 @@ describe('createChannelReplyOpener', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v1',
+      promptVersion: 'v2',
       scenario: 'channel_reply_opener',
       schemaName: 'channel_reply_opener',
     });

@@ -24,8 +24,9 @@ const styles = stylex.create({
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     display: 'inline-flex',
     flexShrink: 0,
-    gap: 4,
+    justifyContent: 'center',
     minHeight: 32,
+    minWidth: 32,
   },
   root: {
     alignItems: 'center',
@@ -62,8 +63,7 @@ const SectionHeading = ({ count, id, label, to }: SectionHeadingProps) => {
           to={to}
           {...stylex.props(styles.link)}
         >
-          {t('catalog.viewAll')}
-          <Icon icon={ChevronRight} size={16} />
+          <Icon aria-hidden icon={ChevronRight} size={16} />
         </WorkspaceLink>
       )}
     </div>

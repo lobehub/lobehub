@@ -74,6 +74,7 @@ app.get(
   routeDoc({
     data: HealthSchema,
     envelope: false,
+    operationId: 'health.check',
     public: true,
     summary: 'Health check',
     tags: ['health'],

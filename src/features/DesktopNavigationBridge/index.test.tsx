@@ -31,7 +31,9 @@ vi.mock('@/features/AppLaunch/openDirectory', () => ({
   openDirectoryInApp: openDirectoryInAppMock,
 }));
 
-const getStateMock = vi.hoisted(() => vi.fn(() => ({ gatewayDeviceInfo: { deviceId: 'device-local' } })));
+const getStateMock = vi.hoisted(() =>
+  vi.fn(() => ({ gatewayDeviceInfo: { deviceId: 'device-local' } })),
+);
 
 vi.mock('@/store/electron', () => ({
   useElectronStore: Object.assign(() => undefined, { getState: getStateMock }),

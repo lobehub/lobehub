@@ -30,6 +30,7 @@ import {
   createCodexAgentHandle,
   createFileStoreImageUploader,
   isHeteroStatusGuideErrorData,
+  resolveDshSpawnCommand,
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -435,9 +436,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
         })
       : undefined;
 
-  // DSH is a protocol runtime (its `acp` profile) with no CLI descriptor. Keep
-  // it on the same public `hetero exec` surface, but drive its ACP session
-  // directly instead of passing it through `spawnAgent`.
+  // DSH (an `acp`-profile runtime, no CLI descriptor) keeps the CLI agents' surface and
+  // identity echo, but drives its ACP session directly on the validated `dsh` + its PATH.
   if (agentType === DSH_AGENT_TYPE) {
     const hasImages =
       typeof resolved.prompt !== 'string' &&
@@ -468,15 +468,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
     };
 
     try {
+      const dshCommand = await resolveDshSpawnCommand(options.command);
       session = spawnDshAcpSession({
         args: options.agentArg,
         clientVersion: 'lobehub-cli',
-        command: options.command,
+        command: dshCommand.command,
         cwd: options.cwd || process.cwd(),
-        // Same identity echo as the CLI agents, so `lh` commands the harness
-        // runs for this conversation can name its operation and topic.
         env: buildAgentProcessEnv({
           operationId: serverIngest ? operationId : undefined,
+          pathEnv: dshCommand.pathEnv,
           topicId: options.topic,
         }),
         model: options.model,
@@ -1074,9 +1074,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
     initialModel: usesHeterogeneousSessionInitialModel(options.type) ? options.model : undefined,
-    // Keep Claude Code's stdin open while it can still use input: closing it
-    // early makes print mode kill background tasks after 10 minutes.
-    liveInput: options.type === 'claude-code',
+    // Keep Claude Code's and Antigravity's stdin open while they can still use
+    // input (live steer / background tasks).
+    liveInput: options.type === 'claude-code' || options.type === 'antigravity',
     operationId,
     // Better Coding Experience: Claude Code prompts answered on the bridge's cards.
     ...(options.type === 'claude-code' &&

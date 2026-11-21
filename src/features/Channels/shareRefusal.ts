@@ -1,6 +1,5 @@
 import type { ChannelDetail, ChannelPublicJob, ContactUserProfile } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { TRPCClientError } from '@trpc/client';
 
 /**
  * The share refusals a visitor reads beside their message instead of behind a failure mark,
@@ -45,18 +44,4 @@ export const shareRefusalOf = (
     errorType: job.errorType,
     ...(SHARE_REFUSALS[job.errorType].addOwner && { owner }),
   };
-};
-
-export type ContactRequestOutcome = 'added' | 'alreadyContact' | 'requestSent';
-
-/**
- * What asking the owner to be a contact settled as. Undefined for a failure the visitor should
- * see as an error; a conflict means they already reach the owner (a contact or a colleague).
- */
-export const contactRequestOutcome = (
-  settled: { result: { status: 'accepted' | 'pending' } } | { error: unknown },
-): ContactRequestOutcome | undefined => {
-  if ('result' in settled) return settled.result.status === 'accepted' ? 'added' : 'requestSent';
-  if (settled.error instanceof TRPCClientError && settled.error.data?.code === 'CONFLICT')
-    return 'alreadyContact';
 };

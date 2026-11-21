@@ -127,6 +127,7 @@ describe('ClientContextBuilder', () => {
     );
     expect(prepareContext).toHaveBeenCalledWith(
       expect.objectContaining({
+        discoveryExcludedToolIds: [],
         messages: [userMessage],
         resolvedAgentConfig: expect.objectContaining({
           enabledToolIds: ['dynamic-search'],

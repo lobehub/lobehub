@@ -92,7 +92,6 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Appearance,
       WorkspaceSettingsTabs.Hotkey,
       WorkspaceSettingsTabs.ChatPreference,
-      WorkspaceSettingsTabs.Messenger,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Profile,
@@ -124,8 +123,12 @@ describe('workspace settings useCategory', () => {
     expect(keys.indexOf(WorkspaceSettingsGroupKey.Subscription)).toBe(
       keys.indexOf(WorkspaceSettingsGroupKey.General) + 1,
     );
-    expect(keys.indexOf(WorkspaceSettingsGroupKey.Resource)).toBe(
-      keys.indexOf(WorkspaceSettingsGroupKey.Connection) + 1,
+    const { result: withConnection } = renderHook(() => useWorkspaceSettingCategory(), {
+      wrapper: wrapperWithMcpEvents,
+    });
+    const orderedKeys = withConnection.current.map((group) => group.key);
+    expect(orderedKeys.indexOf(WorkspaceSettingsGroupKey.Resource)).toBe(
+      orderedKeys.indexOf(WorkspaceSettingsGroupKey.Connection) + 1,
     );
     expect(resourceGroup?.items.map((item) => item.key)).toEqual([
       WorkspaceSettingsTabs.Devices,
@@ -156,13 +159,11 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
 
-    const connectionGroup = result.current.find(
+    const connectionGroup = withConnection.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Connection,
     );
 
-    expect(connectionGroup?.items.map((item) => item.key)).toContain(
-      WorkspaceSettingsTabs.Integrations,
-    );
+    expect(connectionGroup?.items.map((item) => item.key)).not.toContain('integrations');
     expect(connectionGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Creds,
     );
@@ -278,12 +279,12 @@ describe('workspace settings useCategory automations', () => {
   };
 
   // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
-  it('hides Automations while MCP Events is off', () => {
-    expect(connectionKeys(false)).not.toContain(WorkspaceSettingsTabs.Automations);
+  it('hides Automations, and the then-empty group, while MCP Events is off', () => {
+    expect(connectionKeys(false)).toBeUndefined();
   });
 
   // Every role sees it: the list is how members learn what fires shared agents.
-  it('lists Automations after Integrations for every role', () => {
+  it('lists Automations before Webhooks for every role', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
     mocks.canViewBilling = false;
@@ -291,8 +292,9 @@ describe('workspace settings useCategory automations', () => {
 
     // Connectors moved to the Marketplace (`/:slug/marketplace/connector`).
     expect(keys).not.toContain(WorkspaceSettingsTabs.Connector);
-    expect(keys.indexOf(WorkspaceSettingsTabs.Automations)).toBe(
-      keys.indexOf(WorkspaceSettingsTabs.Integrations) + 1,
+    expect(keys).not.toContain('integrations');
+    expect(keys.indexOf(WorkspaceSettingsTabs.Webhooks)).toBe(
+      keys.indexOf(WorkspaceSettingsTabs.Automations) + 1,
     );
   });
 });

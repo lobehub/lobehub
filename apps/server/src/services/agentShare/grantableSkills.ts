@@ -1,14 +1,26 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
+import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
 import { assembleSkillPool } from '@lobechat/mecha';
+import {
+  getImplicitBuiltinSkillIds,
+  getLegacyDisabledBuiltinSkillIds,
+  legacyBuiltinSkillIds,
+  type SkillDiscoveryChatConfig,
+} from '@lobechat/mecha/builtinSkillGate';
 import {
   type AgentPluginEntry,
   getActivePluginIds,
   getAutoPluginIds,
+  getBuiltinOverrides,
   getDisabledPluginIds,
 } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { UserSkillService } from '@/server/services/userSkill';
@@ -22,7 +34,8 @@ export interface ShareGrantableSkill {
 interface GrantableSkillsInput {
   agentConfig:
     | {
-        chatConfig?: { skillActivateMode?: 'auto' | 'manual' } | null;
+        chatConfig?: SkillDiscoveryChatConfig | null;
+        createdAt?: Date | string;
         plugins?: AgentPluginEntry[] | null;
       }
     | null
@@ -35,9 +48,40 @@ interface GrantableSkillsInput {
    */
   canExecuteOnDevice?: boolean;
   db: LobeChatDatabase;
+  /**
+   * Apply the owner-run legacy builtin rules: implicit builtin skills for a
+   * pre-opt-in Agent, minus legacy library uninstalls. On for the share picker
+   * only. A visitor run assembles neither, so its automatic grants must not
+   * open a skill the Agent never explicitly turned on.
+   */
+  includeLegacyBuiltinSkills?: boolean;
   userId: string;
   workspaceId?: string;
 }
+
+const resolveLegacyBuiltinSkills = async ({
+  agentConfig,
+  db,
+  userId,
+  workspaceId,
+}: Pick<GrantableSkillsInput, 'agentConfig' | 'db' | 'userId' | 'workspaceId'>) => {
+  const userSettings = await new UserModel(db, userId).getUserSettings().catch(() => null);
+  // Unknown settings fail closed: no legacy builtin is offered as installed.
+  const uninstalledBuiltinIds = userSettings
+    ? resolveUninstalledBuiltinTools(
+        userSettings.tool as UninstalledBuiltinToolsScope | undefined,
+        workspaceId,
+      )
+    : legacyBuiltinSkillIds;
+
+  return {
+    disabledIds: getLegacyDisabledBuiltinSkillIds(
+      uninstalledBuiltinIds,
+      getBuiltinOverrides(agentConfig?.plugins),
+    ),
+    implicitIds: getImplicitBuiltinSkillIds(agentConfig?.createdAt, agentConfig?.chatConfig),
+  };
+};
 
 /**
  * Skills this Agent could offer a visitor: the share settings skill picker's
@@ -56,10 +100,9 @@ interface GrantableSkillsInput {
  * The user's skill library is listed as a run lists it: its catalog without
  * generated skills, and none at all for a workspace-public Agent.
  *
- * Skills are NOT filtered to the agent's pinned set: a skill is on-demand by
- * default, so an unpinned skill is exactly the normal case. `manual` mode is
- * the one exception, and `assembleSkillPool` applies it from
- * `enabledPluginIds` on its own.
+ * Skills are opt-in per Agent (`auto` or legacy `pinned`). With
+ * `includeLegacyBuiltinSkills`, legacy Agents also keep their implicit builtin
+ * skills (minus legacy library uninstalls), as their owner's run assembles them.
  *
  * Reads the creator's whole skill catalog: callers must have authorized the
  * Agent's share first.
@@ -69,11 +112,12 @@ export const listShareGrantableSkills = async ({
   agentId,
   canExecuteOnDevice = false,
   db,
+  includeLegacyBuiltinSkills = false,
   userId,
   workspaceId,
 }: GrantableSkillsInput): Promise<ShareGrantableSkill[]> => {
   const plugins = agentConfig?.plugins ?? undefined;
-  const [dbSkills, agentSkills, userSkills] = await Promise.all([
+  const [dbSkills, agentSkills, userSkills, legacyBuiltinSkills] = await Promise.all([
     new AgentSkillModel(db, userId, workspaceId).findAll().then((result) => result.data),
     // A bundle-less agent is the common case and throws nothing; a genuine
     // failure here must not take the whole list down with it — the DB and
@@ -88,6 +132,9 @@ export const listShareGrantableSkills = async ({
           ? await new AgentModel(db, userId, workspaceId).getAgentVisibility(agentId)
           : undefined,
       ).listCatalog({ includeGenerated: false }))(),
+    includeLegacyBuiltinSkills
+      ? resolveLegacyBuiltinSkills({ agentConfig, db, userId, workspaceId })
+      : undefined,
   ]);
 
   const { skills } = assembleSkillPool(
@@ -111,8 +158,9 @@ export const listShareGrantableSkills = async ({
     {
       autoSkillIds: getAutoPluginIds(plugins),
       canExecuteOnDevice,
-      disabledIds: getDisabledPluginIds(plugins),
+      disabledIds: [...getDisabledPluginIds(plugins), ...(legacyBuiltinSkills?.disabledIds ?? [])],
       enabledPluginIds: getActivePluginIds(plugins),
+      implicitBuiltinSkillIds: legacyBuiltinSkills?.implicitIds,
       skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,
     },
   );

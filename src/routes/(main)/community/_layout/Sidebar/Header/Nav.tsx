@@ -2,16 +2,17 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Blocks, Bot } from 'lucide-react';
+import { Blocks, Bot, Cable } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   getMarketplaceSubPath,
   MARKETPLACE_AGENT_PATH,
-  MARKETPLACE_CONNECTOR_PATH,
-  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  MARKETPLACE_APPS_PATH,
+  MARKETPLACE_INSTALLED_MCP_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
+  MARKETPLACE_MCP_PATH,
   MARKETPLACE_SKILL_PATH,
 } from '@/features/Marketplace/paths';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -23,8 +24,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { DiscoverTab } from '@/types/discover';
 import { isModifierClick } from '@/utils/navigation';
 
-/** Connectors: the MCP catalog plus the connector manager moved here from settings. */
-const CONNECTOR_TAB = 'connector';
+const APPS_TAB = 'app';
 
 interface Item {
   icon: NavItemProps['icon'];
@@ -36,16 +36,9 @@ interface Item {
   url?: string;
 }
 
-// Workspace-aware: `/:slug/marketplace/skill` resolves to `skill` as well.
-// MCP detail pages (`mcp/:slug`) belong to Connectors, which absorbed the MCP list.
-const useActiveTabKey = () => {
-  const { pathname } = useActiveLocation();
-  const subPath = getMarketplaceSubPath(pathname) ?? '';
-  return subPath.startsWith(DiscoverTab.Mcp) ? CONNECTOR_TAB : subPath;
-};
-
 const Nav = memo(() => {
-  const tab = useActiveTabKey();
+  const { pathname } = useActiveLocation();
+  const tab = getMarketplaceSubPath(pathname) ?? '';
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
   const { showMarket } = useServerConfigStore(featureFlagsSelectors);
@@ -54,11 +47,10 @@ const Nav = memo(() => {
     () =>
       [
         {
-          icon: Bot,
-          key: DiscoverTab.Assistants,
-          marketOnly: true,
-          title: t('tab.assistant'),
-          url: MARKETPLACE_AGENT_PATH,
+          icon: Blocks,
+          key: APPS_TAB,
+          title: t('tab.apps'),
+          url: MARKETPLACE_APPS_PATH,
         },
         {
           icon: SkillsIcon,
@@ -68,12 +60,17 @@ const Nav = memo(() => {
           url: showMarket ? MARKETPLACE_SKILL_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH,
         },
         {
-          icon: Blocks,
-          key: CONNECTOR_TAB,
-          title: t('tab.connector'),
-          // Connectors merges the MCP catalog (Discover) with the installed
-          // connectors; without the market only the installed view exists.
-          url: showMarket ? MARKETPLACE_CONNECTOR_PATH : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+          icon: Bot,
+          key: DiscoverTab.Assistants,
+          marketOnly: true,
+          title: t('tab.assistant'),
+          url: MARKETPLACE_AGENT_PATH,
+        },
+        {
+          icon: Cable,
+          key: DiscoverTab.Mcp,
+          title: t('tab.mcp'),
+          url: showMarket ? MARKETPLACE_MCP_PATH : MARKETPLACE_INSTALLED_MCP_PATH,
         },
       ].filter((item: Item) => showMarket || !item.marketOnly) as Item[],
     [showMarket, t],

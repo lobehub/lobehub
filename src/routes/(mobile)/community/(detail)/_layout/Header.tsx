@@ -4,6 +4,7 @@ import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
 
+import { getMarketplaceSubPath, MARKETPLACE_MCP_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
@@ -23,7 +24,11 @@ const Header = memo(() => {
       onBackClick={() =>
         typeof catalog === 'string'
           ? navigate(catalog, { escape: true, replace: true })
-          : navigate(`/${path}`)
+          : navigate(
+              getMarketplaceSubPath(location.pathname)?.startsWith('mcp/')
+                ? MARKETPLACE_MCP_PATH
+                : `/${path}`,
+            )
       }
     />
   );

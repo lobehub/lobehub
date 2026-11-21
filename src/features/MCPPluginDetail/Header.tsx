@@ -33,7 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import OfficialIcon from '@/components/OfficialIcon';
-import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
+import { MARKETPLACE_MCP_PATH } from '@/features/Marketplace/paths';
 import Scores from '@/features/MCP/Scores';
 import { getLanguageColor, getRecommendedDeployment } from '@/features/MCP/utils';
 import { useCategory } from '@/hooks/useMCPCategory';
@@ -143,7 +143,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
     <Link
       to={qs.stringifyUrl({
         query: { category: cate?.key },
-        url: MARKETPLACE_CONNECTOR_PATH,
+        url: MARKETPLACE_MCP_PATH,
       })}
     >
       <Button icon={cate?.icon} size={'middle'}>
