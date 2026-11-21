@@ -6,7 +6,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '@/auth';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { POST } from './route';
 
@@ -182,6 +182,28 @@ describe('POST handler', () => {
         errorType: 500,
       });
     });
+    it('ends the trace of a chat that fails before streaming', async () => {
+      const endOnError = vi.fn();
+      vi.mocked(createTraceOptions).mockReturnValueOnce({ endOnError } as any);
+      const providerError = { errorType: ChatErrorType.InternalServerError };
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockRejectedValue(providerError),
+      };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const tracedRequest = new Request(new URL('https://test.com'), {
+        body: JSON.stringify({ message: 'Hello, world!' }),
+        headers: {
+          'X-lobe-trace': Buffer.from(JSON.stringify({ enabled: true })).toString('base64'),
+        },
+        method: 'POST',
+      });
+      await POST(tracedRequest, { params: Promise.resolve({ provider: 'test-provider' }) });
+
+      expect(endOnError).toHaveBeenCalledWith(providerError);
+    });
+
     it('answers a structured error when the response body fails before its first byte', async () => {
       // A routed chat buffers bytes until visible output, so an empty completion errors the
       // body before anything is sent; returning it as-is made Next.js answer with its 500 page.

@@ -39,21 +39,33 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
       const tracePayload = getTracePayload(req);
 
       let traceOptions = {};
+      let endTraceOnError: ((error: unknown) => void) | undefined;
       // If user enable trace
       if (tracePayload?.enabled) {
-        traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
+        const { endOnError, ...options } = createTraceOptions(data, {
+          provider,
+          trace: tracePayload,
+        });
+        traceOptions = options;
+        endTraceOnError = endOnError;
       }
 
-      const response = await modelRuntime.chat(data, {
-        user: userId,
-        ...traceOptions,
-        metadata: { topicId: req.headers.get(REQUEST_TOPIC_ID_HEADER) ?? undefined },
-        signal: req.signal,
-      });
+      try {
+        const response = await modelRuntime.chat(data, {
+          user: userId,
+          ...traceOptions,
+          metadata: { topicId: req.headers.get(REQUEST_TOPIC_ID_HEADER) ?? undefined },
+          signal: req.signal,
+        });
 
-      // A routed chat can fail before its first byte (e.g. an empty completion); surface that
-      // as the structured error below instead of the framework's 500 page.
-      return await awaitFirstResponseChunk(response);
+        // A routed chat can fail before its first byte (e.g. an empty completion); surface that
+        // as the structured error below instead of the framework's 500 page.
+        return await awaitFirstResponseChunk(response);
+      } catch (error) {
+        // No stream callback runs for a chat that fails here, so end its trace directly.
+        endTraceOnError?.(error);
+        throw error;
+      }
     });
   } catch (e) {
     const {
