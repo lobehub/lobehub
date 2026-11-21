@@ -51,6 +51,7 @@ vi.mock('@/store/agent', () => ({
 }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
+    getAgentConfigById: () => () => undefined,
     getAgentKnowledgeBasesById: () => () => [],
     getAgentPluginsById: () => () => [],
     getAgentSystemRoleById: () => () => '',
@@ -58,7 +59,6 @@ vi.mock('@/store/agent/selectors', () => ({
   chatConfigByIdSelectors: {
     getChatConfigById: () => () => ({}),
     getRuntimeModeById: () => () => undefined,
-    getSkillActivateModeById: () => () => undefined,
   },
 }));
 vi.mock('@/store/aiInfra', () => ({

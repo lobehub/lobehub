@@ -1,3 +1,4 @@
+import { parsePluginEntry } from '@lobechat/types';
 import { Button, confirmModal, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -39,9 +40,12 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
+  const [togglePlugin, removePlugin, hasPluginEntry] = useAgentStore((s) => [
     s.togglePlugin,
-    agentSelectors.currentAgentPlugins(s).includes(identifier),
+    s.removePlugin,
+    (agentSelectors.currentAgentConfig(s)?.plugins ?? []).some(
+      (entry) => parsePluginEntry(entry).identifier === identifier,
+    ),
   ]);
   // A marketplace MCP installed as a connector, a reinstall over a legacy row
   // included: its tools run on the connector, so its settings are edited there,
@@ -116,9 +120,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                     confirmModal({
                       okButtonProps: { danger: true },
                       onOk: async () => {
-                        // If plugin is enabled in current agent, disable it first
-                        if (isPluginEnabledInAgent) {
-                          await togglePlugin(identifier, false);
+                        // Drop any agent-level entry (auto / pinned / disabled) before uninstalling
+                        if (hasPluginEntry) {
+                          await removePlugin(identifier);
                         }
                         await unInstallPlugin(identifier);
                       },
@@ -142,7 +146,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
               if (!canCreate || !canEdit) return;
               if (isMCP) {
                 await installMCPPlugin(identifier);
-                await togglePlugin(identifier);
+                await togglePlugin(identifier, true);
               }
             }}
           >

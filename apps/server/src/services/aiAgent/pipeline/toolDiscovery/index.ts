@@ -34,7 +34,12 @@ import {
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
 import type { BuiltinToolResolveContext, FrozenCredentialFacts } from '@lobechat/types';
-import { getActivePluginIds, manifestBaseIdentifier, resolveToolMode } from '@lobechat/types';
+import {
+  getActivePluginIds,
+  getOptedInPluginIds,
+  manifestBaseIdentifier,
+  resolveToolMode,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
@@ -183,19 +188,24 @@ export const discoverTools = async (
   let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
 
   // `selectedToolIds` are the user's @-mention picks for this turn; merged in
-  // (deduped) alongside the agent's pinned plugins and any internal
-  // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
+  // (deduped) alongside the agent's configured plugins and any internal
+  // `additionalPluginIds` so a mentioned-but-not-enabled tool (e.g. a custom MCP
   // connector) is both queried for manifests and enabled by the tools engine.
   const isGoalTurn = isGoalPrompt(prompt);
+  const toolMode = resolveToolMode(agentConfig.chatConfig);
+  const configuredPluginIds =
+    toolMode === 'agent'
+      ? getActivePluginIds(agentConfig?.plugins)
+      : getOptedInPluginIds(agentConfig?.plugins);
   let agentPlugins: string[] = exclusivePluginIds
     ? [...new Set(exclusivePluginIds)]
     : isGoalTurn
       ? [GoalIdentifier]
       : [
           ...new Set([
-            // An agent that pinned the goal or dashboard tool before its
+            // An agent that enabled the goal or dashboard tool before its
             // rename still carries the legacy id; resolve it to the current one.
-            ...getActivePluginIds(agentConfig?.plugins).map((id) =>
+            ...configuredPluginIds.map((id) =>
               isGoalIdentifier(id)
                 ? GoalIdentifier
                 : isDashboardIdentifier(id)
@@ -225,9 +235,8 @@ export const discoverTools = async (
   // Connected tools are discoverable by default in ordinary agent runs.
   // An exact toolset (verify agent, goal supervisor) names
   // its tools itself, so the agent's switches do not apply to it.
-  const optedInIds = [...getActivePluginIds(agentConfig?.plugins), ...(ctx.autoSkillIds ?? [])];
-  const discoverByDefault =
-    resolveToolMode(agentConfig.chatConfig) === 'agent' && !evalConnectorSnapshots;
+  const optedInIds = [...getOptedInPluginIds(agentConfig?.plugins), ...(ctx.autoSkillIds ?? [])];
+  const discoverByDefault = toolMode === 'agent' && !evalConnectorSnapshots;
   const connectorActivation =
     exclusivePluginIds || isGoalTurn
       ? undefined

@@ -1,7 +1,6 @@
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { EvalCaseEnvironment, EvalRunConfig } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
@@ -100,7 +99,8 @@ const buildCaseAgent = (
     fewShots: base?.fewShots,
     model,
     params: { ...(base?.params ?? DEFAULT_AGENT_CONFIG.params), ...run.config?.params },
-    plugins: caseAgent?.plugins ?? (base ? getActivePluginIds(base.plugins) : []),
+    // Preserve full AgentPluginEntry[] (auto skills/connectors and disabled opt-outs) from base.
+    plugins: caseAgent?.plugins ?? base?.plugins ?? [],
     provider,
     // Name and title reach the prompt (`<agent_identity>`), so the Agent carries
     // only what the case or the target Agent declares; the eval label lives in

@@ -434,6 +434,7 @@ export const agentShareRouter = router({
       agentConfig,
       agentId: input.agentId,
       db: ctx.serverDB,
+      includeLegacyBuiltinSkills: true,
       userId: ctx.userId,
       workspaceId,
     });

@@ -1,7 +1,7 @@
 import { AGENT_PLAN_FILE_TYPE, isDesktop } from '@lobechat/const';
 import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import type { ContextFactProviders, ContextFactRequest, CredentialSummary } from '@lobechat/mecha';
-import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/types';
+import { type AgentShareVisitorContext, getOptedInPluginIds } from '@lobechat/types';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -146,7 +146,7 @@ export const createBrowserContextFactProviders = ({
       openingMessage: config.openingMessage,
       openingQuestions: config.openingQuestions,
       params: config.params as Record<string, unknown> | undefined,
-      plugins: getActivePluginIds(config.plugins),
+      plugins: getOptedInPluginIds(config.plugins),
       provider: config.provider,
       systemRole: config.systemRole,
       tags: meta?.tags,

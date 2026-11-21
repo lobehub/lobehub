@@ -4,11 +4,14 @@ import { listShareGrantableSkills } from './grantableSkills';
 
 const mocks = vi.hoisted(() => ({
   getAgentVisibility: vi.fn(),
+  getUserSettings: vi.fn(),
   listCatalog: vi.fn(),
   userSkillScope: vi.fn(),
 }));
 
-vi.mock('@lobechat/builtin-skills', () => ({ builtinSkills: [] }));
+vi.mock('@lobechat/builtin-skills', () => ({
+  builtinSkills: [{ description: 'LobeHub', identifier: 'lobehub', name: 'LobeHub' }],
+}));
 // Constructor mocks must be `function`s: `new` on an arrow-function mock throws.
 vi.mock('@/database/models/agentSkill', () => ({
   AgentSkillModel: vi.fn(function () {
@@ -18,6 +21,11 @@ vi.mock('@/database/models/agentSkill', () => ({
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
     return { getAgentVisibility: mocks.getAgentVisibility };
+  }),
+}));
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return { getUserSettings: mocks.getUserSettings };
   }),
 }));
 vi.mock('@/server/services/agentDocuments', () => ({
@@ -69,5 +77,39 @@ describe('listShareGrantableSkills', () => {
 
     expect(mocks.getAgentVisibility).toHaveBeenCalledWith('agent-1');
     expect(mocks.userSkillScope).toHaveBeenCalledWith({}, 'owner', 'ws-1', 'public');
+  });
+
+  describe('legacy builtin skills', () => {
+    const legacyAgent = {
+      chatConfig: {},
+      createdAt: new Date('2026-11-01T00:00:00Z'),
+      plugins: [],
+    };
+
+    it('offers implicit builtin skills in the share picker', async () => {
+      mocks.getUserSettings.mockResolvedValue({});
+
+      const skills = await listShareGrantableSkills({
+        agentConfig: legacyAgent,
+        agentId: 'agent-1',
+        db: {} as any,
+        includeLegacyBuiltinSkills: true,
+        userId: 'owner',
+      });
+
+      expect(skills.map((skill) => skill.identifier)).toContain('lobehub');
+    });
+
+    it('does not auto-grant implicit builtin skills to a visitor run', async () => {
+      const skills = await listShareGrantableSkills({
+        agentConfig: legacyAgent,
+        agentId: 'agent-1',
+        db: {} as any,
+        userId: 'owner',
+      });
+
+      expect(skills.map((skill) => skill.identifier)).not.toContain('lobehub');
+      expect(mocks.getUserSettings).not.toHaveBeenCalled();
+    });
   });
 });

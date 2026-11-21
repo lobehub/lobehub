@@ -85,14 +85,14 @@ describe('assembleSkillPool', () => {
       'agent-skills:notes',
     ]);
 
-    // A saved auto entry is a user choice, including on legacy manual agents.
+    // A saved auto entry is a user choice, including on legacy manual agents (for both DB and agent skills).
     expect(
       assembleSkillPool(sources, {
-        autoSkillIds: ['auto'],
+        autoSkillIds: ['auto', 'agent-skills:notes'],
         enabledPluginIds: ['pinned'],
         skillActivateMode: 'manual',
       }).skills.map((s) => s.identifier),
-    ).toEqual(['project:deploy', 'pinned', 'auto']);
+    ).toEqual(['project:deploy', 'pinned', 'auto', 'agent-skills:notes']);
   });
 
   it('withholds everything a share configuration does not allow', () => {
