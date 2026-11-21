@@ -160,7 +160,7 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
 
-    const connectionGroup = result.current.find(
+    const connectionGroup = withConnection.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Connection,
     );
 
