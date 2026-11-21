@@ -116,9 +116,14 @@ export type ContactCard =
       name: string | null;
       /** Owner's display name, so the card can say whose Agent it is. */
       ownerName: string | null;
-      /** The link share the recipient adds it through. */
-      shareId: string;
+      /** The share the recipient adds it through; null on a workspace card. */
+      shareId: string | null;
       type: 'agent';
+      /**
+       * Set on a workspace card: a public Agent of that workspace, shared inside it. Its members
+       * already reach it there, so it needs no share and nothing to add.
+       */
+      workspaceId?: string | null;
     };
 
 export type ContactCardType = ContactCard['type'];
@@ -136,7 +141,7 @@ export const contactCardOf = (
   if (
     card?.type === 'agent' &&
     typeof card.agentId === 'string' &&
-    typeof card.shareId === 'string'
+    (typeof card.shareId === 'string' || typeof card.workspaceId === 'string')
   )
     return card as ContactCard;
   return undefined;
