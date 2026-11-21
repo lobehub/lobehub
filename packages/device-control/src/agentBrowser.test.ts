@@ -14,10 +14,10 @@ const step = (command: string[], result: Record<string, unknown>) => ({
   success: true,
 });
 
-/** The `focus` and page-probe answers for a `fill` target that is an ordinary field. */
+/** The class lookup and focus check for a `fill` target that is an ordinary field. */
 const notACodeEditor = [
-  JSON.stringify([step(['focus'], {})]),
-  JSON.stringify([step(['eval'], { result: JSON.stringify({ isEditor: false }) })]),
+  JSON.stringify([step(['get', 'attr'], { value: 'field' }), step(['focus'], {})]),
+  JSON.stringify([step(['eval'], { result: false })]),
 ];
 
 const run = (apiName: string, args: Record<string, unknown>, steps: unknown[]) => {
@@ -225,6 +225,12 @@ describe('runAgentBrowserCall', () => {
       const page = { doc: initial };
       const exec = vi.fn(async (_session: string, commands: string[][]) => {
         const [name, script = ''] = commands[0];
+        if (name === 'get') {
+          return JSON.stringify([
+            step(commands[0], { value: 'inputarea monaco-mouse-cursor-text' }),
+            step(commands[1], {}),
+          ]);
+        }
         if (name !== 'eval') return JSON.stringify([step(commands[0], {})]);
         let result: unknown = JSON.stringify({ hasApi: true, isEditor: true, readOnly: false });
         if (script.includes('executeEdits')) {
@@ -253,6 +259,29 @@ describe('runAgentBrowserCall', () => {
       expect(result).toMatchObject({ success: true });
       expect(page.doc).toBe('const raw=true;\n');
       expect(exec.mock.calls.some(([, commands]) => commands[0][0] === 'fill')).toBe(false);
+    });
+
+    // `focus` reports success on a heading and leaves focus in the editor, and
+    // `agent-browser fill` then typed at the caret: `raw=falonese`.
+    it('refuses to fill another element while focus stays in the code', async () => {
+      const exec = vi
+        .fn()
+        .mockResolvedValueOnce(
+          JSON.stringify([step(['get', 'attr'], { value: null }), step(['focus'], {})]),
+        )
+        .mockResolvedValueOnce(JSON.stringify([step(['eval'], { result: true })]));
+
+      const result = await runAgentBrowserCall(
+        'fill',
+        { ref: 'e1', text: 'one' },
+        { exec, readFile: vi.fn(), screenshotPath: '/s.png' },
+      );
+
+      expect(result).toMatchObject({
+        error: expect.stringContaining('would type into the code'),
+        success: false,
+      });
+      expect(exec).toHaveBeenCalledTimes(2);
     });
 
     it('refuses a printable key while focus is in the code', async () => {

@@ -216,9 +216,16 @@ const evaluateStep = async (exec: AgentBrowserExec, session: string, script: str
   return step.result?.result;
 };
 
+const CODE_INPUT_CLASS = /(?:^|\s)(?:inputarea|native-edit-context)(?:\s|$)/;
+
 /**
  * Routes `fill` on a Monaco input through the editor. A ref that cannot be
- * focused is left to the regular `fill`, whose step reports the bad ref.
+ * resolved is left to the regular `fill`, whose step reports the bad ref.
+ *
+ * The ref's own class decides, not the focused element: `focus` reports success
+ * on a heading while focus stays in the editor. For the same reason a regular
+ * `fill` on such a ref would type at the editor's caret (`raw=false` became
+ * `raw=falonese`), so it is refused.
  */
 const fillAgentBrowserCodeEditor = async (
   exec: AgentBrowserExec,
@@ -226,8 +233,25 @@ const fillAgentBrowserCodeEditor = async (
   args: Record<string, unknown>,
   platform: string,
 ) => {
-  const [focused] = parseSteps(await exec(session, [['focus', toRef(args.ref)]]));
-  if (!focused?.success) return { handled: false as const };
+  const ref = toRef(args.ref);
+  const [attr, focused] = parseSteps(
+    await exec(session, [
+      ['get', 'attr', ref, 'class'],
+      ['focus', ref],
+    ]),
+  );
+  if (!attr?.success || !focused?.success) return { handled: false as const };
+
+  const className = attr.result?.value;
+  if (typeof className !== 'string' || !CODE_INPUT_CLASS.test(className)) {
+    if ((await evaluateStep(exec, session, CODE_EDITOR_FOCUSED_SCRIPT)) === true) {
+      throw new Error(
+        `${String(args.ref)} is not a text field and focus is still in a code editor, so filling it would type into the code. Nothing changed. Use the code editor's own ref.`,
+      );
+    }
+    return { handled: false as const };
+  }
+
   return fillCodeEditor(
     {
       evaluate: (script) => evaluateStep(exec, session, script),
