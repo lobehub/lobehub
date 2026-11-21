@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelService } from './ChannelService';
 
-const { remove, removeThread, wake, notify, notifyMentions, notifyDirect, send, routing } =
+const { create, remove, removeThread, wake, notify, notifyMentions, notifyDirect, send, routing } =
   vi.hoisted(() => ({
+    create: vi.fn(),
     remove: vi.fn(),
     send: vi.fn(),
     routing: vi.fn(),
@@ -17,6 +18,7 @@ const { remove, removeThread, wake, notify, notifyMentions, notifyDirect, send, 
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
+    create = create;
     remove = remove;
     send = send;
     removeThread = removeThread;
@@ -31,6 +33,33 @@ vi.mock('./directMessage', () => ({ notifyChannelDirectMessages: notifyDirect })
 vi.mock('./notify', () => ({ notifyChannel: notify }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: routing }));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
+
+describe('Channel creation visibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    create.mockResolvedValue({ channel: { id: 'channel' }, member: { id: 'owner-member' } });
+  });
+
+  it('creates a workspace group public in one step', async () => {
+    await new ChannelService({} as never, 'owner', 'workspace').create({
+      agents: [],
+      title: 'Town hall',
+      visibility: 'public',
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
+  });
+
+  it('refuses a public channel outside a workspace before writing anything', async () => {
+    await expect(
+      new ChannelService({} as never, 'owner').create({
+        agents: [],
+        title: 'Mine',
+        visibility: 'public',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(create).not.toHaveBeenCalled();
+  });
+});
 
 describe('Channel deletion scheduling', () => {
   beforeEach(() => {
