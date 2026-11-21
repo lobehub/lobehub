@@ -118,6 +118,24 @@ describe('ModelsService', () => {
       restore();
     });
 
+    // The relay is the narrower device-only rule, not the browser's
+    // `fetchOnClient`: a keyed provider on a private base URL is device-only for
+    // the relay while that rule still says false. Skipping the relay sent the
+    // request without the relay headers and the server failed it with
+    // `no_executor`.
+    it('relays a device-only provider even when the browser would not fetch on client', async () => {
+      oneShotRelay.needsRelay.mockReturnValue(true);
+      oneShotRelay.run.mockImplementationOnce(async (_provider, request) => request(RELAY));
+      (fetch as Mock).mockResolvedValueOnce(new Response('[]'));
+
+      await modelsService.getModels('openai');
+
+      expect(oneShotRelay.run).toHaveBeenCalledWith('openai', expect.any(Function));
+      expect(fetch).toHaveBeenCalledWith('/webapi/models/openai', { headers: RELAY.headers });
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      oneShotRelay.needsRelay.mockReturnValue(false);
+    });
+
     // The server resolves the provider config (and so whether to relay) for
     // the active workspace from `X-Workspace-Id`, which the cloud build adds.
     it('sends the workspace headers with relayed model list and download requests', async () => {

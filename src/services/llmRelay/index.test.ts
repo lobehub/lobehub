@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@/store/aiInfra', () => ({
   aiProviderSelectors: {
-    isProviderFetchOnClient: (provider: string) => () => provider === 'ollama',
+    isProviderDeviceOnly: (provider: string) => () => provider === 'ollama',
   },
   getAiInfraStoreState: () => state.aiInfra,
 }));
