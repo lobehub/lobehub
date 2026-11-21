@@ -53,15 +53,15 @@ export interface StreamContext {
     name: string;
   };
   /**
-   * Indicates whether the current state is within a "thinking" segment of the model output
-   * (e.g., when processing lmstudio responses).
+   * Fallback `<think>` parsing state. Tri-state:
+   * - `undefined`: no non-empty content has arrived yet;
+   * - `true`: the answer opened with `<think>`, so content is reasoning until
+   *   the matching `</think>`;
+   * - `false`: answer text (or native reasoning arrived first), so literal
+   *   `<think>` / `</think>` tags are ordinary content.
    *
-   * When parsing output containing <think> and </think> tags:
-   * - Set to `true` upon encountering a <think> tag (entering reasoning mode)
-   * - Set to `false` upon encountering a </think> tag (exiting reasoning mode)
-   *
-   * While `thinkingInContent` is `true`, subsequent content should be stored in `reasoning_content`.
-   * When `false`, content should be stored in the regular `content` field.
+   * Only a leading tag enters reasoning mode. Mid-answer tags are literal:
+   * providers and users discuss these tags in prose and code samples.
    */
   thinkingInContent?: boolean;
   tool?: {
@@ -78,6 +78,15 @@ export interface StreamContext {
   usage?: ModelUsage;
   usageMissingDiagnostics?: UsageMissingDiagnostics;
 }
+
+const LEADING_NOISE = /^[\s\u200B\uFEFF]+/;
+
+/**
+ * Content after leading whitespace and zero-width formatting characters.
+ * Some providers emit U+200B before the first token, which would otherwise
+ * hide a leading `<think>` tag from the fallback reasoning detector.
+ */
+export const getLeadingContent = (content: string): string => content.replace(LEADING_NOISE, '');
 
 export interface StreamProtocolChunk {
   data: any;
