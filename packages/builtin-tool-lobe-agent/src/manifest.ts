@@ -79,7 +79,8 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           planId: {
-            description: 'Plan document ID (e.g. "docs_xxx") returned by createPlan.',
+            description:
+              'Plan document ID (e.g. "docs_xxx") returned by createPlan. Do NOT use the goal text as planId.',
             type: 'string',
           },
           goal: {
@@ -293,6 +294,8 @@ export const LobeAgentManifest: BuiltinToolManifest = {
         additionalProperties: false,
         properties: {
           category: {
+            description:
+              'missing_tool (no tool exists), schema_mismatch (params disagree with docs/behavior), doc_conflict (wrong/contradictory docs), platform_bug (anomalous surface error), env_limitation (sandbox/network/timeout/resource limit), or other.',
             enum: [...VENT_CATEGORIES],
             type: 'string',
           },

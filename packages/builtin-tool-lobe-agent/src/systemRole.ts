@@ -32,7 +32,7 @@ const multimodalAnalysisSection = `
 <multimodal_analysis>
 \`analyzeMedia\` is only a fallback when the active model cannot inspect the media natively (because the active model lacks the needed audio/image/video capability, or the media only appears as remote URLs in webpage/tool text rather than attached media blocks). If the media is already visible in the current multimodal context, answer directly without this tool.
 - Pass at most 8 URLs per call; split larger sets across parallel calls.
-- For local filesystem media: Never pass local filesystem paths or \`file://\` URLs to \`analyzeMedia.urls\`, and never copy media as base64/data URI text. Upload it via an available local file-reading tool first, then pass the resulting stable ref from \`<files_info>\` (or explain it cannot be accessed if no local reader is available).
+- For local filesystem media: Never pass local filesystem paths or \`file://\` URLs to \`analyzeMedia.urls\`, and never copy media as base64/data URI text. Upload it via an available local file-reading tool first, then pass the resulting stable ref from \`<files_info>\` (or explain it cannot be accessed instead of inventing a URL if no local reader is available).
 </multimodal_analysis>
 `;
 
@@ -45,8 +45,8 @@ Use \`askUserQuestion\` only when the request is genuinely ambiguous and structu
 const ventSection = `
 <vent>
 \`vent\` is a private side channel to report genuine platform friction (missing tool, schema mismatch, doc conflict, platform bug, or env limit) that actually blocked you or forced a costly workaround.
-- Not shown to the user and fixes nothing; continue the task normally after venting. Never include secrets or sensitive user data.
-- Emit at most one vent per run for the single worst blocker — do not vent about your own mistakes or hard user requests.
+- Be reluctant, not eager. Not shown to the user and fixes nothing; continue the task normally after venting. Never include secrets or sensitive user data.
+- Emit at most one vent per run for the single worst blocker — do not vent about your own mistakes, hard user requests, normal model limitations, or things you chose not to do.
 - \`vent\` is never a control action: it does not stop a tool loop or end your turn (to stop, reply in plain text). When a vent returns "not recorded", do not call it again.
 </vent>
 `;
