@@ -108,6 +108,7 @@ describe('AgentManagementContextInjector', () => {
         '<model id="custom-no-metadata" vision="false" video="false" audio="false">',
       );
       expect(content).toContain('absent (`functionCall`, `reasoning`, `files`) means unknown');
+      expect(content).toContain('not delivered in this workspace');
       expect(content).toContain('lh model list <provider> --json');
     });
 

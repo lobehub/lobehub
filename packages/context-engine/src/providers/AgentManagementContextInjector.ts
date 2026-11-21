@@ -126,7 +126,7 @@ export interface AgentManagementContextInjectorConfig {
 const EXPLICIT_MEDIA_ABILITIES = ['vision', 'video', 'audio'] as const;
 
 const MODEL_ABILITIES_INSTRUCTION =
-  'In `available_models`, `vision`, `video` and `audio` are always explicit and state what this workspace will deliver to the model natively; a saved user model config overrides the catalog, so they can differ from it. Any other ability attribute that is absent (`functionCall`, `reasoning`, `files`) means unknown, not unsupported: do not tell the user a model lacks it without checking the model catalog (for example `lh model list <provider> --json`).';
+  'In `available_models`, `vision`, `video` and `audio` are always explicit and describe native delivery in this workspace, not the full capability of the model: `false` means this workspace will not send that media to the model natively, and a saved user model config can turn it off even when the catalog says the model supports it. So report `false` as "not delivered in this workspace", and check the model catalog (for example `lh model list <provider> --json`) before saying a model itself cannot handle a media type. Any other ability attribute that is absent (`functionCall`, `reasoning`, `files`) means unknown, not unsupported.';
 
 /**
  * Format Agent Management context as XML for injection
