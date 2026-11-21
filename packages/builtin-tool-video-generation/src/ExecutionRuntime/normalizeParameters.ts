@@ -1,5 +1,4 @@
-import type { VideoModelParamsSchema } from 'model-bank';
-import { VideoModelParamsMetaSchema } from 'model-bank';
+import type { RuntimeVideoGenParamsKeys, VideoModelParamsSchema } from 'model-bank';
 
 import type { GenerateVideoParams } from '../types';
 
@@ -16,14 +15,39 @@ interface ParameterRule {
   step?: number;
 }
 
+type DedicatedArgumentKey = 'endImageUrl' | 'imageUrl' | 'imageUrls' | 'prompt';
+
 /** These have dedicated tool arguments and are normalized separately. */
-const DEDICATED_ARGUMENT_KEYS = new Set(['endImageUrl', 'imageUrl', 'imageUrls', 'prompt']);
+const DEDICATED_ARGUMENT_KEYS = new Set<string>([
+  'endImageUrl',
+  'imageUrl',
+  'imageUrls',
+  'prompt',
+] satisfies DedicatedArgumentKey[]);
+
+/** A full record, so adding a standard video parameter fails compilation until it is listed. */
+const GENERATION_KEY_RECORD: Record<
+  Exclude<RuntimeVideoGenParamsKeys, DedicatedArgumentKey>,
+  true
+> = {
+  aspectRatio: true,
+  cameraFixed: true,
+  duration: true,
+  generateAudio: true,
+  promptExtend: true,
+  resolution: true,
+  seed: true,
+  size: true,
+  task: true,
+  watermark: true,
+  webSearch: true,
+};
+const GENERATION_KEYS: string[] = Object.keys(GENERATION_KEY_RECORD);
+const STANDARD_KEYS = new Set([...GENERATION_KEYS, ...DEDICATED_ARGUMENT_KEYS]);
+
 const BOOLEAN_KEYS = new Set(['cameraFixed', 'generateAudio', 'watermark', 'webSearch']);
 const NUMBER_KEYS = new Set(['duration', 'seed']);
 const STRING_KEYS = new Set(['aspectRatio', 'resolution', 'size', 'task']);
-
-const STANDARD_KEYS = new Set(Object.keys(VideoModelParamsMetaSchema.shape));
-const GENERATION_KEYS = [...STANDARD_KEYS].filter((key) => !DEDICATED_ARGUMENT_KEYS.has(key));
 
 const isPlainObject = (value: unknown): value is VideoParameters =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
