@@ -150,8 +150,9 @@ const recoverRun = async (
   // reclaims it. The model query only hands over rows stale past the rollup
   // grace, so reaching this branch means the spawner has been gone for a
   // while. Skip while a repair child is still in flight (a live child owns
-  // this run's settlement); otherwise retake the claim via CAS and let the
-  // recomputed rollup + finalizer re-drive repair for the same failures.
+  // this run's settlement); finish a settled child whose finalizer died;
+  // otherwise retake the claim via CAS and let the recomputed rollup +
+  // finalizer re-drive repair for the same failures.
   if (run.status === 'repairing') {
     const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
     const runModel = new VerifyRunModel(db, run.userId, workspaceId);
@@ -167,6 +168,27 @@ const recoverRun = async (
     );
     for (const child of repairChildren) {
       if (await isRepairChainLive(child, operationModel, runModel, now)) return 'skipped';
+    }
+
+    // A repair round that settled but whose finalizer died is not the pre-spawn
+    // shape: `createRepairRunner` already attached it as the acceptance's next
+    // round, so reclaiming this parent would end in a suppressed finalizer
+    // (`isLatestRound`), and the settled child is never swept on its own — the
+    // task and acceptance would hang for good. Finish what that child's
+    // finalizer started instead: it decides the child's own repair, collapses
+    // this parent through `recomputeRepairAncestors`, and drives the task.
+    // Overlapping sweeps are safe here — the repair claim and the task drive
+    // inside the finalizer are both CAS-guarded.
+    const strandedRound = await findStrandedRepairRound(db, run, repairChildren, runModel);
+    if (strandedRound) {
+      await finalizeVerifyRun(db, run.userId, strandedRound, {}, workspaceId);
+      log(
+        'finalized stranded repair round %s of run %s (op %s)',
+        strandedRound,
+        run.id,
+        operationId,
+      );
+      return 'settled';
     }
 
     // Stale claim, no live child: retake it via CAS. Losing it means a
@@ -323,7 +345,7 @@ const SETTLED_RUN_STATUSES = new Set(['errored', 'failed', 'passed']);
  * finalizer collapses this parent. A child round that just settled counts for
  * {@link VERIFY_ROLLUP_GRACE_MS}: its finalizer runs right after the rollup
  * write and collapses this parent. Still `repairing` after the grace means that
- * finalizer died, and the claim is reclaimed.
+ * finalizer died, and the sweep runs it (see {@link findStrandedRepairRound}).
  */
 const isRepairChainLive = async (
   child: { id: string; status: AgentOperationStatus },
@@ -345,6 +367,28 @@ const isRepairChainLive = async (
   return verifiers.some(
     (verifier) => verifier.id !== child.id && isAgentOperationInFlight(verifier.status),
   );
+};
+
+/**
+ * The operation of a repair round of this run that already settled — but past
+ * {@link VERIFY_ROLLUP_GRACE_MS}, so its finalizer is gone — and is still the
+ * acceptance's latest round. A round a later round superseded is left to the
+ * reclaim path: finalizing it would decline a repair that already happened.
+ */
+const findStrandedRepairRound = async (
+  db: LobeChatDatabase,
+  run: VerifyRunItem,
+  repairChildren: { id: string }[],
+  runModel: VerifyRunModel,
+): Promise<string | undefined> => {
+  for (const child of repairChildren) {
+    const childRun = await runModel.findByOperation(child.id);
+    if (!childRun?.status || !SETTLED_RUN_STATUSES.has(childRun.status)) continue;
+    // Evidence/verifier children also hang off this operation; only a round of
+    // the same acceptance is a repair (the check `settleFailedRepair` applies).
+    if ((childRun.acceptanceId ?? null) !== (run.acceptanceId ?? null)) continue;
+    if (await isLatestRound(db, childRun)) return child.id;
+  }
 };
 
 /** Whether no later round of the same acceptance superseded this one. */

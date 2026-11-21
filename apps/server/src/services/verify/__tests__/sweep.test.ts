@@ -589,24 +589,77 @@ describe('sweepStuckVerifyRuns', () => {
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
   });
 
-  it('reclaims a stale repairing claim once its settled repair child is past the finalizer grace', async () => {
-    // The child settled long ago, yet the parent is still `repairing`: the
-    // child's finalizer died before collapsing it, so the claim is abandoned.
-    singlePage([stuckRun({ status: 'repairing' })]);
+  const strandedChild = (status: string, overrides?: Record<string, unknown>) => ({
+    id: 'run-repair',
+    status,
+    updatedAt: new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000),
+    ...overrides,
+  });
+
+  it.each(['passed', 'failed', 'errored'])(
+    'finishes a %s repair child whose finalizer died instead of reclaiming its parent',
+    async (status) => {
+      // The child settled long ago, yet the parent is still `repairing`: the
+      // child's finalizer died before collapsing it. The child is already the
+      // acceptance's latest round, so reclaiming the parent would only reach a
+      // suppressed finalizer and leave the task hanging — run the child's.
+      singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+      operationListTree.mockImplementation(settledChildTree);
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair'
+          ? strandedChild(status, { acceptanceId: 'acc-1', roundIndex: 2 })
+          : undefined,
+      );
+      listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }]);
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.settled).toEqual(['run-1']);
+      expect(finalizeVerifyRun).toHaveBeenCalledTimes(1);
+      expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-repair', {}, undefined);
+      // The child's finalizer collapses this parent; the parent's claim stays
+      // put so a child that repairs again keeps owning the chain.
+      expect(reclaimRepairing).not.toHaveBeenCalled();
+      expect(recompute).not.toHaveBeenCalled();
+      expect(recordAutoRepair).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reclaims the parent when its settled repair child was itself superseded', async () => {
+    // A later round already took over the acceptance: finalizing the child
+    // would decline a repair that already happened, so only the parent's own
+    // rollup is restored.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
     operationListTree.mockImplementation(settledChildTree);
     runFindByOperation.mockImplementation(async (id: string) =>
       id === 'op-repair'
-        ? {
-            id: 'run-repair',
-            status: 'passed',
-            updatedAt: new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000),
-          }
-        : undefined,
+        ? strandedChild('failed', { acceptanceId: 'acc-1', roundIndex: 2 })
+        : { id: 'run-1', status: 'failed' },
     );
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }, { roundIndex: 3 }]);
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(outcome.settled).toEqual(['run-1']);
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a settled child of another acceptance as the repair round', async () => {
+    // Evidence/verifier children hang off the same operation; their own runs
+    // are not this acceptance's rounds, so the claim is reclaimed as before.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockImplementation(settledChildTree);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair' ? strandedChild('passed', { acceptanceId: 'acc-other' }) : undefined,
+    );
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
   });
 
