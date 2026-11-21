@@ -135,8 +135,6 @@
   "artboard.share.unpublishFailed": "Couldn’t stop sharing. Try again.",
   "artboard.share.unpublished": "Sharing stopped",
   "artboard.share.update": "Update share",
-  "artboard.stale.refresh": "Refresh",
-  "artboard.stale.title": "This board has a newer version",
   "artboard.submit.action": "Submit to agent",
   "artboard.submit.allPicked": "{{picked}} picked",
   "artboard.submit.commentMessage_one": "Left {{count}} comment on the artboard.",
