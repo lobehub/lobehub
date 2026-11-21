@@ -85,6 +85,18 @@ describe('DeveloperWebhookWorkflow.runDeliver', () => {
     expect(DeveloperWebhookWorkflow.triggerDeliver).not.toHaveBeenCalled();
   });
 
+  it('lets a failed recovery publication surface so the queue can retry it', async () => {
+    // The recovery message is the only thing that would resume the delivery; answering 200
+    // after failing to publish it would strand the delivery, so the error has to come out.
+    mocks.attempt.mockResolvedValue({ outcome: 'skipped', reason: 'not_due' });
+    mocks.load.mockResolvedValue(row());
+    vi.mocked(DeveloperWebhookWorkflow.triggerDeliver).mockRejectedValueOnce(
+      new Error('QStash down'),
+    );
+
+    await expect(DeveloperWebhookWorkflow.runDeliver(payload)).rejects.toThrow('QStash down');
+  });
+
   it('leaves a settled skip alone', async () => {
     mocks.attempt.mockResolvedValue({ outcome: 'skipped', reason: 'already_settled' });
 

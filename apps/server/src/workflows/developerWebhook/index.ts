@@ -119,14 +119,9 @@ export class DeveloperWebhookWorkflow {
 
     const delaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
     log('recover %s in %ds (%s)', payload.deliveryId, delaySeconds, reason);
-    try {
-      await DeveloperWebhookWorkflow.triggerDeliver(payload, delaySeconds);
-    } catch (error) {
-      console.error(
-        '[developerWebhook:workflow] cannot schedule the lease recovery',
-        payload.deliveryId,
-        error,
-      );
-    }
+    // Deliberately not swallowed: this message is the only thing that would resume the
+    // delivery, so letting the error out makes the callback answer 5xx and the queue retry
+    // it. Settling the delivery here would give up on an attempt that may still recover.
+    await DeveloperWebhookWorkflow.triggerDeliver(payload, delaySeconds);
   }
 }
