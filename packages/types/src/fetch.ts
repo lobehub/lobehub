@@ -15,6 +15,7 @@ export const ChatErrorType = {
   SharePromptTooLong: 'SharePromptTooLong', // Visitor's message to a shared agent is longer than SHARE_VISITOR_PROMPT_MAX_LENGTH
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
   ShareHeteroDeviceUnavailable: 'ShareHeteroDeviceUnavailable', // The shared local CLI agent's device is offline or not set — visitor can retry later
+  ChannelAttachmentUnavailable: 'ChannelAttachmentUnavailable', // A Channel send names a file the sender cannot attach there (e.g. uploaded in another workspace) — resending the same files never succeeds
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
   AgentConcurrencyLimitExceeded: 'AgentConcurrencyLimitExceeded', // The user already has as many agent runs in flight as allowed — recovers when one finishes

@@ -62,6 +62,11 @@ interface UploadWithProgressParams {
    * `'private'`, children inherit their parent document's visibility).
    */
   visibility?: 'private' | 'public';
+  /**
+   * Pins the scope every step of the upload runs in, `null` being the personal one. `undefined`
+   * follows the active workspace; a surface owned by a known scope (a Channel) passes its own.
+   */
+  workspaceId?: string | null;
 }
 
 interface UploadWithProgressResult {
@@ -156,6 +161,7 @@ export class FileUploadActionImpl {
     visibility,
     fileMetadata,
     conversationAgentId,
+    workspaceId,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
     let uploadedPathname: string | undefined;
@@ -180,7 +186,7 @@ export class FileUploadActionImpl {
         });
       });
 
-      const checkStatus = await fileService.checkFileHash(hash);
+      const checkStatus = await fileService.checkFileHash(hash, workspaceId);
       let metadata: ExistingFileMetadata;
 
       // 3. if file exist, just skip upload
@@ -215,6 +221,7 @@ export class FileUploadActionImpl {
             });
           },
           skipCheckFileType,
+          workspaceId,
         });
         if (!success) return;
 
@@ -258,6 +265,7 @@ export class FileUploadActionImpl {
           visibility,
         },
         knowledgeBaseId,
+        workspaceId,
       );
       uploadedPathname = undefined;
 
@@ -276,7 +284,7 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
-      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname, workspaceId);
       if (abortController?.signal.aborted) {
         onStatusUpdate?.({
           id: statusId,
