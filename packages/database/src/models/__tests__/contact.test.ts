@@ -249,6 +249,65 @@ describe('shared Agents', () => {
   });
 });
 
+describe('shared-Agent market', () => {
+  const listIn = (shareConfig: Record<string, unknown>) => ({
+    monthlySpendLimit: 1,
+    ...shareConfig,
+  });
+
+  it('lists only link shares their owners listed, without the trashed', async () => {
+    expect((await carolModel.listMarketAgents({ limit: 10 })).items).toEqual([]);
+
+    await serverDB
+      .update(agentShares)
+      .set({ shareConfig: listIn({ listedInMarket: true, slug: 'bob-helper' }) })
+      .where(eq(agentShares.agentId, bobAgent));
+    const { items, nextCursor } = await carolModel.listMarketAgents({ limit: 10 });
+    expect(items).toMatchObject([
+      { agentId: bobAgent, owner: { id: bob }, slug: 'bob-helper', title: 'Bob Helper' },
+    ]);
+    expect(nextCursor).toBeNull();
+
+    // A paused share or a trashed Agent leaves the market even while still marked listed.
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'card' })
+      .where(eq(agentShares.agentId, bobAgent));
+    expect((await carolModel.listMarketAgents({ limit: 10 })).items).toEqual([]);
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'link' })
+      .where(eq(agentShares.agentId, bobAgent));
+    await serverDB.update(agents).set({ isDeleted: true }).where(eq(agents.id, bobAgent));
+    expect((await carolModel.listMarketAgents({ limit: 10 })).items).toEqual([]);
+  });
+
+  it('pages newest first without repeating a share, and filters by title', async () => {
+    await serverDB.update(agentShares).set({ shareConfig: listIn({ listedInMarket: true }) });
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: new Date('2026-01-01') })
+      .where(eq(agentShares.agentId, bobAgent));
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: new Date('2026-02-01') })
+      .where(eq(agentShares.agentId, aliceAgent));
+
+    const first = await carolModel.listMarketAgents({ limit: 1 });
+    expect(first.items.map((a) => a.agentId)).toEqual([aliceAgent]);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await carolModel.listMarketAgents({
+      cursor: first.nextCursor!,
+      limit: 1,
+    });
+    expect(second.items.map((a) => a.agentId)).toEqual([bobAgent]);
+    expect(second.nextCursor).toBeNull();
+
+    const found = await carolModel.listMarketAgents({ limit: 10, query: 'bob' });
+    expect(found.items.map((a) => a.agentId)).toEqual([bobAgent]);
+  });
+});
+
 describe('shared Agents in a workspace', () => {
   it('belong to the workspace: every member sees and can message them', async () => {
     await aliceInTeam.addAgent('bob-helper');

@@ -15,7 +15,7 @@ import type {
 import { agentDisplayName, channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
-import { and, desc, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, not, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import {
@@ -31,11 +31,11 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { agentShareAdmits } from '../utils/agentShareAdmits';
-import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { ilikeContains } from '../utils/like';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 import { AgentShareModel } from './agentShare';
+import { agentProfileColumns, owners, toAgentProfile } from './contactAgentProfile';
 
 const userProfileColumns = {
   avatar: users.avatar,
@@ -44,8 +44,13 @@ const userProfileColumns = {
   username: users.username,
 };
 
-const owners = alias(users, 'contact_agent_owner');
 const referrers = alias(users, 'contact_request_referrer');
+
+/** Where a market page ends: the last share's creation time (ISO) and id. */
+export interface MarketAgentCursor {
+  createdAt: string;
+  id: string;
+}
 
 /** Who the caller is in the active scope. */
 type ScopeRole = 'personal' | 'member' | 'external';
@@ -59,58 +64,6 @@ const activeMemberWhere = (workspaceId: string, userId: string | SQLWrapper) =>
     eq(workspaceMembers.userId, userId as string),
     isNull(workspaceMembers.deletedAt),
   );
-
-/** Columns of an Agent reached through its share, with the owner joined as `owners`. */
-const agentProfileColumns = {
-  agentAvatar: agents.avatar,
-  agentBackgroundColor: agents.backgroundColor,
-  agentDescription: agents.description,
-  agentId: agents.id,
-  agentName: agents.name,
-  agentSlug: agents.slug,
-  agentTitle: agents.title,
-  isDeleted: agents.isDeleted,
-  ownerAvatar: owners.avatar,
-  ownerFullName: owners.fullName,
-  ownerId: owners.id,
-  ownerUsername: owners.username,
-  shareId: agentShares.id,
-  shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
-  visibility: agentShares.visibility,
-};
-
-type AgentProfileRow = {
-  agentAvatar: string | null;
-  agentBackgroundColor: string | null;
-  agentDescription: string | null;
-  agentId: string;
-  agentName: string | null;
-  agentSlug: string | null;
-  agentTitle: string | null;
-  ownerAvatar: string | null;
-  ownerFullName: string | null;
-  ownerId: string | null;
-  ownerUsername: string | null;
-  shareId: string;
-  shareSlug: string | null;
-};
-
-const toAgentProfile = (row: AgentProfileRow): ContactAgentProfile => ({
-  agentId: row.agentId,
-  avatar: normalizeInboxAgentAvatar(row.agentAvatar, { slug: row.agentSlug }) ?? null,
-  backgroundColor: row.agentBackgroundColor,
-  description: row.agentDescription,
-  name: row.agentName?.trim() || null,
-  owner: {
-    avatar: row.ownerAvatar,
-    fullName: row.ownerFullName,
-    id: row.ownerId ?? '',
-    username: row.ownerUsername,
-  },
-  shareId: row.shareId,
-  slug: row.shareSlug,
-  title: normalizeInboxAgentTitle(row.agentTitle, { slug: row.agentSlug }) ?? null,
-});
 
 /** Share handles are stored lowercase; accept `@handle`, `/a/handle` and full share URLs. */
 export const parseContactHandle = (query: string): string | undefined => {
@@ -1054,6 +1007,56 @@ export class ContactModel {
       )
       .orderBy(desc(agentShares.createdAt));
     return rows.map(toAgentProfile);
+  };
+
+  /**
+   * The shared-Agent market: link shares whose owners listed them, newest first, one page at a
+   * time. Keyset-paged on the share's creation time (id breaks ties), so a share listed while
+   * someone scrolls neither repeats nor skips a row. `query` matches the title or description.
+   */
+  listMarketAgents = async (options: {
+    cursor?: MarketAgentCursor;
+    limit: number;
+    query?: string;
+  }): Promise<{ items: ContactAgentProfile[]; nextCursor: MarketAgentCursor | null }> => {
+    const { cursor, limit } = options;
+    const query = options.query?.trim();
+    const rows = await this.db
+      .select({ ...agentProfileColumns, shareCreatedAt: agentShares.createdAt })
+      .from(agentShares)
+      .innerJoin(agents, eq(agents.id, agentShares.agentId))
+      .leftJoin(owners, eq(owners.id, agents.userId))
+      .where(
+        and(
+          eq(agentShares.visibility, 'link'),
+          sql`(${agentShares.shareConfig} ->> 'listedInMarket')::boolean IS TRUE`,
+          notTrashed(agents.isDeleted),
+          query
+            ? or(ilikeContains(agents.title, query), ilikeContains(agents.description, query))
+            : undefined,
+          cursor
+            ? or(
+                lt(agentShares.createdAt, new Date(cursor.createdAt)),
+                and(
+                  eq(agentShares.createdAt, new Date(cursor.createdAt)),
+                  lt(agentShares.id, cursor.id),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(agentShares.createdAt), desc(agentShares.id))
+      .limit(limit + 1);
+
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: page.map(toAgentProfile),
+      nextCursor:
+        rows.length > limit && last
+          ? { createdAt: last.shareCreatedAt.toISOString(), id: last.shareId }
+          : null,
+    };
   };
 
   // ── Search ────────────────────────────────────────────────────────────

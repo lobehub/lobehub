@@ -87,6 +87,8 @@ export const agentShareConfigSchema = z
       .max(100)
       .refine((ids) => new Set(ids).size === ids.length, 'Duplicate featured Work')
       .optional(),
+    /** Lists the share in the shared-Agent market; see `AgentShareConfig.listedInMarket`. */
+    listedInMarket: z.boolean().optional(),
     /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
     maxFileStorage: z.number().int().nonnegative().optional(),
     maxMessagesPerVisitor: z.number().int().positive().optional(),

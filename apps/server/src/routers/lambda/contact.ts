@@ -181,6 +181,17 @@ export const contactRouter = router({
 
   // ── Agents ────────────────────────────────────────────────────────────
 
+  /** The shared-Agent market: link shares their owners listed, paged by `nextCursor`. */
+  listMarketAgents: contactProcedure
+    .input(
+      z.object({
+        cursor: z.object({ createdAt: z.iso.datetime(), id: z.uuid() }).optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+        query: z.string().trim().max(100).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => ctx.contactModel.listMarketAgents(input)),
+
   // Changing a workspace's address book takes a member; a viewer only reads it.
   addAgent: contactProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
