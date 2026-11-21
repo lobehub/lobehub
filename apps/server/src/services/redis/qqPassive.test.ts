@@ -13,8 +13,17 @@ const createRedis = (stored?: string) => {
   if (stored) store.set('pending', stored);
 
   return {
-    // Mirrors PENDING_TAKE_SCRIPT: read and delete in one step.
-    eval: vi.fn(async () => {
+    // Mirrors PENDING_TAKE_SCRIPT (read and delete) and PENDING_RESTORE_SCRIPT (compare-and-set).
+    eval: vi.fn(async (script: string, _count: number, _key: string, ...args: unknown[]) => {
+      if (script.includes('-- restore')) {
+        const [text, older] = args as [string, string];
+        const current = store.get('pending');
+        if (current && current !== older) return 0;
+        store.set('pending', text);
+
+        return 1;
+      }
+
       const text = store.get('pending');
       store.delete('pending');
 
@@ -75,6 +84,50 @@ describe('qqPassive pending replies', () => {
     expect(redis.store.get('pending')).toBe('claimed before the outage');
     await expect(qqPassive.takePending(KEY)).resolves.toBe('reply parked during the outage');
     await expect(qqPassive.takePending(KEY)).resolves.toBe('claimed before the outage');
+  });
+
+  it('keeps the claimed newer reply when its delivery fails after the older one was put back', async () => {
+    mockedGetClient.mockResolvedValue(null as any);
+    await qqPassive.savePending(KEY, 'newer local reply');
+
+    const redis = createRedis('older Redis reply');
+    mockedGetClient.mockResolvedValue(redis as any);
+
+    // The newer copy goes out first, and the older one is handed back to Redis.
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('newer local reply');
+    expect(redis.store.get('pending')).toBe('older Redis reply');
+
+    // Its delivery failed. The requeued older reply must not shadow it, or the newer answer is
+    // lost for good: it was already removed from this instance when it was claimed.
+    await qqPassive.restorePending(KEY, 'newer local reply');
+    expect(redis.store.get('pending')).toBe('newer local reply');
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('newer local reply');
+    await expect(qqPassive.takePending(KEY)).resolves.toBeUndefined();
+  });
+
+  it('lets only the claim that requeued the older reply replace it', async () => {
+    mockedGetClient.mockResolvedValue(null as any);
+    await qqPassive.savePending(KEY, 'reply B');
+
+    const redis = createRedis('reply R');
+    mockedGetClient.mockResolvedValue(redis as any);
+
+    // Delivery B claims the newer local copy and hands `reply R` back to the slot.
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('reply B');
+    expect(redis.store.get('pending')).toBe('reply R');
+
+    // Redis blips out long enough for a second delivery to park a newer copy, then claims it and
+    // records its own permission for the same slot before its send succeeds.
+    mockedGetClient.mockResolvedValue(null as any);
+    await qqPassive.savePending(KEY, 'reply L');
+    mockedGetClient.mockResolvedValue(redis as any);
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('reply L');
+    expect(redis.store.get('pending')).toBe('reply R');
+
+    // B now fails. L's permission says nothing about B's claim, so `reply R` — parked after B was
+    // claimed — must survive instead of being overwritten by B.
+    await qqPassive.restorePending(KEY, 'reply B');
+    expect(redis.store.get('pending')).toBe('reply R');
   });
 
   it('drops the local copy once Redis accepts the same reply', async () => {
