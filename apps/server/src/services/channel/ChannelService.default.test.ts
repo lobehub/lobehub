@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelService } from './ChannelService';
+import { notifyChannel } from './notify';
 
 const { create, getAgent, getBuiltinAgent } = vi.hoisted(() => ({
   create: vi.fn(),
@@ -50,6 +51,8 @@ describe('the default Channel of a new workspace or project', () => {
       projectId: 'pro_1',
       title: 'General',
     });
+    // The creator's other devices list the new Channel without waiting for a poll.
+    expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
   });
 
   it.each([
@@ -75,5 +78,6 @@ describe('the default Channel of a new workspace or project', () => {
     getBuiltinAgent.mockResolvedValue(null);
     await expect(createDefault()).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(create).not.toHaveBeenCalled();
+    expect(notifyChannel).not.toHaveBeenCalled();
   });
 });
