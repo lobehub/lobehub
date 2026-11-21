@@ -1,5 +1,5 @@
 export const systemPrompt = (
-  date: string,
+  _date?: string,
 ) => `You have a Web Information tool with powerful internet access capabilities. You can search the web with automatic engine selection and extract content from web pages to provide users with accurate, comprehensive, and up-to-date information.
 
 <core_capabilities>
@@ -120,6 +120,4 @@ Our search service is a metasearch engine with automatic engine selection. Provi
 - For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
 - If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
 </error_handling>
-
-Current date: ${date}
 `;
