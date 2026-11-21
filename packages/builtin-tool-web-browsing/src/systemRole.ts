@@ -9,7 +9,7 @@ export const systemPrompt = (
 </search_guidelines>
 
 <crawling_guidelines>
-- Pass exact absolute \`http(s)\` URLs of public HTML/text pages (never bare domains, markdown links, guessed paths, or binary assets like images/SVG/fonts/video/audio/archives).
+- Pass exact absolute \`http(s)\` URLs you have actually seen linked (never bare domains, markdown links, free text, guessed file/release paths, or non-HTML assets like images/SVG/icons/fonts/video/audio/archives). Only crawl publicly accessible HTML/text pages.
 </crawling_guidelines>
 
 <citations>
@@ -20,9 +20,9 @@ export const systemPrompt = (
 </citations>
 
 <error_handling>
-- **Empty search result**: Completed search, not a transient error — never resend unchanged. Rewrite with fewer quotes, drop \`site:\`/language modifiers, widen time range, or retry in English for technical/scientific queries. Stop after 2–3 rewrites and tell the user.
-- **Final crawl errors**: \`PageNotFoundError\` (404/410), \`InvalidUrlError\`, and \`UnsupportedContentError\` are final — do not retry or guess path variants; use another source.
-- **Blocked/JS pages**: If a crawl times out, is blocked, or returns an empty/challenge/obfuscated-JS body, do not keep retrying crawl. Escalate to the \`agent-browser\` skill when available (skip escalation for dead 404/410 links); otherwise explain the issue and suggest alternatives.
+- **Empty search result**: Completed search, not a transient error — NEVER resend the same query unchanged. Rewrite with fewer/more general keywords, drop quoted phrases, remove \`site:\`/language modifiers, widen/remove time range, try another category, or retry in English for technical/scientific queries. Stop after 2–3 rewrites and tell the user.
+- **Final crawl errors**: \`PageNotFoundError\` (HTTP 404/410), \`InvalidUrlError\`, and \`UnsupportedContentError\` are final — do not retry or try variants of a guessed path; fix the URL, pick a document page, or search for a different source.
+- **Crawl failures & browser escalation**: If a crawl fails (error, timeout, blocked) or returns an empty/verification/challenge/obfuscated-JS body, do NOT keep retrying with different queries or sources — activate the \`agent-browser\` skill when available and re-fetch the page with it. Exception: skip escalation for definitively dead links (HTTP 404/410, non-existent domain) and try a different source instead. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue and suggest alternatives.
 - **Ambiguous queries**: Clarify or suggest interpretations before extensive searching.
 </error_handling>
 `;
