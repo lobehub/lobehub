@@ -263,7 +263,7 @@ const McpCatalog = () => {
   const matches = installed.filter((item) =>
     matchesConnectorKeyword(q, [item.title, item.identifier, item.description]),
   );
-  const label = t('apps.installedMcp');
+  const label = t('catalog.yourMcpServers');
   const error = connectors.error ?? plugins.error;
   const loading = !initialized && (connectors.isLoading || plugins.isValidating);
   const retry = () => {
