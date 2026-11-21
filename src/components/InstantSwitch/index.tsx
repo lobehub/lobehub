@@ -21,8 +21,15 @@ const InstantSwitch = memo<InstantSwitchProps>(({ disabled, enabled, onChange, s
       onChange={async (enabled) => {
         setLoading(true);
         setValue(enabled);
-        await onChange(enabled);
-        setLoading(false);
+        try {
+          await onChange(enabled);
+        } catch {
+          // The save failed, so the switch shows what is still stored; the
+          // caller reports the failure.
+          setValue(!enabled);
+        } finally {
+          setLoading(false);
+        }
       }}
     />
   );

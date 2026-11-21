@@ -33,6 +33,7 @@ import {
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
 import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -40,7 +41,7 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
-import { canStageDraftOn } from './startProjectTopicDraft';
+import { pickStartDirectory, START_DIRECTORY_PRESENCE_INTERVAL_MS } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
 import { useStartProjectTopic } from './useStartProjectTopic';
@@ -97,6 +98,12 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
       filterTopics(scopedTopics, filter, { directories }).length === 0,
     [filter, scopedTopics, directories],
   );
+  // Device priority skips offline devices, so their presence is loaded and
+  // kept fresh here: no other part of every sidebar layout guarantees it.
+  useDeviceStore((s) => s.useFetchDevices)(true, {
+    refreshInterval: START_DIRECTORY_PRESENCE_INTERVAL_MS,
+  });
+  const devices = useDeviceStore(deviceSelectors.deviceList);
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
   return (
@@ -127,10 +134,11 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
             title={t('sidebar.newConversation')}
             onClick={() =>
               // Same habit as an agent's "+": straight into the coordinator's
-              // conversation, on the first directory it can run in when there is one.
+              // conversation, on the first directory in the project's device
+              // priority it can run in when there is one.
               startTopic({
                 agentId: coordinatorAgentId,
-                directoryId: directories.find((d) => canStageDraftOn(d, fixedDeviceId))?.id,
+                directoryId: pickStartDirectory(directories, devices, fixedDeviceId)?.id,
               })
             }
           />

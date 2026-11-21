@@ -61,6 +61,36 @@ describe('projectWorkingDirectory store', () => {
     });
   });
 
+  describe('reorderDirectories', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('sends drags one after another so the last order reaches the server last', async () => {
+      const order: string[] = [];
+      let releaseFirst!: () => void;
+      vi.spyOn(projectWorkingDirectoryService, 'reorder').mockImplementation((async ({
+        ids,
+      }: {
+        ids: string[];
+      }) => {
+        order.push(`start:${ids[0]}`);
+        if (ids[0] === 'a') await new Promise<void>((resolve) => (releaseFirst = resolve));
+        order.push(`end:${ids[0]}`);
+        return { success: true };
+      }) as never);
+      vi.mocked(mutate).mockClear();
+
+      const store = useProjectDirectoryStore.getState();
+      const first = store.reorderDirectories('project-1', ['a', 'b']);
+      const second = store.reorderDirectories('project-1', ['b', 'a']);
+      await vi.waitFor(() => expect(order).toEqual(['start:a']));
+      releaseFirst();
+      await Promise.all([first, second]);
+
+      expect(order).toEqual(['start:a', 'end:a', 'start:b', 'end:b']);
+      expect(invalidates('projectDirectories', 'project-1')).toBe(true);
+    });
+  });
+
   describe('removeDirectory', () => {
     afterEach(() => vi.restoreAllMocks());
 

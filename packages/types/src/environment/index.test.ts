@@ -4,6 +4,7 @@ import {
   type EnvironmentConfiguration,
   layoutRepositorySources,
   toExecutionConfiguration,
+  withoutLocalOnlySources,
   withRepositorySetup,
 } from './index';
 
@@ -120,6 +121,42 @@ describe('withRepositorySetup', () => {
     ).toEqual({
       bootstrapCommand: "(cd '.' && npm ci\n)",
       sources: [{ kind: 'git', url: 'https://github.com/a/one' }],
+    });
+  });
+});
+
+describe('withoutLocalOnlySources', () => {
+  const app = { kind: 'git' as const, url: 'https://github.com/org/app' };
+  const secret = { kind: 'git' as const, url: 'https://github.com/org/secret' };
+
+  it('leaves a definition without local-only repositories as it was', () => {
+    const configuration: EnvironmentConfiguration = { sources: [app, secret] };
+    expect(withoutLocalOnlySources(configuration)).toBe(configuration);
+  });
+
+  it('drops local-only repositories and keeps the rest in their device folders', () => {
+    expect(
+      withoutLocalOnlySources({ sources: [app, { ...secret, localOnly: true }] }).sources,
+    ).toEqual([{ ...app, path: 'app' }]);
+  });
+
+  it('strips an explicit false so the execution plane never sees the flag', () => {
+    expect(withoutLocalOnlySources({ sources: [{ ...app, localOnly: false }] }).sources).toEqual([
+      app,
+    ]);
+  });
+
+  it('keeps local-only repositories out of what a sandbox build receives', () => {
+    expect(
+      toExecutionConfiguration({
+        sources: [
+          { ...app, setupCommand: 'pnpm i' },
+          { ...secret, localOnly: true, setupCommand: 'make' },
+        ],
+      }),
+    ).toEqual({
+      bootstrapCommand: "(cd 'app' && pnpm i\n)",
+      sources: [{ ...app, path: 'app' }],
     });
   });
 });

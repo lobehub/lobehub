@@ -65,6 +65,36 @@ describe('resolveProjectTopicSandbox', () => {
     await expect(resolve()).resolves.toEqual({});
   });
 
+  it('starts nowhere special when every repository is local-only', async () => {
+    mocks.getProjectEnvironment.mockResolvedValue({
+      ...environment,
+      configuration: {
+        kind: 'code',
+        sources: environment.configuration.sources.map((source) => ({
+          ...source,
+          localOnly: true,
+        })),
+      },
+    });
+
+    await expect(resolve()).resolves.toEqual({});
+  });
+
+  it('still starts in the sandbox while one repository may be cloned there', async () => {
+    mocks.getProjectEnvironment.mockResolvedValue({
+      ...environment,
+      configuration: {
+        kind: 'code',
+        sources: [
+          { ...environment.configuration.sources[0], localOnly: true },
+          environment.configuration.sources[1],
+        ],
+      },
+    });
+
+    await expect(resolve()).resolves.toEqual({ sandboxEnvironmentId: 'env-project' });
+  });
+
   it('gives a workspace-public agent the environment only once it is published', async () => {
     mocks.getAgentVisibility.mockResolvedValue('public');
 

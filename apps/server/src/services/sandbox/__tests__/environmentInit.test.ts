@@ -80,6 +80,31 @@ describe('toSandboxInitialization', () => {
     ]);
   });
 
+  it('never clones a local-only repository or runs its setup', () => {
+    expect(
+      toSandboxInitialization({
+        configuration: {
+          sources: [
+            { kind: 'git', url: 'https://github.com/lobehub/lobehub' },
+            {
+              kind: 'git',
+              localOnly: true,
+              path: 'lobe-ui',
+              setupCommand: 'pnpm i',
+              url: 'https://github.com/lobehub/lobe-ui',
+            },
+          ],
+        },
+        id: 'env-1',
+        name: 'Two',
+      }),
+    ).toEqual({
+      environmentId: 'env-1',
+      name: 'Two',
+      sources: [{ path: 'lobehub', url: 'https://github.com/lobehub/lobehub' }],
+    });
+  });
+
   it('asks for nothing when the environment has neither a repository nor setup', () => {
     expect(
       toSandboxInitialization({

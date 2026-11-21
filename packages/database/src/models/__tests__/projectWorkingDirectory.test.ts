@@ -293,3 +293,45 @@ it('normalizes directory paths per platform', () => {
   expect(normalizeProjectDirectory('C:\\work\\repo\\', 'win32')).toBe('C:\\work\\repo');
   expect(() => normalizeProjectDirectory('relative/path', 'linux')).toThrow();
 });
+
+describe('project directory priority', () => {
+  const bindAt = async (path: string) => {
+    const [device] = await db.select().from(devices);
+    return model.create({
+      addedByUserId: userId,
+      deviceId: device.id,
+      name: path,
+      path,
+      projectId: base.projectId,
+    });
+  };
+  const order = async () =>
+    (
+      await db
+        .select({ path: projectWorkingDirectories.path })
+        .from(projectWorkingDirectories)
+        .orderBy(projectWorkingDirectories.sortOrder, projectWorkingDirectories.createdAt)
+    ).map((row) => row.path);
+
+  it('appends a new directory after the ranked ones', async () => {
+    const first = await bindAt('/work/a');
+    const second = await bindAt('/work/b');
+    expect([first.sortOrder, second.sortOrder]).toEqual([0, 1]);
+    await model.reorder(base.projectId, [second.id, first.id]);
+    await bindAt('/work/c');
+    expect(await order()).toEqual(['/work/b', '/work/a', '/work/c']);
+  });
+
+  it('ranks the listed directories first and keeps the rest after them', async () => {
+    const a = await bindAt('/work/a');
+    await bindAt('/work/b');
+    const c = await bindAt('/work/c');
+    await model.reorder(base.projectId, [c.id, a.id]);
+    expect(await order()).toEqual(['/work/c', '/work/a', '/work/b']);
+  });
+
+  it('refuses to reorder another user’s project', async () => {
+    const a = await bindAt('/work/a');
+    await expect(other.reorder(base.projectId, [a.id])).rejects.toThrow();
+  });
+});

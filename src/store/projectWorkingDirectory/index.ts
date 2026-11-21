@@ -111,6 +111,11 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   relocateDirectory: (...args: ServiceParams<'relocate'>) => Promise<ServiceData<'relocate'>>;
   /** Remove a directory from a project; its conversations stay in the project. */
   removeDirectory: (projectId: string, id: string) => Promise<void>;
+  /**
+   * Rank a project's directories — its device priority. The new order shows at
+   * once and is confirmed by a refetch either way.
+   */
+  reorderDirectories: (projectId: string, ids: string[]) => Promise<void>;
   /** Create or rename an environment. */
   saveEnvironment: (
     ...args: ServiceParams<'saveEnvironment'>
@@ -198,6 +203,12 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
     stateKey: 'directoryTopicsReplica',
     view: recordLens<ProjectDirectoryStore, DirectoryTopic[]>('directoryTopicsMap'),
   });
+  // Reorders run one after another, so the server ends on the last drag; only
+  // the last one in flight refetches, so an earlier one cannot flash its
+  // order back over a newer optimistic one.
+  let reorderQueue: Promise<unknown> = Promise.resolve();
+  let reorderVersion = 0;
+
   const environmentTopics = createReplicaSlice(environmentTopicsResource, {
     actionPrefix: 'projectWorkingDirectory/environmentTopics',
     fetcher: (idsKey) =>
@@ -264,6 +275,30 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         environments.revalidate(input.projectId),
       ]);
       return result.data;
+    },
+    reorderDirectories: async (projectId, ids) => {
+      const current = get().directoriesMap[projectId];
+      if (current) {
+        const rank = new Map(ids.map((id, index) => [id, index]));
+        const next = [...current].sort(
+          (a, b) => (rank.get(a.id) ?? ids.length) - (rank.get(b.id) ?? ids.length),
+        );
+        set({ directoriesMap: { ...get().directoriesMap, [projectId]: next } });
+      }
+      const version = ++reorderVersion;
+      const operation = reorderQueue
+        .catch(() => undefined)
+        .then(() => projectWorkingDirectoryService.reorder({ ids, projectId }));
+      reorderQueue = operation;
+      try {
+        await operation;
+      } finally {
+        if (version === reorderVersion)
+          await Promise.all([
+            directories.revalidate(projectId),
+            directories.revalidate(ALL_PROJECTS_KEY),
+          ]);
+      }
     },
     removeDirectory: async (projectId, id) => {
       await projectWorkingDirectoryService.remove({ id, projectId });

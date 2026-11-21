@@ -1,4 +1,4 @@
-import { toExecutionConfiguration } from '@lobechat/types';
+import { toExecutionConfiguration, withoutLocalOnlySources } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -74,7 +74,8 @@ export const instanceBuildRouter = router({
       // result and never the inputs, the same way it is handed the workspace
       // claim.
       const credentials = await resolveScmCloneCredentials({
-        configuration: specification,
+        // Local-only repositories are not built here, so they get no token.
+        configuration: withoutLocalOnlySources(specification),
         db: ctx.serverDB,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,

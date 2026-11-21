@@ -27,6 +27,8 @@ const ALLOWED_SOURCE_HOSTS = new Set(['github.com', 'www.github.com']);
  */
 const environmentSourceSchema = z.object({
   kind: z.literal('git'),
+  /** Checked out on the project's local devices only, never in a cloud sandbox. */
+  localOnly: z.boolean().optional(),
   /** Where the checkout lands, relative to the instance's own directory. */
   path: relativePathSchema.optional(),
   ref: z.string().trim().min(1).max(255).optional(),

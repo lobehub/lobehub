@@ -430,6 +430,13 @@ export const projectWorkingDirectoryRouter = router({
         success: true,
       };
     }),
+  /** Rank a project's directories: the first is the device a local run prefers. */
+  reorder: write
+    .input(z.object({ ids: z.array(z.string().uuid()).max(200), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.directoryModel.reorder(input.projectId, input.ids).catch(notFound);
+      return { success: true };
+    }),
   remove: write
     .input(idInput.extend({ projectId: z.string() }))
     .mutation(async ({ ctx, input }) => ({

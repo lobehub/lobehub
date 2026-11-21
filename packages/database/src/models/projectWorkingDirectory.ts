@@ -82,8 +82,39 @@ export class ProjectWorkingDirectoryModel {
     projectId: string;
     workspaceId?: string;
   }) {
-    const [row] = await this.db.insert(projectWorkingDirectories).values(input).returning();
+    // A new directory goes last: the order is the project's device priority,
+    // and adding a folder must not jump it ahead of the ones already ranked.
+    const [row] = await this.db
+      .insert(projectWorkingDirectories)
+      .values({
+        ...input,
+        sortOrder: sql`(select coalesce(max(${projectWorkingDirectories.sortOrder}) + 1, 0) from ${projectWorkingDirectories} where ${projectWorkingDirectories.projectId} = ${input.projectId})`,
+      })
+      .returning();
     return row;
+  }
+
+  /**
+   * Rank a project's directories: `ids` in priority order, first is preferred.
+   * A local run starts on the first one whose device can take it. Ids of other
+   * projects' directories are ignored; directories left out keep their rank
+   * after the listed ones.
+   */
+  async reorder(projectId: string, ids: string[]) {
+    await this.project(projectId);
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return;
+    const rank = sql.join(
+      unique.map((id, index) => sql`when ${projectWorkingDirectories.id} = ${id} then ${index}`),
+      sql` `,
+    );
+    await this.db
+      .update(projectWorkingDirectories)
+      .set({
+        sortOrder: sql`case ${rank} else ${projectWorkingDirectories.sortOrder} + ${unique.length} end`,
+        updatedAt: new Date(),
+      })
+      .where(eq(projectWorkingDirectories.projectId, projectId));
   }
 
   async list(projectId?: string) {

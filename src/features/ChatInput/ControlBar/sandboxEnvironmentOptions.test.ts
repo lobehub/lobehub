@@ -5,6 +5,7 @@ import {
   environmentSettingsPath,
   pickableEnvironments,
   projectStartEnvironmentId,
+  repositoriesLabel,
   repositorySelection,
   repositorySlug,
 } from './sandboxEnvironmentOptions';
@@ -107,5 +108,26 @@ describe('projectStartEnvironmentId', () => {
       undefined,
     );
     expect(projectStartEnvironmentId([])).toBeUndefined();
+  });
+
+  it('labels the environment by the repositories a sandbox clones', () => {
+    const mixed = {
+      configuration: {
+        sources: [
+          { kind: 'git' as const, localOnly: true, url: 'https://github.com/org/secret' },
+          { kind: 'git' as const, url: 'https://github.com/org/app' },
+        ],
+      },
+    };
+    expect(repositorySlug(mixed)).toBe('org/app');
+    expect(repositoriesLabel(mixed)).toBe('org/app');
+  });
+
+  // Same rule as the server: a local-only repository is never cloned in the cloud.
+  it('is none when every repository is local-only', () => {
+    const localOnly = { sources: [{ ...git.sources[0], localOnly: true }] };
+    expect(projectStartEnvironmentId([{ configuration: localOnly, id: 'env-project' }])).toBe(
+      undefined,
+    );
   });
 });

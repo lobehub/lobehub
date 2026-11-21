@@ -27,11 +27,16 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
-import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
+import {
+  canStageDraftOn,
+  pickStartDirectory,
+  START_DIRECTORY_PRESENCE_INTERVAL_MS,
+} from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useStartProjectTopic } from '@/features/Projects/WorkingDirectories/useStartProjectTopic';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { type ProjectTopicSubGroupMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -116,12 +121,23 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
     [canAddTopic, directories, fixedDeviceId],
   );
 
+  // Device priority skips offline devices, so their presence is loaded and
+  // kept fresh here: no other part of every sidebar layout guarantees it.
+  useDeviceStore((s) => s.useFetchDevices)(true, {
+    refreshInterval: START_DIRECTORY_PRESENCE_INTERVAL_MS,
+  });
+  const devices = useDeviceStore(deviceSelectors.deviceList);
   const startTopic = useStartProjectTopic(scope?.projectId);
   // Same habit as an agent's "+": straight into this agent's conversation, on
-  // the first directory it can run in when there is one.
+  // the first directory in the project's device priority it can run in.
   const handleAddTopic = (initialDirectoryId?: string) => {
     if (!scope || !agentId) return;
-    startTopic({ agentId, directoryId: initialDirectoryId ?? startDirectories?.[0]?.id });
+    startTopic({
+      agentId,
+      directoryId:
+        initialDirectoryId ??
+        (startDirectories && pickStartDirectory(startDirectories, devices, fixedDeviceId)?.id),
+    });
   };
 
   // The agent bucket already sits inside one project, so its rows skip the
