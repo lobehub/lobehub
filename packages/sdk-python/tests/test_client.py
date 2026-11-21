@@ -83,6 +83,29 @@ def test_workspace_id_default_per_call_override_and_with_options(server: MockSer
     assert scoped.agent_groups._client is scoped
 
 
+def test_header_spellings_merge_case_insensitively(server: MockServer) -> None:
+    """HTTP header names are case-insensitive, so a later spelling must replace the value.
+
+    Keeping `x-workspace-id` from `default_headers` next to the client's `X-Workspace-Id`
+    would send one header with both values joined by a comma, and the API compares the
+    workspace out of that header exactly.
+    """
+    server.default = Reply(body=envelope({"items": [], "hasMore": False, "nextCursor": None, "total": 0}))
+    client = make(server, default_headers={"x-workspace-id": "ws_stale"})
+
+    client.agent_groups.list(workspace_id="ws_call")
+    client.agent_groups.list(extra_headers={"X-Workspace-Id": "ws_extra"})
+
+    assert [r.headers["x-workspace-id"] for r in server.requests] == ["ws_call", "ws_extra"]
+
+
+def test_the_client_workspace_replaces_a_default_headers_spelling(server: MockServer) -> None:
+    server.reply(Reply(body=envelope({"id": "user_1"})))
+    make(server, workspace_id="ws_new", default_headers={"x-workspace-id": "ws_old"}).users.me()
+
+    assert server.requests[0].headers["x-workspace-id"] == "ws_new"
+
+
 def test_path_query_and_json_body_serialization(server: MockServer) -> None:
     server.default = Reply(body=envelope({"items": [], "hasMore": False, "nextCursor": None, "total": 0}))
     client = make(server)

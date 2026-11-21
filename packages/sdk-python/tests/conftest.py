@@ -84,7 +84,12 @@ class MockServer:
                     method=self.command,
                     path=parts.path,
                     query=parse_qs(parts.query),
-                    headers={k.lower(): v for k, v in self.headers.items()},
+                    headers={
+                        # A header sent twice reaches the handler as one comma-joined
+                        # value, so record it the way the server would read it.
+                        name.lower(): ", ".join(self.headers.get_all(name) or [])
+                        for name in self.headers.keys()
+                    },
                     body=body,
                 )
                 server.requests.append(recorded)

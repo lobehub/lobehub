@@ -88,6 +88,27 @@ def should_retry_status(request: httpx.Request, response: httpx.Response) -> boo
     return isinstance(body, dict) and body.get("code") == "idempotency_conflict"
 
 
+def _set_header(headers: Dict[str, str], name: str, value: str) -> None:
+    """
+    Assign a header, dropping any earlier spelling that differs only in case.
+
+    HTTP header names are case-insensitive: keeping `x-workspace-id` and
+    `X-Workspace-Id` side by side would make httpx send one header with both
+    values joined by a comma.
+    """
+    lowered = name.lower()
+    for existing in [key for key in headers if key.lower() == lowered]:
+        del headers[existing]
+    headers[name] = value
+
+
+def _merge_headers(headers: Dict[str, str], overrides: Optional[Mapping[str, Optional[str]]]) -> None:
+    """Apply headers case-insensitively, so a later spelling replaces the earlier value."""
+    for name, value in (overrides or {}).items():
+        if value is not None:
+            _set_header(headers, name, value)
+
+
 def _query_value(value: Any) -> Any:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -147,15 +168,17 @@ class BaseClient:
         return clone
 
     def _headers(self, token: Optional[str]) -> Dict[str, str]:
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": f"lobehub-python/{__version__}",
-            **self._default_headers,
-        }
+        # Every layer is folded in case-insensitively: a `default_headers` spelling of
+        # `x-workspace-id` must be replaced by the client's `workspace_id`, not sent
+        # alongside it (the API compares the workspace out of that header exactly).
+        headers: Dict[str, str] = {}
+        _set_header(headers, "Accept", "application/json")
+        _set_header(headers, "User-Agent", f"lobehub-python/{__version__}")
+        _merge_headers(headers, self._default_headers)
         if token:
-            headers["Authorization"] = f"Bearer {token}"
+            _set_header(headers, "Authorization", f"Bearer {token}")
         if self.workspace_id:
-            headers[WORKSPACE_HEADER] = self.workspace_id
+            _set_header(headers, WORKSPACE_HEADER, self.workspace_id)
         return headers
 
     def _timeout(self, timeout: Optional[float]) -> Optional[float]:
@@ -180,11 +203,12 @@ class BaseClient:
         accept: Optional[str],
     ) -> httpx.Request:
         merged = self._headers(token)
-        # A per-call header (`workspace_id=`, `idempotency_key=`) wins over the client default.
-        merged.update({k: v for k, v in (headers or {}).items() if v is not None})
-        merged.update(extra_headers or {})
+        # A per-call header (`workspace_id=`, `idempotency_key=`) wins over the client
+        # default, whatever its casing.
+        _merge_headers(merged, headers)
+        _merge_headers(merged, extra_headers)
         if accept:
-            merged["Accept"] = accept
+            _set_header(merged, "Accept", accept)
 
         params = {
             k: _query_value(v) for k, v in {**(query or {}), **(extra_query or {})}.items() if v is not None
@@ -195,7 +219,8 @@ class BaseClient:
             # new boundary on every attempt, and the server's Idempotency-Key fingerprint
             # hashes the raw bytes, so a rebuilt multipart looks like a different request.
             body, content_type = multipart
-            merged.setdefault("Content-Type", content_type)
+            if not any(key.lower() == "content-type" for key in merged):
+                merged["Content-Type"] = content_type
             content = {"content": body}
         elif extra_body is not None:
             # Fields the spec does not (yet) describe ride along with the typed body.
