@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import { NetworkConnectionError, ProviderFetchError, TimeoutError } from '../../utils/errorType';
 import { firecrawl } from '../firecrawl';
 
 const pageMetadata = () => ({
@@ -122,7 +122,7 @@ describe('firecrawl crawler', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should throw PageNotFoundError for 404 status', async () => {
+  it('should treat the provider API 404 as a provider failure, not a dead link', async () => {
     process.env.FIRECRAWL_API_KEY = 'test-api-key';
 
     const mockResponse = createMockResponse('Not Found', {
@@ -135,7 +135,7 @@ describe('firecrawl crawler', () => {
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
 
     await expect(firecrawl('https://example.com', { filterOptions: {} })).rejects.toThrow(
-      PageNotFoundError,
+      ProviderFetchError,
     );
   });
 

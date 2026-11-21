@@ -7,6 +7,7 @@ import {
   isRetryableCrawlError,
   NetworkConnectionError,
   PageNotFoundError,
+  ProviderFetchError,
   TimeoutError,
   toFetchError,
   UnsupportedContentError,
@@ -277,6 +278,10 @@ describe('isRetryableCrawlError', () => {
     expect(isRetryableCrawlError(new HTTPStatusError('422', 422))).toBe(false);
     expect(isRetryableCrawlError(new HTTPStatusError('408', 408))).toBe(true);
     expect(isRetryableCrawlError(new HTTPStatusError('429', 429))).toBe(true);
+  });
+
+  it('should not resend a request the provider could not fetch', () => {
+    expect(isRetryableCrawlError(new ProviderFetchError('failed', 404, 'DeepSeek'))).toBe(false);
   });
 
   it('should retry transient failures', () => {

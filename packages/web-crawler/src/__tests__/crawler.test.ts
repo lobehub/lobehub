@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Crawler } from '../crawler';
-import { HTTPStatusError, PageNotFoundError } from '../utils/errorType';
+import { HTTPStatusError, PageNotFoundError, ProviderFetchError } from '../utils/errorType';
 
 // Move mocks outside of test cases to avoid hoisting issues
 vi.mock('../crawImpl', () => ({
@@ -368,6 +368,59 @@ describe('Crawler', () => {
       expect(crawlImpls.naive).not.toHaveBeenCalled();
       expect((result.data as any).content).toContain('HTTP 410');
       expect(result.data).toMatchObject({ retryable: false });
+    });
+  });
+
+  describe('provider 404', () => {
+    const providerError = () =>
+      new ProviderFetchError(
+        'DeepSeek could not fetch this page (provider response status 404)',
+        404,
+        'DeepSeek',
+      );
+
+    it('should fall through to the next impl instead of reporting a dead link', async () => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockRejectedValue(providerError());
+      vi.mocked(crawlImpls.naive).mockResolvedValue({
+        content: 'Recovered content'.repeat(10),
+        contentType: 'text',
+        length: 170,
+        title: 'Recovered',
+        url: 'https://example.com',
+      });
+
+      const result = await crawler.crawl({ url: 'https://example.com' });
+
+      expect(crawlImpls.jina).toHaveBeenCalledTimes(1);
+      expect(crawlImpls.naive).toHaveBeenCalledTimes(1);
+      expect(result.crawler).toBe('naive');
+      expect(result.data).not.toHaveProperty('errorType');
+    });
+
+    it('should still honour a dead link confirmed by a later impl', async () => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockRejectedValue(providerError());
+      vi.mocked(crawlImpls.naive).mockRejectedValue(new PageNotFoundError('Not Found', 404));
+
+      const result = await crawler.crawl({ url: 'https://example.com/missing' });
+
+      expect(crawlImpls.search1api).not.toHaveBeenCalled();
+      expect(result.crawler).toBe('naive');
+      expect(result.data).toMatchObject({ errorType: 'PageNotFoundError', retryable: false });
+    });
+
+    it('should return an explicit upstream error when no impl is left', async () => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockRejectedValue(providerError());
+
+      const result = await new Crawler({ impls: ['jina'] }).crawl({ url: 'https://example.com' });
+      const content = (result.data as any).content;
+
+      expect(result.data).toMatchObject({ errorType: 'ProviderFetchError', retryable: false });
+      expect(content).toContain('DeepSeek could not fetch this page');
+      expect(content).toContain('does NOT mean the page is missing');
+      expect(content).not.toContain('Dead link:');
     });
   });
 

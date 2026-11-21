@@ -7,6 +7,7 @@ import {
   InvalidUrlError,
   isRetryableCrawlError,
   PageNotFoundError,
+  ProviderFetchError,
   UnsupportedContentError,
 } from './utils/errorType';
 import { getNonDocumentExtension, normalizeCrawlUrl } from './utils/urlPreflight';
@@ -53,6 +54,8 @@ const buildErrorData = (error: Error | undefined): CrawlErrorResult => {
 
   if (error instanceof PageNotFoundError) {
     content = `Dead link: the server confirmed this page does not exist (HTTP ${error.status}). This is a final answer — do not retry this URL; find a different source instead.`;
+  } else if (error instanceof ProviderFetchError) {
+    content = `Crawl provider failure: ${errorMessage}. This does NOT mean the page is missing — it may still exist. Do not report it as a dead link; read it another way (e.g. a browser) or use a different source.`;
   } else if (error instanceof InvalidUrlError) {
     content = `Invalid URL: ${errorMessage}. Nothing was fetched — pass an absolute http(s) URL.`;
   } else if (error instanceof UnsupportedContentError) {
