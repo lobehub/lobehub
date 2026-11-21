@@ -4,6 +4,20 @@ import * as stylex from '@stylexjs/stylex';
 import { densityTokens } from '@/styles/density.stylex';
 
 export const styles = stylex.create({
+  // The personal vault's filled card row; listed after `container` so its
+  // padding wins.
+  card: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  cardClickable: {
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+  },
   container: {
     paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
@@ -36,7 +50,7 @@ export const styles = stylex.create({
     borderRadius: '10px',
   },
   key: {
-    fontFamily: 'monospace',
+    fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
   },

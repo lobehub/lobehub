@@ -16,14 +16,23 @@ const styles = stylex.create({ steps: { marginBlockEnd: '24px' } });
 
 export interface CreateCredModalContentProps {
   credsApi: CredsApi;
+  /**
+   * The type already picked from the vault's create menu: the modal opens on
+   * its form, and Back still leads to the type step.
+   */
+  initialType?: CredType;
   onSuccess?: () => void;
 }
 
-const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ credsApi, onSuccess }) => {
+const CreateCredModalContent: FC<CreateCredModalContentProps> = ({
+  credsApi,
+  initialType,
+  onSuccess,
+}) => {
   const { t } = useTranslation('setting');
   const { close } = useModalContext();
-  const [step, setStep] = useState(0);
-  const [credType, setCredType] = useState<CredType | null>(null);
+  const [step, setStep] = useState(initialType ? 1 : 0);
+  const [credType, setCredType] = useState<CredType | null>(initialType ?? null);
 
   const handleTypeSelect = (type: CredType) => {
     setCredType(type);

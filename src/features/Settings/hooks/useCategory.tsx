@@ -26,6 +26,7 @@ import {
   TagIcon,
   TerminalSquare,
   Trash2,
+  VaultIcon,
   WebhookIcon,
   Wrench,
   ZapIcon,
@@ -232,13 +233,20 @@ export const useCategory = () => {
         key: SettingsTabs.SubscriptionAccounts,
         label: t('tab.subscriptionAccounts'),
       },
-      // Environments & Vault, always there: what a run starts from and
-      // the secrets it reads, in one place. An environment is a definition,
-      // written down before anything runs it, so it needs no drive.
+      // Always there: an environment is a definition, written down before
+      // anything runs it, so it needs no drive.
       {
         icon: ContainerIcon,
         key: SettingsTabs.Environments,
-        label: t('tab.environmentsAndCreds'),
+        label: t('tab.environments'),
+      },
+      // The personal vault has its own entry: every secret in it is the
+      // caller's own, so it reads as part of their settings rather than as a
+      // tab of a shared resource page (workspaces keep Environments & Vault).
+      {
+        icon: VaultIcon,
+        key: SettingsTabs.Creds,
+        label: t('tab.creds'),
       },
       isDesktop && {
         icon: EthernetPort,

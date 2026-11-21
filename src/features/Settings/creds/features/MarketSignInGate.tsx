@@ -25,11 +25,14 @@ const styles = stylex.create({
  * Credentials live in the Market account: until the user is signed in to the
  * Market, show a sign-in prompt instead of `children`.
  */
-const MarketSignInGate: FC<{ children: ReactNode }> = ({ children }) => {
+const MarketSignInGate: FC<{ children: ReactNode; loading?: ReactNode }> = ({
+  children,
+  loading,
+}) => {
   const { t } = useTranslation('setting');
   const { isAuthenticated, isLoading, signIn } = useMarketAuth();
 
-  if (isLoading) return <CredsListSkeleton />;
+  if (isLoading) return loading ?? <CredsListSkeleton />;
 
   if (!isAuthenticated) {
     return (

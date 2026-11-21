@@ -82,7 +82,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   ],
   [SettingsTabs.Webhooks]: ['webhooks', 'webhook url', 'callback', 'http trigger'],
   [SettingsTabs.Credits]: ['credits', 'balance', 'top up', 'recharge', 'buy credits'],
-  [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
+  [SettingsTabs.Creds]: ['vault', 'credentials', 'secrets', 'oauth'],
   [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
@@ -98,6 +98,8 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
+    // The workspace Environments & Vault page shares this key; the personal
+    // vault has its own entry under `credential`.
     'credentials',
     'secrets',
     'vault',

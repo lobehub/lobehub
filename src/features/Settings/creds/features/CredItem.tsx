@@ -13,21 +13,13 @@ import {
   Tag,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import {
-  Eye,
-  File,
-  Globe,
-  Key,
-  MoreHorizontalIcon,
-  Pencil,
-  TerminalSquare,
-  Trash2,
-} from 'lucide-react';
+import { Eye, MoreHorizontalIcon, Pencil, Trash2 } from 'lucide-react';
 import { type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDensity } from '@/styles/density';
 
+import { CRED_TYPE_ICONS } from './credTypeIcons';
 import { styles } from './style';
 
 interface CredItemProps {
@@ -36,6 +28,11 @@ interface CredItemProps {
   cred: UserCredSummary;
   /** Row-specific actions (publish, share…) listed before view / edit / delete. */
   extraMenuItems?: DropdownItem[];
+  /**
+   * Row click, the item's primary action. Card rows only; the row shows as
+   * clickable while it is set.
+   */
+  onClick?: (cred: UserCredSummary) => void;
   /**
    * Action handlers are optional: omit one to leave its item out. A row with
    * no items renders no "..." menu.
@@ -47,13 +44,19 @@ interface CredItemProps {
   tags?: React.ReactNode;
   /** Inline marker right after the name, e.g. the private lock in the workspace list. */
   titleSuffix?: React.ReactNode;
+  /**
+   * `list` (default): a plain row with the type as a tag. `card`: the personal
+   * vault's filled card, with the type leading the second line instead — the
+   * vault's category tabs already sort items by type.
+   */
+  variant?: 'card' | 'list';
 }
 
-const typeIcons: Record<string, React.ReactNode> = {
-  'file': <File size={20} />,
-  'kv-env': <TerminalSquare size={20} />,
-  'kv-header': <Globe size={20} />,
-  'oauth': <Key size={20} />,
+/** What a person knows the item by after its name: the account, the file, else the key. */
+const itemDetail = (cred: UserCredSummary) => {
+  if (cred.type === 'oauth') return cred.oauthUsername || cred.key;
+  if (cred.type === 'file') return cred.fileName || cred.key;
+  return cred.key;
 };
 
 const typeColors: Record<string, string> = {
@@ -64,7 +67,19 @@ const typeColors: Record<string, string> = {
 };
 
 const CredItem: FC<CredItemProps> = memo(
-  ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags, titleSuffix }) => {
+  ({
+    canManage,
+    cred,
+    extraMenuItems = [],
+    onClick,
+    onEdit,
+    onDelete,
+    onView,
+    tags,
+    titleSuffix,
+    variant = 'list',
+  }) => {
+    const isCard = variant === 'card';
     const { t } = useTranslation('setting');
     const { compact, tokens } = useDensity();
 
@@ -127,7 +142,7 @@ const CredItem: FC<CredItemProps> = memo(
         // `display: flex` collapses the inline span's line box so the svg sits
         // dead-center in the 48px container instead of on the text baseline.
         <span style={{ color: 'var(--lobe-color-text-secondary)', display: 'flex' }}>
-          {typeIcons[cred.type]}
+          <Icon icon={CRED_TYPE_ICONS[cred.type]} size={20} />
         </span>
       );
     };
@@ -136,9 +151,17 @@ const CredItem: FC<CredItemProps> = memo(
       <Flexbox
         horizontal
         align="center"
-        className={stylex.props(styles.container, compact && styles.containerCompact).className}
         gap={tokens.sectionGap}
         justify="space-between"
+        className={
+          stylex.props(
+            styles.container,
+            compact && styles.containerCompact,
+            isCard && styles.card,
+            isCard && onClick && styles.cardClickable,
+          ).className
+        }
+        onClick={isCard && onClick ? () => onClick(cred) : undefined}
       >
         <Flexbox
           horizontal
@@ -153,7 +176,7 @@ const CredItem: FC<CredItemProps> = memo(
                 {cred.name}
               </span>
               {titleSuffix}
-              <Tag color={typeColors[cred.type]}>{t(`creds.types.${cred.type}`)}</Tag>
+              {!isCard && <Tag color={typeColors[cred.type]}>{t(`creds.types.${cred.type}`)}</Tag>}
               {tags}
             </Flexbox>
             <Flexbox
@@ -162,8 +185,16 @@ const CredItem: FC<CredItemProps> = memo(
               gap={8}
               style={{ lineHeight: compact ? '18px' : undefined }}
             >
-              <code {...stylex.props(styles.key)}>{cred.key}</code>
-              {cred.description && (
+              {isCard ? (
+                <span {...stylex.props(styles.description)}>
+                  {[t(`creds.types.${cred.type}`), itemDetail(cred), cred.description]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              ) : (
+                <code {...stylex.props(styles.key)}>{cred.key}</code>
+              )}
+              {!isCard && cred.description && (
                 <>
                   <span style={{ color: 'var(--lobe-color-text-quaternary)' }}>·</span>
                   <span {...stylex.props(styles.description)}>{cred.description}</span>
@@ -175,7 +206,7 @@ const CredItem: FC<CredItemProps> = memo(
         <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
           {menuItems.length > 0 && (
             <DropdownMenu items={menuItems} placement="bottomRight">
-              <Button icon={MoreHorizontalIcon} />
+              <Button aria-label={t('creds.table.actions')} icon={MoreHorizontalIcon} />
             </DropdownMenu>
           )}
         </Flexbox>

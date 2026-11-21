@@ -14,18 +14,26 @@ const ROW_WIDTHS = [
   [112, 184],
 ];
 
+interface CredsListSkeletonProps {
+  rows?: number;
+  /** Matches `CredItem`'s variant: `card` is the personal vault's filled rows. */
+  variant?: 'card' | 'list';
+}
+
 /**
- * Credential rows as `CredItem` lays them out: 12px block padding, a 48px icon
- * tile, a name + type-tag line over a key line, and the "..." menu button. Rows
- * sit edge to edge (gap 0), like the settled list.
+ * Credential rows as `CredItem` lays them out: a 48px icon tile, a name line
+ * over a key line, and the "..." menu button. `list` rows sit edge to edge
+ * with 12px block padding and a type tag; `card` rows are filled cards 8px
+ * apart with 12px × 16px padding and no tag, like the personal vault.
  */
-export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
+export const CredsListSkeleton = ({ rows = 4, variant = 'list' }: CredsListSkeletonProps) => {
   // Compact `CredItem`: 6px padding, 36px tile, 22px title line + 2 + 18px key line = 54px.
   const { compact, tokens } = useDensity();
   const { controlHeight } = useDensityTokens();
+  const isCard = variant === 'card';
 
   return (
-    <Flexbox aria-busy data-testid={'settings-creds-skeleton'} gap={0} width={'100%'}>
+    <Flexbox aria-busy data-testid={'settings-creds-skeleton'} gap={isCard ? 8 : 0} width={'100%'}>
       {Array.from({ length: rows }, (_, index) => {
         const [title, key] = ROW_WIDTHS[index % ROW_WIDTHS.length];
         return (
@@ -35,7 +43,16 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
             gap={tokens.sectionGap}
             justify={'space-between'}
             key={index}
-            style={{ paddingBlock: compact ? 6 : 12 }}
+            style={
+              isCard
+                ? {
+                    background: cssVar.colorFillQuaternary,
+                    borderRadius: cssVar.borderRadiusLG,
+                    paddingBlock: 12,
+                    paddingInline: 16,
+                  }
+                : { paddingBlock: compact ? 6 : 12 }
+            }
           >
             <Flexbox horizontal align={'center'} flex={1} gap={tokens.sectionGap}>
               <SkeletonBar
@@ -46,7 +63,7 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
               <Flexbox gap={compact ? 2 : 4}>
                 <Flexbox horizontal align={'center'} gap={8} height={22}>
                   <SkeletonBar height={compact ? 14 : 15} width={title} />
-                  <SkeletonBar height={22} radius={cssVar.borderRadiusSM} width={52} />
+                  {!isCard && <SkeletonBar height={22} radius={cssVar.borderRadiusSM} width={52} />}
                 </Flexbox>
                 <Flexbox height={18} justify={'center'}>
                   <SkeletonBar height={12} width={key} />
@@ -61,9 +78,23 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
   );
 };
 
-/** The small primary "Create" button the page portals into the header. */
-const PageActions = () => <SkeletonBar height={32} width={96} />;
+/**
+ * The personal vault page: the toolbar row (category tabs, search, create
+ * menu) above the card rows.
+ */
+const VaultSkeleton = () => (
+  <Flexbox gap={16} width={'100%'}>
+    <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+      <SkeletonBar height={38} radius={cssVar.borderRadiusLG} width={420} />
+      <Flexbox horizontal align={'center'} gap={8}>
+        <SkeletonBar height={32} width={220} />
+        <SkeletonBar height={32} width={120} />
+      </Flexbox>
+    </Flexbox>
+    <CredsListSkeleton variant={'card'} />
+  </Flexbox>
+);
 
-const CredsSkeleton: SettingsTabSkeleton = { Body: () => <CredsListSkeleton />, PageActions };
+const CredsSkeleton: SettingsTabSkeleton = { Body: VaultSkeleton };
 
 export default CredsSkeleton;
