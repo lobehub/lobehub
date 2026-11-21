@@ -37,6 +37,13 @@ import {
   selectOperationToolSet,
   selectRunTools,
 } from '../utils/operationToolSet';
+import {
+  buildRejectedToolRetryContent,
+  partitionRejectedToolRetries,
+  REJECTED_TOOL_RETRY_FINISH_REASON,
+  REJECTED_TOOL_RETRY_REASON,
+  REJECTED_TOOL_RETRY_STOP_NOTE,
+} from '../utils/rejectedToolRetry';
 import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
 import {
@@ -707,7 +714,44 @@ export class GeneralChatAgent implements Agent {
 
           if (executableCalls.length === 0) return instructions;
 
-          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(executableCalls);
+          // A tool the user rejected this turn is not asked about again: the
+          // model gets a blocked result telling it to clarify, while calls to
+          // other tools in the same batch carry on.
+          const { blockedRetries, ignoredBlock, remainingCalls } = partitionRejectedToolRetries(
+            executableCalls,
+            state.messages,
+          );
+          // Only end the run when nothing else in this batch can still make progress.
+          const stopAfterBlock = ignoredBlock && remainingCalls.length === 0;
+          if (blockedRetries.length > 0) {
+            const contentFor = (call: ChatToolPayload) =>
+              buildRejectedToolRetryContent(`${call.identifier}/${call.apiName}`);
+            instructions.push({
+              payload: {
+                blockedContent: contentFor(blockedRetries[0]),
+                blockedContentByCallId: Object.fromEntries(
+                  blockedRetries.map((call) => [call.id, contentFor(call)]),
+                ),
+                blockedReason: REJECTED_TOOL_RETRY_REASON,
+                ...(stopAfterBlock && { parentNote: REJECTED_TOOL_RETRY_STOP_NOTE }),
+                parentMessageId,
+                toolsCalling: blockedRetries,
+              },
+              type: 'resolve_blocked_tools',
+            } satisfies AgentInstruction);
+          }
+          if (remainingCalls.length === 0) {
+            if (stopAfterBlock) {
+              instructions.push({
+                reason: REJECTED_TOOL_RETRY_FINISH_REASON,
+                reasonDetail: `LLM called a rejected tool again after being blocked: ${blockedRetries.map((call) => `${call.identifier}/${call.apiName}`).join(', ')}`,
+                type: 'finish',
+              });
+            }
+            return instructions;
+          }
+
+          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(remainingCalls);
           // Check which tools need human intervention
           const [toolsNeedingIntervention, toolsToExecute] = await this.checkInterventionNeeded(
             allowedTools,

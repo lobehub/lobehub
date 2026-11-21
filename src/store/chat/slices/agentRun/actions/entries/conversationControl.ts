@@ -5,6 +5,7 @@ import {
   type ChatTopicStatus,
   type ConversationContext,
   type MessageMetadata,
+  resolveToolRejection,
   type UIChatMessage,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
@@ -1870,9 +1871,10 @@ export class ConversationControlActionImpl {
 
   rejectToolCalling = async (
     messageId: string,
-    reason?: string,
+    rawReason?: string,
     context?: ConversationContext,
   ): Promise<void> => {
+    const { content: toolContent, reason } = resolveToolRejection(rawReason);
     const { startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
@@ -1911,9 +1913,6 @@ export class ConversationControlActionImpl {
       this.#get,
     );
 
-    const toolContent = !!reason
-      ? `User reject this tool calling with reason: ${reason}`
-      : 'User reject this tool calling without reason';
     const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId);
 
     if (shouldUseGatewayResume) {
@@ -2058,7 +2057,7 @@ export class ConversationControlActionImpl {
 
       try {
         const sourceResolution = await this.tryResolveAgentInterventionBySource({
-          action: { reason, type: 'reject_continue' },
+          action: { reason: resolveToolRejection(reason).reason, type: 'reject_continue' },
           context: effectiveContext,
           toolMessageIds: [messageId],
         });

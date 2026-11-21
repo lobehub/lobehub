@@ -1,5 +1,10 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
-import type { BuiltinRememberApproval, DynamicInterventionResolver } from '@lobechat/types';
+import type {
+  BuiltinRememberApproval,
+  DynamicInterventionResolver,
+  ToolRejectionPresetCode,
+} from '@lobechat/types';
+import { composeToolRejectionReason } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { Button, Flexbox, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -29,6 +34,7 @@ import {
   resolveRememberAction,
 } from './approvalGate';
 import { type ApprovalMode } from './index';
+import RejectReasonChips from './RejectReasonChips';
 import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
 
 /** The audit this client runs for a tool's dynamic approval, to re-check calls after a remember. */
@@ -154,6 +160,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const { t } = useTranslation(['chat', 'plugin']);
     const [choice, setChoice] = useState<Choice>('approve');
     const [reason, setReason] = useState('');
+    const [reasonCode, setReasonCode] = useState<ToolRejectionPresetCode>();
     const [loading, setLoading] = useState(false);
     const rejectInputRef = useRef<HTMLInputElement>(null);
 
@@ -241,7 +248,10 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       setLoading(true);
       try {
         if (effectiveChoice === 'reject') {
-          await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
+          await rejectAndContinueToolCall(
+            messageId,
+            composeToolRejectionReason({ code: reasonCode, note: reason }),
+          );
         } else {
           const remember = effectiveChoice === 'approve-remember';
           // The tool's own remember step runs first, so the very next call
@@ -284,6 +294,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       messageId,
       onBeforeApprove,
       reason,
+      reasonCode,
       rejectAndContinueToolCall,
       rememberAction,
       rememberOption,
@@ -478,6 +489,15 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             );
           })}
         </div>
+
+        {effectiveChoice === 'reject' && (
+          <RejectReasonChips
+            disabled={loading || isMessageCreating}
+            hasNote={!!reason.trim()}
+            value={reasonCode}
+            onChange={setReasonCode}
+          />
+        )}
 
         <div {...stylex.props(styles.footer)}>
           <Button

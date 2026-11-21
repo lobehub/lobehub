@@ -5,6 +5,7 @@ import {
   ComposerUserMessageSchema,
   entityIdPattern,
   firstSendWorktreeSchema,
+  normalizeToolRejectionReason,
   RequestTrigger,
   UserInterventionConfigSchema,
 } from '@lobechat/types';
@@ -204,7 +205,7 @@ export const bridgeLegacyResumeToSourceIntervention = async (
           ),
         ];
         sourceAction = {
-          ...(reasons.length === 1 && { reason: reasons[0] }),
+          reason: normalizeToolRejectionReason(reasons.length === 1 ? reasons[0] : undefined),
           type: 'reject_continue',
         };
       }

@@ -1,3 +1,4 @@
+import { parseToolRejectionReason, TOOL_REJECTION_RETRY_BLOCKED_REASON } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -34,6 +35,14 @@ const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped
   const { t } = useTranslation('chat');
 
   const copyKey = resolveRejectedCopyKey({ apiName, reason, skipped, timedOut });
+  // Structured reasons are stored as `[code] text`; the code is not copy.
+  const parsed = reason ? parseToolRejectionReason(reason) : undefined;
+  const displayReason =
+    reason === TOOL_REJECTION_RETRY_BLOCKED_REASON
+      ? t('tool.intervention.rejectedRetryBlocked')
+      : parsed?.code && parsed.isDefaultText
+        ? t(`tool.intervention.rejectReason.${parsed.code}`)
+        : parsed?.text;
 
   return (
     <Flexbox className={stylex.props(styles.container).className} gap={8}>
@@ -43,7 +52,7 @@ const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped
         ) : (
           <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />
         )}
-        <div {...stylex.props(styles.title)}>{t(copyKey, { reason })}</div>
+        <div {...stylex.props(styles.title)}>{t(copyKey, { reason: displayReason })}</div>
       </Flexbox>
     </Flexbox>
   );

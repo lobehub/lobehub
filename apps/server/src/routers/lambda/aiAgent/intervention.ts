@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { normalizeToolRejectionReason } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -324,7 +325,7 @@ export const interventionRouter = router({
         }
         case 'reject':
         case 'reject_continue': {
-          interventionParams.rejectionReason = reason || 'Tool call rejected by user';
+          interventionParams.rejectionReason = normalizeToolRejectionReason(reason);
           interventionParams.rejectAndContinue = action === 'reject_continue';
           break;
         }

@@ -3696,7 +3696,16 @@ export default {
   'tool.intervention.onboarding.userProfile.title': 'Confirm your profile update',
   'tool.intervention.reject': 'Reject',
   'tool.intervention.rejectOnly': 'Reject',
+  'tool.intervention.rejectReason.not_needed': 'Not needed',
+  'tool.intervention.rejectReason.other': 'Other reason',
+  'tool.intervention.rejectReason.too_risky': 'Too risky',
+  'tool.intervention.rejectReason.unspecified': 'No reason given',
+  'tool.intervention.rejectReason.wrong_arguments': 'Wrong parameters',
+  'tool.intervention.rejectReasonDefaultHint':
+    'Pick a reason or type one. Otherwise this is recorded as "No reason given".',
   'tool.intervention.rejectReasonPlaceholder': "Tell the agent what you'd like instead",
+  'tool.intervention.rejectedRetryBlocked':
+    'You already rejected this tool, so it was not run again',
   'tool.intervention.rejectedWithReason': 'This Skill call was rejected: {{reason}}',
   'tool.intervention.pending': 'Pending',
   'tool.intervention.scrollToIntervention': 'View',

@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import type { ExecAgentResult, MessagePluginItem } from '@lobechat/types';
+import { formatToolRejectionContent, normalizeToolRejectionReason } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -239,12 +240,10 @@ export const claimApprovalResume = async (
             };
           }
           return {
-            content: entry.rejectionReason
-              ? `User reject this tool calling with reason: ${entry.rejectionReason}`
-              : 'User reject this tool calling without reason',
+            content: formatToolRejectionContent(entry.rejectionReason),
             id: entry.parentMessageId,
             intervention: {
-              rejectedReason: entry.rejectionReason,
+              rejectedReason: normalizeToolRejectionReason(entry.rejectionReason),
               resolutionRequestId: approvalResolutionRequestId,
               status: 'rejected',
             },
