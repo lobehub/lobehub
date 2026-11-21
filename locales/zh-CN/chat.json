@@ -1586,7 +1586,7 @@
   "heteroAgent.executionTarget.onlineConnections_one": "在线 · {{count}} 个连接",
   "heteroAgent.executionTarget.onlineConnections_other": "在线 · {{count}} 个连接",
   "heteroAgent.executionTarget.otherDevicesGroup": "其他设备",
-  "heteroAgent.executionTarget.persistentSandbox": "带云盘的云端沙箱",
+  "heteroAgent.executionTarget.persistentSandbox": "持久化沙箱",
   "heteroAgent.executionTarget.persistentSandboxDesc": "产物和过程保存到云盘，适合日常任务",
   "heteroAgent.executionTarget.personalGroup": "私人设备",
   "heteroAgent.executionTarget.presenceChecking": "正在确认状态…",

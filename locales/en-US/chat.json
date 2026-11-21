@@ -1586,7 +1586,7 @@
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} connection",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} connections",
   "heteroAgent.executionTarget.otherDevicesGroup": "Other devices",
-  "heteroAgent.executionTarget.persistentSandbox": "Cloud Sandbox With Drive",
+  "heteroAgent.executionTarget.persistentSandbox": "Persistent Sandbox",
   "heteroAgent.executionTarget.persistentSandboxDesc": "Keeps results and work on your drive, for everyday tasks",
   "heteroAgent.executionTarget.personalGroup": "Private Devices",
   "heteroAgent.executionTarget.presenceChecking": "Checking status…",
