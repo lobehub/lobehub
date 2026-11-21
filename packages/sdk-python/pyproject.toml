@@ -1,0 +1,63 @@
+[project]
+name = "lobehub"
+version = "0.1.0"
+description = "Official Python SDK for the LobeHub REST API, generated from the OpenAPI spec"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "LobeHub", email = "hello@lobehub.com" }]
+keywords = ["lobehub", "agents", "api", "sdk", "openapi"]
+classifiers = [
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+dependencies = ["httpx>=0.25,<1", "typing-extensions>=4.7"]
+
+[project.urls]
+Homepage = "https://github.com/lobehub/lobehub/tree/canary/packages/sdk-python"
+Repository = "https://github.com/lobehub/lobehub"
+Changelog = "https://github.com/lobehub/lobehub/blob/canary/packages/sdk-python/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.10",
+  "pytest>=8",
+  # Exact pins: the generator formats its output with ruff and reads the spec
+  # with PyYAML, so the drift check compares byte-identical output.
+  "pyyaml==6.0.3",
+  "ruff==0.17.5",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lobehub"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/lobehub", "README.md", "CHANGELOG.md", "pyproject.toml"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "UP006", "UP007", "UP035", "UP045"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lobehub"]
+
+[tool.mypy]
+# mypy itself needs 3.10+; the runtime supports 3.9 (CI runs the tests there).
+python_version = "3.10"
+strict = true
+files = ["src/lobehub", "tests/readme_examples.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p anyio"

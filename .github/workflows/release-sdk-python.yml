@@ -1,0 +1,112 @@
+name: Release Python SDK
+
+# Manual only: a maintainer bumps `version` in packages/sdk-python/pyproject.toml
+# (and src/lobehub/_version.py) with a CHANGELOG.md section, merges it, then runs
+# this workflow. Publishing needs one of:
+#   - a PyPI trusted publisher for this repository + workflow + the `pypi`
+#     environment (preferred, no secret), or
+#   - the `PYPI_API_TOKEN` repository secret (a PyPI API token scoped to `lobehub`).
+# `TEST_PYPI_API_TOKEN` does the same for the `testpypi` target.
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Where to publish
+        type: choice
+        options:
+          - testpypi
+          - pypi
+        default: testpypi
+      dry_run:
+        description: Build and verify only, do not upload
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish lobehub to ${{ inputs.repository }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.repository }}
+    permissions:
+      contents: read
+      # PyPI trusted publishing (OIDC).
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check generated SDK is in sync with openapi.yml
+        run: uv run python scripts/generate.py --check
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Check version and changelog
+        id: version
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          RUNTIME=$(uv run python -c "import lobehub; print(lobehub.__version__)")
+          if [ "$VERSION" != "$RUNTIME" ]; then
+            echo "::error::pyproject.toml version $VERSION does not match lobehub.__version__ $RUNTIME"
+            exit 1
+          fi
+          if ! grep -q "^## ${VERSION}\$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## ${VERSION}' section"
+            exit 1
+          fi
+          INDEX=https://pypi.org
+          [ "$REPOSITORY" = testpypi ] && INDEX=https://test.pypi.org
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$INDEX/pypi/lobehub/$VERSION/json")
+          if [ "$STATUS" = 200 ]; then
+            echo "::error::lobehub $VERSION is already on $REPOSITORY; bump the version first"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: uv build
+
+      - name: Smoke test the wheel
+        run: |
+          uv run --isolated --no-project --with dist/*.whl python -c \
+            "import lobehub; c = lobehub.LobeHub(api_key='sk-lh-x'); assert c.agents and lobehub.types.Agent; print(lobehub.__version__)"
+
+      - name: Publish to PyPI
+        if: ${{ !inputs.dry_run && inputs.repository == 'pypi' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/sdk-python/dist
+          # Empty when the secret is unset: the action then uses trusted publishing.
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Publish to TestPyPI
+        if: ${{ !inputs.dry_run && inputs.repository == 'testpypi' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: packages/sdk-python/dist
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+      - name: Summary
+        run: echo "lobehub ${{ steps.version.outputs.version }} → ${{ inputs.repository }} (dry run ${{ inputs.dry_run }})" >> "$GITHUB_STEP_SUMMARY"

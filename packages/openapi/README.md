@@ -1,6 +1,6 @@
 # @lobechat/openapi
 
-LobeHub's public REST API (`/api/v1`), built with Hono + zod. `openapi.yml` is generated from the routes — run `bun run --cwd packages/openapi generate:openapi`, never edit it by hand. The SDK in `packages/sdk` is generated from that file.
+LobeHub's public REST API (`/api/v1`), built with Hono + zod. `openapi.yml` is generated from the routes — run `bun run --cwd packages/openapi generate:openapi`, never edit it by hand. Both SDKs are generated from that file and their CI fails when they drift from it: after regenerating the spec, also run `bun run --cwd packages/sdk generate` (TypeScript) and `cd packages/sdk-python && uv run python scripts/generate.py` (Python, needs [uv](https://docs.astral.sh/uv/)), and commit the results with the route change.
 
 This file documents the conventions every route follows. The same text ships in the spec's `info.description`.
 
