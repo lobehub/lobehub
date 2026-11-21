@@ -145,8 +145,9 @@ select that member. Explicit mentions cannot overtake those decisions; unrelated
 and other Channels remain independent. A failed, skipped or stopped decision releases the wait.
 `channel.retryRouting({ channelId, messageId })` lets the author/admin retry an unassigned message;
 sending a new message with an explicit mention remains available.
-`channel.retryJob({ channelId, jobId })` lets the requester/admin re-queue a reply that failed
-because its device could not be reached; it waits for the device like any queued reply.
+`channel.retryJob({ channelId, jobId })` lets the requester/admin re-queue any failed reply that
+published nothing (device unreachable, model or quota error, timeout) once its writer is released;
+it runs again on a fresh operation and waits for the device like any queued reply.
 
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
 token count, latency, and each member's own rule verdicts (`wakeRules`). No raw provider errors are stored. Runtime hooks still receive

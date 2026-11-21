@@ -8,17 +8,22 @@ import { assertThreadOpen, findThread } from './delivery';
 import { ChannelError } from './error';
 import { audit } from './transaction';
 
-/** The operation error type of a run whose device could not be reached. */
-const DEVICE_UNREACHABLE = 'DeviceGatewayNotConfigured';
-
 /**
- * Queues a reply that failed before it started again. Only a reply whose device could not be
- * reached qualifies, only while its request still stands (a deleted request leaves a tombstone
- * without text or mentions, so re-running it would answer nothing), and only once its writer is
- * released: nothing ran, nothing was accepted or published, so running it again cannot repeat
- * work. Deliveries are unique per message and member, so the job itself goes back to the queue,
- * keeping its place in message order. The next claim reads the Agent's current settings and
- * environment and opens a fresh operation; the failed one stays on its topic as history.
+ * Queues a failed reply again. Any terminal failure qualifies (an unreachable device, a model or
+ * quota error, a timeout, an unknown execution), but only while:
+ *
+ * - nothing was published: a reply already in the timeline is never answered twice;
+ * - its request still stands: a deleted request leaves a tombstone without text or mentions, so
+ *   re-running it would answer nothing;
+ * - its writer is released: termination was confirmed, so the failed run can no longer write.
+ *
+ * A run that got further may have done work (tool calls, a saved draft); the person asked for it
+ * again, so that work is repeated, never resumed. Its unpublished draft is discarded, and late
+ * callbacks of the failed operation cannot publish because the job no longer points at it.
+ * Deliveries are unique per message and member, so the job itself goes back to the queue, keeping
+ * its place in message order. The next claim reads the Agent's current settings and environment
+ * and opens a fresh operation; the failed one stays on its topic as history. Retries are
+ * serialized by the Channel lock: a second retry finds the job queued and is refused.
  */
 export const retryJob = async (
   tx: Transaction,
@@ -42,17 +47,8 @@ export const retryJob = async (
   if (channelMessageDeletedAt(request.metadata))
     throw new ChannelError('CONFLICT', 'The request was deleted');
   assertThreadOpen(await findThread(tx, channelId, job.threadId));
-  if (
-    job.status !== 'failed' ||
-    errorType !== DEVICE_UNREACHABLE ||
-    job.acceptedAt ||
-    job.draft !== null ||
-    job.publishedMessageId
-  )
-    throw new ChannelError(
-      'CONFLICT',
-      'Only a reply that could not reach its device can be retried',
-    );
+  if (job.status !== 'failed' || job.publishedMessageId)
+    throw new ChannelError('CONFLICT', 'Only a failed reply that was not published can be retried');
   if (job.writerHeld)
     throw new ChannelError('CONFLICT', 'The failed reply is still being released');
 
@@ -64,6 +60,7 @@ export const retryJob = async (
       blockedReason: null,
       claimedAt: null,
       deviceId: null,
+      draft: null,
       executionConfig: null,
       isolatedAt: null,
       leaseExpiresAt: null,
@@ -77,7 +74,10 @@ export const retryJob = async (
     })
     .where(eq(channelJobs.id, job.id))
     .returning();
-  await audit(tx, channelId, 'job_retried', job.id, { operationId: job.operationId });
+  await audit(tx, channelId, 'job_retried', job.id, {
+    errorType,
+    operationId: job.operationId,
+  });
 
   return retried;
 };
