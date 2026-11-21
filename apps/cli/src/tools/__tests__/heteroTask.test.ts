@@ -12,6 +12,7 @@ const fsState = vi.hoisted(() => ({ content: undefined as string | undefined }))
 const notifyMutateMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const prepareSpawnMock = vi.hoisted(() => vi.fn());
 const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
+const findOperationProcessGroupsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
@@ -20,6 +21,10 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
   resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/heteroExecProcess', () => ({
+  findOperationProcessGroups: findOperationProcessGroupsMock,
 }));
 
 vi.mock('node:fs', () => ({
@@ -892,12 +897,137 @@ describe('cancelHeteroTask (process-group kill)', () => {
     }
   });
 
-  it('returns No task found when the task is not registered', async () => {
-    const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-missing' });
+  describe('untracked operation (daemon restarted and lost the run)', () => {
+    beforeEach(() => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    });
 
-    expect(result).toEqual({
-      message: 'No task found with taskId: op-missing',
-      success: false,
+    it('confirms the exit when no wrapper for the operation is left', async () => {
+      findOperationProcessGroupsMock.mockResolvedValue([]);
+      const killSpy = vi.spyOn(process, 'kill');
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-missing' });
+
+      expect(findOperationProcessGroupsMock).toHaveBeenCalledWith('op-missing');
+      expect(killSpy).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        exited: true,
+        reason: 'not_found',
+        signal: 'SIGINT',
+        success: true,
+        taskId: 'op-missing',
+      });
+    });
+
+    it('kills orphaned wrapper groups and confirms once they exit', async () => {
+      findOperationProcessGroupsMock.mockResolvedValueOnce([6001, 6002]).mockResolvedValueOnce([]);
+      const alive = new Set([6001, 6002]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+        const group = Math.abs(pid);
+        if (signal === 'SIGINT') alive.delete(group);
+        if (signal === 0 && !alive.has(group)) {
+          throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        }
+        return true;
+      });
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-orphan' });
+
+      expect(killSpy).toHaveBeenCalledWith(-6001, 'SIGINT');
+      expect(killSpy).toHaveBeenCalledWith(-6002, 'SIGINT');
+      expect(result).toEqual({
+        exited: true,
+        processGroups: [6001, 6002],
+        reason: 'orphan_terminated',
+        signal: 'SIGINT',
+        success: true,
+        taskId: 'op-orphan',
+      });
+    });
+
+    it('kills groups the wrapper detached once the wrapper is gone', async () => {
+      // A live wrapper is matched by argv; the detached Codex app-server only
+      // shows up through its environment after the wrapper exits.
+      findOperationProcessGroupsMock.mockResolvedValueOnce([6001]).mockResolvedValueOnce([7001]);
+      const alive = new Set([6001, 7001]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+        const group = Math.abs(pid);
+        if (signal === 'SIGINT' || signal === 'SIGKILL') alive.delete(group);
+        if (signal === 0 && !alive.has(group)) {
+          throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        }
+        return true;
+      });
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-codex' });
+
+      expect(findOperationProcessGroupsMock).toHaveBeenCalledTimes(2);
+      expect(killSpy).toHaveBeenCalledWith(-7001, 'SIGKILL');
+      expect(result).toEqual({
+        exited: true,
+        processGroups: [6001, 7001],
+        reason: 'orphan_terminated',
+        signal: 'SIGINT',
+        success: true,
+        taskId: 'op-codex',
+      });
+    });
+
+    it('does not confirm the exit when the recheck cannot read the process table', async () => {
+      findOperationProcessGroupsMock
+        .mockResolvedValueOnce([6001])
+        .mockRejectedValueOnce(new Error('ps timed out'));
+      vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+        if (signal === 0) throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        return true;
+      });
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-recheck' });
+
+      expect(result).toMatchObject({ exited: false, reason: 'lookup_failed', success: false });
+    });
+
+    it('escalates to SIGKILL and stays unconfirmed when an orphan survives', async () => {
+      vi.useFakeTimers();
+      findOperationProcessGroupsMock.mockResolvedValue([6003]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      try {
+        const cancellation = cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-stuck-orphan' });
+        await vi.advanceTimersByTimeAsync(5_100);
+
+        await expect(cancellation).resolves.toEqual({
+          exited: false,
+          processGroups: [6003],
+          reason: 'orphan_alive',
+          signal: 'SIGINT',
+          success: false,
+          taskId: 'op-stuck-orphan',
+        });
+        expect(killSpy).toHaveBeenCalledWith(-6003, 'SIGKILL');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not confirm the exit when the process table cannot be read', async () => {
+      findOperationProcessGroupsMock.mockRejectedValue(new Error('spawn ps ENOENT'));
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-unknown' });
+
+      expect(result).toMatchObject({ exited: false, reason: 'lookup_failed', success: false });
+    });
+
+    it('keeps the not-found answer on Windows', async () => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-missing' });
+
+      expect(findOperationProcessGroupsMock).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        message: 'No task found with taskId: op-missing',
+        success: false,
+      });
     });
   });
 

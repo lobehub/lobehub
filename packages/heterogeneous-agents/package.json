@@ -10,6 +10,7 @@
     "./claudeCodePermission": "./src/claudeCodePermission/index.ts",
     "./claudeCodePermission/shared": "./src/claudeCodePermission/shared.ts",
     "./errors": "./src/errors/index.ts",
+    "./heteroExecProcess": "./src/spawn/heteroExecProcess.ts",
     "./client": "./src/client/index.ts",
     "./codexAppServerParams": "./src/codex/appServerParams.ts",
     "./models": "./src/models/index.ts",
