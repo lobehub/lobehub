@@ -453,6 +453,10 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
         ],
         ['sensitive words detected', AgentRuntimeErrorType.ContentModeration],
         ['请勿发送探测请求', AgentRuntimeErrorType.ContentModeration],
+        [
+          'Request rejected in accordance with our terms of use and policies.',
+          AgentRuntimeErrorType.ContentModeration,
+        ],
       ],
       name: 'capability and moderation',
     },

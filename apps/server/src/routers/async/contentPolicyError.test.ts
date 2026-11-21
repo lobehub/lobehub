@@ -27,6 +27,16 @@ describe('getContentPolicyErrorMessage', () => {
     expect(getContentPolicyErrorMessage({ message: 'Input contains sensitive information.' })).toBe(
       'Content policy check failed. Revise your prompt and try again.',
     );
+    // Google image generation rejection observed in production.
+    expect(
+      getContentPolicyErrorMessage({
+        error: {
+          code: null,
+          message:
+            'Request rejected in accordance with our terms of use and policies. (tid: 2026110608023283697040942079038)',
+        },
+      }),
+    ).toBe('Content policy check failed. Revise your prompt and try again.');
   });
 
   it('should return undefined for unrelated provider errors', () => {
