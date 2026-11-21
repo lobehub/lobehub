@@ -28,10 +28,7 @@ import {
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { buildAntigravityArgs } from './antigravity';
-import {
-  AntigravityLiveInput,
-  resolveAntigravityLiveRuntimeEnd,
-} from './antigravityLiveInput';
+import { AntigravityLiveInput, resolveAntigravityLiveRuntimeEnd } from './antigravityLiveInput';
 import {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
@@ -610,7 +607,7 @@ const spawnCliAgent = async (
         })
       : undefined;
 
-  const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
+  const cliSpawnPlan = await resolveCliSpawnPlan(command, args, childEnv);
   const detached = platform() !== 'win32' && (options.detached ?? true);
   const startedAt = Date.now();
   const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
@@ -620,7 +617,8 @@ const spawnCliAgent = async (
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  const claudeLive = claudeLiveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
+  const claudeLive =
+    claudeLiveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
   const antigravityLive =
     antigravityLiveInput && proc.stdin ? new AntigravityLiveInput(proc.stdin) : undefined;
   const live = claudeLive ?? antigravityLive;

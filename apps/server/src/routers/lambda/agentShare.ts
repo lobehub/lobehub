@@ -8,12 +8,12 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
-import { ContactModel } from '@/database/models/contact';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
@@ -207,7 +207,7 @@ const shareAddressBook = async (ctx: AgentSharePermissionContext, agentId: strin
     .limit(1);
   const ownerId = agent?.userId ?? ctx.userId;
   return {
-    book: new ContactModel(ctx.serverDB, ownerId, ctx.workspaceId),
+    book: getAddressBook(ctx.serverDB, ownerId, ctx.workspaceId),
     enabled: await isChannelEnabled(ownerId),
   };
 };
@@ -444,7 +444,7 @@ export const agentShareRouter = router({
 
   /**
    * Who the execution-environment grant can name: the address book of the
-   * share's scope (`ContactModel.listAddressBookPeople`). `unlisted` resolves
+   * share's scope (`AddressBook.listAddressBookPeople`). `unlisted` resolves
    * the profiles of already-granted people who have since left that book, so
    * the settings page can show them as no longer authorized instead of an id.
    * `enabled` is false while the address book itself is off for the caller

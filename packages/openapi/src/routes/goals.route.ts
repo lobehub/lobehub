@@ -91,7 +91,6 @@ GoalRoutes.get(
   routeDoc({
     data: GoalSupervisionSchema,
     errors: [404],
-    operationId: 'getGoalSupervision',
     summary: 'Get goal supervision state',
     tags: ['goals'],
   }),
@@ -139,7 +138,7 @@ GoalRoutes.post(
   routeDoc({
     data: GoalAdvanceResultSchema,
     errors: [404],
-    operationId: 'advanceGoal',
+    operationId: 'goals.advance',
     summary: 'Run the goal coordinator now',
     tags: ['goals'],
   }),
@@ -156,7 +155,7 @@ GoalRoutes.post(
     data: GoalSchema,
     // 409: a draft never started; 412: an archived goal stays put.
     errors: [404, 409, 412],
-    operationId: 'pauseGoal',
+    operationId: 'goals.pause',
     summary: 'Pause a goal',
     tags: ['goals'],
   }),
@@ -173,7 +172,7 @@ GoalRoutes.post(
     data: GoalSchema,
     // 409: a draft, or the goal changed while resuming; 412: an archived goal.
     errors: [404, 409, 412],
-    operationId: 'resumeGoal',
+    operationId: 'goals.resume',
     summary: 'Resume a paused goal',
     tags: ['goals'],
   }),
@@ -190,7 +189,7 @@ GoalRoutes.post(
     data: GoalRestartResultSchema,
     // 412: an archived goal is not restarted.
     errors: [404, 412],
-    operationId: 'restartGoal',
+    operationId: 'goals.restart',
     summary: 'Restart every unfinished task of a goal',
     tags: ['goals'],
   }),

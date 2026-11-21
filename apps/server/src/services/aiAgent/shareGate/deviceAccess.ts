@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import { ContactModel } from '@/database/models/contact';
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import type { AgentShareConfig } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
@@ -43,7 +43,7 @@ export interface ShareDeviceAccessSubject {
  *
  * `contacts` grants every visitor currently in the address book of the
  * Agent's scope. `allowlist` grants a listed visitor only while they are still
- * in that address book (`ContactModel.filterAddressBookPeople`):
+ * in that address book (`AddressBook.filterAddressBookPeople`):
  * the owner's personal contacts, or the workspace's members and external
  * contacts. The list was checked against the same book when written; checking
  * again here makes removing a contact, or leaving the workspace, revoke the
@@ -69,7 +69,7 @@ export const resolveShareVisitorDeviceAccess = async (
     return false;
   }
 
-  const [inBook] = await new ContactModel(
+  const [inBook] = await getAddressBook(
     db,
     share.ownerId,
     share.workspaceId,

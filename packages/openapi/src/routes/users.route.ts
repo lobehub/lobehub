@@ -31,6 +31,7 @@ const UserRoutes = new Hono();
 UserRoutes.get(
   '/me',
   routeDoc({
+    operationId: 'users.me',
     data: CurrentUserSchema,
     description:
       'Reachable by every authenticated caller. An API key without `user:read` receives only `{ id }`; `messageCount` is included only with `?includeCount=1` and `chat:read`.',
