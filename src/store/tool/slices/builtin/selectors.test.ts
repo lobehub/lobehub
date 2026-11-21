@@ -238,4 +238,14 @@ describe('builtinToolSelectors', () => {
       expect(excluded).not.toContain('lobe-agent-management');
     });
   });
+
+  describe('needsBuiltinOverride', () => {
+    it.each([
+      ['an on-demand builtin tool', 'lobe-calculator', true],
+      ['a legacy builtin skill', 'lobe-artifacts', true],
+      ['a connector', 'plugin-1', false],
+    ])('classifies %s', (_name, identifier, expected) => {
+      expect(builtinToolSelectors.needsBuiltinOverride(identifier)).toBe(expected);
+    });
+  });
 });

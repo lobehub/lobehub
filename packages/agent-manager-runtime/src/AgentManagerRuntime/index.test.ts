@@ -118,6 +118,7 @@ vi.mock('@/store/tool', () => ({
 vi.mock('@/store/tool/selectors', () => ({
   builtinToolSelectors: {
     metaList: vi.fn(() => [{ identifier: 'lobe-web-browsing', meta: { title: 'Web Browsing' } }]),
+    needsBuiltinOverride: vi.fn((identifier: string) => identifier === 'lobe-artifacts'),
   },
   composioStoreSelectors: {
     getServers: vi.fn(() => []),
@@ -261,6 +262,29 @@ describe('AgentManagerRuntime', () => {
           config: {
             newValues: {
               plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'auto' }],
+            },
+          },
+        });
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
+    });
+
+    it('records a builtin override so enabling a library-uninstalled builtin takes effect', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [] as any;
+
+      try {
+        const result = await runtime.updateAgentConfig('agent-id', {
+          config: { model: 'gpt-4o' },
+          togglePlugin: { pluginId: 'lobe-artifacts', enabled: true },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state).toMatchObject({
+          config: {
+            newValues: {
+              plugins: [{ builtinOverride: true, identifier: 'lobe-artifacts', mode: 'auto' }],
             },
           },
         });
