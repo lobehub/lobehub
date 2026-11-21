@@ -44,6 +44,7 @@ import { ChannelError } from './error';
 import { channelLastMessages } from './lastMessage';
 import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
+import { notificationsMutedSql, setNotificationsMuted } from './notificationMute';
 import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
@@ -454,7 +455,12 @@ export class ChannelRepository {
         const view = await readChannelView(tx, channelId, options, this.userId);
         const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: { ...access.channel, canDelete: admin, ...shared.channel },
+          channel: {
+            ...access.channel,
+            canDelete: admin,
+            notificationsMuted: access.member.metadata?.notificationsMuted === true,
+            ...shared.channel,
+          },
           joined: true,
           sharedAgentOwner: shared.owner,
           ...view,
@@ -485,6 +491,13 @@ export class ChannelRepository {
       },
       { allowArchived: true, allowTrashed: true },
     );
+
+  /** Turns the caller's own push notifications for the conversation off or on. */
+  setNotificationsMuted = async (channelId: string, muted: boolean) =>
+    this.write(channelId, (tx, { member }) => setNotificationsMuted(tx, member.id, muted), {
+      allowArchived: true,
+      allowTrashed: true,
+    });
 
   /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
@@ -544,6 +557,7 @@ export class ChannelRepository {
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
         hidden: boolean;
+        notificationsMuted: boolean;
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sectionId: string | null;
@@ -562,6 +576,7 @@ export class ChannelRepository {
         hidden: channelMembers.hidden,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
+        notificationsMuted: notificationsMutedSql(),
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         sectionId: channelMembers.sectionId,
@@ -681,6 +696,7 @@ export class ChannelRepository {
         channel,
         hidden,
         lastReadSequence,
+        notificationsMuted,
         pinnedAt,
         role,
         sectionId,
@@ -699,6 +715,7 @@ export class ChannelRepository {
           memberAvatars: avatarsOf.get(channel.id) ?? [],
           memberRole: role,
           mentionCount: mentionCountOf.get(channel.id) ?? 0,
+          notificationsMuted,
           peerUserId: peerOf(channel, this.userId),
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
@@ -723,6 +740,7 @@ export class ChannelRepository {
         memberAvatars: avatarsOf.get(channel.id) ?? [],
         memberRole: null,
         mentionCount: 0,
+        notificationsMuted: false,
         peerUserId: peerOf(channel, this.userId),
         pinnedAt: null,
         replyJobs: [],

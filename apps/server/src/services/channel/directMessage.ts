@@ -1,8 +1,9 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { notifyChannelDirectMessage } from '@/business/server/channel-message/notifyActivity';
-import { channels } from '@/database/schemas';
+import { notificationsMutedSql } from '@/database/repositories/channel/notificationMute';
+import { channelMembers, channels } from '@/database/schemas';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 interface SentMessage {
@@ -39,6 +40,19 @@ export const notifyChannelDirectMessages = (
             ? channel.ownerId
             : null;
       if (!recipientUserId) return;
+
+      // The recipient turned off their own notifications for this conversation.
+      const [recipient] = await db
+        .select({ muted: notificationsMutedSql() })
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, message.channelId),
+            eq(channelMembers.userId, recipientUserId),
+          ),
+        )
+        .limit(1);
+      if (recipient?.muted) return;
 
       await notifyChannelDirectMessage({
         actorUserId: userId,
