@@ -495,7 +495,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       case 'scanHeterogeneousAgents': {
         const { scanHeterogeneousAgentsOnHost } =
           await import('@lobechat/heterogeneous-agents/scanHost');
-        const agents = await scanHeterogeneousAgentsOnHost();
+        const agents = await scanHeterogeneousAgentsOnHost(args as { agentTypes?: string[] });
         const result = { agents };
         return { content: JSON.stringify(result), state: result, success: true };
       }

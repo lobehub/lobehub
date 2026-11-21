@@ -10,6 +10,7 @@ import { deviceService } from '@/services/device';
 import {
   buildConnectAgentConfig,
   buildPlatformAgencyConfig,
+  CONNECTABLE_PROVIDERS,
   getConnectableProvider,
 } from './providers';
 import { scanLocal, useAgentScan } from './useAgentScan';
@@ -165,8 +166,29 @@ describe('buildConnectAgentConfig', () => {
 describe('useAgentScan', () => {
   const device = { deviceId: 'dev_1' } as DeviceListItem;
   const scanAgents = vi.mocked(deviceService.scanAgents);
+  const types = CONNECTABLE_PROVIDERS.map((provider) => provider.type);
+  const [first, second, ...others] = types;
   const wrapper = ({ children }: PropsWithChildren) =>
     createElement(SWRConfig, { value: { provider: () => new Map() } }, children);
+
+  const deferred = <T>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  };
+
+  /** One pending reply per requested type, resolved by the test. */
+  const holdProbes = () => {
+    const probes = new Map<string, ReturnType<typeof deferred<any>>>();
+    scanAgents.mockImplementation(((input: { agentTypes: string[] }) => {
+      const probe = deferred<any>();
+      probes.set(input.agentTypes[0], probe);
+      return probe.promise;
+    }) as any);
+    return probes;
+  };
 
   beforeEach(() => {
     scanAgents.mockReset();
@@ -179,15 +201,72 @@ describe('useAgentScan', () => {
     expect(scanAgents).not.toHaveBeenCalled();
   });
 
-  it('scans the target device as soon as it is given', async () => {
-    const agents = { 'claude-code': { available: true, version: '1.0.0' } };
+  it('probes the first agent alone, then shows every other agent as its probe lands', async () => {
+    const probes = holdProbes();
+    const { result } = renderHook(() => useAgentScan({ device, kind: 'device' }), { wrapper });
+
+    await waitFor(() => expect(scanAgents).toHaveBeenCalledTimes(1));
+    expect(scanAgents).toHaveBeenCalledWith({ agentTypes: [first], deviceId: 'dev_1' });
+    expect(result.current.state).toEqual({ agents: {}, settled: [], status: 'scanning' });
+
+    await act(async () => {
+      probes.get(first)!.resolve({ agents: { [first]: { available: true, version: '1.0.0' } } });
+    });
+    // The first reply honoured the filter: the rest fan out at once
+    await waitFor(() => expect(scanAgents).toHaveBeenCalledTimes(types.length));
+    expect(result.current.state).toEqual({
+      agents: { [first]: { available: true, version: '1.0.0' } },
+      settled: [first],
+      status: 'scanning',
+    });
+
+    await act(async () => {
+      probes.get(second)!.resolve({ agents: { [second]: { available: false } } });
+    });
+    expect(result.current.state.status).toBe('scanning');
+    expect(result.current.state.settled).toEqual([first, second]);
+    expect(result.current.state.agents?.[second]).toEqual({ available: false });
+
+    await act(async () => {
+      for (const type of others) probes.get(type)!.resolve({ agents: {} });
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(result.current.state.agents).toEqual({
+      [first]: { available: true, version: '1.0.0' },
+      [second]: { available: false },
+    });
+    // Arrival order outlives the scan so the finished list does not reshuffle
+    expect(result.current.state.settled).toEqual([first, second, ...others]);
+  });
+
+  it('takes the full map from a device that predates the type filter without fanning out', async () => {
+    const agents = { codex: { available: true }, [first]: { available: true, version: '2' } };
     scanAgents.mockResolvedValue({ agents } as any);
 
     const { result } = renderHook(() => useAgentScan({ device, kind: 'device' }), { wrapper });
 
-    expect(result.current.state.status).toBe('scanning');
-    await waitFor(() => expect(result.current.state).toEqual({ agents, status: 'success' }));
-    expect(scanAgents).toHaveBeenCalledWith({ deviceId: 'dev_1' });
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(result.current.state.agents).toEqual(agents);
+    expect(scanAgents).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks only the probes that failed unavailable, with the reason', async () => {
+    scanAgents.mockImplementation((async ({ agentTypes: [type] }: { agentTypes: string[] }) => {
+      if (type === first) return { agents: { [first]: { available: true } } };
+      if (type === second) return { agents: {}, error: 'probe timed out' };
+      if (type === others[0]) throw new Error('network down');
+      return { agents: {} };
+    }) as any);
+
+    const { result } = renderHook(() => useAgentScan({ device, kind: 'device' }), { wrapper });
+
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(result.current.state.agents).toEqual({
+      [first]: { available: true },
+      [others[0]]: { available: false, reason: 'network down' },
+      [second]: { available: false, reason: 'probe timed out' },
+    });
   });
 
   it('reports a device-side scan failure and re-probes on rescan', async () => {
@@ -202,12 +281,15 @@ describe('useAgentScan', () => {
         status: 'error',
       }),
     );
+    // An unanswered first probe stops the scan: no fan-out to a dead device
+    expect(scanAgents).toHaveBeenCalledTimes(1);
 
-    const agents = { codex: { available: true } };
+    const agents = { [first]: { available: true }, codex: { available: true } };
     scanAgents.mockResolvedValueOnce({ agents } as any);
     act(() => result.current.rescan());
 
-    await waitFor(() => expect(result.current.state).toEqual({ agents, status: 'success' }));
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(result.current.state.agents).toEqual(agents);
     expect(scanAgents).toHaveBeenCalledTimes(2);
   });
 
@@ -232,6 +314,7 @@ describe('useAgentScan', () => {
       wrapper: reconnectWrapper,
     });
     await waitFor(() => expect(result.current.state.status).toBe('success'));
+    const probes = scanAgents.mock.calls.length;
 
     expect(reconnect).toBeDefined();
     await act(async () => {
@@ -240,6 +323,33 @@ describe('useAgentScan', () => {
     });
 
     expect(result.current.state.status).toBe('success');
-    expect(scanAgents).toHaveBeenCalledTimes(1);
+    expect(scanAgents).toHaveBeenCalledTimes(probes);
+  });
+
+  it('shows local agents one by one as each detector call settles', async () => {
+    const pending = new Map<string, ReturnType<typeof deferred<any>>>();
+    detectHeterogeneousAgentCommand.mockImplementation(({ agentType }) => {
+      const probe = deferred<any>();
+      pending.set(agentType, probe);
+      return probe.promise;
+    });
+
+    const { result } = renderHook(() => useAgentScan({ kind: 'local' }), { wrapper });
+    await waitFor(() => expect(pending.size).toBe(types.length));
+
+    await act(async () => {
+      pending.get(second)!.resolve({ available: true, version: '3.0.0' });
+    });
+    expect(result.current.state).toEqual({
+      agents: { [second]: { available: true, version: '3.0.0' } },
+      settled: [second],
+      status: 'scanning',
+    });
+
+    await act(async () => {
+      for (const type of [first, ...others]) pending.get(type)!.resolve({ available: false });
+    });
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+    expect(Object.keys(result.current.state.agents ?? {})).toHaveLength(types.length);
   });
 });

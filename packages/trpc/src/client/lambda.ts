@@ -233,7 +233,11 @@ const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalCon
 // `project.detail` joins topic agents and reads members, tasks, works and
 // reviews; batched, it held the project's topic list sent beside it and a
 // project topic opened on a blank pane until the detail answered.
+// `device.scanAgents` fans out one probe per agent so the connect wizard lists
+// each agent as soon as it is found; batched (even among device reads), every
+// row would wait for the slowest probe and the list would land all at once.
 const slowProcedures = new Set([
+  'device.scanAgents',
   'market.getAssistantList',
   'message.getMessages',
   'project.detail',

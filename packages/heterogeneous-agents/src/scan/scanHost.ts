@@ -183,9 +183,23 @@ export const probeRemotePlatform = async (
     : { available: false, reason: status.error };
 };
 
-export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgentScanMap> => {
+export interface ScanHeterogeneousAgentsOnHostOptions {
+  /**
+   * Probe only these agent types; omitted or empty probes every known type.
+   * The connect wizard asks one type per call so each row can render as soon
+   * as its own probe settles, instead of waiting on the slowest binary.
+   */
+  agentTypes?: readonly string[];
+}
+
+export const scanHeterogeneousAgentsOnHost = async (
+  options: ScanHeterogeneousAgentsOnHostOptions = {},
+): Promise<HeterogeneousAgentScanMap> => {
+  const wanted = options.agentTypes?.length ? new Set(options.agentTypes) : undefined;
+  const include = (type: string) => !wanted || wanted.has(type);
+
   const entries = await Promise.all([
-    ...HETEROGENEOUS_AGENT_CONFIGS.map(async (config) => {
+    ...HETEROGENEOUS_AGENT_CONFIGS.filter((config) => include(config.type)).map(async (config) => {
       const status = await detectHeterogeneousCliCommand(config.type, config.defaultCommand);
       return [
         config.type,
@@ -195,10 +209,12 @@ export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgen
         } satisfies HeterogeneousAgentScanStatus,
       ] as const;
     }),
-    ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(async (config) => {
-      const status = await probeRemotePlatform(config.type);
-      return [config.type, status] as const;
-    }),
+    ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.filter((config) => include(config.type)).map(
+      async (config) => {
+        const status = await probeRemotePlatform(config.type);
+        return [config.type, status] as const;
+      },
+    ),
   ]);
 
   return Object.fromEntries(entries);

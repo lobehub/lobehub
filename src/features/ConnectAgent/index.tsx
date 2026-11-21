@@ -56,6 +56,7 @@ import { densityVars } from '@/styles/densityVars';
 import { getDeviceListState, isListableDevice } from './deviceListState';
 import type { ConnectableProvider, ConnectAgentProfile } from './providers';
 import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
+import { buildScanInventory } from './scanInventory';
 import type { ScanTarget } from './useAgentScan';
 import { useAgentScan } from './useAgentScan';
 
@@ -281,6 +282,8 @@ const SectionLabel = memo<{ children: ReactNode }>(({ children }) => (
   </Text>
 ));
 
+const SKELETON_WIDTHS = [90, 70, 110, 80, 100, 75, 95];
+
 const SkeletonRow = memo<{ squareIcon?: boolean; width: number }>(({ squareIcon, width }) => (
   <div className={`${styles.row} ${styles.rowStatic}`}>
     <div
@@ -457,15 +460,10 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const targetLabel =
       target?.kind === 'device' ? deviceLabel(target.device) : t('connectAgent.create.localDevice');
 
-    const inventory = useMemo(() => {
-      if (scanState.status !== 'success' || !scanState.agents) return [];
-      const rank = (available?: boolean) => (available ? 0 : 1);
-      return [...CONNECTABLE_PROVIDERS]
-        .map((provider) => ({ provider, status: scanState.agents?.[provider.type] }))
-        .sort((a, b) => rank(a.status?.available) - rank(b.status?.available));
-    }, [scanState]);
-
-    const detectedCount = inventory.filter((entry) => entry.status?.available).length;
+    const { detectedCount, inventory, pendingCount } = useMemo(
+      () => buildScanInventory(scanState),
+      [scanState],
+    );
 
     const selectedProviders = useMemo(
       () => CONNECTABLE_PROVIDERS.filter((provider) => selectedTypes.includes(provider.type)),
@@ -827,19 +825,6 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               )}
           </Flexbox>
 
-          {scanning && (
-            <Flexbox gap={6}>
-              <SectionLabel>{t('connectAgent.create.scanning')}</SectionLabel>
-              <ScrollableAgentList>
-                {[90, 70, 110, 80, 100, 75, 95]
-                  .slice(0, CONNECTABLE_PROVIDERS.length)
-                  .map((width, i) => (
-                    <SkeletonRow key={i} width={width} />
-                  ))}
-              </ScrollableAgentList>
-            </Flexbox>
-          )}
-
           {scanState.status === 'error' && (
             <Alert
               showIcon
@@ -867,10 +852,12 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             </Flexbox>
           )}
 
-          {scanState.status === 'success' && detectedCount > 0 && (
+          {(scanning || (scanState.status === 'success' && detectedCount > 0)) && (
             <Flexbox gap={6}>
               <SectionLabel>
-                {t('connectAgent.create.detectedCount', { total: detectedCount })}
+                {scanning
+                  ? t('connectAgent.create.scanning')
+                  : t('connectAgent.create.detectedCount', { total: detectedCount })}
               </SectionLabel>
               <ScrollableAgentList>
                 {inventory.map(({ provider, status }) => (
@@ -882,6 +869,12 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     subtitle={t(`connectAgent.providerDesc.${provider.type}`)}
                     unavailableText={t('connectAgent.create.notInstalled')}
                     onToggle={() => toggleType(provider)}
+                  />
+                ))}
+                {Array.from({ length: pendingCount }, (_, i) => (
+                  <SkeletonRow
+                    key={`pending-${i}`}
+                    width={SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}
                   />
                 ))}
               </ScrollableAgentList>
