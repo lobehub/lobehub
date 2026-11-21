@@ -13,7 +13,15 @@
  * which device runtimes do not import because it carries the React renders.
  */
 import {
+  CODE_EDITOR_FOCUSED_SCRIPT,
+  codeEditorTypingError,
+  fillCodeEditor,
+  formatCodeEditors,
+  readCodeEditorsScript,
+} from './browserCodeEditor';
+import {
   browserEditCommandOf,
+  browserKeyTypesText,
   DEFAULT_BROWSER_VIEWPORT,
   parseBrowserKey,
   parseBrowserViewport,
@@ -116,7 +124,7 @@ export const buildAgentBrowserCommands = (
       return [['open', url]];
     }
     case 'snapshot': {
-      return [['snapshot', '-i'], ...PAGE_INFO];
+      return [['snapshot', '-i'], ['eval', readCodeEditorsScript(0)], ...PAGE_INFO];
     }
     case 'click': {
       if (args.ref !== undefined && args.ref !== '')
@@ -155,7 +163,7 @@ export const buildAgentBrowserCommands = (
       return [['screenshot', screenshotPath]];
     }
     case 'readPage': {
-      return [['read'], ...PAGE_INFO];
+      return [['read'], ['eval', readCodeEditorsScript()], ...PAGE_INFO];
     }
     default: {
       throw new Error(`Browser tool "${apiName}" is not available on this device`);
@@ -201,6 +209,50 @@ const toBase64 = (bytes: Uint8Array): string => {
   return btoa(binary);
 };
 
+/** One `eval` step's value; a failed step throws so the tool call reports it. */
+const evaluateStep = async (exec: AgentBrowserExec, session: string, script: string) => {
+  const [step] = parseSteps(await exec(session, [['eval', script]]));
+  if (!step?.success) throw new Error(step?.error ?? 'agent-browser could not run the page script');
+  return step.result?.result;
+};
+
+/**
+ * Routes `fill` on a Monaco input through the editor. A ref that cannot be
+ * focused is left to the regular `fill`, whose step reports the bad ref.
+ */
+const fillAgentBrowserCodeEditor = async (
+  exec: AgentBrowserExec,
+  session: string,
+  args: Record<string, unknown>,
+  platform: string,
+) => {
+  const [focused] = parseSteps(await exec(session, [['focus', toRef(args.ref)]]));
+  if (!focused?.success) return { handled: false as const };
+  return fillCodeEditor(
+    {
+      evaluate: (script) => evaluateStep(exec, session, script),
+      selectAll: async () => {
+        await exec(session, [['press', parseBrowserKey('ControlOrMeta+a', platform).combo]]);
+      },
+    },
+    'document.activeElement',
+    {
+      oldText: typeof args.oldText === 'string' ? args.oldText : undefined,
+      submit: !!args.submit,
+      text: String(args.text),
+    },
+  );
+};
+
+const codeEditorCount = (raw: unknown): number => {
+  try {
+    const editors = JSON.parse(String(raw));
+    return Array.isArray(editors) ? editors.length : 0;
+  } catch {
+    return 0;
+  }
+};
+
 const pageLabel = (title?: string, url?: string) => `Page: ${title ?? ''} (${url ?? ''})`;
 
 /**
@@ -218,6 +270,32 @@ export const runAgentBrowserCall = async (
     const { __agentId: _agentId, __topicId: topicId, ...args } = rawArgs;
     const session = agentBrowserSessionName(topicId);
     const platform = options.platform ?? process.platform;
+
+    if (apiName === 'press') {
+      const combo = parseBrowserKey(args.key, platform);
+      if (
+        browserKeyTypesText(combo) &&
+        (await evaluateStep(options.exec, session, CODE_EDITOR_FOCUSED_SCRIPT)) === true
+      ) {
+        throw new Error(codeEditorTypingError(combo.combo));
+      }
+    }
+
+    if (apiName === 'fill' && typeof args.text === 'string') {
+      const edit = await fillAgentBrowserCodeEditor(options.exec, session, args, platform);
+      if (edit.handled) {
+        if (edit.error) throw new Error(edit.error);
+        return {
+          content:
+            args.oldText === undefined
+              ? `Filled ${String(args.ref)} with "${args.text}" and read it back.`
+              : `Replaced "${String(args.oldText)}" with "${args.text}" in ${String(args.ref)} and read it back.`,
+          success: true,
+        };
+      }
+      if (args.oldText !== undefined) throw new Error('oldText only works on a code editor ref');
+    }
+
     const commands = buildAgentBrowserCommands(apiName, args, options.screenshotPath, {
       fillsSelect: apiName === 'fill' && (await isNativeSelect(options.exec, session, args.ref)),
       platform,
@@ -249,10 +327,14 @@ export const runAgentBrowserCall = async (
       case 'snapshot': {
         const snapshot = str(result(0).snapshot) ?? '';
         const header = pageLabel(title, url);
+        const codeEditors = codeEditorCount(result(1).result);
+        const codeHint = codeEditors
+          ? `\n[code-editor=monaco] ${codeEditors} code editor(s) on this page: read them with readPage and change them only with fill on their textbox ref.`
+          : '';
         // An empty snapshot is an answer, not a failure — see the desktop executor.
         return {
           content: snapshot
-            ? `${header}\n${snapshot}`
+            ? `${header}\n${snapshot}${codeHint}`
             : `${header}\nNo interactive elements (links, buttons, form fields, headings) are visible on this page. Use readPage to read its text, or screenshot to see it.`,
           state: { snapshot, title, url },
           success: true,
@@ -298,7 +380,8 @@ export const runAgentBrowserCall = async (
         };
       }
       default: {
-        const content = (str(result(0).content) ?? '').slice(0, READ_PAGE_MAX_CHARS);
+        const pageText = (str(result(0).content) ?? '').slice(0, READ_PAGE_MAX_CHARS);
+        const content = `${pageText}${formatCodeEditors(result(1).result)}`;
         return {
           content: `${pageLabel(title, url)}\n${content}`,
           state: { content, title, url },

@@ -90,6 +90,29 @@ describe('BrowserControlCtr input', () => {
     expect(guest.sendInputEvent).not.toHaveBeenCalled();
   });
 
+  describe('with focus in a code editor', () => {
+    beforeEach(() => {
+      guest.mainFrame.executeJavaScript.mockImplementation(async (code: string) =>
+        code.includes('isCodeInput(document.activeElement)') ? true : undefined,
+      );
+    });
+
+    it('refuses a printable key, which would land in the code', async () => {
+      await expect(controller.press({ key: 'o', sessionId: 's' })).resolves.toMatchObject({
+        error: expect.stringContaining('would be typed into the code'),
+        success: false,
+      });
+      expect(guest.sendInputEvent).not.toHaveBeenCalled();
+    });
+
+    it.each(['Escape', 'Alt+F1', 'ControlOrMeta+End'])('still sends %s', async (key) => {
+      await expect(controller.press({ key, sessionId: 's' })).resolves.toEqual({ success: true });
+      expect(guest.sendInputEvent).toHaveBeenCalled();
+      const sent = guest.sendInputEvent.mock.calls.map(([event]) => event.type);
+      expect(sent).not.toContain('char');
+    });
+  });
+
   describe('on macOS', () => {
     let platform: ReturnType<typeof vi.spyOn>;
     beforeEach(() => {

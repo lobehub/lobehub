@@ -14,6 +14,12 @@ const step = (command: string[], result: Record<string, unknown>) => ({
   success: true,
 });
 
+/** The `focus` and page-probe answers for a `fill` target that is an ordinary field. */
+const notACodeEditor = [
+  JSON.stringify([step(['focus'], {})]),
+  JSON.stringify([step(['eval'], { result: JSON.stringify({ isEditor: false }) })]),
+];
+
 const run = (apiName: string, args: Record<string, unknown>, steps: unknown[]) => {
   const exec = vi.fn().mockResolvedValue(JSON.stringify(steps));
   const readFile = vi.fn();
@@ -132,6 +138,7 @@ describe('runAgentBrowserCall', () => {
   it('returns the snapshot with the page header', async () => {
     const { promise } = run('snapshot', {}, [
       step(['snapshot'], { snapshot: '- link "Learn more" [ref=e1]' }),
+      step(['eval'], { result: '[]' }),
       step(['get', 'title'], { title: 'Example' }),
       step(['get', 'url'], { url: 'https://example.com/' }),
     ]);
@@ -146,6 +153,7 @@ describe('runAgentBrowserCall', () => {
   it('caps readPage like the desktop', async () => {
     const { promise } = run('readPage', {}, [
       step(['read'], { content: 'a'.repeat(READ_PAGE_MAX_CHARS + 10) }),
+      step(['eval'], { result: '[]' }),
       step(['get', 'title'], { title: 'T' }),
       step(['get', 'url'], { url: 'https://u/' }),
     ]);
@@ -176,6 +184,8 @@ describe('runAgentBrowserCall', () => {
   it('fills a native select through `select`', async () => {
     const exec = vi
       .fn()
+      .mockResolvedValueOnce(notACodeEditor[0])
+      .mockResolvedValueOnce(notACodeEditor[1])
       .mockResolvedValueOnce(
         JSON.stringify([step(['get', 'html'], { html: '<option value="b">Banana</option>' })]),
       )
@@ -187,14 +197,16 @@ describe('runAgentBrowserCall', () => {
       { exec, readFile: vi.fn(), screenshotPath: '/s.png' },
     );
 
-    expect(exec).toHaveBeenNthCalledWith(1, 'lobehub-topic-t', [['get', 'html', '@e5']]);
-    expect(exec).toHaveBeenNthCalledWith(2, 'lobehub-topic-t', [['select', '@e5', 'Banana']]);
+    expect(exec).toHaveBeenNthCalledWith(3, 'lobehub-topic-t', [['get', 'html', '@e5']]);
+    expect(exec).toHaveBeenNthCalledWith(4, 'lobehub-topic-t', [['select', '@e5', 'Banana']]);
     expect(result).toMatchObject({ content: 'Selected e5 with "Banana".', success: true });
   });
 
   it('fills a text field through `fill`', async () => {
     const exec = vi
       .fn()
+      .mockResolvedValueOnce(notACodeEditor[0])
+      .mockResolvedValueOnce(notACodeEditor[1])
       .mockResolvedValueOnce(JSON.stringify([step(['get', 'html'], { html: '' })]))
       .mockResolvedValueOnce(JSON.stringify([step(['fill'], { filled: '@e6' })]));
 
@@ -204,7 +216,89 @@ describe('runAgentBrowserCall', () => {
       { exec, readFile: vi.fn(), screenshotPath: '/s.png' },
     );
 
-    expect(exec).toHaveBeenNthCalledWith(2, 'lobehub-default', [['fill', '@e6', 'hello']]);
+    expect(exec).toHaveBeenNthCalledWith(4, 'lobehub-default', [['fill', '@e6', 'hello']]);
+  });
+
+  describe('on a Monaco editor', () => {
+    /** A page whose focused element is a Monaco input backed by `doc`. */
+    const monacoExec = (initial: string) => {
+      const page = { doc: initial };
+      const exec = vi.fn(async (_session: string, commands: string[][]) => {
+        const [name, script = ''] = commands[0];
+        if (name !== 'eval') return JSON.stringify([step(commands[0], {})]);
+        let result: unknown = JSON.stringify({ hasApi: true, isEditor: true, readOnly: false });
+        if (script.includes('executeEdits')) {
+          const [, start, end, text] = script.match(/\}\)\((\d+), (\d+), (".*")\)$/s)!;
+          page.doc = page.doc.slice(0, +start) + JSON.parse(text) + page.doc.slice(+end);
+          result = JSON.stringify({ ok: true });
+        } else if (script.includes('text: bound ?')) {
+          result = JSON.stringify({ text: page.doc });
+        }
+        return JSON.stringify([step(commands[0], { result })]);
+      });
+      return { exec, page };
+    };
+
+    // `agent-browser fill` set the hidden input's value, which Monaco read as
+    // typing over its text: `const raw=false;` became `onese;`.
+    it('edits through the editor and never fills its hidden input', async () => {
+      const { exec, page } = monacoExec('const raw=false;\n');
+
+      const result = await runAgentBrowserCall(
+        'fill',
+        { oldText: 'raw=false', ref: 'e1', text: 'raw=true' },
+        { exec: exec as any, readFile: vi.fn(), screenshotPath: '/s.png' },
+      );
+
+      expect(result).toMatchObject({ success: true });
+      expect(page.doc).toBe('const raw=true;\n');
+      expect(exec.mock.calls.some(([, commands]) => commands[0][0] === 'fill')).toBe(false);
+    });
+
+    it('refuses a printable key while focus is in the code', async () => {
+      const exec = vi.fn().mockResolvedValue(JSON.stringify([step(['eval'], { result: true })]));
+
+      const result = await runAgentBrowserCall(
+        'press',
+        { key: 'o' },
+        { exec, readFile: vi.fn(), screenshotPath: '/s.png' },
+      );
+
+      expect(result).toMatchObject({
+        error: expect.stringContaining('would be typed into the code'),
+        success: false,
+      });
+      expect(exec).toHaveBeenCalledTimes(1);
+      expect(exec.mock.calls[0][1][0][0]).toBe('eval');
+    });
+
+    it.each(['Escape', 'Alt+F1', 'ControlOrMeta+End'])('still sends %s', async (key) => {
+      const exec = vi.fn().mockResolvedValue(JSON.stringify([step(['press'], {})]));
+
+      await expect(
+        runAgentBrowserCall(
+          'press',
+          { key },
+          { exec, platform: 'linux', readFile: vi.fn(), screenshotPath: '/s.png' },
+        ),
+      ).resolves.toMatchObject({ success: true });
+      expect(exec).toHaveBeenCalledTimes(1);
+      expect(exec.mock.calls[0][1][0][0]).toBe('press');
+    });
+
+    it('appends the exact code to readPage', async () => {
+      const editors = [{ complete: true, language: 'ts', lines: 1, text: 'const a = 1;' }];
+      const { promise } = run('readPage', {}, [
+        step(['read'], { content: 'Page text' }),
+        step(['eval'], { result: JSON.stringify(editors) }),
+        step(['get', 'title'], { title: 'T' }),
+        step(['get', 'url'], { url: 'https://u/' }),
+      ]);
+
+      expect((await promise).content).toContain(
+        '--- code editor 1 (monaco, ts, 1 lines) ---\nconst a = 1;\n--- end of code editor 1 ---',
+      );
+    });
   });
 
   it('reports the failing step', async () => {
