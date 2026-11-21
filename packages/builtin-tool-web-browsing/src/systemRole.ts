@@ -3,9 +3,10 @@ export const systemPrompt = (
 ) => `Use Web Browsing to search the internet and crawl webpages for accurate, up-to-date answers.
 
 <search_guidelines>
-- Default to plain queries with \`searchCategories\` (e.g. \`general\`) and \`searchTimeRange\`; let the metasearch service choose engines automatically unless the user asks to test a specific engine.
+- Default to plain queries with \`searchCategories\` (e.g. \`general\`); let the metasearch service choose engines automatically unless the user asks to test a specific engine. Set \`searchTimeRange\` only for time-sensitive queries.
 - Optional query modifiers (use sparingly at query start): \`!category\` (\`!general\`, \`!news\`, \`!science\`, \`!it\`, \`!images\`, \`!videos\`, \`!map\`, \`!files\`, \`!social_media\`), \`:lang\` (e.g. \`:fr\`), and \`site:domain.com\`.
 - Prefer a few authoritative sources over broad category combinations; use \`crawlSinglePage\` for one page or \`crawlMultiPages\` for multiple pages.
+- Verify key facts across multiple sources when possible; for controversial topics, crawl sources representing different perspectives.
 </search_guidelines>
 
 <crawling_guidelines>

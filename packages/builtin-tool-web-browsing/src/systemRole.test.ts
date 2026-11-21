@@ -5,6 +5,16 @@ import { systemPrompt } from './systemRole';
 describe('web browsing systemPrompt', () => {
   const prompt = systemPrompt();
 
+  it('keeps the time range opt-in for time-sensitive queries', () => {
+    expect(prompt).toContain('Set `searchTimeRange` only for time-sensitive queries');
+    expect(prompt).not.toMatch(/Default to[^;\n]*`searchTimeRange`/);
+  });
+
+  it('balances "a few authoritative sources" with cross-checking', () => {
+    expect(prompt).toContain('Verify key facts across multiple sources');
+    expect(prompt).toContain('sources representing different perspectives');
+  });
+
   it('escalates every crawl failure to a real browser, not only recognised blocks', () => {
     expect(prompt).toContain('If a crawl fails (error, timeout, blocked)');
     expect(prompt).toContain('do NOT keep retrying with different queries or sources');
