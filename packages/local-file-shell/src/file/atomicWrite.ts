@@ -2,6 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { chmod, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { TextFileFormat } from '@lobechat/file-loaders/utils/decodeTextFile';
+import { decodeTextBuffer, encodeTextBuffer } from '@lobechat/file-loaders/utils/decodeTextFile';
+
 /**
  * Per-path write queue for this process.
  *
@@ -53,12 +56,20 @@ const RENAME_BLOCKED_CODES = new Set(['EACCES', 'EBUSY', 'EPERM']);
  * middle of one) produce an empty file, a duplicated tail, or a UTF-8
  * sequence cut in half.
  *
+ * `encoding` keeps the file's original byte format: the tools that call this
+ * decode a file before editing it, and writing the edited text back as UTF-8
+ * would silently transcode a UTF-16 file instead of editing it.
+ *
  * Symlinks are followed so the link itself is kept, and the target's mode is
  * carried over. When the rename is refused (another process holding the file
  * open on Windows), fall back to an in-place write — still serialized by
  * {@link withFileLock}, and still checked by {@link verifyWrittenContent}.
  */
-export const writeFileAtomic = async (filePath: string, content: string): Promise<void> => {
+export const writeFileAtomic = async (
+  filePath: string,
+  content: string,
+  format: TextFileFormat = { bom: null, encoding: 'utf8' },
+): Promise<void> => {
   let target = filePath;
   let mode: number | undefined;
   try {
@@ -78,27 +89,30 @@ export const writeFileAtomic = async (filePath: string, content: string): Promis
   );
 
   try {
-    await writeFile(tempPath, content, 'utf8');
+    await writeFile(tempPath, encodeTextBuffer(content, format.encoding, format.bom));
     if (mode !== undefined) await chmod(tempPath, mode);
     await rename(tempPath, target);
   } catch (error) {
     await rm(tempPath, { force: true });
     if (!RENAME_BLOCKED_CODES.has((error as NodeJS.ErrnoException).code ?? '')) throw error;
-    await writeFile(target, content, 'utf8');
+    await writeFile(target, encodeTextBuffer(content, format.encoding, format.bom));
   }
 };
 
 /**
  * Read the file back and confirm it holds exactly what was written, so a
  * success result reflects the disk rather than the in-memory replacement.
- * Returns an error message when it does not.
+ * Returns an error message when it does not. The file is decoded with the
+ * same detection used everywhere else (BOM excluded by the decoder), so the
+ * comparison is on text rather than raw bytes.
  */
 export const verifyWrittenContent = async (
   filePath: string,
   expected: string,
 ): Promise<string | undefined> => {
-  const actual = await readFile(filePath, 'utf8');
+  const actualBytes = await readFile(filePath);
+  const actual = decodeTextBuffer(actualBytes).content;
   if (actual === expected) return;
 
-  return `The write to ${filePath} did not persist: reading it back returned ${Buffer.byteLength(actual, 'utf8')} bytes instead of the expected ${Buffer.byteLength(expected, 'utf8')}. Another process may have modified the file — read it again before retrying.`;
+  return `The write to ${filePath} did not persist: reading it back returned ${actualBytes.byteLength} bytes instead of the expected ${Buffer.byteLength(expected, 'utf8')}. Another process may have modified the file — read it again before retrying.`;
 };

@@ -1,5 +1,4 @@
-import { readFile } from 'node:fs/promises';
-
+import { decodeTextFile } from '@lobechat/file-loaders/utils/decodeTextFile';
 import { createPatch } from 'diff';
 
 import type { EditFileParams, EditFileResult } from '../types';
@@ -88,7 +87,13 @@ const applyEdit = async (
   { old_string, new_string, replace_all = false }: EditFileParams,
 ): Promise<EditFileResult> => {
   try {
-    const content = await readFile(filePath, 'utf8');
+    // Decode with the same detection the read tools use, so an old_string
+    // copied from a read matches on a UTF-16 file too — hard-coding `utf8`
+    // turned every edit of one into a deterministic "not found"
+    // (lobehub/lobehub#20563). The format is passed to the write-back so a
+    // UTF-16 file stays UTF-16 and a BOM is preserved.
+    const { bom, content, encoding } = await decodeTextFile(filePath);
+    const format = { bom, encoding };
 
     // Resolve the search/replace strings against the file's actual line endings.
     // LLMs almost always emit `\n` even when the on-disk file uses CRLF (the norm
@@ -160,7 +165,7 @@ const applyEdit = async (
       replacements = 1;
     }
 
-    await writeFileAtomic(filePath, newContent);
+    await writeFileAtomic(filePath, newContent, format);
 
     const writeError = await verifyWrittenContent(filePath, newContent);
     if (writeError) return { error: writeError, replacements: 0, success: false };
