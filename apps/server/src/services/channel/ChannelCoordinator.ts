@@ -42,6 +42,12 @@ import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routed
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
+/**
+ * How long a stopped or failed run may hold its member's queue while its device does not confirm
+ * the process exited. After that the writer is isolated: the queue moves on, the device directory
+ * stays locked, and a late confirmation still releases it.
+ */
+export const STOP_CONFIRM_TIMEOUT_MS = 2 * 60_000;
 
 /**
  * A dispatch refused for a reason the requester can act on. Its `type` is kept on the failed
@@ -221,10 +227,18 @@ export class ChannelCoordinator {
 
     try {
       await pMap(
-        Object.values(groupBy(pending, (job) => `${job.memberId}:${job.threadId ?? ''}`)),
+        // One group per queue (see `sameQueue`): a member's branch, and for a member with no
+        // device picked in the Channel, one requester's requests in it.
+        Object.values(
+          groupBy(
+            pending,
+            (job) =>
+              `${job.memberId}:${job.threadId ?? ''}:${unpicked.has(job.memberId) ? job.requesterMemberId : ''}`,
+          ),
+        ),
         async (jobs) => {
-          // Recover a branch's earlier runs before claiming in it, without delaying other
-          // members or the member's other branches.
+          // Recover a queue's earlier runs before claiming in it, without delaying other
+          // members, the member's other branches or other requesters' queues.
           for (const job of jobs) {
             if (job.status !== 'queued') {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
@@ -617,83 +631,115 @@ export class ChannelCoordinator {
     jobs: Array<{ channelId: string; id: string; operationId: string | null }>,
   ) => {
     for (const job of jobs) {
-      if (!job.operationId) continue;
-      const [row] = await this.db
-        .select({ operation: agentOperations, config: channelJobs.executionConfig })
-        .from(agentOperations)
-        .innerJoin(channelJobs, eq(channelJobs.operationId, agentOperations.id))
-        .where(eq(agentOperations.id, job.operationId));
-      if (!row?.operation.userId) continue;
-      if (await this.executions.retireReservation(job.channelId, job.id)) continue;
-      // Cancellation must not release the writer while a dispatcher can still submit
-      // its network request. An operation result alone does not prove device exit.
-      const [current] = await this.db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
-      if (!current?.writerHeld) continue;
-      // A dispatcher that died before settling leaves its lease behind. Once expired, revoke
-      // it and still require the device to confirm termination below.
-      const dispatch = current.leaseOwner
-        ? await this.executions.revokeExpiredLease(job.channelId, job.id)
-        : 'settled';
-      if (dispatch === 'live') continue;
-      // A Native run, or any run with no device picked in the Channel, went through the
-      // ordinary pipeline, which knows where it routed the run; stop it there. Only a run on a
-      // device picked in the Channel needs that device to confirm the external process exited.
-      if (row.config?.runtime === 'native' || !row.config?.deviceId) {
-        const result = await this.service(
-          row.operation.userId,
-          row.operation.workspaceId,
-          !!row.config?.share,
-        ).interruptTask({
-          operationId: job.operationId,
-          topicId: row.operation.topicId ?? undefined,
-        });
-        // The ordinary pipeline may have run it on a device. A terminal status does not prove that
-        // process exited (a lost acknowledgement can fail the operation while it runs on), so an
-        // unconfirmed device cancellation keeps the writer, as for a device picked in the Channel.
-        if (result.deviceCancellationConfirmed === false) continue;
-        if (
-          !result.success &&
-          !['done', 'error', 'interrupted', 'abandoned'].includes(row.operation.status)
-        )
-          continue;
-        if (row.config?.runtime === 'native' && row.config.deviceId) {
-          const stopped = await deviceGateway.executeToolCall(
-            {
-              deviceId: row.config.deviceId,
-              operationId: job.operationId,
-              userId: row.config.deviceOwnerId ?? row.operation.userId,
-              workspaceId: row.operation.workspaceId ?? undefined,
-            },
-            { apiName: 'cancelNativeOperation', arguments: '{}', identifier: 'lobe-local-system' },
-            10_000,
-          );
-          if (!stopped.success || !isRecord(stopped.state) || stopped.state.exited !== true)
-            continue;
-        }
-        await this.executions.releaseWriter(job.channelId, job.id);
-      } else {
-        // Use the frozen identity even if runtime cleanup already removed the topic marker.
-        const result = await deviceGateway.executeToolCall(
+      let failure: unknown;
+      const held = await this.stopWriter(job).catch((error) => {
+        failure = error;
+        return true;
+      });
+      // A stop the device never confirms, or cannot even be asked for, must not hold the
+      // member's queue indefinitely.
+      if (held) {
+        const isolated = await this.executions
+          .isolateUnconfirmedStop(job.channelId, job.id, STOP_CONFIRM_TIMEOUT_MS)
+          .catch((error) => {
+            console.error('[channel:isolate-unconfirmed-stop]', error);
+            return false;
+          });
+        if (isolated) await wakeChannel(job.channelId);
+      }
+      if (failure) throw failure;
+    }
+  };
+
+  /**
+   * Stops one writer and releases it once its termination is confirmed. Returns true when the
+   * writer may still be held: the dispatcher is live or the device did not confirm the exit.
+   */
+  private stopWriter = async (job: {
+    channelId: string;
+    id: string;
+    operationId: string | null;
+  }) => {
+    if (!job.operationId) return false;
+    const [row] = await this.db
+      .select({ operation: agentOperations, config: channelJobs.executionConfig })
+      .from(agentOperations)
+      .innerJoin(channelJobs, eq(channelJobs.operationId, agentOperations.id))
+      .where(eq(agentOperations.id, job.operationId));
+    if (!row?.operation.userId) return false;
+    if (await this.executions.retireReservation(job.channelId, job.id)) return false;
+    // Cancellation must not release the writer while a dispatcher can still submit
+    // its network request. An operation result alone does not prove device exit.
+    const [current] = await this.db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
+    if (!current?.writerHeld) return false;
+    // A dispatcher that died before settling leaves its lease behind. Once expired, revoke
+    // it and still require the device to confirm termination below.
+    const dispatch = current.leaseOwner
+      ? await this.executions.revokeExpiredLease(job.channelId, job.id)
+      : 'settled';
+    if (dispatch === 'live') return true;
+    // A Native run, or any run with no device picked in the Channel, went through the
+    // ordinary pipeline, which knows where it routed the run; stop it there. Only a run on a
+    // device picked in the Channel needs that device to confirm the external process exited.
+    if (row.config?.runtime === 'native' || !row.config?.deviceId) {
+      const result = await this.service(
+        row.operation.userId,
+        row.operation.workspaceId,
+        !!row.config?.share,
+      ).interruptTask({
+        operationId: job.operationId,
+        topicId: row.operation.topicId ?? undefined,
+      });
+      // The ordinary pipeline may have run it on a device. A terminal status does not prove that
+      // process exited (a lost acknowledgement can fail the operation while it runs on), so an
+      // unconfirmed device cancellation keeps the writer, as for a device picked in the Channel.
+      if (result.deviceCancellationConfirmed === false) return true;
+      if (
+        !result.success &&
+        !['done', 'error', 'interrupted', 'abandoned'].includes(row.operation.status)
+      )
+        return true;
+      if (row.config?.runtime === 'native' && row.config.deviceId) {
+        const stopped = await deviceGateway.executeToolCall(
           {
             deviceId: row.config.deviceId,
+            operationId: job.operationId,
             userId: row.config.deviceOwnerId ?? row.operation.userId,
             workspaceId: row.operation.workspaceId ?? undefined,
           },
-          {
-            apiName: 'cancelHeteroTask',
-            arguments: JSON.stringify({ signal: 'SIGINT', taskId: job.operationId }),
-            identifier: 'cancelHeteroTask',
-          },
+          { apiName: 'cancelNativeOperation', arguments: '{}', identifier: 'lobe-local-system' },
           10_000,
         );
-        const exited = result.success && isRecord(result.state) && result.state.exited === true;
-        // "No such process" proves nothing while a revoked dispatcher may still submit the
-        // start late, and the device keeps no record that would refuse it. Only a run the
-        // device itself reported done shows that the one submission already arrived.
-        const unseen = isRecord(result.state) && result.state.reason === 'not_found';
-        if (exited && (dispatch !== 'revoked' || !unseen || row.operation.status === 'done'))
-          await this.executions.releaseWriter(job.channelId, job.id);
+        if (!stopped.success || !isRecord(stopped.state) || stopped.state.exited !== true)
+          return true;
       }
+      await this.executions.releaseWriter(job.channelId, job.id);
+      return false;
+    } else {
+      // Use the frozen identity even if runtime cleanup already removed the topic marker.
+      const result = await deviceGateway.executeToolCall(
+        {
+          deviceId: row.config.deviceId,
+          userId: row.config.deviceOwnerId ?? row.operation.userId,
+          workspaceId: row.operation.workspaceId ?? undefined,
+        },
+        {
+          apiName: 'cancelHeteroTask',
+          arguments: JSON.stringify({ signal: 'SIGINT', taskId: job.operationId }),
+          identifier: 'cancelHeteroTask',
+        },
+        10_000,
+      );
+      const exited = result.success && isRecord(result.state) && result.state.exited === true;
+      // "No such process" proves nothing while a revoked dispatcher may still submit the
+      // start late, and the device keeps no record that would refuse it. Only a run the
+      // device itself reported done shows that the one submission already arrived.
+      const unseen = isRecord(result.state) && result.state.reason === 'not_found';
+      if (exited && (dispatch !== 'revoked' || !unseen || row.operation.status === 'done')) {
+        await this.executions.releaseWriter(job.channelId, job.id);
+        return false;
+      }
+      return true;
     }
   };
 }

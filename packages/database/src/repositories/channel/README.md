@@ -179,11 +179,20 @@ runs and sub-agents do not inherit it.
 ## Branch concurrency
 
 A member runs one reply per conversation branch (a Thread, or the main timeline) and answers each
-branch in message order; its branches run alongside each other. `candidates` returns one queue
-head per member and branch, and the coordinator settles and claims each branch without waiting on
-the member's others. A Thread starts only after the member's main-timeline answer to its root, so
-a follow-up never overtakes the reply it follows. A reply that opens a Thread before its claim
-runs in that Thread, which leaves the main timeline free for the next request.
+branch in message order; its branches run alongside each other. Without a device picked in the
+Channel, the queue is also per requester (`sameQueue`): each requester's run executes as them, in
+their own topic and usually on their own device, like separate conversations with the Agent, so
+one person's stuck run never holds back another person's request in the same branch. Each
+requester's requests still run one at a time, in message order. With a picked device every run
+shares that device and directory, so the member keeps taking turns across requesters.
+`candidates` returns one queue head per member, branch and requester, and the coordinator settles
+and claims each queue without waiting on the others (the claim holds back the extra heads of a
+member that takes turns). Replies publish in completion order, each linked to its request; a run's
+input is frozen at its own request's cutoff, so a concurrent run of another requester never sees
+or rewrites it. A Thread starts only after the member's main-timeline answer to its root, whoever
+asks in the Thread, so a follow-up never overtakes the reply it follows. A reply that opens a
+Thread before its claim runs in that Thread, which leaves the main timeline free for the next
+request.
 
 These locks are application rules in `claimJob`, not database constraints, so they can change
 without a migration. The branch lock is checked under the channel lock, which already serializes
@@ -242,7 +251,11 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
 - Job status describes the Channel delivery; execution status/errors/usage live on its operation.
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
-  Isolation frees the member's branch but keeps the device/directory lock. Never retry an unknown delivery.
+  Isolation frees the member's branch but keeps the device/directory lock. A stopped or failed
+  writer whose termination is still unconfirmed two minutes after its revocation
+  (`isolateUnconfirmedStop`, timed from the job's audited `publication_revoked` / `stop_requested`
+  / `execution_failed` / `execution_unknown` event) is isolated by the coordinator, so a device
+  that never answers the stop cannot hold the queue. Never retry an unknown delivery.
   `retryJob` re-queues only a failed job whose device could not be reached
   (`DeviceGatewayNotConfigured`), with its writer released and nothing accepted or published;
   the next claim opens a fresh operation.
