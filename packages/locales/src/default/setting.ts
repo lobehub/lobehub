@@ -5275,12 +5275,9 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.community.wechat': 'Official WeChat group',
   'subscriptionAccounts.purchase.community.wechatRequest': 'Request the WeChat group QR code',
   'subscriptionAccounts.purchase.community.wechatScan': 'Scan with WeChat to join.',
-  'subscriptionAccounts.purchase.account.none': 'No account',
-  'subscriptionAccounts.purchase.account.noneDesc':
-    'Only the device. You sign in your own account on it.',
-  'subscriptionAccounts.purchase.account.title': 'Choose a CC account',
+  'subscriptionAccounts.purchase.account.title': 'Choose a coding account',
   'subscriptionAccounts.purchase.desc':
-    'A cloud device, optionally with an official Claude Code account. After payment, we create the device and a Claude Code agent bound to it.',
+    'A cloud device with an official Claude Code or Codex account. After payment, we create the device and the matching agent bound to it.',
   'subscriptionAccounts.purchase.device.title': 'Choose a device',
   'subscriptionAccounts.purchase.empty':
     'No bundles are on sale right now. New stock appears here once it is listed.',
@@ -5318,10 +5315,12 @@ When I am ___, I need ___
     'The device and agent are created in this workspace for its members.',
   'subscriptionAccounts.purchase.sku.currency': 'Priced in CNY',
   'subscriptionAccounts.purchase.sku.perMonth': '/ month',
+  'subscriptionAccounts.purchase.sku.perQuarter': '/ quarter',
+  'subscriptionAccounts.purchase.sku.perYear': '/ year',
   'subscriptionAccounts.purchase.sku.remaining': '{{count}} left',
   'subscriptionAccounts.purchase.status.active': 'Ready. The device and agent are set up.',
   'subscriptionAccounts.purchase.status.awaiting_account':
-    'Device and agent created. We are signing the Claude account in on the device.',
+    'Device and agent created. We are signing the account in on the device.',
   'subscriptionAccounts.purchase.status.checkout_pending': 'Confirming your payment…',
   'subscriptionAccounts.purchase.status.ended': 'This bundle has ended.',
   'subscriptionAccounts.purchase.status.expired': 'The payment page expired before payment.',
@@ -5346,16 +5345,13 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.summary.period': 'Billing period',
   'subscriptionAccounts.purchase.summary.periodValue': '{{period}} · {{count}} mo',
   'subscriptionAccounts.purchase.summary.device': 'Device',
-  'subscriptionAccounts.purchase.summary.noAccount': 'Not included',
   'subscriptionAccounts.purchase.summary.sentence':
     '{{device}} + {{account}}, {{period}}, {{amount}} this period.',
-  'subscriptionAccounts.purchase.summary.sentenceDeviceOnly':
-    '{{device}}, {{period}}, {{amount}} this period.',
   'subscriptionAccounts.purchase.summary.split': 'Device {{device}} + account {{account}}',
   'subscriptionAccounts.purchase.summary.support': 'Network, power and reconnection support',
   'subscriptionAccounts.purchase.summary.title': 'Summary',
   'subscriptionAccounts.purchase.summary.total': 'Total this period · CNY',
-  'subscriptionAccounts.purchase.title': 'CC account + cloud device',
+  'subscriptionAccounts.purchase.title': 'Coding account + cloud device',
   'subscriptionAccounts.searchPlaceholder': 'Search accounts…',
   'subscriptionAccounts.usageTitle': 'Usage history',
   'subscriptionAccounts.columns.account': 'Account',
