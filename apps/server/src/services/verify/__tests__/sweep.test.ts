@@ -475,12 +475,54 @@ describe('sweepStuckVerifyRuns', () => {
       { id: 'op-1', parentOperationId: null },
       { id: 'op-repair', parentOperationId: 'op-1', status: 'running' },
     ]);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair' ? { id: 'run-repair', status: 'planned', updatedAt: NOW } : undefined,
+    );
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(outcome.skipped).toBe(1);
     expect(recompute).not.toHaveBeenCalled();
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  /** Regression (Codex r4652054496): a verifier parked on an async tool pinned a dead claim forever. */
+  it('does not count an in-flight verifier of the parent as a repair in flight', async () => {
+    // `agentVerifier` parents its sub-agent under the verified operation, and
+    // a verifier owns no round. The repair it led to was never spawned, so the
+    // claim is reclaimed rather than skipped every tick.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null },
+      { id: 'op-verifier', parentOperationId: 'op-1', status: 'running' },
+    ]);
+    runFindByOperation.mockResolvedValue(undefined);
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it('does not count an in-flight child with a round of another acceptance', async () => {
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null },
+      { id: 'op-other', parentOperationId: 'op-1', status: 'running' },
+    ]);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-other'
+        ? { acceptanceId: 'acc-other', id: 'run-other', status: 'verifying', updatedAt: NOW }
+        : undefined,
+    );
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(outcome.settled).toEqual(['run-1']);
   });
 
   it('reclaims a stale repairing claim whose repair child already finished', async () => {
@@ -536,7 +578,17 @@ describe('sweepStuckVerifyRuns', () => {
             { id: 'op-verifier', parentOperationId: 'op-repair', status: 'running' },
           ],
     );
-    runFindByOperation.mockResolvedValue(undefined);
+    // The repair's own round is stale and pre-judging; only its live verifier
+    // keeps the chain alive.
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? {
+            id: 'run-repair',
+            status: 'planned',
+            updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+          }
+        : undefined,
+    );
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 

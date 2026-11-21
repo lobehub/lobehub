@@ -167,9 +167,20 @@ const recoverRun = async (
     // `recomputeRepairAncestors`). Only a chain that is dead end to end is safe
     // to reclaim; reclaiming earlier would spawn a duplicate repair against the
     // same failures while the first one is still being verified.
-    const repairChildren = children.filter(
-      (child) => child.id !== operationId && child.parentOperationId === operationId,
-    );
+    //
+    // Verifier sub-agents and evidence turns hang off this operation too, but
+    // only a repair owns a round: `prepareRepairRound` gives it a confirmed
+    // round of the same acceptance as it is created. A verifier parked on an
+    // async tool is not a repair in flight, and counting it would keep a dead
+    // claim forever.
+    const repairChildren: typeof children = [];
+    for (const child of children) {
+      if (child.id === operationId || child.parentOperationId !== operationId) continue;
+      const childRun = await runModel.findByOperation(child.id);
+      if (!childRun) continue;
+      if ((childRun.acceptanceId ?? null) !== (run.acceptanceId ?? null)) continue;
+      repairChildren.push(child);
+    }
     for (const child of repairChildren) {
       if (await isRepairChainLive(child, operationModel, runModel, now)) return 'skipped';
     }
