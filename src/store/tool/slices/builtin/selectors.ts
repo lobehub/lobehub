@@ -3,6 +3,7 @@ import {
   isOnDemandBuiltinTool,
   runtimeManagedToolIds,
 } from '@lobechat/builtin-tools';
+import { legacyBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import type { BuiltinSkillManifest, LobeToolMeta } from '@lobechat/types';
 
 import {
@@ -306,6 +307,13 @@ const uninstalledBuiltinTools = (s: ToolStoreState): string[] => s.uninstalledBu
 const isBuiltinToolInstalled = (identifier: string) => (s: ToolStoreState) =>
   !s.uninstalledBuiltinTools.includes(identifier);
 
+/**
+ * Whether an Agent's choice for this identifier must record `builtinOverride`,
+ * so it takes precedence over a legacy library-wide uninstall.
+ */
+const needsBuiltinOverride = (identifier: string): boolean =>
+  isOnDemandBuiltinTool(identifier) || legacyBuiltinSkillIds.includes(identifier);
+
 export const builtinToolSelectors = {
   allMetaList,
   discoverableMetaList,
@@ -315,6 +323,7 @@ export const builtinToolSelectors = {
   isBuiltinToolInstalled,
   metaList,
   metaListIncludingHidden,
+  needsBuiltinOverride,
   nonProfileConfigurableBuiltinToolIds,
   uninstalledBuiltinTools,
 };
