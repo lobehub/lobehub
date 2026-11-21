@@ -1,7 +1,9 @@
+import { WEBHOOK_DELIVERY_POLICY } from '@lobechat/types';
 import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { WebhookDeliveryWorkerModel } from '@/database/models/developerWebhook';
+import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { qstashClient } from '@/libs/qstash';
 import { attemptWebhookDelivery } from '@/server/services/developerWebhook/deliver';
@@ -54,7 +56,14 @@ export class DeveloperWebhookWorkflow {
 
   /** One attempt, then the next one scheduled when it failed and may be retried. */
   static async runDeliver(payload: DeveloperWebhookDeliverPayload) {
-    const result = await attemptWebhookDelivery(await getServerDB(), payload.deliveryId);
+    const db = await getServerDB();
+    const result = await attemptWebhookDelivery(db, payload.deliveryId);
+    if (
+      result.outcome === 'skipped' &&
+      (result.reason === 'not_due' || result.reason === 'already_claimed')
+    )
+      await DeveloperWebhookWorkflow.scheduleLeaseRecovery(db, payload, result.reason);
+
     if (result.outcome === 'retry') {
       log('schedule retry of %s in %ds', payload.deliveryId, result.delaySeconds);
       try {
@@ -81,5 +90,43 @@ export class DeveloperWebhookWorkflow {
       }
     }
     return result;
+  }
+
+  /**
+   * A nonterminal skip means this message carried no attempt: another invocation has
+   * claimed the delivery and its lease still runs, or a scheduled retry is not due yet.
+   * The callback answers 200 either way, so if the claiming invocation died after
+   * `claimAttempt` — its own queue retry lands here as a skip too — nothing would ever
+   * resume the delivery. Schedule one callback for the moment the lease expires: claiming
+   * again keeps the attempt single, and a further skip only reschedules while the wait is
+   * still lease-shaped, so a long backoff (which has its own message) never multiplies.
+   */
+  private static async scheduleLeaseRecovery(
+    db: LobeChatDatabase,
+    payload: DeveloperWebhookDeliverPayload,
+    reason: 'already_claimed' | 'not_due',
+  ) {
+    const row = await new WebhookDeliveryWorkerModel(db).load(payload.deliveryId);
+    if (!row) return;
+    const { delivery } = row;
+    if (delivery.status !== 'pending' && delivery.status !== 'retrying') return;
+
+    const dueAt = delivery.nextAttemptAt?.getTime();
+    if (dueAt === undefined) return;
+    const remainingMs = dueAt - Date.now();
+    // A claim lease is short; a retry backoff is minutes away and already queued.
+    if (remainingMs > 2 * (WEBHOOK_DELIVERY_POLICY.timeoutMs + 30_000)) return;
+
+    const delaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+    log('recover %s in %ds (%s)', payload.deliveryId, delaySeconds, reason);
+    try {
+      await DeveloperWebhookWorkflow.triggerDeliver(payload, delaySeconds);
+    } catch (error) {
+      console.error(
+        '[developerWebhook:workflow] cannot schedule the lease recovery',
+        payload.deliveryId,
+        error,
+      );
+    }
   }
 }
