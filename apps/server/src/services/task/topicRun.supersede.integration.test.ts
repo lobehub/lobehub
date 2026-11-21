@@ -8,7 +8,8 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { agentOperations, tasks, taskTopics, topics, users } from '@/database/schemas';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
-import { ORPHANED_RUN_GRACE_MS } from '@/server/services/taskLifecycle/reconcile';
+import { ORPHANED_RUN_GRACE_MS } from '@/server/services/taskLifecycle/constants';
+import { reconcileCompletedTaskRuns } from '@/server/services/taskLifecycle/reconcileCompleted';
 import { reconcileInterruptedTaskRuns } from '@/server/services/taskLifecycle/reconcileInterrupted';
 
 import { TopicRunService } from './topicRun';
@@ -386,6 +387,42 @@ describe('reconcileInterruptedTaskRuns (real PostgreSQL)', () => {
     const result = await reconcileInterruptedTaskRuns(db, { staleBefore: T0 });
 
     expect(result.paused).not.toContain(topicId);
+    expect((await readTask(task.id))?.status).toBe('running');
+  });
+});
+
+describe('a completed-run recovery racing a follow-up (real PostgreSQL)', () => {
+  it('reopens a recovered run and clears its topic end stamp for the successor', async () => {
+    const { task, taskOperationId, topicId } = await seedRunningTask({
+      status: 'done',
+      trigger: 'task',
+    });
+    const service = new TopicRunService(db, userId);
+    // Resolve while the old operation still owns the running row.
+    const link = await service.resolveOwnableRun(topicId, { replacesOperationId: taskOperationId });
+    expect(link?.takeOverOperationId).toBe(taskOperationId);
+    const recovered = await reconcileCompletedTaskRuns(db, {
+      staleBefore: new Date(T0.getTime() + ORPHANED_RUN_GRACE_MS),
+    });
+    expect(recovered.converged).toContain(topicId);
+    expect((await readRun(topicId)).status).toBe('completed');
+    expect(
+      (await db.select().from(topics).where(eq(topics.id, topicId)))[0].completedAt,
+    ).not.toBeNull();
+    await seedOperation(topicId, 'op-after-completed-recovery', {
+      createdAt: at(120),
+      status: 'running',
+    });
+    await expect(
+      service.reopen({ link: link!, operationId: 'op-after-completed-recovery' }),
+    ).resolves.toBe('reopened');
+    expect(await readRun(topicId)).toMatchObject({
+      operationId: 'op-after-completed-recovery',
+      status: 'running',
+    });
+    expect(
+      (await db.select().from(topics).where(eq(topics.id, topicId)))[0].completedAt,
+    ).toBeNull();
     expect((await readTask(task.id))?.status).toBe('running');
   });
 });

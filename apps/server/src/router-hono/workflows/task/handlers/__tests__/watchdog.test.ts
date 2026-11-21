@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   findStuckTasks: vi.fn(),
   getServerDB: vi.fn(),
   notifyTaskRunFailed: vi.fn(),
+  reconcileCompletedTaskRuns: vi.fn(),
   reconcileInterruptedTaskRuns: vi.fn(),
   reconcileOrphanedTaskRuns: vi.fn(),
   updateStatus: vi.fn(),
@@ -39,6 +40,10 @@ vi.mock('@/server/services/taskLifecycle/reconcile', () => ({
   reconcileOrphanedTaskRuns: mocks.reconcileOrphanedTaskRuns,
 }));
 
+vi.mock('@/server/services/taskLifecycle/reconcileCompleted', () => ({
+  reconcileCompletedTaskRuns: mocks.reconcileCompletedTaskRuns,
+}));
+
 vi.mock('@/server/services/taskLifecycle/reconcileInterrupted', () => ({
   reconcileInterruptedTaskRuns: mocks.reconcileInterruptedTaskRuns,
 }));
@@ -64,6 +69,32 @@ describe('task watchdog', () => {
     mocks.notifyTaskRunFailed.mockResolvedValue(undefined);
     mocks.reconcileOrphanedTaskRuns.mockResolvedValue({ converged: [] });
     mocks.reconcileInterruptedTaskRuns.mockResolvedValue({ paused: [] });
+    mocks.reconcileCompletedTaskRuns.mockResolvedValue({
+      checked: 0,
+      converged: [],
+      failed: [],
+      skipped: [],
+    });
+  });
+
+  it('settles successful runs even when no Task has heartbeat timeout', async () => {
+    mocks.findStuckTasks.mockResolvedValue([]);
+    mocks.reconcileCompletedTaskRuns.mockResolvedValue({
+      checked: 1,
+      converged: ['tpc-done'],
+      failed: [],
+      skipped: [],
+    });
+    const { body, status } = await runWatchdog();
+    expect(status).toBe(200);
+    expect(mocks.reconcileCompletedTaskRuns).toHaveBeenCalledTimes(1);
+    expect(body.completed).toEqual({
+      checked: 1,
+      converged: ['tpc-done'],
+      failed: [],
+      skipped: [],
+    });
+    expect(mocks.notifyTaskRunFailed).not.toHaveBeenCalled();
   });
 
   it('parks interrupted runs nothing took over on every tick', async () => {
