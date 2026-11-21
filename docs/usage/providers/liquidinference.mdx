@@ -1,0 +1,39 @@
+---
+title: Using Liquid Inference in LobeHub
+description: >-
+  Learn how to create a Liquid Inference API key and configure it in LobeHub to
+  buy LLM inference on an auction exchange.
+tags:
+  - Liquid Inference
+  - API Key
+  - Web UI
+---
+
+# Using Liquid Inference in LobeHub
+
+[Liquid Inference](https://liquidinference.ai) is an auction exchange for LLM inference. Providers post standing offers. For each request, the exchange ranks the eligible offers by estimated charge, fixes a price cap before the first token, and charges for the tokens used.
+
+This guide shows how to use Liquid Inference in LobeHub:
+
+<Steps>
+  ### Step 1: Create an API key
+
+  - Sign in at [liquidinference.ai](https://liquidinference.ai) and add funds to your workspace.
+  - Create a buyer API key with the `spend` grade. Set a spending limit on the key.
+  - Copy the key and store it securely.
+
+  ### Step 2: Configure Liquid Inference in LobeHub
+
+  - Open **App Settings → AI Providers** and select **Liquid Inference**.
+  - Enable the provider and enter the API key.
+  - Select **Check** to test the connection.
+  - Fetch the model list. The list shows the models that providers quote now.
+  - Enable the models you need, then select one in the agent settings.
+
+  <Callout type={'warning'}>
+    Scheduled agents can make many requests while you are away. A spending limit on the key stops
+    the charges at a fixed amount.
+  </Callout>
+</Steps>
+
+You can now use Liquid Inference models in LobeHub. Use `liquid.auto` to let the exchange choose the offer for each request.
