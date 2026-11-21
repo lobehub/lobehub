@@ -18,6 +18,7 @@ import {
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { isSuccessLikeCompletionReason } from '../completionReason';
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
 import {
   markInterruptedTurn,
@@ -42,6 +43,7 @@ import type {
   TopicRunSettledHandler,
 } from './types';
 
+export { isSuccessLikeCompletionReason } from '../completionReason';
 export { CriticalAgentInterventionPersistenceError } from './intervention';
 export {
   extractTextFromMessage,
@@ -58,23 +60,9 @@ export type {
 
 const log = debug('lobe-server:completion-lifecycle');
 
-/**
- * Terminal reasons this lifecycle treats as a successful completion: the run
- * produced a deliverable, even when it was stopped by a step/cost cap rather
- * than finishing naturally. `persistCompletion` stores all three with
- * status='done', and success-side effects (assistant-content recovery,
- * file-Work registration) must cover the capped reasons too — gating them on
- * `reason === 'done'` alone silently drops capped runs' artifacts.
- */
 /** Terminal reasons after which the topic's agent may be woken again. */
 const isTopicRunSettledReason = (reason: string) =>
   reason !== 'interrupted' && reason !== 'waiting_for_human' && reason !== 'waiting_for_async_tool';
-
-export const isSuccessLikeCompletionReason = (reason: string): boolean =>
-  reason === 'done' ||
-  reason === 'max_steps' ||
-  reason === 'cost_limit' ||
-  reason === 'tool_call_repeat_limit';
 
 /**
  * Owns everything that happens once an operation reaches a terminal state:
@@ -507,7 +495,9 @@ export class CompletionLifecycle {
       // Delivery checker: on a successful completion, run the confirmed verify
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
       // without an opted-in plan is a no-op, and failures never affect the run.
-      if (reason === 'done') {
+      // A capped run delivered too, and its Task settles it as `done` and
+      // waits for this verify, so gating on `done` alone would strand it.
+      if (isSuccessLikeCompletionReason(reason)) {
         // The task's verify plan is instantiated fire-and-forget at run start; a
         // fast or no-op run can reach completion before it settles. Await the
         // in-flight instantiation (if any) so the gate sees the confirmed plan

@@ -8,6 +8,7 @@ export interface ExecutionSnapshot {
     | 'max_steps'
     | 'cost_limit'
     | 'tool_call_repeat_limit'
+    | 'tool_name_unresolved'
     | 'waiting_for_human';
   error?: { type: string; message: string };
   externalRetryCount?: number;

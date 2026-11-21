@@ -458,6 +458,23 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
     });
+
+    // T-14103: capped runs reach the hook under their own completion reason.
+    // They delivered, so they settle like `done`; otherwise no branch matched,
+    // the run row stayed `running`, and the orphan sweep later failed it.
+    it.each(['max_steps', 'tool_call_repeat_limit', 'tool_name_unresolved'])(
+      'settles a run capped by %s as done',
+      async (reason) => {
+        findById.mockResolvedValue(baseTask({ automationMode: 'heartbeat' }));
+
+        await service.onTopicComplete({ ...createDoneParams(), reason });
+
+        expect(updateTopicStatus).toHaveBeenCalledWith('task-1', 'topic-1', 'completed', {
+          reportedOperationId: 'op-1',
+        });
+        expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: null });
+      },
+    );
   });
 
   describe('reason=done with brief.mode', () => {
