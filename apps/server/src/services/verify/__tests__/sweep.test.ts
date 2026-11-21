@@ -23,6 +23,7 @@ const {
   upsertByCheckItem,
   finalizeVerifyRun,
   findVerifyMessageByOperationId,
+  findLatestAssistantByOperationId,
   runFindByOperation,
   recordAutoRepair,
 } = vi.hoisted(() => ({
@@ -32,6 +33,7 @@ const {
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
   findVerifyMessageByOperationId: vi.fn(),
+  findLatestAssistantByOperationId: vi.fn(),
   listByAcceptance: vi.fn(),
   messageFindById: vi.fn(),
   operationFindById: vi.fn(),
@@ -79,7 +81,11 @@ vi.mock('../statusService', () => ({
 }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(function () {
-    return { findById: messageFindById, findVerifyMessageByOperationId };
+    return {
+      findById: messageFindById,
+      findLatestAssistantByOperationId,
+      findVerifyMessageByOperationId,
+    };
   }),
 }));
 vi.mock('../lifecycle', () => ({
@@ -121,6 +127,7 @@ describe('sweepStuckVerifyRuns', () => {
       finalizeVerifyRun,
       findStuckVerifying,
       findVerifyMessageByOperationId,
+      findLatestAssistantByOperationId,
       listByAcceptance,
       messageFindById,
       operationFindById,
@@ -776,6 +783,36 @@ describe('sweepStuckVerifyRuns', () => {
       expect(runVerifyAfterEvidenceSubmission).not.toHaveBeenCalled();
       expect(reclaimRepairing).not.toHaveBeenCalled();
       expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Regression (Codex r4652081198): completion marked the repair `done` and
+     * died before writing the verify card, so the child was judged on an empty
+     * delivery.
+     */
+    it("judges the run's own final reply when completion died before the verify card", async () => {
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair' ? preJudgingChild('planned') : undefined,
+      );
+      findVerifyMessageByOperationId.mockResolvedValue(undefined);
+      findLatestAssistantByOperationId.mockResolvedValue({
+        content: 'Fixed it without a card.',
+        id: 'msg-own',
+        role: 'assistant',
+      });
+
+      await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(findLatestAssistantByOperationId).toHaveBeenCalledWith({
+        operationId: 'op-repair',
+        topicId: 'tpc-1',
+      });
+      expect(runVerifyOnCompletion).toHaveBeenCalledWith(
+        db,
+        'u1',
+        expect.objectContaining({ deliverable: 'Fixed it without a card.' }),
+        undefined,
+      );
     });
 
     it('judges a child whose evidence turn died in collecting_evidence', async () => {

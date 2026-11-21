@@ -8,6 +8,7 @@ import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { extractTextFromMessage } from '@/server/services/agentRuntime/CompletionLifecycle/messageContent';
 
 import {
   redriveClaimedVerification,
@@ -502,6 +503,12 @@ const canRedrive = async (
  * The builder's final reply, read back the way the completion gate received it:
  * the run's delivery-checker card hangs off the assistant message that
  * completion carried.
+ *
+ * Completion marks the operation `done` before it writes that card, so a crash
+ * in between leaves a finished run with no card. Its reply is then the newest
+ * assistant row the run itself stamped (`metadata.operationId`) — never the
+ * topic's latest reply, which may belong to another turn. Judging an empty
+ * delivery would record a false failure and spawn another repair.
  */
 const resolveFinalDeliverable = async (
   db: LobeChatDatabase,
@@ -511,8 +518,12 @@ const resolveFinalDeliverable = async (
 ): Promise<string> => {
   const messageModel = new MessageModel(db, userId, workspaceId);
   const card = await messageModel.findVerifyMessageByOperationId(operationId, topicId);
-  if (!card?.parentId) return '';
+  if (card?.parentId) {
+    const reply = await messageModel.findById(card.parentId);
+    if (typeof reply?.content === 'string' && reply.content) return reply.content;
+  }
+  if (!topicId) return '';
 
-  const reply = await messageModel.findById(card.parentId);
-  return typeof reply?.content === 'string' ? reply.content : '';
+  const own = await messageModel.findLatestAssistantByOperationId({ operationId, topicId });
+  return extractTextFromMessage(own) ?? '';
 };
