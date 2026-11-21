@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 /**
  * The agent-browser release the desktop app downloads
  * (`apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts` `pinnedVersion`).
@@ -27,7 +28,7 @@ where.exe agent-browser    # Windows (cmd or PowerShell)
   \`\`\`bash
   ${NPX_AGENT_BROWSER} open example.com
   \`\`\`
-- **Neither works** (no \`npx\` either) → stop and tell the user \`agent-browser\` isn't installed on this device yet. The LobeHub desktop app retries the download on its next launch, and **Settings → System Tools → Browser Automation** shows whether it's been detected; they can also install it themselves with \`npm i -g agent-browser\` or \`brew install agent-browser\`. Don't hand-roll a replacement with curl/python scraping.
+- **Neither works** (no \`npx\` either) → stop and tell the user \`agent-browser\` isn't installed on this device yet. The ${BRANDING_NAME} desktop app retries the download on its next launch, and **Settings → System Tools → Browser Automation** shows whether it's been detected; they can also install it themselves with \`npm i -g agent-browser\` or \`brew install agent-browser\`. Don't hand-roll a replacement with curl/python scraping.
 
 If a command fails because no browser is available, run \`agent-browser install\` (same prefix) once to download Chrome for Testing, then retry.
 

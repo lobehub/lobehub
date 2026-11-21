@@ -3,6 +3,7 @@ import type {
   TrashItem,
   TrashProjectFilter,
   TrashResourceType,
+  TrashVisibility,
 } from '@lobechat/types';
 
 import { createReplicaState, type ReplicaPagedData, type ReplicaState } from '@/libs/replica';
@@ -24,11 +25,13 @@ export interface TrashProjectSelection {
 export interface TrashState {
   /** Type filter the recycle-bin page is currently showing (`undefined` = everything). */
   activeType?: TrashResourceType;
+  /** Side of a workspace bin last shown (`undefined` = the public side; ignored in personal). */
+  activeVisibility?: TrashVisibility;
   /** Registry ids with an in-flight restore / purge — drives per-row spinners. */
   loadingIds: string[];
   /** Project filter, bound to its scope (`undefined` = every project). */
   projectSelection?: TrashProjectSelection;
-  /** Per-type counts per project filter (`trashCountMap[trashCountKey(projectId)]`). */
+  /** Per-type counts per side and project filter (`trashCountMap[trashCountKey(filter)]`). */
   trashCountMap: Record<string, TrashCountByType>;
   /** Local-first bookkeeping for `trashCountMap`. */
   trashCountReplica: ReplicaState<TrashCountByType>;
@@ -40,6 +43,7 @@ export interface TrashState {
 
 export const initialState: TrashState = {
   activeType: undefined,
+  activeVisibility: undefined,
   loadingIds: [],
   projectSelection: undefined,
   trashCountMap: {},

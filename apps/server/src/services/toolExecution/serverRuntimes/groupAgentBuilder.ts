@@ -14,9 +14,11 @@
  * agent and must not be stamped as a group-chat turn. A group created in the
  * conversation with `createGroup` takes over from it (`resolveBuilderGroupId`).
  *
- * Member creation mirrors `routers/lambda/agentGroup.ts` exactly — virtual
- * agents, roster insert, and workspace access-level inheritance — so an agent
- * created by the assistant is indistinguishable from one created through the UI.
+ * Member creation mirrors `batchCreateAgentsInGroup` in
+ * `routers/lambda/agentGroup/members.ts` (and `createGroupWithMembers` in
+ * `agentGroup/lifecycle.ts`) exactly — virtual agents, roster insert, and
+ * workspace access-level inheritance — so an agent created by the assistant
+ * is indistinguishable from one created through the UI.
  */
 import type {
   GetAvailableModelsParams,
@@ -400,9 +402,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
             {
               avatar: params.avatar,
               description: params.description,
-              // Domain tool plugins support structured entries, while the DB
-              // model's JSONB column still carries its legacy string[] type.
-              plugins: params.tools as unknown as string[] | undefined,
+              plugins: params.tools,
               systemRole: params.systemRole,
               title: params.title,
               virtual: true,
@@ -447,7 +447,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
             params.agents.map((agent) => ({
               avatar: agent.avatar,
               description: agent.description,
-              plugins: agent.tools as unknown as string[] | undefined,
+              plugins: agent.tools,
               systemRole: agent.systemRole,
               title: agent.title,
               virtual: true,

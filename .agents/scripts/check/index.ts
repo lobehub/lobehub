@@ -4,7 +4,7 @@
  * Agent-oriented quality check engine: `bun run check [files...] [--lint] [--test] [--type]`.
  *
  * Runs the lint-staged toolchain (with autofix) and/or related tests on the
- * given files, auto-routing each file to the right eslint/stylelint config
+ * given files, auto-routing each file to the right oxlint/stylelint config
  * root (the host repo or a mounted sub-repo) and the nearest owning vitest
  * config. Output is compact and colorless so agents burn minimal tokens
  * reading it.

@@ -1,3 +1,4 @@
+import { verifyTextEvidenceTypes } from '@lobechat/const/verify';
 import type { JudgeEvidence } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 
@@ -11,7 +12,7 @@ export interface EvidencePlan {
 }
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
-const textEvidenceTypes = new Set(['dom_snapshot', 'markdown', 'text', 'transcript']);
+const textEvidenceTypes = verifyTextEvidenceTypes;
 
 /**
  * Select the least-powerful verifier that can inspect every required artifact.

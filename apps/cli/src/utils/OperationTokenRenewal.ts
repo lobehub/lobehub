@@ -1,3 +1,5 @@
+import { refreshCodexJwtFiles } from '@lobechat/heterogeneous-agents/spawn';
+
 import { log } from './logger';
 
 /** Renew this long before expiry, so a slow or failed attempt still has room to retry. */
@@ -35,7 +37,8 @@ const readOperationTokenExpiry = (jwt: string): number | undefined => {
  * it expires every ingest is rejected — heartbeats included — so the lease stops
  * renewing and the server reclaims the operation as abandoned while the agent is
  * still working. Renewing writes the new token back to `LOBEHUB_JWT`, which the
- * tRPC clients read on every request.
+ * tRPC clients read on every request, and into any Codex JWT file the agent's
+ * nested `lh` commands read.
  *
  * Only a `hetero-operation` token is renewed. A desktop run authenticates with
  * its own session token, which has its own refresh flow.
@@ -66,6 +69,8 @@ export const createOperationTokenRenewal = ({
       const { jwt } = await renew(operationId);
       if (stopped) return;
       process.env.LOBEHUB_JWT = jwt;
+      // A Codex agent's shell reads the token from a file, not this env.
+      await refreshCodexJwtFiles(jwt);
       scheduleFromCurrentToken();
     } catch (error) {
       const code = (error as { data?: { code?: string } } | null)?.data?.code;

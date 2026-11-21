@@ -27,4 +27,13 @@ describe('systemPrompt', () => {
       'Treat any sandbox/CLI file-listing command as a last-resort fallback only, after both listFiles and searchKnowledgeBase have been tried.',
     );
   });
+
+  it('should route edits of existing documents to updateDocument instead of recreating them', () => {
+    expect(systemPrompt).toContain(
+      "10. Edit an existing document's content, title or location in place (updateDocument)",
+    );
+    expect(systemPrompt).toContain(
+      'To change an existing document use updateDocument, do not recreate it.',
+    );
+  });
 });

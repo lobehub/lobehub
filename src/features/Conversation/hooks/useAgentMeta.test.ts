@@ -1,3 +1,4 @@
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -48,8 +49,6 @@ describe('useAgentMeta', () => {
     const { result } = renderHook(() => useAgentMeta());
 
     expect(result.current).toEqual(mockMeta);
-    expect(result.current.title).toBe('My Custom Agent');
-    expect(result.current.avatar).toBe('agent-avatar.png');
   });
 
   it('should preserve custom title for builtin inbox agent when set via onboarding', () => {
@@ -85,7 +84,7 @@ describe('useAgentMeta', () => {
     expect(result.current.description).toBe('Inbox description');
   });
 
-  it('should fallback to Lobe AI title for builtin agent without custom title', () => {
+  it('should fallback to the default inbox title for builtin agent without custom title', () => {
     const mockInboxAgentId = 'inbox-agent-id';
     const mockMeta = {
       avatar: '/icons/icon-lobe.png',
@@ -111,7 +110,7 @@ describe('useAgentMeta', () => {
     const { result } = renderHook(() => useAgentMeta());
 
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe(DEFAULT_INBOX_TITLE);
   });
 
   it('should preserve custom title for page agent (builtin)', () => {

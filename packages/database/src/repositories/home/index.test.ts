@@ -43,7 +43,7 @@ describe('HomeRepository', () => {
   });
 
   describe('getSidebarAgentList - agents', () => {
-    it('should return agents without projecting legacy session info', async () => {
+    it('returns linked agents with their agent-owned sidebar fields', async () => {
       // Create agent
       const [agent] = await serverDB
         .insert(agents)
@@ -83,6 +83,27 @@ describe('HomeRepository', () => {
         title: 'Test Agent',
         type: 'agent',
       });
+    });
+
+    it('should expose the market source an agent was forked from', async () => {
+      const [forked, plain] = await serverDB
+        .insert(agents)
+        .values([
+          {
+            params: { forkedFromIdentifier: 'market-writer' },
+            title: 'Forked',
+            userId,
+            virtual: false,
+          },
+          { title: 'Plain', userId, virtual: false },
+        ])
+        .returning();
+
+      const result = await homeRepo.getSidebarAgentList();
+      const byId = new Map(result.ungrouped.map((item) => [item.id, item]));
+
+      expect(byId.get(forked.id)?.forkedFromIdentifier).toBe('market-writer');
+      expect(byId.get(plain.id)?.forkedFromIdentifier ?? null).toBeNull();
     });
 
     it('should fallback inbox agent meta by slug', async () => {

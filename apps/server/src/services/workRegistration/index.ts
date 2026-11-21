@@ -13,14 +13,30 @@
  *   runtime state, used to suppress the early `visible_output_end` when
  *   completion will export files.
  *
+ * - `resolveAgentWorkRun` / `resolveAgentWorkFile` — resolve the running
+ *   operation and uploaded file behind an agent's own `lh work create|update`.
+ *
  * Execution-time registrations (skill structured tools, task / document
  * works) live with their owning features — see `WorkModel` and the agent-work
  * skill's file map.
  */
 export {
+  type AgentWorkRun,
+  AgentWorkRunError,
+  parseCollectionImageRef,
+  resolveAgentWorkCollectionItems,
+  resolveAgentWorkFile,
+  resolveAgentWorkRun,
+} from './agentWork';
+export {
   type LocalRunShellWorksResult,
   registerShellWorksForLocalRun,
 } from './localRunWorkRegistration';
+export {
+  isBetterCodingExperienceEnabled,
+  resolveShellPullRequestLinking,
+  type ShellPullRequestLinking,
+} from './pullRequestLinking';
 export {
   registerWorksForOperation,
   type RegisterWorksForOperationParams,
@@ -28,3 +44,14 @@ export {
 } from './registerWorksForOperation';
 export { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 export { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
+export {
+  linkTopicPullRequest,
+  parsePullRequestUrl,
+  setTopicPullRequestDismissed,
+} from './topicPullRequestLinks';
+export {
+  type DeviceReportedPullRequest,
+  linkPushedPullRequests,
+  type LinkPushedPullRequestsResult,
+  listTopicPullRequestsWithStatus,
+} from './topicPullRequests';

@@ -9,7 +9,6 @@ type UniformTool = UniformToolArray[number];
 const log = debug('lobe-mecha:tool-set-composer');
 
 export interface ToolSetComposerContext {
-  isPageEditorReady?: boolean;
   scope?: string;
 }
 
@@ -49,18 +48,12 @@ const mergeInjectedManifests = (
   };
 };
 
-// `scope` is bound to the topic, not the route: navigating away from the page
-// editor keeps `scope === 'page'` on the same topic. Without this drop the LLM
-// still sees page-agent tools and can call them against a stale editor ref.
-const dropPageAgentIfEditorNotMounted = (
-  set: ComposedToolSet,
-  context: ToolSetComposerContext,
-): ComposedToolSet => {
-  if (context.scope !== 'page') return set;
+// Page tools execute only on the server runtime (gateway mode); a run on the
+// client transport has no executor for them.
+const dropPageAgent = (set: ComposedToolSet): ComposedToolSet => {
   if (!set.enabledToolIds.includes(PageAgentIdentifier)) return set;
-  if (context.isPageEditorReady) return set;
 
-  log('dropping %s: editor not mounted', PageAgentIdentifier);
+  log('dropping %s: page tools run on the server runtime only', PageAgentIdentifier);
 
   const toolNamePrefix = `${PageAgentIdentifier}____`;
   const nextTools = set.tools?.filter((t) => !t.function?.name?.startsWith(toolNamePrefix));
@@ -83,8 +76,6 @@ export const composeEnabledTools = ({
     tools: toolsDetailed.tools,
   };
 
-  return dropPageAgentIfEditorNotMounted(
-    mergeInjectedManifests(initial, injectedManifests),
-    context,
-  );
+  const merged = mergeInjectedManifests(initial, injectedManifests);
+  return context.scope === 'page' ? dropPageAgent(merged) : merged;
 };

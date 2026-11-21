@@ -147,11 +147,26 @@ export const readFrozenModelFacts = async (
     ? await resolveReasoningConfig(request, providers)
     : undefined;
 
+  // Deployment-catalog providers (Azure, Volcengine Ark, Spark) address the
+  // request model by the card's `config.deploymentName`, and the transport
+  // resolves it from the frozen provider card. A user-configured alias
+  // (`ai_models.config.deploymentName`) replaces the bundled one — otherwise
+  // calls 404 wherever only the user's endpoint exists.
+  const deploymentName = userModelRow?.deploymentName || modelCard?.deploymentName || undefined;
+  const mergedModelCard: ModelCardFacts | undefined = modelCard
+    ? { ...modelCard, ...(deploymentName ? { deploymentName } : {}) }
+    : userModelRow?.deploymentName
+      ? // A custom model has no bundled card; the user row alone still names
+        // its deployment, so freeze a minimal card for the transport.
+        { deploymentName: userModelRow.deploymentName, id: model, providerId: provider }
+      : undefined;
+
   return {
-    // Only the two cards the rules can match — the provider's own and the
-    // canonical one of the same id elsewhere. The whole bank would not fit the
-    // state, and nothing asks about another model (see the frozen providers).
-    cards: [modelCard, canonicalModelCard].filter(
+    // Only the two cards the rules can match — the provider's own (with the
+    // user's deployment alias merged over the bundled value) and the canonical
+    // one of the same id elsewhere. The whole bank would not fit the state,
+    // and nothing asks about another model (see the frozen providers).
+    cards: [mergedModelCard, canonicalModelCard].filter(
       (card, index, all): card is ModelCardFacts => !!card && all.indexOf(card) === index,
     ),
     // Only the three flags the rules read: a host may hand over a fuller

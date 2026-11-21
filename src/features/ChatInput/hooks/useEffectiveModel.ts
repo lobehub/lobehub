@@ -8,13 +8,44 @@ import { useChatStore } from '@/store/chat';
 // controls, and the barrel drags in unrelated slice selectors.
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
+import { useTopicId } from './useTopicId';
+
 interface ModelAndProvider {
   model: string;
   provider: string;
 }
 
 /**
- * The effective model/provider for ChatInput: the active topic's pinned model
+ * The model pinned to this composer's own topic (see `useTopicId`), never the
+ * global active topic's: a page copilot embedded beside another chat has
+ * `topicId: null` and must not pick up the outer chat's pin.
+ *
+ * Also the single place the composer loads its topic by id. A topic that never
+ * reaches the loaded lists (a document's chat panel runs on a
+ * `trigger='document'` system topic, a goal's supervision topic is excluded from
+ * the sidebar) still has a persisted pin and summary the run uses, and not every
+ * route mounts `useFetchActiveTopicDetail`. Doing it here, rather than in a
+ * leaf like the token tag, means every consumer of the model (and the gates that
+ * decide whether such a leaf mounts at all) triggers the load; the by-id fetch
+ * dedupes across callers and with `useFetchActiveTopicDetail`.
+ */
+export const useTopicModel = (): ModelAndProvider | undefined => {
+  const topicId = useTopicId();
+
+  const topicModel = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicModelById(topicId)(s) : undefined,
+  );
+  const isUnlistedTopic = useChatStore(
+    (s) => !!topicId && !topicSelectors.getTopicById(topicId)(s),
+  );
+  const useFetchTopicDetail = useChatStore((s) => s.useFetchTopicDetail);
+  useFetchTopicDetail(isUnlistedTopic ? topicId : undefined);
+
+  return topicModel;
+};
+
+/**
+ * The effective model/provider for ChatInput: the composer topic's pinned model
  * when one exists, otherwise the agent default.
  *
  * Use this everywhere a capability is gated on the model that will actually run
@@ -29,7 +60,7 @@ export const useEffectiveModel = (agentId: string): ModelAndProvider => {
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
 
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useTopicModel();
 
   return {
     model: topicModel?.model || agentModel,

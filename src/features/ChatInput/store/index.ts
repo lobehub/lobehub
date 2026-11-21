@@ -1,13 +1,7 @@
 'use client';
 
 import { type StoreApiWithSelector } from '@lobechat/types';
-import {
-  createContext as createReactContext,
-  createElement,
-  type ReactNode,
-  useContext,
-  useRef,
-} from 'react';
+import { createElement, type ReactNode, useRef } from 'react';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
@@ -15,6 +9,7 @@ import { createContext } from 'zustand-utils';
 
 import { type Store } from './action';
 import { store } from './action';
+import { ChatInputStoreApiContext } from './apiContext';
 import { type State } from './initialState';
 
 export type { PublicState, State } from './initialState';
@@ -30,20 +25,7 @@ const {
 
 export { useChatInputStore, useStoreApi };
 
-/**
- * Parallel context that mirrors the ChatInput store api. zustand-utils' own
- * context throws ("...used zustand provider as an ancestor.") when read without
- * a Provider, so it cannot answer "is there a store here?". Components reused
- * outside a chat input — e.g. the image/video generation prompt reuses
- * ChatInput's <Action> — read this to degrade gracefully instead of crashing.
- */
-const ChatInputStoreApiContext = createReactContext<StoreApiWithSelector<Store> | undefined>(
-  undefined,
-);
-
-/** The ChatInput store api, or `undefined` when rendered outside a Provider. */
-export const useChatInputStoreApiOptional = (): StoreApiWithSelector<Store> | undefined =>
-  useContext(ChatInputStoreApiContext);
+export { useChatInputStoreApiOptional } from './apiContext';
 
 /**
  * Wraps zustand-utils' Provider and additionally publishes the same store

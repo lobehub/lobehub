@@ -31,12 +31,13 @@ export const skillsPrompts = (skills: SkillItem[]) => {
     (skill) => skill.source === 'project' || skill.source === 'device',
   );
   const filesystemHint = hasFilesystemSkill
-    ? `\nFor a skill with source="project" or source="device", load it by calling the readFile tool on its \`location\` path before following its instructions.`
+    ? `\nFor a skill with source="project" or source="device", load it by calling the readFile tool on its \`location\` path and resolve relative paths against its parent directory (parent of SKILL.md).`
     : '';
 
-  return `<available_skills>
-${skillTags}
-</available_skills>
+  return `The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.${filesystemHint}
 
-Use the activateSkill tool to activate a skill when needed.${filesystemHint}`;
+<available_skills>
+${skillTags}
+</available_skills>`;
 };

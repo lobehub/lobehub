@@ -99,6 +99,50 @@ describe('createPendingCreateLedger', () => {
     });
   });
 
+  describe('retryNew', () => {
+    it('replays a fresh failure once, then leaves a still-failing row to drain', async () => {
+      const createMessage = vi.fn().mockRejectedValue(new Error('index row too large'));
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      ledger.add('msg-a', row('msg-a'));
+      await ledger.retryNew();
+      await ledger.retryNew();
+
+      expect(createMessage).toHaveBeenCalledTimes(1);
+      expect(ledger.has('msg-a')).toBe(true);
+
+      await ledger.drain();
+      expect(createMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not create a row twice when replays overlap', async () => {
+      let release!: () => void;
+      const createMessage = vi.fn().mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      ledger.add('msg-a', row('msg-a'));
+      const first = ledger.retryNew();
+      const second = ledger.drain();
+      await vi.waitFor(() => expect(createMessage).toHaveBeenCalledTimes(1));
+      release();
+      await Promise.all([first, second]);
+
+      expect(createMessage).toHaveBeenCalledTimes(1);
+      expect(ledger.size).toBe(0);
+    });
+  });
+
   describe('drain', () => {
     it('keeps rows that fail again so a later pass can retry them', async () => {
       const createMessage = vi

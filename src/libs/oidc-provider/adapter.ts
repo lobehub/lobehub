@@ -14,6 +14,8 @@ import { eq, sql } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
+import { stampClientLastUsed } from './clientLastUsed';
+
 // Create adapter logging namespace
 const log = debug('lobe-oidc:adapter');
 
@@ -285,28 +287,16 @@ class OIDCAdapter {
         });
       log('[%s] Successfully upserted record: %s', this.name, id);
 
+      // Only opaque access tokens reach the adapter; JWT ones (the API audience
+      // default) are stamped from the provider's `access_token.issued` event.
       if (this.name === 'AccessToken' || this.name === 'DeviceCode') {
-        this.stampClientLastUsed(payload.clientId);
+        stampClientLastUsed(this.db, payload.clientId);
       }
     } catch (error) {
       log('[%s] ERROR upserting record: %O', this.name, error);
       console.error(`[OIDC Adapter] Error upserting ${this.name}:`, error);
       throw error;
     }
-  }
-
-  private stampClientLastUsed(clientId?: string): void {
-    if (!clientId || !clientId.startsWith('lca_')) return;
-
-    // last_used_at is a best-effort UX signal for user-created OAuth clients;
-    // a failed stamp must never break token issuance, so swallow all errors.
-    void this.db
-      .update(oidcClients)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(oidcClients.id, clientId))
-      .then(undefined, (error: unknown) => {
-        log('[%s] Failed to stamp last_used_at for client %s: %O', this.name, clientId, error);
-      });
   }
 
   /**

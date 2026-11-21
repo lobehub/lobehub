@@ -1,14 +1,14 @@
 import { parse } from '../parse';
-import { toTime } from '../utils/timestamp';
 import type { Message, MessageGroupMetadata } from '../types';
+import { toTime } from '../utils/timestamp';
 import type { RepairOp, TopicDiagnosis, TopicIssue } from './types';
 
 /**
  * Every message id referenced anywhere in the rendered payload.
  *
  * The renderer does not emit one flat entry per message: tool results live in
- * `children[].tools[].result_msg_id`, signal turns in `signalCallbacks[]`, post-task
- * summaries in `taskCompletions[]`, and so on. Rather than mirror each nesting site
+ * `children[].tools[].result_msg_id`, signal turns in `signalCallbacks[]`, and so on.
+ * Rather than mirror each nesting site
  * (and silently start over-reporting whenever a new one is added), walk the payload
  * generically and collect anything that could be a message id. Ids that are not
  * messages (tool_call ids) fall out when the set is intersected with the topic.
@@ -175,7 +175,10 @@ export const diagnoseTopic = (
       // a message inside this very section can't anchor it.
       const sectionIds = new Set(section.map((m) => m.id));
       const anchor = sorted
-        .filter((m) => canAnchor(m) && toTime(m.createdAt) < toTime(root.createdAt) && !sectionIds.has(m.id))
+        .filter(
+          (m) =>
+            canAnchor(m) && toTime(m.createdAt) < toTime(root.createdAt) && !sectionIds.has(m.id),
+        )
         .sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))[0];
       if (!anchor) continue;
 
@@ -257,7 +260,8 @@ export const diagnoseTopic = (
 
     const ownIds = new Set(ownSubtree.map((m) => m.id));
     const candidates = sorted.filter(
-      (m) => m.role === 'tool' && toTime(m.createdAt) < toTime(message.createdAt) && !ownIds.has(m.id),
+      (m) =>
+        m.role === 'tool' && toTime(m.createdAt) < toTime(message.createdAt) && !ownIds.has(m.id),
     );
     // The signal names the tool call it is reacting to; fall back to the most recent tool
     // result only when that call cannot be found.

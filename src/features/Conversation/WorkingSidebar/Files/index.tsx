@@ -1,13 +1,20 @@
 'use client';
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { Center, Empty, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Button, DropdownMenu, Input, Spin } from '@lobehub/ui/base-ui';
-import type { GitStatusEntry } from '@pierre/trees';
-import { createStaticStyles } from 'antd-style';
 import {
-  CheckIcon,
-  ChevronDownIcon,
+  ActionIcon,
+  Center,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+  Icon,
+  Input,
+  stopPropagation,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import type { GitStatusEntry } from '@pierre/trees';
+import * as stylex from '@stylexjs/stylex';
+import {
   EllipsisIcon,
   FileIcon,
   FilePlusIcon,
@@ -23,21 +30,25 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
 import { ExplorerTree, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { useClientDataSWR } from '@/libs/swr';
 import { projectFileService } from '@/services/projectFile';
 import { useGlobalStore } from '@/store/global';
+import { isPersistedPartialIndex } from '@/store/projectFile';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
 import { FILE_TREE_UNSAFE_CSS } from './fileTreeStyle';
 import { isExcludedProjectFileEntry } from './fileVisibility';
 import { getAncestorIds, getParentRelativePath, PROJECT_ROOT_NODE_ID } from './treePaths';
 import { useCollapsedDirectoryChildren } from './useCollapsedDirectoryChildren';
+import { useFilesTreeSources } from './useFilesTreeSources';
 import { useFileTreeActions } from './useFileTreeActions';
-import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
-import { useProjectFiles } from './useProjectFiles';
+import { buildGitStatusEntries } from './useGitWorkingTreeFiles';
 
 interface FilesProps {
   /**
@@ -60,47 +71,52 @@ interface FilesProps {
   workingDirectory: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  tree: css`
-    --trees-bg-override: transparent;
-    --trees-border-color-override: transparent;
-    --trees-selected-bg-override: ${cssVar.colorFillSecondary};
-    --trees-selected-fg-override: ${cssVar.colorText};
-    --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorTextSecondary};
-    --trees-fg-muted-override: ${cssVar.colorTextSecondary};
-    --trees-accent-override: ${cssVar.colorPrimary};
-    --trees-padding-inline-override: 0px;
-    --trees-font-size-override: 12px;
-    --trees-border-radius-override: 6px;
-
-    flex: 1;
-    min-height: 0;
-  `,
-  subheader: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 6px 8px;
-    padding-inline: 12px;
-  `,
-  search: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  truncated: css`
-    flex-shrink: 0;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  tree: {
+    '--trees-bg-override': 'transparent',
+    '--trees-border-color-override': 'transparent',
+    '--trees-selected-bg-override': cssVar.colorFillSecondary,
+    '--trees-selected-fg-override': cssVar.colorText,
+    '--trees-bg-muted-override': cssVar.colorFillTertiary,
+    '--trees-fg-override': cssVar.colorTextSecondary,
+    '--trees-fg-muted-override': cssVar.colorTextSecondary,
+    '--trees-accent-override': cssVar.colorPrimary,
+    '--trees-padding-inline-override': sidebarRow.paneInline,
+    '--trees-item-margin-x-override': '0px',
+    '--trees-item-padding-x-override': sidebarRow.paddingInline,
+    '--trees-item-row-gap-override': sidebarRow.gap,
+    '--trees-font-size-override': sidebarRow.textFontSize,
+    '--trees-border-radius-override': sidebarRow.radius,
+    'flex': '1',
+    'minHeight': '0',
+    'paddingBlockStart': sidebarRow.paneBlockStart,
+  },
+  subheader: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    height: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+  },
+  search: { flex: '1', minWidth: '0' },
+  skeleton: {
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
+  },
+  truncated: {
+    flexShrink: 0,
+    paddingBlock: '4px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
@@ -209,15 +225,14 @@ const Files = memo<FilesProps>(
     // sandbox both answer over the network, and neither can be handed to Electron
     // to reveal in a file manager.
     const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
-    const { data, error, isLoading } = useProjectFiles(deviceId, workingDirectory, {
+    const {
+      git: { data: gitFiles, error: gitError },
+      project: { data, error, isLoading, isValidating },
+    } = useFilesTreeSources(deviceId, workingDirectory, {
       instanceId: sandboxInstanceId,
       topicId: sandboxTopicId,
     });
-    const { data: gitFiles } = useGitWorkingTreeFiles(
-      deviceId,
-      workingDirectory,
-      data?.source === 'git',
-    );
+    const density = useDensityTokens();
     const projectSource = data?.source;
     const projectRoot = data?.root ?? workingDirectory;
 
@@ -349,8 +364,12 @@ const Files = memo<FilesProps>(
       [changedOnly, isFiltering, nodes],
     );
     const treeStyleVars = useMemo(
-      () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
-      [nodes],
+      () =>
+        getExplorerTreeStyleVars({
+          reserveChevronSlot: nodes.some((node) => node.isFolder),
+          rowGap: density.gap,
+        }),
+      [density.gap, nodes],
     );
 
     useEffect(() => {
@@ -377,27 +396,6 @@ const Files = memo<FilesProps>(
       treeRef.current?.setExpanded([]);
       setExpandedIds([]);
     }, []);
-
-    const viewItems = useMemo(
-      () => [
-        {
-          extra: viewMode === 'project' ? <CheckIcon size={14} /> : undefined,
-          icon: <FolderTreeIcon size={14} />,
-          key: 'project',
-          label: t('workingPanel.files.views.project'),
-          onClick: () => setViewMode('project'),
-        },
-        {
-          disabled: data?.source !== 'git',
-          extra: viewMode === 'changes' ? <CheckIcon size={14} /> : undefined,
-          icon: <GitCompareArrowsIcon size={14} />,
-          key: 'changes',
-          label: t('workingPanel.files.views.changes'),
-          onClick: () => setViewMode('changes'),
-        },
-      ],
-      [data?.source, t, viewMode],
-    );
 
     useEffect(() => {
       if (!isFiltering) return;
@@ -493,20 +491,24 @@ const Files = memo<FilesProps>(
     );
 
     const isEmpty = displayEntries.length === 0;
+    // A large project's saved tree keeps only its shallowest entries. Its own
+    // refresh replaces it within moments; only when that refresh is not running
+    // (it failed, or has not been retried) is the partial tree worth flagging.
+    const showsPartialIndex = isPersistedPartialIndex(data) && !isValidating;
+    // A restored tree / overlay is painted before the host answers again. When
+    // that refresh fails the saved view stays on screen, so it must say that it
+    // could not be revalidated instead of reading as the current directory.
+    const showsRefreshFailure = !!data && !!(error || gitError);
 
     if (!data && isLoading) {
-      return (
-        <Center flex={1}>
-          <Spin size="large" />
-        </Center>
-      );
+      return <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={8} />;
     }
 
     return (
       <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
-        <div className={styles.subheader}>
+        <div {...stylex.props(styles.subheader)}>
           {searchExpanded ? (
-            <div className={styles.search}>
+            <div {...stylex.props(styles.search)}>
               <FilesSearchBar
                 onClose={() => setSearchExpanded(false)}
                 onDebouncedChange={setDebouncedQuery}
@@ -514,22 +516,23 @@ const Files = memo<FilesProps>(
             </div>
           ) : (
             <>
-              <DropdownMenu items={viewItems} placement={'bottomLeft'}>
-                <Button
-                  icon={viewMode === 'project' ? FolderTreeIcon : GitCompareArrowsIcon}
-                  size={'small'}
-                  style={{ maxWidth: 'calc(100% - 84px)' }}
-                  title={t('workingPanel.files.views.title')}
-                  type={'text'}
-                >
-                  {t(
-                    viewMode === 'project'
-                      ? 'workingPanel.files.views.project'
-                      : 'workingPanel.files.views.changes',
-                  )}
-                  <ChevronDownIcon size={12} />
-                </Button>
-              </DropdownMenu>
+              <ActionIcon
+                active={viewMode === 'project'}
+                aria-pressed={viewMode === 'project'}
+                icon={FolderTreeIcon}
+                size={'small'}
+                title={t('workingPanel.files.views.project')}
+                onClick={() => setViewMode('project')}
+              />
+              <ActionIcon
+                active={viewMode === 'changes'}
+                aria-pressed={viewMode === 'changes'}
+                disabled={data?.source !== 'git'}
+                icon={GitCompareArrowsIcon}
+                size={'small'}
+                title={t('workingPanel.files.views.changes')}
+                onClick={() => setViewMode('changes')}
+              />
               <div style={{ flex: 1 }} />
             </>
           )}
@@ -559,11 +562,9 @@ const Files = memo<FilesProps>(
           </DropdownMenu>
         </div>
         {isEmpty && isFiltering && isSearching ? (
-          <Center flex={1}>
-            <Spin size="large" />
-          </Center>
+          <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={4} />
         ) : isEmpty && !actions.pendingCreate ? (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             {/* A failed read and an empty directory look identical once the tree
               is empty, and they are not the same thing to act on: one is
               "nothing here yet", the other is "we could not find out". Saying
@@ -581,7 +582,7 @@ const Files = memo<FilesProps>(
             />
           </Center>
         ) : (
-          <div className={styles.tree} style={treeStyleVars}>
+          <div className={stylex.props(styles.tree).className} style={treeStyleVars}>
             <ExplorerTree<ProjectFileIndexEntry>
               iconsColored
               canDrag={actions.canDrag}
@@ -592,6 +593,7 @@ const Files = memo<FilesProps>(
               getContextMenuItems={actions.getContextMenuItems}
               gitStatus={gitStatus}
               iconSet="complete"
+              itemHeight={density.treeItemHeight}
               nodes={nodes}
               ref={treeRef}
               style={{ height: '100%' }}
@@ -607,8 +609,16 @@ const Files = memo<FilesProps>(
             />
           </div>
         )}
-        {truncatedCount > 0 && (
-          <div className={styles.truncated}>{t('workingPanel.files.truncatedNotice')}</div>
+        {showsRefreshFailure ? (
+          <div {...stylex.props(styles.truncated)}>{t('workingPanel.files.refreshFailed')}</div>
+        ) : showsPartialIndex ? (
+          <div {...stylex.props(styles.truncated)}>
+            {t('workingPanel.files.partialIndexNotice')}
+          </div>
+        ) : (
+          truncatedCount > 0 && (
+            <div {...stylex.props(styles.truncated)}>{t('workingPanel.files.truncatedNotice')}</div>
+          )
         )}
       </Flexbox>
     );

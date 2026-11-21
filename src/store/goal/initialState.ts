@@ -13,9 +13,10 @@ export type { GoalListItem };
  * `running` the goal whose loop is executing right now, `achieved` the goals
  * that reached their terminal outcome. The other terminal states (`failed`,
  * `canceled`) stay reachable through `all` only — "completed" would misname
- * them.
+ * them. `archived` lists the goals the user put away, which every other tab
+ * leaves out.
  */
-export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved';
+export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved' | 'archived';
 export type GoalViewMode = 'card' | 'list';
 
 export interface GoalState {
@@ -31,8 +32,19 @@ export interface GoalState {
    * (what the project dashboard and the route meta read) and one sibling entry
    * per narrow tab (`goalListKey`).
    */
+  /**
+   * The agent the cross-agent goals page is narrowed to; unset lists every
+   * agent's goals. Kept in the store so returning from a goal keeps the filter.
+   */
+  goalListAgentFilter?: string;
   goalListByAgentId: Record<string, GoalListValue>;
   goalListFilter: GoalListFilter;
+  /**
+   * The goals page's search box, matched against the loaded rows' title and
+   * requirement. Kept in the store, like the tab, so returning from a goal
+   * keeps the search.
+   */
+  goalListKeyword: string;
   /** Local-first bookkeeping for `goalListByAgentId`. */
   goalListReplica: ReplicaState<GoalListValue>;
   goalListVisibleLimit: number;
@@ -44,6 +56,8 @@ export interface GoalState {
   goalMetricSeriesById: Record<string, MetricSeriesWithPoints[]>;
   /** Local-first bookkeeping for `goalMetricSeriesById`. */
   goalMetricSeriesReplica: ReplicaState<MetricSeriesWithPoints[]>;
+  /** Goals whose title is being generated right now, for the header's loading state. */
+  goalTitleRenamingIds: string[];
   goalViewMode: GoalViewMode;
   /**
    * Every agent's goals, for the home rail's cross-agent roll-up — keyed by
@@ -54,6 +68,10 @@ export interface GoalState {
   homeGoalsByScope: Record<string, GoalListValue>;
   /** Local-first bookkeeping for `homeGoalsByScope`. */
   homeGoalsReplica: ReplicaState<GoalListValue>;
+  /** Goals created from one conversation, keyed by topic id. */
+  topicGoalsByTopicId: Record<string, GoalListValue>;
+  /** Local-first bookkeeping for `topicGoalsByTopicId`. */
+  topicGoalsReplica: ReplicaState<GoalListValue>;
 }
 
 export const initialState: GoalState = {
@@ -61,11 +79,15 @@ export const initialState: GoalState = {
   goalGraphReplica: createReplicaState(),
   goalListByAgentId: {},
   goalListFilter: 'all',
+  goalListKeyword: '',
   goalListReplica: createReplicaState(),
   goalListVisibleLimit: 10,
   goalMetricSeriesById: {},
   goalMetricSeriesReplica: createReplicaState(),
+  goalTitleRenamingIds: [],
   goalViewMode: 'list',
   homeGoalsByScope: {},
   homeGoalsReplica: createReplicaState(),
+  topicGoalsByTopicId: {},
+  topicGoalsReplica: createReplicaState(),
 };

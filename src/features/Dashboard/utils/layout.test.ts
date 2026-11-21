@@ -6,6 +6,8 @@ import {
   DASHBOARD_ROW_HEIGHT,
   defaultWidgetSize,
   flowLayouts,
+  resizeByKey,
+  resizeByPointer,
   resolveLayouts,
   sortByPosition,
 } from './layout';
@@ -83,5 +85,58 @@ describe('sortByPosition', () => {
     expect(
       sortByPosition([{ id: 'a' }, { id: 'b' }, { id: 'c' }], layouts).map((i) => i.id),
     ).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('resizeByPointer', () => {
+  // 12 columns of 64px with 16px gaps: one column plus its gap is 80px.
+  const gridWidth = 12 * 64 + 11 * DASHBOARD_GRID_GAP;
+  const rowStep = DASHBOARD_ROW_HEIGHT + DASHBOARD_GRID_GAP;
+
+  it('snaps the dragged size to whole columns and rows', () => {
+    expect(resizeByPointer({ h: 3, w: 4 }, { dx: 160, dy: rowStep }, gridWidth)).toEqual({
+      h: 4,
+      w: 6,
+    });
+    // Less than half a step does not move the edge.
+    expect(resizeByPointer({ h: 3, w: 4 }, { dx: 30, dy: -30 }, gridWidth)).toEqual({
+      h: 3,
+      w: 4,
+    });
+  });
+
+  it('stays within the board limits', () => {
+    expect(resizeByPointer({ h: 3, w: 4 }, { dx: -2000, dy: -2000 }, gridWidth)).toEqual({
+      h: 2,
+      w: 3,
+    });
+    expect(resizeByPointer({ h: 3, w: 4 }, { dx: 5000, dy: 5000 }, gridWidth)).toEqual({
+      h: 12,
+      w: DASHBOARD_GRID_COLUMNS,
+    });
+  });
+
+  it('changes only the height on a stacked board, keeping the saved width', () => {
+    expect(
+      resizeByPointer({ h: 3, w: 4 }, { dx: 400, dy: rowStep }, 360, { stacked: true }),
+    ).toEqual({ h: 4, w: 4 });
+  });
+
+  it('keeps the size while the grid has no width yet', () => {
+    expect(resizeByPointer({ h: 3, w: 4 }, { dx: 100, dy: 100 }, 0)).toEqual({ h: 3, w: 4 });
+  });
+});
+
+describe('resizeByKey', () => {
+  it('steps one column or row per arrow and ignores other keys', () => {
+    expect(resizeByKey({ h: 3, w: 4 }, 'ArrowRight')).toEqual({ h: 3, w: 5 });
+    expect(resizeByKey({ h: 3, w: 4 }, 'ArrowUp')).toEqual({ h: 2, w: 4 });
+    expect(resizeByKey({ h: 2, w: 3 }, 'ArrowUp')).toEqual({ h: 2, w: 3 });
+    expect(resizeByKey({ h: 3, w: 4 }, 'Enter')).toBeUndefined();
+  });
+
+  it('steps only the height on a stacked board', () => {
+    expect(resizeByKey({ h: 3, w: 4 }, 'ArrowDown', { stacked: true })).toEqual({ h: 4, w: 4 });
+    expect(resizeByKey({ h: 3, w: 4 }, 'ArrowRight', { stacked: true })).toBeUndefined();
   });
 });

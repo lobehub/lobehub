@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -60,7 +61,7 @@ export async function messengerInstall(c: Context): Promise<Response> {
   if (!config) {
     log('install: %s messenger not configured', platform);
     return new Response(
-      `${definition.name} messenger is not configured on this LobeHub deployment. ` +
+      `${definition.name} messenger is not configured on this ${BRANDING_NAME} deployment. ` +
         `Ask the operator to add a ${definition.name} bot in dc-center → Agent → System Bots ` +
         `and enable it.`,
       { status: 503 },

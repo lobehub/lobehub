@@ -1,6 +1,5 @@
 import { Github } from '@lobehub/icons';
-import { Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Icon } from '@lobehub/ui';
 import { FolderGit2Icon, FolderIcon } from 'lucide-react';
 import { memo } from 'react';
 

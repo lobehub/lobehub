@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

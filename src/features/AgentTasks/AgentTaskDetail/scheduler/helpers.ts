@@ -47,18 +47,20 @@ export const formatScheduleDescription = (pattern: string, t: TFunction<'chat'>)
   switch (parsed.scheduleType) {
     case 'hourly': {
       const interval = parsed.hourlyInterval ?? 1;
-      // Cron storage rounds minutes to 0 or 30 (see buildCronPattern). Reading
-      // ':30' literally felt awkward in the summary, so call it out as
-      // "half past" only when it's actually non-zero and stay implicit on :00.
-      const isHalfPast = parsed.triggerMinute === 30;
+      // Reading ':30' literally felt awkward in the summary, so call it out as
+      // "half past" and stay implicit on :00; any other minute is named as is.
+      const minute = parsed.triggerMinute;
       if (interval === 1) {
-        return isHalfPast
-          ? t('taskSchedule.summary.hourlyHalfPast')
-          : t('taskSchedule.summary.hourly');
+        if (minute === 0) return t('taskSchedule.summary.hourly');
+        if (minute === 30) return t('taskSchedule.summary.hourlyHalfPast');
+        return t('taskSchedule.summary.hourlyAtMinute', { minute: padTime(minute) });
       }
-      return isHalfPast
-        ? t('taskSchedule.summary.everyNHoursHalfPast', { count: interval })
-        : t('taskSchedule.summary.everyNHours', { count: interval });
+      if (minute === 0) return t('taskSchedule.summary.everyNHours', { count: interval });
+      if (minute === 30) return t('taskSchedule.summary.everyNHoursHalfPast', { count: interval });
+      return t('taskSchedule.summary.everyNHoursAtMinute', {
+        count: interval,
+        minute: padTime(minute),
+      });
     }
     case 'daily': {
       return t('taskSchedule.summary.daily', {

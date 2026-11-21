@@ -1,13 +1,12 @@
 'use client';
 
 import type { WidgetStatOutput } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowDownRightIcon, ArrowRightIcon, ArrowUpRightIcon } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 
 import type { DashboardTrendSeries } from '@/services/dashboard';
+import { densityVars } from '@/styles/densityVars';
 
 import { formatDelta, formatWidgetValue } from '../../utils/format';
 import TrendSparkline from './TrendSparkline';
@@ -44,7 +43,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline-end: 4px;
   `,
   unit: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
   `,

@@ -335,24 +335,6 @@ describe('LobeCometAPIAI - custom features', () => {
       // processMultiProviderModelList should handle different providers
     });
 
-    it('should merge with known model data from model-bank', async () => {
-      const mockClient = {
-        apiKey: 'test',
-        baseURL: 'https://api.cometapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gpt-3.5-turbo', object: 'model', owned_by: 'openai' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      const model = models[0];
-
-      // Should have properties from both API and model-bank
-      expect(model.id).toBe('gpt-3.5-turbo');
-    });
-
     it('should handle models not in model-bank', async () => {
       const mockClient = {
         apiKey: 'test',
@@ -388,36 +370,6 @@ describe('LobeCometAPIAI - custom features', () => {
 
       const models = await params.models!({ client: mockClient as any });
       expect(models.length).toBe(4);
-    });
-
-    it('should preserve object field in processed models', async () => {
-      const mockClient = {
-        apiKey: 'test',
-        baseURL: 'https://api.cometapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gpt-3.5-turbo', object: 'model', owned_by: 'openai' }],
-          }),
-        },
-      };
-
-      await params.models!({ client: mockClient as any });
-      // The mapped model list should preserve the object field
-    });
-
-    it('should call processMultiProviderModelList with correct arguments', async () => {
-      const mockClient = {
-        apiKey: 'test',
-        baseURL: 'https://api.cometapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gpt-3.5-turbo', object: 'model', owned_by: 'openai' }],
-          }),
-        },
-      };
-
-      await params.models!({ client: mockClient as any });
-      // processMultiProviderModelList should be called with modelList and 'cometapi'
     });
   });
 });

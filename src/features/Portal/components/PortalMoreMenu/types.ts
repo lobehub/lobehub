@@ -1,4 +1,4 @@
-import { type DropdownItem } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
 
 /**
  * What a portal can do with the entity it shows. Every field is optional: a

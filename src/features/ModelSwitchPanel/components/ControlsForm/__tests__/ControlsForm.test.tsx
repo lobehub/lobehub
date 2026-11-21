@@ -27,7 +27,7 @@ const testState = vi.hoisted(() => ({
   updateAgentChatConfig: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui/form', async (importOriginal) => ({
+vi.mock('@lobehub/ui/form', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Form: () => <div data-testid="controls-form" />,
   useForm: () => ({ setValues: testState.setValues }),

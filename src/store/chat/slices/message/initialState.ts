@@ -1,6 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
 
 import { type ChatGroupAgentItem } from '@/database/schemas/chatGroup';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { type ConversationMessagePage } from '@/services/message/replica';
+
+import { type TranscriptPaging } from './transcript/lens';
 
 export interface ChatMessageState {
   activeAgentId: string;
@@ -18,6 +22,17 @@ export interface ChatMessageState {
    */
   messageEditingIds: string[];
   /**
+   * Paging bookkeeping of each transcript entry (cursor of the next older
+   * page, loaded depth), keyed by the transcript entry key. The rows are the
+   * entry's `dbMessagesMap` bucket.
+   */
+  messagePagingMap: Record<string, TranscriptPaging>;
+  /**
+   * Replica bookkeeping of the transcripts (`dbMessagesMap` + `messagesMap` +
+   * `messagePagingMap` are its view).
+   */
+  messageReplica: ReplicaState<ConversationMessagePage>;
+  /**
    * whether messages have fetched
    */
   messagesInit: boolean;
@@ -33,6 +48,8 @@ export const initialMessageState: ChatMessageState = {
   groupAgentMaps: {},
   isCreatingMessage: false,
   messageEditingIds: [],
+  messagePagingMap: {},
+  messageReplica: createReplicaState(),
   messagesInit: false,
   messagesMap: {},
 };

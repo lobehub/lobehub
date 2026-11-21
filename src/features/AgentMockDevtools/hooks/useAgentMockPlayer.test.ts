@@ -494,6 +494,7 @@ describe('useAgentMockPlayer', () => {
         },
       },
       { operationId: secondOperationId },
+      { creationOrigin: 'client' },
     );
     expect(secondHandle.player.seekToEventIndex).toHaveBeenCalledWith(2);
     expect(secondHandle.start).toHaveBeenCalledTimes(1);

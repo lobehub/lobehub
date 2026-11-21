@@ -1,11 +1,22 @@
 import type { HeteroSessionDirGroup, HeteroSessionDirPref } from '@lobechat/types';
 import { ClaudeCode, Codex } from '@lobehub/icons';
-import { Flexbox, Icon, ScrollShadow, Tooltip } from '@lobehub/ui';
-import { ActionIcon, DraggablePanel, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DraggablePanel,
+  Flexbox,
+  Icon,
+  ScrollShadow,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronRight, Eye, EyeOff, Folder, FolderGit2, Timer, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { baseName, dirKeyOf } from './utils';
 
@@ -53,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   sidebar: css`
     width: 100%;
     height: 100%;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 8px;
   `,
 }));

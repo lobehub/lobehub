@@ -1,5 +1,5 @@
+import { NEWS_BRIEF_TYPES } from '@lobechat/types';
 import dayjs from 'dayjs';
-import { type SWRResponse } from 'swr';
 
 import {
   createReplicaSlice,
@@ -8,8 +8,8 @@ import {
   type ReplicaSyncResult,
   revalidateReplica,
 } from '@/libs/replica';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { briefKeys, goalKeys } from '@/libs/swr/keys';
+import { mutate } from '@/libs/swr';
+import { goalKeys } from '@/libs/swr/keys';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
@@ -18,22 +18,19 @@ import { goalGraphResource, homeGoalListResource } from '@/store/goal/projection
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { BRIEF_LIST_KEY, briefEntity, briefListResource } from './projection';
+import {
+  BRIEF_LIST_KEY,
+  briefEntity,
+  briefListResource,
+  briefNewsResource,
+  type NewsDay,
+  newsDayEntity,
+  type NewsDayParams,
+} from './projection';
 
 const n = setNamespace('briefList');
 
-export interface NewsDay {
-  /**
-   * The local day (`YYYY-MM-DD`) this payload belongs to. Carried in the data so
-   * consumers rendering with `keepPreviousData` can label/gate from the day
-   * actually shown instead of the day being fetched — otherwise a slow page
-   * flip shows the new day's title over the old day's briefs.
-   */
-  day: string;
-  /** Any news brief older than this day exists — the day pager's "older" arrow. */
-  hasEarlier: boolean;
-  news: BriefItem[];
-}
+export type { NewsDay } from './projection';
 
 /** Sync flags of the unresolved feed, plus the aliases the inbox reads. */
 export interface BriefListSyncResult extends ReplicaSyncResult {
@@ -46,6 +43,13 @@ export interface BriefListSyncResult extends ReplicaSyncResult {
 /** The feed has one entry per scope (the replica partitions by identity), so its params are constant. */
 const LIST_PARAMS = {} as Record<string, never>;
 
+/**
+ * The digest is read by every Home surface that owns the rail sections; collapse
+ * their mounts into one request. Writes, focus and explicit revalidation still
+ * refresh as usual.
+ */
+const NEWS_DEDUPING_INTERVAL = 10_000;
+
 type Setter = StoreSetter<BriefStore>;
 
 export const createBriefListSlice = (set: Setter, get: () => BriefStore, _api?: unknown) =>
@@ -54,7 +58,10 @@ export const createBriefListSlice = (set: Setter, get: () => BriefStore, _api?: 
 export class BriefListActionImpl {
   readonly #get: () => BriefStore;
   readonly #briefList;
+  readonly #briefNews;
   readonly #briefs;
+  readonly #listBriefs;
+  readonly #newsBriefs;
 
   constructor(set: Setter, get: () => BriefStore, _api?: unknown) {
     void _api;
@@ -75,7 +82,30 @@ export class BriefListActionImpl {
     // applies right away, a failed write rolls back to the confirmed base, and a
     // confirmed write reaches the persisted row too — so a reload never hydrates
     // a value the server has already moved past.
-    this.#briefs = linkReplicaEntity<BriefItem>([this.#briefList]);
+    this.#briefNews = createReplicaSlice(briefNewsResource, {
+      actionPrefix: n('news'),
+      entity: newsDayEntity,
+      // `day` is the viewer's local `YYYY-MM-DD`; the [start, end) instants are
+      // computed here so the server stays timezone-agnostic.
+      fetcher: async ({ day }: NewsDayParams): Promise<NewsDay> => {
+        const startAt = dayjs(day).startOf('day');
+        const result = await briefService.listNewsByDay({
+          endAt: startAt.add(1, 'day').toDate(),
+          startAt: startAt.toDate(),
+        });
+        return { day, hasEarlier: result.hasEarlier, news: result.data as BriefItem[] };
+      },
+      get,
+      set,
+      stateKey: 'briefNewsReplica',
+      view: recordLens<BriefStore, NewsDay>('briefNewsMap'),
+    });
+    // A news brief is in both the unresolved feed and its day's digest, so a
+    // read / resolve / delete lands on both — persisted rows of days not on
+    // screen included.
+    this.#briefs = linkReplicaEntity<BriefItem>([this.#briefList, this.#briefNews]);
+    this.#listBriefs = linkReplicaEntity<BriefItem>([this.#briefList]);
+    this.#newsBriefs = linkReplicaEntity<BriefItem>([this.#briefNews]);
   }
 
   #syncResult = (sync: ReplicaSyncResult): BriefListSyncResult => ({
@@ -107,12 +137,18 @@ export class BriefListActionImpl {
     if (ids.length === 0) return;
 
     const result = await briefService.resolveManyAsRead(ids);
-    for (const id of result.data) this.#briefs.remove(id);
+    const resolvedAt = new Date().toISOString();
+    for (const id of result.data) {
+      this.#listBriefs.remove(id);
+      // The digest keeps resolved briefs (it is a day's record, not a to-do list).
+      this.#newsBriefs.update(id, (brief) => ({ ...brief, resolvedAction: 'read', resolvedAt }));
+    }
+    void this.#briefNews.revalidate();
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
-    const goal = this.#get().briefListMap[BRIEF_LIST_KEY]?.find((brief) => brief.id === id)
-      ?.metadata?.goal;
+    const target = this.#get().briefListMap[BRIEF_LIST_KEY]?.find((brief) => brief.id === id);
+    const goal = target?.metadata?.goal;
     await this.#briefs.optimistic(
       id,
       (brief) => ({
@@ -122,6 +158,10 @@ export class BriefListActionImpl {
       }),
       () => briefService.resolve(id, { action, comment }),
     );
+    // An urgent news brief is answered from "Needs you", and the day digest it
+    // returns to holds its own unresolved copy — refresh it so the handled brief
+    // does not come back there as unread once it leaves the unresolved feed.
+    if (target && NEWS_BRIEF_TYPES.includes(target.type)) void this.#briefNews.revalidate();
     // A goal brief answered the goal itself: the island and the goal views
     // asking the same question have to drop it too.
     if (goal)
@@ -153,27 +193,30 @@ export class BriefListActionImpl {
   };
 
   /**
-   * Day-scoped news digest (`insight` + `result`, resolved included). Lives in
-   * SWR only — no zustand bucket: the key already partitions by identity scope
-   * and day, the list is read-mostly, and the one mutation that touches it
-   * (mark-all-read) revalidates through the returned SWR handle. `day` is the
-   * viewer's local `YYYY-MM-DD`; the [start, end) instants are computed here so
-   * the server stays timezone-agnostic. `keepPreviousData` keeps the section
-   * stable while the user pages between days.
+   * Day-scoped news digest (`insight` + `result`, resolved included) of the
+   * active identity scope. Read it with `briefNewsSelectors.newsDay(day)`: the
+   * replica hydrates the persisted day on the first frame and converges on the
+   * server in the background.
    */
-  useFetchNewsByDay = (enabled: boolean, scope: string, day: string): SWRResponse<NewsDay> =>
-    useClientDataSWR<NewsDay>(
-      enabled ? briefKeys.news(true, scope, day) : null,
-      async () => {
-        const startAt = dayjs(day).startOf('day');
-        const result = await briefService.listNewsByDay({
-          endAt: startAt.add(1, 'day').toDate(),
-          startAt: startAt.toDate(),
-        });
-        return { day, hasEarlier: result.hasEarlier, news: result.data as BriefItem[] };
-      },
-      { keepPreviousData: true },
-    );
+  useFetchNewsByDay = (enabled: boolean, day: string): ReplicaSyncResult =>
+    this.#briefNews.useSync({ day }, { dedupingInterval: NEWS_DEDUPING_INTERVAL, enabled });
+
+  /**
+   * Seed the persisted unresolved feed and `day`'s digest before Home commits,
+   * so the inbox paints the last confirmed briefs on the first frame instead of
+   * a skeleton until the mount-time hydrate lands. Call from a route loader,
+   * bounded by a timeout.
+   */
+  preHydrateInbox = async (day: string): Promise<boolean[]> => {
+    const scope = briefListResource.scope.get();
+    // The slots may still hold the previous identity's rows; drop them first.
+    this.#briefList.ensureScope(scope);
+    this.#briefNews.ensureScope(scope);
+    return Promise.all([
+      this.#briefList.hydrate(LIST_PARAMS, scope),
+      this.#briefNews.hydrate({ day }, scope),
+    ]);
+  };
 
   /**
    * The unresolved feed of the active scope. Read the rows with

@@ -1,4 +1,4 @@
-import { createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { createModal, useModalContext } from '@lobehub/ui';
 import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,22 +6,33 @@ import CreateForm from './CreateForm';
 
 interface ModalContentProps {
   id?: string;
-  initialValues?: { name?: string; description?: string };
+  initialValues?: { cover?: string; description?: string; name?: string };
   onSuccess?: (id: string) => void;
+  visibility?: 'private' | 'public';
 }
 
-const ModalContent = memo<ModalContentProps>(({ id, initialValues, onSuccess }) => {
+const ModalContent = memo<ModalContentProps>(({ id, initialValues, onSuccess, visibility }) => {
   const { close } = useModalContext();
 
-  return <CreateForm id={id} initialValues={initialValues} onClose={close} onSuccess={onSuccess} />;
+  return (
+    <CreateForm
+      id={id}
+      initialValues={initialValues}
+      visibility={visibility}
+      onClose={close}
+      onSuccess={onSuccess}
+    />
+  );
 });
 
 ModalContent.displayName = 'KnowledgeBaseCreateModalContent';
 
 interface OpenParams {
   id?: string;
-  initialValues?: { name?: string; description?: string };
+  initialValues?: { cover?: string; description?: string; name?: string };
   onSuccess?: (id: string) => void;
+  /** Scope for a new library; defaults to the Resources sidebar mode. */
+  visibility?: 'private' | 'public';
 }
 
 export const useCreateNewModal = () => {
@@ -37,6 +48,7 @@ export const useCreateNewModal = () => {
             <ModalContent
               id={props?.id}
               initialValues={props?.initialValues}
+              visibility={props?.visibility}
               onSuccess={props?.onSuccess}
             />
           </Suspense>

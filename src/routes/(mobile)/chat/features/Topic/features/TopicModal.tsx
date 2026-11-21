@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import { OverlayContainerContext } from '@/features/NavPanel/OverlayContainer';
-import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -20,7 +20,9 @@ const Topics = memo(({ children }: PropsWithChildren) => {
   const { t } = useTranslation('topic');
   const [overlayContainer, setOverlayContainer] = useState<HTMLDivElement | null>(null);
 
-  useFetchTopics();
+  // The same canonical query as the list inside: both write this container's
+  // bucket, so a looser fetch landing last would bring back filtered-out topics.
+  useFetchChatTopics();
 
   return (
     <OverlayContainerContext value={overlayContainer}>

@@ -21,16 +21,20 @@ const getDefaultModelType = (modelId: string): AiModelType => {
  * @param modelId The ID of the model.
  * @param propertyName The name of the property.
  * @param providerId Optional provider ID for an exact match.
+ * @param models Optional catalog snapshot to reuse instead of loading it again.
  * @returns The property value or a default value.
  */
 export const getModelPropertyWithFallback = async <T>(
   modelId: string,
   propertyName: keyof AiFullModelCard,
   providerId?: string,
+  models?: LobeDefaultAiModelListItem[],
 ): Promise<T> => {
-  const { loadModels } =
-    (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
-  const models = await loadModels();
+  if (!models) {
+    const { loadModels } =
+      (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
+    models = await loadModels();
+  }
 
   // Step 1: If providerId is provided, prioritize an exact match (same provider + same id)
   if (providerId) {

@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import type { PropsWithChildren } from 'react';
 import { memo } from 'react';
 

@@ -1,6 +1,4 @@
-import { stopPropagation, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Button, createStaticStyles, cx, stopPropagation, Tooltip } from '@lobehub/ui';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -9,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import FileIcon from '@/components/FileIcon';
 import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
 
@@ -39,7 +38,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
 
     opacity: 0;
@@ -70,7 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     min-height: 120px;
     max-height: 300px;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
 
     font-size: 13px;
@@ -108,7 +107,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     max-width: 100%;
     margin-block-end: 8px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: ${cssVar.fontWeightStrong};
     color: ${cssVar.colorTextLightSolid};
     text-align: center;

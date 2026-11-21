@@ -1,5 +1,5 @@
 import type { DocumentItem } from '@lobechat/database/schemas';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
@@ -18,6 +18,12 @@ vi.mock('@/services/document', () => ({
     deleteDocument: vi.fn(),
     getDocumentById: vi.fn(),
     updateDocument: vi.fn(),
+  },
+}));
+
+vi.mock('@/store/home', () => ({
+  useHomeStore: {
+    getState: () => ({ refreshDocsHome: vi.fn().mockResolvedValue(undefined) }),
   },
 }));
 
@@ -87,6 +93,11 @@ beforeEach(() => {
   pageActions.reset();
 });
 
+afterEach(async () => {
+  // Page mutations refresh Docs home through a fire-and-forget dynamic import.
+  await vi.dynamicImportSettled();
+});
+
 describe('pageActions — createNewPage', () => {
   it('shows an optimistic row, then swaps in the server row and navigates to it', async () => {
     const navigate = vi.fn();
@@ -104,7 +115,7 @@ describe('pageActions — createNewPage', () => {
     expect(items()[0].title).toBe('My page');
     expect(usePageStore.getState().selectedPageId).toBe('docnew1');
     expect(usePageStore.getState().isCreatingNew).toBe(false);
-    expect(navigate).toHaveBeenCalledWith('/page/docnew1');
+    expect(navigate).toHaveBeenCalledWith('/resource/page/docnew1');
   });
 
   it('shows the optimistic row while the request is in flight', async () => {
@@ -140,7 +151,7 @@ describe('pageActions — createNewPage', () => {
     expect(items()).toEqual([]);
     expect(usePageStore.getState().selectedPageId).toBeNull();
     expect(usePageStore.getState().isCreatingNew).toBe(false);
-    expect(navigate).toHaveBeenCalledWith('/page');
+    expect(navigate).toHaveBeenCalledWith('/resource');
   });
 });
 
@@ -173,7 +184,7 @@ describe('pageActions — removePage', () => {
     await pageActions.removePage('docs_a');
 
     expect(usePageStore.getState().selectedPageId).toBeNull();
-    expect(navigate).toHaveBeenCalledWith('/page');
+    expect(navigate).toHaveBeenCalledWith('/resource');
   });
 });
 

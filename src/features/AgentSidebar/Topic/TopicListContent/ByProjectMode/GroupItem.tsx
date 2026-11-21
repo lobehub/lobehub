@@ -1,5 +1,4 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -7,20 +6,25 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  Center,
+  cssVar,
+  cx,
   type DropdownItem,
   DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   Archive,
   FolderClosedIcon,
   FolderOpenIcon,
+  LaptopIcon,
   ListFilter,
   LucideCheck,
-  type LucideIcon,
   PlusIcon,
 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -28,21 +32,24 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import Avatar from '@/components/Avatar';
-import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
-import RingLoadingIcon from '@/components/RingLoading';
-import UnreadDot from '@/components/UnreadDot';
+import TailMarquee from '@/components/TailMarquee';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
+import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
+import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
+import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { type ProjectTopicSubGroupMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -55,146 +62,23 @@ import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/
 import { useTopicListScope } from '../../TopicListScope';
 import { getMergedPullRequestTopics } from '../../utils/mergedPullRequestTopics';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
+import { useStartTopicInDirectory } from '../useStartTopicInDirectory';
+import { indicatorStyles, useCollapsedIndicators } from './CollapsedIndicators';
+import { deviceCategoryKey, deviceDisplayName } from './deviceIdentity';
 import ProjectTopicList from './ProjectTopicList';
-import {
-  getProjectTopicStatusCounts,
-  hasProjectTopicStatusCounts,
-  type ProjectTopicStatusCounts,
-} from './statusCounts';
 
 const PROJECT_GROUP_PREFIX = 'project:';
 const PROJECT_ID_GROUP_PREFIX = 'project-id:';
 const SUB_GROUP_MODES: ProjectTopicSubGroupMode[] = ['none', 'byDevice', 'byTime', 'byStatus'];
-// A plain folder lives on one machine, so sectioning it by device says nothing.
+// One directory lives on one device, so sectioning it by device would only
+// nest the device under its own folder — devices lead in the sidebar's own
+// "by device" grouping instead. A project spans directories on several
+// machines, and a folder can merge one machine's personal and workspace
+// identities; only those section by device.
 const FOLDER_SUB_GROUP_MODES = SUB_GROUP_MODES.filter((mode) => mode !== 'byDevice');
 
-const styles = createStaticStyles(({ css }) => ({
-  statusBadge: css`
-    display: inline-flex;
-    gap: 2px;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 20px;
-    height: 18px;
-    padding-inline: 4px;
-    border-radius: 9px;
-
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1;
-  `,
-  statusBadgeError: css`
-    color: ${cssVar.colorError};
-    background: color-mix(in srgb, ${cssVar.colorError} 14%, transparent);
-  `,
-  statusBadgeLoading: css`
-    color: ${cssVar.colorWarning};
-    background: color-mix(in srgb, ${cssVar.colorWarning} 14%, transparent);
-  `,
-  statusBadgeWaiting: css`
-    color: ${cssVar.colorInfo};
-    background: color-mix(in srgb, ${cssVar.colorInfo} 14%, transparent);
-  `,
-  addTopicAction: css`
-    pointer-events: none;
-
-    overflow: hidden;
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-
-    max-width: 0;
-
-    opacity: 0;
-
-    transition:
-      max-width 150ms ${cssVar.motionEaseOut},
-      opacity 150ms ${cssVar.motionEaseOut};
-
-    /* Holds the grouping menu, the "more" menu and the start "+" (3 × 24px) */
-    &:focus-within,
-    .accordion-header:hover & {
-      pointer-events: auto;
-      max-width: 72px;
-      opacity: 1;
-    }
-  `,
-}));
-
-interface StatusBadgeConfig {
-  className: string;
-  count: number;
-  icon?: LucideIcon;
-  label: string;
-  loading?: boolean;
-}
-
-const CollapsedStatusBadges = memo<{ counts: ProjectTopicStatusCounts }>(({ counts }) => {
-  const { t } = useTranslation('topic');
-
-  const items: StatusBadgeConfig[] = [
-    {
-      className: styles.statusBadgeLoading,
-      count: counts.loading,
-      label: t('projectStatus.loading', { count: counts.loading }),
-      loading: true,
-    },
-    {
-      className: styles.statusBadgeWaiting,
-      count: counts.waitingForHuman,
-      icon: TOPIC_STATUS_VISUALS.waitingForHuman.icon,
-      label: t('projectStatus.waitingForHuman', { count: counts.waitingForHuman }),
-    },
-    {
-      className: styles.statusBadgeError,
-      count: counts.failed,
-      icon: TOPIC_STATUS_VISUALS.failed.icon,
-      label: t('projectStatus.failed', { count: counts.failed }),
-    },
-  ].filter((item) => item.count > 0);
-
-  if (items.length === 0) return null;
-
-  return (
-    <Flexbox horizontal align={'center'} gap={3}>
-      {items.map(({ className, count, icon, label, loading }) => (
-        <Tooltip key={label} title={label}>
-          <span aria-label={label} className={cx(styles.statusBadge, className)} role="status">
-            {loading ? (
-              <RingLoadingIcon
-                ringColor={`color-mix(in srgb, ${cssVar.colorWarning} 28%, transparent)`}
-                size={11}
-                style={{ color: cssVar.colorWarning }}
-              />
-            ) : (
-              icon && <Icon icon={icon} size={{ size: 11, strokeWidth: 2 }} />
-            )}
-            {count}
-          </span>
-        </Tooltip>
-      ))}
-    </Flexbox>
-  );
-});
-
-CollapsedStatusBadges.displayName = 'CollapsedProjectStatusBadges';
-
-const CollapsedUnreadDot = memo<{ count: number }>(({ count }) => {
-  const { t } = useTranslation('topic');
-  const label = t('projectStatus.unread', { count });
-
-  return (
-    <Tooltip title={label}>
-      <UnreadDot label={label} />
-    </Tooltip>
-  );
-});
-
-CollapsedUnreadDot.displayName = 'CollapsedProjectUnreadDot';
-
 const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
-  const { id, title, children } = group;
+  const { id, title, children, deviceId: groupDeviceId } = group;
   const scope = useTopicListScope();
   const navigate = useWorkspaceAwareNavigate();
   // `project-id:` groups merge every directory of one project — resolve the
@@ -267,41 +151,74 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     ],
   );
 
-  // A merged project group may span several machines. It opens the plain new
-  // topic composer — no directory is pre-committed and no chooser modal pops;
-  // the user picks the machine/directory in the composer control bar, the
-  // same habit as the header's new-topic action. Single-directory groups keep
-  // the legacy direct start above.
+  // A merged project group may span several machines, so there is no single
+  // directory to commit to the agent. It still has to open the blank composer
+  // INSIDE the project: stage one runnable directory — the agent's current
+  // device first — so the first send binds the new topic to the project, and
+  // let the user move to another machine in the composer's device switcher.
+  // Staging nothing (the old behaviour) dropped the topic into a path-only
+  // conversation, detached from the project the "+" belonged to. No directory
+  // can run it → fall back to the plain composer, as before.
+  const fixedDeviceId = useAgentFixedDeviceId(targetAgentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(targetAgentId ?? '', {
+    topicId: null,
+  });
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const handleStartPlain = useCallback(() => {
     if (!currentAgentId || !targetAgentId) return;
+    const runnable = projectDirectories.filter((d) => canStageDraftOn(d, fixedDeviceId));
+    const preferredDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+      workspaceScoped,
+    });
+    const stagedDirectory =
+      runnable.find((d) => preferredDeviceId && d.deviceId === preferredDeviceId) ?? runnable[0];
     useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    useChatStore
+      .getState()
+      .setPendingNewTopicDirectory(
+        stagedDirectory
+          ? { agentId: targetAgentId, projectWorkingDirectoryId: stagedDirectory.id }
+          : undefined,
+      );
     router.push(
       buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
     );
-  }, [currentAgentId, targetAgentId, router, agentRoute, activeWorkspaceSlug]);
+  }, [
+    currentAgentId,
+    targetAgentId,
+    projectDirectories,
+    fixedDeviceId,
+    agencyConfig,
+    currentDeviceId,
+    workspaceScoped,
+    router,
+    agentRoute,
+    activeWorkspaceSlug,
+  ]);
 
-  // Start on one specific project directory — the device sub-group "+". The
-  // directory pins the device, so nothing is committed to the agent default.
-  const handleStartInDirectory = useCallback(
-    (projectWorkingDirectoryId: string) => {
-      if (!targetAgentId) return;
-      useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
-      useChatStore
-        .getState()
-        .setPendingNewTopicDirectory({ agentId: targetAgentId, projectWorkingDirectoryId });
-      router.push(
-        buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
-      );
-    },
-    [targetAgentId, router, agentRoute, activeWorkspaceSlug],
-  );
+  // Start on one specific project directory — the device sub-group "+".
+  const { startInDirectory: handleStartInDirectory } = useStartTopicInDirectory();
 
   const canAddTopic = !scope && !!currentAgentId && !!workingDirectory;
   const needsPlainStart = !!projectId && projectDirectories.length > 1;
   const { t: tProject } = useTranslation('project');
 
   const isProjectGroup = !!projectId || !!children[0]?.projectWorkingDirectoryId;
-  const subGroupModes = isProjectGroup ? SUB_GROUP_MODES : FOLDER_SUB_GROUP_MODES;
+  const spansDevices =
+    new Set(children.map((topic) => topic.metadata?.boundDeviceId).filter(Boolean)).size > 1;
+  const subGroupModes = projectId || spansDevices ? SUB_GROUP_MODES : FOLDER_SUB_GROUP_MODES;
+
+  // The same folder on another machine is its own group with the same name:
+  // name the device, and its category for one machine's several identities.
+  useDeviceStore((s) => s.useFetchDevices)(!!groupDeviceId);
+  const devices = useDeviceStore(deviceSelectors.deviceList);
+  const { t: tChat } = useTranslation('chat');
+  const deviceLabel = useMemo(() => {
+    if (!groupDeviceId) return;
+    const name = deviceDisplayName(groupDeviceId, devices);
+    const categoryKey = deviceCategoryKey(groupDeviceId, devices, currentDeviceId);
+    return categoryKey ? `${name} · ${tChat(categoryKey)}` : name;
+  }, [groupDeviceId, devices, currentDeviceId, tChat]);
   const storedSubGroupMode = useGlobalStore(systemStatusSelectors.projectTopicSubGroupMode(id));
   const subGroupMode = subGroupModes.includes(storedSubGroupMode) ? storedSubGroupMode : 'none';
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
@@ -360,23 +277,19 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     [activeWorkspaceId, canEditTopic, children, currentUserId, t],
   );
 
-  const statusCounts = useChatStore(
-    (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
-    isEqual,
+  const { hasIndicators: hasCollapsedIndicators, indicators } = useCollapsedIndicators(
+    children,
+    expanded,
   );
-  const childTopicIds = useMemo(() => children.map((topic) => topic.id), [children]);
-  const unreadCount = useChatStore(operationSelectors.unreadCompletedCountForTopics(childTopicIds));
-  const hasCollapsedStatus = !expanded && hasProjectTopicStatusCounts(statusCounts);
-  const hasCollapsedUnread = !expanded && unreadCount > 0;
-  const hasCollapsedIndicators = hasCollapsedStatus || hasCollapsedUnread;
   const ProjectFolderIcon = expanded ? FolderOpenIcon : FolderClosedIcon;
   // Sub-grouping is its own row action: it needs no directory, so it stays
-  // available even when the directory actions below can't render.
+  // available even when the directory actions below can't render. The buttons
+  // collapse to zero width until the row is hovered, so a resting title gets
+  // the full row instead of a gap reserved for invisible actions.
   const action = (
     <Flexbox horizontal align={'center'} gap={4}>
-      {hasCollapsedStatus && <CollapsedStatusBadges counts={statusCounts} />}
-      {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
-      <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
+      {indicators}
+      <span className={indicatorStyles.hoverActions}>
         <DropdownMenu items={subGroupMenuItems}>
           <ActionIcon
             icon={ListFilter}
@@ -426,8 +339,9 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center flex="none" height={24} width={28}>
               {project ? (
-                <Avatar
-                  avatar={project.projectAvatar || undefined}
+                <ProjectAvatar
+                  avatar={project.projectAvatar}
+                  id={project.projectId}
                   name={project.projectName}
                   size={18}
                 />
@@ -439,40 +353,74 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
                 />
               )}
             </Center>
-            <Text
-              ellipsis
-              fontSize={14}
-              style={{ color: project ? cssVar.colorText : cssVar.colorTextSecondary, flex: 1 }}
-            >
-              {project && !scope ? (
-                <a
-                  style={{ color: 'inherit', textDecoration: 'none' }}
-                  href={buildWorkspaceAwarePath(
-                    `/project/${project.projectSlug ?? project.projectId}`,
-                    activeWorkspaceSlug,
-                  )}
-                  onClick={(event) => {
-                    // Keep the accordion closed either way; leave modified clicks
-                    // (new tab / window) to the browser's native link handling.
-                    event.stopPropagation();
-                    if (
-                      event.button !== 0 ||
-                      event.metaKey ||
-                      event.ctrlKey ||
-                      event.shiftKey ||
-                      event.altKey
-                    )
-                      return;
-                    event.preventDefault();
-                    navigate(`/project/${project.projectSlug ?? project.projectId}`);
-                  }}
-                >
-                  {project.projectName}
-                </a>
-              ) : (
-                title
-              )}
-            </Text>
+            {project ? (
+              <Text ellipsis fontSize={14} style={{ color: cssVar.colorText, flex: 1 }}>
+                {scope ? (
+                  title
+                ) : (
+                  <a
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                    href={buildWorkspaceAwarePath(
+                      `/project/${project.projectSlug ?? project.projectId}`,
+                      activeWorkspaceSlug,
+                    )}
+                    onClick={(event) => {
+                      // Keep the accordion closed either way; leave modified clicks
+                      // (new tab / window) to the browser's native link handling.
+                      event.stopPropagation();
+                      if (
+                        event.button !== 0 ||
+                        event.metaKey ||
+                        event.ctrlKey ||
+                        event.shiftKey ||
+                        event.altKey
+                      )
+                        return;
+                      event.preventDefault();
+                      navigate(`/project/${project.projectSlug ?? project.projectId}`);
+                    }}
+                  >
+                    {project.projectName}
+                  </a>
+                )}
+              </Text>
+            ) : (
+              // A bare path reads from its end: keep the tail in view and
+              // scroll to the head on hover.
+              <TailMarquee
+                style={{
+                  color: cssVar.colorTextSecondary,
+                  fontSize: 14,
+                  // Beside a device tag, hug the name instead of filling the row,
+                  // so it stays next to its icon and the tag follows it.
+                  ...(deviceLabel && { flex: '0 1 auto' }),
+                }}
+              >
+                {title}
+              </TailMarquee>
+            )}
+            {deviceLabel && (
+              // The folder name stays readable: the device tag takes nearly all
+              // the shrinking when the row is tight; an overflowing label reads
+              // from its category end and scrolls to the device name on hover,
+              // like the folder path beside it.
+              <Tag
+                size={'small'}
+                style={{
+                  color: cssVar.colorTextDescription,
+                  flex: '0 100 auto',
+                  fontSize: 10,
+                  // A long path title still leaves the icon and a few letters.
+                  minWidth: 48,
+                  overflow: 'hidden',
+                }}
+              >
+                <Flexbox horizontal align={'center'} gap={3} style={{ minWidth: 0 }}>
+                  <Icon icon={LaptopIcon} size={{ size: 10 }} style={{ flex: 'none' }} />
+                  <TailMarquee>{deviceLabel}</TailMarquee>
+                </Flexbox>
+              </Tag>
+            )}
           </Flexbox>
         </AccordionTrigger>
         <div
@@ -489,6 +437,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
       <AccordionPanel contentStyle={{ padding: 0 }}>
         <ProjectTopicList
           mode={subGroupMode}
+          startAgentId={targetAgentId}
           startDirectories={projectId ? projectDirectories : project ? [project] : undefined}
           topics={children}
           onStartInDirectory={!scope && targetAgentId ? handleStartInDirectory : undefined}

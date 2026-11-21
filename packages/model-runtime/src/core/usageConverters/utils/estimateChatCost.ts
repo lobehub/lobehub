@@ -3,7 +3,7 @@ import {
   type AudioTokenEstimateSource,
   estimateAudioInputTokens,
   normalizeAudioTokensPerSecond,
-} from '@lobechat/utils/audio';
+} from '../../../utils/audio';
 import type { Pricing, PricingUnitName } from 'model-bank';
 import { estimateTokenCount } from 'tokenx';
 

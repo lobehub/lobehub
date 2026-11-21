@@ -1,7 +1,13 @@
-import type { SharedAgentDeliveryStats, SharedAgentWork } from '@lobechat/types';
+import type {
+  CollectionWorkVersionMetadata,
+  SharedAgentDeliveryStats,
+  SharedAgentWork,
+  WorkVersionMetadata,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import {
   and,
+  type AnyColumn,
   avg,
   count,
   desc,
@@ -28,6 +34,39 @@ const originTopics = alias(topics, 'share_work_origin_topics');
 const currentTopics = alias(topics, 'share_work_current_topics');
 const historyVersions = alias(workVersions, 'share_work_history_versions');
 const historyTopics = alias(topics, 'share_work_history_topics');
+
+/**
+ * A profile row belongs to the shared agent's own scope: personal rows for a
+ * personal agent, rows of the agent's Workspace for a Workspace agent. The
+ * agent row is the single source of that scope, so a Work or run left in the
+ * other scope (or an agent moved after the fact) never counts. Callers must
+ * join `agents` on the shared agent id; subqueries reference it as an outer
+ * column.
+ */
+const inAgentScope = (workspaceId: AnyColumn) =>
+  sql`${workspaceId} is not distinct from ${agents.workspaceId}`;
+const outsideAgentScope = (workspaceId: AnyColumn) =>
+  sql`${workspaceId} is distinct from ${agents.workspaceId}`;
+
+/**
+ * The images of a collection Work, the only file links a share profile exposes:
+ * featuring a collection is choosing to show its images. Each keeps only an
+ * http(s) URL.
+ */
+const toSharedCollection = (
+  metadata: WorkVersionMetadata | null,
+): CollectionWorkVersionMetadata | undefined => {
+  const collection = metadata?.collection;
+  if (!collection) return undefined;
+  const items = collection.items.flatMap(({ caption, fileId, mimeType, url }) => {
+    const safeUrl = sanitizeExternalUrl(url);
+    if (!safeUrl) return [];
+    return [
+      { ...(caption ? { caption } : {}), fileId, ...(mimeType ? { mimeType } : {}), url: safeUrl },
+    ];
+  });
+  return { ...(collection.coverFileId ? { coverFileId: collection.coverFileId } : {}), items };
+};
 
 /** Owner-scoped source for explicitly curated share profiles, not a general resource grant. */
 export class AgentShareProfileModel {
@@ -57,6 +96,7 @@ export class AgentShareProfileModel {
         type: works.type,
         updatedAt: works.updatedAt,
         url: works.url,
+        versionMetadata: workVersions.metadata,
       })
       .from(works)
       .innerJoin(agents, eq(agents.id, works.originAgentId))
@@ -71,18 +111,17 @@ export class AgentShareProfileModel {
           eq(works.userId, this.userId),
           eq(works.originAgentId, agentId),
           eq(agents.userId, this.userId),
-          isNull(agents.workspaceId),
           sql`${agents.isDeleted} is not true`,
-          isNull(works.workspaceId),
+          inAgentScope(works.workspaceId),
           isNull(works.deletedAt),
           sql`${works.isDeleted} is not true`,
           eq(originTopics.userId, this.userId),
-          isNull(originTopics.workspaceId),
+          inAgentScope(originTopics.workspaceId),
           isNull(originTopics.senderId),
           isNull(originTopics.deletedAt),
           sql`${originTopics.isDeleted} is not true`,
           eq(currentTopics.userId, this.userId),
-          isNull(currentTopics.workspaceId),
+          inAgentScope(currentTopics.workspaceId),
           isNull(currentTopics.senderId),
           isNull(currentTopics.deletedAt),
           sql`${currentTopics.isDeleted} is not true`,
@@ -99,14 +138,14 @@ export class AgentShareProfileModel {
                     isNull(historyTopics.id),
                     isNotNull(historyTopics.senderId),
                     ne(historyTopics.userId, this.userId),
-                    isNotNull(historyTopics.workspaceId),
+                    outsideAgentScope(historyTopics.workspaceId),
                   ),
                 ),
               ),
           ),
           ids ? inArray(works.id, ids) : undefined,
           or(
-            inArray(works.type, ['external', 'file']),
+            inArray(works.type, ['external', 'file', 'collection']),
             and(
               eq(works.type, 'document'),
               exists(
@@ -117,7 +156,7 @@ export class AgentShareProfileModel {
                     and(
                       eq(documents.id, works.resourceId),
                       eq(documents.userId, this.userId),
-                      isNull(documents.workspaceId),
+                      inAgentScope(documents.workspaceId),
                       isNull(documents.deletedAt),
                       sql`${documents.isDeleted} is not true`,
                     ),
@@ -134,7 +173,7 @@ export class AgentShareProfileModel {
                     and(
                       eq(tasks.id, works.resourceId),
                       eq(tasks.createdByUserId, this.userId),
-                      isNull(tasks.workspaceId),
+                      inAgentScope(tasks.workspaceId),
                       isNull(tasks.deletedAt),
                       sql`${tasks.isDeleted} is not true`,
                     ),
@@ -164,15 +203,26 @@ export class AgentShareProfileModel {
       rows.map(({ id }) => id),
     );
     const byId = new Map(
-      rows.map(({ deliveredAt: _deliveredAt, ...work }) => [
-        work.id,
-        {
-          ...work,
-          totalCost: costs.get(work.id) ?? null,
-          /** File URLs can be bearer download links; featuring a Work is not a download grant. */
-          url: work.type === 'external' ? (sanitizeExternalUrl(work.url) ?? null) : null,
-        },
-      ]),
+      rows.map(({ deliveredAt: _deliveredAt, versionMetadata, ...work }) => {
+        const collection =
+          work.type === 'collection' ? toSharedCollection(versionMetadata) : undefined;
+        return [
+          work.id,
+          {
+            ...work,
+            ...(collection ? { collection } : {}),
+            totalCost: costs.get(work.id) ?? null,
+            /**
+             * File URLs can be bearer download links; featuring a file Work is not a
+             * download grant. A collection's URL is its cover, shown with its images.
+             */
+            url:
+              work.type === 'external' || work.type === 'collection'
+                ? (sanitizeExternalUrl(work.url) ?? null)
+                : null,
+          },
+        ];
+      }),
     );
     return workIds.flatMap((id) => {
       const work = byId.get(id);
@@ -212,14 +262,19 @@ export class AgentShareProfileModel {
       allRows.map(({ id }) => id),
     );
     const byId = new Map(
-      allRows.map(({ deliveredAt: _deliveredAt, ...work }) => [
-        work.id,
-        {
-          ...work,
-          totalCost: costs.get(work.id) ?? null,
-          url: sanitizeExternalUrl(work.url) ?? null,
-        },
-      ]),
+      allRows.map(({ deliveredAt: _deliveredAt, versionMetadata, ...work }) => {
+        const collection =
+          work.type === 'collection' ? toSharedCollection(versionMetadata) : undefined;
+        return [
+          work.id,
+          {
+            ...work,
+            ...(collection ? { collection } : {}),
+            totalCost: costs.get(work.id) ?? null,
+            url: sanitizeExternalUrl(work.url) ?? null,
+          },
+        ];
+      }),
     );
     const orderedIds = [...includeWorkIds, ...pageRows.map(({ id }) => id)];
 
@@ -281,11 +336,10 @@ export class AgentShareProfileModel {
             eq(agentOperations.userId, this.userId),
             eq(agentOperations.agentId, agentId),
             eq(agents.userId, this.userId),
-            isNull(agents.workspaceId),
             sql`${agents.isDeleted} is not true`,
-            isNull(agentOperations.workspaceId),
+            inAgentScope(agentOperations.workspaceId),
             eq(topics.userId, this.userId),
-            isNull(topics.workspaceId),
+            inAgentScope(topics.workspaceId),
             isNull(topics.senderId),
             isNull(topics.deletedAt),
             sql`${topics.isDeleted} is not true`,

@@ -3,11 +3,13 @@ import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { DroidIcon } from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
   Cursor,
   Devin,
+  GithubCopilot,
   Grok,
   Kimi,
   OpenCode,
@@ -23,6 +25,10 @@ import {
 } from './types';
 
 const GUIDE_PRESENTATION_CONFIG = {
+  'antigravity': {
+    icon: Antigravity,
+    translationPrefix: 'antigravityInstallGuide',
+  },
   'amp': {
     icon: Amp,
     translationPrefix: 'ampInstallGuide',
@@ -38,6 +44,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'codex': {
     icon: Codex,
     translationPrefix: 'codexInstallGuide',
+  },
+  'copilot': {
+    icon: GithubCopilot,
+    translationPrefix: 'copilotInstallGuide',
   },
   'cursor': {
     icon: Cursor,

@@ -49,6 +49,7 @@ describe('kb command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -74,13 +75,21 @@ describe('kb command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const items = [{ id: 'kb1', name: 'Test' }];
       mockTrpcClient.knowledgeBase.getKnowledgeBases.query.mockResolvedValue(items);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'kb', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(items, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...items[0], url: 'https://app.lobehub.com/resource/library/kb1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should show message when no knowledge bases found', async () => {

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * `topicComment` is a `@lobechat/replica`-backed store. The root feed, the
+ * `topicComment` is a `local-replica`-backed store. The root feed, the
  * reply feed, the per-topic counts and one comment by id each paint their
  * persisted row before the network answers, are confirmed and persisted by the
  * response, page further through the engine, and are re-partitioned when the

@@ -10,6 +10,7 @@ import {
 
 import { BaseService } from '../common/base.service';
 import { projectPublicEvalDataset, projectPublicEvalTestCase } from '../helpers/public-fields';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateBenchmark,
   CreateDataset,
@@ -132,7 +133,7 @@ export class EvalResourceService extends BaseService {
     if (!row) throw this.createNotFoundError('Benchmark not found');
     return projectBenchmark(row);
   }
-  async deleteBenchmark(id: string) {
+  async deleteBenchmark(id: string): Promise<DeletedResource> {
     await this.getBenchmark(id, true);
     await this.db
       .delete(benchmarks)
@@ -143,7 +144,7 @@ export class EvalResourceService extends BaseService {
           eq(benchmarks.isSystem, false),
         ),
       );
-    return { id };
+    return { deleted: true, id };
   }
   async getDataset(id: string, mutable = false) {
     const [row] = await this.db
@@ -216,12 +217,12 @@ export class EvalResourceService extends BaseService {
     if (!row) throw this.createNotFoundError('Dataset not found');
     return this.getDataset(row.id);
   }
-  async deleteDataset(id: string) {
+  async deleteDataset(id: string): Promise<DeletedResource> {
     await this.getDataset(id, true);
     await this.db
       .delete(datasets)
       .where(and(eq(datasets.id, id), this.buildWorkspaceWhere(datasets)));
-    return { id };
+    return { deleted: true, id };
   }
   async getTestCase(id: string, mutable = false) {
     const [row] = await this.db
@@ -302,9 +303,9 @@ export class EvalResourceService extends BaseService {
     if (!row) throw this.createNotFoundError('Test case not found');
     return projectTestCase(row);
   }
-  async deleteTestCase(id: string) {
+  async deleteTestCase(id: string): Promise<DeletedResource> {
     await this.getTestCase(id, true);
     await this.db.delete(cases).where(and(eq(cases.id, id), this.buildWorkspaceWhere(cases)));
-    return { id };
+    return { deleted: true, id };
   }
 }

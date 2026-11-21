@@ -36,7 +36,7 @@ export const fileWorkResourceId = (userId: string, topicId: string, filePath: st
  * builtin-tools `getBasename` without pulling that package into the DB layer —
  * used to denormalize the `identifier` display column (see {@link registerFileWork}).
  */
-const fileBasename = (filePath: string): string =>
+export const fileBasename = (filePath: string): string =>
   filePath.replaceAll('\\', '/').split('/').findLast(Boolean)?.trim() ?? '';
 
 /**
@@ -116,6 +116,7 @@ export const registerFileWork = async (
       visibility: params.visibility ?? 'private',
     },
     {
+      agentEditable: params.agentEditable,
       agentId: params.agentId,
       changeType,
       cumulativeCost: params.cumulativeCost,
@@ -138,7 +139,7 @@ export const registerFileWork = async (
       // sidebar's fallback label renders the filename instead of leaking the
       // internal `resourceId` (`userId:topicId:filePath`).
       display: {
-        description: params.filePath,
+        description: params.description || params.filePath,
         identifier: fileBasename(params.filePath) || null,
         title: params.title,
         url: params.metadata.fileUrl ?? null,

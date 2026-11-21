@@ -11,12 +11,11 @@ import {
   deleteGitBranch,
   listGitBranches,
   listGitRemoteBranches,
-  pullGitBranch,
-  pushGitBranch,
   renameGitBranch,
   revertGitFile,
 } from '../branches';
 import { getGitAheadBehind, getGitBranch } from '../info';
+import { pullGitBranch, pushGitBranch } from '../sync';
 import { getGitBranchDiff, getGitWorkingTreeFiles, getGitWorkingTreePatches } from '../workingTree';
 import { listGitWorktrees, parseGitWorktreeList, removeGitWorktree } from '../worktrees';
 
@@ -248,6 +247,20 @@ describe('working tree status / files / patches', () => {
     expect(files.modified).toContain('a.txt');
     expect(files.added).toContain('new.txt');
     expect(files.deleted).toEqual([]);
+  });
+
+  it('distinguishes a failed git status from a clean tree when asked', async () => {
+    const notRepo = await mkdtemp(path.join(tmpdir(), 'lfs-not-git-'));
+    cleanup.push(notRepo);
+
+    // Default callers keep the tolerant fallback.
+    await expect(getGitWorkingTreeFiles(notRepo)).resolves.toEqual({
+      added: [],
+      deleted: [],
+      modified: [],
+    });
+    // Persisting callers must see the failure instead of a false-clean tree.
+    await expect(getGitWorkingTreeFiles(notRepo, { throwOnError: true })).rejects.toThrow();
   });
 
   it('getGitWorkingTreePatches returns per-file patches ordered added → modified', async () => {

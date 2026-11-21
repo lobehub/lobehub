@@ -4,9 +4,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import ResourceAccessPage from '@/features/ResourcePermission/ResourceAccessPage';
-import { useClientDataSWR } from '@/libs/swr';
-import { documentService } from '@/services/document';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
 /**
  * Member Permissions for one page/document — the Agent-style standalone page.
@@ -17,18 +17,19 @@ import { documentService } from '@/services/document';
 const PagePermission = memo(() => {
   const { t } = useTranslation('setting');
   const { id } = useParams<{ id: string }>();
-  const { data } = useClientDataSWR(id ? ['page-permission-title', id] : null, () =>
-    documentService.getDocumentById(id!),
-  );
+  // The page detail replica: the title paints from the page list or the
+  // persisted detail row and revalidates in the background.
+  pageActions.useFetchPageDetail(id);
+  const title = usePageStore((s) => pageSelectors.getDocumentById(id)(s)?.title || undefined);
 
   if (!id) return null;
 
   return (
     <ResourceAccessPage
-      redirectPath={`/page/${id}`}
-      resourceHomePath={`/page/${id}`}
+      redirectPath={docsPagePath(id)}
+      resourceHomePath={docsPagePath(id)}
       resourceId={id}
-      resourceName={data?.title}
+      resourceName={title}
       resourceType={'document'}
       copy={{
         generalAccessDesc: t('permission.page.documentGeneralAccessDesc'),

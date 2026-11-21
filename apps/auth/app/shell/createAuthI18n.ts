@@ -3,6 +3,7 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
 import { DEFAULT_LANG } from '@/const/locale';
+import { brandPostProcessOptions, withBrandPostProcessor } from '@/locales/brandPostProcessor';
 import { normalizeLocale } from '@/locales/resources';
 
 import type { AuthResourceBundle } from './i18nScript';
@@ -19,8 +20,7 @@ interface CreateAuthI18nOptions {
 // switcher reaches afterwards arrives through the on-demand backend.
 export const createAuthI18n = ({ locale, resources }: CreateAuthI18nOptions) => {
   const lng = normalizeLocale(locale);
-  const instance = i18next
-    .createInstance()
+  const instance = withBrandPostProcessor(i18next.createInstance())
     .use(initReactI18next)
     .use(resourcesToBackend(loadAuthNamespace));
 
@@ -48,6 +48,7 @@ export const createAuthI18n = ({ locale, resources }: CreateAuthI18nOptions) => 
         },
         resources: { [lng]: resources },
         showSupportNotice: false,
+        ...brandPostProcessOptions,
       }),
     instance,
   };

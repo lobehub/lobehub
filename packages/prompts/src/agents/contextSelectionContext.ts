@@ -1,6 +1,7 @@
+import { MCP_APP_CONTEXT_MAX_LENGTH } from '@lobechat/const/mcpApp';
 import type { ContextSelection } from '@lobechat/types';
 
-import { escapeXmlAttr } from '../prompts/search/xmlEscape';
+import { escapeXmlAttr, escapeXmlContent } from '../prompts/search/xmlEscape';
 
 const formatLineRange = (selection: ContextSelection): string => {
   const range = selection.lineRange;
@@ -13,6 +14,8 @@ const formatSelectionAttributes = (selection: ContextSelection): string => {
   const attrs = [`source="${selection.source}"`];
 
   if (selection.title) attrs.push(`title="${escapeXmlAttr(selection.title)}"`);
+  if (selection.source === 'mcpApp')
+    attrs.push(`identifier="${escapeXmlAttr(selection.identifier)}"`);
   if (selection.source === 'page') attrs.push(`pageId="${escapeXmlAttr(selection.pageId)}"`);
   if (selection.source === 'code') {
     attrs.push(`filePath="${escapeXmlAttr(selection.filePath)}"`);
@@ -27,7 +30,16 @@ const formatSelectionAttributes = (selection: ContextSelection): string => {
 };
 
 const getSelectionBody = (selection: ContextSelection): string => {
-  if (selection.source === 'page') return selection.xml || selection.content;
+  if (selection.source === 'mcpApp')
+    return escapeXmlContent(selection.content.slice(0, MCP_APP_CONTEXT_MAX_LENGTH));
+  if (selection.source === 'page' && selection.xml) {
+    if (!selection.content || selection.content === selection.xml) return selection.xml;
+
+    return `<selected_text>${escapeXmlContent(selection.content)}</selected_text>
+<containing_blocks>
+${selection.xml}
+</containing_blocks>`;
+  }
 
   return selection.content;
 };

@@ -1,20 +1,20 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 const prefixCls = 'ant';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadius};
 
     &:hover {

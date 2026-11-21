@@ -28,6 +28,10 @@ const collectConnectorKeys = () => {
   return [...keys].sort();
 };
 
+// A key passed `count` resolves to its plural forms (`<key>_one` / `<key>_other`).
+const isDefined = (key: string, locale: Record<string, unknown>) =>
+  key in locale || `${key}_other` in locale;
+
 describe('Connectors i18n keys', () => {
   const keys = collectConnectorKeys();
 
@@ -36,10 +40,10 @@ describe('Connectors i18n keys', () => {
   });
 
   it('defines every connector key in the default tool locale', () => {
-    expect(keys.filter((key) => !(key in tool))).toEqual([]);
+    expect(keys.filter((key) => !isDefined(key, tool))).toEqual([]);
   });
 
   it('ships every connector key in the zh-CN tool locale', () => {
-    expect(keys.filter((key) => !(key in zhCN))).toEqual([]);
+    expect(keys.filter((key) => !isDefined(key, zhCN))).toEqual([]);
   });
 });

@@ -183,10 +183,10 @@ describe('GET /oidc/interaction/[uid]', () => {
 
     beforeEach(() => {
       mocks.getInteractionDetails.mockResolvedValue({
-        params: { client_id: 'lobehub-review', resource: RESOURCE, scope: 'acceptance:review' },
+        params: { client_id: 'lobehub-acceptance', resource: RESOURCE, scope: 'acceptance:review' },
         prompt: { name: 'consent' },
       });
-      mocks.getConsentClientMetadata.mockResolvedValue({ clientName: 'LobeHub Review' });
+      mocks.getConsentClientMetadata.mockResolvedValue({ clientName: 'LobeHub Acceptance' });
       mocks.getUserAuth.mockResolvedValue({ userId: 'user-1' });
     });
 
@@ -214,7 +214,7 @@ describe('GET /oidc/interaction/[uid]', () => {
       const response = await GET(createRequest('uid-r'), createProps('uid-r'));
       const body = await response.json();
 
-      expect(body.acceptanceReview).toEqual({ allowed: false });
+      expect(body.acceptanceReview).toEqual({ allowed: false, kind: 'acceptance' });
     });
 
     it('is not looked up for other clients', async () => {

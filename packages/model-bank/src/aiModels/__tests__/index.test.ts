@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(8);
+    expect(models).toHaveLength(11);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -309,6 +309,66 @@ describe('vendor provider cards', () => {
 });
 
 describe('recent direct-provider models', () => {
+  it.each([
+    {
+      cutoff: '2026-05',
+      id: 'gpt-6.2-astra',
+      rates: [
+        [8, 16],
+        [0.4, 0.8],
+        [10, 20],
+        [40, 60],
+      ],
+    },
+    {
+      cutoff: '2026-06',
+      id: 'gpt-6.2-sol',
+      rates: [
+        [2, 4],
+        [0.1, 0.2],
+        [2.5, 5],
+        [10, 15],
+      ],
+    },
+  ])('registers OpenAI $id with its published limits and rates', ({ cutoff, id, rates }) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === ModelProvider.OpenAI && entry.id === id,
+    );
+
+    expect(model).toMatchObject({
+      abilities: {
+        functionCall: true,
+        reasoning: true,
+        search: true,
+        structuredOutput: true,
+        vision: true,
+      },
+      contextWindowTokens: 1_050_000,
+      enabled: true,
+      family: 'gpt',
+      generation: 'gpt-6.2',
+      isOfficial: true,
+      knowledgeCutoff: cutoff,
+      maxOutput: 128_000,
+      releasedAt: '2026-11-17',
+      settings: { extendParams: ['gpt6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
+      type: 'chat',
+    });
+    expect(model?.pricing?.units).toEqual(
+      ['textInput', 'textInput_cacheRead', 'textInput_cacheWrite', 'textOutput'].map(
+        (name, index) => ({
+          name,
+          strategy: 'tiered',
+          tiers: [
+            { rate: rates[index][0], upTo: 272_000 },
+            { rate: rates[index][1], upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        }),
+      ),
+    );
+  });
+
   it('registers GPT-6.1 Sol with its published limits, pricing, and reasoning controls', () => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
       (entry) => entry.providerId === ModelProvider.OpenAI && entry.id === 'gpt-6.1-sol',
@@ -349,8 +409,18 @@ describe('recent direct-provider models', () => {
 
   it.each([
     ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['azure', 'gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['azure', 'gpt-6.2-sol', 'gpt6ReasoningEffort'],
+    ['openrouter', 'openai/gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['openrouter', 'openai/gpt-6.2-sol', 'gpt6ReasoningEffort'],
     ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
+    ['google', 'gemini-4-carbon', 'thinkingLevel3'],
+    ['vertexai', 'gemini-4-carbon', 'thinkingLevel3'],
+    ['openrouter', 'google/gemini-4-carbon', 'thinkingLevel3'],
+    ['google', 'gemini-4-neon', 'thinkingLevel5'],
+    ['vertexai', 'gemini-4-neon', 'thinkingLevel5'],
+    ['openrouter', 'google/gemini-4-neon', 'thinkingLevel5'],
     ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
     ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
     ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
@@ -368,6 +438,33 @@ describe('recent direct-provider models', () => {
   });
 });
 
+describe('GPT-6.2 reseller cards', () => {
+  it.each([
+    ['azure', 'gpt-6.2-astra', 'gpt-6.2-astra'],
+    ['azure', 'gpt-6.2-sol', 'gpt-6.2-sol'],
+    ['openrouter', 'openai/gpt-6.2-astra', 'gpt-6.2-astra'],
+    ['openrouter', 'openai/gpt-6.2-sol', 'gpt-6.2-sol'],
+  ])('prices %s/%s at the official OpenAI list price', (providerId, id, officialId) => {
+    const official = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'openai' && entry.id === officialId,
+    );
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(official?.isOfficial).toBe(true);
+    expect(model?.isOfficial).toBeUndefined();
+    expect(model?.pricing).toEqual(official?.pricing);
+    expect(model?.contextWindowTokens).toBe(official?.contextWindowTokens);
+  });
+
+  it.each(['gpt-6.2-astra', 'gpt-6.2-sol'])('deploys azure/%s under its model id', (id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'azure' && entry.id === id,
+    );
+    expect(model?.config?.deploymentName).toBe(id);
+  });
+});
+
 describe('Gemini 3.8 introductory pricing', () => {
   it.each(['google', 'vertexai'])('uses the published output rate for %s', (providerId) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
@@ -382,10 +479,31 @@ describe('Gemini 3.8 introductory pricing', () => {
   });
 });
 
+describe('Gemini 4 Carbon introductory pricing', () => {
+  it.each([
+    ['google', 'gemini-4-carbon'],
+    ['vertexai', 'gemini-4-carbon'],
+    ['openrouter', 'google/gemini-4-carbon'],
+  ])('bills %s/%s at $2 input and $10 output', (providerId, id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ]),
+    );
+  });
+});
+
 describe('subscription model catalogs', () => {
   it.each([
+    ['chatgpt', 'gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['chatgpt', 'gpt-6.2-sol', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6.1-sol', 'gpt6ReasoningEffort'],
+    ['chatgpt', 'gpt-6.1-terra', 'gpt5_6ReasoningEffort'],
     ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
   ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
@@ -396,11 +514,121 @@ describe('subscription model catalogs', () => {
     expect(model?.settings?.extendParams).toContain(reasoningParam);
   });
 
-  it('keeps the ChatGPT context cap and thinking preservation', () => {
-    const model = LOBE_DEFAULT_MODEL_LIST.find(
-      (entry) => entry.providerId === 'chatgpt' && entry.id === 'gpt-6-astra',
+  it.each(['gpt-6-astra', 'gpt-6.2-astra', 'gpt-6.2-sol'])(
+    'keeps the ChatGPT context cap and thinking preservation for %s',
+    (id) => {
+      const model = LOBE_DEFAULT_MODEL_LIST.find(
+        (entry) => entry.providerId === 'chatgpt' && entry.id === id,
+      );
+      expect(model?.contextWindowTokens).toBe(272_000);
+      expect(model?.settings?.extendParams).toContain('preserveThinking');
+    },
+  );
+});
+
+describe('Anthropic cache-write pricing', () => {
+  it('lists both the 5-minute and 1-hour cache-write prices for flat-priced models', () => {
+    // Official multipliers: a 5-minute write is 1.25x base input, a 1-hour write is 2x.
+    // https://platform.claude.com/docs/en/about-claude/pricing
+    const flatPriced = LOBE_DEFAULT_MODEL_LIST.filter(
+      (m) =>
+        m.providerId === ModelProvider.Anthropic &&
+        m.pricing?.units.find((u) => u.name === 'textInput')?.strategy === 'fixed',
     );
-    expect(model?.contextWindowTokens).toBe(272_000);
-    expect(model?.settings?.extendParams).toContain('preserveThinking');
+
+    expect(flatPriced.map((m) => m.id)).toContain('claude-fable-5-1');
+
+    for (const model of flatPriced) {
+      const units = model.pricing!.units;
+      const input = units.find((u) => u.name === 'textInput');
+      const cacheWrite = units.find((u) => u.name === 'textInput_cacheWrite');
+      const inputRate = input?.strategy === 'fixed' ? input.rate : NaN;
+
+      expect({ id: model.id, unit: cacheWrite }).toEqual({
+        id: model.id,
+        unit: {
+          lookup: {
+            prices: { '1h': inputRate * 2, '5m': inputRate * 1.25 },
+            pricingParams: ['ttl'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      });
+    }
+  });
+});
+
+describe('Google context-caching pricing', () => {
+  // https://ai.google.dev/gemini-api/docs/pricing
+  const units = (id: string) =>
+    LOBE_DEFAULT_MODEL_LIST.find((m) => m.providerId === ModelProvider.Google && m.id === id)
+      ?.pricing?.units;
+  const storage = {
+    lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+    name: 'textInput_cacheWrite',
+    strategy: 'lookup',
+    unit: 'millionTokens',
+  };
+  const fixed = (name: string, rate: number) => ({
+    name,
+    rate,
+    strategy: 'fixed',
+    unit: 'millionTokens',
+  });
+
+  it('prices Gemini 2.5 Pro cache reads by prompt length', () => {
+    expect(units('gemini-2.5-pro')).toContainEqual({
+      name: 'textInput_cacheRead',
+      strategy: 'tiered',
+      tiers: [
+        { rate: 0.125, upTo: 200_000 },
+        { rate: 0.25, upTo: 'infinity' },
+      ],
+      unit: 'millionTokens',
+    });
+  });
+
+  it.each([
+    ['gemini-2.5-flash', 0.03, 0.1],
+    ['gemini-2.5-flash-lite', 0.01, 0.03],
+  ])('lists text and audio cache reads plus storage for %s', (id, text, audio) => {
+    expect(units(id)).toEqual(
+      expect.arrayContaining([
+        fixed('textInput_cacheRead', text),
+        fixed('audioInput_cacheRead', audio),
+        storage,
+      ]),
+    );
+  });
+
+  it('lists the audio cache read for Gemini 3 Flash Preview', () => {
+    expect(units('gemini-3-flash-preview')).toContainEqual(fixed('audioInput_cacheRead', 0.1));
+  });
+});
+
+describe('Gemini 4 Neon pricing', () => {
+  it.each([
+    ['google', 'gemini-4-neon'],
+    ['vertexai', 'gemini-4-neon'],
+    ['openrouter', 'google/gemini-4-neon'],
+  ])('bills %s/%s at $3 input and $15 output', (providerId, id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ]),
+    );
+  });
+
+  it('marks only the Gemini API card as the official price source', () => {
+    const official = LOBE_DEFAULT_MODEL_LIST.filter(
+      (entry) => entry.id === 'gemini-4-neon' && entry.isOfficial,
+    );
+    expect(official.map((entry) => entry.providerId)).toEqual(['google']);
   });
 });

@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { SelectAllState } from '@/features/ResourceManager/store/initialState';

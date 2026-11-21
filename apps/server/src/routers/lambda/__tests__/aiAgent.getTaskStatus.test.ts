@@ -16,6 +16,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiAgentRouter } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
 
+const threadTaskInput = (threadId: string) => ({
+  threadId,
+});
+
+const completedThreadState = (status: (typeof ThreadStatus)['Completed']) => ({
+  status,
+  metadata: {
+    operationId: 'op-test-123',
+    completedAt: '2024-01-01T00:00:00Z',
+  },
+});
+
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -134,9 +146,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
     it('should return task status from Thread table', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.taskDetail).toBeDefined();
@@ -172,9 +182,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('completed');
       expect(result.completedAt).toBe('2024-01-01T00:00:00Z');
@@ -205,9 +213,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
         const caller = aiAgentRouter.createCaller(createTestContext());
 
-        const result = await caller.getSubAgentTaskStatus({
-          threadId: testThreadId,
-        });
+        const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
         expect(result.status).toBe(expectedTaskStatus);
       },
@@ -230,9 +236,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.stepCount).toBe(3);
@@ -240,6 +244,73 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       expect(mockGetOperationStatus).toHaveBeenCalledWith({
         operationId: 'op-test-123',
       });
+    });
+
+    it('accumulates LLM calls against the persisted versioned baseline', async () => {
+      await serverDB
+        .update(threads)
+        .set({
+          metadata: { operationId: 'op-test-123', totalLlmCalls: 4, totalSteps: 4 },
+        })
+        .where(eq(threads.id, testThreadId));
+
+      mockGetOperationStatus.mockResolvedValue({
+        currentState: {
+          llmCalls: 3,
+          status: 'done',
+          stepCount: 9,
+          usage: { llm: { apiCalls: 3, tokens: { total: 100 } } },
+        },
+        isCompleted: true,
+        hasError: false,
+        metadata: {},
+        stats: { totalMessages: 2 },
+      });
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const result = await caller.getSubAgentTaskStatus({ threadId: testThreadId });
+
+      expect(result.status).toBe('completed');
+      // 4 previous + 3 in this operation — not the operation's own 3.
+      expect(result.taskDetail?.totalSteps).toBe(7);
+
+      const [row] = await serverDB.select().from(threads).where(eq(threads.id, testThreadId));
+      expect((row.metadata as any)?.totalLlmCalls).toBe(7);
+      expect((row.metadata as any)?.totalSteps).toBe(7);
+    });
+
+    it('keeps the LLM-call total stable when the same operation is polled again', async () => {
+      await serverDB
+        .update(threads)
+        .set({ metadata: { operationId: 'op-test-123', totalLlmCalls: 4, totalSteps: 4 } })
+        .where(eq(threads.id, testThreadId));
+
+      // The operation keeps reporting the same cumulative count on every poll.
+      mockGetOperationStatus.mockResolvedValue({
+        currentState: {
+          llmCalls: 3,
+          status: 'running',
+          stepCount: 6,
+          usage: { llm: { apiCalls: 3, tokens: { total: 100 } } },
+        },
+        isCompleted: false,
+        hasError: false,
+        metadata: {},
+        stats: { totalMessages: 2 },
+      });
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const first = await caller.getSubAgentTaskStatus({ threadId: testThreadId });
+      expect(first.taskDetail?.totalSteps).toBe(7);
+
+      // A second poll must not add the operation's cumulative count again.
+      const second = await caller.getSubAgentTaskStatus({ threadId: testThreadId });
+      expect(second.taskDetail?.totalSteps).toBe(7);
+
+      const [row] = await serverDB.select().from(threads).where(eq(threads.id, testThreadId));
+      expect((row.metadata as any)?.totalLlmCalls).toBe(7);
+      expect((row.metadata as any)?.totalSteps).toBe(7);
+      expect((row.metadata as any)?.llmCallsBaseline).toBe(4);
     });
 
     it('should extract totalToolCalls from usage.tools.totalCalls', async () => {
@@ -269,9 +340,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.taskDetail?.totalToolCalls).toBe(5);
       expect(result.taskDetail?.totalTokens).toBe(8358);
@@ -295,9 +364,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.usage).toEqual({ total_tokens: 500 });
@@ -316,9 +383,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       // Should not call Redis for completed tasks
       expect(mockGetOperationStatus).not.toHaveBeenCalled();
@@ -345,9 +410,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('failed');
       expect(result.error).toMatchObject({
@@ -376,9 +439,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('failed');
       expect(result.error).toBe('Tool execution failed');
@@ -411,9 +472,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.taskDetail).toEqual({
         threadId: testThreadId,
@@ -476,20 +535,12 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       // Update thread to completed status
       await serverDB
         .update(threads)
-        .set({
-          status: ThreadStatus.Completed,
-          metadata: {
-            operationId: 'op-test-123',
-            completedAt: '2024-01-01T00:00:00Z',
-          },
-        })
+        .set(completedThreadState(ThreadStatus.Completed))
         .where(eq(threads.id, testThreadId));
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('completed');
       expect(result.result).toBe('This is the final result of the task execution.');
@@ -520,9 +571,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('failed');
       expect(result.result).toBe('Partial result before failure.');
@@ -543,9 +592,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       // Thread is in processing status (default from beforeEach)
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.result).toBeUndefined();
@@ -555,20 +602,12 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       // Update thread to completed status without any messages
       await serverDB
         .update(threads)
-        .set({
-          status: ThreadStatus.Completed,
-          metadata: {
-            operationId: 'op-test-123',
-            completedAt: '2024-01-01T00:00:00Z',
-          },
-        })
+        .set(completedThreadState(ThreadStatus.Completed))
         .where(eq(threads.id, testThreadId));
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('completed');
       expect(result.result).toBeUndefined();
@@ -592,9 +631,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.currentActivity).toEqual({
@@ -649,9 +686,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.currentActivity?.type).toBe('tool_result');
@@ -675,9 +710,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.currentActivity).toEqual({
@@ -700,9 +733,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.currentActivity?.contentPreview).toBe('A'.repeat(100));
     });
@@ -721,20 +752,12 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       // Update thread to completed status
       await serverDB
         .update(threads)
-        .set({
-          status: ThreadStatus.Completed,
-          metadata: {
-            operationId: 'op-test-123',
-            completedAt: '2024-01-01T00:00:00Z',
-          },
-        })
+        .set(completedThreadState(ThreadStatus.Completed))
         .where(eq(threads.id, testThreadId));
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('completed');
       expect(result.currentActivity).toBeUndefined();
@@ -743,9 +766,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
     it('should not return currentActivity when no messages in thread', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getSubAgentTaskStatus({
-        threadId: testThreadId,
-      });
+      const result = await caller.getSubAgentTaskStatus(threadTaskInput(testThreadId));
 
       expect(result.status).toBe('processing');
       expect(result.currentActivity).toBeUndefined();

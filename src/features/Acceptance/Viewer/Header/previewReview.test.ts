@@ -5,7 +5,7 @@ import { previewReviewUrl } from './previewReview';
 const round = (roundIndex: number, metadata: unknown) => ({ run: { metadata, roundIndex } });
 
 describe('previewReviewUrl', () => {
-  it('opens the latest round preview with the review toolbar activated', () => {
+  it('opens the latest round preview with the acceptance toolbar activated', () => {
     expect(
       previewReviewUrl('acc-1', [
         round(1, { previewUrl: 'https://old.example.com/' }),

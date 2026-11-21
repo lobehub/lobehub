@@ -1,6 +1,15 @@
-import { DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +18,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import { createCreateNewModelModal } from '../CreateNewModelModal';
 import { ProviderSettingsContext } from '../ProviderSettingsContext';
@@ -50,6 +60,7 @@ const ModelTitle = memo<ModelFetcherProps>(
     const { showDeployName } = use(ProviderSettingsContext);
 
     const mobile = useIsMobile();
+    const { pageTitleFontSize } = useDensityTokens();
 
     useEffect(() => {
       useAiInfraStore.setState({ modelSearchKeyword: '' });
@@ -70,7 +81,7 @@ const ModelTitle = memo<ModelFetcherProps>(
       >
         <Flexbox horizontal align={'center'} gap={0} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
-            <Text strong style={{ fontSize: 16 }}>
+            <Text strong style={{ fontSize: pageTitleFontSize }}>
               {t('providerModels.list.title')}
             </Text>
 

@@ -1,4 +1,4 @@
-import { ModalHost } from '@lobehub/ui/base-ui';
+import { ModalHost } from '@lobehub/ui';
 import {
   act,
   cleanup,

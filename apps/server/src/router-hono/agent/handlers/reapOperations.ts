@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { StaleOperationReaper } from '@/server/services/agentRuntime';
+import { recoverChannels } from '@/server/services/channel/recover';
 
 const log = debug('lobe-server:agent:reap-operations');
 
@@ -30,6 +31,7 @@ export async function reapOperations(c: Context): Promise<Response> {
 
   try {
     const serverDB = await getServerDB();
+    await recoverChannels(serverDB);
     const result = await new StaleOperationReaper(serverDB).sweep({
       limit: num('limit'),
       maxRedriveAttempts: num('maxRedriveAttempts'),

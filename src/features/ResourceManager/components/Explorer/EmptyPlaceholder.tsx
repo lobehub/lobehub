@@ -1,6 +1,14 @@
-import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text, Upload } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  FileTypeIcon,
+  Flexbox,
+  Icon,
+  Text,
+  Upload,
+} from '@lobehub/ui';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +19,7 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getResourceSourceFilter } from '@/features/ResourceManager/store/selectors';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { ResourceSourceFilter } from '@/types/files';
 
 const ICON_SIZE = 80;
@@ -18,7 +27,7 @@ const ICON_SIZE = 80;
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionTitle: css`
     margin-block-start: 12px;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   card: css`
@@ -110,7 +119,8 @@ const EmptyPlaceholder = () => {
         <Text as={'h4'}>{t('FileManager.emptyStatus.title')}</Text>
         <Text type={'secondary'}>{t('FileManager.emptyStatus.or')}</Text>
       </Flexbox>
-      <Flexbox horizontal gap={12}>
+      {/* Wraps so the three 200px cards stack on a phone instead of clipping. */}
+      <Flexbox horizontal gap={12} justify={'center'} paddingInline={16} wrap={'wrap'}>
         {!libraryId && (
           <Flexbox
             className={styles.card}

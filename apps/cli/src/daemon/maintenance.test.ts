@@ -6,10 +6,13 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ServiceStatusModule from '../service/status';
+import type { ConnectServiceStatus } from '../service/status';
 import { CliMaintenance } from './maintenance';
 
-const { spawn, child } = vi.hoisted(() => {
+const { spawn, child, readConnectServices } = vi.hoisted(() => {
   return {
+    readConnectServices: vi.fn(),
     child: {
       value: undefined as unknown as EventEmitter & {
         connected: boolean;
@@ -23,6 +26,10 @@ const { spawn, child } = vi.hoisted(() => {
 vi.mock('node:child_process', async (original) => ({
   ...(await original<typeof ChildProcessModule>()),
   spawn,
+}));
+vi.mock('../service/status', async (original) => ({
+  ...(await original<typeof ServiceStatusModule>()),
+  readConnectServices,
 }));
 
 let home: string;
@@ -42,6 +49,7 @@ beforeEach(async () => {
     unref: vi.fn(),
   });
   spawn.mockReturnValue(child.value);
+  readConnectServices.mockResolvedValue({ services: [], unavailableScopes: [] });
 });
 afterEach(async () => {
   process.argv = originalArgv;
@@ -49,13 +57,31 @@ afterEach(async () => {
   vi.clearAllMocks();
   await rm(home, { force: true, recursive: true });
 });
-const create = (activeTasks = () => 0, daemon = true) =>
+const create = (activeTasks = () => 0, daemon = true, shutdown = vi.fn()) =>
   new CliMaintenance({
     activeTasks,
     daemon,
     restartArgs: ['connect', '--workspace', 'workspace-a', '--public'],
-    shutdown: vi.fn(),
+    shutdown,
   });
+const service = (overrides: Partial<ConnectServiceStatus> = {}): ConnectServiceStatus => ({
+  active: true,
+  enabled: true,
+  fragmentPath: '/etc/systemd/system/lobehub-connect.service',
+  mainPid: process.pid,
+  restart: 'on-failure',
+  restartPreventExitStatus: [],
+  scope: 'system',
+  serviceName: 'lobehub-connect.service',
+  subState: 'running',
+  successExitStatus: ['0', '1', '2'],
+  user: 'ubuntu',
+  ...overrides,
+});
+const readConfig = async () =>
+  JSON.parse(
+    await readFile(path.join(home, '.lobehub/cli-maintenance', `${id}.config.json`), 'utf8'),
+  );
 
 describe('CLI maintenance admission', () => {
   it('makes historical operations recoverable after a manual version change', async () => {
@@ -129,5 +155,66 @@ describe('CLI maintenance admission', () => {
       'Check for updates',
     );
     expect(spawn).not.toHaveBeenCalled();
+  });
+});
+
+describe('CLI maintenance under systemd', () => {
+  it('lets a restarting service hand the restart to systemd with a failure exit status', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    readConnectServices.mockResolvedValue({ services: [service()], unavailableScopes: [] });
+    const shutdown = vi.fn().mockResolvedValue(undefined);
+    const maintenance = create(undefined, false, shutdown);
+
+    expect((await maintenance.getState()).supported).toBe(true);
+    await maintenance.restart({ requestId: id, update: false });
+    // The worker must not start a second connector next to the one systemd starts.
+    expect((await readConfig()).restartArgs).toBeUndefined();
+    child.value.emit('message', { type: 'ready-to-restart' });
+    expect(shutdown).toHaveBeenCalledWith(75);
+  });
+
+  it('keeps daemon restarts on a clean exit with relaunch arguments', async () => {
+    const shutdown = vi.fn().mockResolvedValue(undefined);
+    const maintenance = create(undefined, true, shutdown);
+    await maintenance.restart({ requestId: id, update: false });
+    expect((await readConfig()).restartArgs).toEqual([
+      'connect',
+      '--workspace',
+      'workspace-a',
+      '--public',
+    ]);
+    child.value.emit('message', { type: 'ready-to-restart' });
+    expect(shutdown).toHaveBeenCalledWith(0);
+    expect(readConnectServices).not.toHaveBeenCalled();
+  });
+
+  it('refuses services systemd would not start again and foreground runs beside a service', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    readConnectServices.mockResolvedValue({
+      services: [service({ restart: 'no' })],
+      unavailableScopes: [],
+    });
+    expect((await create(undefined, false).getState()).supported).toBe(false);
+
+    readConnectServices.mockResolvedValue({
+      services: [service({ mainPid: process.pid + 1 })],
+      unavailableScopes: [],
+    });
+    const foreground = create(undefined, false);
+    await expect(foreground.restart({ requestId: id, update: false })).rejects.toThrow(
+      'systemd connect service',
+    );
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('checks again after a service manager could not be read', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    readConnectServices.mockResolvedValueOnce({ services: [], unavailableScopes: ['system'] });
+    readConnectServices.mockResolvedValueOnce({ services: [service()], unavailableScopes: [] });
+    const maintenance = create(undefined, false);
+    expect((await maintenance.getState()).supported).toBe(false);
+    expect((await maintenance.getState()).supported).toBe(true);
+    expect((await maintenance.getState()).supported).toBe(true);
+    expect(readConnectServices).toHaveBeenCalledTimes(2);
   });
 });

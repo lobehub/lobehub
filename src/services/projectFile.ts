@@ -18,13 +18,18 @@ import { isAbsolute, relative, resolve } from 'pathe';
 import { mutate } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
+import {
+  type LocalFilePreview,
+  localFilePreviewResultError,
+  localFileService,
+} from '@/services/electron/localFileService';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 export type { LocalFilePreview } from '@/services/electron/localFileService';
 
 export interface GetLocalFilePreviewParams extends LocalFilePreviewUrlParams {
   deviceId?: string;
+  topicId?: string;
 }
 
 const base64ToBlob = (base64: string, contentType: string): Blob => {
@@ -159,7 +164,9 @@ class ProjectFileService {
     topicId?: string;
   }): Promise<ProjectFileIndexResult | undefined> {
     const [workspace, listing] = await Promise.all([
-      sandboxStorageService.getStorage(),
+      // Rooted on the drive the conversation's folder is on, which the
+      // topic names.
+      sandboxStorageService.getStorage({ topicId }),
       // The topic still travels: it names the warm session the read can go
       // through, and is what lets a listing be refreshed before it is served.
       // The instance is the address; the topic is the route.
@@ -253,6 +260,7 @@ class ProjectFileService {
   /** File preview payload for a file in a project working directory. */
   async getLocalFilePreview({
     deviceId,
+    topicId,
     ...params
   }: GetLocalFilePreviewParams): Promise<LocalFilePreview> {
     if (deviceId) {
@@ -260,11 +268,12 @@ class ProjectFileService {
         accept: params.accept,
         deviceId,
         path: params.path,
+        ...(topicId && { topicId }),
         workingDirectory: params.workingDirectory,
       });
 
       if (!result.success || !result.preview) {
-        throw new Error(result.error || 'Missing local file preview');
+        throw localFilePreviewResultError(result, 'Missing local file preview');
       }
 
       if (params.accept === 'image' && result.preview.type !== 'image') {
@@ -344,10 +353,12 @@ class ProjectFileService {
   async moveProjectFiles({
     deviceId,
     items,
+    topicId,
     workingDirectory,
   }: {
     deviceId?: string;
     items: MoveLocalFileParams[];
+    topicId?: string;
     workingDirectory: string;
   }): Promise<LocalMoveFilesResultItem[]> {
     assertNotWorkspaceRoot(
@@ -356,7 +367,12 @@ class ProjectFileService {
     );
 
     return deviceId
-      ? lambdaClient.device.moveProjectFiles.mutate({ deviceId, items, workingDirectory })
+      ? lambdaClient.device.moveProjectFiles.mutate({
+          deviceId,
+          items,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.moveLocalFiles({ items });
   }
 
@@ -365,17 +381,25 @@ class ProjectFileService {
     deviceId,
     newName,
     path,
+    topicId,
     workingDirectory,
   }: {
     deviceId?: string;
     newName: string;
     path: string;
+    topicId?: string;
     workingDirectory: string;
   }): Promise<RenameLocalFileResult> {
     assertNotWorkspaceRoot(workingDirectory, [path]);
 
     return deviceId
-      ? lambdaClient.device.renameProjectFile.mutate({ deviceId, newName, path, workingDirectory })
+      ? lambdaClient.device.renameProjectFile.mutate({
+          deviceId,
+          newName,
+          path,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.renameLocalFile({ newName, path });
   }
 
@@ -389,15 +413,23 @@ class ProjectFileService {
     content,
     deviceId,
     path,
+    topicId,
     workingDirectory,
   }: {
     content: string;
     deviceId?: string;
     path: string;
+    topicId?: string;
     workingDirectory: string;
   }): Promise<{ error?: string; success: boolean }> {
     return deviceId
-      ? lambdaClient.device.writeProjectFile.mutate({ content, deviceId, path, workingDirectory })
+      ? lambdaClient.device.writeProjectFile.mutate({
+          content,
+          deviceId,
+          path,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.writeFile({ content, path });
   }
 
@@ -409,15 +441,23 @@ class ProjectFileService {
     content,
     deviceId,
     path,
+    topicId,
     workingDirectory,
   }: {
     content?: string;
     deviceId?: string;
     path: string;
+    topicId?: string;
     workingDirectory: string;
   }): Promise<CreateLocalEntryResult> {
     return deviceId
-      ? lambdaClient.device.createProjectFile.mutate({ content, deviceId, path, workingDirectory })
+      ? lambdaClient.device.createProjectFile.mutate({
+          content,
+          deviceId,
+          path,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.createLocalFile({ content, path });
   }
 
@@ -425,14 +465,21 @@ class ProjectFileService {
   async createProjectDirectory({
     deviceId,
     path,
+    topicId,
     workingDirectory,
   }: {
     deviceId?: string;
     path: string;
+    topicId?: string;
     workingDirectory: string;
   }): Promise<CreateLocalEntryResult> {
     return deviceId
-      ? lambdaClient.device.createProjectDirectory.mutate({ deviceId, path, workingDirectory })
+      ? lambdaClient.device.createProjectDirectory.mutate({
+          deviceId,
+          path,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.createLocalDirectory({ path });
   }
 
@@ -444,10 +491,12 @@ class ProjectFileService {
   async copyProjectFiles({
     deviceId,
     items,
+    topicId,
     workingDirectory,
   }: {
     deviceId?: string;
     items: CopyLocalFileItem[];
+    topicId?: string;
     workingDirectory: string;
   }): Promise<LocalCopyFilesResultItem[]> {
     assertNotWorkspaceRoot(
@@ -456,7 +505,12 @@ class ProjectFileService {
     );
 
     return deviceId
-      ? lambdaClient.device.copyProjectFiles.mutate({ deviceId, items, workingDirectory })
+      ? lambdaClient.device.copyProjectFiles.mutate({
+          deviceId,
+          items,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.copyLocalFiles({ items });
   }
 
@@ -468,16 +522,23 @@ class ProjectFileService {
   async trashProjectFiles({
     deviceId,
     paths,
+    topicId,
     workingDirectory,
   }: {
     deviceId?: string;
     paths: string[];
+    topicId?: string;
     workingDirectory: string;
   }): Promise<TrashLocalFilesResult> {
     assertNotWorkspaceRoot(workingDirectory, paths);
 
     return deviceId
-      ? lambdaClient.device.trashProjectFiles.mutate({ deviceId, paths, workingDirectory })
+      ? lambdaClient.device.trashProjectFiles.mutate({
+          deviceId,
+          paths,
+          ...(topicId && { topicId }),
+          workingDirectory,
+        })
       : localFileService.trashLocalFiles({ paths });
   }
 }

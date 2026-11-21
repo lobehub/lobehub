@@ -1,20 +1,14 @@
-import { join } from 'node:path';
-
-import { PGlite } from '@electric-sql/pglite';
-import { vector } from '@electric-sql/pglite/vector';
-import { sql } from 'drizzle-orm';
-import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite';
+import { migrate as pgliteMigrate } from 'drizzle-orm/pglite/migrator';
 import { Pool as NodePool } from 'pg';
 
 import { serverDBEnv } from '@/config/db';
 
 import * as schema from '../schemas';
 import type { LobeChatDatabase } from '../type';
-
-const migrationsFolder = join(__dirname, '../../migrations');
+import { createPGlite, migrationsFolder, readPGliteSnapshot } from './pgliteSnapshot';
 
 const isServerDBMode = process.env.TEST_SERVER_DB === '1';
 
@@ -43,36 +37,13 @@ export const getTestDB = async (): Promise<LobeChatDatabase> => {
   // Client DB mode (PGlite)
   if (testClientDB) return testClientDB as unknown as LobeChatDatabase;
 
-  const pglite = new PGlite({ extensions: { vector } });
+  const snapshot = readPGliteSnapshot();
+  const pglite = createPGlite(snapshot);
   testClientDB = pgliteDrizzle({ client: pglite, schema });
 
-  // Custom migration that skips pg_search-related SQL for PGlite compatibility
-  const migrations = readMigrationFiles({ migrationsFolder });
-
-  await testClientDB.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`);
-  await testClientDB.execute(sql`
-    CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
-      id SERIAL PRIMARY KEY,
-      hash text NOT NULL,
-      created_at bigint
-    )
-  `);
-
-  for (const migration of migrations) {
-    const skipSql = migration.sql.some(
-      (s) => s.toLowerCase().includes('pg_search') || s.toLowerCase().includes('bm25'),
-    );
-
-    if (!skipSql) {
-      for (const stmt of migration.sql) {
-        await testClientDB.execute(sql.raw(stmt));
-      }
-    }
-
-    await testClientDB.execute(
-      sql`INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at) VALUES (${migration.hash}, ${migration.folderMillis})`,
-    );
-  }
+  // The global setup's snapshot is already migrated; without it, migrate here.
+  // pg_search migrations skip themselves when the extension is unavailable, as in PGlite.
+  if (!snapshot) await pgliteMigrate(testClientDB, { migrationsFolder });
 
   return testClientDB as unknown as LobeChatDatabase;
 };

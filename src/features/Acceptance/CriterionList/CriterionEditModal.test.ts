@@ -7,7 +7,7 @@ import { CriterionEditor } from './CriterionEditor';
 
 const mocks = vi.hoisted(() => ({ createModal: vi.fn((options) => options) }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createModal: mocks.createModal,
 }));

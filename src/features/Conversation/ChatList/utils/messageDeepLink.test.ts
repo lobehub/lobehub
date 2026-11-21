@@ -63,6 +63,22 @@ describe('resolveMessageDeepLink', () => {
     expect(resolve(messages, 'compressed-hit')?.index).toBe(2);
   });
 
+  it('resolves a compressed member the read path did not hydrate to its group row', () => {
+    const messages = [
+      message('first'),
+      message('compressed-row', {
+        compressedMessages: [message('compressed-newest')],
+        compressedOmittedIds: ['compressed-oldest'],
+        role: 'compressedGroup',
+      }),
+    ];
+
+    expect(resolve(messages, 'compressed-oldest')).toMatchObject({
+      displayMessageId: 'compressed-row',
+      index: 1,
+    });
+  });
+
   it('returns undefined when the message is not rendered by the list', () => {
     expect(resolve([message('first')], 'missing')).toBeUndefined();
   });

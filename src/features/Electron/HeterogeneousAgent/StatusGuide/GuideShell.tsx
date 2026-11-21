@@ -1,6 +1,4 @@
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Avatar, Block, cssVar, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +14,7 @@ interface GuideShellProps {
    * status, not a full error panel.
    */
   compact?: boolean;
+  dismissLabel?: string;
   headerDescription?: ReactNode;
   icon: ReactNode;
   onDismiss?: () => void;
@@ -27,6 +26,7 @@ const GuideShell = ({
   actions,
   children,
   compact = false,
+  dismissLabel,
   headerDescription,
   icon,
   onDismiss,
@@ -75,8 +75,13 @@ const GuideShell = ({
             >
               {actionsInHeader && actions}
               {onDismiss && (
-                <Tooltip title={t('close')}>
-                  <ActionIcon aria-label={t('close')} icon={X} size="small" onClick={onDismiss} />
+                <Tooltip title={dismissLabel ?? t('close')}>
+                  <ActionIcon
+                    aria-label={dismissLabel ?? t('close')}
+                    icon={X}
+                    size="small"
+                    onClick={onDismiss}
+                  />
                 </Tooltip>
               )}
             </Flexbox>

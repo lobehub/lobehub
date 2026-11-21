@@ -1,13 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
+import { css, cx, Flexbox } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 const body = css`
   :has(.portal-artifact) {
     overflow: hidden;
-    padding-block-end: 12px;
+    padding-block-end: ${densityVars.contentGap};
   }
 `;
 

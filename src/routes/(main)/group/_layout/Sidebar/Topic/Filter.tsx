@@ -1,4 +1,4 @@
-import { ActionIcon, DropdownMenu } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { ListFilter } from 'lucide-react';
 import { memo } from 'react';
 

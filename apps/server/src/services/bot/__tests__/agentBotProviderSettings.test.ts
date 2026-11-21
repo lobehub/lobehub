@@ -1,9 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { assertWatchKeywordsWritable, invalidateBotAfterUpdate } from '../agentBotProviderSettings';
+import {
+  assertWatchKeywordsWritable,
+  invalidateBotAfterUpdate,
+  mergeBotSettingsForCreate,
+  mergeBotSettingsPatch,
+} from '../agentBotProviderSettings';
 
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
+const mockStartClient = vi.hoisted(() => vi.fn());
+const inProcess = vi.hoisted(() => ({
+  canHost: true,
+  host: 'in-process' as 'in-process' | 'message-gateway',
+}));
+
+vi.mock('@/server/services/gateway/replyConnectionHost', () => ({
+  resolveReplyConnectionHost: () => (inProcess.canHost ? inProcess.host : undefined),
+}));
 const mockInvalidateBot = vi.hoisted(() => vi.fn());
 const gatewayState = vi.hoisted(() => ({ useMessageGateway: true }));
 
@@ -14,6 +28,7 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
 vi.mock('@/server/services/gateway', () => ({
   GatewayService: vi.fn(function () {
     return {
+      startClient: mockStartClient,
       stopClient: mockStopClient,
       get useMessageGateway() {
         return gatewayState.useMessageGateway;
@@ -141,8 +156,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('stops the runtime when watch keywords go from none to some', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).toHaveBeenCalledWith('discord', 'app-1', 'user-1');
@@ -151,8 +166,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('stops the runtime when watch keywords are cleared', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
-      { settings: { watchKeywords: [] } },
+      { ...target, settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
+      { settings: { botWakeDisabled: true, watchKeywords: [] } },
     );
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
@@ -164,8 +179,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     gatewayState.useMessageGateway = false;
 
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).not.toHaveBeenCalled();
@@ -175,7 +190,10 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   it('still stops the runtime for disable/rebind even without the external gateway', async () => {
     gatewayState.useMessageGateway = false;
 
-    await invalidateBotAfterUpdate({ ...target, settings: {} }, { enabled: false });
+    await invalidateBotAfterUpdate(
+      { ...target, settings: { botWakeDisabled: true } },
+      { enabled: false },
+    );
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
   });
@@ -184,8 +202,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     // Gateway reconciliation skips webhook-mode providers, so a stop here
     // would take the bot offline until the next manual config save.
     await invalidateBotAfterUpdate(
-      { ...target, platform: 'telegram', settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, platform: 'telegram', settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).not.toHaveBeenCalled();
@@ -194,7 +212,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('does not stop the runtime when settings switch the bot into webhook mode', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
+      { ...target, settings: { botWakeDisabled: true } },
       { settings: { connectionMode: 'webhook', watchKeywords: [{ keyword: 'bug' }] } },
     );
 
@@ -203,7 +221,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('does not stop the runtime when keyword presence is unchanged', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
       { settings: { watchKeywords: [{ keyword: 'outage' }] } },
     );
 
@@ -212,9 +230,270 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   });
 
   it('does not stop the runtime for settings-free updates', async () => {
-    await invalidateBotAfterUpdate({ ...target, settings: {} }, {});
+    await invalidateBotAfterUpdate({ ...target, settings: { botWakeDisabled: true } }, {});
 
     expect(mockStopClient).not.toHaveBeenCalled();
     expect(mockInvalidateBot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mergeBotSettingsPatch', () => {
+  const stored = {
+    allowFrom: [{ id: 'u-1', name: 'Ada' }],
+    botWakeDisabled: false,
+    botWakeScope: 'bot-threads',
+    dmPolicy: 'pairing',
+    userId: 'owner-1',
+    watchKeywords: [{ keyword: 'bug' }],
+  };
+
+  // The agent maintains its own duties through `updateBot`: one key in, every other key kept.
+  it('writes the duties without resetting the settings the caller did not send', () => {
+    const merged = mergeBotSettingsPatch('discord', stored, {
+      botWakeDuties: '评估群里描述的需求',
+      botWakeDutiesThreshold: 0.7,
+    });
+
+    expect(merged).toMatchObject({
+      ...stored,
+      botWakeDuties: '评估群里描述的需求',
+      botWakeDutiesThreshold: 0.7,
+    });
+  });
+
+  it('replaces a key it carries whole, arrays included, and fills schema defaults', () => {
+    const merged = mergeBotSettingsPatch('discord', stored, { allowFrom: [] });
+
+    expect(merged?.allowFrom).toEqual([]);
+    expect(merged?.userId).toBe('owner-1');
+    // A field neither stored nor sent still gets its schema default.
+    expect(merged?.botWakeDutiesThreshold).toBe(0.65);
+  });
+
+  it('writes a flat key the runtime reads, even for a bot configured with a nested botWake', () => {
+    const merged = mergeBotSettingsPatch(
+      'discord',
+      { botWake: { enabled: true, rules: { scope: 'bot-threads' } }, userId: 'owner-1' },
+      { botWakeDuties: 'Triage bug reports.' },
+    );
+
+    expect(merged).toMatchObject({
+      botWakeDuties: 'Triage bug reports.',
+      botWakeDisabled: false,
+      botWakeScope: 'bot-threads',
+      userId: 'owner-1',
+    });
+    expect(merged?.botWake).toBeUndefined();
+  });
+
+  it('starts from the defaults when nothing is stored', () => {
+    expect(mergeBotSettingsPatch('discord', null, { botWakeDuties: 'x' })).toMatchObject({
+      botWakeDuties: 'x',
+      botWakeDisabled: false,
+    });
+  });
+});
+
+describe('mergeBotSettingsForCreate', () => {
+  const dbWith = (agencyConfig: unknown) =>
+    ({
+      query: { agents: { findFirst: vi.fn(async () => ({ agencyConfig })) } },
+    }) as never;
+
+  it('leaves bot wake on for an ordinary agent', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {});
+
+    expect(settings?.botWakeDisabled).toBe(false);
+  });
+
+  it('switches bot wake off for a heterogeneous agent that did not choose', async () => {
+    const settings = await mergeBotSettingsForCreate(
+      dbWith({ heterogeneousProvider: { type: 'claude-code' } }),
+      'agt',
+      'discord',
+      { dmPolicy: 'open' },
+    );
+
+    expect(settings).toMatchObject({ botWakeDisabled: true, dmPolicy: 'open' });
+  });
+
+  it('writes the defaults for an ordinary agent created without settings, reactions off', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', undefined);
+
+    expect(settings).toMatchObject({ botWakeDisabled: false, reactionMode: 'none' });
+  });
+
+  it('creates a bot with status reactions off when the caller did not choose', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {
+      dmPolicy: 'open',
+    });
+
+    expect(settings).toMatchObject({ dmPolicy: 'open', reactionMode: 'none' });
+  });
+
+  it('keeps the status reaction mode the caller chose', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {
+      reactionMode: 'full',
+    });
+
+    expect(settings?.reactionMode).toBe('full');
+  });
+
+  it('turns reactions off for a heterogeneous agent created without settings too', async () => {
+    const db = dbWith({ heterogeneousProvider: { type: 'claude-code' } });
+
+    expect(await mergeBotSettingsForCreate(db, 'agt', 'discord', undefined)).toMatchObject({
+      botWakeDisabled: true,
+      reactionMode: 'none',
+    });
+  });
+
+  it('adds no reaction mode on a platform without status reactions', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'wechat', {});
+
+    expect(settings).not.toHaveProperty('reactionMode');
+  });
+
+  describe('DingTalk behind the message gateway', () => {
+    afterEach(() => {
+      gatewayState.useMessageGateway = true;
+    });
+
+    it('defaults a new bot to webhook mode when the gateway cannot host its Stream connection', async () => {
+      gatewayState.useMessageGateway = true;
+
+      expect(
+        (await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', undefined))?.connectionMode,
+      ).toBe('webhook');
+      expect(
+        (await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {}))?.connectionMode,
+      ).toBe('webhook');
+    });
+
+    it('keeps the mode the caller chose', async () => {
+      gatewayState.useMessageGateway = true;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {
+        connectionMode: 'websocket',
+      });
+
+      expect(settings?.connectionMode).toBe('websocket');
+    });
+
+    it('keeps Stream mode without the gateway', async () => {
+      gatewayState.useMessageGateway = false;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {});
+
+      expect(settings?.connectionMode).toBe('websocket');
+    });
+
+    it('leaves platforms the gateway can host on their default', async () => {
+      gatewayState.useMessageGateway = true;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {});
+
+      expect(settings?.connectionMode).not.toBe('webhook');
+    });
+  });
+
+  it('keeps a heterogeneous agent opted in when the caller turned it on', async () => {
+    const db = dbWith({ heterogeneousProvider: { type: 'codex' } });
+    const settings = await mergeBotSettingsForCreate(db, 'agt', 'discord', {
+      botWakeDisabled: false,
+    });
+
+    expect(settings?.botWakeDisabled).toBe(false);
+  });
+});
+
+describe('status reactions of an existing bot', () => {
+  it('keep the stored mode on a partial update', () => {
+    expect(
+      mergeBotSettingsPatch('discord', { reactionMode: 'minimal' }, { charLimit: 1000 }),
+    ).toMatchObject({ charLimit: 1000, reactionMode: 'minimal' });
+  });
+
+  it('stay on for a row saved before the field existed', () => {
+    expect(mergeBotSettingsPatch('discord', {}, { charLimit: 1000 })?.reactionMode).toBe('minimal');
+  });
+});
+
+describe('invalidateBotAfterUpdate — credential changes on an in-process-only platform', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockStartClient.mockResolvedValue('started');
+    inProcess.canHost = true;
+    inProcess.host = 'in-process';
+    gatewayState.useMessageGateway = false;
+  });
+
+  const existing = { applicationId: 'bot-1', platform: 'wecom', userId: 'user-1' };
+
+  it('restarts the WeCom connection on the new secret', async () => {
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' } });
+
+    expect(mockInvalidateBot).toHaveBeenCalledWith('wecom', 'bot-1');
+    expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
+  });
+
+  it('leaves other platforms and settings-only saves alone', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, platform: 'discord' },
+      { credentials: { botToken: 'x' } },
+    );
+    await invalidateBotAfterUpdate(existing, { settings: { charLimit: 500 } });
+    expect(mockStartClient).not.toHaveBeenCalled();
+  });
+
+  it('does not restart where WeCom cannot run, or when the bot is being turned off', async () => {
+    inProcess.canHost = false;
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' } });
+    inProcess.canHost = true;
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' }, enabled: false });
+
+    expect(mockStartClient).not.toHaveBeenCalled();
+    expect(mockStopClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart when a full save resends the stored secret unchanged', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { botId: 'bot-1', secret: 'same' } },
+      { credentials: { botId: 'bot-1', secret: 'same' } },
+    );
+
+    expect(mockInvalidateBot).toHaveBeenCalledWith('wecom', 'bot-1');
+    expect(mockStartClient).not.toHaveBeenCalled();
+  });
+
+  it('restarts when the stored secret differs from the saved one', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { botId: 'bot-1', secret: 'old' } },
+      { credentials: { botId: 'bot-1', secret: 'new' } },
+    );
+
+    expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
+  });
+
+  it('waits for the restart when the message gateway holds the connection', async () => {
+    inProcess.host = 'message-gateway';
+    let connected = false;
+    mockStartClient.mockImplementationOnce(async () => {
+      await Promise.resolve();
+      connected = true;
+      return 'started';
+    });
+
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { secret: 'old' } },
+      { credentials: { secret: 'new' } },
+    );
+
+    // A serverless invocation may be frozen once it responds, so the gateway connect must land first.
+    expect(connected).toBe(true);
+  });
+
+  it('keeps the save successful when the restart fails', async () => {
+    mockStartClient.mockRejectedValueOnce(new Error('subscribe rejected'));
+    await expect(
+      invalidateBotAfterUpdate(existing, { credentials: { secret: 'bad' } }),
+    ).resolves.toBeUndefined();
   });
 });

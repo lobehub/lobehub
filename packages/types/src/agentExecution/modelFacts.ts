@@ -16,6 +16,14 @@ export interface ModelCardFacts {
 export interface UserModelRowFacts {
   /** Stored as untyped JSON; a non-empty object replaces the card's abilities. */
   abilities?: unknown;
+  /**
+   * User-configured deployment alias (`ai_models.config.deploymentName`).
+   * Deployment-catalog providers (Azure, Volcengine Ark, Spark) address the
+   * request model by it, so the frozen provider card merges this over the
+   * bundled value and the transport injects the user's endpoint, not the
+   * catalog default.
+   */
+  deploymentName?: string | null;
   displayName?: string | null;
   /** `[]` is an explicit opt-out from the card's params; absent falls back to the cards. */
   extendParams?: string[] | null;

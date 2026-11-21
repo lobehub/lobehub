@@ -235,7 +235,7 @@ const TestBaseUISwitch = (props: TestBaseUISwitchProps) => {
 
 // base-ui Button requires the app-level motion provider. Unit tests exercise
 // consuming components, so a native button keeps interaction behavior stable.
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {

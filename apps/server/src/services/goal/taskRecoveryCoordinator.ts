@@ -1,4 +1,5 @@
 import type { GoalItem, TaskItem } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -8,6 +9,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
+import { clearDeviceDispatchStreak, parkDeviceUnavailableDispatch } from './deviceDispatchStreak';
 import {
   countChargedTaskAttempts,
   countUnchargedRuns,
@@ -49,10 +51,36 @@ export type TaskRecoveryOutcome =
 export interface TaskRecoveryResult {
   /** Present only on `spawn-failed` when the retry could not reach its device. */
   deviceUnavailable?: boolean;
+  /**
+   * Present only on `spawn-failed`: why the run did not start, when the cause is
+   * one the person answering the gate can act on (see {@link describeSpawnFailure}).
+   */
+  error?: string;
   /** Present only on `started`. The drill-down link into `agent_operations`. */
   operationId?: string;
   outcome: TaskRecoveryOutcome;
 }
+
+/** Longest spawn failure carried into a gate reason. */
+const MAX_SPAWN_FAILURE_LENGTH = 300;
+
+/**
+ * The part of a spawn failure that may reach the person answering the gate.
+ *
+ * The gate used to say only that recovery "could not start the next attempt",
+ * so its owner asked what had gone wrong and pressed Retry blind. `runTask`
+ * refuses with a TRPC error written for its caller — a running topic it names,
+ * a missing agent — and that sentence is what they need. Any other error may
+ * carry SQL, identifiers or provider diagnostics; it stays in the server log.
+ */
+export const describeSpawnFailure = (error: unknown): string | undefined => {
+  if (!(error instanceof TRPCError) || error.code === 'INTERNAL_SERVER_ERROR') return;
+  const message = error.message.trim().replace(/\.$/, '');
+  if (!message) return;
+  return message.length > MAX_SPAWN_FAILURE_LENGTH
+    ? `${message.slice(0, MAX_SPAWN_FAILURE_LENGTH - 1)}…`
+    : message;
+};
 
 /** Retry budget and spawn boundary for a Goal Graph Task. */
 export class TaskRecoveryCoordinator {
@@ -151,6 +179,9 @@ export class TaskRecoveryCoordinator {
         trigger: 'goal',
       });
       log('task %s → recovery attempt %d spawned', task.identifier, attempts + 1);
+      await clearDeviceDispatchStreak(taskModel, current.id).catch((clearError) => {
+        log('task %s failed to clear the device dispatch streak: %O', task.identifier, clearError);
+      });
       return { operationId: run.operationId, outcome: 'started' };
     } catch (error) {
       log('task %s recovery spawn failed (non-fatal): %O', task.identifier, error);
@@ -159,14 +190,18 @@ export class TaskRecoveryCoordinator {
       const message = error instanceof Error ? error.message : String(error);
       const deviceUnavailable = isDeviceUnavailableFailure(message);
       // We own the claim, so nothing else will put the task back.
-      await taskModel
-        .updateStatusIfCurrent(task.id, 'running', 'paused', {
-          error: deviceUnavailable ? message : current.error,
-        })
-        .catch((releaseError) => {
-          log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
-        });
-      return { deviceUnavailable, outcome: 'spawn-failed' };
+      await (
+        deviceUnavailable
+          ? parkDeviceUnavailableDispatch(taskModel, current, message)
+          : taskModel.updateStatusIfCurrent(task.id, 'running', 'paused', { error: current.error })
+      ).catch((releaseError) => {
+        log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
+      });
+      return {
+        deviceUnavailable,
+        error: deviceUnavailable ? undefined : describeSpawnFailure(error),
+        outcome: 'spawn-failed',
+      };
     }
   };
 }

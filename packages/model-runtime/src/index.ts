@@ -1,10 +1,14 @@
 export * from './core/BaseAI';
+export {
+  type InlineImageNormalizer,
+  setInlineImageNormalizer,
+} from './core/contextBuilders/inlineImageBudget';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
 export { mergeModelRuntimeHooks } from './core/mergeHooks';
 export type { ModelRuntimeHooks } from './core/ModelRuntime';
-export { ModelRuntime } from './core/ModelRuntime';
-export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
-export { StructuredOutputError } from './core/openaiCompatibleFactory/structuredOutput';
+export { describeGenerateObjectError, ModelRuntime } from './core/ModelRuntime';
+export { createOpenAICompatibleRuntime } from './core/openaiCompatible';
+export { StructuredOutputError } from './core/openaiCompatible/structuredOutput';
 export * from './core/RouterRuntime';
 export { createCallbacksTransformer } from './core/streams/protocol';
 export * from './core/usageConverters';
@@ -53,6 +57,9 @@ export { LobeChatGPTAI } from './providers/chatGPT';
 export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
+export { LobeDoubaoSpeechAI } from './providers/doubaospeech';
+export { LobeElevenLabsAI } from './providers/elevenlabs';
+export { LobeFishAudioAI } from './providers/fishaudio';
 export { LobeGLMCodingPlanAI } from './providers/glmCodingPlan';
 export { LobeGoogleAI } from './providers/google';
 export * from './providers/google/modelId';
@@ -79,6 +86,7 @@ export { LobeStraicoAI } from './providers/straico';
 export { LobeStreamLakeAI } from './providers/streamlake';
 export { LobeSuperGrokAI } from './providers/superGrok';
 export { LobeTogetherAI } from './providers/togetherai';
+export { LobeTypeSafeAI } from './providers/typesafe';
 export { LobeVolcengineAI } from './providers/volcengine';
 export { LobeVolcengineCodingPlanAI } from './providers/volcengineCodingPlan';
 export { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
@@ -87,6 +95,7 @@ export { LobeZeroOneAI } from './providers/zeroone';
 export { LobeZhipuAI } from './providers/zhipu';
 export * from './types';
 export * from './types/error';
+export { awaitFirstResponseChunk } from './utils/awaitFirstResponseChunk';
 export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';

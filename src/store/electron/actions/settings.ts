@@ -4,8 +4,8 @@ import {
   type ShortcutUpdateResult,
 } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
+import { type SWRResponse } from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { electronKeys } from '@/libs/swr/keys';

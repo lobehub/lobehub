@@ -40,7 +40,7 @@ import { AiProviderSourceEnum } from '@/types/aiProvider';
 import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { initialAIModelState, seedModelReasoningConfigMap } from '../aiModel/initialState';
+import { initialAIModelState } from '../aiModel/initialState';
 import {
   AI_PROVIDER_LIST_KEY,
   aiProviderDetailResource,
@@ -118,9 +118,9 @@ const getModelProperty = async <T>(
   return getModelPropertyWithFallback<T | undefined>(model.id, propertyName, model.providerId);
 };
 
-const hasParameters = (parameters?: ModelParamsSchema): parameters is ModelParamsSchema =>
-  !!parameters && Object.keys(parameters).length > 0;
+const hasParameters = (parameters?: object) => !!parameters && Object.keys(parameters).length > 0;
 
+/** Only image, video and music models reach here, so `parameters` is a generation schema. */
 const resolveModelParameters = async (
   model: EnabledAiModel,
 ): Promise<ModelParamsSchema | undefined> => {
@@ -128,7 +128,7 @@ const resolveModelParameters = async (
   // populates it. An empty object is truthy, so a naive truthy check would skip
   // the fallback and leave required fields (e.g. `prompt`) missing, which later
   // fails schema validation. Treat an empty object as "no inline parameters".
-  if (hasParameters(model.parameters)) return model.parameters;
+  if (hasParameters(model.parameters)) return model.parameters as ModelParamsSchema;
 
   return getModelPropertyWithFallback<ModelParamsSchema | undefined>(
     model.id,
@@ -271,6 +271,35 @@ export const getImageModelList = createProviderModelCollector('image', normalize
 
 export const getVideoModelList = createProviderModelCollector('video', normalizeVideoModel);
 
+/**
+ * Normalizes an enabled text-to-music model: the creation page reads `parameters` to decide
+ * which inputs to show and `outputsPerRequest` to tell how many songs one request returns.
+ */
+export const normalizeMusicModel = async (
+  model: EnabledAiModel,
+): Promise<ProviderModelListItem> => {
+  const [parameters, pricing, description, outputsPerRequest] = await Promise.all([
+    resolveModelParameters(model),
+    getModelProperty<Pricing>(model, 'pricing'),
+    getModelProperty<string>(model, 'description'),
+    getModelProperty<number>(model, 'outputsPerRequest'),
+  ]);
+
+  return {
+    abilities: (model.abilities || {}) as ModelAbilities,
+    contextWindowTokens: model.contextWindowTokens,
+    displayName: model.displayName ?? '',
+    id: model.id,
+    releasedAt: model.releasedAt,
+    ...(parameters && { parameters }),
+    ...(description && { description }),
+    ...(pricing && { pricing }),
+    ...(typeof outputsPerRequest === 'number' && { outputsPerRequest }),
+  };
+};
+
+export const getMusicModelList = createProviderModelCollector('text2music', normalizeMusicModel);
+
 const buildProviderModelLists = async (
   providers: EnabledProvider[],
   enabledAiModels: EnabledAiModel[],
@@ -329,6 +358,14 @@ const buildVideoProviderModelLists = async (
 ) => buildProviderModelLists(providers, enabledAiModels, getVideoModelList);
 
 /**
+ * Build text-to-music provider model lists with proper async handling
+ */
+const buildMusicProviderModelLists = async (
+  providers: EnabledProvider[],
+  enabledAiModels: EnabledAiModel[],
+) => buildProviderModelLists(providers, enabledAiModels, getMusicModelList);
+
+/**
  * Derives the runtime state from the server rows plus the bundled model bank —
  * the exact body of the old runtime-state `useClientDataSWR` fetcher, extracted
  * so the replica resource can own the sync. `isLogin` separates the signed-in
@@ -377,6 +414,11 @@ const fetchAiProviderRuntimeState = async (
       enabledAiModels,
       'video',
     );
+    const enabledMusicAiProviders = filterEnabledProvidersByModelType(
+      data.enabledAiProviders,
+      enabledAiModels,
+      'text2music',
+    );
 
     // Build model lists with proper async handling
     const [
@@ -385,12 +427,14 @@ const fetchAiProviderRuntimeState = async (
       enabledAsrModelList,
       enabledImageModelList,
       enabledVideoModelList,
+      enabledMusicModelList,
     ] = await Promise.all([
       buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
       buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
       buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
       buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
       buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+      buildMusicProviderModelLists(enabledMusicAiProviders, enabledAiModels),
     ]);
 
     return {
@@ -403,6 +447,7 @@ const fetchAiProviderRuntimeState = async (
       enabledEmbeddingModelList,
       enabledImageAiProviders,
       enabledImageModelList,
+      enabledMusicModelList,
       enabledVideoAiProviders,
       enabledVideoModelList,
       hiddenBuiltinModels,
@@ -454,18 +499,25 @@ const fetchAiProviderRuntimeState = async (
     enabledAiModels,
     'asr',
   );
+  const enabledMusicAiProviders = filterEnabledProvidersByModelType(
+    enabledAiProviders,
+    enabledAiModels,
+    'text2music',
+  );
   const [
     enabledChatModelList,
     enabledEmbeddingModelList,
     enabledAsrModelList,
     enabledImageModelList,
     enabledVideoModelList,
+    enabledMusicModelList,
   ] = await Promise.all([
     buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
     buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
     buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
     buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
     buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+    buildMusicProviderModelLists(enabledMusicAiProviders, enabledAiModels),
   ]);
 
   return {
@@ -478,6 +530,7 @@ const fetchAiProviderRuntimeState = async (
     enabledEmbeddingModelList,
     enabledImageAiProviders,
     enabledImageModelList,
+    enabledMusicModelList,
     enabledVideoAiProviders,
     enabledVideoModelList,
     hiddenBuiltinModels: defaultHiddenBuiltinModels,
@@ -508,11 +561,13 @@ const aiProviderListLens: ReplicaLens<AiInfraStore, AiProviderListItem[]> = {
  * Projects a confirmed runtime-state value onto the flat fields the many
  * existing selectors read. `enabled*` stays derived here rather than becoming a
  * selector over the entry map, so no reader has to change.
+ *
+ * The saved reasoning configs are the one field not written here: they belong to
+ * the aiModel replica, which seeds them through `seedModelReasoningConfigs` (see
+ * the `runtimeState` effects) so a storage hydration cannot repaint an older row
+ * over this server snapshot.
  */
-const projectRuntimeState = (
-  state: AiInfraStore,
-  data: AiProviderRuntimeStateView,
-): Partial<AiInfraStore> => ({
+const projectRuntimeState = (data: AiProviderRuntimeStateView): Partial<AiInfraStore> => ({
   aiProviderRuntimeConfig: data.runtimeConfig,
   builtinAiModelList: data.builtinAiModelList,
   enabledAiModels: data.enabledAiModels,
@@ -521,20 +576,32 @@ const projectRuntimeState = (
   enabledChatModelList: data.enabledChatModelList || [],
   enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
   enabledImageModelList: data.enabledImageModelList || [],
+  enabledMusicModelList: data.enabledMusicModelList || [],
   enabledVideoModelList: data.enabledVideoModelList || [],
   hiddenBuiltinModels: data.hiddenBuiltinModels,
   isInitAiProviderRuntimeState: true,
   modelRedirects: data.modelRedirects,
-  ...(data.modelReasoningConfigs && {
-    modelReasoningConfigMap: seedModelReasoningConfigMap(
-      state.modelReasoningConfigMap,
-      data.modelReasoningConfigs,
-      data.enabledAiModels,
-      state.modelReasoningConfigUpdatingKeys,
-    ),
-  }),
   providerBindingAgentTypes: data.providerBindingAgentTypes ?? {},
 });
+
+const projectRuntimeStateDisplay = (
+  state: AiInfraStore,
+  data: AiProviderRuntimeStateView,
+): Partial<AiInfraStore> =>
+  state.isInitAiProviderRuntimeState
+    ? {}
+    : {
+        enabledAiModels: data.enabledAiModels,
+        enabledAiProviders: data.enabledAiProviders,
+        enabledAsrModelList: data.enabledAsrModelList || [],
+        enabledChatModelList: data.enabledChatModelList || [],
+        enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
+        enabledImageModelList: data.enabledImageModelList || [],
+        enabledMusicModelList: data.enabledMusicModelList || [],
+        enabledVideoModelList: data.enabledVideoModelList || [],
+        modelRedirects: data.modelRedirects,
+        providerBindingAgentTypes: data.providerBindingAgentTypes ?? {},
+      };
 
 const aiProviderRuntimeStateLens: ReplicaLens<AiInfraStore, AiProviderRuntimeStateView> = {
   clear: () => ({
@@ -547,6 +614,7 @@ const aiProviderRuntimeStateLens: ReplicaLens<AiInfraStore, AiProviderRuntimeSta
     enabledChatModelList: [],
     enabledEmbeddingModelList: [],
     enabledImageModelList: [],
+    enabledMusicModelList: [],
     enabledVideoModelList: [],
     hiddenBuiltinModels: undefined,
     isInitAiProviderRuntimeState: false,
@@ -564,7 +632,12 @@ const aiProviderRuntimeStateLens: ReplicaLens<AiInfraStore, AiProviderRuntimeSta
     // the next confirmed value (or the scope `clear`).
     if (data === undefined) return { aiProviderRuntimeStateMap: next };
 
-    return { aiProviderRuntimeStateMap: next, ...projectRuntimeState(state, data) };
+    return {
+      aiProviderRuntimeStateMap: next,
+      ...(data.isDisplaySnapshot
+        ? projectRuntimeStateDisplay(state, data)
+        : projectRuntimeState(data)),
+    };
   },
 };
 
@@ -601,6 +674,17 @@ export class AiProviderActionImpl {
     });
     this.#runtimeState = createReplicaSlice(aiProviderRuntimeStateResource, {
       actionPrefix: n('runtimeState'),
+      // The runtime state carries the complete saved reasoning-config snapshot.
+      // Seeding it through the aiModel replica keeps those values *confirmed*
+      // entries, so a storage hydration that resolves after this response can no
+      // longer repaint an older persisted row over the server's value.
+      effects: {
+        onApplied: (data) => {
+          if (data.isDisplaySnapshot || !data.modelReasoningConfigs) return;
+
+          get().seedModelReasoningConfigs(data.modelReasoningConfigs, data.enabledAiModels);
+        },
+      },
       fetcher: (params) => fetchAiProviderRuntimeState(params.isLogin),
       get,
       set,

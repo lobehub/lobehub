@@ -163,15 +163,23 @@ beforeEach(() => {
   mockSendMessage.mockResolvedValue({ ret: 0 });
 });
 
+const helloWechatPush = (): Parameters<typeof sendProactiveWechatMessage>[0] => ({
+  content: 'hello',
+  serverDB,
+  userId: LOBE_USER,
+});
+
+const freshWechatPush = (): Parameters<typeof sendProactiveWechatMessage>[0] => ({
+  content: 'fresh push',
+  serverDB,
+  userId: LOBE_USER,
+});
+
 describe('sendProactiveWechatMessage', () => {
   it('delivers inside an open send window and consumes quota', async () => {
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
 
-    const result = await sendProactiveWechatMessage({
-      content: 'hello',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(helloWechatPush());
 
     expect(result).toEqual({ remaining: WECHAT_WINDOW_MAX_SENDS - 1, status: 'sent' });
     expect(mockSendMessage).toHaveBeenCalledWith(WECHAT_USER, 'hello', 'token-1');
@@ -263,11 +271,7 @@ describe('sendProactiveWechatMessage', () => {
     // …then the window reopened without the inbound flush having run.
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
 
-    const result = await sendProactiveWechatMessage({
-      content: 'fresh push',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(freshWechatPush());
 
     expect(result.status).toBe('sent');
     // FIFO: the backlog lands before the new message.
@@ -284,11 +288,7 @@ describe('sendProactiveWechatMessage', () => {
     await consumeSendCredits(redis, APP, WECHAT_USER, WECHAT_WINDOW_MAX_SENDS - 2);
     await enqueuePendingPush(redis, APP, WECHAT_USER, { content: 'queued first', enqueuedAt: 1 });
 
-    const result = await sendProactiveWechatMessage({
-      content: 'fresh push',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(freshWechatPush());
 
     expect(result).toEqual({ reason: 'quota_exhausted', status: 'queued' });
     // The fresh message never jumped the queue.
@@ -307,11 +307,7 @@ describe('sendProactiveWechatMessage', () => {
     // Someone else's drain is in flight; the queue is transiently empty.
     await redis.set(`wechat:pending-flush:${APP}:${WECHAT_USER}`, '1', 'EX', 30);
 
-    const result = await sendProactiveWechatMessage({
-      content: 'fresh push',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(freshWechatPush());
 
     expect(result).toEqual({ reason: 'delivery_in_progress', status: 'queued' });
     expect(mockSendMessage).not.toHaveBeenCalled();
@@ -339,11 +335,7 @@ describe('sendProactiveWechatMessage', () => {
   });
 
   it('queues when there is no send window', async () => {
-    const result = await sendProactiveWechatMessage({
-      content: 'hello',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(helloWechatPush());
 
     expect(result).toEqual({ reason: 'window_closed', status: 'queued' });
     expect(mockSendMessage).not.toHaveBeenCalled();
@@ -354,11 +346,7 @@ describe('sendProactiveWechatMessage', () => {
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
     await consumeSendCredits(redis, APP, WECHAT_USER, WECHAT_WINDOW_MAX_SENDS);
 
-    const result = await sendProactiveWechatMessage({
-      content: 'hello',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(helloWechatPush());
 
     expect(result).toEqual({ reason: 'window_closed', status: 'queued' });
     expect(mockSendMessage).not.toHaveBeenCalled();
@@ -368,11 +356,7 @@ describe('sendProactiveWechatMessage', () => {
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
     mockSendMessage.mockRejectedValueOnce(new Error('stale token'));
 
-    const result = await sendProactiveWechatMessage({
-      content: 'hello',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(helloWechatPush());
 
     expect(result).toEqual({ reason: 'send_failed', status: 'queued' });
     expect(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))).toHaveLength(1);
@@ -461,11 +445,7 @@ describe('sendProactiveWechatMessage', () => {
   it('reports unlinked when the user has no WeChat account link', async () => {
     mockFindByPlatform.mockResolvedValueOnce(undefined);
 
-    const result = await sendProactiveWechatMessage({
-      content: 'hello',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(helloWechatPush());
 
     expect(result).toEqual({ status: 'unlinked' });
   });
@@ -473,11 +453,7 @@ describe('sendProactiveWechatMessage', () => {
   it('reports unavailable when redis is down', async () => {
     redisHolder.current = null;
 
-    const result = await sendProactiveWechatMessage({
-      content: 'hello',
-      serverDB,
-      userId: LOBE_USER,
-    });
+    const result = await sendProactiveWechatMessage(helloWechatPush());
 
     expect(result).toEqual({ status: 'unavailable' });
   });

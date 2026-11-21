@@ -3,13 +3,12 @@
  *
  * Creates and exports the ActivatorExecutor instance for registration.
  * Resolves tool manifests from the tool store (installedPlugins + builtinTools +
- * lobehubSkillServers + composio servers).
+ * lobehubSkillServers + composio servers + MCP connectors).
  *
  * State tracking (getActivatedToolIds / markActivated) is intentionally a no-op
  * because the activated state is persisted in message pluginState and accumulated
  * by selectActivatedToolIdsFromMessages at each agentic loop step.
  */
-import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   ActivatorExecutionRuntime,
   type ActivatorRuntimeService,
@@ -17,8 +16,8 @@ import {
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { ActivatorExecutor } from '@lobechat/builtin-tool-activator/executor';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
+import type { BuiltinToolContext } from '@lobechat/types';
 
-import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -26,26 +25,18 @@ import { toolSelectors } from '@/store/tool/selectors/tool';
 import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore';
 
-const skillsRuntime = new SkillsExecutionRuntime({
-  builtinSkills: filterBuiltinSkills(builtinSkills),
-  service: {
-    findAll: () => agentSkillService.list(),
-    findById: (id) => agentSkillService.getById(id),
-    findByName: (name) => agentSkillService.getByName(name),
-    readResource: (id, path) => agentSkillService.readResource(id, path),
-  },
-});
+import { clientSkillCatalog } from './clientSkillCatalog';
 
-const service: ActivatorRuntimeService = {
-  activateSkill: (args) => skillsRuntime.activateSkill(args),
+const createService = (discoverableIds?: string[]): ActivatorRuntimeService => ({
   getActivatedToolIds: () => [],
-  getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
+  getToolManifests: async (identifiers: string[], run): Promise<ToolManifestInfo[]> => {
     const s = getToolStoreState();
 
     // Only allow activation of tools that passed discovery filters
-    // (discoverable, platform-available, not internal/hidden)
+    // (discoverable, platform-available, not internal/hidden) for the
+    // conversation the activation runs in
     const discoverable = new Set(
-      toolSelectors.availableToolsForDiscovery(s).map((t) => t.identifier),
+      discoverableIds ?? toolSelectors.availableToolsForDiscovery(s, run).map((t) => t.identifier),
     );
     const allowedIds = identifiers.filter((id) => discoverable.has(id));
 
@@ -132,6 +123,24 @@ const service: ActivatorRuntimeService = {
         });
         continue;
       }
+
+      // MCP connectors no plugin row serves (every MCP install now), built the
+      // way the tools engine offers them
+      const connectorManifest = toolSelectors
+        .executableConnectorManifests(s)
+        .find((manifest) => manifest.identifier === id);
+      if (connectorManifest) {
+        results.push({
+          apiDescriptions: connectorManifest.api.map((a) => ({
+            description: a.description,
+            name: a.name,
+          })),
+          avatar: connectorManifest.meta?.avatar,
+          identifier: connectorManifest.identifier,
+          name: connectorManifest.meta?.title ?? connectorManifest.identifier,
+          type: connectorManifest.type,
+        });
+      }
     }
 
     return results;
@@ -143,14 +152,31 @@ const service: ActivatorRuntimeService = {
   // variants. Reuses `getToolManifests` on the same
   // `availableToolsForDiscovery` allowlist so scoping and manifest mapping
   // cannot drift between the two paths.
-  listToolManifests: async (): Promise<ToolManifestInfo[]> => {
+  async listToolManifests(run): Promise<ToolManifestInfo[]> {
     const s = getToolStoreState();
-    const discoveryIds = toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
-    return service.getToolManifests(discoveryIds);
+    const discoveryIds =
+      discoverableIds ??
+      toolSelectors.availableToolsForDiscovery(s, run).map((tool) => tool.identifier);
+    return this.getToolManifests(discoveryIds, run);
   },
   markActivated: () => {},
-};
+});
 
-const runtime = new ActivatorExecutionRuntime({ service });
+const runtime = (ctx: BuiltinToolContext) =>
+  new ActivatorExecutionRuntime({
+    service: {
+      ...createService(ctx.stepContext?.discoverableToolIds),
+      activateSkill: (args) => {
+        const { builtinSkills, lookup } = clientSkillCatalog(ctx);
+        return new SkillsExecutionRuntime({
+          builtinSkills,
+          service: {
+            ...lookup,
+            readResource: (id, path) => agentSkillService.readResource(id, path),
+          },
+        }).activateSkill(args);
+      },
+    },
+  });
 
 export const activatorExecutor = new ActivatorExecutor(runtime);

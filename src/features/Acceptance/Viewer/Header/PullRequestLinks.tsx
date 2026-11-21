@@ -2,7 +2,8 @@
 
 import type { VerifyCodingPullRequest } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   GitMerge,
   GitPullRequest,
@@ -14,17 +15,13 @@ import { memo } from 'react';
 
 import type { AcceptanceBundle } from '@/services/verify';
 
-const styles = createStaticStyles(({ css }) => ({
-  link: css`
-    cursor: pointer;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      text-decoration: underline;
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    cursor: 'pointer',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    textDecoration: { 'default': null, ':hover': 'underline' },
+  },
+});
 
 type PullRequest = AcceptanceBundle['pullRequests'][number];
 
@@ -58,7 +55,7 @@ const PullRequestLinks = memo<PullRequestLinksProps>(({ pullRequests, fallback }
           const { color, icon } = stateIcon(pullRequest);
           return (
             <a
-              className={styles.link}
+              {...stylex.props(styles.link)}
               href={pullRequest.url}
               key={pullRequest.url}
               rel={'noreferrer'}
@@ -86,7 +83,7 @@ const PullRequestLinks = memo<PullRequestLinksProps>(({ pullRequests, fallback }
   );
   return fallback.url ? (
     <a
-      className={styles.link}
+      {...stylex.props(styles.link)}
       href={fallback.url}
       rel={'noreferrer'}
       target={'_blank'}

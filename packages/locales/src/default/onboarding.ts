@@ -153,7 +153,7 @@ export default {
   'next': 'Next',
   'proSettings.connectors.title': 'Connect Your Favorite Tools',
   'responseLanguage.hint':
-    'After selecting a language, AI responses will use that language, and the interface language will also sync',
+    'Choose a language if you want replies in that language. You can change this later in Settings.',
   'responseLanguage.saveFailed': 'Failed to save. Please try again.',
   'responseLanguage.title': 'Which language should we use to communicate?',
   'responseLanguage.title2': 'Start with language, build true understanding.',

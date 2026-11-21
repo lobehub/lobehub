@@ -1,5 +1,6 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
+import { CLOUD_SANDBOX_DELETE_AUDIT } from './interventionAudit';
 import { systemPrompt } from './systemRole';
 import { CloudSandboxApiName } from './types';
 
@@ -305,6 +306,45 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
           },
         },
         required: ['path'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Analyze what takes up space on the persistent drive: totals by category (dependencies, caches and build output, archives, media, git, environment snapshots, other), the largest items of each with their absolute paths and whether they are regenerable, and the largest files and folders. Works when the drive is over its quota. A large drive may need several calls: when the result says it is not done, call again to continue.',
+      name: CloudSandboxApiName.analyzeStorage,
+      parameters: {
+        properties: {
+          top: {
+            description: 'How many of the largest items to list per category (default 20, max 50).',
+            type: 'number',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Permanently delete files or folders on the persistent drive, to free space. Works when the drive is over its quota, when shell commands are refused. Deleted files cannot be recovered. Set regenerableOnly to true when every path is a dependency directory, a cache or build output (the "regenerable" items from analyzeStorage): such a call runs without asking the user, and is refused as a whole if any path is not regenerable. Any other deletion always asks the user to confirm first, even in auto-run mode, so tell the user what you are deleting and why.',
+      humanIntervention: {
+        dynamic: { default: 'never', policy: 'always', type: CLOUD_SANDBOX_DELETE_AUDIT },
+      },
+      name: CloudSandboxApiName.deleteFiles,
+      parameters: {
+        properties: {
+          paths: {
+            description:
+              'Absolute paths, or paths relative to the working directory, of the files or folders to delete (at most 100).',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          regenerableOnly: {
+            description:
+              'True only when every path is a dependency directory, cache or build output. Lets the deletion run without the user confirming.',
+            type: 'boolean',
+          },
+        },
+        required: ['paths'],
         type: 'object',
       },
     },

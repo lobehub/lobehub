@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "新增至知識庫",
   "addToKnowledgeBase.totalFiles": "已選擇 {{count}} 個文件",
   "createNew.confirm": "新建",
+  "createNew.cover.label": "封面",
   "createNew.description.label": "資料庫描述（選填）",
   "createNew.description.placeholder": "描述有助於大型語言模型更好地理解您的資料庫",
   "createNew.edit.confirm": "儲存變更",

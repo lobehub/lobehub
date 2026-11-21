@@ -20,11 +20,13 @@ export const hasAnnotatableEvidence = (check: AcceptanceCheck) =>
 
 /**
  * What a reject can point into: images by region, videos by frame or span.
- * Discussion threads stay image-only ({@link isAnnotatable}) — their anchor has
- * no time yet.
+ * Discussion uses the same media capability; its video anchors carry a time.
  */
 export const isRejectable = (item: AcceptanceEvidence) =>
   isAnnotatable(item) || (Boolean(item.fileUrl) && item.type === 'video');
+
+/** Discussion can point at images and video, independently of a decision. */
+export const isCommentableEvidence = isRejectable;
 
 export const hasRejectableEvidence = (check: AcceptanceCheck) => check.evidence.some(isRejectable);
 

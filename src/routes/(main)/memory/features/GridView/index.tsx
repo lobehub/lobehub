@@ -1,5 +1,4 @@
-import { type DivProps } from '@lobehub/ui';
-import { Grid } from '@lobehub/ui';
+import { type DivProps, Grid } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { VirtuosoGrid } from 'react-virtuoso';
@@ -70,7 +69,8 @@ function GridViewInner<T extends { id: string }>({
       style={{ minHeight: '100%' }}
       components={{
         Footer: footer
-          ? () => (
+          ? // eslint-disable-next-line @eslint-react/no-nested-component-definitions -- reads the latest pagination state on every render
+            () => (
               <LoadMoreFooter
                 loadMoreError={loadMoreError}
                 rows={defaultColumnCount}

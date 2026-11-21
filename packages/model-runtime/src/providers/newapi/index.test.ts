@@ -189,27 +189,29 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
   });
 
   describe('Models Function - Integration Testing', () => {
+    const createModelsClient = (id = 'test-model') => ({
+      apiKey: 'test-key',
+      baseURL: 'https://api.newapi.com/v1',
+      models: {
+        list: vi.fn().mockResolvedValue({
+          data: [
+            {
+              created: 123,
+              id,
+              object: 'model',
+              owned_by: 'openai',
+            },
+          ],
+        }),
+      },
+    });
+
     beforeEach(() => {
       mockProcessMultiProviderModelList.mockReturnValue([]);
     });
 
     it('should fetch models and process with processMultiProviderModelList', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         ok: false,
@@ -237,22 +239,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle successful pricing fetch and enrich models', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -300,22 +287,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle pricing fetch with model_ratio instead of model_price', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -355,22 +327,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should skip pricing for quota_type = 1 (pay-per-call)', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -397,22 +354,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle pricing fetch failure gracefully', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         ok: false,
@@ -426,22 +368,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle pricing fetch network error gracefully', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockRejectedValue(new Error('Network error'));
 
@@ -460,22 +387,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       global.document = {} as any;
 
       try {
-        const mockClient = {
-          apiKey: 'test-key',
-          baseURL: 'https://api.newapi.com/v1',
-          models: {
-            list: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  created: 123,
-                  id: 'test-model',
-                  object: 'model',
-                  owned_by: 'openai',
-                },
-              ],
-            }),
-          },
-        };
+        const mockClient = createModelsClient();
 
         mockFetch.mockResolvedValue({
           json: async () => ({
@@ -513,22 +425,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       global.document = {} as any;
 
       try {
-        const mockClient = {
-          apiKey: 'test-key',
-          baseURL: 'https://api.newapi.com/v1',
-          models: {
-            list: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  created: 123,
-                  id: 'custom-model',
-                  object: 'model',
-                  owned_by: 'openai',
-                },
-              ],
-            }),
-          },
-        };
+        const mockClient = createModelsClient('custom-model');
 
         mockFetch.mockResolvedValue({
           json: async () => ({
@@ -562,22 +459,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle pricing data with success=false', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -595,22 +477,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle pricing data with missing data field', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'test-model',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -628,15 +495,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle empty model list', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
+      mockClient.models.list.mockResolvedValue({ data: [] });
 
       mockFetch.mockResolvedValue({
         ok: false,
@@ -650,15 +510,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should handle undefined model data', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: undefined,
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
+      mockClient.models.list.mockResolvedValue({ data: undefined });
 
       mockFetch.mockResolvedValue({
         ok: false,
@@ -682,13 +535,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       ];
 
       for (const testCase of testCases) {
-        const mockClient = {
-          apiKey: 'test-key',
-          baseURL: testCase.input,
-          models: {
-            list: vi.fn().mockResolvedValue({ data: [] }),
-          },
-        };
+        const mockClient = createModelsClient();
+        mockClient.baseURL = testCase.input;
+        mockClient.models.list.mockResolvedValue({ data: [] });
 
         mockFetch.mockResolvedValue({ ok: false });
         mockProcessMultiProviderModelList.mockReturnValue([]);
@@ -705,22 +554,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should add models from pricing list that are not in models list', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'model-a',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient('model-a');
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -778,22 +612,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should not duplicate models that exist in both lists', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                created: 123,
-                id: 'model-a',
-                object: 'model',
-                owned_by: 'openai',
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient('model-a');
 
       mockFetch.mockResolvedValue({
         json: async () => ({
@@ -822,15 +641,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     });
 
     it('should verify that additionalModels get processed with displayName and type through processMultiProviderModelList', async () => {
-      const mockClient = {
-        apiKey: 'test-key',
-        baseURL: 'https://api.newapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [],
-          }),
-        },
-      };
+      const mockClient = createModelsClient();
+      mockClient.models.list.mockResolvedValue({ data: [] });
 
       mockFetch.mockResolvedValue({
         json: async () => ({

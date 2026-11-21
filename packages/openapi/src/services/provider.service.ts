@@ -10,6 +10,7 @@ import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicProvider } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateProviderRequest,
   DeleteProviderRequest,
@@ -303,7 +304,7 @@ export class ProviderService extends BaseService {
     }
   }
 
-  async deleteProvider(request: DeleteProviderRequest): ServiceResult<{ id: string }> {
+  async deleteProvider(request: DeleteProviderRequest): ServiceResult<DeletedResource> {
     this.log('info', '删除 Provider', {
       id: request.id,
       userId: this.userId,
@@ -354,7 +355,7 @@ export class ProviderService extends BaseService {
         id: request.id,
       });
 
-      return { id: request.id };
+      return { deleted: true, id: request.id };
     } catch (error) {
       this.handleServiceError(error, '删除 Provider');
     }

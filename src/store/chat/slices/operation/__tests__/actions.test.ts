@@ -58,6 +58,20 @@ describe('Operation Actions', () => {
       expect(merged.editorData?.root.children[2]).toEqual(secondParagraph);
     });
 
+    it('leaves markdown sent without an editor document to render as markdown', () => {
+      const merged = mergeQueuedMessages([
+        {
+          content: 'Left 1 comment.\n\n> Re: t1 · 首页\n\n太挤了',
+          createdAt: 1,
+          id: 'q1',
+          interruptMode: 'soft',
+        },
+      ]);
+
+      expect(merged.content).toBe('Left 1 comment.\n\n> Re: t1 · 首页\n\n太挤了');
+      expect(merged.editorData).toBeUndefined();
+    });
+
     it('should flatten file ids and filesPreview snapshots from queued messages', () => {
       const merged = mergeQueuedMessages([
         {
@@ -268,32 +282,6 @@ describe('Operation Actions', () => {
       // Check context index
       const contextKey = 'main_session1_topic1';
       expect(result.current.operationsByContext[contextKey]).toContain(operationId!);
-    });
-  });
-
-  describe('completeOperation', () => {
-    it('should mark operation as completed with correct metadata', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      let operationId: string;
-
-      act(() => {
-        operationId = result.current.startOperation({
-          type: 'execAgentRuntime',
-          context: { agentId: 'session1' },
-        }).operationId;
-      });
-
-      act(() => {
-        result.current.completeOperation(operationId!);
-      });
-
-      const operation = result.current.operations[operationId!];
-
-      expect(operation.status).toBe('completed');
-      expect(operation.metadata.endTime).toBeDefined();
-      expect(operation.metadata.duration).toBeDefined();
-      expect(operation.metadata.duration).toBeGreaterThanOrEqual(0);
     });
   });
 

@@ -7,7 +7,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode } from '@/types/topic';
 
 import { useTopicListScope } from '../TopicListScope';
-import { resolveAgentTopicGroupMode } from '../utils/topicGroupMode';
+import { resolveAgentTopicGroupMode, resolveProjectTopicGroupMode } from '../utils/topicGroupMode';
 
 export const useAgentTopicGroupMode = () => {
   const scope = useTopicListScope();
@@ -18,9 +18,10 @@ export const useAgentTopicGroupMode = () => {
   );
   const updateAgentChatConfig = useAgentStore((s) => s.updateAgentChatConfig);
   const globalMode = useUserStore(preferenceSelectors.topicGroupMode);
+  const projectMode = useUserStore(preferenceSelectors.projectTopicGroupMode);
 
   const topicGroupMode = scope
-    ? globalMode
+    ? resolveProjectTopicGroupMode(projectMode)
     : resolveAgentTopicGroupMode({
         agentTopicGroupMode,
         agentType,
@@ -29,7 +30,7 @@ export const useAgentTopicGroupMode = () => {
 
   const updateTopicGroupMode = useCallback(
     async (mode: TopicGroupMode) => {
-      if (scope) await updatePreference({ topicGroupMode: mode });
+      if (scope) await updatePreference({ projectTopicGroupMode: mode });
       else await updateAgentChatConfig({ topicGroupMode: mode });
     },
     [scope, updateAgentChatConfig, updatePreference],

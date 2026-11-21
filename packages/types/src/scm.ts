@@ -64,6 +64,19 @@ export interface ScmInstallationRepository {
   private?: boolean;
 }
 
+/** A repository a connected installation can read, as the "new project from GitHub" picker lists it. */
+export interface ScmRepositoryListItem {
+  defaultBranch: string;
+  description: string | null;
+  /** `owner/name` as the provider prints it. */
+  fullName: string;
+  htmlUrl: string;
+  ownerAvatarUrl: string | null;
+  private: boolean;
+  /** ISO timestamp of the latest push; what "recent" sorts by. */
+  pushedAt: string | null;
+}
+
 /**
  * Open bag for provider-specific installation facts that are safe to read
  * without decryption (display names, avatar, granted permissions).
@@ -145,6 +158,12 @@ export interface ScmChangeRequestMetadata {
   [key: string]: unknown;
   /** Acceptance links parsed out of the change request body. */
   acceptanceIdsFromBody?: string[];
+  /**
+   * Per pull request Auto-fix: whether failing CI and review feedback wake
+   * the agent of the linked conversation. Absent means on — the account's
+   * `wakeOnCiFailure` / `wakeOnReview` switches still apply on top of it.
+   */
+  autoFix?: boolean;
   /**
    * Who is currently posting the tracking comment, as an ISO timestamp.
    * Taken atomically so concurrent deliveries cannot each post one; goes
@@ -230,6 +249,19 @@ export interface ScmChangeRequestSnapshot {
 /** The LobeHub records a change request is tied to. Only ever filled in, never cleared. */
 export interface ScmChangeRequestLinks {
   acceptanceId?: string | null;
+  /**
+   * Where `acceptanceId` came from, when the answer decides whether the model
+   * may write it.
+   *
+   * - `hand-link` — the acceptance's own `metadata.pullRequests`. Resolved
+   *   outside the change-request row lock, so the model re-checks the link
+   *   before writing: an unlink that commits in between must not be undone by
+   *   a delivery that read the link while it still stood.
+   * - `row-binding` — only echoed from the row the delivery matched. The row
+   *   under its lock is the authority on that binding, and it may have lost it
+   *   to an unlink since, so the model never lets the echo revive it.
+   */
+  acceptanceSource?: 'hand-link' | 'row-binding';
   installationId?: string | null;
   taskId?: string | null;
   topicId?: string | null;

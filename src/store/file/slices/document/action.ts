@@ -14,6 +14,7 @@ import { type LobeDocument } from '@/types/document';
 import { DocumentSourceType } from '@/types/document';
 import { type ResourceItem } from '@/types/resource';
 import { setNamespace } from '@/utils/storeDebug';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { type FileStore, useFileStore } from '../../store';
 import { getResourceQueryKey } from '../resource/utils';
@@ -563,6 +564,15 @@ export class DocumentActionImpl {
     const entry = useFileStore((s) => (documentId ? s.documentMap[documentId] : undefined));
 
     const sync = this.#documents.useSync(documentId, {
+      // A page made private to another member (FORBIDDEN) or deleted (NOT_FOUND)
+      // must not keep painting from the projection: settle it like a "not found"
+      // answer (evicting the persisted row) rather than `remove`, which would also
+      // unregister this mounted query and drop a retry once access is restored.
+      // Transient failures keep the cached row.
+      onError: (error, { key, scope }) => {
+        if (key && (isTrpcErrorCode(error, 'FORBIDDEN') || isTrpcErrorCode(error, 'NOT_FOUND')))
+          this.#documents.replace(key, { document: null }, scope);
+      },
       // Keep an open page in step with other writers.
       revalidateOnFocus: true,
     });

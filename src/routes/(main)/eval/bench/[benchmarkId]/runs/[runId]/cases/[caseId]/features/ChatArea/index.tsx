@@ -1,20 +1,19 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import MessageItem from '@/features/Conversation/Messages';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   header: css`
     flex: none;
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   scroll: css`
@@ -26,11 +25,13 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface ChatAreaProps {
   agentId: string;
+  /** Changes when the attempt's state does, so a page opened mid-run reloads the messages. */
+  reloadKey?: string | null;
   threadId?: string;
   topicId: string;
 }
 
-const ChatArea = memo<ChatAreaProps>(({ agentId, topicId, threadId }) => {
+const ChatArea = memo<ChatAreaProps>(({ agentId, topicId, threadId, reloadKey }) => {
   const { t } = useTranslation('eval');
   useInitAgentConfig(agentId);
 
@@ -39,8 +40,9 @@ const ChatArea = memo<ChatAreaProps>(({ agentId, topicId, threadId }) => {
     [],
   );
 
-  // Use threadId as part of key to force re-render when switching threads
-  const contextKey = threadId ? `${topicId}-${threadId}` : topicId;
+  // Use threadId as part of key to force re-render when switching threads; the
+  // reload key does the same when the attempt finishes after the page opened.
+  const contextKey = [topicId, threadId, reloadKey].filter(Boolean).join('-');
 
   return (
     <ConversationProvider context={{ agentId, threadId, topicId }} key={contextKey}>

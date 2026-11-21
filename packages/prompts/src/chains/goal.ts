@@ -65,7 +65,7 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
 };
 
 /** Bump when the goal decomposition planning prompt meaningfully changes. */
-export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v8';
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v9';
 
 export const GOAL_DECOMPOSE_JSON_SCHEMA = {
   name: 'goal_decomposition',
@@ -73,6 +73,12 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
     additionalProperties: false,
     properties: {
       assumptions: { items: { maxLength: 280, type: 'string' }, maxItems: 5, type: 'array' },
+      /**
+       * One sentence on why this goal needs more than a single planning pass,
+       * so the main Agent — which can inspect the workspace — plans it instead.
+       * Null when the plan below is good enough to run.
+       */
+      escalate: { maxLength: 280, type: ['string', 'null'] },
       problemStatement: { maxLength: 280, minLength: 1, type: 'string' },
       /**
        * Set only for one repeated mould — many structurally identical units
@@ -138,7 +144,7 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
         type: 'array',
       },
     },
-    required: ['problemStatement', 'questions', 'assumptions', 'tasks', 'rollout'],
+    required: ['problemStatement', 'questions', 'assumptions', 'tasks', 'rollout', 'escalate'],
     type: 'object' as const,
   },
   strict: true,
@@ -169,6 +175,7 @@ export const chainGoalDecompose = ({
     {
       content: [
         'You plan executable tasks for a persistent autonomous goal.',
+        'You plan in one pass, without seeing the workspace. That suits a goal whose shape is clear from its wording. When planning it well needs more — reading the repository or files to know what the units are, ordering a multi-phase change, or you are not sure the work is one repeated mould — set escalate to one sentence saying what, and the main Agent, which can inspect the workspace, plans the goal instead. Still return your best plan below; it runs only if no main Agent can take the goal. Leave escalate null whenever your plan is good enough to run.',
         'Decompose the goal into the outcome it must achieve and the tasks that together deliver it. Preserve the requested action: a request to build, fix, or upgrade requires implementation, not just investigation or verification.',
         'Guidelines:',
         '- problemStatement is 1–2 sentences naming the core question or outcome of the goal, in your own words. Never copy the acceptance-criteria list into it.',
@@ -193,7 +200,7 @@ export const chainGoalDecompose = ({
         "- When you set rollout, repeatable must be true only if, after replacing the concrete file / module / symbol names with placeholders, every unit's transformation steps are still the same. If they differ, it is not one batch: leave rollout null and decompose the directions normally.",
         '- rollout.unitCount is your honest count of the homogeneous units in the WHOLE goal (it will usually exceed the few tasks you list). recipeOutline names that single reusable transformation in one sentence. variants lists the axes the units vary along (e.g. axis "cold-start" with values ["yes","no"]); name an axis only if some unit actually takes each value you list.',
         '- rollout.units is the full roster of every homogeneous unit as short titles, probes first and in delivery order (list all of them, up to 60). The coordinator promotes the units after the probes from this roster one wave at a time; a unit missing here will never be delivered.',
-        '- When rollout is set, tasks lists only the few REPRESENTATIVE units to run first — 3–5 probes, not every unit. Choose probes that cover the declared variant axes and MUST include the hardest unit. The coordinator releases the remaining units in waves once the probes prove the class runs fully automatically; do not enumerate them here.',
+        '- When rollout is set, tasks lists only the few REPRESENTATIVE units to run first — 3–5 probes, not every unit. Choose probes that cover the declared variant axes and MUST include the hardest unit. Each probe is exactly ONE unit from rollout.units and its title is exactly that unit entry, character for character, and every probe instruction follows the same template — the shared recipe steps, then only the specifics of that unit — so the probes read as one mould. Do not add tasks that verify, summarize or validate the recipe: the gate of the coordinator does that after the probes. The coordinator releases the remaining units in waves once the probes prove the class runs fully automatically; do not enumerate them here.',
         '- Write all fields in the language used by the goal.',
       ].join('\n'),
       role: 'system',

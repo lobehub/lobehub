@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { ArrowUpRightIcon, PanelRightOpenIcon, RocketIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +24,7 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { formatDuration } from '../utils/format';
 import { getDashboardPath } from '../utils/path';
@@ -32,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   root: css`
     width: 100%;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,

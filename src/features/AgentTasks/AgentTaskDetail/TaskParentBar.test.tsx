@@ -16,6 +16,7 @@ const createState = (parent: any) => ({
   activeTaskId: 'T-child',
   taskDetailMap: {
     'T-child': {
+      id: 'T-child',
       identifier: 'T-child',
       instruction: 'Child instruction',
       parent,
@@ -24,7 +25,10 @@ const createState = (parent: any) => ({
   },
 });
 
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
 vi.mock('react-router', () => ({
+  useLocation: () => ({ state: locationMock.state }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -67,16 +71,19 @@ vi.mock('../features/TaskSubtaskProgressTag', () => ({
 
 describe('TaskParentBar', () => {
   beforeEach(() => {
+    locationMock.state = undefined;
     mocks.navigate.mockClear();
     mocks.getDetail.mockReset();
     mocks.taskState = createState({
       agentId: 'agt_parent',
+      id: 'T-parent',
       identifier: 'T-parent',
       name: 'Parent task',
     });
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
@@ -94,18 +101,22 @@ describe('TaskParentBar', () => {
 
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task', {
+      state: undefined,
+    });
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
   });
 
   it('falls back to the global route when the parent task owner is unknown', async () => {
     mocks.taskState = createState({
+      id: 'T-parent',
       identifier: 'T-parent',
       name: 'Parent task',
     });
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: null,
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
@@ -118,19 +129,21 @@ describe('TaskParentBar', () => {
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent/parent-task');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent/parent-task', { state: undefined });
   });
 
   it("opens parent subtasks inside the clicked subtask's owning agent route", async () => {
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
         subtasks: [
           {
             assignee: { id: 'agt_sibling' },
+            id: 'T-sibling',
             identifier: 'T-sibling',
             status: 'backlog',
           },
@@ -142,6 +155,20 @@ describe('TaskParentBar', () => {
 
     fireEvent.click(await screen.findByTestId('parent-subtask'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_sibling/task/T-sibling');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_sibling/task/T-sibling', {
+      state: undefined,
+    });
+  });
+
+  it('keeps carrying the source task list into the parent task', async () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(<TaskParentBar />);
+
+    fireEvent.click(screen.getByText('Parent task').closest('button')!);
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task', {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
+    await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
   });
 });

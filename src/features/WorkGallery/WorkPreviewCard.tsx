@@ -1,16 +1,26 @@
 'use client';
 
-import type { WorkSummaryItem } from '@lobechat/types';
-import { formatTokenNumber } from '@lobechat/utils/format';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { memo } from 'react';
+import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
+import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DropdownMenu,
+  Flexbox,
+  Tag,
+} from '@lobehub/ui';
+import { MoreHorizontalIcon } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { densityVars } from '@/styles/densityVars';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -49,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   cardInfo: css`
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   clickable: css`
     cursor: pointer;
@@ -78,6 +88,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metaRow: css`
     min-width: 0;
+  `,
+  more: css`
+    flex: none;
+    margin-inline-start: auto;
   `,
   meta: css`
     flex: none;
@@ -123,15 +137,28 @@ const styles = createStaticStyles(({ css }) => ({
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
   onOpen: (item: WorkSummaryItem) => void;
+  /** File storage a canvas Work holds, when it is the caller's own canvas. */
+  storage?: CanvasStorageItem;
 }
+
+const stopPropagation = (event: MouseEvent) => event.stopPropagation();
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'artboard': {
+      return 'work.type.artboard';
+    }
+    case 'canvas': {
+      return 'work.type.canvas';
+    }
     case 'document': {
       return 'work.type.document';
     }
     case 'file': {
       return 'work.type.file';
+    }
+    case 'collection': {
+      return 'work.type.collection';
     }
     case 'github_issue': {
       return 'work.type.githubIssue';
@@ -145,6 +172,9 @@ const workTypeKey = (item: WorkSummaryItem) => {
     case 'linear_issue': {
       return 'work.type.linearIssue';
     }
+    case 'link': {
+      return 'work.type.link';
+    }
     case 'task': {
       return 'work.type.task';
     }
@@ -156,7 +186,7 @@ const workTypeKey = (item: WorkSummaryItem) => {
  * never reach it: `listByWorkspace` filters them out server-side, so the card
  * has no "resource deleted" state.
  */
-const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
+const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) => {
   const { t, i18n } = useTranslation(['chat', 'common', 'file']);
   const agent = useAgentDisplayMeta(item.originAgentId);
   const descriptor = getWorkTypeDescriptor(item);
@@ -184,6 +214,8 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
   });
   const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
   const cost = formatWorkVersionCost(item.totalCost);
+  const size = storage ? formatSize(storage.totalSize) : null;
+  const menuItems = useCanvasCardMenu(item, storage);
 
   return (
     <Flexbox
@@ -207,17 +239,29 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
               {item.status}
             </Tag>
           )}
+          {menuItems.length > 0 && (
+            <div className={styles.more} onClick={stopPropagation}>
+              <DropdownMenu items={menuItems} placement={'bottomRight'}>
+                <ActionIcon
+                  icon={MoreHorizontalIcon}
+                  size={'small'}
+                  title={t('more', { ns: 'common' })}
+                  onClick={stopPropagation}
+                />
+              </DropdownMenu>
+            </div>
+          )}
         </Flexbox>
         <div className={styles.title}>{title}</div>
         <Flexbox horizontal align={'baseline'} className={styles.footer} gap={7}>
           {agent && (
             <>
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={item.originAgentId}
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
                 className={styles.agentAvatar}
-                shape={'square'}
+                name={agent.title}
                 size={24}
               />
               <Flexbox className={styles.identityMeta} gap={1}>
@@ -243,9 +287,9 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
               )}
             </Flexbox>
           )}
-          {(totalTokens || cost) && (
+          {(size || totalTokens || cost) && (
             <span className={styles.usage}>
-              {[totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
+              {[size, totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
                 .filter(Boolean)
                 .join(' · ')}
             </span>

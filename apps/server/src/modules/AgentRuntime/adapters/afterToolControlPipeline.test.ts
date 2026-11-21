@@ -13,6 +13,40 @@ import { HookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { RuntimeExecutorContext } from '../context';
 import { ServerToolTransport } from './ServerToolTransport';
 
+const protectedToolRow = (plugin: ChatToolPayload) => ({
+  id: 'protected-row',
+  parentId: 'original-assistant',
+  role: 'tool',
+  tool_call_id: 'native-1',
+  content: '',
+  plugin,
+  pluginIntervention: { operationId: 'original-op', status: 'approved' },
+});
+
+const protectedSingleToolEvent = (
+  toolCalling: ChatToolPayload,
+): Parameters<NonNullable<ReturnType<typeof createAgentRuntimeExecutors>['call_tool']>>[0] => ({
+  type: 'call_tool',
+  payload: {
+    parentMessageId: 'protected-row',
+    skipCreateToolMessage: true,
+    toolCalling,
+  },
+});
+
+const protectedBatchToolEvent = (
+  toolCalling: ChatToolPayload,
+): Parameters<
+  NonNullable<ReturnType<typeof createAgentRuntimeExecutors>['call_tools_batch']>
+>[0] => ({
+  type: 'call_tools_batch',
+  payload: {
+    parentMessageId: 'assistant',
+    toolsCalling: [toolCalling],
+    existingToolMessageIds: { 'native-1': 'protected-row' },
+  },
+});
+
 const { archive, dispatchClient, fetchHook, getEmailsByIds, queueMode } = vi.hoisted(() => ({
   archive: vi.fn(async (result) => result),
   dispatchClient: vi.fn(),
@@ -132,6 +166,7 @@ function setup(hooks: AgentHook[], signal?: AbortSignal, restore = false) {
           return persisted;
         }),
         query: vi.fn(async () => rows),
+        getToolMessage: vi.fn(async (id: string) => rows.find((row) => row.id === id)),
         updateToolMessage: vi.fn(async (id, update) => {
           const row = rows.find((row) => row.id === id);
           if (row) Object.assign(row, update);
@@ -484,7 +519,7 @@ describe('afterToolCall control pipeline', () => {
         role: 'tool',
         tool_call_id: 'native-1',
         content: secret,
-        pluginState: { images: [{ url: secret }] },
+        pluginState: { status: 'pending', images: [{ url: secret }] },
       });
       fixture.execute.mockResolvedValue(raw());
       fetchHook.mockImplementation(async () => response('deny'));
@@ -526,15 +561,7 @@ describe('afterToolCall control pipeline', () => {
     'keeps the original result control after a %s approval creates a hook-less continuation',
     async (mode) => {
       const fixture = setup([]);
-      fixture.rows.push({
-        id: 'protected-row',
-        parentId: 'original-assistant',
-        role: 'tool',
-        tool_call_id: 'native-1',
-        content: '',
-        plugin: call(),
-        pluginIntervention: { operationId: 'original-op', status: 'approved' },
-      });
+      fixture.rows.push(protectedToolRow(call()));
       fixture.loadState.mockResolvedValue({
         ...fixture.state,
         operationId: 'original-op',
@@ -544,26 +571,9 @@ describe('afterToolCall control pipeline', () => {
       fetchHook.mockImplementation(async () => response('deny'));
       const result =
         mode === 'single'
-          ? await fixture.executors.call_tool!(
-              {
-                type: 'call_tool',
-                payload: {
-                  parentMessageId: 'protected-row',
-                  skipCreateToolMessage: true,
-                  toolCalling: call(),
-                },
-              },
-              fixture.state,
-            )
+          ? await fixture.executors.call_tool!(protectedSingleToolEvent(call()), fixture.state)
           : await fixture.executors.call_tools_batch!(
-              {
-                type: 'call_tools_batch',
-                payload: {
-                  parentMessageId: 'assistant',
-                  toolsCalling: [call()],
-                  existingToolMessageIds: { 'native-1': 'protected-row' },
-                },
-              },
+              protectedBatchToolEvent(call()),
               fixture.state,
             );
       expect(fixture.execute).toHaveBeenCalledTimes(1);
@@ -586,15 +596,7 @@ describe('afterToolCall control pipeline', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       const fixture = setup([]);
-      fixture.rows.push({
-        id: 'protected-row',
-        parentId: 'original-assistant',
-        role: 'tool',
-        tool_call_id: 'native-1',
-        content: '',
-        plugin: call(),
-        pluginIntervention: { operationId: 'original-op', status: 'approved' },
-      });
+      fixture.rows.push(protectedToolRow(call()));
       fixture.loadState.mockResolvedValue({
         ...fixture.state,
         operationId: 'original-op',
@@ -602,29 +604,9 @@ describe('afterToolCall control pipeline', () => {
       });
       fetchHook.mockImplementation(async () => response('allow'));
       if (mode === 'single') {
-        await fixture.executors.call_tool!(
-          {
-            type: 'call_tool',
-            payload: {
-              parentMessageId: 'protected-row',
-              skipCreateToolMessage: true,
-              toolCalling: call(),
-            },
-          },
-          fixture.state,
-        );
+        await fixture.executors.call_tool!(protectedSingleToolEvent(call()), fixture.state);
       } else {
-        await fixture.executors.call_tools_batch!(
-          {
-            type: 'call_tools_batch',
-            payload: {
-              parentMessageId: 'assistant',
-              toolsCalling: [call()],
-              existingToolMessageIds: { 'native-1': 'protected-row' },
-            },
-          },
-          fixture.state,
-        );
+        await fixture.executors.call_tools_batch!(protectedBatchToolEvent(call()), fixture.state);
       }
       expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
         'https://hooks.example/control',
@@ -642,40 +624,12 @@ describe('afterToolCall control pipeline', () => {
     'publishes a %s result when the environment control has been removed',
     async (mode) => {
       const fixture = setup([]);
-      fixture.rows.push({
-        id: 'protected-row',
-        parentId: 'original-assistant',
-        role: 'tool',
-        tool_call_id: 'native-1',
-        content: '',
-        plugin: call(),
-        pluginIntervention: { operationId: 'original-op', status: 'approved' },
-      });
+      fixture.rows.push(protectedToolRow(call()));
       fixture.loadState.mockResolvedValue({ ...fixture.state, operationId: 'original-op' });
       if (mode === 'single') {
-        await fixture.executors.call_tool!(
-          {
-            type: 'call_tool',
-            payload: {
-              parentMessageId: 'protected-row',
-              skipCreateToolMessage: true,
-              toolCalling: call(),
-            },
-          },
-          fixture.state,
-        );
+        await fixture.executors.call_tool!(protectedSingleToolEvent(call()), fixture.state);
       } else {
-        await fixture.executors.call_tools_batch!(
-          {
-            type: 'call_tools_batch',
-            payload: {
-              parentMessageId: 'assistant',
-              toolsCalling: [call()],
-              existingToolMessageIds: { 'native-1': 'protected-row' },
-            },
-          },
-          fixture.state,
-        );
+        await fixture.executors.call_tools_batch!(protectedBatchToolEvent(call()), fixture.state);
       }
       expect(fetchHook).not.toHaveBeenCalled();
       expect(archive).toHaveBeenCalled();
@@ -689,15 +643,7 @@ describe('afterToolCall control pipeline', () => {
 
   it('does not trust tool state to bypass a continuation’s additional control', async () => {
     const fixture = setup([control('new-policy')]);
-    fixture.rows.push({
-      id: 'protected-row',
-      parentId: 'original-assistant',
-      role: 'tool',
-      tool_call_id: 'native-1',
-      content: '',
-      plugin: call(),
-      pluginIntervention: { operationId: 'original-op', status: 'approved' },
-    });
+    fixture.rows.push(protectedToolRow(call()));
     fixture.loadState.mockResolvedValue({
       ...fixture.state,
       operationId: 'original-op',
@@ -711,14 +657,7 @@ describe('afterToolCall control pipeline', () => {
       response(String(url).endsWith('/original-policy') ? 'allow' : 'deny'),
     );
     const result = await fixture.executors.call_tool!(
-      {
-        type: 'call_tool',
-        payload: {
-          parentMessageId: 'protected-row',
-          skipCreateToolMessage: true,
-          toolCalling: call(),
-        },
-      },
+      protectedSingleToolEvent(call()),
       fixture.state,
     );
     expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([

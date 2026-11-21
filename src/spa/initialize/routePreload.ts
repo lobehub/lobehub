@@ -73,7 +73,7 @@ const createWebRoutePreloadTasks = (): RoutePreloadTask[] => [
   createTask({
     id: 'community',
     idleDelay: 6000,
-    matches: matchesRoute('community'),
+    matches: matchesRoute('marketplace'),
     priority: 'medium',
   }),
   createTask({
@@ -113,6 +113,12 @@ const createWebRoutePreloadTasks = (): RoutePreloadTask[] => [
     priority: 'low',
   }),
   createTask({
+    id: 'music',
+    idleDelay: Number.POSITIVE_INFINITY,
+    matches: matchesRoute('music'),
+    priority: 'low',
+  }),
+  createTask({
     id: 'eval',
     idleDelay: Number.POSITIVE_INFINITY,
     matches: matchesRoute('eval'),
@@ -148,7 +154,7 @@ const createMobileRoutePreloadTasks = (): RoutePreloadTask[] => [
   createTask({
     id: 'mobile-community',
     idleDelay: 6000,
-    matches: matchesRoute('community'),
+    matches: matchesRoute('marketplace'),
     priority: 'medium',
   }),
   createTask({

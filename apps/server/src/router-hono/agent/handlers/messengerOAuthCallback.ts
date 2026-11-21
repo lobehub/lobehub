@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -10,13 +11,14 @@ import { messengerPlatformRegistry } from '@/server/services/messenger/platforms
 
 const log = debug('lobe-server:messenger:oauth-callback');
 
-const SETTINGS_PATH = '/settings/messenger';
+const MARKETPLACE_APPS_PATH = '/marketplace/app';
 
 // All OAuth callbacks land on the per-platform detail page so the user sees the
 // freshly-installed workspace/server without an extra click. The detail page
 // reads `installed=ok` / `error=...` / `workspace=...` from the URL.
-const redirectToPlatform = (origin: string, platform: string, query?: string): Response => {
-  const target = new URL(`${SETTINGS_PATH}/${platform}${query ? `?${query}` : ''}`, origin);
+const redirectToPlatform = (origin: string, platform: string, query: string): Response => {
+  const target = new URL(`${MARKETPLACE_APPS_PATH}/${platform}`, origin);
+  target.search = query;
   return Response.redirect(target, 302);
 };
 
@@ -40,7 +42,7 @@ const errorRedirect = (origin: string, platform: string, code: string, extra?: U
  *   3. Detect tenant takeover (another LobeHub user already owns this row)
  *   4. Encrypt + upsert into `messenger_installations`
  *   5. Hand off to the platform's deep-link redirect (Slack
- *      `slack.com/app/open`) or fall back to the settings page.
+ *      `slack.com/app/open`) or fall back to the Marketplace app.
  */
 export async function messengerOAuthCallback(c: Context): Promise<Response> {
   const platform = c.req.param('platform');
@@ -75,7 +77,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
   if (!config) {
     log('callback[%s]: messenger env not configured', platform);
     return new Response(
-      `${definition.name} messenger is not configured on this LobeHub deployment.`,
+      `${definition.name} messenger is not configured on this ${BRANDING_NAME} deployment.`,
       { status: 503 },
     );
   }
@@ -173,7 +175,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
     return errorRedirect(url.origin, platform, 'persist_failed');
   }
 
-  // 5. Branch on outcome. Takeover attempts get bounced to settings with a
+  // 5. Branch on outcome. Takeover attempts get sent to the Marketplace app with a
   // dedicated error so the page can render a Modal explaining the situation
   // (tenant name lets the UI name the workspace/guild).
   if (isTakeoverAttempt) {
@@ -190,7 +192,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
   }
 
   // 6. Hand off to the platform's deep-link if it provides one, otherwise
-  // fall back to the settings page with a `<platform>_installed=ok` flag.
+  // fall back to the Marketplace app with a `installed=ok` flag.
   const deepLink = definition.oauth.buildPostInstallRedirect?.(install, url.origin);
   if (deepLink) {
     log(

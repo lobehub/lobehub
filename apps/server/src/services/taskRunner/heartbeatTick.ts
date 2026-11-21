@@ -19,6 +19,7 @@ export type HeartbeatTickOutcome =
   { ran: true; taskIdentifier: string } | { ran: false; reason: HeartbeatTickSkipReason };
 
 export type HeartbeatTickSkipReason =
+  | 'archived'
   | 'human-waiting'
   | 'in-flight'
   | 'mode-changed'
@@ -54,6 +55,11 @@ export async function runHeartbeatTick(
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
+  }
+  // Archived tasks are hidden from every list; never run them out of sight.
+  if (task.archivedAt) {
+    log('skip task=%s reason=archived', taskId);
+    return { ran: false, reason: 'archived' };
   }
   const activeTickToken = (task.context as { scheduler?: { tickToken?: string } } | null)?.scheduler
     ?.tickToken;

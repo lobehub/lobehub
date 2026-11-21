@@ -52,6 +52,7 @@ const FlatMode = memo(() => {
       {activeTopicList?.map((topic) => (
         <TopicItem
           fav={topic.favorite}
+          hasGoal={topic.hasGoal}
           id={topic.id}
           key={topic.id}
           metadata={topic.metadata}

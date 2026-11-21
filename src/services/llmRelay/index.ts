@@ -78,6 +78,7 @@ export const oneShotRelay = new OneShotRelay({
   },
   isDeviceProvider: (provider) =>
     aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState()),
+  endOperation: (operationId) => llmRelayExecutor.cancelOperation(operationId),
   onCancel: (data) => llmRelayExecutor.cancel(data),
   onExecute: (data) => void llmRelayExecutor.execute(data),
   subscribe: (channel, onEvent) => {

@@ -10,7 +10,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@/const/meta';
 import {
   useKeepSidebarGroupsListed,
   useKeepSidebarListed,
@@ -110,7 +110,7 @@ export const useHomeAgentRows = (): HomeAgentRows => {
           DEFAULT_INBOX_AVATAR,
         backgroundColor: inboxMeta?.backgroundColor || undefined,
         id: inboxAgentId,
-        title: agentDisplayName(inboxMeta, 'Lobe AI'),
+        title: agentDisplayName(inboxMeta, DEFAULT_INBOX_TITLE),
       });
     }
     workspaceRows.push(

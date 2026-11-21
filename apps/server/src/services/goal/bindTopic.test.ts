@@ -206,6 +206,19 @@ describe('GoalService.bindTopic', () => {
     expect(event.reason).toContain(boundTopicId);
   });
 
+  it("drops the previous agent's model overrides when binding moves the goal to another agent", async () => {
+    const { id } = await standaloneGoalMidRun(otherAgentId);
+    await service().setModel(id, { model: 'gemini-3.8-flash', provider: 'google' });
+    await service().setTaskModel(id, { model: 'gpt-5.6-luna', provider: 'openai' });
+
+    await service().bindTopic(id, runOpId);
+
+    const goal = (await model().findById(id))!;
+    expect(goal.agentId).toBe(agentId);
+    expect(goal.config).not.toHaveProperty('model');
+    expect(goal.config).not.toHaveProperty('taskModel');
+  });
+
   it('dispatches the next planning turn into the bound topic', async () => {
     const { id } = await standaloneGoalMidRun();
     await service().bindTopic(id, runOpId);

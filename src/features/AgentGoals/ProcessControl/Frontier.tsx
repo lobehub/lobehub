@@ -1,9 +1,17 @@
 'use client';
 
 import type { AcceptanceStatus } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Divider, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { ChevronDown, ChevronRight, History, ListTodo, Plus } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +21,8 @@ import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
 import GoalDecisionCase, {
@@ -28,6 +38,8 @@ import {
   viewGateKind,
 } from './coordinatorCopy';
 import type { FrontierItem, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
+import ReleaseGateEntry from './ReleaseGateEntry';
+import { TASK_HOLD_VISUALS, useQuotaResumeText } from './taskHold';
 import { useElapsed } from './useElapsed';
 
 /**
@@ -57,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
@@ -74,7 +86,7 @@ const styles = createStaticStyles(({ css }) => ({
   // A gate is an intent card: lifted off the list so it reads as the one thing
   // asking for the owner, not another row.
   decisionCard: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -163,8 +175,17 @@ const RowGlyph = memo<{ kind: FrontierItem['kind']; view: GoalNodeView }>(({ kin
     case 'stale': {
       return (
         <Icon
-          color={TASK_STATUS_VISUALS.failed.color}
-          icon={TASK_STATUS_VISUALS.failed.icon}
+          color={TASK_HOLD_VISUALS.stalled.color}
+          icon={TASK_HOLD_VISUALS.stalled.icon}
+          size={16}
+        />
+      );
+    }
+    case 'quota': {
+      return (
+        <Icon
+          color={TASK_HOLD_VISUALS.waitingQuota.color}
+          icon={TASK_HOLD_VISUALS.waitingQuota.icon}
           size={16}
         />
       );
@@ -253,6 +274,19 @@ const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
 
 RunningClock.displayName = 'GoalRunningClock';
 
+const QuotaResumeTime = memo<{ retryAt?: Date }>(({ retryAt }) => {
+  const { t } = useTranslation('chat');
+  const text = useQuotaResumeText(retryAt);
+  if (!text) return null;
+  return (
+    <Text fontSize={12} title={t('goalProcess.quota.tooltip')} type={'secondary'}>
+      {text}
+    </Text>
+  );
+});
+
+QuotaResumeTime.displayName = 'GoalQuotaResumeTime';
+
 const DoneTime = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.updatedAt);
   return (
@@ -269,7 +303,7 @@ const StaleBody = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text } = useActivityTime(view.heartbeatAt);
   return (
     <Text fontSize={13} type={'secondary'}>
-      {t('goalProcess.stale.description', { duration: text })}
+      {t('goalProcess.stalled.description', { duration: text })}
     </Text>
   );
 });
@@ -380,59 +414,85 @@ const GateCard = memo<{
   goalAgentId?: string | null;
   numbers: Map<string, number>;
   onSelect: (nodeId: string) => void;
+  /** Set when this gate is a held batch release reviewed on its own page. */
+  releaseGateAcceptanceId?: string;
   subject?: GoalNodeView;
   view: GoalNodeView;
-}>(({ actions, canEdit, category, goalAgentId, numbers, onSelect, subject, view }) => {
-  const { t } = useTranslation('chat');
-  const gateSummary = useGateSummary();
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-  const taskSubject = subject?.node.kind === 'task' ? subject : undefined;
-  const subjectTitle =
-    subject?.node.kind === 'task'
-      ? (() => {
-          const key = coordinatorNodeTitleKey(subject);
-          return key ? t(key as any) : subject.node.title;
-        })()
-      : undefined;
-  return (
-    <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
-      <GoalDecisionCase
-        agentId={goalAgentId}
-        basis={view.node.description}
-        canAnswer={canEdit}
-        category={category}
-        decision={view.decision!}
-        evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
-        summary={gateSummary(category, subjectTitle)}
-        footer={
-          // A goal-level question (the main Agent asking about the goal itself)
-          // stopped no Task, so there is no run to open.
-          taskSubject ? (
-            <GateLinks
-              ledgerOpen={ledgerOpen}
-              subject={taskSubject}
-              onOpen={() => onSelect(taskSubject.node.id)}
-              onToggleLedger={() => setLedgerOpen(!ledgerOpen)}
-            />
-          ) : undefined
-        }
-        task={
-          taskSubject && subjectTitle
-            ? {
-                description: taskSubject.node.description,
-                onOpen: () => onSelect(taskSubject.node.id),
-                title:
-                  numbers.get(taskSubject.node.id) !== undefined
-                    ? `#${numbers.get(taskSubject.node.id)} ${subjectTitle}`
-                    : subjectTitle,
-              }
-            : undefined
-        }
-        onDecide={(optionId, resolution) => actions.decide(view.decision!.id, optionId, resolution)}
-      />
-    </div>
-  );
-});
+}>(
+  ({
+    actions,
+    canEdit,
+    category,
+    goalAgentId,
+    numbers,
+    onSelect,
+    releaseGateAcceptanceId,
+    subject,
+    view,
+  }) => {
+    const { t } = useTranslation('chat');
+    const gateSummary = useGateSummary();
+    const [ledgerOpen, setLedgerOpen] = useState(false);
+    const taskSubject = subject?.node.kind === 'task' ? subject : undefined;
+    const subjectTitle =
+      subject?.node.kind === 'task'
+        ? (() => {
+            const key = coordinatorNodeTitleKey(subject);
+            return key ? t(key as any) : subject.node.title;
+          })()
+        : undefined;
+    if (releaseGateAcceptanceId)
+      return (
+        <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+          <ReleaseGateEntry
+            acceptanceId={releaseGateAcceptanceId}
+            decision={view.decision!}
+            goalId={view.node.goalId}
+          />
+        </div>
+      );
+    return (
+      <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+        <GoalDecisionCase
+          agentId={goalAgentId}
+          basis={view.node.description}
+          canAnswer={canEdit}
+          category={category}
+          decision={view.decision!}
+          evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
+          summary={gateSummary(category, subjectTitle)}
+          footer={
+            // A goal-level question (the main Agent asking about the goal itself)
+            // stopped no Task, so there is no run to open.
+            taskSubject ? (
+              <GateLinks
+                ledgerOpen={ledgerOpen}
+                subject={taskSubject}
+                onOpen={() => onSelect(taskSubject.node.id)}
+                onToggleLedger={() => setLedgerOpen(!ledgerOpen)}
+              />
+            ) : undefined
+          }
+          task={
+            taskSubject && subjectTitle
+              ? {
+                  description: taskSubject.node.description,
+                  onOpen: () => onSelect(taskSubject.node.id),
+                  title:
+                    numbers.get(taskSubject.node.id) !== undefined
+                      ? `#${numbers.get(taskSubject.node.id)} ${subjectTitle}`
+                      : subjectTitle,
+                }
+              : undefined
+          }
+          onDecide={(optionId, resolution) =>
+            actions.decide(view.decision!.id, optionId, resolution)
+          }
+        />
+      </div>
+    );
+  },
+);
 
 GateCard.displayName = 'GoalGateCard';
 
@@ -470,16 +530,18 @@ const FrontierRow = memo<{
         ? null
         : { color: 'info', text: t('goalProcess.tag.verifying') }
       : item.kind === 'stale'
-        ? { color: 'error', text: t('goalProcess.tag.lost') }
-        : item.kind === 'done'
-          ? {
-              color: undefined,
-              text:
-                node.status === 'resolved'
-                  ? t('goalProcess.tag.done')
-                  : t('goalProcess.tag.retired'),
-            }
-          : null;
+        ? { color: 'warning', text: t('goalProcess.tag.stalled') }
+        : item.kind === 'quota'
+          ? { color: 'warning', text: t('goalProcess.tag.waitingQuota') }
+          : item.kind === 'done'
+            ? {
+                color: undefined,
+                text:
+                  node.status === 'resolved'
+                    ? t('goalProcess.tag.done')
+                    : t('goalProcess.tag.retired'),
+              }
+            : null;
 
   return (
     <Block
@@ -510,6 +572,7 @@ const FrontierRow = memo<{
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <AcceptanceChip view={view} />
           {item.kind === 'running' && <RunningClock startedAt={view.startedAt} />}
+          {item.kind === 'quota' && <QuotaResumeTime retryAt={view.quotaRetryAt} />}
           {item.kind === 'done' && <DoneTime view={view} />}
         </Flexbox>
       </Flexbox>
@@ -535,8 +598,13 @@ const FrontierRow = memo<{
               {node.description}
             </Text>
           )}
-          {item.kind === 'stale' && <StaleBody view={view} />}
-          <AttemptLedger view={subject ?? view} />
+          {item.kind === 'stale' ? (
+            // The open attempt would read "Running" under a "Stalled" badge; the
+            // body already says when it went quiet and what happens next.
+            <StaleBody view={view} />
+          ) : (
+            <AttemptLedger view={subject ?? view} />
+          )}
         </Flexbox>
       )}
     </Block>
@@ -564,6 +632,7 @@ AddTaskButton.displayName = 'GoalAddTaskButton';
 
 const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, planning }) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const [showBlocked, setShowBlocked] = useState(false);
 
   const numbers = new Map(
@@ -600,7 +669,7 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
     <Flexbox gap={8}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'}>
         <Flexbox horizontal align={'baseline'} gap={8}>
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('goalProcess.frontier.title')}
           </Text>
           {graph.frontier.length > 0 && (
@@ -623,9 +692,14 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
           goalAgentId={graph.goal.agentId}
           key={item.key}
           numbers={numbers}
-
           subject={item.view.gateSubjectId ? graph.byId[item.view.gateSubjectId] : undefined}
+
           view={item.view}
+          releaseGateAcceptanceId={
+            graph.goal.config?.rolloutState?.releaseReviewNodeId === item.view.node.id
+              ? graph.goal.config.rolloutState.releaseGateAcceptanceId
+              : undefined
+          }
           onSelect={onSelect}
         />
       ))}

@@ -45,6 +45,16 @@ const createMockState = (overrides: Partial<State> = {}): State => ({
   ...overrides,
 });
 
+const twoBlockAssistantGroup = () => ({
+  children: [
+    { content: 'first', id: 'block-1' },
+    { content: 'second', id: 'block-2' },
+  ],
+  content: '',
+  id: 'group-1',
+  role: 'assistantGroup',
+});
+
 describe('conversationSelectors', () => {
   describe('Context Selectors', () => {
     describe('context', () => {
@@ -148,6 +158,32 @@ describe('conversationSelectors', () => {
         expect(conversationSelectors.isTopic(store)).toBe(false);
       });
     });
+
+    describe('isSharePage', () => {
+      it('should return true on a topic share link', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', topicShareId: 'share-1' },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(true);
+      });
+
+      it('should return true for a shared-agent visitor', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', agentShareId: 'agent-share-1', topicId: 'topic-1' },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(true);
+      });
+
+      it('should return false in the owner conversation', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: null },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(false);
+      });
+    });
   });
 
   describe('UI State Selectors', () => {
@@ -244,17 +280,7 @@ describe('conversationSelectors', () => {
     describe('isMessageGenerating', () => {
       it('only checks the requested message id', () => {
         const store = createMockState({
-          displayMessages: [
-            {
-              children: [
-                { content: 'first', id: 'block-1' },
-                { content: 'second', id: 'block-2' },
-              ],
-              content: '',
-              id: 'group-1',
-              role: 'assistantGroup',
-            } as any,
-          ],
+          displayMessages: [twoBlockAssistantGroup() as any],
           operationState: {
             ...DEFAULT_OPERATION_STATE,
             getMessageOperationState: (messageId) => ({
@@ -271,17 +297,7 @@ describe('conversationSelectors', () => {
     describe('isAssistantGroupItemGenerating', () => {
       it('returns true for an assistantGroup when any child block is generating', () => {
         const store = createMockState({
-          displayMessages: [
-            {
-              children: [
-                { content: 'first', id: 'block-1' },
-                { content: 'second', id: 'block-2' },
-              ],
-              content: '',
-              id: 'group-1',
-              role: 'assistantGroup',
-            } as any,
-          ],
+          displayMessages: [twoBlockAssistantGroup() as any],
           operationState: {
             ...DEFAULT_OPERATION_STATE,
             getMessageOperationState: (messageId) => ({
@@ -296,17 +312,7 @@ describe('conversationSelectors', () => {
 
       it('returns true for a child block when its assistantGroup is generating', () => {
         const store = createMockState({
-          displayMessages: [
-            {
-              children: [
-                { content: 'first', id: 'block-1' },
-                { content: 'second', id: 'block-2' },
-              ],
-              content: '',
-              id: 'group-1',
-              role: 'assistantGroup',
-            } as any,
-          ],
+          displayMessages: [twoBlockAssistantGroup() as any],
           operationState: {
             ...DEFAULT_OPERATION_STATE,
             getMessageOperationState: (messageId) => ({

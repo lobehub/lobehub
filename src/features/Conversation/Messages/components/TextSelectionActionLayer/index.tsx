@@ -1,25 +1,20 @@
 'use client';
 
-import { nanoid } from '@lobechat/utils';
-import { Flexbox } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { MessageCirclePlusIcon } from 'lucide-react';
+import { Button, copyToClipboard, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { CheckIcon, CopyIcon, TextQuoteIcon } from 'lucide-react';
 import type { CSSProperties, PointerEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import type { ChatInputEditor } from '@/features/ChatInput/hooks/useChatInputEditor';
 import { useChatStore } from '@/store/chat';
-import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
-import {
-  createTextSelectionContext,
-  getRangeFirstLineRect,
-  getSelectionToolbarPosition,
-  isSameTextSelectionContext,
-} from './helpers';
+import { getRangeFirstLineRect, getSelectionToolbarPosition } from './helpers';
+import { quoteIntoEditor } from './quote';
 
 interface ActiveSelection {
   position: {
@@ -34,45 +29,50 @@ interface TextSelectionActionLayerProps {
   disabled?: boolean;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    display: contents;
-  `,
-  toolbar: css`
-    position: fixed;
-    z-index: 10000;
-    transform: translate(-50%, -100%);
+const styles = stylex.create({
+  root: { display: 'contents' },
+  toolbar: {
+    position: 'fixed',
+    zIndex: 10000,
+    transform: 'translate(-50%, -100%)',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    // Theme tokens, not the CSS light-dark function: the build rewrites it into
+    // `--lightningcss-*` fallbacks that never resolve here, which left the border
+    // two-toned and the background transparent.
+    borderColor: cssVar.colorBorder,
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: '0 8px 24px rgb(0 0 0 / 12%), 0 2px 8px rgb(0 0 0 / 8%)',
+  },
+});
 
-    padding: 4px;
-    border: 1px solid light-dark(rgb(229 231 235), rgb(64 64 64));
-    border-radius: 999px;
+/** How long the Copy button reads "Copied" before it can be used again. */
+const COPIED_FEEDBACK_MS = 1500;
 
-    background: light-dark(#fff, #1f1f1f);
-    box-shadow:
-      0 8px 24px rgb(0 0 0 / 12%),
-      0 2px 8px rgb(0 0 0 / 8%);
-  `,
-}));
-
-const focusChatInputSoon = () => {
-  window.setTimeout(() => {
-    // The Conversation ChatInput syncs the active editor here. In a portal
-    // thread, the newly mounted input becomes the latest registered editor.
-    useChatStore.getState().mainInputEditor?.focus();
-  }, 160);
-};
+/**
+ * The composer that receives a quote: this conversation's own ChatInput when it has one,
+ * otherwise the most recently registered chat input.
+ */
+const getComposerEditor = (conversationEditor: ChatInputEditor | null) =>
+  (conversationEditor ?? useChatStore.getState().mainInputEditor)?.instance?.getLexicalEditor?.() ??
+  undefined;
 
 const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children, disabled }) => {
   const { t } = useTranslation('chat');
   const rootRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [activeSelection, setActiveSelection] = useState<ActiveSelection | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const composerTarget = useConversationStore((s) => s.composerTarget);
-  const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
+  const conversationEditor = useConversationStore((s) => s.editor as ChatInputEditor | null);
 
   const hideToolbar = useCallback(() => {
     setActiveSelection(null);
+    setCopied(false);
   }, []);
 
   const clearNativeSelection = useCallback(() => {
@@ -100,8 +100,8 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
       return;
     }
 
-    const text = selection.toString().trim();
-    if (!text) {
+    const text = selection.toString();
+    if (!text.trim()) {
       hideToolbar();
       return;
     }
@@ -112,9 +112,9 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
       return;
     }
 
-    setActiveSelection({
-      position: getSelectionToolbarPosition(rect, window.innerWidth),
-      text,
+    setActiveSelection((previous) => {
+      if (previous?.text !== text) setCopied(false);
+      return { position: getSelectionToolbarPosition(rect, window.innerWidth), text };
     });
   }, [composerTarget.writable, disabled, hideToolbar]);
 
@@ -133,42 +133,49 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
       hideToolbar();
     };
 
+    // Escape closes only the toolbar, and only while it is showing.
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      hideToolbar();
+    };
+
     window.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('resize', hideToolbar);
     window.addEventListener('scroll', hideToolbar, true);
 
     return () => {
       window.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('resize', hideToolbar);
       window.removeEventListener('scroll', hideToolbar, true);
     };
   }, [activeSelection, hideToolbar]);
 
-  const addSelectionToConversation = useCallback(() => {
+  // The quote goes into the draft itself, where the user sees it, can edit it, and keeps
+  // typing below it; focusing the composer there is the confirmation.
+  const handleQuote = useCallback(() => {
     const text = activeSelection?.text;
-    if (!text || !composerTarget.writable) return;
+    const editor = getComposerEditor(conversationEditor);
+    if (!text || !editor || !composerTarget.writable) return;
 
-    const currentSelections = fileChatSelectors.chatContextSelections(composerTarget.contextKey)(
-      useFileStore.getState(),
-    );
-    const existing = currentSelections.find((item) => isSameTextSelectionContext(item, text));
-    const context =
-      existing ??
-      createTextSelectionContext({
-        id: `selection-${nanoid(6)}`,
-        selectedText: text,
-        title: t('textSelection.title'),
-      });
+    if (quoteIntoEditor(editor, text)) clearNativeSelection();
+  }, [activeSelection?.text, clearNativeSelection, composerTarget.writable, conversationEditor]);
 
-    addChatContextSelection({ contextKey: composerTarget.contextKey, selection: context });
-    toast.success(t('textSelection.added'));
-  }, [activeSelection?.text, addChatContextSelection, composerTarget, t]);
+  const handleCopy = useCallback(async () => {
+    const text = activeSelection?.text;
+    if (!text) return;
 
-  const handleAddToConversation = useCallback(() => {
-    addSelectionToConversation();
-    clearNativeSelection();
-    focusChatInputSoon();
-  }, [addSelectionToConversation, clearNativeSelection]);
+    await copyToClipboard(text.trim());
+    setCopied(true);
+  }, [activeSelection?.text]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   const handleToolbarPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -184,7 +191,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
 
   return (
     <div
-      className={styles.root}
+      {...stylex.props(styles.root)}
       ref={rootRef}
       onKeyUp={scheduleSelectionUpdate}
       onPointerUp={scheduleSelectionUpdate}
@@ -195,19 +202,27 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.toolbar}
+            className={stylex.props(styles.toolbar).className}
             gap={2}
             ref={toolbarRef}
             style={toolbarStyle}
             onPointerDown={handleToolbarPointerDown}
           >
             <Button
-              icon={<MessageCirclePlusIcon size={14} />}
+              icon={<TextQuoteIcon size={14} />}
               size={'small'}
               type={'text'}
-              onClick={handleAddToConversation}
+              onClick={handleQuote}
             >
-              {t('textSelection.addToConversation')}
+              {t('textSelection.quote')}
+            </Button>
+            <Button
+              icon={copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+              size={'small'}
+              type={'text'}
+              onClick={handleCopy}
+            >
+              {t(copied ? 'textSelection.copied' : 'textSelection.copy')}
             </Button>
           </Flexbox>,
           document.body,

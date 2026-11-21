@@ -1,5 +1,5 @@
 import type { FileTreeRowDecoration, GitStatusEntry } from '@pierre/trees';
-import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react';
+import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode, Ref } from 'react';
 
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
@@ -18,6 +18,12 @@ export interface ExplorerTreeNode<TData = unknown> {
   name: string;
   parentId?: string | null;
 }
+
+/** Orders sibling rows; return < 0 to put `a` first. */
+export type ExplorerTreeNodeComparator<TData = unknown> = (
+  a: ExplorerTreeNode<TData>,
+  b: ExplorerTreeNode<TData>,
+) => number;
 
 export interface ExplorerTreeMoveEvent<TData = unknown> {
   /** @deprecated Transitional compatibility for the current @pierre/trees bridge. */
@@ -154,7 +160,15 @@ export interface ExplorerTreeProps<TData = unknown> {
     ctx: ExplorerTreeKeyDownCtx<TData>,
   ) => boolean | void;
   overscan?: number;
+  /** Imperative tree API; passed as a prop, as React 19 expects. */
+  ref?: Ref<ExplorerTreeHandle>;
   selectedIds?: string[];
+  /**
+   * Sibling order. Without it the tree lists folders first, then names by code
+   * point. Whether a comparator is used is fixed on mount; passing a new one
+   * (or nodes that it orders differently) re-sorts the rows in place.
+   */
+  sort?: ExplorerTreeNodeComparator<TData>;
   style?: CSSProperties;
   /** Raw CSS injected into the pierre/trees shadow DOM via FILE_TREE_UNSAFE_CSS_ATTRIBUTE. */
   unsafeCSS?: string;

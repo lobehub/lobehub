@@ -4,6 +4,7 @@ import { planSubtaskLayers, type SubtaskNode } from './index';
 
 const node = (identifier: string, status: string, dependsOn: string[] = []): SubtaskNode => ({
   dependsOn,
+  id: identifier,
   identifier,
   status,
 });
@@ -53,6 +54,17 @@ describe('planSubtaskLayers', () => {
     ]);
     expect(plan.layers).toEqual([['T-2'], ['T-3']]);
     expect(plan.alreadyDone).toEqual(['T-1']);
+  });
+
+  it('keeps archived subtasks out of the layers and holds their dependents back', () => {
+    const plan = planSubtaskLayers([
+      node('T-1', 'backlog'),
+      { ...node('T-2', 'backlog'), archived: true },
+      node('T-3', 'backlog', ['T-2']),
+    ]);
+    expect(plan.layers).toEqual([['T-1']]);
+    expect(plan.ineligible).toEqual(['T-2']);
+    expect(plan.blockedExternally).toEqual(['T-3']);
   });
 
   it('marks running / scheduled tasks as ineligible (not in layers)', () => {

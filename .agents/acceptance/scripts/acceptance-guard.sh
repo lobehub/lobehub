@@ -28,8 +28,8 @@
 # worktrees' servers and other runs' browsers — five such processes held ~20 GB here
 # — so a group or total RSS cap would turn a merely busy machine red and stop a
 # healthy run. macOS tiers on kernel memory pressure (three consecutive red samples
-# before stop-owned); Linux uses the swap/free thresholds below. On macOS swap and
-# free percentages are diagnostic only. The groups select what stop-owned may stop.
+# before stop-owned); Linux uses the free (MemAvailable) thresholds below. Swap is
+# diagnostic only on both platforms. The groups select what stop-owned may stop.
 #
 # Contract: .agents/skills/acceptance/references/resource-guard.md
 set -uo pipefail
@@ -40,15 +40,15 @@ fail() { echo "$PROG $*" >&2; exit 2; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 GUARD="${ACCEPTANCE_GUARD_SCRIPT:-$ROOT/.agents/skills/acceptance/scripts/resource-guard.sh}"
 
-YELLOW="${ACCEPTANCE_GUARD_YELLOW:-swap=60,free=20}"
-RED="${ACCEPTANCE_GUARD_RED:-swap=80,free=8}"
+YELLOW="${ACCEPTANCE_GUARD_YELLOW:-free=20}"
+RED="${ACCEPTANCE_GUARD_RED:-free=8}"
 
 # The processes a LobeHub run is worth bounding. A pattern alone never grants
 # ownership: only the run tag or an explicit claim does.
 GUARD_GROUPS=(
   'browser=Google Chrome for Testing'
   'devserver=next-server|vite'
-  'typecheck=tsgo'
+  'typecheck=tsrs'
 )
 
 RUN_TAG="${ACCEPTANCE_RUN_TAG:-}"

@@ -8,6 +8,9 @@ const callAgentSystemRole = `You have a callAgent tool to delegate tasks to othe
 <execution_guide>
 ### Synchronous Call
 callAgent(agentId, instruction) — agent responds directly in conversation.
+
+### Background Call
+callAgent(agentId, instruction, runInBackground: true) — returns at once; the agent's reply arrives later as a message from that agent. Do not poll for it.
 </execution_guide>`;
 
 /**

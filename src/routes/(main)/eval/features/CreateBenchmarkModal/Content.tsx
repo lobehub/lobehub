@@ -1,8 +1,7 @@
 'use client';
 
-import { Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { cssVar } from 'antd-style';
+import { cssVar, Input, TextArea, toast, useModalContext } from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -36,7 +35,6 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
         description: values.description?.trim() || undefined,
         identifier: values.identifier.trim(),
         name: values.name.trim(),
-        tags: values.tags?.length > 0 ? values.tags : undefined,
       });
       toast.success(t('benchmark.create.success'));
       close();
@@ -85,16 +83,6 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
 
       <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
-      </Form.Field>
-
-      <Form.Field label={t('benchmark.create.tags.label')} name="tags">
-        <Select
-          mode="tags"
-          open={false}
-          placeholder={t('benchmark.create.tags.placeholder')}
-          style={{ width: '100%' }}
-          tokenSeparators={[',', '，', ' ']}
-        />
       </Form.Field>
     </Form>
   );

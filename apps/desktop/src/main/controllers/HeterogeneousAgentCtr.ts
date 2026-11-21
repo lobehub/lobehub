@@ -1,4 +1,8 @@
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
+
+import type { ClaudeCodeAccountProfiles } from '@/modules/heterogeneousAgent/claudeCodeAccounts';
 import type { RemoteServerAuth } from '@/modules/heterogeneousAgent/fileStorePort';
+import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 
 import type HeterogeneousAgentImplementation from './HeterogeneousAgentImpl';
 import type { LhHeteroExecCancellationResult } from './HeterogeneousAgentImpl';
@@ -16,6 +20,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   static override readonly groupName = 'heterogeneousAgent';
 
   private implementationPromise?: Promise<Implementation>;
+  private claudeCodeAccountsPromise?: Promise<ClaudeCodeAccountProfiles>;
 
   /**
    * Resolved on this side of the lazy boundary and handed to the implementation.
@@ -47,6 +52,23 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       });
 
     return this.implementationPromise;
+  };
+
+  /** Local Claude Code logins (default + per-account profiles), loaded on first use. */
+  private getClaudeCodeAccounts = (): Promise<ClaudeCodeAccountProfiles> => {
+    this.claudeCodeAccountsPromise ??= Promise.all([
+      import('@/modules/heterogeneousAgent/claudeCodeAccountsHost'),
+      import('./HeterogeneousAgentImpl'),
+    ])
+      .then(([{ createClaudeCodeAccountProfiles }, { buildInheritedSpawnEnv }]) =>
+        createClaudeCodeAccountProfiles(this.app, () => buildInheritedSpawnEnv()),
+      )
+      .catch((error) => {
+        this.claudeCodeAccountsPromise = undefined;
+        throw error;
+      });
+
+    return this.claudeCodeAccountsPromise;
   };
 
   @IpcMethod()
@@ -85,6 +107,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getAntigravityQuota(params: AntigravityQuotaParams = {}) {
+    const [{ getAntigravityQuota }, { buildInheritedSpawnEnv }] = await Promise.all([
+      import('@lobechat/device-control'),
+      import('./HeterogeneousAgentImpl'),
+    ]);
+    return getAntigravityQuota({
+      ...params,
+      env: {
+        ...buildInheritedSpawnEnv(),
+        ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+        ...params.env,
+      },
+    });
+  }
+
+  @IpcMethod()
   async getCodexQuota(...args: Parameters<Implementation['getCodexQuota']>) {
     return (await this.getImplementation()).getCodexQuota(...args);
   }
@@ -106,9 +144,58 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     return (await this.getImplementation()).getClaudeCodeQuota(...args);
   }
 
+  /** Every Claude Code account signed in on this machine, and where its login lives. */
+  @IpcMethod()
+  async listClaudeCodeAccounts() {
+    return (await this.getClaudeCodeAccounts()).list();
+  }
+
+  /** The local login a run for this provider account must spawn with. */
+  @IpcMethod()
+  async resolveClaudeCodeAccount(params: { externalAccountId: string }) {
+    return (await this.getClaudeCodeAccounts()).resolve(params.externalAccountId);
+  }
+
+  /**
+   * External-provider routing flags (`CLAUDE_CODE_USE_BEDROCK` …) a session
+   * spawn inherits from this desktop's process env. The renderer cannot see
+   * that env, yet those flags take the run off the subscription login.
+   */
+  @IpcMethod()
+  async getClaudeCodeInheritedRoutingEnv() {
+    const [{ buildInheritedSpawnEnv }, { CLAUDE_CODE_EXTERNAL_ROUTING_ENV_KEYS }] =
+      await Promise.all([
+        import('./HeterogeneousAgentImpl'),
+        import('@lobechat/heterogeneous-agents/quota'),
+      ]);
+    const inherited = buildInheritedSpawnEnv();
+    const flags: Record<string, string> = {};
+    for (const key of CLAUDE_CODE_EXTERNAL_ROUTING_ENV_KEYS) {
+      const value = inherited[key];
+      if (value !== undefined) flags[key] = value;
+    }
+    return flags;
+  }
+
+  /** Sign an account in to its own profile; resolves once the browser login lands. */
+  @IpcMethod()
+  async loginClaudeCodeAccount(params: { email?: string } = {}) {
+    return (await this.getClaudeCodeAccounts()).login(params);
+  }
+
+  @IpcMethod()
+  async cancelClaudeCodeAccountLogin() {
+    return (await this.getClaudeCodeAccounts()).cancelLogin();
+  }
+
   @IpcMethod()
   async getKimiCodeQuota(...args: Parameters<Implementation['getKimiCodeQuota']>) {
     return (await this.getImplementation()).getKimiCodeQuota(...args);
+  }
+
+  @IpcMethod()
+  async steerSession(...args: Parameters<Implementation['steerSession']>) {
+    return (await this.getImplementation()).steerSession(...args);
   }
 
   @IpcMethod()
@@ -117,13 +204,18 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async stopBackgroundTask(...args: Parameters<Implementation['stopBackgroundTask']>) {
+    return (await this.getImplementation()).stopBackgroundTask(...args);
+  }
+
+  @IpcMethod()
   async stopSession(...args: Parameters<Implementation['stopSession']>) {
     return (await this.getImplementation()).stopSession(...args);
   }
 
   @IpcMethod()
-  async respondPermission(...args: Parameters<Implementation['respondPermission']>) {
-    return (await this.getImplementation()).respondPermission(...args);
+  async setPermissionMode(...args: Parameters<Implementation['setPermissionMode']>) {
+    return (await this.getImplementation()).setPermissionMode(...args);
   }
 
   @IpcMethod()

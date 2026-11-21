@@ -17,7 +17,7 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 
 import { resolveSystemAgentModelConfig } from './modelConfig';
 
@@ -68,12 +68,11 @@ export class SystemAgentService {
 
       const payload = chainSummaryTitle(messages, locale);
 
-      const modelRuntime = await initModelRuntimeFromDB(
-        this.db,
-        this.userId,
-        provider,
-        this.workspaceId,
-      );
+      // Relayed to the requesting tab for a device-only provider; a bot's
+      // topic title has no tab and falls back to the default title.
+      const modelRuntime = await initModelRuntimeForRequest(this.db, this.userId, provider, {
+        workspaceId: this.workspaceId,
+      });
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages,
@@ -131,12 +130,11 @@ export class SystemAgentService {
       const payload = chainGenerateSkillMeta({ content, responseLanguage: locale });
       const tracingId = randomUUID();
 
-      const modelRuntime = await initModelRuntimeFromDB(
-        this.db,
-        this.userId,
-        provider,
-        this.workspaceId,
-      );
+      // Relayed to the requesting tab for a device-only provider; a bot's
+      // topic title has no tab and falls back to the default title.
+      const modelRuntime = await initModelRuntimeForRequest(this.db, this.userId, provider, {
+        workspaceId: this.workspaceId,
+      });
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],

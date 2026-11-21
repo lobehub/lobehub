@@ -5,7 +5,7 @@ import type {
   ScreenCaptureModelOption,
   ScreenCaptureOverlayTheme,
 } from '@lobechat/electron-client-ipc';
-import { useTheme } from 'antd-style';
+import { useTheme } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useMemo, useRef } from 'react';
 

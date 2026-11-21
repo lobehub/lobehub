@@ -1,14 +1,22 @@
 import {
   formatSelfReviewBriefTitle,
   getSelfReviewBriefDetails,
+  getSelfReviewProposalContent,
+  hasSelfReviewProposalContent,
   type SelfReviewBriefDetails,
   type SelfReviewBriefDetailsTranslator,
+  type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
 import { useTranslation } from 'react-i18next';
 
 import { type BriefItem } from './types';
 
 export interface SelfReviewBriefView {
+  /**
+   * What each proposed action would write (skill body, system prompt, memory),
+   * present only when there is more to read than the inline rows show.
+   */
+  content?: SelfReviewProposalContentItem[];
   details: SelfReviewBriefDetails;
   /** Title naming the main proposed change, in the reader's language. */
   title: string;
@@ -33,7 +41,13 @@ export const useSelfReviewBriefView = (
   const details = getSelfReviewBriefDetails(metadata);
   if (!details) return;
 
-  return { details, title: formatSelfReviewBriefTitle(details, translate) };
+  const content = details.kind === 'proposal' ? getSelfReviewProposalContent(metadata) : undefined;
+
+  return {
+    ...(content && hasSelfReviewProposalContent(content) ? { content } : {}),
+    details,
+    title: formatSelfReviewBriefTitle(details, translate),
+  };
 };
 
 /**

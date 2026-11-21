@@ -85,7 +85,16 @@ export class UserMemorySourceBenchmarkLoCoMoModel {
       .sort((a, b) => {
         if (a.partIndex !== b.partIndex) return a.partIndex - b.partIndex;
 
-        return (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0);
+        return (
+          (a.createdAt?.getTime() ??
+            // v8 ignore start -- unreachable: replaceParts always sets createdAt
+            0) -
+          // v8 ignore stop
+          (b.createdAt?.getTime() ??
+            // v8 ignore start -- unreachable: replaceParts always sets createdAt
+            0)
+          // v8 ignore stop
+        );
       });
   }
 }

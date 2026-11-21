@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { redisService } from './index';
 
-const { get, set } = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }));
-vi.mock('./client', () => ({ getRedisServiceClient: async () => ({ get, set }) }));
+const { del, get, set } = vi.hoisted(() => ({ del: vi.fn(), get: vi.fn(), set: vi.fn() }));
+vi.mock('./client', () => ({ getRedisServiceClient: async () => ({ del, get, set }) }));
 
 describe('Redis domain service', () => {
   beforeEach(() => {
@@ -67,5 +67,21 @@ describe('Redis domain service', () => {
       nx: true,
       px: 45_000,
     });
+  });
+
+  it('claims one webhook delivery per provider event id across instances, and releases it', async () => {
+    set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
+    const scope = { eventId: 'evt_1', provider: 'agent-mail' };
+
+    await expect(redisService.agentIdentity.claimWebhookEvent(scope, 86_400)).resolves.toBe(true);
+    await expect(redisService.agentIdentity.claimWebhookEvent(scope, 86_400)).resolves.toBe(false);
+    expect(set).toHaveBeenCalledWith('webhook_event:v1:agent-mail:evt_1', '1', {
+      nx: true,
+      px: 86_400_000,
+    });
+
+    del.mockResolvedValue(1);
+    await redisService.agentIdentity.releaseWebhookEvent(scope);
+    expect(del).toHaveBeenCalledWith('webhook_event:v1:agent-mail:evt_1');
   });
 });

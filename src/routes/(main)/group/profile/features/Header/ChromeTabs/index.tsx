@@ -1,12 +1,20 @@
 'use client';
 
-import { DropdownMenu, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Avatar,
+  createStaticStyles,
+  cx,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
   addButton: css`
@@ -17,9 +25,9 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
+    border-radius: ${densityVars.radius};
 
     color: ${cv.colorTextTertiary};
 
@@ -66,10 +74,12 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: 8px;
+    height: ${densityVars.controlHeight};
+    padding-block: 4px;
+    padding-inline: ${densityVars.contentGap};
+    border-radius: ${densityVars.radius};
+
+    font-size: ${densityVars.fontSize};
 
     color: ${cv.colorTextTertiary};
 
@@ -119,7 +129,7 @@ interface ChromeTabsProps {
    * When provided, the add button becomes a dropdown trigger showing these items.
    * Otherwise it falls back to calling `onAdd` directly on click.
    */
-  addMenuItems?: MenuProps['items'];
+  addMenuItems?: DropdownItem[];
   items: ChromeTabItem[];
   onAdd?: () => void;
   onChange: (id: string) => void;

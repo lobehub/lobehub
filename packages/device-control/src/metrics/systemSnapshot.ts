@@ -1,10 +1,15 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, statfs } from 'node:fs/promises';
 import os from 'node:os';
 
 export interface CpuTimes {
   idle: number;
   total: number;
+}
+
+export interface DiskUsage {
+  totalBytes: number;
+  usedBytes: number;
 }
 
 export interface MemoryUsage {
@@ -95,4 +100,31 @@ export const readLoadAverage = (): [number, number, number] | null => {
   if (process.platform === 'win32') return null;
   const [load1, load5, load15] = os.loadavg();
   return [load1, load5, load15];
+};
+
+/**
+ * `statfs` reading → the volume's size and the bytes no longer available to
+ * the user (total minus `bavail`). Counting against `bavail` rather than
+ * `bfree` means a volume reads 100% exactly when the user can no longer write
+ * to it (root-reserved blocks included), and on APFS it covers every volume
+ * sharing the container, as Finder's storage bar does.
+ */
+export const diskUsageFromStatfs = (stats: {
+  bavail: number;
+  blocks: number;
+  bsize: number;
+}): DiskUsage | undefined => {
+  const totalBytes = stats.blocks * stats.bsize;
+  if (!(totalBytes > 0)) return undefined;
+  const usedBytes = Math.min(totalBytes, Math.max(0, (stats.blocks - stats.bavail) * stats.bsize));
+  return { totalBytes, usedBytes };
+};
+
+/** The volume holding the home directory — where agents' working directories usually live. */
+export const readDiskUsage = async (dir = os.homedir()): Promise<DiskUsage | undefined> => {
+  try {
+    return diskUsageFromStatfs(await statfs(dir));
+  } catch {
+    return undefined;
+  }
 };

@@ -1,14 +1,23 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Breadcrumb, Button, Tag, Text, TextArea, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Breadcrumb,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tag,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
 import { FileText, Pencil } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import Transcript from './Transcript';
 import { useCaseDraft } from './useCaseDraft';
@@ -52,7 +61,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   prose: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSize};

@@ -1,3 +1,4 @@
+import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunStatus } from '@lobechat/types';
 import debug from 'debug';
 
@@ -38,7 +39,8 @@ export class VerifyStatusService {
    * - else any required result errored (verifier couldn't run) → `errored`
    * - otherwise → `passed`
    * A genuine `failed` dominates an `errored` (the delivery has a real problem to
-   * fix, so it should still gate + repair). A required `skipped` result is an
+   * fix, so it should still gate + repair). A check waived by an upheld dispute
+   * is skipped entirely. A required `skipped` result is an
    * execution gap and rolls up as `errored`; only optional checks may skip.
    */
   async recompute(operationId: string): Promise<VerifyRunStatus | null> {
@@ -62,6 +64,9 @@ export class VerifyStatusService {
     let anyErrored = false;
     for (const item of requiredItems) {
       const result = byItem.get(item.id);
+      // A panel upheld the builder's dispute that this check is invalid: it no
+      // longer gates the round, whatever the verifier said about it.
+      if (result && isCheckWaivedByDispute(result.metadata)) continue;
       // A required item without a result yet is still pending.
       if (!result || result.status === 'pending' || result.status === 'running') {
         anyPending = true;

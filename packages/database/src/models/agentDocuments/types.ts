@@ -85,8 +85,15 @@ export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDeri
 
 /** A document-tree entry with its optional original uploaded file. */
 export interface AgentDocumentListItem extends AgentDocumentDerivedFields {
+  /** When the backing document was created. */
+  createdAt: Date;
   description: string | null;
   documentId: string;
+  /**
+   * When the backing document last changed (content, title, …). `updatedAt` is
+   * the agent binding's, which content edits do not touch.
+   */
+  documentUpdatedAt: Date;
   /** Original file to preview; absent for editable agent documents. */
   fileId?: string | null;
   filename: string;
@@ -121,6 +128,18 @@ export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
   templateId: string | null;
   title: string;
   updatedAt: Date;
+}
+
+export interface AgentDocumentContextQueryOptions {
+  /**
+   * Leave out progressive documents, for a step that renders the index from an
+   * already pinned snapshot: an agent can have over 10k of them, and reading
+   * them on every step was the bulk of agent-document reads. Disabled documents
+   * are left out too, since they are never injected. Only `always` documents and
+   * folder rows stay, so the archived tool results under `.tool-results` are
+   * still recognized.
+   */
+  excludeProgressive?: boolean;
 }
 
 export interface AgentDocumentContextPayload {

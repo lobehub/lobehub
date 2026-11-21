@@ -5,56 +5,62 @@ exports[`SkillContextProvider > should directly inject content for activated ski
 Use \`lh task\` to manage tasks.
 </task_guides>
 
+The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+
 <available_skills>
   <skill name="Artifacts">Generate interactive UI components</skill>
-</available_skills>
-
-Use the activateSkill tool to activate a skill when needed."
+</available_skills>"
 `;
 
 exports[`SkillContextProvider > should handle all skills activated (no available_skills list) 1`] = `"Task skill content here"`;
 
 exports[`SkillContextProvider > should inject skill metadata when skills are provided 1`] = `
-"<available_skills>
+"The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+
+<available_skills>
   <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>
   <skill name="My Skill">Custom skill description</skill>
-</available_skills>
-
-Use the activateSkill tool to activate a skill when needed."
+</available_skills>"
 `;
 
 exports[`SkillContextProvider > should merge with existing system message 1`] = `
 "You are a helpful assistant.
 
+The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+
 <available_skills>
   <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>
   <skill name="My Skill">Custom skill description</skill>
-</available_skills>
-
-Use the activateSkill tool to activate a skill when needed."
+</available_skills>"
 `;
 
 exports[`SkillContextProvider > should only inject lightweight metadata without content field 1`] = `
-"<available_skills>
-  <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>
-</available_skills>
+"The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
 
-Use the activateSkill tool to activate a skill when needed."
+<available_skills>
+  <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>
+</available_skills>"
 `;
 
 exports[`SkillContextProvider > should render XML with location attribute 1`] = `
-"<available_skills>
+"The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+
+<available_skills>
   <skill name="PDF Processing" location="/path/to/skills/pdf-processing/SKILL.md">Extracts text from PDF files</skill>
   <skill name="Data Analysis" location="/path/to/skills/data-analysis/SKILL.md">Analyzes datasets and generates charts</skill>
-</available_skills>
-
-Use the activateSkill tool to activate a skill when needed."
+</available_skills>"
 `;
 
 exports[`SkillContextProvider > should render XML without location when not provided 1`] = `
-"<available_skills>
-  <skill name="My Skill">Custom skill description</skill>
-</available_skills>
+"The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
 
-Use the activateSkill tool to activate a skill when needed."
+<available_skills>
+  <skill name="My Skill">Custom skill description</skill>
+</available_skills>"
 `;

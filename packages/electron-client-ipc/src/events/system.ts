@@ -1,4 +1,10 @@
-import type { ElectronAppState, ThemeAppearance, ThemeMode } from '../types';
+import type {
+  ElectronAppState,
+  GuidedPermission,
+  PermissionGuideStatus,
+  ThemeAppearance,
+  ThemeMode,
+} from '../types';
 
 export interface SystemBroadcastEvents {
   /**
@@ -8,6 +14,10 @@ export interface SystemBroadcastEvents {
    */
   appStateUpdated: (data: Partial<ElectronAppState>) => void;
   localeChanged: (data: { locale: string }) => void;
+  permissionGuideChanged: (data: {
+    permission: GuidedPermission;
+    status: PermissionGuideStatus;
+  }) => void;
   systemThemeChanged: (data: { themeMode: ThemeAppearance }) => void;
   themeChanged: (data: { themeMode: ThemeMode }) => void;
   windowFocused: () => void;

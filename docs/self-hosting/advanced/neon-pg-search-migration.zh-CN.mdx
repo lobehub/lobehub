@@ -9,11 +9,11 @@ tags:
   - 私有部署
 ---
 
-# Neon pg\_search 迁移指南
+# Neon pg_search 迁移指南
 
 根据 [Neon 的 `pg_search` 公告](https://neon.com/docs/extensions/pg_search)，Neon 已停止为新项目提供该扩展。如果 Neon 通知你的现有项目也将停用 `pg_search`，请在通知中的截止日期前完成迁移；不同项目的时间可能不同，请以 Neon 发给你的通知为准。迁移只更换搜索后端，聊天记录等原始数据仍保存在原来的 PostgreSQL 数据库中。
 
-本文面向已经运行 LobeHub、并且已经完成历史数据库迁移的现有实例。新建数据库请先阅读[全文搜索](/zh/docs/self-hosting/advanced/full-text-search)中的数据库限制。
+本文面向已经运行 LobeHub 的现有实例。没有 `pg_search` 的新数据库不需要迁移：首次启动前设置 `FTS_SEARCH_PROVIDER=pg_like` 即可，详见[全文搜索](/zh/docs/self-hosting/advanced/full-text-search)。
 
 ## 1. 确认是否需要迁移
 
@@ -44,7 +44,7 @@ Elastic Cloud 和 Docker Elasticsearch 是同一种搜索后端，只是 Elastic
   当前 LobeHub 的 Elasticsearch 同步 worker 是常驻进程，纯 Vercel 部署无法直接运行它。除非你另外准备了常驻服务器，否则请选择 `pg_like`。
 </Callout>
 
-## 3. 迁移到 pg\_like（推荐）
+## 3. 迁移到 pg_like（推荐）
 
 1. **升级并备份。** 将 LobeHub 升级到包含 `pg_like` 的版本，并按数据库服务的说明创建备份。
 

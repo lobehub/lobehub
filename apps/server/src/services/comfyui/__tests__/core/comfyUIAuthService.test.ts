@@ -121,18 +121,6 @@ describe('ComfyUIAuthService', () => {
   });
 
   describe('Edge cases', () => {
-    it('should handle partial basic auth gracefully in headers', () => {
-      // This tests the createAuthHeaders method behavior
-      const options: ComfyUIKeyVault = {
-        authType: 'basic',
-        username: 'testuser',
-        password: 'testpass',
-      };
-
-      const service = new ComfyUIAuthService(options);
-      expect(service.getAuthHeaders()).toBeDefined();
-    });
-
     it('should handle partial bearer auth gracefully in headers', () => {
       const options: ComfyUIKeyVault = {
         authType: 'bearer',

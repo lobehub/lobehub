@@ -52,7 +52,12 @@ import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttac
  * Normalize a Discord API message object to MessageItem.
  */
 const toMessageItem = (msg: any): MessageItem => ({
-  attachments: msg.attachments?.map((a: any) => ({ name: a.filename, url: a.url })),
+  attachments: msg.attachments?.map((a: any) => ({
+    contentType: a.content_type,
+    name: a.filename,
+    size: a.size,
+    url: a.url,
+  })),
   author: { id: msg.author?.id ?? '', name: msg.author?.username ?? 'Unknown' },
   content: msg.content ?? '',
   id: msg.id,

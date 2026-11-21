@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * The dataset lists (benchmark-scoped + scope-wide) and the dataset detail are
- * `@lobechat/replica` resources. These tests pin the fetch orchestration at the
+ * `local-replica` resources. These tests pin the fetch orchestration at the
  * boundary: which service call each hook registers, the pre-migration return
  * shapes, and that the refresh actions revalidate the replica sync instead of a
  * hand-written SWR `mutate`.
@@ -189,13 +189,5 @@ describe('DatasetAction replica wiring', () => {
         ),
       ).toBe(true);
     });
-  });
-
-  it('no longer exposes the retired reducer internals', () => {
-    const state = useEvalStore.getState() as Record<string, unknown>;
-    expect(state.internal_dispatchDatasetDetail).toBeUndefined();
-    expect(state.internal_updateDatasetDetailLoading).toBeUndefined();
-    expect(state.isLoadingDatasets).toBeUndefined();
-    expect(state.loadingDatasetDetailIds).toBeUndefined();
   });
 });

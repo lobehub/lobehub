@@ -1,5 +1,7 @@
 import mime from 'mime';
 
+import { sniffBinaryBuffer } from './isBinaryContent';
+
 // Extensions where mime-db has no entry (or a wrong one) but a specific
 // text/x-* mime helps downstream language detection.
 const CUSTOM_MIME_TYPES: Record<string, string> = {
@@ -32,9 +34,20 @@ const BINARY_FALLBACK_MIME = 'application/octet-stream';
 const TEXT_MIME_PATTERN =
   /^(?:text\/|application\/(?:ecmascript|graphql|javascript|json|toml|xhtml\+xml|xml|yaml))/;
 
-const withCharset = (mimeType: string): string =>
+// SVG is text on disk but must keep its registered type: browsers only render
+// it as an image from `image/svg+xml`, never from text/plain or application/xml.
+// Other `+xml` types (atom, rss, …) stay on the text downgrade so text previews
+// keep working for them.
+const SVG_MIME = 'image/svg+xml';
+
+// A MIME charset label (RFC 2046), not a Node.js encoding name; `utf8` is not
+// a registered label, so keep the hyphen.
+// oxlint-disable-next-line unicorn/text-encoding-identifier-case
+const DEFAULT_CHARSET = 'utf-8';
+
+const withCharset = (mimeType: string, charset: string = DEFAULT_CHARSET): string =>
   TEXT_MIME_PATTERN.test(mimeType) && !mimeType.includes('charset=')
-    ? `${mimeType}; charset=utf-8`
+    ? `${mimeType}; charset=${charset}`
     : mimeType;
 
 const getExtension = (filePath: string): string => {
@@ -57,6 +70,38 @@ const looksBinary = (buffer: Uint8Array): boolean => {
     if (buffer[i] === 0) return true;
   }
   return false;
+};
+
+type Utf16Charset = 'utf-16be' | 'utf-16le';
+
+/**
+ * Detect UTF-16 text marked by a byte order mark.
+ *
+ * The UTF-16LE BOM (0xFF 0xFE) is also a valid MPEG audio frame sync, so
+ * file-type reports Windows PowerShell 5.1 output (`Tee-Object`, `Out-File`)
+ * as audio/mpeg. The BOM alone is not proof: a real MPEG-1 Layer I frame can
+ * start with the same bytes. Decode the bytes after the BOM strictly and
+ * require them to read as text: compressed audio contains unpaired surrogates,
+ * and a lenient decode would turn them into "printable" characters. `stream`
+ * keeps a surrogate pair split by the sample boundary from failing the decode.
+ */
+const detectUtf16BomText = (buffer: Uint8Array): Utf16Charset | null => {
+  if (buffer.byteLength < 2) return null;
+
+  let charset: Utf16Charset;
+  if (buffer[0] === 0xff && buffer[1] === 0xfe) charset = 'utf-16le';
+  else if (buffer[0] === 0xfe && buffer[1] === 0xff) charset = 'utf-16be';
+  else return null;
+
+  const sample = buffer.subarray(2, Math.min(buffer.byteLength, SNIFF_BYTES));
+  let text: string;
+  try {
+    text = new TextDecoder(charset, { fatal: true }).decode(sample, { stream: true });
+  } catch {
+    return null;
+  }
+
+  return sniffBinaryBuffer(new TextEncoder().encode(text)).isBinary ? null : charset;
 };
 
 /**
@@ -88,25 +133,46 @@ export const tryGetMimeType = (filePath: string): string | undefined => {
  * Trust magic bytes first, then fall back to the extension, and let a text
  * sniff overrule mime-db when the two disagree.
  *
+ * 0. UTF-16 BOM text → text mime with the matching charset, before the
+ *    magic-byte check (the UTF-16LE BOM looks like an MPEG audio frame).
+ *    Keeps a text extension mime, otherwise falls back to text/plain.
  * 1. `fileTypeFromBuffer()` — magic-byte detection. Authoritative when it
- *    matches: real MPEG-TS media wins here regardless of extension.
+ *    matches: real MPEG-TS media wins here regardless of extension. The one
+ *    exception is a generic `application/xml` match, which yields to the
+ *    `.svg` extension (an SVG with an `<?xml` prolog).
  * 2. Extension lookup (custom map + `mime.getType`) — the only signal for
  *    text formats file-type can't fingerprint (json/css/md/svg/…).
  *    - Text mime → use as-is (with charset appended).
+ *    - `image/svg+xml` → use as-is; it is text but must render as an image.
  *    - Binary mime + non-empty buffer that sniffs as text → downgrade to
  *      text/plain. Saves TypeScript source from mime-db's `video/mp2t`.
  *    - Otherwise → use the extension mime.
  * 3. No extension mapping → sniff-based fallback.
  */
 export const resolveMimeType = async (filePath: string, buffer: Uint8Array): Promise<string> => {
+  const fromExtension = lookupExtensionMime(filePath);
+
+  const utf16Charset = detectUtf16BomText(buffer);
+  if (utf16Charset) {
+    if (fromExtension === SVG_MIME) return SVG_MIME;
+    return fromExtension && TEXT_MIME_PATTERN.test(fromExtension)
+      ? withCharset(fromExtension, utf16Charset)
+      : `text/plain; charset=${utf16Charset}`;
+  }
+
   const { fileTypeFromBuffer } = await import('file-type');
   const detected = await fileTypeFromBuffer(buffer);
-  if (detected?.mime) return detected.mime;
+  if (detected?.mime) {
+    // file-type fingerprints any `<?xml` prolog as generic application/xml,
+    // which would hide an SVG's image/svg+xml; the extension is more specific.
+    if (detected.mime === 'application/xml' && fromExtension === SVG_MIME) return SVG_MIME;
+    return detected.mime;
+  }
 
   const isBinary = looksBinary(buffer);
-  const fromExtension = lookupExtensionMime(filePath);
   if (fromExtension) {
     if (TEXT_MIME_PATTERN.test(fromExtension)) return withCharset(fromExtension);
+    if (fromExtension === SVG_MIME) return SVG_MIME;
     if (buffer.byteLength > 0 && !isBinary) return TEXT_FALLBACK_MIME;
     return fromExtension;
   }

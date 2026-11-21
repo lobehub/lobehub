@@ -15,10 +15,10 @@ import {
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { resolveShareAllowedSkillIds } from '@lobechat/const';
 import {
   type BuiltinSkill,
-  getDisabledPluginIds,
   type SkillItem,
   type SkillListItem,
   type SkillResourceContent,
@@ -26,7 +26,6 @@ import {
 import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { TaskModel } from '@/database/models/task';
@@ -37,13 +36,14 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
-import { MarketService } from '@/server/services/market';
+import type { MarketService } from '@/server/services/market';
 import {
   createSandboxService,
   normalizeSandboxCommandResult,
   resolveSandboxSessionConfig,
   type SandboxSessionSpecification,
 } from '@/server/services/sandbox';
+import type { SandboxInitialization } from '@/server/services/sandbox/environmentInit';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
@@ -57,7 +57,10 @@ import {
   UserSkillService,
 } from '@/server/services/userSkill';
 
+import { readSkillUserSettings, resolveAgentSkillGates } from './librarySkillGate';
+import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -87,12 +90,6 @@ const isPrepareTimeout = (error?: string) =>
     error.startsWith('DEVICE_RESPONSE_TIMEOUT') ||
     /aborted due to timeout/i.test(error));
 
-interface UserSettingsWithMarketToken {
-  market?: {
-    accessToken?: string;
-  };
-}
-
 /**
  * Device-execution wiring for the exec APIs, present only when the run's
  * execution plan routed a device (`plan.kind === 'device'` — the aiAgent sets
@@ -104,6 +101,13 @@ interface UserSettingsWithMarketToken {
 interface SkillDeviceExecution {
   deviceId: string;
   executionTimeoutMs?: number;
+  /**
+   * The run's resolved Local Sandbox decision (`context.localSandbox`), the
+   * same value the local-system device-proxy applies to `runCommand`.
+   */
+  localSandbox?: boolean;
+  /** `context.localSandboxNetwork`; only meaningful with {@link localSandbox}. */
+  localSandboxNetwork?: boolean;
   operationId?: string;
   /**
    * Filesystem skills already living on the device (project/device SKILL.md).
@@ -137,8 +141,7 @@ const LEGACY_DEVICE_CLIENT = Symbol('legacy-device-client');
  * discloses the degradation — the manifest already told it the command would
  * run on the user's device.
  */
-const LEGACY_FALLBACK_NOTE =
-  "Note: the user's device client is outdated and does not support on-device skill execution, so this command ran in the cloud sandbox instead. Tell the user to update their LobeHub app to run skills on their device.";
+const LEGACY_FALLBACK_NOTE = `Note: the user's device client is outdated and does not support on-device skill execution, so this command ran in the cloud sandbox instead. Tell the user to update their ${BRANDING_NAME} app to run skills on their device.`;
 
 class SkillServerRuntimeService implements SkillRuntimeService {
   private agentId?: string;
@@ -149,17 +152,29 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private fileModel: FileModel;
   private serverDB: LobeChatDatabase;
   private topicId?: string;
+  /**
+   * The run this runtime belongs to. Handed to `preprocessLhCommand` so a
+   * sandbox `lh agent run` carries `LOBEHUB_OPERATION_ID`, exactly as the device
+   * and heterogeneous runtimes do.
+   */
+  private operationId?: string;
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
+  private sandboxInitialization?: SandboxInitialization;
   private sandboxWorkingDir?: string;
   private sandboxInstanceId?: string;
   private sandboxMode?: SandboxMode;
   private sandboxSpecification?: SandboxSessionSpecification;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
+  private isLibrarySkillEnabled?: (identifier: string) => boolean;
+  private resolveUserSkillArchive?: (
+    name: string,
+  ) => Promise<{ fileHash: string; url: string } | undefined>;
   private isSkillGranted?: (identifier: string) => boolean;
   private shareVisitorBlocked: boolean;
+  private wrapSandbox?: SandboxWrapper;
 
   constructor(options: {
     agentId?: string;
@@ -173,6 +188,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     disabledSkillIds?: Set<string>;
     fileModel: FileModel;
     fileService: FileService;
+    /** Library skills are opt-in per agent; see `resolveAgentSkillGates`. */
+    isLibrarySkillEnabled?: (identifier: string) => boolean;
     /**
      * Agent Share only: answers "may this visitor reach the skill with this
      * identifier". Absent on a creator's own run, where the creator reaches
@@ -180,7 +197,12 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      */
     isSkillGranted?: (identifier: string) => boolean;
     marketService: MarketService;
+    operationId?: string;
     resourceService: SkillResourceService;
+    /** The archive of a user skill (`user-skills:<name>`) this run may load. */
+    resolveUserSkillArchive?: (
+      name: string,
+    ) => Promise<{ fileHash: string; url: string } | undefined>;
     /**
      * Persistence for this run, resolved once by the factory. Every sandbox
      * this service creates MUST carry the same values the cloud-sandbox runtime
@@ -189,6 +211,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      * CLIs, injected credentials and anything outside the workspace with it.
      */
     sandboxCwd?: string;
+    sandboxInitialization?: SandboxInitialization;
     sandboxInstanceId?: string;
     sandboxMode?: SandboxMode;
     sandboxSpecification?: SandboxSessionSpecification;
@@ -200,26 +223,32 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     topicId?: string;
     userId: string;
     workspaceId?: string;
+    wrapSandbox?: SandboxWrapper;
   }) {
     this.agentId = options.agentId;
     this.skillModel = options.skillModel;
     this.resourceService = options.resourceService;
+    this.resolveUserSkillArchive = options.resolveUserSkillArchive;
     this.marketService = options.marketService;
     this.fileService = options.fileService;
     this.fileModel = options.fileModel;
     this.serverDB = options.serverDB;
     this.topicId = options.topicId;
+    this.operationId = options.operationId;
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
+    this.sandboxInitialization = options.sandboxInitialization;
     this.sandboxWorkingDir = options.sandboxWorkingDir;
     this.sandboxInstanceId = options.sandboxInstanceId;
     this.sandboxMode = options.sandboxMode;
     this.sandboxSpecification = options.sandboxSpecification;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
+    this.isLibrarySkillEnabled = options.isLibrarySkillEnabled;
     this.isSkillGranted = options.isSkillGranted;
     this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
+    this.wrapSandbox = options.wrapSandbox;
   }
 
   /**
@@ -228,6 +257,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
    * together so no lookup path can honor one and miss the other:
    *
    * - `disabledSkillIds` — the agent's own tri-state (`agents.plugins`);
+   * - `isLibrarySkillEnabled` — a library skill the agent never turned on is off;
    * - `isSkillGranted` — an Agent Share visitor's per-skill allowlist
    *   (`shareConfig.skillGrants`). Absent for a creator's own run.
    *
@@ -236,16 +266,18 @@ class SkillServerRuntimeService implements SkillRuntimeService {
    * carries the identifier the grant is written against.
    */
   private isSkillReachable = (identifier: string): boolean =>
-    !this.disabledSkillIds.has(identifier) && (this.isSkillGranted?.(identifier) ?? true);
+    !this.disabledSkillIds.has(identifier) &&
+    (this.isLibrarySkillEnabled?.(identifier) ?? true) &&
+    (this.isSkillGranted?.(identifier) ?? true);
 
   findAll = async (): Promise<{ data: SkillListItem[]; total: number }> => {
     const result = await this.skillModel.findAll();
-    if (!this.isSkillGranted) return result;
+    if (!this.isSkillGranted && !this.isLibrarySkillEnabled) return result;
 
-    // A share visitor must not learn the creator's catalog. This list is not
-    // just an internal lookup: `activateSkill` echoes it back in its
-    // not-found message ("Available skills: ..."), so an unfiltered read here
-    // hands every skill name and description to anyone with the link.
+    // A share visitor must not learn the creator's catalog, and no run should be
+    // offered a skill its agent never turned on. This list is not just an
+    // internal lookup: `activateSkill` echoes it back in its not-found message
+    // ("Available skills: ..."), handing every name and description to the model.
     const data = result.data.filter((skill) => this.isSkillReachable(skill.identifier));
     return { data, total: data.length };
   };
@@ -293,6 +325,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       this.userId,
       workspaceId,
       this.shareVisitorBlocked,
+      this.operationId,
     );
 
     return { command: result.command, error: result.error };
@@ -350,6 +383,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -358,7 +392,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('runCommand', { command: lhResult.command });
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'runCommand',
+        { command: lhResult.command },
+      );
 
       log('runCommand response: %O', response);
 
@@ -403,6 +440,17 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
     for (const activatedSkill of activatedSkills) {
       if (!activatedSkill.name) continue;
+
+      // A user skill's package is its latest published version.
+      if (canonicalUserSkillIdentifier(activatedSkill.name)) {
+        const archive = await this.resolveUserSkillArchive?.(activatedSkill.name);
+        const url = archive && (await this.fileService.getFullFileUrl(archive.url));
+        if (archive && url) {
+          archives.push({ name: activatedSkill.name, url, zipHash: archive.fileHash });
+          log('Resolved zipUrl for user skill %s', activatedSkill.name);
+        }
+        continue;
+      }
 
       // `findByName`, not `skillModel.findByName`: `activatedSkills` is
       // model-suppliable (see `ExecutionRuntime`'s `args.activatedSkills ??
@@ -545,17 +593,28 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
           return fail(
             `Failed to prepare skill "${archive.name}" on the user's device: ${prepared.error ?? 'unknown error'}. ` +
-              'Do not retry elsewhere — report this to the user (their LobeHub app may need an update).',
+              `Do not retry elsewhere — report this to the user (their ${BRANDING_NAME} app may need an update).`,
           );
         }
         runDir = prepared.extractedDir;
       }
 
       const cwd = runDir ?? device.workingDirectory;
+      // A fenced run writes only to the agent's working directory: `runDir` is
+      // the device's shared skill cache, which must stay out of the fence so a
+      // fenced run cannot plant code a later unfenced run executes.
+      if (device.localSandbox && !device.workingDirectory) {
+        return fail(
+          'Local Sandbox requires a working directory. Set one for this agent (or topic) and run the command again.',
+        );
+      }
       // Content scope, NOT the gateway-addressing scope resolved above: a
       // workspace agent routed to the caller's own machine is still editing
       // workspace content.
-      const deviceLhEnv = buildDeviceLhEnv(await this.resolveWorkspaceId());
+      const deviceLhEnv = buildDeviceLhEnv({
+        operationId: device.operationId,
+        workspaceId: await this.resolveWorkspaceId(),
+      });
       const response = await executeAuthorizedDeviceToolCall(
         this.serverDB,
         {
@@ -573,9 +632,20 @@ class SkillServerRuntimeService implements SkillRuntimeService {
             command,
             ...(cwd && { cwd }),
             // Keep `lh` on the device in this run's workspace instead of the
-            // device credentials' personal scope.
+            // device credentials' personal scope, and tell it which run it acts for.
             ...(deviceLhEnv && { env: deviceLhEnv }),
             ...(device.executionTimeoutMs && { timeout: device.executionTimeoutMs }),
+            // The fence is the run owner's decision, applied exactly as the
+            // local-system device-proxy does for `runCommand`; neither it nor
+            // its root comes from the model. A client predating `sandboxRoot`
+            // still fences, just to `cwd`.
+            ...(device.localSandbox !== undefined && {
+              sandbox: device.localSandbox,
+              ...(device.localSandbox && {
+                sandboxNetwork: device.localSandboxNetwork === true,
+                sandboxRoot: device.workingDirectory,
+              }),
+            }),
           }),
           identifier: LocalSystemIdentifier,
         },
@@ -708,6 +778,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -716,7 +787,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('execScript', enhancedParams);
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'execScript',
+        enhancedParams,
+      );
 
       log('execScript response: %O', response);
 
@@ -771,6 +845,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -816,32 +891,17 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     }
 
     // Fetch market access token from user settings
-    let marketAccessToken: string | undefined;
-    try {
-      const userModel = new UserModel(context.serverDB, context.userId);
-      const userSettings = await userModel.getUserSettings();
-      marketAccessToken = (userSettings as UserSettingsWithMarketToken | undefined)?.market
-        ?.accessToken;
-      log(
-        'Fetched market accessToken for user %s: %s',
-        context.userId,
-        marketAccessToken ? 'exists' : 'not found',
-      );
-    } catch (error) {
-      log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
-    }
+    const userSettings = await readSkillUserSettings(
+      new UserModel(context.serverDB, context.userId),
+    );
+    const marketAccessToken = userSettings?.market?.accessToken;
 
-    // Independent of `<available_skills>` (built once, earlier, in
-    // aiAgent/index.ts) — this runtime resolves skills fresh by name/id, so a
-    // model that already knows a disabled skill's name (prior turn, or a
-    // guess) could otherwise still activate/run it. Re-derive the disabled
-    // set here so this path enforces the same tri-state.
-    let disabledSkillIds = new Set<string>();
-    if (context.agentId) {
-      const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-      const agentConfig = await agentModel.getAgentConfigById(context.agentId);
-      disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
-    }
+    // This runtime resolves skills fresh by name/id, so the agent's own
+    // tri-state is enforced here too (see `resolveAgentSkillGates`).
+    const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(
+      context,
+      userSettings,
+    );
 
     // The share's own opt-out, for the same reason: the creator named the
     // skills a visitor may load (`shareConfig.skillGrants`), and the
@@ -903,14 +963,12 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       workspaceId,
     });
 
-    const marketService = new MarketService({
-      accessToken: marketAccessToken,
-      userInfo: {
-        sandboxStorage: sandbox.claim,
-        userId: context.userId,
-        workspaceId,
-      },
-    });
+    const marketService = createSandboxMarketService(
+      context,
+      marketAccessToken,
+      workspaceId,
+      sandbox.claim,
+    );
     const fileService = new FileService(context.serverDB, context.userId, workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, workspaceId);
 
@@ -926,6 +984,8 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       ? {
           deviceId: context.activeDeviceId,
           executionTimeoutMs: context.executionTimeoutMs,
+          localSandbox: context.localSandbox,
+          localSandboxNetwork: context.localSandboxNetwork,
           operationId: context.operationId,
           projectSkills: context.projectSkills,
           // Same lazy workspace-principal recovery as the local-system runtime,
@@ -935,16 +995,60 @@ export const skillsRuntime: ServerRuntimeRegistration = {
         }
       : undefined;
 
+    // The user's own skill library is read per call, for the one name asked
+    // for — it grows with every goal batch, and this factory runs per tool
+    // call. Read under the recovered workspace (a dispatched or resumed run may
+    // not carry it on the context).
+    const loadUserSkill = async (requested: string) => {
+      // Models vary the casing of a name, as the preloaded lookup tolerates.
+      const name = canonicalUserSkillIdentifier(requested);
+      if (!name || !isSkillReachable(name)) return undefined;
+      const [skill] = await new UserSkillService(
+        context.serverDB!,
+        context.userId!,
+        workspaceId,
+        context.agentVisibility,
+      )
+        .loadRuntimeSkills([name], {
+          // Only the generated skills this run's own Task names are trusted
+          // past a public agent's visibility — never a name the model chose.
+          trustedGenerated: context.taskId
+            ? readTaskSkillIds(
+                (
+                  await new TaskModel(context.serverDB!, context.userId!, workspaceId).findById(
+                    context.taskId,
+                  )
+                )?.config,
+              )
+            : [],
+        })
+        .catch((error) => {
+          log('failed to load user skill %s: %O', name, error);
+          return [];
+        });
+      return skill;
+    };
+
     const service = new SkillServerRuntimeService({
+      wrapSandbox: pageSandboxWrapper(context, workspaceId),
       agentId: context.agentId,
       device,
       disabledSkillIds,
       fileModel,
       fileService,
+      isLibrarySkillEnabled,
       isSkillGranted,
       marketService,
+      // The run this runtime belongs to, so an `lh agent run` it preprocesses in
+      // the cloud sandbox can be attributed to the agent that launched it — the
+      // device branch below carries the same id for its own routing.
+      operationId: context.operationId,
       resourceService,
+      // A user skill's latest version is its archive, read through the same
+      // load as `activateSkill` so the same visibility rules apply.
+      resolveUserSkillArchive: async (name) => (await loadUserSkill(name))?.archive,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,
@@ -1066,14 +1170,14 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       // back to these because the raw LLM args never carry activatedSkills.
       activatedSkills: context.activatedSkills,
       builtinSkills: [
-        // Device-only skills resolve in device-capable runs — mirrors the
-        // SkillEngine gate in aiAgent that builds <available_skills>, so a
-        // `device-unrouted` run can activate/read them before the model routes
-        // a device. `activeDeviceId` is the fallback for callers without an
-        // execution plan.
+        // Match the device and opt-in gates of the operation's skill catalog.
         ...filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
-        }).filter((skill) => isSkillReachable(skill.identifier)),
+        }).filter(
+          (skill) =>
+            isSkillReachable(skill.identifier) &&
+            (isLibrarySkillEnabled?.(skill.identifier) ?? true),
+        ),
         ...agentSkillBuiltins,
       ],
       deviceFileAccess,
@@ -1089,32 +1193,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       // call. Same carrier shape as above, under the recovered workspace (a
       // dispatched or resumed run may not carry it on the context).
       resolveSkill: async (requested) => {
-        // Models vary the casing of a name, as the preloaded lookup tolerates.
-        const name = canonicalUserSkillIdentifier(requested);
-        if (!name || !isSkillReachable(name)) return undefined;
-        const [skill] = await new UserSkillService(
-          context.serverDB!,
-          context.userId!,
-          workspaceId,
-          context.agentVisibility,
-        )
-          .loadRuntimeSkills([name], {
-            // Only the generated skills this run's own Task names are trusted
-            // past a public agent's visibility — never a name the model chose.
-            trustedGenerated: context.taskId
-              ? readTaskSkillIds(
-                  (
-                    await new TaskModel(context.serverDB!, context.userId!, workspaceId).findById(
-                      context.taskId,
-                    )
-                  )?.config,
-                )
-              : [],
-          })
-          .catch((error) => {
-            log('failed to load user skill %s: %O', name, error);
-            return [];
-          });
+        const skill = await loadUserSkill(requested);
         return (
           skill && {
             content: skill.body,

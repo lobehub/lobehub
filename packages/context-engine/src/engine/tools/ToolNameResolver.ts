@@ -1,4 +1,4 @@
-import { parseToolNameMaxLength } from '@lobechat/const/plugin';
+import { parseToolNameMaxLength } from '../../const/plugin';
 import { Md5 } from 'ts-md5';
 
 import type { ChatToolPayload, MessageToolCall } from '@/types/index';

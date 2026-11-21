@@ -64,6 +64,26 @@ describe('bearerSecretAuth middleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts any configured rotation secret', async () => {
+    const next = vi.fn().mockResolvedValue(undefined);
+    const middleware = bearerSecretAuth(() => ['active', 'fallback']);
+
+    await middleware(buildContext('Bearer fallback').ctx, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 503 when a rotation secret list contains no configured value', async () => {
+    const next = vi.fn();
+    const response = await bearerSecretAuth(() => [undefined, ''])(
+      buildContext('Bearer anything').ctx,
+      next,
+    );
+
+    expect(response?.status).toBe(503);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('evaluates the secret getter on each request (no cache)', async () => {
     const getSecret = vi.fn();
     getSecret.mockReturnValueOnce(undefined).mockReturnValueOnce('s');

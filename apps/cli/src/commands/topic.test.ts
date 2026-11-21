@@ -16,6 +16,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       searchTopics: { query: vi.fn() },
       updateTopic: { mutate: vi.fn() },
     },
+    workspace: { list: { query: vi.fn() } },
   },
 }));
 
@@ -33,6 +34,9 @@ describe('topic command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockTrpcClient.workspace.list.query.mockResolvedValue([
+      { id: 'ws_1', name: 'Acme', slug: 'acme' },
+    ]);
     for (const method of Object.values(mockTrpcClient.topic)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -269,6 +273,33 @@ describe('topic command', () => {
       ]);
 
       expect(mockGetTrpcClient).toHaveBeenCalledWith('ws_1');
+    });
+
+    it('resolves a --workspace slug to its id', async () => {
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'topic',
+        'view',
+        't1',
+        '--workspace',
+        'acme',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenLastCalledWith('ws_1');
+    });
+
+    it('exits without reading when --workspace matches no workspace', async () => {
+      exitSpy.mockImplementation((() => {
+        throw new Error('process.exit');
+      }) as never);
+
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'topic', 'view', 't1', '--workspace', 'nope']),
+      ).rejects.toThrow('process.exit');
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.topic.getTopicTranscript.query).not.toHaveBeenCalled();
     });
 
     it('uses the aggregate endpoint without loading messages for --no-messages', async () => {

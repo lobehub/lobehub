@@ -1,5 +1,5 @@
-import { type AnchorHTMLAttributes } from 'react';
 import React, { memo } from 'react';
+import { type AnchorHTMLAttributes } from 'react';
 import { Link as RouterLink } from 'react-router';
 
 interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {

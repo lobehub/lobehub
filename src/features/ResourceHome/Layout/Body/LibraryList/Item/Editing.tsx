@@ -1,5 +1,4 @@
-import { stopPropagation } from '@lobehub/ui';
-import { Input, toast } from '@lobehub/ui/base-ui';
+import { Input, stopPropagation, toast } from '@lobehub/ui';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -33,6 +33,10 @@ const normalizeChildren = (children: unknown[]): unknown[] =>
 const normalizeFirstChild = (node: SerializedDiffNodeLike): NormalizedNode => {
   const [origin] = getChildren(node);
 
+  if (isRecord(origin) && origin.type === 'diff-content') {
+    return normalizeChildren(getChildren(origin));
+  }
+
   return origin === undefined ? REMOVED_NODE : normalizeNode(origin);
 };
 
@@ -74,6 +78,13 @@ const normalizeNode = (value: unknown): NormalizedNode => {
   if (!isRecord(value)) return value as NormalizedNode;
 
   if (isDiffNode(value)) return normalizeDiffNodeOrigin(value);
+
+  if (
+    value.type === 'listitem' &&
+    getChildren(value).some((child) => isDiffNode(child) && child.diffType === 'listItemAdd')
+  ) {
+    return REMOVED_NODE;
+  }
 
   const normalized: Record<string, unknown> = {};
 

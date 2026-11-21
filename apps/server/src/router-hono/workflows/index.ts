@@ -5,7 +5,9 @@ import agentSignalApp from './agent-signal';
 import expertiseHistoryApp from './expertise-history';
 import expertiseRejectionApp from './expertise-rejection';
 import goalApp from './goal';
+import { inboundWebhookWorkflowApp } from './inbound-webhook';
 import memoryUserMemoryApp from './memory-user-memory';
+import { workflowAuth } from './middlewares/qstashAuth';
 import onboardingTaskRecommendationApp from './onboarding-task-recommendation';
 import onboardingUnderstandingApp from './onboarding-understanding';
 import taskApp from './task';
@@ -16,11 +18,14 @@ import widgetApp from './widget';
 
 const app = new Hono().basePath('/api/workflows');
 
+app.use('*', workflowAuth());
+
 app.route('/agent-eval-run', agentEvalRunApp);
 app.route('/agent-signal', agentSignalApp);
 app.route('/expertise-history', expertiseHistoryApp);
 app.route('/expertise-rejection', expertiseRejectionApp);
 app.route('/goal', goalApp);
+app.route('/inbound-webhook', inboundWebhookWorkflowApp);
 app.route('/memory-user-memory', memoryUserMemoryApp);
 app.route('/onboarding/understanding', onboardingUnderstandingApp);
 app.route('/onboarding/task-recommendations', onboardingTaskRecommendationApp);

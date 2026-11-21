@@ -12,6 +12,8 @@ import type { TaskConfigSliceAction } from './slices/config';
 import { createTaskConfigSlice } from './slices/config';
 import type { TaskDetailSliceAction } from './slices/detail';
 import { createTaskDetailSlice } from './slices/detail';
+import type { TaskLabelSliceAction } from './slices/label';
+import { createTaskLabelSlice } from './slices/label';
 import type { TaskLifecycleSliceAction } from './slices/lifecycle';
 import { createTaskLifecycleSlice } from './slices/lifecycle';
 import type { TaskListSliceAction } from './slices/list';
@@ -23,6 +25,7 @@ export interface TaskStore
   extends
     TaskConfigSliceAction,
     TaskDetailSliceAction,
+    TaskLabelSliceAction,
     TaskLifecycleSliceAction,
     TaskListSliceAction,
     ResetableStore,
@@ -30,6 +33,7 @@ export interface TaskStore
 
 type TaskStoreAction = TaskConfigSliceAction &
   TaskDetailSliceAction &
+  TaskLabelSliceAction &
   TaskLifecycleSliceAction &
   TaskListSliceAction &
   ResetableStore;
@@ -46,6 +50,7 @@ const createStore: StateCreator<TaskStore, [['zustand/devtools', never]]> = (
     createTaskListSlice(...parameters),
     createTaskDetailSlice(...parameters),
     createTaskLifecycleSlice(...parameters),
+    createTaskLabelSlice(...parameters),
     createTaskConfigSlice(...parameters),
     new TaskStoreResetAction(...parameters),
   ]),

@@ -1,13 +1,14 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles } from '@lobehub/ui';
 import { PanelRightIcon } from 'lucide-react';
 import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
+
+import { useEntityLinkSideBrowser } from '../host';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -50,13 +51,14 @@ const isWebUrl = (href?: string) => !!href && /^https?:\/\//i.test(href);
 const LinkChip = memo<LinkChipProps>(({ href, icon, label }) => {
   const { t } = useTranslation('chat');
   const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
+  const openInHostBrowser = useEntityLinkSideBrowser();
 
   const openInSideBrowser = useCallback(
     (event: MouseEvent<HTMLElement>) => {
       event.preventDefault();
-      openInBrowserTab(href!);
+      (openInHostBrowser ?? openInBrowserTab)(href!);
     },
-    [href, openInBrowserTab],
+    [href, openInBrowserTab, openInHostBrowser],
   );
 
   const link = (

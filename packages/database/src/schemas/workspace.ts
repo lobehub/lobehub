@@ -1,7 +1,8 @@
-import type { WorkspaceUserPreference } from '@lobechat/types';
+import type { WorkspaceMemberConfig, WorkspaceUserPreference } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   foreignKey,
   index,
   jsonb,
@@ -64,6 +65,12 @@ export const workspaceMembers = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     role: text('role').notNull().default('member'),
+    // Workspace-scoped profile: the same person can hold a different title and
+    // duties in each workspace. Lengths are enforced by the API, not the column.
+    title: text('title'),
+    responsibilities: text('responsibilities'),
+    /** Per-member display settings; see {@link WorkspaceMemberConfig}. */
+    config: jsonb('config').$type<WorkspaceMemberConfig>().notNull().default({}),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
     deletedAt: timestamptz('deleted_at'),
@@ -106,7 +113,13 @@ export const workspaceInvitations = pgTable(
     role: text('role').notNull().default('member'),
     token: text('token').unique().notNull(),
     status: text('status').notNull().default('pending'),
-    expiresAt: timestamptz('expires_at').notNull(),
+    /**
+     * A reusable (shareable link) invitation admits any number of users and
+     * stays `pending` after each accept; a regular invitation is single-use.
+     */
+    reusable: boolean('reusable').notNull().default(false),
+    /** `null` means the invitation never expires (reusable links only). */
+    expiresAt: timestamptz('expires_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -115,6 +128,11 @@ export const workspaceInvitations = pgTable(
     index('workspace_invitations_inviter_id_idx').on(t.inviterId),
     index('workspace_invitations_email_idx').on(t.email),
     index('workspace_invitations_token_idx').on(t.token),
+    // Only a reusable link may never expire; a single-use invitation always has an expiry.
+    check(
+      'workspace_invitations_expiry_required',
+      sql`${t.reusable} OR ${t.expiresAt} IS NOT NULL`,
+    ),
   ],
 );
 

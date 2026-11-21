@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { isSameTabTarget, normalizeTabScope, resolveTabScope, tabTargetId } from './scope';
+import {
+  isSameTabTarget,
+  normalizeTabScope,
+  resolveNewTabUrl,
+  resolveTabScope,
+  tabTargetId,
+} from './scope';
 
 describe('desktop tab scope', () => {
   it('marks known top-level desktop routes as personal scope', () => {
@@ -9,6 +15,17 @@ describe('desktop tab scope', () => {
     expect(resolveTabScope('/settings/profile')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/verify/run_1')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/invite/abc')).toEqual({ type: 'personal' });
+  });
+
+  // Regression: mirrored routes missing from the personal segment list used to
+  // resolve as a phantom `workspace:<segment>` scope, so entering a project
+  // page scope-swapped the tab and replayed stale tabs from that bucket.
+  it('marks project, agents and goal routes as personal scope, not phantom workspaces', () => {
+    expect(resolveTabScope('/project/prj_1/topic/tpc_1')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/project/prj_1/acceptance')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/projects')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/agents')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/goal/goal_1')).toEqual({ type: 'personal' });
   });
 
   it('uses the first segment as workspace scope for workspace-prefixed URLs', () => {
@@ -34,5 +51,15 @@ describe('desktop tab scope', () => {
 
   it('keeps the historical recent/pinned id as the normalized URL', () => {
     expect(tabTargetId('/acme/agent/a?b=2&a=1')).toBe('/acme/agent/a?a=1&b=2');
+  });
+
+  // Regression: the macOS Preferences menu (Cmd+,) broadcasts `createNewTab`
+  // with a bare `/settings`, which resolved as personal and swapped the whole
+  // tab strip out of the workspace.
+  it('keeps new tabs in the active workspace scope', () => {
+    expect(resolveNewTabUrl('/settings', '/acme/agent/a')).toBe('/acme/settings');
+    expect(resolveNewTabUrl('/', '/acme/agent/a')).toBe('/acme/');
+    expect(resolveNewTabUrl('/settings', '/agent/a')).toBe('/settings');
+    expect(resolveNewTabUrl('/settings/llm', '/acme/agent/a')).toBe('/settings/llm');
   });
 });

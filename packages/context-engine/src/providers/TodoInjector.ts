@@ -1,6 +1,7 @@
 import debug from 'debug';
 
-import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
+import { BaseVirtualLastUserContentProvider } from '../base/BaseVirtualLastUserContentProvider';
+import { CONTEXT_INSTRUCTION, SYSTEM_CONTEXT_END, SYSTEM_CONTEXT_START } from '../base/constants';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
@@ -72,10 +73,10 @@ function formatTodos(todos: TodoList): string | null {
 
 /**
  * Todo Injector
- * Responsible for injecting the current todo list at the end of the last user message
+ * Responsible for injecting the current todo list as a standalone virtual tail message
  * This provides the AI with real-time awareness of task progress
  */
-export class TodoInjector extends BaseLastUserContentProvider {
+export class TodoInjector extends BaseVirtualLastUserContentProvider {
   readonly name = 'TodoInjector';
 
   constructor(
@@ -85,52 +86,69 @@ export class TodoInjector extends BaseLastUserContentProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    log('doProcess called');
-    log('config.enabled:', this.config.enabled);
-
-    const clonedContext = this.cloneContext(context);
-
+  protected shouldSkip(context: PipelineContext): boolean {
     if (!this.config.enabled || !this.config.todos) {
       log('Todo not enabled or no todos, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return true;
     }
 
-    const formattedContent = formatTodos(this.config.todos);
+    const hasRealUser = context.messages.some(
+      (message) =>
+        message.role === 'user' &&
+        message.meta?.virtualLastUser !== true &&
+        message.meta?.systemInjection !== true,
+    );
+    if (!hasRealUser) {
+      log('No user messages found, skipping injection');
+      return true;
+    }
+
+    return false;
+  }
+
+  protected buildContent(_context: PipelineContext): string | null {
+    const formattedContent = formatTodos(this.config.todos!);
 
     if (!formattedContent) {
       log('No todos to inject (empty list)');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
     log('Formatted content length:', formattedContent.length);
 
-    const lastUserIndex = this.findLastUserMessageIndex(clonedContext.messages);
+    return `${SYSTEM_CONTEXT_START}
+${CONTEXT_INSTRUCTION}
+<todo_context>
+${formattedContent}
+</todo_context>
+${SYSTEM_CONTEXT_END}`;
+  }
 
-    log('Last user message index:', lastUserIndex);
-
-    if (lastUserIndex === -1) {
-      log('No user messages found, skipping injection');
-      return this.markAsExecuted(clonedContext);
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    if (this.shouldSkip(context)) {
+      return this.markAsExecuted(context);
     }
 
-    const hasExistingWrapper = this.hasExistingSystemContext(clonedContext);
-    const contentToAppend = hasExistingWrapper
-      ? this.createContextBlock(formattedContent, 'todo_context')
-      : this.wrapWithSystemContext(formattedContent, 'todo_context');
+    const content = this.buildContent(context);
+    if (!content) {
+      return this.markAsExecuted(context);
+    }
 
-    this.appendToLastUserMessage(clonedContext, contentToAppend);
+    const clonedContext = this.cloneContext(context);
+    clonedContext.messages.push(this.createVirtualLastUserMessage(content));
+
+    const { items } = this.config.todos!;
 
     clonedContext.metadata.todoInjected = true;
-    clonedContext.metadata.todoCount = this.config.todos.items.length;
-    clonedContext.metadata.todoCompletedCount = this.config.todos.items.filter(
+    clonedContext.metadata.todoCount = items.length;
+    clonedContext.metadata.todoCompletedCount = items.filter(
       (item) => item.status === 'completed',
     ).length;
-    clonedContext.metadata.todoProcessingCount = this.config.todos.items.filter(
+    clonedContext.metadata.todoProcessingCount = items.filter(
       (item) => item.status === 'processing',
     ).length;
 
-    log('Todo context appended to last user message');
+    log('Todo context injected as virtual tail user message');
 
     return this.markAsExecuted(clonedContext);
   }

@@ -1,10 +1,10 @@
 import type {
-  UserMemoryActivitiesWithoutVectors,
-  UserMemoryContextsWithoutVectors,
-  UserMemoryExperiencesWithoutVectors,
-  UserMemoryIdentitiesWithoutVectors,
-  UserMemoryPreferencesWithoutVectors,
-} from '../../schemas';
+  UserMemoryActivityWithoutVectors,
+  UserMemoryContextWithoutVectors,
+  UserMemoryExperienceWithoutVectors,
+  UserMemoryIdentityWithoutVectors,
+  UserMemoryPreferenceWithoutVectors,
+} from '@lobechat/types';
 
 export { UserMemoryTopicRepository } from './UserMemoryTopicRepository';
 
@@ -15,18 +15,18 @@ export interface MemorySource {
   title: string | null;
 }
 
-export interface DisplayExperienceMemory extends UserMemoryExperiencesWithoutVectors {
+export interface DisplayExperienceMemory extends UserMemoryExperienceWithoutVectors {
   title: string | null;
 }
 
-export interface DisplayPreferenceMemory extends UserMemoryPreferencesWithoutVectors {
+export interface DisplayPreferenceMemory extends UserMemoryPreferenceWithoutVectors {
   title: string | null;
 }
 
-export type DisplayContextMemory = UserMemoryContextsWithoutVectors;
+export type DisplayContextMemory = UserMemoryContextWithoutVectors;
 
-export type DisplayIdentityMemory = UserMemoryIdentitiesWithoutVectors;
+export type DisplayIdentityMemory = UserMemoryIdentityWithoutVectors;
 
-export interface DisplayActivityMemory extends UserMemoryActivitiesWithoutVectors {
+export interface DisplayActivityMemory extends UserMemoryActivityWithoutVectors {
   title: string | null;
 }

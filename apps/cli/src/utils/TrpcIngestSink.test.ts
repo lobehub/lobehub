@@ -68,4 +68,62 @@ describe('heterogeneous completion delivery', () => {
     await assertion;
     expect(mutate).toHaveBeenCalledTimes(7);
   });
+
+  it('drops background tasks for the rest of the run once a server refuses them', async () => {
+    const { ingestMutate, sink } = setup();
+    const badRequest = Object.assign(new Error('Invalid input'), { data: { code: 'BAD_REQUEST' } });
+    ingestMutate.mockRejectedValueOnce(badRequest).mockResolvedValue({ accepted: true });
+    const chunk = {
+      data: {},
+      operationId: 'owned-op',
+      stepIndex: 0,
+      timestamp: 1,
+      type: 'stream_chunk',
+    };
+    const task = { ...chunk, type: 'background_task' };
+
+    await expect(sink.ingest([chunk, task] as any)).resolves.toEqual({ accepted: true });
+    await sink.ingest([task, chunk] as any);
+
+    expect(ingestMutate.mock.calls.map(([input]) => input.events.map((e: any) => e.type))).toEqual([
+      ['stream_chunk', 'background_task'],
+      ['stream_chunk'],
+      ['stream_chunk'],
+    ]);
+  });
+
+  it('keeps other refusals as they are', async () => {
+    const { ingestMutate, sink } = setup();
+    const badRequest = Object.assign(new Error('Invalid input'), { data: { code: 'BAD_REQUEST' } });
+    ingestMutate.mockRejectedValue(badRequest);
+    const chunk = {
+      data: {},
+      operationId: 'owned-op',
+      stepIndex: 0,
+      timestamp: 1,
+      type: 'stream_chunk',
+    };
+
+    await expect(sink.ingest([chunk] as any)).rejects.toBe(badRequest);
+    expect(ingestMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends nothing for a batch of only background tasks once the server refused them', async () => {
+    const { ingestMutate, sink } = setup();
+    const badRequest = Object.assign(new Error('Invalid input'), { data: { code: 'BAD_REQUEST' } });
+    ingestMutate.mockRejectedValueOnce(badRequest);
+    const task = {
+      data: {},
+      operationId: 'owned-op',
+      stepIndex: 0,
+      timestamp: 1,
+      type: 'background_task',
+    };
+
+    // The refused batch held only tasks: dropping them leaves nothing to send.
+    await expect(sink.ingest([task] as any)).resolves.toEqual({ accepted: true });
+    await expect(sink.ingest([task, task] as any)).resolves.toEqual({ accepted: true });
+
+    expect(ingestMutate).toHaveBeenCalledTimes(1);
+  });
 });

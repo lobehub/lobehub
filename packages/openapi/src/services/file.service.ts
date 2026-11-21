@@ -31,6 +31,7 @@ import { nanoid } from '@/utils/uuid';
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicFile, projectPublicUser } from '../helpers/public-fields';
+import type { DeletedResource } from '../types/common.type';
 import type {
   AsyncTaskErrorResponse,
   BatchFileUploadRequest,
@@ -1054,9 +1055,8 @@ export class FileUploadService extends BaseService {
   /**
    * Delete file
    */
-  async deleteFile(fileId: string): Promise<void> {
+  async deleteFile(fileId: string): Promise<DeletedResource> {
     try {
-      // Permission check
       const permissionResult = await this.resolveOperationPermission('FILE_DELETE', {
         targetFileId: fileId,
       });
@@ -1075,7 +1075,7 @@ export class FileUploadService extends BaseService {
 
       this.log('info', 'File deleted successfully', { fileId, key: file.url });
 
-      return;
+      return { deleted: true, id: fileId };
     } catch (error) {
       this.handleServiceError(error, '删除文件');
     }

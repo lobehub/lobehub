@@ -1,9 +1,8 @@
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { Fragment, memo } from 'react';
 
-import { type ScoreItemProps } from './ScoreItem';
 import ScoreItem from './ScoreItem';
+import { type ScoreItemProps } from './ScoreItem';
 
 interface ScoreListProps {
   items: ScoreItemProps[];

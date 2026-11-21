@@ -1,7 +1,5 @@
 import { type IThreadType, ThreadType } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Divider, Flexbox, Icon } from '@lobehub/ui';
 import { GitBranch } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

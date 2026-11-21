@@ -77,9 +77,10 @@ export const resolveWorkspaceCommunityProfileRedirect = ({
 }: ResolveWorkspaceCommunityProfileRedirectParams) => {
   if (!isWorkspaceScope) return null;
 
-  const targetPath = '/community/workspace';
+  const targetPath = '/marketplace/workspace';
   if (pathname.endsWith(targetPath)) return null;
-  if (!pathname.includes('/community/user/') && !pathname.includes('/community/org/')) return null;
+  if (!pathname.includes('/marketplace/user/') && !pathname.includes('/marketplace/org/'))
+    return null;
 
   return `${targetPath}${search}`;
 };

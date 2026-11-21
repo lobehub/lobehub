@@ -1,9 +1,21 @@
 'use client';
 
 import { formatSize } from '@lobechat/utils/format';
-import { Center, Flexbox, Icon, Markdown, useAppElement } from '@lobehub/ui';
-import { ActionIcon, Button, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Markdown,
+  Skeleton,
+  Tag,
+  Text,
+  useAppElement,
+} from '@lobehub/ui';
 import { ArrowLeft, ArrowRight, Download, ExternalLink, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -12,9 +24,8 @@ import { useTranslation } from 'react-i18next';
 import { EntityLinkHostProvider, useEntityMarkdown } from '@/features/EntityLink';
 import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
+import { useDocumentStore } from '@/store/document';
+import { densityVars } from '@/styles/densityVars';
 
 import type { DeliverableItem } from './deliverableList';
 import {
@@ -57,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     flex: none;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 24px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -119,7 +130,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     width: 320px;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
@@ -159,11 +170,10 @@ const SidebarItem = ({
 
 const DocumentBody = ({ documentId }: { documentId: string }) => {
   const markdownProps = useEntityMarkdown();
-  const { data: document, isLoading } = useClientDataSWR(
-    portalKeys.documentHeader(documentId),
-    () => documentService.getDocumentById(documentId),
-  );
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const { data: document, isHydrated, isLoading } = useFetchDocumentDetail(documentId);
 
+  if (isLoading && !isHydrated) return null;
   if (isLoading)
     return (
       <Flexbox className={styles.doc} data-testid={'deliverable-reader-loading'} gap={12}>

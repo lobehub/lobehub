@@ -44,6 +44,16 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { value: originalPlatform });
 });
 
+const stdioOptions = () => ({
+  args: [],
+  commandPath: 'agent',
+  cwd: '/workspace',
+  env: { ...process.env },
+  closeGraceMs: 50,
+  onMessage: vi.fn(),
+  onStderr: vi.fn(),
+});
+
 /**
  * The transport is protocol-agnostic: the default `isResponse` matches
  * JSON-RPC-2.0-shaped responses (has `id`, no `method`), so an ACP-style
@@ -178,15 +188,7 @@ describe('RpcStdioClient (generic transport)', () => {
       child.killed = true;
       return true;
     });
-    const client = new RpcStdioClient({
-      args: [],
-      commandPath: 'agent',
-      cwd: '/workspace',
-      env: { ...process.env },
-      closeGraceMs: 50,
-      onMessage: vi.fn(),
-      onStderr: vi.fn(),
-    });
+    const client = new RpcStdioClient(stdioOptions());
     await client.start();
     const close = client.close();
     expect(client.close()).toBe(close);
@@ -245,15 +247,7 @@ describe('RpcStdioClient (generic transport)', () => {
       const { child } = createProcess();
       child.stdin.end.mockImplementation(() => {});
       spawnMock.mockReturnValue(child);
-      const client = new RpcStdioClient({
-        args: [],
-        commandPath: 'agent',
-        cwd: '/workspace',
-        env: { ...process.env },
-        closeGraceMs: 50,
-        onMessage: vi.fn(),
-        onStderr: vi.fn(),
-      });
+      const client = new RpcStdioClient(stdioOptions());
       await client.start();
       Object.defineProperty(process, 'platform', { value: 'win32' });
       const killer = new EventEmitter();
@@ -278,15 +272,7 @@ describe('RpcStdioClient (generic transport)', () => {
     child.stdin.end.mockImplementation(() => {});
     spawnMock.mockReturnValue(child);
     vi.spyOn(process, 'kill').mockReturnValue(true);
-    const client = new RpcStdioClient({
-      args: [],
-      commandPath: 'agent',
-      cwd: '/workspace',
-      env: { ...process.env },
-      closeGraceMs: 50,
-      onMessage: vi.fn(),
-      onStderr: vi.fn(),
-    });
+    const client = new RpcStdioClient(stdioOptions());
     await client.start();
     const result = expect(client.close()).rejects.toThrow('did not exit after SIGKILL');
     await vi.advanceTimersByTimeAsync(4050);

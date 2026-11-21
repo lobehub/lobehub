@@ -63,6 +63,11 @@ export const cleanupTestUser = async (serverDB: LobeChatDatabase, userId: string
   const { users } = await import('@/database/schemas');
   const { eq } = await import('drizzle-orm');
 
-  // Due to foreign key cascade deletion, only the user needs to be deleted
+  const { releaseProjectEnvironments } =
+    await import('@/database/models/utils/projectEnvironmentCleanup');
+
+  // Everything else cascades from the user; each project's environment is
+  // released the way account deletion releases it.
+  await releaseProjectEnvironments(serverDB, { userId });
   await serverDB.delete(users).where(eq(users.id, userId));
 };

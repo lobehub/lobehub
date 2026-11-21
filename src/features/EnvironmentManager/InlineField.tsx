@@ -1,13 +1,23 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Input, Select, Text, TextArea, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Input,
+  Select,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { densityVars } from '@/styles/densityVars';
 
 import { describeError } from './errorMessage';
 
@@ -24,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-height: 36px;
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -60,8 +70,8 @@ interface InlineFieldProps {
    * person's text still in it, and the reason goes to a toast.
    */
   onSave: (value: string) => Promise<void>;
-  /** Shown in place of an empty value, muted. */
-  placeholder: string;
+  /** Shown in place of an empty value, muted. Omit when no example fits every case. */
+  placeholder?: string;
   /** Refuse an empty value instead of saving it — for the one field that has no sensible blank. */
   required?: boolean;
   /**

@@ -17,12 +17,14 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
+import ProjectHomeSkeleton from '@/components/Skeleton/ProjectHome';
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import ProviderSettingsSkeleton, {
   ProviderDetailSkeleton,
 } from '@/components/Skeleton/Settings/Provider';
+import { getSettingsTabSkeleton } from '@/components/Skeleton/Settings/tabs';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -30,6 +32,7 @@ import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetail
 import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
+import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
 import { createTabRouter } from '@/spa/router/tabRouter';
 import { resolveRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
@@ -79,6 +82,16 @@ async function readRouterSources() {
       'desktopRouter.shared.tsx',
       'desktopRouter.config.tsx',
       'desktopRouter.config.desktop.tsx',
+      'projectWorkspaceRoutes.tsx',
+      'taskWorkspaceRoutes.tsx',
+      'workspaceSettingsRoutes.tsx',
+      'resourceRoutes.tsx',
+      'agentPageRoutes.tsx',
+      'memoryRoutes.tsx',
+      'onboardingRoute.tsx',
+      'collaborationRoutes.tsx',
+      'evalRoutes.tsx',
+      'marketplaceRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -184,6 +197,21 @@ describe('desktop router shared definition', () => {
     },
   );
 
+  it.each(mainAreaVariants)(
+    '%s renders the project home skeleton on the composer layout',
+    (_, factory) => {
+      // Regression: the home is a centered composer page (title, subtitle, then the
+      // tray + card), but its route skeleton was the generic avatar/detail surface,
+      // so the first paint and the loaded page had different layouts.
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1');
+      const Skeleton = resolveRouteSkeleton(
+        matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
+      );
+
+      expect(Skeleton).toBe(ProjectHomeSkeleton);
+    },
+  );
+
   it.each(mainAreaVariants)('%s keeps legacy self-learning deep-links matching', (_, factory) => {
     const matches = matchRoutes(
       createMainAreaRoutes(factory),
@@ -195,7 +223,7 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
-    '%s exposes project task, goal, dashboard, and acceptance workspaces',
+    '%s exposes project channel, task, goal, dashboard, and acceptance workspaces',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');
       const projectIndexRoute = projectRoute?.children?.find((route) => route.index);
@@ -204,23 +232,71 @@ describe('desktop router shared definition', () => {
         .filter((routePath): routePath is string => Boolean(routePath));
 
       expect(projectPaths).toEqual([
+        'topic/:topicId?',
         'conversation/:topicId?',
+        'channels/:channelId',
+        'channels/:channelId/settings',
         'tasks',
         'settings/:section?',
         'goals',
         'dashboard',
         'acceptance',
       ]);
-      for (const section of ['general', 'environments', 'directories']) {
+      for (const section of ['general', 'members', 'knowledge', 'environments', 'directories']) {
         const matches = matchRoutes(
           createMainAreaRoutes(factory),
           `/project/project-1/settings/${section}`,
         );
         expect(matches?.at(-1)?.params.section).toBe(section);
       }
+      // A project's Channel opens inside the project, beside its sidebar.
+      const channelMatches = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/project/project-1/channels/chn_1',
+      );
+      expect(channelMatches?.at(-1)?.params.channelId).toBe('chn_1');
+      // A thread page stays inside its Channel's route, so the Channel page keeps rendering it.
+      const threadMatches = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/project/project-1/channels/chn_1/threads/cht_1',
+      );
+      expect(threadMatches?.at(-2)?.route.path).toBe('channels/:channelId');
+      expect(threadMatches?.at(-1)?.params).toMatchObject({
+        channelId: 'chn_1',
+        threadId: 'cht_1',
+      });
+      // The project root is its home page (composer + overview), not a redirect.
       expect(
-        (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
-      ).toBe('conversation');
+        (projectIndexRoute?.element as ReactElement<{ to?: string }> | undefined)?.props.to,
+      ).toBeUndefined();
+      expect(projectIndexRoute?.handle?.meta?.titleKey).toBe('project:sections.home');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s opens a Channel thread as a page under its Channel',
+    (_, factory) => {
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/channels/chn_1/threads/cht_1');
+
+      expect(matches?.at(-2)?.route.path).toBe(':channelId');
+      expect(matches?.at(-1)?.params).toMatchObject({ channelId: 'chn_1', threadId: 'cht_1' });
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s opens a project acceptance record inside the project section',
+    (_, factory) => {
+      const list = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1/acceptance');
+      const record = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1/acceptance/acc_1');
+      const check = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/project/prj_1/acceptance/acc_1/check/chk_1',
+      );
+
+      expect(list?.at(-1)?.route.index).toBe(true);
+      expect(record?.at(-1)?.route.path).toBe(':acceptanceId');
+      expect(record?.at(-1)?.params.acceptanceId).toBe('acc_1');
+      expect(check?.at(-1)?.params.checkId).toBe('chk_1');
     },
   );
 
@@ -258,7 +334,7 @@ describe('desktop router shared definition', () => {
   );
 
   it.each(mainAreaVariants)(
-    '%s personal devices list and detail use their own skeletons, not the settings form',
+    '%s personal devices list and detail resolve the devices tab skeleton',
     (_, factory) => {
       for (const [url, leaf] of [
         ['/settings/devices', 'devices'],
@@ -272,9 +348,11 @@ describe('desktop router shared definition', () => {
 
         expect(matches?.at(-1)?.route.path).toBe(leaf);
         expect(handle.settingsTab).toBe('devices');
-        expect(handle.meta?.Skeleton).toBeDefined();
-        expect(handle.meta?.Skeleton).not.toBe(SettingsPageSkeleton);
+        // The settings page skeleton picks the devices entry by pathname, so the
+        // explicit routes render the card grid, not the generic settings form.
+        expect(handle.meta?.Skeleton).toBe(SettingsPageSkeleton);
       }
+      expect(getSettingsTabSkeleton('devices')).toBeDefined();
     },
   );
 
@@ -342,7 +420,15 @@ describe('desktop router shared definition', () => {
     expect(webPaths).not.toContain('/a/:slugOrId/:topicId?');
     expect(electronPaths).not.toContain('/a/:slugOrId/:topicId?');
     expect(webPaths).not.toContain('/verify');
-    expect(webPaths).toContain('/acceptance');
+    // Acceptance sits under a pathless layout that owns its workspace context,
+    // personal at `/acceptance` and mirrored at `/:workspaceSlug/acceptance`.
+    const acceptanceLayout = webDesktopRoutes.find((route) =>
+      route.children?.some((child) => child.path === '/acceptance'),
+    );
+    expect(acceptanceLayout?.path).toBeUndefined();
+    expect(
+      acceptanceLayout?.children?.find((child) => child.path === ':workspaceSlug')?.children,
+    ).toMatchObject([{ path: 'acceptance' }]);
     expect(webPaths).toContain('/onboarding');
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');
@@ -350,7 +436,8 @@ describe('desktop router shared definition', () => {
     expect(electronPaths).not.toContain('/share/page');
     expect(electronPaths).not.toContain('/verify');
     expect(electronPaths).not.toContain('/acceptance');
-    expect(electronPaths).not.toContain('/onboarding');
+    // Electron runs account onboarding after its local first-run setup.
+    expect(electronPaths).toContain('/onboarding');
     expect(electronPaths).toContain('/desktop-onboarding');
   });
 
@@ -486,9 +573,11 @@ describe('desktop router shared definition', () => {
       ['/apps', AppsSkeleton],
       ['/memory', MemorySkeleton],
       ['/resource', ResourceHomeSkeleton],
-      ['/resource/files', ResourceCategorySkeleton],
-      ['/resource/images', ResourceCategorySkeleton],
+      ['/resource/drive', ResourceCategorySkeleton],
+      ['/resource/drive/files', ResourceCategorySkeleton],
+      ['/resource/drive/images', ResourceCategorySkeleton],
       ['/resource/works', ResourceCategorySkeleton],
+      ['/resource/library', ResourceCategorySkeleton],
     ] as const) {
       const matches = matchRoutes(getRoutes(pathname), pathname);
       expect(
@@ -541,13 +630,13 @@ describe('desktop router shared definition', () => {
   ])(
     '%s paints the resource skeleton on its first render, without a chunk wait',
     (_, getRoutes) => {
-      const matches = matchRoutes(getRoutes('/resource/files'), '/resource/files');
+      const matches = matchRoutes(getRoutes('/resource/drive/files'), '/resource/drive/files');
       const Skeleton = resolveRouteSkeleton(
         matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
       );
 
       const html = renderToString(
-        <MemoryRouter initialEntries={['/resource/files']}>
+        <MemoryRouter initialEntries={['/resource/drive/files']}>
           {Skeleton && <Skeleton />}
         </MemoryRouter>,
       );
@@ -636,6 +725,129 @@ describe('desktop router shared definition', () => {
   );
 
   it.each(mainAreaVariants)(
+    '%s serves installed skills and connectors in the Marketplace, beside the skill detail',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const [url, leaf, titleKey] of [
+        [
+          '/marketplace/skill/installed',
+          'skill/installed',
+          'navigation.marketplaceInstalledSkills',
+        ],
+        [
+          '/acme/marketplace/skill/installed',
+          'skill/installed',
+          'navigation.marketplaceInstalledSkills',
+        ],
+        [
+          '/marketplace/connector/installed',
+          'connector/installed',
+          'navigation.marketplaceConnectors',
+        ],
+        [
+          '/acme/marketplace/connector/installed',
+          'connector/installed',
+          'navigation.marketplaceConnectors',
+        ],
+      ] as const) {
+        const matches = matchRoutes(routes, url);
+        const handle = matches?.at(-1)?.route.handle as {
+          meta?: { Skeleton?: unknown; titleKey?: string };
+        };
+
+        expect(matches?.at(-1)?.route.path, url).toBe(leaf);
+        // Inside the marketplace root (its sidebar), not the list or detail layouts.
+        expect(matches?.at(-2)?.route.path, url).toBe('marketplace');
+        expect(handle.meta?.titleKey, url).toBe(titleKey);
+        expect(handle.meta?.Skeleton, url).toBeDefined();
+      }
+
+      // A real skill identifier still opens the catalog detail page.
+      expect(matchRoutes(routes, '/marketplace/skill/some-skill')?.at(-1)?.route.path).toBe(
+        'skill/:slug',
+      );
+      // Discover pages: no category column layout, the Codex groups are the page.
+      expect(matchRoutes(routes, '/marketplace/skill')?.at(-1)?.route.path).toBe('skill');
+      const appDiscover = matchRoutes(routes, '/marketplace/app')?.at(-1)?.route;
+      expect(appDiscover?.path).toBe('app');
+      expect(
+        (appDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
+      ).toBe('navigation.marketplaceApps');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s distinguishes Apps, their capabilities, and MCP routes',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const prefix of ['', '/acme']) {
+        for (const [url, pattern] of [
+          ['app', 'app'],
+          ['app/slack', 'app/:appId'],
+          ['mcp', 'mcp'],
+          ['mcp/installed', 'mcp/installed'],
+        ]) {
+          expect(matchRoutes(routes, `${prefix}/marketplace/${url}`)?.at(-1)?.route.path).toBe(
+            pattern,
+          );
+        }
+      }
+
+      expect(matchRoutes(routes, '/marketplace/mcp/notion')?.at(-1)?.route.path).toBe('mcp/:slug');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s redirects settings skill / connector URLs to the Marketplace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const [url, to] of [
+        ['/settings/skill', '/marketplace/skill/installed'],
+        ['/settings/skill/sub', '/marketplace/skill/installed'],
+        ['/settings/connector', '/marketplace/connector/installed'],
+        ['/settings/connector/sub', '/marketplace/connector/installed'],
+        ['/acme/settings/skill', '/marketplace/skill/installed'],
+        ['/acme/settings/connector', '/marketplace/connector/installed'],
+      ] as const) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
+          ReactElement<{ to: string }> | undefined;
+
+        // Before the static routes existed, `/settings/skill` fell into `:tab` and
+        // rendered the default tab once the componentMap entry was gone.
+        expect(element?.type, url).toBe(LegacyPathRedirect);
+        expect(element?.props.to, url).toBe(to);
+      }
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s forwards every old /community URL to the Marketplace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      const entry = matchRoutes(routes, '/marketplace')?.at(-1)?.route.element;
+      expect(matchRoutes(routes, '/community')?.at(-1)?.route.element).toBe(entry);
+
+      for (const url of [
+        '/community/mcp/notion',
+        '/acme/community/skill',
+        // Compete with `/:workspaceSlug/agent[/:aid]`; a lone `community/*`
+        // splat lost and read `community` as a workspace slug.
+        '/community/agent',
+        '/community/agent/some-agent',
+        '/acme/community/agent/some-agent',
+        '/community/workspace/settings',
+      ]) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as ReactElement | undefined;
+        expect(element?.type, url).toBe(LegacyCommunityRedirect);
+      }
+    },
+  );
+
+  it.each(mainAreaVariants)(
     '%s keeps workspace provider deep-links inside the workspace',
     (_, factory) => {
       const routes = createMainAreaRoutes(factory);
@@ -703,11 +915,13 @@ describe('desktop router shared definition', () => {
   });
 
   it('keeps business resource and task routes in the shared definition', async () => {
-    const [sharedSource] = await readRouterSources();
+    const [sharedSource, , , , , , resourceSource, agentPageSource] = await readRouterSources();
 
-    expect(sharedSource).toContain('...BusinessResourceRoutes');
+    expect(sharedSource).toContain('resourceRoute,');
+    expect(resourceSource).toContain('...BusinessResourceRoutes');
     expect(sharedSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
-    expect(sharedSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
+    expect(sharedSource).toContain('...agentPageChildren,');
+    expect(agentPageSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/tasks/_layout')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/task/_layout')");

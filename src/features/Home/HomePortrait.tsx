@@ -1,5 +1,5 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { resolveChiefAgentArtwork } from '@/features/ChiefAgent/artwork';

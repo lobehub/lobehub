@@ -73,6 +73,43 @@ describe('resolveGroupMemberApprovalContinuation', () => {
     });
   });
 
+  it.each(['submitted', 'skipped'] as const)(
+    'recovers authoritative member context for a %s tool result',
+    async (outcome) => {
+      const { bridgeHook, deps } = createDeps({ ...member, threadId: 'thd_1' });
+      const resumeToolResult = {
+        content: outcome === 'submitted' ? 'Yes' : 'User skipped',
+        outcome,
+        parentMessageId: 'msg_ask_user',
+        toolCallId: 'call_ask',
+      };
+      const result = await resolveGroupMemberApprovalContinuation(deps as any, {
+        agentId: 'agt_sup',
+        // A Web thread view may omit the group; a supplied group is not authority either.
+        appContext: { groupId: 'untrusted-group', scope: 'thread', threadId: 'thd_1' },
+        prompt: '',
+        resumeToolResult,
+      });
+
+      expect(deps.findMessagePlugin).toHaveBeenCalledWith('msg_ask_user');
+      expect(result).toMatchObject({
+        agentId: member.agentId,
+        appContext: {
+          groupId: member.groupId,
+          isolationThread: true,
+          isSubAgent: true,
+          orchestrationRole: 'member',
+          threadId: 'thd_1',
+          topicId: member.topicId,
+        },
+        hooks: [expect.objectContaining({ id: 'thread-completion' }), bridgeHook],
+        parentOperationId: bridgeBody.parentOperationId,
+        resumeToolResult,
+        topicStartOwnerOperationId: bridgeBody.parentOperationId,
+      });
+    },
+  );
+
   it('keeps an isolated member in its own thread', async () => {
     const { deps } = createDeps({ ...member, threadId: 'thd_1' });
 

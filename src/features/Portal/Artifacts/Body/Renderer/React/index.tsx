@@ -33,4 +33,5 @@ const ReactRenderer = memo<ReactRendererProps>(({ code }) => {
   );
 });
 
+/**  Superseded by Canvas (`lobe-canvas`); kept so existing conversations keep rendering. */
 export default ReactRenderer;

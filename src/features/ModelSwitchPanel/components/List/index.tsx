@@ -50,9 +50,19 @@ export const List: FC<ListProps> = ({
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
-  const { isModelRestricted, onBeforeModelSelect, onRestrictedModelClick, sortModelLast } =
-    useBusinessModelListGuard();
-  const proLabel = isModelRestricted ? tCommon('pro') : undefined;
+  const {
+    isModelRestricted,
+    onBeforeModelSelect,
+    onRestrictedModelClick,
+    restrictedBadgeLabel,
+    sortModelLast,
+  } = useBusinessModelListGuard();
+  const proLabel = tCommon('pro');
+  const getRestrictedLabel = useCallback(
+    (modelId: string, providerId: string) =>
+      restrictedBadgeLabel?.(modelId, providerId) ?? proLabel,
+    [proLabel, restrictedBadgeLabel],
+  );
 
   const chatEnabledList = useEnabledChatModels();
   const enabledList = enabledListProp ?? chatEnabledList;
@@ -162,11 +172,11 @@ export const List: FC<ListProps> = ({
               <ListItemRenderer
                 activeKey={activeKey}
                 activeSecondaryText={activeSecondaryText}
+                getRestrictedLabel={getRestrictedLabel}
                 isModelRestricted={isModelRestricted}
                 item={item}
                 key={key}
                 newLabel={newLabel}
-                proLabel={proLabel}
                 subscribeScroll={subscribeScroll}
                 onBeforeModelSelect={onBeforeModelSelect}
                 onClose={handleClose}

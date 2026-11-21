@@ -3,7 +3,10 @@ import type {
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
-import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
+import type {
+  HeteroPermissionMode,
+  ServerDefaultHeterogeneousModelDescriptor,
+} from '@lobechat/types';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -18,6 +21,11 @@ export interface HeterogeneousAgentBuildPlan {
    * persisting conversation content for CLIs that cannot read prompts on stdin.
    */
   argvPayload?: string;
+  /**
+   * Keep stdin open after the prompt for as long as the session can use it
+   * (Claude Code, always): the channel for control requests and mid-run messages.
+   */
+  liveInput?: boolean;
   stdinPayload?: string;
 }
 
@@ -27,6 +35,8 @@ export interface HeterogeneousAgentBuildPlanHelpers {
 
 export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
+  /** CLI version spawn preflight detected, when known. */
+  cliVersion?: string;
   helpers: HeterogeneousAgentBuildPlanHelpers;
   /**
    * Optional path to an MCP config JSON written by the controller (e.g. for
@@ -34,6 +44,16 @@ export interface HeterogeneousAgentBuildPlanParams {
    * field append `--mcp-config <path>`; others ignore it.
    */
   mcpConfigPath?: string;
+  /**
+   * (Claude Code) Better Coding Experience permission mode. Absent: every
+   * action is allowed.
+   */
+  permissionMode?: HeteroPermissionMode;
+  /**
+   * (Claude Code) The host answers prompts (an AskUserBridge is up). Without,
+   * a picked mode fails closed: print mode denies what it would ask about.
+   */
+  permissionPrompts?: boolean;
   promptInput: AgentPromptInput;
   resumeSessionId?: string;
 }
@@ -70,6 +90,8 @@ export interface ProviderBindingPlan {
   /** Best-effort synchronous release for app shutdown. */
   cleanupSync?: () => void;
   env: Record<string, string>;
+  /** Native selector ID for transports that select models after the handshake. */
+  model?: string;
   /** Environment variable that receives the per-prompt server operation token. */
   operationTokenEnvKey?: string;
   profileFiles?: ProviderBindingFilePlan[];

@@ -4,6 +4,7 @@ import { isInstalledPluginAvailableInCurrentEnv } from '@/helpers/toolAvailabili
 import { type InstallPluginMeta, type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import { type ToolStoreState } from '../../initialState';
+import { connectorSelectors } from '../connector/selectors';
 import { INSTALLED_PLUGINS_KEY } from './projection';
 
 const EMPTY_PLUGINS: LobeTool[] = [];
@@ -23,6 +24,10 @@ const installedPlugins = (s: ToolStoreState) => s.installedPlugins;
 const isInstalledPluginsCacheOnly = (s: ToolStoreState) =>
   s.installedPluginsReplica?.entries[INSTALLED_PLUGINS_KEY]?.source === 'storage';
 
+/** Whether the list holds the server's full records (not unloaded, not the cached projection). */
+const isInstalledPluginsServerConfirmed = (s: ToolStoreState) =>
+  s.installedPluginsReplica?.entries[INSTALLED_PLUGINS_KEY]?.source === 'server';
+
 /**
  * The full installed-plugin records — settings and MCP connection included —
  * that tool assembly, tool execution, edit forms and writes may act on. Empty
@@ -32,8 +37,10 @@ const isInstalledPluginsCacheOnly = (s: ToolStoreState) =>
 const confirmedInstalledPlugins = (s: ToolStoreState) =>
   isInstalledPluginsCacheOnly(s) ? EMPTY_PLUGINS : s.installedPlugins;
 
+/** Installed as a legacy plugin row, or as a finished marketplace connector install. */
 const isPluginInstalled = (id: string) => (s: ToolStoreState) =>
-  installedPlugins(s).some((i) => i.identifier === id);
+  installedPlugins(s).some((i) => i.identifier === id) ||
+  connectorSelectors.isMarketplaceConnectorInstalled(id)(s);
 
 /** The full record of an installed plugin (see {@link confirmedInstalledPlugins}). */
 const getInstalledPluginById = (id?: string) => (s: ToolStoreState) => {
@@ -142,6 +149,7 @@ export const pluginSelectors = {
   installedPluginMetaList,
   installedPlugins,
   isInstalledPluginsCacheOnly,
+  isInstalledPluginsServerConfirmed,
   isPluginHasUI,
   isPluginInstalled,
   storeAndInstallPluginsIdList,

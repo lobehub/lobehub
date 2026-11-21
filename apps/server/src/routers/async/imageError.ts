@@ -14,6 +14,36 @@ const IMAGE_GENERATION_NO_IMAGE_MESSAGE = [
   'Try a milder prompt or another model.',
 ].join(' ');
 
+const MAX_NESTED_ERROR_DEPTH = 3;
+
+/**
+ * First upstream message found by walking the `.error` chain, prefixed with the HTTP status.
+ *
+ * RouterRuntime rethrows the last channel's error as is. A normalized `AgentRuntimeError` has no
+ * `.message`; the provider body sits one or two `.error` levels deeper, e.g.
+ * `{ errorType: 'UpstreamHttpError', error: { status: 400, error: { message: "Unknown parameter: 'height'." } } }`.
+ * Reading only `.message` and `.error.message` stored a bare `ServerError` for these failures.
+ */
+const getUpstreamErrorMessage = (error: unknown): string | undefined => {
+  let current = error;
+  let status: number | undefined;
+
+  for (let depth = 0; depth <= MAX_NESTED_ERROR_DEPTH; depth++) {
+    if (!current || typeof current !== 'object') return;
+
+    const record = current as { error?: unknown; message?: unknown; status?: unknown };
+    if (status === undefined && typeof record.status === 'number') status = record.status;
+
+    if (typeof record.message === 'string' && record.message.length > 0) {
+      return status !== undefined && !record.message.startsWith(String(status))
+        ? `${status} ${record.message}`
+        : record.message;
+    }
+
+    current = record.error;
+  }
+};
+
 interface CategorizeImageGenerationErrorOptions {
   error: ImageGenerationErrorLike;
   isAborted: boolean;
@@ -24,10 +54,12 @@ interface CategorizeImageGenerationErrorOptions {
 interface ImageGenerationErrorLike {
   body?: string | { detail: string };
   error?: {
+    error?: unknown;
     message?: string;
     providerReason?: string;
     reasonCode?: string;
     responseId?: string;
+    status?: number;
   };
   errorType?: string;
   message?: string;
@@ -181,7 +213,7 @@ export const categorizeImageGenerationError = ({
   }
 
   return {
-    errorMessage: error.message || error.error?.message || AsyncTaskErrorType.ServerError,
+    errorMessage: getUpstreamErrorMessage(error) || AsyncTaskErrorType.ServerError,
     errorType: AsyncTaskErrorType.ServerError,
   };
 };

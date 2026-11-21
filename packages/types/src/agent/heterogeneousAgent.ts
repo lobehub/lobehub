@@ -54,6 +54,32 @@ const COMMON_AUTH_REQUIRED_PATTERNS = [
 export const HETEROGENEOUS_AGENT_CONFIGS = [
   {
     auth: {
+      docsUrl: 'https://antigravity.google/docs/cli/install/',
+      errorMessage: 'Antigravity could not authenticate. Run `agy` and sign in, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not logged in',
+        'please (?:log|sign) in',
+      ],
+      signInCommand: 'agy',
+    },
+    defaultCommand: 'agy',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Antigravity',
+    install: {
+      commands: [],
+      docsUrl: 'https://antigravity.google/docs/cli/install/',
+    },
+    kind: 'local-cli',
+    menuKey: 'newAntigravityAgent',
+    menuLabelKey: 'newAntigravityAgent',
+    resume: { supported: true },
+    title: 'Antigravity',
+    type: 'antigravity',
+  },
+  {
+    auth: {
       docsUrl: 'https://ampcode.com/manual',
       errorMessage:
         'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
@@ -156,6 +182,38 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     resume: { supported: true },
     title: 'Codex',
     type: 'codex',
+  },
+  {
+    auth: {
+      docsUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+      errorMessage:
+        'GitHub Copilot CLI could not authenticate. Run `copilot login` in your terminal, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not authenticated',
+        'not logged in',
+        'copilot login',
+        'gh auth login',
+      ],
+      signInCommand: 'copilot login',
+    },
+    defaultCommand: 'copilot',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'GithubCopilot',
+    install: {
+      commands: [
+        'curl -fsSL https://gh.io/copilot-install | bash',
+        'npm install -g @github/copilot',
+      ],
+      docsUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCopilotAgent',
+    menuLabelKey: 'newCopilotAgent',
+    resume: { supported: true },
+    title: 'GitHub Copilot',
+    type: 'copilot',
   },
   {
     auth: {

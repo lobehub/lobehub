@@ -33,6 +33,14 @@ inputs:
     required: false
     default: 'true'
 
+outputs:
+  core-published:
+    description: Whether the versioned Core update was uploaded
+    value: ${{ steps.base.outputs.published }}
+  installers-published:
+    description: Whether installer files and manifests were uploaded
+    value: ${{ steps.manifests.outputs.published }}
+
 runs:
   using: composite
   steps:
@@ -92,6 +100,53 @@ runs:
           '{shellAbi: $shellAbi, shellVersion: $shellVersion, publishedAt: $publishedAt}' > release/shell.json
         cat release/shell.json
 
+    # Installers go up before the core and shell.json: until shell.json lands, clients and later
+    # core-only runs keep targeting the previous shell, so a failed installer upload leaves nothing
+    # half-published and the job can simply be re-run.
+    - name: Upload installers to S3
+      id: installers
+      if: inputs.upload-release-files == 'true' && inputs.s3-bucket != ''
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        AWS_REGION: ${{ inputs.s3-region }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_ENDPOINT: ${{ inputs.s3-endpoint }}
+        CHANNEL: ${{ inputs.channel }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        ENDPOINT_ARGS=()
+        if [ -n "$S3_ENDPOINT" ]; then
+          ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
+          echo "📡 Using custom S3 endpoint: $S3_ENDPOINT"
+        fi
+        # aws s3 cp retries individual requests, but not a whole multipart upload: R2 can reject
+        # CompleteMultipartUpload with InvalidPart after every part succeeded, which failed the
+        # 2.3.2-canary.2 dmg upload (https://github.com/lobehub/lobehub/actions/runs/41944676897).
+        # Retrying the file starts a fresh multipart upload.
+        s3_cp() {
+          local attempt
+          for attempt in 1 2 3; do
+            aws s3 cp "$@" "${ENDPOINT_ARGS[@]}" && return 0
+            [ "$attempt" -lt 3 ] || break
+            echo "::warning::aws s3 cp $1 failed (attempt $attempt/3); retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "::error::aws s3 cp $1 failed after 3 attempts"
+          return 1
+        }
+
+        echo "📦 Uploading release files to s3://$S3_BUCKET/$CHANNEL/$VERSION/"
+        for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz release/*.blockmap; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            echo "   ↗️ $filename"
+            s3_cp "$file" "s3://$S3_BUCKET/$CHANNEL/$VERSION/$filename"
+          fi
+        done
+
     - name: Publish shell.json and r0 core
       id: base
       uses: ./.github/actions/desktop-publish-core-ota
@@ -107,8 +162,10 @@ runs:
         s3-region: ${{ inputs.s3-region }}
         s3-endpoint: ${{ inputs.s3-endpoint }}
 
-    - name: Upload to S3
-      id: installers
+    # The manifests are what electron-updater clients poll, so they go up last, once both the
+    # installers they point at and the new shell's core exist.
+    - name: Publish installer manifests to S3
+      id: manifests
       if: inputs.upload-release-files == 'true'
       shell: bash
       env:
@@ -121,35 +178,34 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
+        echo "published=false" >> "$GITHUB_OUTPUT"
         if [ -z "$S3_BUCKET" ]; then
           echo "⚠️ S3 bucket is not configured, skipping S3 upload"
           exit 0
         fi
 
-        # 构建端点参数
-        ENDPOINT_ARG=""
+        ENDPOINT_ARGS=()
         if [ -n "$S3_ENDPOINT" ]; then
-          ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
-          echo "📡 Using custom S3 endpoint: $S3_ENDPOINT"
+          ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
         fi
+        # aws s3 cp retries individual requests, but not a whole multipart upload: R2 can reject
+        # CompleteMultipartUpload with InvalidPart after every part succeeded, which failed the
+        # 2.3.2-canary.2 dmg upload (https://github.com/lobehub/lobehub/actions/runs/41944676897).
+        # Retrying the file starts a fresh multipart upload.
+        s3_cp() {
+          local attempt
+          for attempt in 1 2 3; do
+            aws s3 cp "$@" "${ENDPOINT_ARGS[@]}" && return 0
+            [ "$attempt" -lt 3 ] || break
+            echo "::warning::aws s3 cp $1 failed (attempt $attempt/3); retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "::error::aws s3 cp $1 failed after 3 attempts"
+          return 1
+        }
 
-        echo "🚀 Uploading to S3 bucket: $S3_BUCKET"
-        echo "📁 Target path: s3://$S3_BUCKET/$CHANNEL/"
-        echo ""
-
-        # 1. 上传安装包到版本目录
-        echo "📦 Uploading release files to s3://$S3_BUCKET/$CHANNEL/$VERSION/"
-        for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz release/*.blockmap; do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            echo "   ↗️ $filename"
-            aws s3 cp "$file" "s3://$S3_BUCKET/$CHANNEL/$VERSION/$filename" $ENDPOINT_ARG
-          fi
-        done
-
-        # 2. stable 渠道补充 stable*.yml
+        # 1. stable 渠道补充 stable*.yml
         # electron-builder 对稳定版默认生成 latest*.yml
-        echo ""
         if [ "$CHANNEL" = "stable" ]; then
           echo "📋 Creating stable*.yml from latest*.yml..."
           for yml in release/latest*.yml; do
@@ -161,7 +217,7 @@ runs:
           done
         fi
 
-        # 3. 为所有 yml manifest 的 URL 加版本目录前缀
+        # 2. 为所有 yml manifest 的 URL 加版本目录前缀
         # merge-mac-files 步骤已生成 {channel}*.yml (如 canary-mac.yml)
         # 安装包在 s3://$BUCKET/$CHANNEL/$VERSION/ 下，URL 需加 $VERSION/ 前缀
         echo ""
@@ -173,7 +229,7 @@ runs:
           fi
         done
 
-        # 4. 上传 installer manifest 到根目录和版本目录
+        # 3. 上传 installer manifest 到根目录和版本目录
         # 根目录: electron-updater 需要，每次发版覆盖
         # 版本目录: 作为存档保留
         echo ""
@@ -182,20 +238,21 @@ runs:
           if [ -f "$yml" ]; then
             filename=$(basename "$yml")
             echo "   ↗️ $filename -> s3://$S3_BUCKET/$CHANNEL/$filename"
-            aws s3 cp "$yml" "s3://$S3_BUCKET/$CHANNEL/$filename" $ENDPOINT_ARG
+            s3_cp "$yml" "s3://$S3_BUCKET/$CHANNEL/$filename"
             echo "   ↗️ $filename -> s3://$S3_BUCKET/$CHANNEL/$VERSION/$filename (archive)"
-            aws s3 cp "$yml" "s3://$S3_BUCKET/$CHANNEL/$VERSION/$filename" $ENDPOINT_ARG
+            s3_cp "$yml" "s3://$S3_BUCKET/$CHANNEL/$VERSION/$filename"
           fi
         done
 
         echo ""
+        echo "published=true" >> "$GITHUB_OUTPUT"
         echo "✅ S3 upload completed!"
         echo ""
         echo "📋 Files in s3://$S3_BUCKET/$CHANNEL/:"
-        aws s3 ls "s3://$S3_BUCKET/$CHANNEL/" $ENDPOINT_ARG || true
+        aws s3 ls "s3://$S3_BUCKET/$CHANNEL/" "${ENDPOINT_ARGS[@]}" || true
         echo ""
         echo "📋 Files in s3://$S3_BUCKET/$CHANNEL/$VERSION/:"
-        aws s3 ls "s3://$S3_BUCKET/$CHANNEL/$VERSION/" $ENDPOINT_ARG || true
+        aws s3 ls "s3://$S3_BUCKET/$CHANNEL/$VERSION/" "${ENDPOINT_ARGS[@]}" || true
 
     - name: Preserve release publication diagnostics
       if: always()

@@ -8,6 +8,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { defineSourceHandler } from '../../../runtime/middleware';
 import { enqueueSelfIterationRun } from '../dispatch/enqueueSelfIterationRun';
+import { resolveSelfIterationResponseLanguage } from '../dispatch/resolveResponseLanguage';
 import type { EvidenceRef } from '../types';
 import { buildSelfFeedbackIntentSourceId, ReviewRunStatus } from '../types';
 
@@ -149,6 +150,13 @@ export interface CreateSelfFeedbackIntentSourceHandlerDependencies {
    * @default builtin agent default
    */
   maxSteps?: number;
+  /**
+   * Resolves the owner's response language for user-visible run output.
+   * Overridable for tests.
+   *
+   * @default reads the user's `responseLanguage` setting
+   */
+  resolveResponseLanguage?: typeof resolveSelfIterationResponseLanguage;
   /** Workspace id, threaded so the enqueued run targets the correct workspace. */
   workspaceId?: string;
 }
@@ -378,10 +386,14 @@ export const createSelfFeedbackIntentSourceHandler = (
     };
 
     const timestamp = new Date(source.timestamp).toISOString();
+    const responseLanguage = await (
+      deps.resolveResponseLanguage ?? resolveSelfIterationResponseLanguage
+    )(deps.db, payload.userId);
     const prompt = createAgentSignalSelfIterationPrompt({
       agentId: payload.agentId,
       context: createIntentRuntimeContext({ enrichment, payload, sourceId: source.sourceId }),
       mode: 'feedback',
+      responseLanguage,
       sourceId: source.sourceId,
       userId: payload.userId,
       window: { end: timestamp, start: timestamp },
