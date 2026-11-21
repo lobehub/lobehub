@@ -12,6 +12,7 @@ import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 
+import { emitDatabaseEvent } from '../../events';
 import {
   messagePlugins,
   messageQueries,
@@ -278,7 +279,7 @@ export class MessageWriteMutations extends MessageScope {
     id: string = this.genId(),
     timing?: ModelTimingContext,
   ): Promise<DBMessageItem> => {
-    return runTimedStage(
+    const item = await runTimedStage(
       timing,
       'db.message.create.transaction',
       () =>
@@ -294,7 +295,24 @@ export class MessageWriteMutations extends MessageScope {
         role: params.role,
       },
     );
+    this.announceCreated(item);
+    return item;
   };
+
+  /** Tell the data layer's event outlet (developer webhooks) a message now exists. */
+  private announceCreated = (item: DBMessageItem) =>
+    emitDatabaseEvent(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      'message.created',
+      {
+        agentId: item.agentId ?? null,
+        messageId: item.id,
+        role: item.role,
+        threadId: item.threadId ?? null,
+        topicId: item.topicId ?? null,
+      },
+    );
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
@@ -323,7 +341,7 @@ export class MessageWriteMutations extends MessageScope {
       ...new Set([userMessage.topicId, assistantMessage.topicId].filter(Boolean) as string[]),
     ];
 
-    return runTimedStage(
+    const created = await runTimedStage(
       timing,
       'db.message.createUserAndAssistant.transaction',
       () =>
@@ -377,6 +395,9 @@ export class MessageWriteMutations extends MessageScope {
         userFileCount: userMessage.files?.length ?? 0,
       },
     );
+    this.announceCreated(created.userMessage);
+    this.announceCreated(created.assistantMessage);
+    return created;
   };
 
   batchCreate = async (newMessages: DBMessageItem[]) => {

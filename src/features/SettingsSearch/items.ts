@@ -61,6 +61,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
   [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
   [SettingsTabs.APIKey]: ['api', 'api key', 'apikey', 'token', 'secret', 'personal key'],
+  [SettingsTabs.Webhook]: ['webhook', 'webhooks', 'callback', 'event', 'events', 'signing secret'],
   [SettingsTabs.Labels]: ['label', 'labels', 'tag', 'tags', 'group', 'grouping'],
   [SettingsTabs.Appearance]: [
     'appearance',
@@ -212,6 +213,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',
   [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
   [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
+  [SettingsTabs.Webhook]: 'settingsSearch.tabKeywords.webhook',
   [SettingsTabs.Appearance]: 'settingsSearch.tabKeywords.appearance',
   [SettingsTabs.Automations]: 'settingsSearch.tabKeywords.automations',
   [SettingsTabs.Webhooks]: 'settingsSearch.tabKeywords.webhooks',

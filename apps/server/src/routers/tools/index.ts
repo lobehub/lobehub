@@ -1,3 +1,6 @@
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { composioToolsRouter } from './composio';

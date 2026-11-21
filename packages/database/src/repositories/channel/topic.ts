@@ -3,6 +3,7 @@ import type { ChannelExecutionConfig } from '@lobechat/types';
 import { and, count, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
+import { announceTopicCreated } from '../../models/topic/create';
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem } from '../../schemas';
 import { agentOperations, agentShares, channelJobs, messages, topics } from '../../schemas';
 import type { Transaction } from '../../type';
@@ -152,6 +153,7 @@ export const resolveTopic = async (
       workspaceId: scope.workspaceId,
     })
     .returning();
+  if (created) announceTopicCreated(tx, scope, created);
   return created;
 };
 

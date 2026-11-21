@@ -147,6 +147,7 @@ describe('workspace settings useCategory', () => {
 
     expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
     expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
+    expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.Webhook);
 
     const itemKeys = result.current.flatMap((group) => group.items.map((item) => item.key));
 
@@ -211,7 +212,7 @@ describe('workspace settings useCategory', () => {
 
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
   // request that immediately 403s.
-  it('hides API Key from viewers but keeps Advanced and Labs in the System group', () => {
+  it('hides API Key and Webhooks from viewers but keeps Advanced and Labs in the System group', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
 

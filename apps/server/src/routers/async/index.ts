@@ -1,3 +1,6 @@
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { asyncRouter as router, publicProcedure } from '@/libs/trpc/async';
 
 import { dataExportRouter } from './dataExport';

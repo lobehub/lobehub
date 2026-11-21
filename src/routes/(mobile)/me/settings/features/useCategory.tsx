@@ -19,6 +19,7 @@ import {
   Sparkles,
   TagIcon,
   UserCircle,
+  WebhookIcon,
   Wrench,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -133,6 +134,8 @@ export const useCategory = (): CategoryGroup[] => {
       }),
       (showApiKeyManage || isDevMode) &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
+      (showApiKeyManage || isDevMode) &&
+        makeItem({ icon: WebhookIcon, key: SettingsTabs.Webhook, label: t('setting:tab.webhook') }),
       enableOAuthApps &&
         makeItem({
           icon: AppWindowIcon,

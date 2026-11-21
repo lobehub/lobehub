@@ -1,7 +1,11 @@
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { Hono } from 'hono';
 
 import agentEvalRunApp from './agent-eval-run';
 import agentSignalApp from './agent-signal';
+import { developerWebhookWorkflowApp } from './developer-webhook';
 import expertiseHistoryApp from './expertise-history';
 import expertiseRejectionApp from './expertise-rejection';
 import goalApp from './goal';
@@ -22,6 +26,7 @@ app.use('*', workflowAuth());
 
 app.route('/agent-eval-run', agentEvalRunApp);
 app.route('/agent-signal', agentSignalApp);
+app.route('/developer-webhook', developerWebhookWorkflowApp);
 app.route('/expertise-history', expertiseHistoryApp);
 app.route('/expertise-rejection', expertiseRejectionApp);
 app.route('/goal', goalApp);

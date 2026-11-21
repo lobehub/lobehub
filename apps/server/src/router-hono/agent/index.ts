@@ -1,3 +1,6 @@
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { Hono } from 'hono';
 
 import { agentAccountDigestFlush } from './handlers/agentAccountDigestFlush';

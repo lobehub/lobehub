@@ -11,6 +11,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
+import { emitDatabaseEvent, hasDatabaseEventListener } from '../../events';
 import type {
   NewTaskActivity,
   NewTaskComment,
@@ -146,6 +147,41 @@ export class TaskModel {
   ): Promise<TaskItem | null> {
     if (Object.keys(data).length === 0) return this.findById(id);
 
+    // Every status written through here — the status helpers, actor-logged edits,
+    // direct resets such as a report rerun — is announced once, against the row's
+    // status before the write.
+    if (data.status === undefined || !hasDatabaseEventListener()) return this.writeUpdate(id, data);
+
+    // The prior status has to be read under the same row lock as the write: an
+    // unlocked read lets two concurrent updates both observe `running` (a heartbeat
+    // timeout detected twice) and each announce a `running → paused` transition, and
+    // it lets a stale read suppress a real transition when it already equals the
+    // requested status. Read and write inside one transaction, announce after it
+    // commits so listeners never see a row the transaction has not published.
+    const settled = await this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), taskOwnership(this.ctx)))
+        .for('update')
+        .limit(1);
+      if (!before) return null;
+
+      const task = await this.writeUpdate(id, data, runner);
+      return task ? { previousStatus: before.status, task } : null;
+    });
+    if (!settled) return null;
+
+    this.announceStatusChange(settled.task, settled.previousStatus);
+    return settled.task;
+  }
+
+  private async writeUpdate(
+    id: string,
+    data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+    db: LobeChatDatabase = this.db,
+  ): Promise<TaskItem | null> {
     // A reassignment is not a plain column write: the row being moved away from
     // decides whether the previous assignee's cloud-repo selection has to go,
     // so read it under a lock — a config write landing between the read and the
@@ -154,9 +190,9 @@ export class TaskModel {
     // handoff/restart, the runner's inbox fallback), so this is the one place
     // the invariant has to hold; `updateWithLog` locks its own read for the
     // activity log and then delegates.
-    if (data.assigneeAgentId === undefined) return rows.writeRow(this.ctx, this.db, id, data);
+    if (data.assigneeAgentId === undefined) return rows.writeRow(this.ctx, db, id, data);
 
-    return this.db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       const runner = tx as LobeChatDatabase;
       const [before] = await runner
         .select({ assigneeAgentId: tasks.assigneeAgentId, config: tasks.config })
@@ -326,11 +362,28 @@ export class TaskModel {
 
   // ========== Status ==========
 
+  /** Announce one status transition to the data layer's event outlet (developer webhooks). */
+  private announceStatusChange(task: TaskItem, previousStatus: string | null) {
+    if (previousStatus === task.status) return;
+    emitDatabaseEvent(
+      this.ctx.db,
+      { userId: this.ctx.userId, workspaceId: this.ctx.workspaceId },
+      'task.status_changed',
+      {
+        identifier: task.identifier ?? null,
+        previousStatus,
+        status: task.status,
+        taskId: task.id,
+      },
+    );
+  }
+
   async updateStatus(
     id: string,
     status: string,
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
+    // `update` announces the transition.
     return this.update(id, { status, ...extra });
   }
 
@@ -340,18 +393,35 @@ export class TaskModel {
     status: string,
     extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
-    return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
+    const task = await rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
+    if (task) this.announceStatusChange(task, currentStatus);
+    return task;
   }
 
   async updateStatusIfCurrentForIds(
     expected: { id: string; status: string }[],
     status: string,
   ): Promise<string[]> {
-    return rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+    const updated = await rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+    if (updated.length > 0 && hasDatabaseEventListener()) {
+      const previous = new Map(expected.map((entry) => [entry.id, entry.status]));
+      // Announce the transition this call committed, not whatever the row reads as later:
+      // a concurrent writer can move a task again between the CAS and this reload, and a
+      // reload that already shows the newer status would swallow the real change (or, for
+      // a same-status pair, announce a transition that never happened here).
+      const moved = updated.filter((id) => previous.get(id) !== status);
+      if (moved.length > 0)
+        for (const task of await this.findByIds(moved))
+          this.announceStatusChange({ ...task, status }, previous.get(task.id) ?? null);
+    }
+    return updated;
   }
 
   async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
-    return rows.completeIfCompletionRequested(this.ctx, id, operationId);
+    const task = await rows.completeIfCompletionRequested(this.ctx, id, operationId);
+    // Only a running task can be completed this way.
+    if (task) this.announceStatusChange(task, 'running');
+    return task;
   }
 
   async withdrawCompletionRequest(id: string, operationId: string): Promise<boolean> {
@@ -359,7 +429,14 @@ export class TaskModel {
   }
 
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {
-    return rows.batchUpdateStatus(this.ctx, ids, status);
+    const before = hasDatabaseEventListener()
+      ? new Map((await this.findByIds(ids)).map((task) => [task.id, task]))
+      : undefined;
+    const count = await rows.batchUpdateStatus(this.ctx, ids, status);
+    if (before)
+      for (const task of before.values())
+        this.announceStatusChange({ ...task, status }, task.status);
+    return count;
   }
 
   async updateStatusForIds(
@@ -367,7 +444,13 @@ export class TaskModel {
     status: string,
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem[]> {
-    return rows.updateStatusForIds(this.ctx, ids, status, extra);
+    const before = hasDatabaseEventListener()
+      ? new Map((await this.findByIds(ids)).map((task) => [task.id, task.status]))
+      : undefined;
+    const updated = await rows.updateStatusForIds(this.ctx, ids, status, extra);
+    if (before)
+      for (const task of updated) this.announceStatusChange(task, before.get(task.id) ?? null);
+    return updated;
   }
 
   async lockForBulkEdit(ids: string[]) {

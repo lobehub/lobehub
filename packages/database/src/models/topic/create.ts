@@ -1,5 +1,6 @@
 import { runTimedSinkStage as runTimedStage } from '@lobechat/utils';
 
+import { emitDatabaseEvent } from '../../events';
 import { type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspacePayload } from '../../utils/workspace';
@@ -54,8 +55,23 @@ export const create = async (
   if (topic?.projectId && topic.agentId)
     await joinTopicAgentsToProjects(ctx.db, { topicIds: [topic.id] });
 
+  if (topic)
+    announceTopicCreated(ctx.db, { userId: ctx.userId, workspaceId: ctx.workspaceId }, topic);
+
   return topic;
 };
+
+/** Tell the data layer's event outlet (developer webhooks) a topic now exists. */
+export const announceTopicCreated = (
+  db: Parameters<typeof emitDatabaseEvent>[0],
+  scope: { userId: string; workspaceId?: string | null },
+  topic: Pick<TopicItem, 'agentId' | 'id' | 'title'>,
+) =>
+  emitDatabaseEvent(db, scope, 'topic.created', {
+    agentId: topic.agentId ?? null,
+    title: topic.title ?? null,
+    topicId: topic.id,
+  });
 
 /**
  * Batch-inserts topic rows, preserving input order in the returned rows.
@@ -64,8 +80,8 @@ export const create = async (
 export const batchInsert = async (
   ctx: TopicModelContext,
   topicParams: (Omit<CreateTopicParams, 'messages'> & { id?: string })[],
-) =>
-  ctx.db
+) => {
+  const rows = await ctx.db
     .insert(topics)
     .values(
       topicParams.map((params) =>
@@ -84,3 +100,7 @@ export const batchInsert = async (
       ),
     )
     .returning();
+  for (const topic of rows)
+    announceTopicCreated(ctx.db, { userId: ctx.userId, workspaceId: ctx.workspaceId }, topic);
+  return rows;
+};

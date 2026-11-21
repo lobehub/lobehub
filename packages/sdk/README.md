@@ -39,7 +39,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 
 ## Resources
 
-30 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
+31 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
 
 | Resource              | Methods                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -73,6 +73,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 | `topics`              | `create`, `delete`, `get`, `list`, `listThreads`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `usage`               | `list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `users`               | `create`, `delete`, `deleteRoles`, `get`, `list`, `listRoles`, `me`, `update`, `updateRoles`                                                                                                                                                                                                                                                                                                                                                                                          |
+| `webhooks`            | `create`, `delete`, `get`, `list`, `listDeliveries`, `redeliver`, `rotateSecret`, `test`, `update`                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## Workspaces
 
@@ -195,6 +196,34 @@ for await (const event of stream) {
 ```
 
 Runs need the `run:read` / `run:write` scopes; starting or resuming one also needs `model:invoke`.
+
+## Webhooks
+
+`webhooks.create` registers an endpoint for some event types (`WEBHOOK_EVENT_TYPES`) and returns its signing secret once; `webhooks.rotateSecret` replaces it. `webhooks.test` sends a `webhook.test` event and returns the delivery, `webhooks.listDeliveries` shows the delivery log, and `webhooks.redeliver` resends one. These need the `webhook:read` / `webhook:write` scopes.
+
+On the receiving side, `constructWebhookEvent` checks `X-LobeHub-Signature` against the raw body and the endpoint secret, rejects a `X-LobeHub-Timestamp` more than 5 minutes off (`toleranceSeconds`), and returns the typed `WebhookEvent`. It uses Web Crypto, so it runs in Node, Bun, Deno, edge runtimes and browsers. Pass the body exactly as received — re-serialised JSON will not verify.
+
+```ts
+import { constructWebhookEvent, WebhookSignatureVerificationError } from '@lobehub/sdk';
+
+export async function POST(request: Request) {
+  try {
+    const event = await constructWebhookEvent({
+      headers: request.headers,
+      payload: await request.text(),
+      secret: process.env.LOBEHUB_WEBHOOK_SECRET!,
+    });
+    if (event.type === 'run.completed') console.log(event.data.runId, event.data.steps);
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof WebhookSignatureVerificationError)
+      return new Response(null, { status: 400 });
+    throw error;
+  }
+}
+```
+
+`verifyWebhookSignature` does the same check without parsing. Deduplicate on `event.id`: a retry or redelivery carries the same id. Answer with a 2xx within 10 seconds; anything else is retried with backoff.
 
 ## Uploads
 

@@ -40,6 +40,7 @@ export enum WorkspaceSettingsTabs {
   Teams = 'teams',
   Trash = 'trash',
   Usage = 'usage',
+  Webhook = 'webhook',
   Webhooks = 'webhooks',
 }
 

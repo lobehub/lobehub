@@ -84,6 +84,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'usage',
   // Agents' webhooks are listed per workspace, like automations.
   'webhooks',
+  // Developer webhooks belong to one member in one space, like API keys.
+  'webhook',
 ]);
 
 const SETTINGS_PREFIX_REGEX = /^\/settings\/([^/?#]+)/;

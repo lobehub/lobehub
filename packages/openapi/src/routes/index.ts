@@ -29,6 +29,7 @@ import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
 import UsageRoutes from './usage.route';
 import UsersRoutes from './users.route';
+import WebhooksRoutes from './webhooks.route';
 
 export default {
   'agent-groups': AgentGroupsRoutes,
@@ -62,4 +63,5 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'webhooks': WebhooksRoutes,
 };

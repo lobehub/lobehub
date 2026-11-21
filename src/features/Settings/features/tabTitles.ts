@@ -13,6 +13,7 @@ export const SETTINGS_TAB_TITLE_KEYS: Partial<Record<SettingsTabs, TitleKey>> = 
   [SettingsTabs.About]: ['setting', 'tab.about'],
   [SettingsTabs.Advanced]: ['setting', 'tab.advanced'],
   [SettingsTabs.APIKey]: ['setting', 'tab.apikey'],
+  [SettingsTabs.Webhook]: ['setting', 'tab.webhook'],
   [SettingsTabs.Appearance]: ['setting', 'tab.appearance'],
   [SettingsTabs.Automations]: ['setting', 'tab.automations'],
   [SettingsTabs.Webhooks]: ['setting', 'tab.webhooks'],

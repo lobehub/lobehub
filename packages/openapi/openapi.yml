@@ -760,6 +760,8 @@ components:
                   - user:write
                   - run:read
                   - run:write
+                  - webhook:read
+                  - webhook:write
             - type: "null"
         updatedAt:
           type: string
@@ -828,6 +830,8 @@ components:
                   - user:write
                   - run:read
                   - run:write
+                  - webhook:read
+                  - webhook:write
             - type: "null"
         updatedAt:
           type: string
@@ -10697,6 +10701,838 @@ components:
         - spent
         - usageByType
       additionalProperties: false
+    Webhook:
+      type: object
+      properties:
+        consecutiveFailures:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: Deliveries in a row that exhausted their retries since the last
+            success.
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type:
+            - string
+            - "null"
+        disabledReason:
+          anyOf:
+            - type: string
+              enum:
+                - manual
+                - consecutive_failures
+            - type: "null"
+          description: "Why the endpoint stopped receiving events: turned off by hand, or
+            after too many failed deliveries. `null` while enabled."
+        enabled:
+          type: boolean
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - run.started
+              - run.completed
+              - run.failed
+              - run.intervention_requested
+              - message.created
+              - topic.created
+              - task.status_changed
+              - goal.status_changed
+              - file.parsed
+              - notification.created
+        id:
+          type: string
+          description: "`whk_…`"
+        lastDeliveryAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+          description: When a delivery last settled (succeeded or ran out of retries).
+        secretHint:
+          type: string
+          description: Last characters of the signing secret, to tell secrets apart.
+        updatedAt:
+          type: string
+          format: date-time
+        url:
+          type: string
+        workspaceId:
+          type:
+            - string
+            - "null"
+      required:
+        - consecutiveFailures
+        - createdAt
+        - description
+        - disabledReason
+        - enabled
+        - events
+        - id
+        - lastDeliveryAt
+        - secretHint
+        - updatedAt
+        - url
+        - workspaceId
+      additionalProperties: false
+    WebhookWithSecret:
+      type: object
+      properties:
+        consecutiveFailures:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: Deliveries in a row that exhausted their retries since the last
+            success.
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type:
+            - string
+            - "null"
+        disabledReason:
+          anyOf:
+            - type: string
+              enum:
+                - manual
+                - consecutive_failures
+            - type: "null"
+          description: "Why the endpoint stopped receiving events: turned off by hand, or
+            after too many failed deliveries. `null` while enabled."
+        enabled:
+          type: boolean
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - run.started
+              - run.completed
+              - run.failed
+              - run.intervention_requested
+              - message.created
+              - topic.created
+              - task.status_changed
+              - goal.status_changed
+              - file.parsed
+              - notification.created
+        id:
+          type: string
+          description: "`whk_…`"
+        lastDeliveryAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+          description: When a delivery last settled (succeeded or ran out of retries).
+        secretHint:
+          type: string
+          description: Last characters of the signing secret, to tell secrets apart.
+        updatedAt:
+          type: string
+          format: date-time
+        url:
+          type: string
+        workspaceId:
+          type:
+            - string
+            - "null"
+        secret:
+          type: string
+          description: "The signing secret (`whsec_…`). Returned only by create and
+            rotate-secret: store it now."
+      required:
+        - consecutiveFailures
+        - createdAt
+        - description
+        - disabledReason
+        - enabled
+        - events
+        - id
+        - lastDeliveryAt
+        - secretHint
+        - updatedAt
+        - url
+        - workspaceId
+        - secret
+      additionalProperties: false
+    WebhookDelivery:
+      type: object
+      properties:
+        attempts:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: Attempts made so far, the first one included.
+        createdAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        durationMs:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: Duration of the latest attempt.
+        error:
+          description: Why the latest attempt failed (HTTP status, timeout, blocked
+            address).
+          type:
+            - string
+            - "null"
+        eventId:
+          type: string
+        eventType:
+          type: string
+          enum:
+            - run.started
+            - run.completed
+            - run.failed
+            - run.intervention_requested
+            - message.created
+            - topic.created
+            - task.status_changed
+            - goal.status_changed
+            - file.parsed
+            - notification.created
+            - webhook.test
+        id:
+          type: string
+          description: "`whd_…`; sent as the `X-LobeHub-Delivery-Id` header."
+        nextAttemptAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+          description: When the next retry is due.
+        payload:
+          $ref: "#/components/schemas/WebhookEvent"
+        redeliveryOf:
+          description: The delivery this one resends.
+          type:
+            - string
+            - "null"
+        responseBody:
+          description: Start of the response body of the latest attempt.
+          type:
+            - string
+            - "null"
+        responseStatus:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        status:
+          type: string
+          enum:
+            - pending
+            - retrying
+            - succeeded
+            - failed
+        webhookId:
+          type: string
+      required:
+        - attempts
+        - createdAt
+        - deliveredAt
+        - durationMs
+        - error
+        - eventId
+        - eventType
+        - id
+        - nextAttemptAt
+        - payload
+        - redeliveryOf
+        - responseBody
+        - responseStatus
+        - status
+        - webhookId
+      additionalProperties: false
+    WebhookEvent:
+      oneOf:
+        - $ref: "#/components/schemas/WebhookRunStartedEvent"
+        - $ref: "#/components/schemas/WebhookRunCompletedEvent"
+        - $ref: "#/components/schemas/WebhookRunFailedEvent"
+        - $ref: "#/components/schemas/WebhookRunInterventionRequestedEvent"
+        - $ref: "#/components/schemas/WebhookMessageCreatedEvent"
+        - $ref: "#/components/schemas/WebhookTopicCreatedEvent"
+        - $ref: "#/components/schemas/WebhookTaskStatusChangedEvent"
+        - $ref: "#/components/schemas/WebhookGoalStatusChangedEvent"
+        - $ref: "#/components/schemas/WebhookFileParsedEvent"
+        - $ref: "#/components/schemas/WebhookNotificationCreatedEvent"
+        - $ref: "#/components/schemas/WebhookTestEvent"
+      description: The JSON body of a delivery, discriminated by `type`. See the
+        top-level `webhooks` section for each event.
+    WebhookRunStartedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookRunStartedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: run.started
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: An agent run started.
+    WebhookRunStartedEventData:
+      type: object
+      properties:
+        agentId:
+          description: Agent that ran
+          type:
+            - string
+            - "null"
+        runId:
+          type: string
+          description: Run id (the agent operation id)
+        topicId:
+          description: Topic the run wrote to
+          type:
+            - string
+            - "null"
+      required:
+        - agentId
+        - runId
+        - topicId
+      additionalProperties: false
+    WebhookRunCompletedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookRunCompletedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: run.completed
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: An agent run finished.
+    WebhookRunCompletedEventData:
+      type: object
+      properties:
+        agentId:
+          description: Agent that ran
+          type:
+            - string
+            - "null"
+        runId:
+          type: string
+          description: Run id (the agent operation id)
+        topicId:
+          description: Topic the run wrote to
+          type:
+            - string
+            - "null"
+        assistantMessageId:
+          description: Final assistant message of the run
+          type:
+            - string
+            - "null"
+        steps:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: LLM calls the run made
+      required:
+        - agentId
+        - runId
+        - topicId
+        - assistantMessageId
+        - steps
+      additionalProperties: false
+    WebhookRunFailedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookRunFailedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: run.failed
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: An agent run ended with an error.
+    WebhookRunFailedEventData:
+      type: object
+      properties:
+        agentId:
+          description: Agent that ran
+          type:
+            - string
+            - "null"
+        runId:
+          type: string
+          description: Run id (the agent operation id)
+        topicId:
+          description: Topic the run wrote to
+          type:
+            - string
+            - "null"
+        error:
+          description: Error message, when the runtime recorded one
+          type:
+            - string
+            - "null"
+      required:
+        - agentId
+        - runId
+        - topicId
+        - error
+      additionalProperties: false
+    WebhookRunInterventionRequestedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookRunInterventionRequestedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: run.intervention_requested
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: "An agent run paused for a person: a tool call waits for approval
+        or an answer."
+    WebhookRunInterventionRequestedEventData:
+      type: object
+      properties:
+        agentId:
+          description: Agent that ran
+          type:
+            - string
+            - "null"
+        runId:
+          type: string
+          description: Run id (the agent operation id)
+        topicId:
+          description: Topic the run wrote to
+          type:
+            - string
+            - "null"
+      required:
+        - agentId
+        - runId
+        - topicId
+      additionalProperties: false
+    WebhookMessageCreatedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookMessageCreatedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: message.created
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: A message was written to a conversation.
+    WebhookMessageCreatedEventData:
+      type: object
+      properties:
+        agentId:
+          type:
+            - string
+            - "null"
+        messageId:
+          type: string
+        role:
+          type: string
+          description: "`user`, `assistant`, `tool`, …"
+        threadId:
+          type:
+            - string
+            - "null"
+        topicId:
+          type:
+            - string
+            - "null"
+      required:
+        - agentId
+        - messageId
+        - role
+        - threadId
+        - topicId
+      additionalProperties: false
+    WebhookTopicCreatedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookTopicCreatedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: topic.created
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: A conversation topic was created.
+    WebhookTopicCreatedEventData:
+      type: object
+      properties:
+        agentId:
+          type:
+            - string
+            - "null"
+        title:
+          type:
+            - string
+            - "null"
+        topicId:
+          type: string
+      required:
+        - agentId
+        - title
+        - topicId
+      additionalProperties: false
+    WebhookTaskStatusChangedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookTaskStatusChangedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: task.status_changed
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: A task moved to another status.
+    WebhookTaskStatusChangedEventData:
+      type: object
+      properties:
+        identifier:
+          description: Human-readable task id, e.g. `T-12`
+          type:
+            - string
+            - "null"
+        previousStatus:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        taskId:
+          type: string
+      required:
+        - identifier
+        - previousStatus
+        - status
+        - taskId
+      additionalProperties: false
+    WebhookGoalStatusChangedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookGoalStatusChangedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: goal.status_changed
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: A goal moved to another status.
+    WebhookGoalStatusChangedEventData:
+      type: object
+      properties:
+        goalId:
+          type: string
+        previousStatus:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+      required:
+        - goalId
+        - previousStatus
+        - status
+      additionalProperties: false
+    WebhookFileParsedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookFileParsedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: file.parsed
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: A file finished parsing into chunks (successfully or not).
+    WebhookFileParsedEventData:
+      type: object
+      properties:
+        error:
+          description: Why parsing failed; `null` on success
+          type:
+            - string
+            - "null"
+        fileId:
+          type: string
+        name:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+          enum:
+            - success
+            - error
+      required:
+        - error
+        - fileId
+        - name
+        - status
+      additionalProperties: false
+    WebhookNotificationCreatedEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookNotificationCreatedEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: notification.created
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: An inbox notification was created for the owner.
+    WebhookNotificationCreatedEventData:
+      type: object
+      properties:
+        category:
+          type: string
+        notificationId:
+          type: string
+        title:
+          type:
+            - string
+            - "null"
+        type:
+          type: string
+      required:
+        - category
+        - notificationId
+        - title
+        - type
+      additionalProperties: false
+    WebhookTestEvent:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the event happened.
+        data:
+          $ref: "#/components/schemas/WebhookTestEventData"
+        id:
+          type: string
+          description: "`evt_…`; stays the same across retries and redeliveries — dedupe
+            on it."
+        type:
+          type: string
+          const: webhook.test
+        workspaceId:
+          description: Workspace the event happened in; `null` for a personal space.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - data
+        - id
+        - type
+        - workspaceId
+      additionalProperties: false
+      description: Sent by `POST /webhooks/{id}/test` to check an endpoint.
+    WebhookTestEventData:
+      type: object
+      properties:
+        message:
+          type: string
+        webhookId:
+          type: string
+      required:
+        - message
+        - webhookId
+      additionalProperties: false
   securitySchemes:
     bearerAuth:
       bearerFormat: API Key (sk-lh-...) or OIDC JWT
@@ -10773,6 +11609,58 @@ security:
 servers:
   - description: LobeHub Cloud
     url: https://app.lobehub.com
+tags:
+  - description: >-
+      Register HTTPS endpoints that LobeHub POSTs events to. Each event type is
+      documented under **Webhooks** with its JSON body.
+
+
+      ## Delivery
+
+
+      Every delivery is a `POST` with a JSON body `{ id, type, createdAt,
+      workspaceId, data }` and these headers:
+
+
+      - `X-LobeHub-Signature`: `v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw
+      body>")>`
+
+      - `X-LobeHub-Timestamp`: Unix seconds the signature was computed at
+
+      - `X-LobeHub-Event-Id`: the event id (same as `id` in the body); stays the
+      same across retries and redeliveries, so dedupe on it
+
+      - `X-LobeHub-Event-Type`: the event type (same as `type` in the body)
+
+      - `X-LobeHub-Delivery-Id`: this delivery's id
+
+
+      Answer with any 2xx status within 10 s. Anything else (or a timeout) is
+      retried up to 5 more times with exponential backoff (30s, 2m, 8m, 32m,
+      128m). After 5 deliveries in a row run out of retries, the endpoint is
+      disabled (`disabledReason: consecutive_failures`); re-enable it with
+      `PATCH /webhooks/{id}`. Redirects are not followed.
+
+
+      ## Verifying signatures
+
+
+      1. Read `X-LobeHub-Timestamp` and reject it if it is more than 300 seconds
+      from now (replay protection).
+
+      2. Compute `HMAC-SHA256` over `<timestamp>.<raw request body>` with the
+      endpoint's secret (the whole `whsec_…` string as the key) and hex-encode
+      it.
+
+      3. Compare it, in constant time, with each `v1=` value in
+      `X-LobeHub-Signature` (there may be several, separated by commas or
+      spaces).
+
+
+      Use the raw body exactly as received: re-serialising parsed JSON changes
+      the bytes. The TypeScript SDK ships `verifyWebhookSignature()` and
+      `constructWebhookEvent()`.
+    name: webhooks
 paths:
   /api/v1/health:
     get:
@@ -14346,6 +15234,8 @@ paths:
                           - user:write
                           - run:read
                           - run:write
+                          - webhook:read
+                          - webhook:write
                     - type: "null"
               required:
                 - name
@@ -43178,3 +44068,2031 @@ paths:
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
       description: "**API key scopes:** `usage:read`."
+  /api/v1/webhooks:
+    get:
+      operationId: webhooks.list
+      description: |-
+        Endpoints the caller registered in this space, newest first.
+
+        **API key scopes:** `webhook:read`.
+      summary: List webhook endpoints
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Webhook"
+                      hasMore:
+                        $ref: "#/components/schemas/PageHasMore"
+                      nextCursor:
+                        $ref: "#/components/schemas/PageNextCursor"
+                      total:
+                        $ref: "#/components/schemas/PageTotal"
+                    required:
+                      - items
+                      - hasMore
+                      - nextCursor
+                      - total
+                    additionalProperties: false
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:read
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+          description: Opaque cursor from the previous page's `nextCursor`. Omit for the
+            first page.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size, 1–100. Defaults to 20.
+        - $ref: "#/components/parameters/WorkspaceId"
+    post:
+      operationId: webhooks.create
+      description: >-
+        Registers an endpoint and returns its signing secret. The secret is
+        shown only here and on rotate-secret — store it to verify
+        `X-LobeHub-Signature`. At most 20 endpoints per space (409 beyond that).
+        Each subscribed event also needs the read scope of its data on an API
+        key: `run:read` for `run.*`, `chat:read` for `message.created` /
+        `topic.created`, `agent:read` for `task.*` / `goal.*`, `file:read` for
+        `file.parsed`, `user:read` for `notification.created` (403
+        `insufficient_scope` otherwise).
+
+
+        **API key scopes:** `webhook:write`.
+      summary: Create a webhook endpoint
+      tags:
+        - webhooks
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookWithSecret"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  anyOf:
+                    - type: string
+                      maxLength: 500
+                    - type: "null"
+                enabled:
+                  description: Defaults to `true`.
+                  type: boolean
+                events:
+                  minItems: 1
+                  maxItems: 20
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - run.started
+                      - run.completed
+                      - run.failed
+                      - run.intervention_requested
+                      - message.created
+                      - topic.created
+                      - task.status_changed
+                      - goal.status_changed
+                      - file.parsed
+                      - notification.created
+                  description: Event types this endpoint receives. Duplicates are ignored.
+                url:
+                  type: string
+                  maxLength: 2048
+                  format: uri
+                  description: Where deliveries are POSTed. Must be an http(s) URL reachable from
+                    the internet.
+              required:
+                - events
+                - url
+              additionalProperties: false
+            example:
+              description: Notify CI when a run finishes
+              events:
+                - run.completed
+                - run.failed
+              url: https://example.com/lobehub/webhook
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/webhooks/{id}:
+    get:
+      operationId: webhooks.get
+      summary: Get a webhook endpoint
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Webhook"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      description: "**API key scopes:** `webhook:read`."
+    patch:
+      operationId: webhooks.update
+      description: >-
+        Change the URL, events, description, or turn the endpoint on or off.
+        Turning a disabled endpoint back on resets its failure streak. Each
+        subscribed event also needs the read scope of its data on an API key:
+        `run:read` for `run.*`, `chat:read` for `message.created` /
+        `topic.created`, `agent:read` for `task.*` / `goal.*`, `file:read` for
+        `file.parsed`, `user:read` for `notification.created` (403
+        `insufficient_scope` otherwise).
+
+
+        **API key scopes:** `webhook:write`.
+      summary: Update a webhook endpoint
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Webhook"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  anyOf:
+                    - type: string
+                      maxLength: 500
+                    - type: "null"
+                enabled:
+                  description: Turning an endpoint back on also clears its failure streak and
+                    `disabledReason`.
+                  type: boolean
+                events:
+                  minItems: 1
+                  maxItems: 20
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - run.started
+                      - run.completed
+                      - run.failed
+                      - run.intervention_requested
+                      - message.created
+                      - topic.created
+                      - task.status_changed
+                      - goal.status_changed
+                      - file.parsed
+                      - notification.created
+                  description: Event types this endpoint receives. Duplicates are ignored.
+                url:
+                  type: string
+                  maxLength: 2048
+                  format: uri
+                  description: Where deliveries are POSTed. Must be an http(s) URL reachable from
+                    the internet.
+              additionalProperties: false
+    delete:
+      operationId: webhooks.delete
+      description: |-
+        Deletes the endpoint and its delivery log; pending retries are dropped.
+
+        **API key scopes:** `webhook:write`.
+      summary: Delete a webhook endpoint
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DeletedResource"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/webhooks/{id}/rotate-secret:
+    post:
+      operationId: webhooks.rotateSecret
+      description: >-
+        Replaces the signing secret and returns the new one. The old secret
+        stops working immediately.
+
+
+        **API key scopes:** `webhook:write`.
+      summary: Rotate the signing secret
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookWithSecret"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/webhooks/{id}/test:
+    post:
+      operationId: webhooks.test
+      description: >-
+        Sends a `webhook.test` event now and waits for the answer: one attempt,
+        no retries, and the failure streak is left alone. Works on a disabled
+        endpoint too. A failed attempt still answers 200 — read `status`,
+        `responseStatus` and `error` on the delivery.
+
+
+        **API key scopes:** `webhook:write`.
+      summary: Send a test event
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookDelivery"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/webhooks/{id}/deliveries:
+    get:
+      operationId: webhooks.listDeliveries
+      description: >-
+        Deliveries to this endpoint, newest first, with the latest attempt of
+        each and the exact body sent. A restricted API key sees only
+        `webhook.test` and the events whose data it may read (the same read
+        scopes as subscribing).
+
+
+        **API key scopes:** `webhook:read`.
+      summary: List deliveries of a webhook endpoint
+      tags:
+        - webhooks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WebhookDelivery"
+                      hasMore:
+                        $ref: "#/components/schemas/PageHasMore"
+                      nextCursor:
+                        $ref: "#/components/schemas/PageNextCursor"
+                      total:
+                        $ref: "#/components/schemas/PageTotal"
+                    required:
+                      - items
+                      - hasMore
+                      - nextCursor
+                      - total
+                    additionalProperties: false
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+          description: Opaque cursor from the previous page's `nextCursor`. Omit for the
+            first page.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size, 1–100. Defaults to 20.
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/webhooks/{id}/deliveries/{deliveryId}/redeliver:
+    post:
+      operationId: webhooks.redeliver
+      description: >-
+        Queues the same event (same event id and body) again as a new delivery,
+        which follows the normal retry policy. Answers 202 with the new
+        delivery; follow it through `GET /webhooks/{id}/deliveries`. A
+        restricted API key needs the read scope of the delivery's event (403
+        `insufficient_scope` otherwise).
+
+
+        **API key scopes:** `webhook:write`.
+      summary: Redeliver an event
+      tags:
+        - webhooks
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookDelivery"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - webhook:write
+      parameters:
+        - in: path
+          name: deliveryId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+webhooks:
+  run.started:
+    post:
+      description: An agent run started.
+      operationId: webhookEvents.runStarted
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRunStartedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: run.started
+      tags:
+        - webhooks
+  run.completed:
+    post:
+      description: An agent run finished.
+      operationId: webhookEvents.runCompleted
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRunCompletedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: run.completed
+      tags:
+        - webhooks
+  run.failed:
+    post:
+      description: An agent run ended with an error.
+      operationId: webhookEvents.runFailed
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRunFailedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: run.failed
+      tags:
+        - webhooks
+  run.intervention_requested:
+    post:
+      description: "An agent run paused for a person: a tool call waits for approval
+        or an answer."
+      operationId: webhookEvents.runInterventionRequested
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRunInterventionRequestedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: run.intervention_requested
+      tags:
+        - webhooks
+  message.created:
+    post:
+      description: A message was written to a conversation.
+      operationId: webhookEvents.messageCreated
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookMessageCreatedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: message.created
+      tags:
+        - webhooks
+  topic.created:
+    post:
+      description: A conversation topic was created.
+      operationId: webhookEvents.topicCreated
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookTopicCreatedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: topic.created
+      tags:
+        - webhooks
+  task.status_changed:
+    post:
+      description: A task moved to another status.
+      operationId: webhookEvents.taskStatusChanged
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookTaskStatusChangedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: task.status_changed
+      tags:
+        - webhooks
+  goal.status_changed:
+    post:
+      description: A goal moved to another status.
+      operationId: webhookEvents.goalStatusChanged
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookGoalStatusChangedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: goal.status_changed
+      tags:
+        - webhooks
+  file.parsed:
+    post:
+      description: A file finished parsing into chunks (successfully or not).
+      operationId: webhookEvents.fileParsed
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookFileParsedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: file.parsed
+      tags:
+        - webhooks
+  notification.created:
+    post:
+      description: An inbox notification was created for the owner.
+      operationId: webhookEvents.notificationCreated
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookNotificationCreatedEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: notification.created
+      tags:
+        - webhooks
+  webhook.test:
+    post:
+      description: Sent by `POST /webhooks/{id}/test` to check an endpoint.
+      operationId: webhookEvents.webhookTest
+      parameters:
+        - description: '`v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>`; several
+            values may be separated by commas or spaces.'
+          in: header
+          name: X-LobeHub-Signature
+          required: true
+          schema:
+            type: string
+        - description: Unix seconds the signature was computed at. Reject values more than
+            300 s from now.
+          in: header
+          name: X-LobeHub-Timestamp
+          required: true
+          schema:
+            type: string
+        - description: Event id; the same across retries and redeliveries.
+          in: header
+          name: X-LobeHub-Event-Id
+          required: true
+          schema:
+            type: string
+        - description: Event type, e.g. `run.completed`.
+          in: header
+          name: X-LobeHub-Event-Type
+          required: true
+          schema:
+            type: string
+        - description: Id of this delivery (`whd_…`).
+          in: header
+          name: X-LobeHub-Delivery-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookTestEvent"
+        required: true
+      responses:
+        2XX:
+          description: Acknowledges the delivery. Any other status, or no answer within
+            the timeout, is retried.
+      security: []
+      summary: webhook.test
+      tags:
+        - webhooks

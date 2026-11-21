@@ -34,6 +34,7 @@ import SubscriptionAccounts from '../subscription-accounts';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
 import Trash from '../trash';
+import Webhook from '../webhook';
 import Webhooks from '../webhooks';
 
 export const componentMap = {
@@ -61,6 +62,7 @@ export const componentMap = {
   [SettingsTabs.Stats]: Stats,
   [SettingsTabs.Usage]: Usage,
   [SettingsTabs.APIKey]: APIKey,
+  [SettingsTabs.Webhook]: Webhook,
   [SettingsTabs.OAuthApps]: OAuthApps,
   [SettingsTabs.Creds]: Creds,
   [SettingsTabs.Security]: Security,

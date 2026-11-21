@@ -16,3 +16,4 @@ export * from './run.controller';
 export * from './topic.controller';
 export * from './usage.controller';
 export * from './user.controller';
+export * from './webhook.controller';

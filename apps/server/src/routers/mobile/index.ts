@@ -2,6 +2,9 @@
  * This file contains the root router of Lobe Chat tRPC-backend for Mobile App
  * Only includes routers that are actually used by the mobile client
  */
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { mobileSubscriptionRouter } from '@/business/server/mobile-routers/mobileSubscription';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
