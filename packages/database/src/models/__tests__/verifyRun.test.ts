@@ -779,6 +779,14 @@ describe('VerifyRunModel.findRoundForOperation', () => {
       .update(verifyRuns)
       .set({ createdAt: new Date(Date.now() - 60_000) })
       .where(eq(verifyRuns.operationId, 'op-first'));
+    await serverDB
+      .update(agentOperations)
+      .set({ createdAt: new Date(Date.now() - 30_000) })
+      .where(eq(agentOperations.id, 'op-repair'));
+    await serverDB
+      .update(agentOperations)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(eq(agentOperations.id, 'op-first'));
     await startOp('op-feedback');
 
     expect(await model().findByOperation('op-feedback')).toBeUndefined();
@@ -791,6 +799,19 @@ describe('VerifyRunModel.findRoundForOperation', () => {
     expect(await model().getStateByOperation('op-feedback')).toBeNull();
     // Read-only: no row is created for the later operation.
     expect(await model().findByOperation('op-feedback')).toBeUndefined();
+  });
+
+  /** Regression (Codex r4652014638): an older run must not reach a round a later run started. */
+  it('never inherits a round started by a later run', async () => {
+    await startOp('op-older');
+    await serverDB
+      .update(agentOperations)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(eq(agentOperations.id, 'op-older'));
+    await confirmedRound('op-newer');
+
+    expect(await model().findRoundForOperation('op-older')).toBeUndefined();
+    expect(await model().getStateByOperation('op-older', { inherit: true })).toBeNull();
   });
 
   it('does not inherit an authored round with no confirmed plan', async () => {

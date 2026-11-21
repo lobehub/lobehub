@@ -532,7 +532,8 @@ export class VerifyRunModel {
 
   /**
    * The round an Agent Run answers to: its own session, else the latest round
-   * with a confirmed plan bound to an earlier run in the same topic.
+   * with a confirmed plan bound to an earlier run in the same topic. Rounds of
+   * runs started after this one are never inherited.
    *
    * A verification session is bound to the operation that started it. A later
    * operation in the same conversation — the builder resumed with the user's
@@ -548,7 +549,7 @@ export class VerifyRunModel {
     if (own) return own;
 
     const [op] = await this.db
-      .select({ topicId: agentOperations.topicId })
+      .select({ createdAt: agentOperations.createdAt, topicId: agentOperations.topicId })
       .from(agentOperations)
       .where(
         and(
@@ -569,6 +570,9 @@ export class VerifyRunModel {
       .where(
         and(
           eq(agentOperations.topicId, op.topicId),
+          // Only a predecessor's round: an earlier run must never reach (and,
+          // through its token, write to) a round a later run started.
+          lt(agentOperations.createdAt, op.createdAt),
           isNotNull(verifyRuns.planConfirmedAt),
           this.ownership(),
         ),
