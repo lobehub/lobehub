@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -12,6 +12,7 @@ import {
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
 } from '@/features/Settings/skill/features/connectorSections';
+import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
 
 import CatalogSection from '../Catalog/CatalogSection';
@@ -98,37 +99,33 @@ export default function AppCatalog() {
                       ts(`tools.composio.servers.${tool.serverType.identifier}.description`, {
                         defaultValue: tool.serverType.description,
                       });
-                const action = hasAppConnection(app)
-                  ? t('apps.manage')
-                  : app.channelPending
-                    ? t('apps.continue')
-                    : t('apps.connect');
+                const isConnected = hasAppConnection(app);
+                const label = t('catalog.rowAction', {
+                  action: isConnected
+                    ? t('apps.manage')
+                    : app.channelPending
+                      ? t('apps.continue')
+                      : t('apps.connect'),
+                  name: app.name,
+                });
                 const open = () => navigate(getAppHome(app));
                 return (
                   <SkillListRow
-                    icon={() => <AppIcon app={app} />}
+                    icon={() => <AppIcon app={app} size={20} />}
                     key={app.id}
                     summary={summary}
                     title={app.name}
                     extra={
-                      <Flexbox horizontal align={'center'} gap={6}>
+                      <>
                         {app.channel?.access?.requiredPlan === 'paid' && (
                           <Tag size={'small'}>{tm('messenger.paidBadge')}</Tag>
                         )}
-                        <Button
-                          size={'small'}
-                          aria-label={t('catalog.rowAction', {
-                            action,
-                            name: app.name,
-                          })}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            open();
-                          }}
-                        >
-                          {action}
-                        </Button>
-                      </Flexbox>
+                        {isConnected ? (
+                          <RowMoreMenu label={label} onOpenDetail={open} />
+                        ) : (
+                          <RowAddAction label={label} onClick={open} />
+                        )}
+                      </>
                     }
                     onClick={open}
                   />
