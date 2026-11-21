@@ -330,6 +330,36 @@ describe('getServerGlobalConfig', () => {
     expect(config.systemAgent?.fileEmbedding).toBeUndefined();
   });
 
+  it('tells clients when nothing runs cron-pattern scheduled tasks', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://db');
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('QSTASH_TOKEN', undefined);
+    vi.stubEnv('VERCEL_ENV', 'production');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'scheduledTaskDispatch',
+      'unconfigured',
+    );
+
+    vi.stubEnv('VERCEL_ENV', undefined);
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'scheduledTaskDispatch',
+      'builtin',
+    );
+
+    // A token alone does not register any schedule.
+    vi.stubEnv('QSTASH_TOKEN', 'token');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'scheduledTaskDispatch',
+      'builtin',
+    );
+
+    vi.stubEnv('QSTASH_SCHEDULES_MANAGED', '1');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'scheduledTaskDispatch',
+      'qstash',
+    );
+  });
+
   it('should omit the OIDC issuer when APP_URL is not configured', async () => {
     await expect(loadServerConfig(false)).resolves.not.toHaveProperty('oidcIssuer');
   });

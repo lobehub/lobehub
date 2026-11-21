@@ -19,6 +19,7 @@ import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 import { isLlmRelayDeploymentReady } from '@/server/modules/AgentRuntime/llmRelay/deployment';
+import { getScheduledTaskDispatch } from '@/server/services/builtinScheduler/deployment';
 import {
   isLegacyPageCollabEnabled,
   isWorkspacePageCollabEnabled,
@@ -232,6 +233,7 @@ export const getServerGlobalConfig = async () => {
     // Same derivation as the provider's own issuer (`libs/oidc-provider/provider.ts`).
     ...(appEnv.APP_URL ? { oidcIssuer: urlJoin(appEnv.APP_URL, OIDC_ISSUER_PATH) } : undefined),
     sandbox: getSandboxDeployment(),
+    scheduledTaskDispatch: getScheduledTaskDispatch(),
     systemAgent: {
       ...parseSystemAgent(appEnv.SYSTEM_AGENT),
       fileEmbedding: getDeploymentFileEmbeddingModel(),
