@@ -1,4 +1,5 @@
 import { getModelParameters, getModelPricing } from '@lobechat/model-runtime';
+import { ANIMATED_IMAGE_OUTPUT_FORMAT, ANIMATION_FRAME_PARAMS } from 'model-bank';
 
 /**
  * Fill model-card parameter defaults into `generationParams` for parameters
@@ -104,3 +105,70 @@ export const findUnsupportedImageParams = (
         key !== 'prompt' && value !== undefined && value !== null && !(key in parametersSchema),
     )
     .map(([key]) => key);
+
+interface DeclaredEnumParam {
+  default?: unknown;
+  enum?: unknown[];
+}
+
+interface DeclaredRangeParam {
+  max?: number;
+  min?: number;
+}
+
+const isSet = (value: unknown) => value !== undefined && value !== null;
+
+const formatRange = ({ max, min }: DeclaredRangeParam) =>
+  min !== undefined && max !== undefined
+    ? `${min} to ${max}`
+    : min === undefined
+      ? `at most ${max}`
+      : `at least ${min}`;
+
+/**
+ * Output-control values that the model's declared parameter schema rules out, described for the
+ * error message. An empty array means the values are acceptable.
+ *
+ * `findUnsupportedImageParams` only checks keys. A declared key can still carry a value the model
+ * does not support, e.g. `outputFormat: "gif"` on a model that declares only `png`, or a
+ * `frameCount` outside the declared range. The upstream API then answers `400 Invalid option`,
+ * but only after the task has been queued and charged. The frame fields are checked only for GIF
+ * output; the runtime drops them for static output.
+ */
+export const findInvalidImageOutputParamValues = (
+  params: Record<string, unknown>,
+  parametersSchema: Record<string, unknown>,
+): string[] => {
+  const formatSchema = parametersSchema.outputFormat as DeclaredEnumParam | undefined;
+  const requestedFormat = params.outputFormat;
+
+  if (
+    isSet(requestedFormat) &&
+    Array.isArray(formatSchema?.enum) &&
+    !formatSchema.enum.includes(requestedFormat)
+  ) {
+    return [
+      `outputFormat ${JSON.stringify(requestedFormat)} (supported: ${formatSchema.enum.join(', ')})`,
+    ];
+  }
+
+  const outputFormat = isSet(requestedFormat) ? requestedFormat : formatSchema?.default;
+  if (outputFormat !== ANIMATED_IMAGE_OUTPUT_FORMAT) return [];
+
+  const issues: string[] = [];
+  for (const key of ANIMATION_FRAME_PARAMS) {
+    const value = params[key];
+    const range = parametersSchema[key] as DeclaredRangeParam | undefined;
+    // Undeclared frame fields are already reported by `findUnsupportedImageParams`.
+    if (!isSet(value) || !range || (range.min === undefined && range.max === undefined)) continue;
+
+    const inRange =
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      (range.min === undefined || value >= range.min) &&
+      (range.max === undefined || value <= range.max);
+    if (!inRange) issues.push(`${key} ${JSON.stringify(value)} (allowed: ${formatRange(range)})`);
+  }
+
+  return issues;
+};

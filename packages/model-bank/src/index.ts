@@ -1,4 +1,5 @@
 export * from './aiModels';
+export * from './const/imageOutputCapabilities';
 export * from './const/knowledgeCutoff';
 export * from './const/modelProvider';
 export {
