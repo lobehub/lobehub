@@ -66,6 +66,7 @@ describe('pushTokenRouter', () => {
         expoToken: 'ExponentPushToken[abc]',
         locale: 'zh-CN',
         platform: 'ios',
+        provider: 'expo',
       });
       expect(result).toEqual({ id: 'row-1' });
     });
@@ -84,6 +85,7 @@ describe('pushTokenRouter', () => {
         deviceId: 'd',
         expoToken: 't',
         platform: 'android',
+        provider: 'expo',
       });
     });
 
@@ -104,6 +106,7 @@ describe('pushTokenRouter', () => {
         deviceId: 'iphone',
         expoToken: 'ExponentPushToken[abc]',
         platform: 'ios',
+        provider: 'expo',
       });
       expect(mockRegisterPushToStart).toHaveBeenCalledWith({
         apnsEnvironment: 'production',
@@ -219,6 +222,64 @@ describe('pushTokenRouter', () => {
           pushToken: 'token',
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('register a native APNs token', () => {
+    const apnsToken = 'ab'.repeat(32);
+
+    it('stores the device token with its provider, bundle id and environment', async () => {
+      mockUpsert.mockResolvedValueOnce({ id: 'row-1' });
+
+      await createCaller().register({
+        bundleId: 'com.lobehub.lobot',
+        deviceId: 'iphone',
+        environment: 'sandbox',
+        platform: 'ios',
+        provider: 'apns',
+        token: apnsToken,
+      });
+
+      expect(mockUpsert).toHaveBeenCalledWith({
+        apnsEnvironment: 'sandbox',
+        bundleId: 'com.lobehub.lobot',
+        deviceId: 'iphone',
+        expoToken: apnsToken,
+        platform: 'ios',
+        provider: 'apns',
+      });
+    });
+
+    it('defaults the APNs environment to production', async () => {
+      mockUpsert.mockResolvedValueOnce({ id: 'row-1' });
+
+      await createCaller().register({
+        deviceId: 'iphone',
+        platform: 'ios',
+        provider: 'apns',
+        token: apnsToken,
+      });
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({ apnsEnvironment: 'production', provider: 'apns' }),
+      );
+    });
+
+    it.each([
+      ['a non-hex token', { platform: 'ios' as const, token: 'ExponentPushToken[abc]' }],
+      ['an Android device', { platform: 'android' as const, token: apnsToken }],
+      ['a missing token', { platform: 'ios' as const }],
+    ])('rejects %s', async (_, input) => {
+      await expect(
+        createCaller().register({ deviceId: 'd', provider: 'apns', ...input }),
+      ).rejects.toThrow();
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
+    it('requires a token for Expo registrations too', async () => {
+      await expect(createCaller().register({ deviceId: 'd', platform: 'ios' })).rejects.toThrow(
+        'token is required',
+      );
     });
   });
 
