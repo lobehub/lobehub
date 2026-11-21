@@ -1,4 +1,5 @@
 import '../initialize';
+import '@/styles/purple-theme.css';
 
 import { RouterProvider } from 'react-router/dom';
 

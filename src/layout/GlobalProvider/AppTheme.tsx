@@ -4,6 +4,7 @@ import '@lobehub/ui/theme.css';
 import '@lobehub/ui/global.css';
 import '@lobehub/ui/style.css';
 import '@/styles/global.css';
+import '@/styles/purple-theme.css';
 
 import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
 import { ConfigProvider, FontLoader, setLobeTheme } from '@lobehub/ui';

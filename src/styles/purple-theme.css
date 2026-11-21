@@ -1,0 +1,85 @@
+/*
+ * 深紫色主题覆盖（仅本 fork 本地使用）
+ *
+ * 原理：@lobehub/ui 的所有配色都来自 `--lobe-color-*` CSS 变量，
+ * 这里把基础色板整体替换为深紫系，组件无需改动即可跟随。
+ * 选择器用 `:root:root` 提高优先级，确保覆盖 lobe-ui 注入的默认值。
+ */
+
+:root:root {
+  color-scheme: dark;
+
+  /* ---------- 背景 ---------- */
+  --lobe-color-bg-base: #150b2e;
+  --lobe-color-bg-layout: #150b2e;
+  --lobe-color-bg-container: #1e1240;
+  --lobe-color-bg-container-secondary: #251749;
+  --lobe-color-bg-elevated: #2a1b52;
+  --lobe-color-bg-spotlight: rgba(255, 255, 255, 0.06);
+  --lobe-color-bg-container-disabled: rgba(255, 255, 255, 0.04);
+  --lobe-color-bg-mask: rgba(8, 3, 20, 0.75);
+
+  /* ---------- 文字 ---------- */
+  --lobe-color-text: #ede7ff;
+  --lobe-color-text-base: #ede7ff;
+  --lobe-color-text-heading: #f5f1ff;
+  --lobe-color-text-secondary: rgba(237, 231, 255, 0.72);
+  --lobe-color-text-tertiary: rgba(237, 231, 255, 0.5);
+  --lobe-color-text-quaternary: rgba(237, 231, 255, 0.34);
+  --lobe-color-text-description: rgba(237, 231, 255, 0.55);
+  --lobe-color-text-label: rgba(237, 231, 255, 0.8);
+  --lobe-color-text-placeholder: rgba(237, 231, 255, 0.35);
+  --lobe-color-text-disabled: rgba(237, 231, 255, 0.28);
+
+  /* ---------- 边框 / 分割线 ---------- */
+  --lobe-color-border: rgba(160, 120, 255, 0.2);
+  --lobe-color-border-secondary: rgba(160, 120, 255, 0.12);
+  --lobe-color-split: rgba(160, 120, 255, 0.16);
+
+  /* ---------- 填充 ---------- */
+  --lobe-color-fill: rgba(255, 255, 255, 0.06);
+  --lobe-color-fill-secondary: rgba(255, 255, 255, 0.08);
+  --lobe-color-fill-tertiary: rgba(255, 255, 255, 0.12);
+  --lobe-color-fill-quaternary: rgba(255, 255, 255, 0.03);
+  --lobe-color-fill-content: rgba(255, 255, 255, 0.06);
+  --lobe-color-fill-content-hover: rgba(255, 255, 255, 0.1);
+  --lobe-color-fill-alter: rgba(255, 255, 255, 0.05);
+
+  /* ---------- 主色（紫色） ---------- */
+  --lobe-color-primary: #8b5cf6;
+  --lobe-color-primary-hover: #a78bfa;
+  --lobe-color-primary-active: #7c3aed;
+  --lobe-color-primary-bg: rgba(139, 92, 246, 0.16);
+  --lobe-color-primary-bg-hover: rgba(139, 92, 246, 0.24);
+  --lobe-color-primary-border: rgba(139, 92, 246, 0.45);
+  --lobe-color-primary-border-hover: rgba(167, 139, 250, 0.6);
+  --lobe-color-primary-text: #c4b5fd;
+  --lobe-color-primary-text-hover: #ddd6fe;
+  --lobe-color-primary-text-active: #a78bfa;
+  --lobe-color-primary-fill: rgba(139, 92, 246, 0.16);
+  --lobe-color-primary-fill-secondary: rgba(139, 92, 246, 0.24);
+  --lobe-color-primary-fill-tertiary: rgba(139, 92, 246, 0.3);
+  --lobe-color-primary-fill-quaternary: rgba(139, 92, 246, 0.08);
+
+  /* ---------- 链接 ---------- */
+  --lobe-color-link: #a78bfa;
+  --lobe-color-link-hover: #c4b5fd;
+  --lobe-color-link-active: #8b5cf6;
+}
+
+/* 页面底色兜底：部分 SPA 模板里内联写了 html body{background:#f8f8f8}，需要更高优先级压掉 */
+html body,
+html[data-theme='light'] body,
+html[data-theme='dark'] body {
+  background: #150b2e !important;
+  color: var(--lobe-color-text);
+}
+
+body,
+#__next,
+#root,
+.lobe-chat,
+.lobe-page {
+  background-color: var(--lobe-color-bg-base);
+  color: var(--lobe-color-text);
+}
