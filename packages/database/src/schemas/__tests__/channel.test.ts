@@ -11,6 +11,7 @@ import {
   channelMemberGrants,
   channelMembers,
   channelMessageFiles,
+  channelMessageReactions,
   channelMessages,
   channels,
   channelThreads,
@@ -498,6 +499,61 @@ describe('channel schema', () => {
         .from(agentOperations)
         .where(eq(agentOperations.id, job.operationId!));
       expect(operation).toMatchObject({ id: job.operationId, userId: ownerId });
+    });
+  });
+
+  describe('message reactions', () => {
+    it('lets each member add an emoji once per message', async () => {
+      const { agent, channel, owner } = await createChannel();
+      const message = await createMessage(channel.id, owner.id, 1);
+      const react = (memberId: string, emoji: string) =>
+        serverDB
+          .insert(channelMessageReactions)
+          .values({ channelId: channel.id, emoji, memberId, messageId: message.id });
+
+      await react(owner.id, '👍');
+      await react(agent.id, '👍');
+      await react(owner.id, 'emj_doge');
+      await expect(react(owner.id, '👍')).rejects.toThrow();
+    });
+
+    it('rejects a member or message from another channel', async () => {
+      const first = await createChannel('First');
+      const second = await createChannel('Second');
+      const message = await createMessage(first.channel.id, first.owner.id, 1);
+
+      await expect(
+        serverDB.insert(channelMessageReactions).values({
+          channelId: first.channel.id,
+          emoji: '👍',
+          memberId: second.owner.id,
+          messageId: message.id,
+        }),
+      ).rejects.toThrow();
+      await expect(
+        serverDB.insert(channelMessageReactions).values({
+          channelId: second.channel.id,
+          emoji: '👍',
+          memberId: second.owner.id,
+          messageId: message.id,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('drops reactions with their message', async () => {
+      const { channel, owner } = await createChannel();
+      const message = await createMessage(channel.id, owner.id, 1);
+      await serverDB
+        .insert(channelMessageReactions)
+        .values({ channelId: channel.id, emoji: '👀', memberId: owner.id, messageId: message.id });
+
+      await serverDB.delete(channelMessages).where(eq(channelMessages.id, message.id));
+
+      const rows = await serverDB
+        .select()
+        .from(channelMessageReactions)
+        .where(eq(channelMessageReactions.messageId, message.id));
+      expect(rows).toHaveLength(0);
     });
   });
 });
