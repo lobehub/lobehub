@@ -314,7 +314,7 @@ export default {
     "This device has no local folder for the project yet, so the conversation starts in the device's default directory.",
   'overview.context.location.environments': 'Environment',
   'overview.context.location.noEnvironments': 'The environment has no repositories yet.',
-  'overview.context.location.title': 'Work location',
+  'overview.context.location.title': 'Execution environment',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
   'overview.context.repository.publishHint':
@@ -697,4 +697,8 @@ export default {
   'settings.enableDirectory': 'Enable',
   'settings.enableDirectoryHint':
     'Link this folder to the project environment so topics can start in it',
+  'overview.context.location.sandboxes': 'Cloud sandbox',
+  'overview.context.location.emptySandbox': 'Empty sandbox',
+  'overview.context.location.emptySandboxDesc':
+    'Starts in an empty folder, without the project environment',
 };

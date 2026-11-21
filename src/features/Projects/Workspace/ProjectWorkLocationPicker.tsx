@@ -4,15 +4,8 @@ import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import {
-  ChevronDownIcon,
-  CircleOffIcon,
-  FolderIcon,
-  HardDriveIcon,
-  PlusIcon,
-  SettingsIcon,
-} from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { ChevronDownIcon, FolderIcon, HardDriveIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { Fragment, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepositoryAvatar from '@/components/RepositoryAvatar';
@@ -259,56 +252,6 @@ const ProjectWorkLocationPicker = ({
         !!location.machineDeviceId &&
         (machineFolders.length > 1 || canManage)));
 
-  // The environment is a first-level choice beside the places: what a cloud
-  // sandbox checks out. Picking one from a device moves the run to the sandbox.
-  const environmentSection = (
-    <>
-      <div {...stylex.props(styles.header)}>{t('overview.context.location.environments')}</div>
-      <div {...stylex.props(styles.list)}>
-        {/* Not every conversation needs the checkout: this one starts in an
-            empty working directory. */}
-        {repositories.length > 0 && (
-          <OptionRow
-            compact
-            active={onSandbox && !driveShown && withoutEnvironment}
-            icon={<Icon icon={CircleOffIcon} size={16} />}
-            label={t('environment.none')}
-            onClick={() => pickRepository(NO_ENVIRONMENT)}
-          />
-        )}
-        {repositories.map((environment) => (
-          <OptionRow
-            compact
-            icon={<RepositoryAvatar size={16} url={environmentRepositoryUrl(environment)} />}
-            key={environment.id}
-            label={environment.name}
-            onClick={() => pickRepository(environment.id)}
-            active={onSandbox && !driveShown && environment.id === repository?.id}
-            // A name that already is the slug needs no second copy of it.
-            hint={
-              repositoriesLabel(environment) === environment.name
-                ? undefined
-                : repositoriesLabel(environment)
-            }
-          />
-        ))}
-      </div>
-      {repositories.length === 0 && (
-        <Text className={stylex.props(styles.hint).className}>
-          {t('overview.context.location.noEnvironments')}
-        </Text>
-      )}
-      {canManage && (
-        <OptionRow
-          compact
-          icon={<Icon icon={SettingsIcon} size={16} />}
-          label={t('environment.configure')}
-          onClick={configureEnvironment}
-        />
-      )}
-    </>
-  );
-
   // The persistent sandbox, beside the temporary one: its folder one level down.
   const driveRow = drive && (
     <Popover
@@ -349,6 +292,53 @@ const ProjectWorkLocationPicker = ({
         />
       </div>
     </Popover>
+  );
+
+  // An execution environment is one thing to pick: a cloud sandbox set up
+  // from the project's environment (its repositories, setup and variables),
+  // an empty one, one on the drive — or, below, a device with its local folder.
+  const sandboxEntities = (
+    <>
+      <div {...stylex.props(styles.header)}>{t('overview.context.location.sandboxes')}</div>
+      <div {...stylex.props(styles.list)}>
+        {repositories.map((environment) => (
+          <OptionRow
+            compact
+            active={onSandbox && !driveShown && environment.id === repository?.id}
+            desc={repositoriesLabel(environment) ?? undefined}
+            icon={<RepositoryAvatar size={16} url={environmentRepositoryUrl(environment)} />}
+            key={environment.id}
+            label={environment.name}
+            onClick={() => pickRepository(environment.id)}
+          />
+        ))}
+        {/* Not every conversation needs the checkout: an empty sandbox starts
+            in an empty working directory. */}
+        <OptionRow
+          compact
+          active={onSandbox && !driveShown && (withoutEnvironment || repositories.length === 0)}
+          desc={t('overview.context.location.emptySandboxDesc')}
+          icon={<ExecutionTargetIcon target={'sandbox'} />}
+          label={t('overview.context.location.emptySandbox')}
+          onClick={() =>
+            repositories.length > 0
+              ? pickRepository(NO_ENVIRONMENT)
+              : switchable
+                ? void select('sandbox')
+                : setOpen(false)
+          }
+        />
+      </div>
+      {driveRow}
+      {canManage && (
+        <OptionRow
+          compact
+          icon={<Icon icon={SettingsIcon} size={16} />}
+          label={t('environment.configure')}
+          onClick={configureEnvironment}
+        />
+      )}
+    </>
   );
 
   /** One machine's folders: the second level of its row. */
@@ -425,54 +415,88 @@ const ProjectWorkLocationPicker = ({
     />
   );
 
+  /** A machine as places to run: one row per local folder, or the machine itself without one. */
+  const machineEntities = (next: 'device' | 'local', device?: (typeof deviceRows)[number]) => {
+    const deviceId = device?.deviceId;
+    const folders = showRepositories
+      ? directoriesOn((next === 'local' ? currentDeviceId : deviceId) ?? '')
+      : [];
+    const onThisMachine =
+      next === 'local'
+        ? target === 'local'
+        : target === 'device' && deviceId === boundDevice?.deviceId;
+    const name =
+      next === 'local'
+        ? tChat('heteroAgent.executionTarget.local')
+        : device?.friendlyName || device?.hostname || deviceId || '';
+    const icon =
+      next === 'local' ? (
+        <ExecutionTargetIcon target={'local'} />
+      ) : (
+        <ExecutionTargetIcon devicePlatform={device?.platform} target={'device'} />
+      );
+    const status = device && (
+      <ExecutionTargetDeviceStatus
+        offlineLabel={tChat('heteroAgent.executionTarget.offline')}
+        online={device.online}
+        onlineLabel={tChat('heteroAgent.executionTarget.online')}
+        unknown={device.onlineUnknown}
+        unknownLabel={tChat('heteroAgent.executionTarget.presenceChecking')}
+      />
+    );
+    if (folders.length > 0)
+      return folders.map((folder) => (
+        <OptionRow
+          active={onThisMachine && folder.id === directory?.id}
+          // The path on its own line, so the machine's name stays whole.
+          desc={folder.path}
+          hint={status}
+          icon={icon}
+          key={folder.id}
+          label={name}
+          onClick={() => pickDirectory(folder.id, next, deviceId)}
+        />
+      ));
+    return machineRow(
+      <OptionRow
+        active={onThisMachine}
+        arrow={showRepositories}
+        hint={status}
+        icon={icon}
+        label={name}
+        onClick={() => void select(next, deviceId)}
+      />,
+      next,
+      deviceId,
+    );
+  };
+
   const content = (
-    <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
-      {showRepositories && (sandboxAvailable || onSandbox) && environmentSection}
+    <Flexbox gap={2} style={{ maxWidth: 380, minWidth: 300 }}>
       <div {...stylex.props(styles.header)}>{t('overview.context.location.title')}</div>
-      {(sandboxAvailable || onSandbox) && (
-        <>
+      {(sandboxAvailable || onSandbox) &&
+        (showRepositories ? (
+          sandboxEntities
+        ) : (
           <div data-testid={'project-location-sandbox'}>{sandboxRow}</div>
-          {showRepositories && driveRow}
-        </>
-      )}
+        ))}
       {(localAvailable || deviceRows.length > 0) && (
         <>
           <div {...stylex.props(styles.header)}>{t('overview.context.location.devices')}</div>
-          {localAvailable &&
-            machineRow(
-              <OptionRow
-                active={target === 'local'}
-                arrow={showRepositories}
-                icon={<ExecutionTargetIcon target={'local'} />}
-                label={tChat('heteroAgent.executionTarget.local')}
-                onClick={() => void select('local')}
-              />,
-              'local',
-            )}
           <div {...stylex.props(styles.list)}>
-            {deviceRows.map((device) =>
-              machineRow(
-                <OptionRow
-                  active={target === 'device' && device.deviceId === boundDevice?.deviceId}
-                  arrow={showRepositories}
-                  icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
-                  label={device.friendlyName || device.hostname || device.deviceId}
-                  hint={
-                    <ExecutionTargetDeviceStatus
-                      offlineLabel={tChat('heteroAgent.executionTarget.offline')}
-                      online={device.online}
-                      onlineLabel={tChat('heteroAgent.executionTarget.online')}
-                      unknown={device.onlineUnknown}
-                      unknownLabel={tChat('heteroAgent.executionTarget.presenceChecking')}
-                    />
-                  }
-                  onClick={() => void select('device', device.deviceId)}
-                />,
-                'device',
-                device.deviceId,
-              ),
-            )}
+            {localAvailable && machineEntities('local')}
+            {deviceRows.map((device) => (
+              <Fragment key={device.deviceId}>{machineEntities('device', device)}</Fragment>
+            ))}
           </div>
+          {showRepositories && canManage && (
+            <OptionRow
+              compact
+              icon={<Icon icon={PlusIcon} size={16} />}
+              label={t('settings.addDirectory')}
+              onClick={() => addDirectory('device')}
+            />
+          )}
         </>
       )}
     </Flexbox>
