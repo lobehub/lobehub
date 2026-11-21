@@ -34,7 +34,7 @@ const noop = () => {};
  * a separate authorization, so its section stays here under the connect row.
  */
 const ConnectorGate = memo<{ children: ReactNode }>(({ children }) => {
-  const { t } = useTranslation('integration');
+  const { ready, t } = useTranslation('integration');
   const { available, connected, error, isInitialLoading, provider, retry, server } =
     useGithubAgentTools();
   const view = resolveAgentToolsView({
@@ -45,6 +45,7 @@ const ConnectorGate = memo<{ children: ReactNode }>(({ children }) => {
     isInitialLoading,
   });
 
+  if (!ready) return <IntegrationConnectionsSkeleton />;
   if (view === 'ready' && connected) return children;
 
   return (
