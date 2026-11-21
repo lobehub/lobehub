@@ -349,6 +349,27 @@ class ChatGroupMember(TypedDict):
     role: Optional[Literal["supervisor", "participant", "assistant"]]
 
 
+class DocumentSummary(TypedDict):
+    createdAt: str
+    fileType: str
+    id: str
+    parentId: Optional[str]
+    slug: Optional[str]
+    title: Optional[str]
+    updatedAt: str
+
+
+class Document(TypedDict):
+    createdAt: str
+    fileType: str
+    id: str
+    parentId: Optional[str]
+    slug: Optional[str]
+    title: Optional[str]
+    updatedAt: str
+    content: Optional[str]
+
+
 class EvalRun(TypedDict):
     config: EvalRunConfig
     createdAt: str
@@ -1247,20 +1268,23 @@ class GoalGraphWorkVersionLinkWork(TypedDict):
     resourceId: Optional[str]
     resourceType: NotRequired[
         Literal[
+            "artboard",
             "canvas",
             "document",
             "github_issue",
             "github_pull_request",
             "linear_document",
             "linear_issue",
+            "link",
             "file",
+            "collection",
             "goal_report",
             "task",
         ]
     ]
     status: Optional[str]
     title: Optional[str]
-    type: Literal["canvas", "document", "external", "file", "goal_report", "task"]
+    type: Literal["artboard", "canvas", "document", "external", "file", "collection", "goal_report", "task"]
     url: Optional[str]
     workId: str
 
@@ -3655,6 +3679,25 @@ class ChatGroupsRemoveMembersBody(TypedDict):
     agentIds: List[str]
 
 
+class DocumentsListResponse(TypedDict):
+    items: List[DocumentSummary]
+    hasMore: PageHasMore
+    nextCursor: PageNextCursor
+    total: PageTotal
+
+
+class DocumentsCreateBody(TypedDict):
+    content: NotRequired[str]
+    fileType: NotRequired[str]
+    parentId: NotRequired[str]
+    title: str
+
+
+class DocumentsUpdateBody(TypedDict):
+    content: NotRequired[str]
+    title: NotRequired[str]
+
+
 class EvalCreateRunsBody(TypedDict):
     config: NotRequired[EvalCreateRunsBodyConfig]
     executionMode: NotRequired[Literal["internal", "external"]]
@@ -5153,6 +5196,11 @@ __all__ = [
     "CreatedApiKey",
     "DeletedResource",
     "DeletedResources",
+    "Document",
+    "DocumentSummary",
+    "DocumentsCreateBody",
+    "DocumentsListResponse",
+    "DocumentsUpdateBody",
     "EvalBatchReportResult",
     "EvalBenchmark",
     "EvalBenchmarkRubric",

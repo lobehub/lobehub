@@ -55,6 +55,11 @@ if TYPE_CHECKING:
         CreatedApiKey,
         DeletedResource,
         DeletedResources,
+        Document,
+        DocumentsCreateBody,
+        DocumentsListResponse,
+        DocumentSummary,
+        DocumentsUpdateBody,
         EvalBatchReportResult,
         EvalBenchmark,
         EvalCreateBenchmarksBody,
@@ -1589,6 +1594,190 @@ class AsyncChatGroups(AsyncAPIResource):
             await self._client._request(
                 "DELETE",
                 f"/api/v1/chat-groups/{_path(id)}/members",
+                query=None,
+                headers={"X-Workspace-Id": workspace_id},
+                json=body,
+                response="envelope",
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                max_retries=max_retries,
+            ),
+        )
+
+
+class AsyncDocuments(AsyncAPIResource):
+    """`client.documents`: the `documents.*` operations."""
+
+    async def list(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        parent_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
+        extra_headers: Optional[Mapping[str, str]] = None,
+        extra_query: Optional[Mapping[str, object]] = None,
+        extra_body: Optional[Mapping[str, object]] = None,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+    ) -> DocumentsListResponse:
+        """
+        List documents
+
+        **API key scopes:** `knowledge:read`.
+
+        `GET /api/v1/documents`
+        """
+        return cast(
+            "DocumentsListResponse",
+            await self._client._request(
+                "GET",
+                "/api/v1/documents",
+                query={"cursor": cursor, "limit": limit, "parentId": parent_id},
+                headers={"X-Workspace-Id": workspace_id},
+                response="envelope",
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                max_retries=max_retries,
+            ),
+        )
+
+    def iter_list(
+        self,
+        *,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+        parent_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
+        extra_headers: Optional[Mapping[str, str]] = None,
+        extra_query: Optional[Mapping[str, object]] = None,
+        extra_body: Optional[Mapping[str, object]] = None,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+    ) -> AsyncIterator[DocumentSummary]:
+        """
+        Iterate every item of `list` across pages, starting at `cursor`.
+
+        Each page is fetched with `list()` and its `nextCursor` is passed back until `hasMore` is false.
+        """
+
+        async def fetch(page_cursor: Optional[str]) -> Any:
+            return await self.list(
+                limit=limit,
+                parent_id=parent_id,
+                workspace_id=workspace_id,
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                max_retries=max_retries,
+                cursor=page_cursor,
+            )
+
+        return aiter_pages(fetch, "items", cursor)
+
+    async def create(
+        self,
+        body: DocumentsCreateBody,
+        *,
+        workspace_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        extra_headers: Optional[Mapping[str, str]] = None,
+        extra_query: Optional[Mapping[str, object]] = None,
+        extra_body: Optional[Mapping[str, object]] = None,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+    ) -> Document:
+        """
+        Create a document
+
+        Creates a page from Markdown, or a folder with `fileType: "custom/folder"`.
+
+        **API key scopes:** `knowledge:write`.
+
+        `POST /api/v1/documents`
+        """
+        return cast(
+            "Document",
+            await self._client._request(
+                "POST",
+                "/api/v1/documents",
+                query=None,
+                headers={"X-Workspace-Id": workspace_id, "Idempotency-Key": idempotency_key},
+                json=body,
+                response="envelope",
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                max_retries=max_retries,
+            ),
+        )
+
+    async def get(
+        self,
+        id: str,
+        *,
+        workspace_id: Optional[str] = None,
+        extra_headers: Optional[Mapping[str, str]] = None,
+        extra_query: Optional[Mapping[str, object]] = None,
+        extra_body: Optional[Mapping[str, object]] = None,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+    ) -> Document:
+        """
+        Get a document
+
+        **API key scopes:** `knowledge:read`.
+
+        `GET /api/v1/documents/{id}`
+        """
+        return cast(
+            "Document",
+            await self._client._request(
+                "GET",
+                f"/api/v1/documents/{_path(id)}",
+                query=None,
+                headers={"X-Workspace-Id": workspace_id},
+                response="envelope",
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                max_retries=max_retries,
+            ),
+        )
+
+    async def update(
+        self,
+        id: str,
+        body: DocumentsUpdateBody,
+        *,
+        workspace_id: Optional[str] = None,
+        extra_headers: Optional[Mapping[str, str]] = None,
+        extra_query: Optional[Mapping[str, object]] = None,
+        extra_body: Optional[Mapping[str, object]] = None,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+    ) -> Document:
+        """
+        Update a document
+
+        Replaces the title and/or the whole Markdown body. A page open in the editor receives the write through its live room.
+
+        **API key scopes:** `knowledge:write`.
+
+        `PATCH /api/v1/documents/{id}`
+        """
+        return cast(
+            "Document",
+            await self._client._request(
+                "PATCH",
+                f"/api/v1/documents/{_path(id)}",
                 query=None,
                 headers={"X-Workspace-Id": workspace_id},
                 json=body,
@@ -7920,6 +8109,10 @@ class AsyncGeneratedResources:
         return AsyncChatGroups(self._client)
 
     @cached_property
+    def documents(self) -> AsyncDocuments:
+        return AsyncDocuments(self._client)
+
+    @cached_property
     def eval(self) -> AsyncEval:
         return AsyncEval(self._client)
 
@@ -8015,6 +8208,7 @@ __all__ = [
     "AsyncAudio",
     "AsyncChat",
     "AsyncChatGroups",
+    "AsyncDocuments",
     "AsyncEval",
     "AsyncFiles",
     "AsyncGeneratedResources",
