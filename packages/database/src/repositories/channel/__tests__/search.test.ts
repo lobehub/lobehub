@@ -71,6 +71,56 @@ describe('ChannelRepository.searchMessages', () => {
     ).toEqual([root.id]);
   });
 
+  it('searches only one Thread when given its id', async () => {
+    const { channel, reply, repo, thread } = await setup();
+    const result = await repo.searchMessages(channel.id, { query: 'search', threadId: thread.id });
+    expect(result).toMatchObject({ hasMore: false, messages: [{ id: reply.id }] });
+    expect(result.messages).toHaveLength(1);
+  });
+
+  it('searches only the main timeline when `threadId` is null', async () => {
+    const { channel, repo, root } = await setup();
+    expect(
+      (await repo.searchMessages(channel.id, { query: 'search', threadId: null })).messages.map(
+        (m) => m.id,
+      ),
+    ).toEqual([root.id]);
+  });
+
+  it('pages a Thread-scoped search with `before`', async () => {
+    const { channel, repo, reply, thread } = await setup();
+    const send = (content: string, requestKey: string) =>
+      repo.send(channel.id, { content, requestKey, routing: 'fallback', threadId: thread.id });
+    const later = await send('Search results look right', 'later');
+    // A newer main-timeline hit stays out of the Thread's pages.
+    await repo.send(channel.id, {
+      content: 'search again',
+      requestKey: 'main',
+      routing: 'fallback',
+    });
+    const first = await repo.searchMessages(channel.id, {
+      limit: 1,
+      query: 'search',
+      threadId: thread.id,
+    });
+    expect(first).toMatchObject({ hasMore: true, messages: [{ id: later.id }] });
+    const next = await repo.searchMessages(channel.id, {
+      before: first.messages[0].sequence,
+      limit: 1,
+      query: 'search',
+      threadId: thread.id,
+    });
+    expect(next).toMatchObject({ hasMore: false, messages: [{ id: reply.id }] });
+  });
+
+  it('finds nothing in a trashed Thread', async () => {
+    const { channel, repo, thread } = await setup();
+    await repo.removeThread(channel.id, thread.id);
+    expect(
+      (await repo.searchMessages(channel.id, { query: 'search', threadId: thread.id })).messages,
+    ).toEqual([]);
+  });
+
   it('hides a Channel the caller cannot read', async () => {
     const { channel } = await setup();
     const outsider = new ChannelRepository(db, fixture.memberId);
