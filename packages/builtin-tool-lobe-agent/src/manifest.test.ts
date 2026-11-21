@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LobeAgentManifest } from './manifest';
+import { MAX_MEDIA_URLS } from './media';
 import { LobeAgentApiName } from './types';
 
 describe('LobeAgentManifest', () => {
@@ -57,6 +58,8 @@ describe('LobeAgentManifest', () => {
     expect(parameters).not.toHaveProperty('oneOf');
     expect(parameters).not.toHaveProperty('allOf');
     expect(parameters).not.toHaveProperty('anyOf');
+    expect(parameters.properties.urls.maxItems).toBe(MAX_MEDIA_URLS);
+    expect(LobeAgentManifest.systemRole).toContain('remote URLs');
   });
 
   it('should expose a restrained vent API for reporting platform friction', () => {
