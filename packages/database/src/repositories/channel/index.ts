@@ -44,6 +44,7 @@ import { ChannelError } from './error';
 import { channelLastMessages } from './lastMessage';
 import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
+import { notificationsMutedSql, setNotificationsMuted } from './notificationMute';
 import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
@@ -63,7 +64,7 @@ import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
-import { channelThreadMentions } from './threadMentions';
+import { channelMentionCounts, channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView, viewerJobs } from './view';
@@ -451,10 +452,11 @@ export class ChannelRepository {
       async (tx, access) => {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
+        const notificationsMuted = access.member.metadata?.notificationsMuted === true;
         const view = await readChannelView(tx, channelId, options, this.userId);
         const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: { ...access.channel, canDelete: admin, ...shared.channel },
+          channel: { ...access.channel, canDelete: admin, notificationsMuted, ...shared.channel },
           joined: true,
           sharedAgentOwner: shared.owner,
           ...view,
@@ -485,6 +487,13 @@ export class ChannelRepository {
       },
       { allowArchived: true, allowTrashed: true },
     );
+
+  /** Turns the caller's own push notifications for the conversation off or on. */
+  setNotificationsMuted = async (channelId: string, muted: boolean) =>
+    this.write(channelId, (tx, { member }) => setNotificationsMuted(tx, member.id, muted), {
+      allowArchived: true,
+      allowTrashed: true,
+    });
 
   /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
@@ -544,6 +553,7 @@ export class ChannelRepository {
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
         hidden: boolean;
+        notificationsMuted: boolean;
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sectionId: string | null;
@@ -562,6 +572,7 @@ export class ChannelRepository {
         hidden: channelMembers.hidden,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
+        notificationsMuted: notificationsMutedSql(),
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         sectionId: channelMembers.sectionId,
@@ -624,24 +635,7 @@ export class ChannelRepository {
     const unreadMemberIds = rows
       .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
       .map(({ memberId }) => memberId);
-    const mentioned = unreadMemberIds.length
-      ? await this.db
-          .select({
-            channelId: channelMessages.channelId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(channelMessages)
-          .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
-          .where(
-            and(
-              inArray(channelMembers.id, unreadMemberIds),
-              sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
-              sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
-            ),
-          )
-          .groupBy(channelMessages.channelId)
-      : [];
-    const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
+    const mentionCountOf = await channelMentionCounts(this.db, unreadMemberIds);
 
     // Thread mentions outlive the read position, which opening the main conversation moves.
     const threadMentionsOf = await channelThreadMentions(
@@ -681,6 +675,7 @@ export class ChannelRepository {
         channel,
         hidden,
         lastReadSequence,
+        notificationsMuted,
         pinnedAt,
         role,
         sectionId,
@@ -699,6 +694,7 @@ export class ChannelRepository {
           memberAvatars: avatarsOf.get(channel.id) ?? [],
           memberRole: role,
           mentionCount: mentionCountOf.get(channel.id) ?? 0,
+          notificationsMuted,
           peerUserId: peerOf(channel, this.userId),
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
@@ -723,6 +719,7 @@ export class ChannelRepository {
         memberAvatars: avatarsOf.get(channel.id) ?? [],
         memberRole: null,
         mentionCount: 0,
+        notificationsMuted: false,
         peerUserId: peerOf(channel, this.userId),
         pinnedAt: null,
         replyJobs: [],
