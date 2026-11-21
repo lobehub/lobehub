@@ -22,7 +22,6 @@ export enum WorkspaceSettingsTabs {
   Environments = 'environments',
   General = 'general',
   Hotkey = 'hotkey',
-  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   Members = 'members',

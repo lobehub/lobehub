@@ -16,7 +16,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
 import RepositoryField, {
   AdvancedRepositories,
@@ -62,7 +62,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     const navigate = useWorkspaceAwareNavigate();
     const connectGithub = () => {
       close();
-      navigate(GITHUB_RETURN_TO);
+      navigate(buildConnectorPagePath('github'));
     };
     const [creating, setCreating] = useState(false);
     // The Enter that confirms an IME candidate reaches `keydown` as an Enter,

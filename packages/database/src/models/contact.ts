@@ -30,10 +30,12 @@ import {
   workspaces,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentShareAdmits } from '../utils/agentShareAdmits';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { ilikeContains } from '../utils/like';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
+import { AgentShareModel } from './agentShare';
 
 const userProfileColumns = {
   avatar: users.avatar,
@@ -207,7 +209,11 @@ export class ContactModel {
       role === 'external'
         ? []
         : this.db
-            .select({ createdAt: userContacts.createdAt, ...agentProfileColumns })
+            .select({
+              admitted: sql<boolean>`${agentShareAdmits(this.userId)}`,
+              createdAt: userContacts.createdAt,
+              ...agentProfileColumns,
+            })
             .from(userContacts)
             .innerJoin(agents, eq(agents.id, userContacts.agentId))
             .innerJoin(agentShares, eq(agentShares.agentId, agents.id))
@@ -218,7 +224,8 @@ export class ContactModel {
 
     const agentItems: ContactAgentItem[] = sharedAgents.map((row) => ({
       agent: toAgentProfile(row),
-      available: row.visibility === 'link' && !row.isDeleted,
+      // A workspace's Agent entries are shared, but a card share admits each person on their own.
+      available: row.admitted && !row.isDeleted,
       createdAt: row.createdAt,
       type: 'agent',
     }));
@@ -825,10 +832,18 @@ export class ContactModel {
     messageId: string,
     addresseeId: string,
   ): Promise<ContactRequestSource | undefined> => {
+    const found = await this.findCardMessage(tx, messageId);
+    if (found?.card.type !== 'user' || found.card.userId !== addresseeId) return;
+    return { channelId: found.channelId, messageId, referrerId: found.senderId, type: 'card' };
+  };
+
+  /** A live card message in a Channel I am an active member of, with its card. */
+  private findCardMessage = async (tx: Pick<LobeChatDatabase, 'select'>, messageId: string) => {
     if (!isUuid(messageId)) return;
     const [row] = await tx
       .select({
         channelId: channelMessages.channelId,
+        createdAt: channelMessages.createdAt,
         metadata: channelMessages.metadata,
         senderId: channelMessages.userId,
       })
@@ -844,21 +859,17 @@ export class ContactModel {
       .where(eq(channelMessages.id, messageId))
       .limit(1);
     const card = contactCardOf(row?.metadata);
-    if (
-      !row ||
-      channelMessageDeletedAt(row.metadata) ||
-      card?.type !== 'user' ||
-      card.userId !== addresseeId
-    )
-      return;
-    return { channelId: row.channelId, messageId, referrerId: row.senderId, type: 'card' };
+    if (!row || !card || channelMessageDeletedAt(row.metadata)) return;
+    return { ...row, card };
   };
 
   /**
    * A contact the caller may share as a card, with its snapshot. A person: the caller, one of
-   * their contacts, or a fellow member of the workspace. An Agent: any Agent whose link share is
-   * on, since anyone signed in can add it anyway; the caller's own Agent with sharing off is
-   * refused so sharing it never publishes it by surprise.
+   * their contacts, or a fellow member of the workspace. An Agent: its owner may share it while
+   * its share is `card` or `link`, and anyone may pass on a `link` share, since anyone signed in
+   * can add it anyway. Only the owner's card admits people to a `card` share. An owner whose
+   * share is off is told to turn card sharing on (`agentShare.enableCardShare`), never refused
+   * outright, so a client can do that and send in one step.
    */
   resolveCard = async (input: ContactCardInput): Promise<ContactCard> => {
     if ((await this.scopeRole()) === 'external')
@@ -882,19 +893,19 @@ export class ContactModel {
     const [row] = await this.db
       .select(agentProfileColumns)
       .from(agents)
-      .leftJoin(
-        agentShares,
-        and(eq(agentShares.agentId, agents.id), eq(agentShares.visibility, 'link')),
-      )
+      .leftJoin(agentShares, eq(agentShares.agentId, agents.id))
       .leftJoin(owners, eq(owners.id, agents.userId))
       .where(and(eq(agents.id, input.agentId), notTrashed(agents.isDeleted)))
       .limit(1);
-    if (!row?.shareId) {
-      if (row?.ownerId === this.userId)
+    const isOwner = !!row && row.ownerId === this.userId;
+    const shareable =
+      row?.shareId && (row.visibility === 'link' || (row.visibility === 'card' && isOwner));
+    if (!shareable) {
+      if (isOwner)
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Turn on sharing first' });
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
     }
-    const profile = toAgentProfile({ ...row, shareId: row.shareId });
+    const profile = toAgentProfile({ ...row, shareId: row.shareId! });
     return {
       agentId: profile.agentId,
       avatar: profile.avatar,
@@ -928,6 +939,64 @@ export class ContactModel {
     return toAgentProfile(share);
   };
 
+  /**
+   * Add another person's Agent from its card in a Channel I am an active member of. A card its
+   * owner sent also grants me its share, which is what admits me to a `card` share and keeps me
+   * admitted if a `link` share later becomes `card`; a card anyone else passed on only works while
+   * the share is `link`, like the link itself.
+   */
+  addAgentFromCard = async (messageId: string): Promise<ContactAgentProfile> => {
+    if ((await this.scopeRole()) === 'external')
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only members add Agents here' });
+    const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+    const message = await this.findCardMessage(this.db, messageId);
+    const card = message?.card;
+    if (!message || card?.type !== 'agent') throw notFound();
+
+    const [share] = await this.db
+      .select(agentProfileColumns)
+      .from(agentShares)
+      .innerJoin(agents, eq(agents.id, agentShares.agentId))
+      .leftJoin(owners, eq(owners.id, agents.userId))
+      .where(
+        and(
+          eq(agentShares.id, card.shareId),
+          eq(agents.id, card.agentId),
+          notTrashed(agents.isDeleted),
+        ),
+      )
+      .limit(1);
+    if (!share?.ownerId) throw notFound();
+    if (share.ownerId === this.userId)
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'This Agent is already yours' });
+    const fromOwner = message.senderId === share.ownerId;
+    if (!(share.visibility === 'link' || (share.visibility === 'card' && fromOwner)))
+      throw notFound();
+
+    await this.db.transaction(async (tx) => {
+      const granted =
+        fromOwner &&
+        (await AgentShareModel.grant(tx, {
+          issuedAt: message.createdAt,
+          shareId: share.shareId,
+          source: { channelId: message.channelId, messageId, type: 'card' },
+          userId: this.userId,
+        }));
+      // The owner revoked me after sending this card: it no longer admits me to a `card` share.
+      if (share.visibility === 'card' && !granted) throw notFound();
+      await tx
+        .insert(userContacts)
+        .values({
+          agentId: share.agentId,
+          type: 'agent',
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        })
+        .onConflictDoNothing();
+    });
+    return toAgentProfile(share);
+  };
+
   removeAgent = async (agentId: string) => {
     await this.db
       .delete(userContacts)
@@ -957,7 +1026,7 @@ export class ContactModel {
         and(
           this.agentEntryWhere(),
           eq(userContacts.agentId, agentId),
-          eq(agentShares.visibility, 'link'),
+          agentShareAdmits(this.userId),
           notTrashed(agents.isDeleted),
         ),
       )

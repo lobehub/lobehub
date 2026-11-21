@@ -14,7 +14,6 @@ import Creds from '../creds';
 import Devices from '../devices';
 import Environments from '../environments';
 import Hotkey from '../hotkey';
-import Integrations from '../integrations';
 import Labels from '../labels';
 import Labs from '../labs';
 import Memory from '../memory';
@@ -40,7 +39,6 @@ export const componentMap = {
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
   [SettingsTabs.Memory]: Memory,
-  [SettingsTabs.Integrations]: Integrations,
   [SettingsTabs.Notification]: DesktopNotificationSettings,
   [SettingsTabs.About]: About,
   [SettingsTabs.Hotkey]: Hotkey,

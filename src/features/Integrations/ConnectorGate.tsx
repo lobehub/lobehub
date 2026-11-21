@@ -10,10 +10,11 @@ import LobehubSkillItem from '@/features/Settings/skill/features/LobehubSkillIte
 import { SkillListVariantProvider } from '@/features/Settings/skill/features/SkillListRow';
 import { densityTokens } from '@/styles/density.stylex';
 
-import { IntegrationConnectionsSkeleton } from '../Skeleton';
-import { useGithubAgentTools } from '../useGithubAgentTools';
-import { resolveAgentToolsView } from './agentToolsView';
-import RepositoryAccess from './RepositoryAccess';
+import type { ConnectorPageId } from './connectorPage';
+import ConnectorPageContent from './ConnectorPageContent';
+import { resolveConnectorPageView } from './connectorPageView';
+import { IntegrationConnectionsSkeleton } from './Skeleton';
+import { useConnectorConnection } from './useConnectorConnection';
 
 const styles = stylex.create({
   page: {
@@ -28,16 +29,21 @@ const styles = stylex.create({
 
 const noop = () => {};
 
+interface ConnectorGateProps {
+  children: ReactNode;
+  identifier: ConnectorPageId;
+}
+
 /**
- * GitHub's Marketplace page. A connected account gets the regular connector
- * detail (`children`). Without one the page still has a job: the GitHub App is
- * a separate authorization, so its section stays here under the connect row.
+ * A connector page. A connected account gets the regular connector detail
+ * (`children`). Without one the page still has a job: the integration is a
+ * separate authorization, so it stays here under the connect row.
  */
-const ConnectorGate = memo<{ children: ReactNode }>(({ children }) => {
-  const { ready, t } = useTranslation('integration');
+const ConnectorGate = memo<ConnectorGateProps>(({ children, identifier }) => {
+  const { t, ready } = useTranslation('integration');
   const { available, connected, error, isInitialLoading, provider, retry, server } =
-    useGithubAgentTools();
-  const view = resolveAgentToolsView({
+    useConnectorConnection(identifier);
+  const view = resolveConnectorPageView({
     available,
     error,
     hasProvider: !!provider,
@@ -59,17 +65,17 @@ const ConnectorGate = memo<{ children: ReactNode }>(({ children }) => {
               showConnectLabel
               provider={provider}
               server={server}
-              summary={t('github.connectorPage.description')}
+              summary={t(`${identifier}.connectorPage.description`)}
               onSelect={noop}
             />
           </SkillListVariantProvider>
         )}
-        <RepositoryAccess />
+        <ConnectorPageContent identifier={identifier} />
       </Flexbox>
     </div>
   );
 });
 
-ConnectorGate.displayName = 'GithubConnectorGate';
+ConnectorGate.displayName = 'ConnectorGate';
 
 export default ConnectorGate;

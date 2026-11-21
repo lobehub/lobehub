@@ -219,6 +219,33 @@ describe('agentShareRouter', () => {
     expect(mockCreate).toHaveBeenCalledWith('agent-1', 'link');
   });
 
+  describe('enableCardShare', () => {
+    it.each([
+      ['creates a missing share as card-only', { ...share, visibility: 'card' }, 0],
+      ['resumes a paused share as card-only', { ...share, visibility: 'private' }, 1],
+    ])('%s', async (_label, existing, updates) => {
+      mockCreate.mockResolvedValue(existing);
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.enableCardShare({ agentId: 'agent-1' });
+
+      expect(mockAssertShareModelAllowed).toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalledWith('agent-1', 'card');
+      expect(mockUpdateVisibility).toHaveBeenCalledTimes(updates);
+      if (updates) expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'card');
+    });
+
+    it('leaves a live link share as it is', async () => {
+      mockCreate.mockResolvedValue({ ...share, visibility: 'link' });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.enableCardShare({ agentId: 'agent-1' })).resolves.toMatchObject({
+        visibility: 'link',
+      });
+      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+    });
+  });
+
   it.each(['enableShare', 'updateVisibility'] as const)(
     'rejects unsupported providers through %s before publishing',
     async (method) => {

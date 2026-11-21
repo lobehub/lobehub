@@ -1,11 +1,26 @@
 import { Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import type { CustomWorld } from '../../support/world';
+import { type CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Then Steps (Assertions)
 // ============================================
+
+Then('I should see the catalog titled {string}', async function (this: CustomWorld, name: string) {
+  await expect(this.page.getByRole('heading', { exact: true, level: 1, name })).toBeVisible({
+    timeout: WAIT_TIMEOUT,
+  });
+});
+
+Then(
+  'the catalog search bar should contain {string}',
+  async function (this: CustomWorld, search: string) {
+    await expect(this.page.getByTestId('search-bar')).toHaveValue(search, {
+      timeout: WAIT_TIMEOUT,
+    });
+  },
+);
 
 // Assistant List Page Steps
 Then('I should see the search bar', async function (this: CustomWorld) {
@@ -85,9 +100,7 @@ Then(
   'I should see the MCP category {string}',
   async function (this: CustomWorld, category: string) {
     await expect(
-      this.page.locator(
-        `section a[href="/marketplace/connector?category=${category}&source=public"]`,
-      ),
+      this.page.locator(`section a[href="/marketplace/mcp?category=${category}"]`),
     ).toBeVisible();
   },
 );

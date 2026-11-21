@@ -10,6 +10,7 @@ import { useLocation, useParams, useSearchParams } from 'react-router';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import { hasConnectorPage } from '@/features/Integrations/connectorPage';
 import InstallResult from '@/features/Messenger/InstallResult';
 import IntegrationDetail from '@/features/Messenger/IntegrationDetail';
 import ComposioSkillItem from '@/features/Settings/skill/features/ComposioSkillItem';
@@ -122,7 +123,7 @@ export default function AppDetail() {
                     onChange={(next) => updateParam('visibility', next)}
                   />
                 )}
-                {app.id === 'github' || app.toolConnected ? (
+                {hasConnectorPage(app.id) || app.toolConnected ? (
                   <>
                     {tool.type === 'composio' && (
                       <ComposioSkillItem server={composioServer} serverType={tool.serverType} />

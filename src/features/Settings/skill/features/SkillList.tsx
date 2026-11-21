@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
-import { isGithubConnector } from '@/features/Integrations/Github/home';
+import { CONNECTOR_PAGE_IDS, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import {
   featureFlagsSelectors,
@@ -238,6 +238,7 @@ const SkillList = memo<SkillListProps>(
         ? []
         : buildIntegrationItems({
             ...connectionState,
+            pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
             connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
           });
 
@@ -417,9 +418,10 @@ const SkillList = memo<SkillListProps>(
         case 'lobehub': {
           return (
             <LobehubSkillItem
+              connectable={isLobehubSkillEnabled}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
-              openWhenDisconnected={isGithubConnector(item.provider.id)}
+              openWhenDisconnected={hasConnectorPage(item.provider.id)}
               provider={item.provider}
               server={getLobehubSkillServerByProvider(item.provider.id)}
               onDelete={onDeleteSelected}

@@ -22,7 +22,6 @@ import {
   Map,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   Sparkles,
   TagIcon,
   TerminalSquare,
@@ -196,11 +195,6 @@ export const useCategory = () => {
     // Connection group — the outside services agents can reach, whoever owns
     // the binding. Every entry here is already the user's own.
     const connectionItems: CategoryItem[] = [
-      {
-        icon: PlugIcon,
-        key: SettingsTabs.Integrations,
-        label: t('tab.integrations'),
-      },
       // What connectors fire on their own: the event subscriptions agents made
       // through them. Connectors themselves are managed in the Marketplace.
       enableWebhook && {
@@ -216,11 +210,13 @@ export const useCategory = () => {
       },
     ].filter(Boolean) as CategoryItem[];
 
-    groups.push({
-      items: connectionItems,
-      key: SettingsGroupKey.Connection,
-      title: t('group.connection'),
-    });
+    // Every entry is conditional, so a self-hosted deployment may have none.
+    if (connectionItems.length > 0)
+      groups.push({
+        items: connectionItems,
+        key: SettingsGroupKey.Connection,
+        title: t('group.connection'),
+      });
 
     // Resource group — where agents run.
     const resourceItems: CategoryItem[] = [

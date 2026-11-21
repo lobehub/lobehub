@@ -22,7 +22,11 @@ import {
 } from '@/features/Marketplace/routeMeta';
 import { SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/platforms';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
-import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
+import {
+  LegacyCommunityRedirect,
+  LegacyIntegrationRedirect,
+  LegacyPathRedirect,
+} from '@/spa/router/legacyPathRedirect';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { dynamicElement, ErrorBoundary } from '@/utils/router';
@@ -379,7 +383,8 @@ const LegacyMessengerRedirect = () => {
 };
 
 /**
- * `settings/skill` and `settings/connector` (plus their `/:sub` forms) moved to
+ * `settings/skill`, `settings/connector` and `settings/integrations` (plus their
+ * `/:sub` forms) moved to
  * the Marketplace. Mounted under both the personal `/settings` and the
  * workspace `/:workspaceSlug/settings` routes (desktop and mobile); the redirect
  * re-applies the slug and keeps `?open=` / `?skill=` deep links.
@@ -398,4 +403,9 @@ const legacySettingsLibraryRedirects: RouteObject[] = [
 export const legacySettingsMarketplaceRedirects: RouteObject[] = [
   ...legacySettingsLibraryRedirects,
   { element: <LegacyMessengerRedirect />, handle: LEGACY_REDIRECT_HANDLE, path: 'messenger/:sub?' },
+  {
+    element: <LegacyIntegrationRedirect />,
+    handle: LEGACY_REDIRECT_HANDLE,
+    path: 'integrations/:sub?',
+  },
 ];

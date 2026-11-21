@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import GithubConnectorGate from '@/features/Integrations/Github/ConnectorGate';
+import ConnectorGate from '@/features/Integrations/ConnectorGate';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import SkillDetail from './index';
@@ -115,8 +115,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/features/Integrations/useGithubAgentTools', () => ({
-  useGithubAgentTools: () => ({ available: false }),
+vi.mock('@/features/Integrations/useConnectorConnection', () => ({
+  useConnectorConnection: () => ({ available: false }),
 }));
 vi.mock('@/features/Integrations/Github/RepositoryAccess', () => ({
   default: () => <div>Repository access</div>,
@@ -252,12 +252,12 @@ describe('SkillDetail', () => {
 
   it('waits for translations before showing GitHub repository access on a cold load', () => {
     mocks.githubLocaleReady = false;
-    const cold = render(<GithubConnectorGate>{null}</GithubConnectorGate>);
+    const cold = render(<ConnectorGate identifier="github">{null}</ConnectorGate>);
     expect(screen.queryByText('Repository access')).toBeNull();
     cold.unmount();
 
     mocks.githubLocaleReady = true;
-    render(<GithubConnectorGate>{null}</GithubConnectorGate>);
+    render(<ConnectorGate identifier="github">{null}</ConnectorGate>);
     expect(screen.getByText('Repository access')).toBeTruthy();
   });
 

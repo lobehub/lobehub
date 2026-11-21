@@ -121,6 +121,12 @@ describe('legacy URL redirects', () => {
       '/marketplace/connector/installed?open=agent-connector%3Arow-own',
     ],
     ['/settings/connector/legacy#section', '/marketplace/connector/installed#section'],
+    ['/settings/integrations', '/marketplace/app'],
+    ['/settings/integrations/github?pending=claim', '/marketplace/app/github?pending=claim'],
+    [
+      '/acme/settings/integrations/linear?installed=ok#done',
+      '/acme/marketplace/app/linear?installed=ok#done',
+    ],
     ['/settings/messenger', '/marketplace/app'],
     ['/settings/messenger/unknown', '/marketplace/app'],
     ['/settings/messenger/slack?installed=ok#link', '/marketplace/app/slack?installed=ok#link'],

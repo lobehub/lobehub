@@ -5,28 +5,26 @@ import { useToolStore } from '@/store/tool';
 import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-const GITHUB_CONNECTOR_ID = 'github';
+import type { ConnectorPageId } from './connectorPage';
 
 /**
- * The GitHub connector as the integration surfaces read it. It is a separate
- * authorization from the GitHub App installation: this one lets agents call
- * GitHub tools with the user's account. `available` is false on a deployment
- * without LobeHub connectors, where the page has nothing to offer for it.
+ * The user's own connector account on a connector page. It is a separate
+ * authorization from the integration on the same page: this one lets agents
+ * call the provider's tools. `available` is false on a deployment without
+ * LobeHub connectors, where only the integration half applies.
  */
-export const useGithubAgentTools = () => {
+export const useConnectorConnection = (identifier: ConnectorPageId) => {
   const available = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const useFetchConnections = useToolStore((s) => s.useFetchLobehubSkillConnections);
   const { error, isLoading, mutate } = useFetchConnections(available);
-  const server = useToolStore(
-    lobehubSkillStoreSelectors.getServerByIdentifier(GITHUB_CONNECTOR_ID),
-  );
+  const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
 
   return {
     available,
     connected: available && server?.status === LobehubSkillStatus.CONNECTED,
     error: available ? error : undefined,
     isInitialLoading: available && isLoading,
-    provider: getLobehubSkillProviderById(GITHUB_CONNECTOR_ID),
+    provider: getLobehubSkillProviderById(identifier),
     retry: () => void mutate(),
     server,
   };

@@ -105,7 +105,6 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
     'setup script',
     'repository',
   ],
-  [SettingsTabs.Integrations]: ['integrations', 'github', 'pull request', 'ci', 'review', 'merge'],
   [SettingsTabs.Notification]: [
     'notification',
     'email',
@@ -215,7 +214,6 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.Hotkey]: 'settingsSearch.tabKeywords.hotkey',
   [SettingsTabs.Labs]: 'settingsSearch.tabKeywords.labs',
   [SettingsTabs.Memory]: 'settingsSearch.tabKeywords.memory',
-  [SettingsTabs.Integrations]: 'settingsSearch.tabKeywords.integrations',
   [SettingsTabs.Notification]: 'settingsSearch.tabKeywords.notification',
   [SettingsTabs.OAuthApps]: 'settingsSearch.tabKeywords.oauthApps',
   [SettingsTabs.Plans]: 'settingsSearch.tabKeywords.plans',

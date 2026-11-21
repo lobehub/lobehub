@@ -35,6 +35,8 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillItemProps {
+  /** False where LobeHub connectors are off: the row only opens its page. Defaults to true. */
+  connectable?: boolean;
   hideConnectedStatus?: boolean;
   isSelected?: boolean;
   onDelete?: () => void;
@@ -50,6 +52,7 @@ interface LobehubSkillItemProps {
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
   ({
+    connectable = true,
     hideConnectedStatus,
     provider,
     server,
@@ -337,6 +340,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // button that opens the OAuth flow inline, so users can tell what is connected
     // and aren't left staring at a blank detail panel wondering if it's a bug.
     const renderPageExtra = () => {
+      if (!isConnected && !connectable) return null;
       const needsAuth = server?.status === LobehubSkillStatus.ERROR;
       if (isConnected)
         return (
@@ -369,6 +373,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
 
     const renderNavExtra = () => {
       if (isPage) return renderPageExtra();
+      if (!isConnected && !connectable) return null;
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }
@@ -433,23 +438,17 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           className={stylex.props(styles.container).className}
           gap={8}
           justify="space-between"
-          style={{
-            ...(isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : {}),
-            ...(onSelect ? { cursor: 'pointer' } : {}),
-          }}
-          onClick={onSelect}
+          style={
+            isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : undefined
+          }
         >
           <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
             <Flexbox
               horizontal
               align="center"
               gap={8}
-              style={{ cursor: onSelect ? undefined : 'pointer' }}
-              onClick={
-                onSelect
-                  ? undefined
-                  : () => createLobehubSkillDetailModal({ identifier: provider.id })
-              }
+              style={{ cursor: 'pointer' }}
+              onClick={() => createLobehubSkillDetailModal({ identifier: provider.id })}
             >
               <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
                 {renderIcon()}
@@ -460,12 +459,10 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
             </Flexbox>
             {!isConnected && renderStatus()}
           </Flexbox>
-          {!onSelect && (
-            <Flexbox horizontal align="center" gap={8}>
-              {isConnected && renderStatus()}
-              {renderAction()}
-            </Flexbox>
-          )}
+          <Flexbox horizontal align="center" gap={8}>
+            {isConnected && renderStatus()}
+            {renderAction()}
+          </Flexbox>
         </Flexbox>
         {actionError && renderConnectorRowDescription({ error: actionError, name: provider.label })}
       </>

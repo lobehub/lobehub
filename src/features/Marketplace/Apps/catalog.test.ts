@@ -17,7 +17,7 @@ const slack: MessengerPlatformItem = {
 const inputs = {
   channels: [slack],
   isToolConnected: () => false,
-  githubInstalled: false,
+  integrationConnected: () => false,
   installedChannels: new Set<string>(),
   linkedChannels: new Set<string>(),
   tools: getConnectorCatalog({ composio: true, lobehub: true }),
@@ -49,12 +49,13 @@ describe('marketplace apps', () => {
     expect(hasAppConnection(slackApp)).toBe(true);
   });
 
-  it('counts a GitHub repository installation independently of tool OAuth', () => {
-    const github = buildMarketplaceApps({ ...inputs, githubInstalled: true }).find(
-      (app) => app.id === 'github',
-    )!;
-    expect(github.toolConnected).toBe(false);
-    expect(hasAppConnection(github)).toBe(true);
+  it.each(['github', 'linear'])('counts a %s integration independently of tool OAuth', (id) => {
+    const app = buildMarketplaceApps({
+      ...inputs,
+      integrationConnected: (provider) => provider === id,
+    }).find((app) => app.id === id)!;
+    expect(app.toolConnected).toBe(false);
+    expect(hasAppConnection(app)).toBe(true);
   });
 
   it('lists only the supported capabilities on each deployment', () => {

@@ -19,8 +19,8 @@ export interface MarketplaceApp {
   channelLinked: boolean;
   channelPending: boolean;
   id: string;
+  integrationConnected: boolean;
   name: string;
-  repositoryConnected: boolean;
   tool?: ConnectorCatalogItem;
   toolConnected: boolean;
 }
@@ -47,7 +47,7 @@ const categoryByTool: Record<string, AppCategory> = {
 };
 
 export const hasAppConnection = (app: MarketplaceApp) =>
-  app.channelLinked || app.toolConnected || app.repositoryConnected;
+  app.channelLinked || app.toolConnected || app.integrationConnected;
 
 export const getAppHome = (app: MarketplaceApp) => {
   const path = marketplaceAppPath(app.id);
@@ -57,14 +57,14 @@ export const getAppHome = (app: MarketplaceApp) => {
 export const buildMarketplaceApps = ({
   channels,
   isToolConnected,
-  githubInstalled,
+  integrationConnected,
   installedChannels,
   linkedChannels,
   tools,
 }: {
   channels: readonly MessengerPlatformItem[];
   isToolConnected: (tool: ConnectorCatalogItem) => boolean;
-  githubInstalled: boolean;
+  integrationConnected: (id: string) => boolean;
   installedChannels: ReadonlySet<string>;
   linkedChannels: ReadonlySet<string>;
   tools: readonly ConnectorCatalogItem[];
@@ -79,7 +79,7 @@ export const buildMarketplaceApps = ({
       channelPending: false,
       id,
       name,
-      repositoryConnected: id === 'github' && githubInstalled,
+      integrationConnected: integrationConnected(id),
       tool,
       toolConnected: isToolConnected(tool),
     });
@@ -97,7 +97,7 @@ export const buildMarketplaceApps = ({
       channelPending: installed && !linked,
       id: channel.id,
       name: channel.name,
-      repositoryConnected: false,
+      integrationConnected: false,
       toolConnected: app?.toolConnected ?? false,
     });
   }

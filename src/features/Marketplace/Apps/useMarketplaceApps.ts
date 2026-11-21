@@ -1,5 +1,7 @@
 import isEqual from 'fast-deep-equal';
 
+import { CONNECTOR_PAGE_IDS } from '@/features/Integrations/connectorPage';
+import { useLinearConnections } from '@/features/Integrations/useLinearIntegration';
 import { buildIntegrationItems } from '@/features/Settings/skill/features/connectorSections';
 import { integrationActions, integrationSelectors, useIntegrationStore } from '@/store/integration';
 import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
@@ -19,7 +21,8 @@ export const useMarketplaceApps = () => {
   const channelsSync = messengerActions.useFetchPlatforms({ enabled: messenger });
   const linksSync = messengerActions.useFetchLinks({ enabled: messenger });
   const installsSync = messengerActions.useFetchInstallations({ enabled: messenger });
-  const githubSync = integrationActions.useFetchGithubInstallations(lobehub);
+  const githubSync = integrationActions.useFetchGithubInstallations(configReady);
+  const linear = useLinearConnections();
   const channels = useMessengerStore(messengerSelectors.platforms);
   const links = useMessengerStore(messengerSelectors.links);
   const installations = useMessengerStore(messengerSelectors.installations);
@@ -43,6 +46,7 @@ export const useMarketplaceApps = () => {
       .map((s) => s.identifier),
   );
   const tools = buildIntegrationItems({
+    pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
     connectorAvailability: { composio, lobehub },
     isComposioActive: (id) => activeComposioIds.has(id),
     isLobehubConnected: (id) => activeLobehubIds.has(id),
@@ -53,18 +57,22 @@ export const useMarketplaceApps = () => {
       tool.type === 'lobehub'
         ? activeLobehubIds.has(tool.provider.id)
         : activeComposioIds.has(tool.serverType.identifier),
-    githubInstalled: Boolean(github?.length),
+    integrationConnected: (id) =>
+      (id === 'github' && Boolean(github?.length)) ||
+      (id === 'linear' && Boolean(linear.data?.length)),
     installedChannels: new Set(installations?.map((s) => s.platform)),
     linkedChannels: new Set(links?.map((s) => s.platform)),
     tools,
   });
   const syncs = [
     ...(messenger ? [channelsSync, linksSync, installsSync] : []),
-    ...(lobehub ? [lobehubSync, githubSync] : []),
+    githubSync,
+    ...(lobehub ? [lobehubSync] : []),
     ...(composio ? [composioSync] : []),
   ];
-  const error = syncs.find((s) => s.error)?.error;
+  const error = syncs.find((s) => s.error)?.error ?? linear.error;
   const retry = () => {
+    void linear.mutate();
     for (const sync of syncs) void sync.revalidate();
   };
   return {
@@ -74,7 +82,7 @@ export const useMarketplaceApps = () => {
     lobehubServers,
     retry,
     loading: !configReady || (messenger && !platformsSettled && !channelsSync.error),
-    refreshing: syncs.some((s) => s.isValidating),
+    refreshing: linear.isValidating || syncs.some((s) => s.isValidating),
     toolSync: { composio: composioSync, lobehub: lobehubSync },
   };
 };

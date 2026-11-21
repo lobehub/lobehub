@@ -22,7 +22,6 @@ import {
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   ScrollText,
   Sparkles,
   TagIcon,
@@ -233,29 +232,22 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        {
+        enableWebhook && {
           items: [
-            // An installation connected here belongs to the workspace, so
-            // every member sees the same one.
-            {
-              icon: PlugIcon,
-              key: WorkspaceSettingsTabs.Integrations,
-              label: t('tab.integrations'),
-            },
             // Every member sees the workspace's event subscriptions, so it is
             // clear what fires the shared agents; managing one is per row.
-            enableWebhook && {
+            {
               icon: ZapIcon,
               key: WorkspaceSettingsTabs.Automations,
               label: t('tab.automations'),
             },
             // The workspace's agents' webhooks; made on each agent's page, managed here too.
-            enableWebhook && {
+            {
               icon: WebhookIcon,
               key: WorkspaceSettingsTabs.Webhooks,
               label: t('tab.webhooks'),
             },
-          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          ] as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
           title: t('group.connection'),
         },

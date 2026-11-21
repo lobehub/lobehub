@@ -34,10 +34,9 @@ const styles = stylex.create({
 });
 
 /**
- * The GitHub App half of GitHub: who installed it, on which accounts, and what
- * LobeHub does with the events. Mounts on the Marketplace connector and, on a
- * deployment without connectors, on the Integrations page. A failed lookup costs
- * only this block, never the connector beside it.
+ * The GitHub App half of the GitHub connector page: who installed it, on which
+ * accounts, and what LobeHub does with the events. A failed lookup costs only
+ * this block, never the account connection beside it.
  */
 const RepositoryAccess = memo(() => {
   const { t } = useTranslation('integration');
