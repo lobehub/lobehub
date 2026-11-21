@@ -41,7 +41,7 @@ Feature: Community Smoke Tests
     When I open the MCP catalog from the Marketplace sidebar
     Then I should be navigated to "/marketplace/mcp"
     And the page should load without errors
-    And I should see the catalog titled "MCP"
+    And I should see the catalog titled "MCP Servers"
     And I should see the search bar
     And I should see MCP cards
     And I should see the MCP category "developer"
