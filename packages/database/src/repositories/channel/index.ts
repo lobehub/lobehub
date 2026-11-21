@@ -59,6 +59,7 @@ import {
   readOpenChannel,
 } from './projectAccess';
 import { joinPublicChannel, listJoinableChannels } from './publicAccess';
+import { readChannelUpTo, readThreadUpTo } from './read';
 import { type ChannelRetryMode, retryJob } from './retry';
 import { retryRouting } from './routing';
 import { type ChannelSearchOptions, searchChannelMessages } from './search';
@@ -118,6 +119,9 @@ export type { ChannelWorktreeCandidate } from './worktree';
 
 /** Recycle-bin row title: the start of the thread's root message. */
 const CHANNEL_THREAD_TITLE_LENGTH = 120;
+
+/** Reading needs no write access, so it works in archived and trashed Channels too. */
+const readOptions = { allowArchived: true, allowTrashed: true };
 
 const ROLE_RANK: Record<ChannelMemberRole, number> = { admin: 1, member: 0, owner: 2 };
 
@@ -489,20 +493,14 @@ export class ChannelRepository {
     this.write(channelId, (tx) => createChannelThread(tx, channelId, input), { joinOpen: true });
 
   markRead = async (channelId: string, sequence: number) =>
+    this.write(channelId, (tx, access) => readChannelUpTo(tx, access, sequence), readOptions);
+
+  /** Raises the caller's read position in one Thread; see {@link readThreadUpTo}. */
+  markThreadRead = async (channelId: string, threadId: string, sequence: number) =>
     this.write(
       channelId,
-      async (tx, { channel, member }) => {
-        const lastReadSequence = Math.max(
-          member.lastReadSequence ?? 0,
-          Math.min(sequence, channel.sequence),
-        );
-        await tx
-          .update(channelMembers)
-          .set({ lastReadSequence })
-          .where(eq(channelMembers.id, member.id));
-        return lastReadSequence;
-      },
-      { allowArchived: true, allowTrashed: true },
+      (tx, access) => readThreadUpTo(tx, access, threadId, sequence),
+      readOptions,
     );
 
   /** Turns the caller's own push notifications for the conversation off or on. */

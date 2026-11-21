@@ -26,6 +26,7 @@ import {
   isNull,
   like,
   lt,
+  max,
   or,
   type SQL,
   sql,
@@ -53,6 +54,7 @@ import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
+import { messageStands } from './tombstone';
 import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
@@ -341,6 +343,30 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
         },
       ];
     }),
+  );
+};
+
+/**
+ * Newest standing reply's sequence per Thread, for every Thread at once, so a client can order
+ * them unread first against the viewer's read positions. A Thread without one is absent.
+ */
+const threadLastSequences = async (tx: Transaction, channelId: string, threadIds: string[]) => {
+  if (!threadIds.length) return new Map<string, number>();
+  const rows = await tx
+    .select({ lastSequence: max(channelMessages.sequence), threadId: channelMessages.threadId })
+    .from(channelMessages)
+    .where(
+      and(
+        eq(channelMessages.channelId, channelId),
+        inArray(channelMessages.threadId, threadIds),
+        messageStands(),
+      ),
+    )
+    .groupBy(channelMessages.threadId);
+  return new Map(
+    rows.flatMap(({ lastSequence, threadId }) =>
+      threadId && lastSequence !== null ? [[threadId, lastSequence] as const] : [],
+    ),
   );
 };
 
@@ -637,6 +663,10 @@ export const readChannelView = async (
         username: users.username,
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
+        threadReadSequences: sql<Record<
+          string,
+          number
+        > | null>`${channelMembers.metadata}->'threadReadSequences'`,
         joinedAt: channelMembers.createdAt,
         deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
         deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
@@ -741,11 +771,19 @@ export const readChannelView = async (
   const summarized = options.threadId
     ? []
     : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
-  const summaries = await threadSummaries(tx, channelId, summarized);
-  const sharedCards = await sharedCardMessageIds(tx, [
-    ...page,
-    ...(rootMessage ? [rootMessage] : []),
+  const [summaries, lastSequences, sharedCards] = await Promise.all([
+    threadSummaries(tx, channelId, summarized),
+    threadLastSequences(
+      tx,
+      channelId,
+      threads.map((entry) => entry.id),
+    ),
+    sharedCardMessageIds(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
   ]);
+  // The viewer's own read positions; never another member's, and nothing for a visitor.
+  const readSequences =
+    members.find((member) => member.actorType === 'user' && member.userId === viewerUserId)
+      ?.threadReadSequences ?? {};
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -806,6 +844,7 @@ export const readChannelView = async (
         grantStatus,
         grantWorkingDirectory,
         inheritedConfig,
+        threadReadSequences: _threadReadSequences,
         workingDirectory: channelDirectory,
         ...member
       } = row;
@@ -841,7 +880,13 @@ export const readChannelView = async (
     }),
     threads: threads.map((entry) => {
       const title = entry.metadata?.title;
-      const named = typeof title === 'string' && title ? { ...entry, title } : entry;
+      const titled = typeof title === 'string' && title ? { ...entry, title } : entry;
+      const lastReadSequence = readSequences[entry.id];
+      const named = {
+        ...titled,
+        lastReadSequence: typeof lastReadSequence === 'number' ? lastReadSequence : 0,
+        lastSequence: lastSequences.get(entry.id) ?? entry.rootSequence,
+      };
       return summarized.includes(entry.id)
         ? {
             ...named,
