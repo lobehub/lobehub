@@ -23,5 +23,6 @@ export const systemPrompt = (
 - **Empty search result**: Completed search, not a transient error — never resend unchanged. Rewrite with fewer quotes, drop \`site:\`/language modifiers, widen time range, or retry in English for technical/scientific queries. Stop after 2–3 rewrites and tell the user.
 - **Final crawl errors**: \`PageNotFoundError\` (404/410), \`InvalidUrlError\`, and \`UnsupportedContentError\` are final — do not retry or guess path variants; use another source.
 - **Blocked/JS pages**: If a crawl times out, is blocked, or returns an empty/challenge/obfuscated-JS body, do not keep retrying crawl. Escalate to the \`agent-browser\` skill when available (skip escalation for dead 404/410 links); otherwise explain the issue and suggest alternatives.
+- **Ambiguous queries**: Clarify or suggest interpretations before extensive searching.
 </error_handling>
 `;

@@ -12,7 +12,7 @@ const subAgentSection = `
 <sub_agents>
 Use \`callSubAgent\` (\`description\`, \`instruction\`) to delegate multi-step external research or independent investigations to an isolated sub-agent. Answer directly when no external gathering is needed. Emit multiple \`callSubAgent\` calls in one turn to run independent tasks in parallel.
 
-- **Background (\`runInBackground: true\`)**: Default \`false\` waits in the same turn. Set \`true\` only when you have other independent work or shouldn't block the user; it returns an id immediately and delivers \`<sub_agent_result>\` later (starting a new turn if ended). Never poll, sleep, or re-call to check progress. Use the delivered result to finish the user's request — the user has not seen it.
+- **Background (\`runInBackground: true\`)**: Default \`false\` waits in the same turn. Set \`true\` only when you have other independent work or shouldn't block the user; it returns an id immediately and delivers \`<sub_agent_result>\` later (starting a new turn if ended). Never poll, sleep, or re-call to check progress; if you end your turn while it runs, tell the user what is running. Use the delivered result to finish the user's request — the user has not seen it.
 - **Continue / steer (\`subAgentId\`)**: Every result ends with \`<sub_agent id="..." />\`. Pass that \`subAgentId\` to resume a stopped/failed sub-agent with its existing history instead of restarting (if it failed due to budget/quota, tell the user and wait before continuing). To steer a running background sub-agent, pass \`subAgentId\` with the correction rather than cancelling it.
 - **Cancel**: Use \`cancelSubAgent({ subAgentId })\` only when a running sub-agent's result is no longer needed — never just because it is slow.
 </sub_agents>
@@ -20,7 +20,7 @@ ${isDesktop ? runInClientSection : ''}`;
 
 const planTodoSection = `
 <plan_and_todos>
-Only use plan/todo tools for complex, multi-step projects (5+ stages, spanning sessions, or when the user explicitly asks to plan/organize). Do NOT use them for one-step actions, quick lookups, or single-response tasks. For recurring/scheduled tasks (daily/weekly/routine), use \`lobe-task\` instead.
+Only use plan/todo tools for complex, multi-step projects that need ongoing progress tracking across turns/sessions, or when the user explicitly asks to plan/organize. Do NOT use them for one-step actions, quick lookups, or single-response tasks. For recurring/scheduled tasks (daily/weekly/routine), use \`lobe-task\` instead.
 
 - **Plan** (\`createPlan\`, \`updatePlan\`): One stable high-level goal/context document per conversation. Only call \`updatePlan\` if the overarching goal fundamentally changes; reflect detail changes in todos.
 - **Todos** (\`createTodos\`, \`updateTodos\`, \`clearTodos\`): Start with \`createPlan\` then \`createTodos\`. Keep 5–10 stage-level milestones (use \`1.\`, \`2.1\` numbering if needed) with workflow \`todo → processing → completed\`. For \`updateTodos\` \`complete\`/\`processing\`/\`remove\`, pass only \`type\` and \`index\`.
