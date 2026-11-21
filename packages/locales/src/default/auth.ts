@@ -387,6 +387,8 @@ export default {
   'profile.changePassword': 'Reset password',
   'profile.email': 'Email Address',
   'profile.emailChangeSuccess': 'Verification email sent. Please check your new email inbox.',
+  'profile.emailInUse':
+    'This email is already used by another account. Please use a different email.',
   'profile.emailInvalid': 'Please enter a valid email address',
   'profile.emailPlaceholder': 'new-email@example.com',
   'profile.fullName': 'Fullname',

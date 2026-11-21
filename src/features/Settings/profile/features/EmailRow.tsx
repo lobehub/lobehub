@@ -9,6 +9,7 @@ import urlJoin from 'url-join';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { changeEmail } from '@/libs/better-auth/auth-client';
+import { CHANGE_EMAIL_IN_USE_CODE } from '@/libs/better-auth/constants';
 import { electronSystemService } from '@/services/electron/system';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -49,6 +50,10 @@ const EmailRow = () => {
       setSaving(true);
       const res = await changeEmail({ callbackURL: '/settings/profile', newEmail: trimmed });
       if (res.error) {
+        if (res.error.code === CHANGE_EMAIL_IN_USE_CODE) {
+          toast.error(t('profile.emailInUse'));
+          return;
+        }
         toast.error(res.error.message ?? res.error.statusText ?? t('profile.saveError'));
         return;
       }
