@@ -180,6 +180,69 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(mockApiHandler).not.toHaveBeenCalled();
   });
 
+  describe('one surplus closing brace', () => {
+    const canvasContext: ToolExecutionContext = {
+      toolManifestMap: {
+        'lobe-notebook': {
+          api: [
+            {
+              description: 'Create',
+              name: 'createDocument',
+              parameters: {
+                properties: {
+                  files: { type: 'array' },
+                  nested: { type: 'object' },
+                  title: { type: 'string' },
+                },
+                required: ['title', 'files'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-notebook',
+          meta: {},
+        } as any,
+      },
+      userId: 'user-1',
+    };
+
+    it('runs the tool with the complete object when only one extra } follows it', async () => {
+      mockApiHandler.mockResolvedValueOnce({ content: 'saved', success: true });
+      const files = [{ content: '<h1>a}</h1>\n<p>b</p>', path: 'index.html' }];
+
+      const result = await executor.execute(
+        buildPayload(`${JSON.stringify({ files, title: 'Report' })}}`),
+        canvasContext,
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockApiHandler).toHaveBeenCalledWith({ files, title: 'Report' }, canvasContext);
+    });
+
+    it.each([
+      ['two extra braces', '{"files":[],"title":"Report"}}}'],
+      ['a key closed out of its parent', '{"files":[],"nested":{"a":1},"title":"T","b":2}}'],
+      ['a missing required field', '{"title":"Report"}}'],
+      ['extra text after the object', '{"files":[],"title":"Report"}x}'],
+    ])('still refuses %s', async (_name, invalid) => {
+      const result = await executor.execute(buildPayload(invalid), canvasContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('INVALID_JSON_ARGUMENTS');
+      expect(result.content).toContain(invalid);
+      expect(mockApiHandler).not.toHaveBeenCalled();
+    });
+
+    it('still refuses when the API declares no parameters to check against', async () => {
+      const invalid = '{"title":"Report"}}';
+
+      const result = await executor.execute(buildPayload(invalid), context);
+
+      expect(result.error?.code).toBe('INVALID_JSON_ARGUMENTS');
+      expect(mockApiHandler).not.toHaveBeenCalled();
+    });
+  });
+
   // verify the self-reflection signal survives the new persist-time
   // sanitizer. The fix sanitizes `tool_calls[].arguments` only at DB/state
   // boundaries (to unbreak strict providers), so the raw bad string must still

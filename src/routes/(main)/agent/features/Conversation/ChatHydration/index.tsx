@@ -4,6 +4,7 @@ import { type FC, memo } from 'react';
 import { useParams } from 'react-router';
 
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
+import { useCanvasDeepLink } from '@/features/Conversation/WorkingSidebar/Canvas/useCanvasDeepLink';
 import { useTopicCommentDeepLink } from '@/features/TopicComment/useTopicCommentDeepLink';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -28,6 +29,7 @@ const ChatHydration: FC<ChatHydrationProps> = memo(({ getConversationPath, getTo
   useClearActiveTopicUnread();
   useFetchTopicLinkedPullRequest(activeAgentId ? routeTopicId : undefined, topicMetadata);
   useTopicCommentDeepLink(routeTopicId);
+  useCanvasDeepLink(routeTopicId);
   useChatRouteSync({ getConversationPath, getTopicPath });
 
   return null;

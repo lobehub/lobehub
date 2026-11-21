@@ -60,7 +60,14 @@ export interface CanvasReadOutcome {
   title: string | null;
 }
 
-export interface CanvasSaveState {
+export interface CanvasLinks {
+  /** Opens the Canvas in its conversation; needs a signed-in user with access. */
+  openUrl?: string;
+  /** Public link from the user's last share; it can lag behind the latest save. */
+  publishedUrl?: string;
+}
+
+export interface CanvasSaveState extends CanvasLinks {
   canvasId?: string;
   issues?: CanvasIssue[];
   metadata?: CanvasWorkVersionMetadata;

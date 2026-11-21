@@ -4,6 +4,7 @@ import type { BuiltinServerRuntimeOutput, WorkRegistrationIntent } from '@lobech
 import { buildCanvasGuide } from '../guide';
 import {
   CanvasApiName,
+  type CanvasLinks,
   type CanvasReadOutcome,
   type CanvasSaveOutcome,
   type CanvasSummary,
@@ -17,6 +18,7 @@ export interface CanvasToolService {
   hasReadGuide: () => Promise<boolean>;
   list: () => Promise<CanvasSummary[]>;
   read: (params: ReadCanvasParams) => Promise<CanvasReadOutcome | undefined>;
+  resolveLinks?: (canvasId: string) => Promise<CanvasLinks>;
   update: (params: UpdateCanvasParams) => Promise<CanvasSaveOutcome>;
 }
 
@@ -35,6 +37,24 @@ const formatIssues = (issues: CanvasIssue[]) =>
       return `- ${location} [${issue.rule}] ${issue.message}`;
     })
     .join('\n');
+
+const formatLinks = ({ openUrl, publishedUrl }: CanvasLinks) => {
+  const lines: string[] = [];
+  if (openUrl) {
+    lines.push(
+      `Open in LobeHub: ${openUrl}`,
+      `This link needs the user's signed-in session; a browser without it lands on Sign In.`,
+    );
+  }
+  if (publishedUrl) {
+    lines.push(
+      `Public link (does not include this save until the user shares again): ${publishedUrl}`,
+    );
+  } else if (openUrl) {
+    lines.push('There is no public link. Only the user can create one with Share on the Canvas.');
+  }
+  return lines.length > 0 ? `\n\n${lines.join('\n')}` : '';
+};
 
 export class CanvasExecutionRuntime {
   private service: CanvasToolService;
@@ -102,11 +122,21 @@ export class CanvasExecutionRuntime {
     };
   }
 
-  private finishSave(
+  // The canvas is already saved here, so a failed link lookup must not fail the call.
+  private async resolveLinks(canvasId: string): Promise<CanvasLinks> {
+    try {
+      return (await this.service.resolveLinks?.(canvasId)) ?? {};
+    } catch (error) {
+      console.error('[CanvasExecutionRuntime] Failed to resolve canvas links:', error);
+      return {};
+    }
+  }
+
+  private async finishSave(
     toolName: string,
     outcome: CanvasSaveOutcome,
     context?: CanvasRuntimeContext,
-  ): BuiltinServerRuntimeOutput {
+  ): Promise<BuiltinServerRuntimeOutput> {
     if (!outcome.ok) {
       const details = outcome.issues.length > 0 ? `\n${formatIssues(outcome.issues)}` : '';
       return {
@@ -128,9 +158,16 @@ export class CanvasExecutionRuntime {
       type: 'canvas',
     });
 
+    const links = await this.resolveLinks(outcome.canvasId);
+
     return {
-      content: `Saved canvas ${outcome.canvasId} "${outcome.title}" (${outcome.metadata.fileCount} files). The user sees it as a card under your reply. Use updateCanvas with canvasId "${outcome.canvasId}" for changes.`,
-      state: { canvasId: outcome.canvasId, metadata: outcome.metadata, title: outcome.title },
+      content: `Saved canvas ${outcome.canvasId} "${outcome.title}" (${outcome.metadata.fileCount} files). The user sees it as a card under your reply. Use updateCanvas with canvasId "${outcome.canvasId}" for changes.${formatLinks(links)}`,
+      state: {
+        canvasId: outcome.canvasId,
+        metadata: outcome.metadata,
+        title: outcome.title,
+        ...links,
+      },
       success: true,
     };
   }

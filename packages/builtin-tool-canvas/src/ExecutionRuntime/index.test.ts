@@ -82,6 +82,52 @@ describe('CanvasExecutionRuntime', () => {
     });
   });
 
+  describe('links in the save result', () => {
+    const openUrl = 'https://app.example.com/acme/agent/agt_1/tpc_1?canvas=cvs_1';
+    const publishedUrl = 'https://cvs-1.example.site';
+
+    it('returns the signed-in link and says no public link exists yet', async () => {
+      const resolveLinks = vi.fn().mockResolvedValue({ openUrl });
+      const runtime = new CanvasExecutionRuntime(createService({ resolveLinks }));
+
+      const result = await runtime.createCanvas(createParams);
+
+      expect(resolveLinks).toHaveBeenCalledWith('cvs_1');
+      expect(result.content).toContain(openUrl);
+      expect(result.content).toMatch(/sign/i);
+      expect(result.content).toMatch(/no public link/i);
+      expect(result.state).toMatchObject({ openUrl });
+      expect(result.state.publishedUrl).toBeUndefined();
+    });
+
+    it('marks an existing public link as not containing this save', async () => {
+      const resolveLinks = vi.fn().mockResolvedValue({ openUrl, publishedUrl });
+      const runtime = new CanvasExecutionRuntime(createService({ resolveLinks }));
+
+      const result = await runtime.updateCanvas({
+        canvasId: 'cvs_1',
+        edits: [{ newText: 'b', oldText: 'a', path: 'index.html' }],
+      });
+
+      expect(result.content).toContain(publishedUrl);
+      expect(result.content).toMatch(/does not include this save/i);
+      expect(result.state).toMatchObject({ openUrl, publishedUrl });
+    });
+
+    it('keeps the save successful when the links cannot be resolved', async () => {
+      const resolveLinks = vi.fn().mockRejectedValue(new Error('workspace lookup failed'));
+      const onWorkRegistration = vi.fn();
+      const runtime = new CanvasExecutionRuntime(createService({ resolveLinks }));
+
+      const result = await runtime.createCanvas(createParams, { onWorkRegistration });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('cvs_1');
+      expect(result.state.openUrl).toBeUndefined();
+      expect(onWorkRegistration).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('reports validation issues with their location and registers nothing', async () => {
     const onWorkRegistration = vi.fn();
     const runtime = new CanvasExecutionRuntime(
