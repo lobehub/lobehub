@@ -53,7 +53,7 @@ export const listGitBranches = async (dirPath: string): Promise<GitBranchListIte
       [
         'for-each-ref',
         '--sort=-committerdate',
-        '--format=%(HEAD)%09%(refname:short)%09%(upstream:short)',
+        '--format=%(HEAD)%09%(refname:lstrip=2)%09%(upstream:short)',
         'refs/heads',
       ],
       { cwd: dirPath, timeout: 5000 },
