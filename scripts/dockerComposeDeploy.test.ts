@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -39,11 +47,11 @@ const envExamples = ['.env.example', '.env.zh-CN.example'].map((file) =>
 
 const ELASTICSEARCH_PROFILES = ['elasticsearch', 'elasticsearch-reindex', 'elasticsearch-sync'];
 
-describe.each(['deploy', 'dev'])('%s docker-compose rustfs-init', (directory) => {
+describe('dev docker-compose rustfs-init', () => {
   const rustfsInit = (
     parse(
       readFileSync(
-        path.resolve(import.meta.dirname, '../docker-compose', directory, 'docker-compose.yml'),
+        path.resolve(import.meta.dirname, '../docker-compose/dev/docker-compose.yml'),
         'utf8',
       ),
     ) as { services: Record<string, { command: string }> }
@@ -69,6 +77,133 @@ describe.each(['deploy', 'dev'])('%s docker-compose rustfs-init', (directory) =>
     expect(rustfsInit.command.indexOf('rc mb "rustfs/lobe"')).toBeLessThan(
       rustfsInit.command.indexOf('rc bucket cors set'),
     );
+  });
+});
+
+describe('deploy docker-compose rustfs-init', () => {
+  it.each([
+    { bucket: 'lobe', name: 'default bucket' },
+    { bucket: 'lobe', configuredBucket: 'lobe', name: 'explicit default bucket' },
+    { bucket: 'uploads.test-01', configuredBucket: 'uploads.test-01', name: 'custom bucket' },
+    {
+      bucket: 'uploads.test-01',
+      configuredBucket: 'uploads.test-01',
+      existing: true,
+      name: 'existing custom bucket',
+    },
+    {
+      bucket: 'uploads.test-01',
+      configuredBucket: 'uploads.test-01',
+      corsFailure: true,
+      name: 'custom bucket with a failed CORS setup',
+    },
+    {
+      bucket: 'uploads.test-01',
+      configuredBucket: 'uploads.test-01',
+      corsFailure: true,
+      name: 'partially configured custom bucket that now contains objects',
+      objects: true,
+    },
+  ])('handles $name', ({ bucket, configuredBucket, corsFailure, existing, objects }) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'rustfs-init-'));
+    try {
+      const lobe = compose.services.lobe;
+      const rustfsInit = compose.services['rustfs-init'];
+      const [shell, ...shellArgs] = rustfsInit.entrypoint!;
+      const [script] = rustfsInit.command!;
+      const templatePath = path.join(deployDirectory, 'bucket.config.json');
+      const render = (value: string) =>
+        value.replaceAll(
+          /\$\$|\$\{([A-Z_]+)(?::-([^}]+))?\}/g,
+          (_, name?: string, fallback?: string) => {
+            if (!name) return '$';
+            return name === 'RUSTFS_LOBE_BUCKET'
+              ? (configuredBucket ?? fallback ?? '')
+              : 'test-credential';
+          },
+        );
+      const calls = path.join(dir, 'calls');
+      const policy = path.join(dir, 'policy.json');
+      const cors = path.join(dir, 'cors.xml');
+      writeFileSync(
+        path.join(dir, 'rc'),
+        [
+          '#!/bin/sh',
+          'set -e',
+          'case "$1:$2" in',
+          '  mb:*)',
+          '    [ "$3" = --ignore-existing ] || exit 1',
+          '    printf "create %s\\n" "$2" >> "$CALLS"',
+          '    if [ "$4" = --json ]; then printf "{\\"created\\": %s}\\n" "$CREATED"; fi ;;',
+          '  ls:rustfs/*) if [ "$HAS_OBJECTS" = true ]; then echo proof.txt; fi ;;',
+          '  anonymous:set-json) cat "$3" > "$POLICY"; printf "policy %s\\n" "$4" >> "$CALLS" ;;',
+          '  bucket:cors)',
+          '    [ "$5" = - ] || exit 1',
+          '    cat > "$CORS"; printf "cors %s\\n" "$4" >> "$CALLS"',
+          '    [ "$CORS_FAILURE" = false ] ;;',
+          'esac',
+        ].join('\n'),
+        { mode: 0o755 },
+      );
+
+      const renderedScript = render(script)
+        .replaceAll('/bucket.config.json', '"$POLICY_TEMPLATE"')
+        .replaceAll('/tmp/lobehub-bucket-policy.json', '"$RENDERED_POLICY"')
+        .replaceAll('/home/rc', '$INIT_STATE');
+      const runInit = (created: boolean, failCors: boolean, hasObjects = false) =>
+        execFileSync(shell, [...shellArgs, renderedScript], {
+          env: {
+            CALLS: calls,
+            CORS: cors,
+            CORS_FAILURE: String(failCors),
+            CREATED: String(created),
+            HAS_OBJECTS: String(hasObjects),
+            INIT_STATE: dir,
+            PATH: `${dir}:/usr/bin:/bin`,
+            POLICY: policy,
+            POLICY_TEMPLATE: templatePath,
+            RENDERED_POLICY: path.join(dir, 'rendered-policy.json'),
+            ...Object.fromEntries(
+              (rustfsInit.environment ?? []).map((entry) => render(entry).split('=')),
+            ),
+          },
+          stdio: 'pipe',
+        });
+
+      const appBucket = render(lobe.environment!.find((entry) => entry.startsWith('S3_BUCKET='))!);
+      expect(appBucket).toBe(`S3_BUCKET=${bucket}`);
+      const pending = path.join(dir, `pending-${bucket}`);
+      const target = `rustfs/${bucket}`;
+      const configureBucket = [`create ${target}`, `policy ${target}`, `cors ${target}`];
+      if (corsFailure) {
+        expect(() => runInit(true, true)).toThrow();
+        expect(existsSync(pending)).toBe(true);
+        if (objects) expect(() => runInit(false, false, true)).toThrow();
+        else runInit(false, false);
+      } else {
+        runInit(!existing, false);
+      }
+      expect(existsSync(pending)).toBe(Boolean(objects));
+      expect(readFileSync(calls, 'utf8').trim().split('\n')).toEqual([
+        ...(corsFailure ? configureBucket : []),
+        ...(existing || objects ? [`create ${target}`] : configureBucket),
+      ]);
+      if (existing) return;
+
+      const expectedPolicy = readFileSync(templatePath, 'utf8').replaceAll(
+        'arn:aws:s3:::lobe/',
+        `arn:aws:s3:::${bucket}/`,
+      );
+      expect(JSON.parse(readFileSync(policy, 'utf8'))).toEqual(JSON.parse(expectedPolicy));
+      const rule = readFileSync(cors, 'utf8');
+      expect(rule).toContain('<AllowedOrigin>*</AllowedOrigin>');
+      for (const method of ['GET', 'PUT', 'HEAD']) {
+        expect(rule).toContain(`<AllowedMethod>${method}</AllowedMethod>`);
+      }
+      expect(rule).toContain('<ExposeHeader>ETag</ExposeHeader>');
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 });
 
