@@ -369,6 +369,7 @@ export const buildServerVirtualSubAgentRunner = (
         timeout,
         title: description,
         topicId,
+        userAgent: state.principal?.audit?.userAgent,
       })) as
         | {
             error?: string;
@@ -617,6 +618,7 @@ export const buildServerAgentMemberRunner = (
               supervisorMessageId,
               timeout,
               topicId,
+              userAgent: state.principal?.audit?.userAgent,
               userInterventionConfig: selectUserInterventionConfig(state),
             });
             if (result?.started) {

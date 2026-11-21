@@ -738,6 +738,8 @@ export interface ExecVirtualSubAgentParams {
   title?: string;
   /** The Topic ID */
   topicId: string;
+  /** User agent of the request that started the parent run, for model-call admission. */
+  userAgent?: string;
 }
 
 /**

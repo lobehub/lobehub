@@ -117,6 +117,37 @@ export const formatSubAgentCreditErrorReason = (error: unknown): string | undefi
 };
 
 /**
+ * A child refused by the usage-security gate fails with the deliberately vague
+ * "Request blocked.", while the gate's reason stays on `body.reason`. Without it
+ * the parent cannot tell an account-level refusal from a content block, so it
+ * rewords the prompt and retries against a gate that ignores the prompt.
+ */
+export const formatSubAgentAccessErrorReason = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const { _responseBody, body, errorType, type } = error as {
+    _responseBody?: { reason?: unknown };
+    body?: { reason?: unknown };
+    errorType?: unknown;
+    type?: unknown;
+  };
+  if (String(type ?? errorType) !== String(ChatErrorType.Forbidden)) return;
+
+  const reason = body?.reason ?? _responseBody?.reason;
+  if (typeof reason !== 'string' || !reason) return;
+
+  const cause =
+    reason === 'not_onboarded'
+      ? 'this LobeHub account has not finished onboarding, so it cannot spend platform credit yet; the account owner has to finish onboarding'
+      : 'the platform refused this account';
+
+  return (
+    `blocked by a LobeHub account check (${reason}): ${cause}. ` +
+    'This is not a verdict on the prompt, so rewording it, retrying, or dispatching more sub-agents will not get past it. ' +
+    'Finish with what you already have and tell the user about the block.'
+  );
+};
+
+/**
  * Extract a short, human-readable reason string from a failed operation's
  * `state.error`, for inlining into the tool-result `content` a parent agent
  * sees. Without this the supervising agent only gets the opaque generic note
@@ -128,6 +159,9 @@ export const formatSubAgentCreditErrorReason = (error: unknown): string | undefi
 export const formatSubAgentErrorReason = (error: unknown): string | undefined => {
   const creditReason = formatSubAgentCreditErrorReason(error);
   if (creditReason) return creditReason;
+
+  const accessReason = formatSubAgentAccessErrorReason(error);
+  if (accessReason) return accessReason;
 
   const message = formatErrorForMetadata(error)?.message;
   if (typeof message !== 'string') return undefined;

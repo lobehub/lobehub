@@ -862,6 +862,7 @@ export class AiAgentService {
       model: params.model,
       provider: params.provider,
       resumeParentOnComplete: true,
+      userAgent: params.userAgent,
     });
 
   /**
