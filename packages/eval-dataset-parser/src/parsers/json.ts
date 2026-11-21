@@ -7,6 +7,12 @@ export function parseJSON(content: string, options?: ParseOptions): ParseResult 
     throw new Error('JSON file must contain an array of objects');
   }
 
+  data.forEach((row, index) => {
+    if (row === null || typeof row !== 'object' || Array.isArray(row)) {
+      throw new Error(`JSON row ${index + 1} must be an object`);
+    }
+  });
+
   const headers = Object.keys(data[0] || {});
   const rows = options?.preview ? data.slice(0, options.preview) : data;
 
