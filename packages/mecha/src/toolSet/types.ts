@@ -60,6 +60,12 @@ export interface ToolRuleRequest {
    */
   hasIdentityAccount?: boolean;
   /**
+   * The user @mentioned other agents this turn (outside a group). Delegating to
+   * them is `lobe-agent.callSubAgent({ agentId })`, so the tool is admitted even
+   * in chat mode, where it trims itself to that one API.
+   */
+  hasMentionedAgents?: boolean;
+  /**
    * An attached or agent-assigned file is too long to inline and is sent as a preview; the
    * attachments tool is enabled so the model can read the rest with `readAttachment`.
    */

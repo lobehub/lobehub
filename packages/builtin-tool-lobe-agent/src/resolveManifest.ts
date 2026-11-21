@@ -1,8 +1,12 @@
-import type { BuiltinManifestResolver } from '@lobechat/types';
+import type {
+  BuiltinManifestResolver,
+  BuiltinToolManifest,
+  InjectedToolManifest,
+} from '@lobechat/types';
 
 import { LobeAgentManifest } from './manifest';
-import { systemPromptWithoutSubAgent } from './systemRole';
-import { LobeAgentApiName } from './types';
+import { delegationSystemPrompt, systemPromptWithoutSubAgent } from './systemRole';
+import { LobeAgentApiName, LobeAgentIdentifier } from './types';
 
 /**
  * Sub-agent dispatch and control: hidden together, never one without the other.
@@ -12,6 +16,53 @@ export const LOBE_AGENT_SUB_AGENT_APIS: ReadonlySet<string> = new Set<string>([
   LobeAgentApiName.callSubAgent,
   LobeAgentApiName.cancelSubAgent,
 ]);
+
+const callSubAgentApi = LobeAgentManifest.api.find(
+  (api) => api.name === LobeAgentApiName.callSubAgent,
+)!;
+
+/**
+ * `callSubAgent` with `agentId` required: the delegation-only surface hands
+ * work to a named agent, never to an anonymous copy of the caller.
+ */
+const delegationCallSubAgentApi: BuiltinToolManifest['api'][number] = {
+  ...callSubAgentApi,
+  description:
+    "Hand work to another of the user's agents (including external agents such as Claude Code). It runs in an isolated context with its own model and tools, and its answer comes back as the result. Pass `subAgentId` to send a follow-up to an earlier one instead of starting a new one.",
+  parameters: {
+    ...callSubAgentApi.parameters,
+    required: ['agentId', 'description', 'instruction'],
+  },
+};
+
+/**
+ * Delegation-only `lobe-agent`: just `callSubAgent` with a target agent. Used
+ * where the full tool is not offered but the user @mentioned agents — chat
+ * mode on the server (via {@link resolveLobeAgentManifest}) and the client
+ * runtime's per-turn injection ({@link createLobeAgentDelegationManifest}).
+ */
+export const LobeAgentDelegationManifest: BuiltinToolManifest = {
+  ...LobeAgentManifest,
+  api: [delegationCallSubAgentApi],
+  systemRole: delegationSystemPrompt,
+};
+
+/**
+ * The delegation-only manifest as a per-turn injection, for the client runtime
+ * when the user @mentions agents. Merged by identifier, so a run that already
+ * carries the full `lobe-agent` keeps it.
+ */
+export const createLobeAgentDelegationManifest = (): InjectedToolManifest => ({
+  api: LobeAgentDelegationManifest.api.map(({ description, name, parameters }) => ({
+    description,
+    name,
+    parameters,
+  })),
+  identifier: LobeAgentIdentifier,
+  meta: { description: 'Delegate tasks to other agents', title: 'Lobe Agent' },
+  systemRole: LobeAgentDelegationManifest.systemRole,
+  type: 'builtin',
+});
 
 /**
  * Context-aware manifest for the lobe-agent tool.
@@ -30,10 +81,15 @@ export const LOBE_AGENT_SUB_AGENT_APIS: ReadonlySet<string> = new Set<string>([
  * the `api` list drops `callSubAgent` (and `cancelSubAgent`), and `systemRole` switches to the variant
  * without the sub-agent section — otherwise the prompt would keep instructing the
  * model to dispatch a tool that is no longer in its tool list.
+ *
+ * In chat mode the tool is only admitted to delegate to @mentioned agents, so
+ * it becomes the delegation-only manifest.
  */
 export const resolveLobeAgentManifest: BuiltinManifestResolver = (context) => {
   const inGroup = context.scope === 'group' || context.scope === 'group_agent';
   const hideSubAgentDispatch = inGroup || context.isSubAgent === true;
+
+  if (context.toolMode === 'chat') return hideSubAgentDispatch ? null : LobeAgentDelegationManifest;
 
   if (!hideSubAgentDispatch) return LobeAgentManifest;
 

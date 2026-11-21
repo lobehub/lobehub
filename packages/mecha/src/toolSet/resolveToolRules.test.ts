@@ -58,6 +58,21 @@ describe('resolveToolRules', () => {
     expect(resolved.defaultToolIds).not.toContain('lobe-agent');
   });
 
+  // @mentioned agents are delegated to with `lobe-agent.callSubAgent({ agentId })`,
+  // which trims itself to that API in chat mode.
+  it('admits lobe-agent in chat mode only to delegate to @mentioned agents', () => {
+    const chat = { chatConfig: { enableAgentMode: false }, plugins: [] };
+
+    const mentioned = resolveToolRules(request({ agent: chat, hasMentionedAgents: true }));
+    expect(mentioned.rules['lobe-agent']).toBe(true);
+    expect(mentioned.defaultToolIds).toContain('lobe-agent');
+
+    const withoutFC = resolveToolRules(
+      request({ agent: chat, hasMentionedAgents: true, model: { canUseFC: false } }),
+    );
+    expect(withoutFC.rules['lobe-agent']).toBeUndefined();
+  });
+
   it('custom mode is exactly the pinned plugins', () => {
     const resolved = resolveToolRules(
       request({ agent: { chatConfig: { toolMode: 'custom' }, plugins: ['a', 'b'] } }),

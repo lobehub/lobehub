@@ -264,9 +264,8 @@ export const buildServerVirtualSubAgentRunner = (
   // execution plan, and without this it falls back to the agent-level
   // `boundDeviceId` — whichever machine last picked "this device" — so with two
   // desktops online the parent and the child land on different machines. An
-  // anonymous `callSubAgent` clone requests this device outright; a named
-  // `callAgent` target only takes it as its `local` device, keeping its own
-  // execution target.
+  // anonymous clone requests this device outright; a named target agent only
+  // takes it as its `local` device, keeping its own execution target.
   const parentDeviceId = resolveRunActiveDeviceId(state);
   // A child forked inside an eval attempt stays inside that attempt's sandbox:
   // same session clock, same tool forwarding and Memory scope, same step cap.
@@ -283,31 +282,34 @@ export const buildServerVirtualSubAgentRunner = (
 
   return {
     ...(cancelVirtualSubAgent && {
+      // `agentId` is the dispatcher: it may cancel its copies and the named
+      // agents it started alike.
       cancel: ({ subAgentId }) => cancelVirtualSubAgent({ agentId, threadId: subAgentId, topicId }),
     }),
     run: async ({
       agentId: targetAgentId,
       background,
+      canSteer,
       description,
       instruction,
+      senderName,
       subAgentId,
       timeout,
     }) => {
-      // This runner serves two tools, and only one of them may swap the model:
-      //   - `callSubAgent` names no agent, so the child is an anonymous clone of
-      //     the parent — it takes the parent's `agencyConfig.subagent` override,
-      //     or follows the parent's effective (topic-pinned) model when none is
-      //     configured.
-      //   - `callAgent` names an existing agent, which carries a model the user
-      //     configured on it. Overriding that would discard a deliberate choice,
-      //     the same way forcing a group member onto the sub-agent default would.
+      // Only a copy of the parent may swap the model:
+      //   - without a target the child is an anonymous clone of the parent — it
+      //     takes the parent's `agencyConfig.subagent` override, or follows the
+      //     parent's effective (topic-pinned) model when none is configured.
+      //   - a named target agent carries a model the user configured on it.
+      //     Overriding that would discard a deliberate choice, the same way
+      //     forcing a group member onto the sub-agent default would.
       // Resolved here at the spawn site so the execution side never has to
       // re-derive it from the parent config.
       const subAgentModel = targetAgentId
         ? undefined
         : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
       // Thinking / reasoning-effort overrides configured for the sub-agent
-      // model; same callSubAgent-only carve-out as the model above.
+      // model; same copy-only carve-out as the model above.
       const subAgentChatConfig = targetAgentId
         ? undefined
         : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
@@ -322,7 +324,7 @@ export const buildServerVirtualSubAgentRunner = (
       const pendingState = {
         ...(background && {
           background: true,
-          sender: { agentId: targetAgentId ?? agentId, name: description },
+          sender: { agentId: targetAgentId ?? agentId, name: senderName ?? description },
         }),
         status: 'pending',
         ...(subAgentId && { threadId: subAgentId }),
@@ -355,6 +357,8 @@ export const buildServerVirtualSubAgentRunner = (
         background,
         chatConfig: subAgentChatConfig,
         deviceId: targetAgentId ? undefined : parentDeviceId,
+        canSteer,
+        dispatcherAgentId: agentId,
         ...(parentEval && { eval: parentEval }),
         groupId: state.origin?.groupId ?? undefined,
         instruction,

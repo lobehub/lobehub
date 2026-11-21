@@ -24,6 +24,7 @@ const mockThreadModel = {
 
 const mockOperationFindById = vi.fn();
 const mockFindMessagePlugin = vi.fn();
+const mockFindMessageById = vi.fn();
 const mockQueueSubAgentSteer = vi.fn();
 
 vi.mock('../steerQueue/subAgent', () => ({
@@ -58,6 +59,7 @@ vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
       create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+      findById: mockFindMessageById,
       findMessagePlugin: mockFindMessagePlugin,
       getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
       getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
@@ -493,6 +495,8 @@ describe('AiAgentService.execSubAgent', () => {
       topicId: 'topic-1',
     };
 
+    let followUpDispatcher: string | undefined;
+
     beforeEach(() => {
       mockThreadModel.findById.mockResolvedValue({
         agentId: 'agent-1',
@@ -765,20 +769,92 @@ describe('AiAgentService.execSubAgent', () => {
         'it was not started by callSubAgent',
         () =>
           mockFindMessagePlugin.mockResolvedValue({
-            apiName: 'callAgent',
-            identifier: 'lobe-agent-management',
+            apiName: 'speak',
+            identifier: 'lobe-group-management',
           }),
         'not a sub-agent',
+      ],
+      [
+        'another agent dispatched the named agent',
+        () => {
+          mockThreadModel.findById.mockResolvedValue({
+            agentId: 'agent-1',
+            id: 'thread-old',
+            sourceMessageId: 'tool-msg-1',
+            status: ThreadStatus.Failed,
+            topicId: 'topic-1',
+            type: ThreadType.Isolation,
+          });
+          mockFindMessageById.mockResolvedValue({ agentId: 'agent-other', id: 'tool-msg-1' });
+          followUpDispatcher = 'agent-parent';
+        },
+        'not found',
       ],
     ])('refuses to start when %s', async (_case, arrange, error) => {
       arrange();
       const execAgentSpy = vi.spyOn(service, 'execAgent');
 
-      const result = await service.execVirtualSubAgent(followUp);
+      const result = await service.execVirtualSubAgent({
+        ...followUp,
+        ...(followUpDispatcher && { dispatcherAgentId: followUpDispatcher }),
+      });
+      followUpDispatcher = undefined;
 
       expect(execAgentSpy).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect(result.error).toContain(error);
+    });
+
+    // `callSubAgent({ agentId })` and the legacy `callAgent`: the thread runs as
+    // the target, anchored on the dispatcher's tool call.
+    describe('a named agent', () => {
+      const namedFollowUp = { ...followUp, agentId: 'agent-target', dispatcherAgentId: 'agent-1' };
+
+      beforeEach(() => {
+        mockThreadModel.findById.mockResolvedValue({
+          agentId: 'agent-target',
+          id: 'thread-old',
+          metadata: { heteroSessionId: 'cc-session-1', operationId: 'op-old' },
+          sourceMessageId: 'tool-msg-1',
+          status: ThreadStatus.Completed,
+          topicId: 'topic-1',
+          type: ThreadType.Isolation,
+        });
+        mockFindMessageById.mockResolvedValue({ agentId: 'agent-1', id: 'tool-msg-1' });
+      });
+
+      it.each([
+        ['callSubAgent', { apiName: 'callSubAgent', identifier: 'lobe-agent' }],
+        ['the legacy callAgent', { apiName: 'callAgent', identifier: 'lobe-agent-management' }],
+      ])('continues a target started by %s, keeping its session', async (_, plugin) => {
+        mockFindMessagePlugin.mockResolvedValue(plugin);
+        const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+        const result = await service.execVirtualSubAgent(namedFollowUp);
+
+        expect(mockThreadModel.claimForRun).toHaveBeenCalledWith(
+          'thread-old',
+          expect.anything(),
+          expect.objectContaining({ heteroSessionId: 'cc-session-1' }),
+        );
+        expect(execAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ agentId: 'agent-target' }),
+        );
+        expect(result).toMatchObject({ success: true, threadId: 'thread-old' });
+      });
+
+      // An external agent's CLI never reads the steer queue.
+      it('refuses an instruction for a running target that cannot be steered', async () => {
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-old' ? { status: 'running' } : { trigger: 'cli' },
+        );
+
+        const result = await service.execVirtualSubAgent({ ...namedFollowUp, canSteer: false });
+
+        expect(mockQueueSubAgentSteer).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('still running and cannot take a new instruction');
+      });
     });
 
     // Models that can't omit the key invent ids like "new" or "exchange-rate-target";

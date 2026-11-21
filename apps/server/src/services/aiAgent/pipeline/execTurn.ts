@@ -683,9 +683,9 @@ export const execAgentTurn = async (
     },
   );
 
-  // When the user @-mentions agents (multi-mention, non-group), enable the
-  // agent-management tool for this run so the supervisor can `callAgent` to
-  // delegate. Mirrors the client runtime, which injects a callAgent manifest.
+  // When the user @-mentions agents (multi-mention, non-group), enable
+  // lobe-agent's `callSubAgent` for this run so the supervisor can delegate with
+  // `agentId`. Mirrors the client runtime, which injects a delegation manifest.
   // Single-mention takes a client-only deterministic-router path and never
   // reaches here. The delegation *context* (which agents were mentioned) is
   // injected separately via `initialContext.mentionedAgents` below.

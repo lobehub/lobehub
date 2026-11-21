@@ -98,8 +98,8 @@ import {
 } from './stepPolicy';
 import {
   completeSubAgentBridge,
-  isCallSubAgentToolMessage,
   publishSubAgentProgress,
+  readSubAgentCallKind,
 } from './subAgentBridge';
 import type {
   AgentRuntimeDelegate,
@@ -322,7 +322,7 @@ export class AgentRuntimeService {
       getPendingInterventions: (...args) => self.getPendingInterventions(...args),
       handleGroupMemberTimeout: (...args) => self.handleGroupMemberTimeout(...args),
       interruptOperation: (...args) => self.interruptOperation(...args),
-      isCallSubAgentToolMessage: (...args) => self.isCallSubAgentToolMessage(...args),
+      readSubAgentCallKind: (...args) => self.readSubAgentCallKind(...args),
       isOperationInterrupted: (...args) => self.isOperationInterrupted(...args),
       listClientLlmWaits: (...args) => self.listClientLlmWaits(...args),
       loadGroupMemberBridge: (...args) => self.loadGroupMemberBridge(...args),
@@ -577,8 +577,8 @@ export class AgentRuntimeService {
     return completeSubAgentBridge(this.context, ...args);
   }
 
-  private isCallSubAgentToolMessage(...args: MethodArgs<typeof isCallSubAgentToolMessage>) {
-    return isCallSubAgentToolMessage(this.context, ...args);
+  private readSubAgentCallKind(...args: MethodArgs<typeof readSubAgentCallKind>) {
+    return readSubAgentCallKind(this.context, ...args);
   }
 
   loadGroupMemberBridge(...args: MethodArgs<typeof loadGroupMemberBridge>) {

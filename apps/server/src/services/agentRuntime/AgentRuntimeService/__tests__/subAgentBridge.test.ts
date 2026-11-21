@@ -1,6 +1,7 @@
 /**
  * @vitest-environment node
  */
+import { LEGACY_CALL_AGENT_NOTE } from '@lobechat/builtin-tool-lobe-agent';
 import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -301,10 +302,27 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('leaves callAgent results without a sub-agent id', async () => {
+    // The retired alias forwards to callSubAgent: its target is continuable, and
+    // the result also tells the model to move to the new interface.
+    it('gives legacy callAgent results the sub-agent id and the switch note', async () => {
       (service as any).messageModel.findMessagePlugin = vi
         .fn()
         .mockResolvedValue({ apiName: 'callAgent', identifier: 'lobe-agent-management' });
+
+      await service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({
+          content: `final answer\n\n${LEGACY_CALL_AGENT_NOTE}\n\n<sub_agent id="${bridgeParams.threadId}" />`,
+        }),
+      );
+    });
+
+    it('leaves results of other bridged calls without a sub-agent id', async () => {
+      (service as any).messageModel.findMessagePlugin = vi
+        .fn()
+        .mockResolvedValue({ apiName: 'speak', identifier: 'lobe-group-management' });
 
       await service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any });
 

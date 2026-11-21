@@ -211,7 +211,7 @@ export class LocalMessageStore {
     } else {
       matches = all.filter((message) => {
         // A concrete topic IS the conversation boundary and may hold messages
-        // from several agents — `callAgent` replies among them. Only an inbox
+        // from several agents — delegated agents' replies among them. Only an inbox
         // read, which has no topic, still needs agent scope. Applying agentId
         // universally silently deletes delegated-agent turns from the model's
         // context on a device-hosted run.

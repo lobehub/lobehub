@@ -305,38 +305,6 @@ export const AgentManagementManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
-
-    // ==================== Execution ====================
-    {
-      description: 'Call an agent to handle a specific task or respond to an instruction.',
-      name: AgentManagementApiName.callAgent,
-      parameters: {
-        properties: {
-          agentId: {
-            description: 'The ID of the agent to call',
-            type: 'string',
-          },
-          instruction: {
-            description:
-              'The instruction or task for the agent to execute. Be specific about expected deliverables.',
-            type: 'string',
-          },
-          runInBackground: {
-            description:
-              'Optional. Start the agent and get control back immediately instead of waiting for its reply. Use it only when you have other independent work to do meanwhile, or when the user should not wait on this reply. The reply arrives later as a message from that agent (waking you up if your turn has ended) — never poll or wait for it. Default is false: wait for the reply in this turn.',
-            type: 'boolean',
-          },
-          skipCallSupervisor: {
-            default: false,
-            description:
-              'If true (and in a group context), the orchestration will end after this agent responds, without calling the supervisor again. Only relevant when used within agent groups.',
-            type: 'boolean',
-          },
-        },
-        required: ['agentId', 'instruction'],
-        type: 'object',
-      },
-    },
   ],
   identifier: AgentManagementIdentifier,
   meta: {

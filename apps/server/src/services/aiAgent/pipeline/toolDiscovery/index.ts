@@ -1,6 +1,7 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { DashboardIdentifier, isDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -204,7 +205,8 @@ export const discoverTools = async (
             ),
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
-            ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+            // @mentioned agents are delegated to with `callSubAgent({ agentId })`.
+            ...(hasMentionedAgents ? [LobeAgentIdentifier] : []),
             ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
           ]),
         ];
@@ -617,6 +619,8 @@ export const discoverTools = async (
         executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
       isSubAgent: appContext?.isSubAgent,
       scope: appContext?.scope ?? undefined,
+      // Chat mode admits lobe-agent only to delegate to @mentioned agents.
+      toolMode: isGoalTurn ? 'custom' : resolveToolMode(agentConfig.chatConfig ?? undefined),
     };
 
     toolsEngine = createServerAgentToolsEngine(toolsContext, {
@@ -654,6 +658,7 @@ export const discoverTools = async (
       hasEnabledKnowledgeBases,
       hasIdentityAccount,
       hasEventConnector,
+      hasMentionedAgents,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,

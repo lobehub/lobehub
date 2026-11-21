@@ -93,6 +93,31 @@ describe('AgentManagementContextInjector', () => {
       expect(content).toContain('<agent id="agt_3">Writer - drafts docs</agent>');
     });
 
+    // A group has no hand-off API: the list serves management only.
+    it.each([
+      [undefined, true],
+      [false, false],
+    ])(
+      'offers the callSubAgent hand-off only where it exists (canHandOff: %s)',
+      async (canHandOff, offered) => {
+        const injector = new AgentManagementContextInjector({
+          enabled: true,
+          context: { availableAgents: [{ id: 'agt_2', title: 'Writer' }], canHandOff },
+        });
+
+        const result = await injector.process(
+          createContext([
+            { role: 'system', content: 'sys' },
+            { role: 'user', content: 'write it' },
+          ]),
+        );
+        const content = result.messages[1].content as string;
+
+        expect(content.includes('callSubAgent')).toBe(offered);
+        expect(content).toContain('<agent id="agt_2">Writer</agent>');
+      },
+    );
+
     it('leaves out a blank name or title instead of an empty attribute', async () => {
       const injector = new AgentManagementContextInjector({
         enabled: true,
@@ -137,7 +162,7 @@ describe('AgentManagementContextInjector', () => {
       expect(delegationMsg.content).toContain('agt_designer');
       expect(delegationMsg.content).toContain('Designer Agent');
       expect(delegationMsg.content).toContain(
-        'MUST call the `lobe-agent-management____callAgent` tool',
+        "MUST call the `lobe-agent____callSubAgent` tool with the agent's id as `agentId`",
       );
       expect(delegationMsg.meta.injectType).toBe('agent-mention-delegation');
     });

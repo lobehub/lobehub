@@ -22,6 +22,7 @@ import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { STOPPED_TOOL_CONTENT } from '../helpers/agentFactory';
+import { readHeteroDeviceRoute } from '../pipeline/heteroDispatch/deviceRoute';
 import { releaseHeteroSteers } from '../steerQueue/hetero';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -114,6 +115,12 @@ export class InterventionController {
     threadId?: string;
     topicId?: string;
   }): Promise<{
+    /**
+     * A remote platform agent (OpenClaw, Hermes, …) accepted the cancel of its
+     * task. It has no runtime state to interrupt; its notify callback settles
+     * the operation later.
+     */
+    deviceCancellationAccepted?: boolean;
     deviceCancellationConfirmed?: boolean;
     operationId?: string;
     success: boolean;
@@ -127,6 +134,7 @@ export class InterventionController {
     let resolvedOperationId = operationId;
     let thread;
     let deviceCancellationConfirmed: boolean | undefined;
+    let deviceCancellationAccepted: boolean | undefined;
 
     if (threadId) {
       thread = await this.deps.threadModel.findById(threadId);
@@ -144,9 +152,19 @@ export class InterventionController {
     // bot/messenger stop). Recover it from the owner-scoped operation row so
     // device cancellation is symmetric across every caller.
     let resolvedTopicId = topicId;
+    let operationRow: Awaited<ReturnType<AgentOperationModel['findById']>> | undefined;
+    // Best-effort: without the row there is just no topic or device route to use.
+    const readOperationRow = async () => {
+      operationRow ??= await this.deps.agentOperationModel
+        .findById(resolvedOperationId!)
+        .catch((error: unknown) => {
+          log('interruptTask: reading operation %s failed: %O', resolvedOperationId, error);
+          return undefined;
+        });
+      return operationRow;
+    };
     if (!resolvedTopicId) {
-      const operation = await this.deps.agentOperationModel.findById(resolvedOperationId);
-      resolvedTopicId = operation?.topicId ?? undefined;
+      resolvedTopicId = (await readOperationRow())?.topicId ?? undefined;
     }
 
     // 2. Cancel a device-hosted hetero process if applicable.
@@ -171,10 +189,14 @@ export class InterventionController {
             }>;
           }
         | undefined;
+      // A background sub-agent outlives its parent's marker entry; its own
+      // operation row keeps the device route.
       const targetOperation =
-        runningOp?.operationId === resolvedOperationId
+        (runningOp?.operationId === resolvedOperationId
           ? runningOp
-          : runningOp?.childOperations?.find((child) => child.operationId === resolvedOperationId);
+          : runningOp?.childOperations?.find(
+              (child) => child.operationId === resolvedOperationId,
+            )) ?? readHeteroDeviceRoute((await readOperationRow())?.metadata);
 
       if (
         targetOperation?.deviceId &&
@@ -208,6 +230,9 @@ export class InterventionController {
           10_000,
         );
 
+        if (isRemoteHeterogeneousType(targetOperation.heteroType) && cancelResult.success) {
+          deviceCancellationAccepted = true;
+        }
         if (isLocalHeterogeneousType(targetOperation.heteroType)) {
           deviceCancellationConfirmed =
             cancelResult.success &&
@@ -283,6 +308,7 @@ export class InterventionController {
       const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
 
       return {
+        deviceCancellationAccepted,
         deviceCancellationConfirmed,
         operationId: resolvedOperationId,
         success: alreadyCancelled,
@@ -302,6 +328,7 @@ export class InterventionController {
     }
 
     return {
+      deviceCancellationAccepted,
       deviceCancellationConfirmed,
       operationId: resolvedOperationId,
       success: true,

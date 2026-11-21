@@ -319,6 +319,7 @@ Action:
 **Communication:**
 - speak: \`agentId\`, \`instruction\` (optional guidance)
 - broadcast: \`agentIds\` (array), \`instruction\` (optional shared guidance)
+- In a group, a member answers in the group conversation only through speak / broadcast (or works on its own through executeAgentTask). There is no other way to call a member — not \`callAgent\`, and \`callSubAgent\` is unavailable here.
 
 **Task Execution:**
 - executeAgentTask: \`agentId\`, \`title\` (brief UI label), \`task\` (detailed instructions with expected deliverables), \`timeout\` (optional, default 30min)

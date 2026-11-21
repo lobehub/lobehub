@@ -105,6 +105,8 @@ export interface ContextFactRequest {
   executionTarget?: string;
   /** Which connector families this deployment offers. */
   features: { composio: boolean; lobehubSkill: boolean };
+  /** The conversation is a group's; agents then answer through the group tools. */
+  groupId?: string | null;
   /** Disable unsolicited workspace-agent inventory, not explicit discovery or delegation tools. */
   includeRecentAgents?: boolean;
   /**

@@ -10,8 +10,6 @@ import type {
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
   buildAnalyzeMediaContent,
-  buildBackgroundSubAgentReceipt,
-  buildSteeredSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
@@ -44,7 +42,7 @@ import {
 } from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
-import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { runCallSubAgent } from './callSubAgent';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
@@ -292,114 +290,20 @@ class LobeAgentExecutionRuntime {
 
   // ==================== Sub-agent (async suspend/resume) ====================
 
-  /**
-   * Fork a sub-agent as an independent async operation.
-   *
-   * Returns a `deferred` result instead of a tool_result: the agent runtime
-   * parks the parent op (`waiting_for_async_tool`) until the sub-op finishes,
-   * at which point the completion bridge backfills the placeholder tool message
-   * and resumes the parent. The placeholder + child-op kickoff are handled by
-   * the injected `ctx.subAgent` runner (which owns the parent message anchor).
-   */
-  callSubAgent = async (
+  /** Hand work to a copy of this agent or, with `agentId`, to another agent. */
+  callSubAgent = (
     params: CallSubAgentParams,
     ctx: ToolExecutionContext,
-  ): Promise<BuiltinServerRuntimeOutput> => {
-    if (ctx.isSubAgent) {
-      return buildError(
-        'Sub-agent calls cannot be triggered from within another sub-agent.',
-        'NESTED_SUB_AGENT_NOT_ALLOWED',
-      );
-    }
-
-    if (!ctx.subAgent) {
-      return buildError(
-        'Sub-agent execution is not available in this runtime.',
-        'SUB_AGENT_UNAVAILABLE',
-      );
-    }
-
-    const { description, instruction, timeout } = params;
-    if (!instruction || typeof instruction !== 'string') {
-      return buildError('instruction is required.', 'INVALID_ARGUMENTS');
-    }
-    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
-      return buildError('subAgentId must be a string.', 'INVALID_ARGUMENTS');
-    }
-    // Models trained on strict function schemas (the GPT family) fill every
-    // declared field, so "start a new sub-agent" arrives as `subAgentId: ""`
-    // rather than an omitted key. Blank means new.
-    const subAgentId = params.subAgentId?.trim() || undefined;
-    const background = params.runInBackground === true;
-
-    const runner = ctx.subAgent;
-    const startRun = () =>
-      runner.run({ background, description, instruction, subAgentId, timeout });
-
-    let runResult: Awaited<ReturnType<typeof startRun>>;
-    if (background) {
-      const outcome = await startBackgroundSubAgent({
-        continuesThreadId: subAgentId,
-        db: this.db,
-        groupId: this.groupId,
-        retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
-        start: startRun,
-        threadId: this.threadId,
-        topicId: this.topicId,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      });
-      if ('refusal' in outcome) return buildError(outcome.refusal.message, outcome.refusal.code);
-      runResult = outcome.result;
-    } else {
-      runResult = await startRun();
-    }
-    const { started, error, steered, threadId, subOperationId, toolMessageId } = runResult;
-
-    // The child op failed to start — no completion bridge will ever fire to
-    // backfill a placeholder, so we must NOT defer/park here. Return a normal
-    // (non-deferred) tool error so the parent's LLM sees the failure and the
-    // batch continues instead of hanging in `waiting_for_async_tool`.
-    if (!started) {
-      const action = subAgentId ? 'could not be continued' : 'failed to start';
-      return buildError(
-        error ? `Sub-agent ${action}: ${error}` : `Sub-agent ${action}.`,
-        'SUB_AGENT_START_FAILED',
-      );
-    }
-
-    // Steered a sub-agent that is still running: the instruction joins its next
-    // step, and the running call reports the answer. Nothing to wait for here.
-    if (steered) {
-      return {
-        content: buildSteeredSubAgentReceipt(threadId),
-        state: { status: 'completed', steered: true, threadId },
-        success: true,
-        toolMessageId,
-      };
-    }
-
-    // Detached: the receipt is the whole tool result and the parent keeps going.
-    // It goes into the placeholder the runner created (it anchors the thread);
-    // the answer reaches the parent later as its own message.
-    if (background) {
-      return {
-        content: buildBackgroundSubAgentReceipt(threadId),
-        success: true,
-        toolMessageId,
-      };
-    }
-
-    return {
-      // No tool_result yet — the bridge fills this in when the sub-op completes.
-      content: '',
-      deferred: true,
-      // `toolMessageId` rides along so the runtime's pause chunk can tell the
-      // client which row to fetch; the client never sees it as tool state.
-      state: { status: 'pending', subOperationId, threadId, toolMessageId },
-      success: true,
-    };
-  };
+  ): Promise<BuiltinServerRuntimeOutput> =>
+    runCallSubAgent(params, ctx, {
+      agentId: this.agentId,
+      db: this.db,
+      groupId: this.groupId,
+      threadId: this.threadId,
+      topicId: this.topicId,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
 
   /**
    * Stop a running sub-agent this agent dispatched earlier in the conversation.

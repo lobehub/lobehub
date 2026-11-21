@@ -1,10 +1,15 @@
 // @vitest-environment node
 /**
- * Integration test for the server `lobe-agent-management.callAgent` deferred
- * execution flow.
+ * Integration test for handing work to another agent on the server:
+ * `lobe-agent.callSubAgent({ agentId })`.
+ *
+ * The retired `lobe-agent-management.callAgent` is no longer offered, so a
+ * new run's tool resolver drops it like any unoffered call; its executor alias
+ * only serves runs whose tool set was frozen before the change (see
+ * `agentManagement.callAgentAlias.test.ts`).
  *
  * Verifies the full lifecycle end-to-end on the in-memory runtime:
- *   1. Parent activates agent management, then emits a `lobe-agent-management____callAgent` tool call.
+ *   1. Parent activates `lobe-agent` (loaded on demand), then emits the tool call.
  *   2. The real server executor parks the parent, creates a pending tool
  *      placeholder, and forks the target agent as a child op.
  *   3. The child op completes.
@@ -54,6 +59,8 @@ const TARGET_ANSWER = 'The target agent completed the delegated callAgent work.'
 const PARENT_FINAL = 'I received the target agent result and the delegated work is complete.';
 
 const createTestContext = () => ({ jwtPayload: { userId }, userId });
+
+const CALL_SUB_AGENT = { apiName: 'callSubAgent', identifier: 'lobe-agent' };
 
 const createToolCallResponse = (callId: string, name: string, args: Record<string, unknown>) => {
   const responseId = `resp_${callId}`;
@@ -177,10 +184,11 @@ beforeEach(async () => {
       {
         chatConfig: {},
         model: 'gpt-5-pro',
-        plugins: ['lobe-agent-management'],
+        // lobe-agent is selected for this agent and loaded on demand.
+        plugins: ['lobe-agent'],
         provider: 'openai',
         systemRole: 'You are a supervisor that delegates work to other agents.',
-        title: 'callAgent Supervisor',
+        title: 'Delegating Supervisor',
         userId,
       },
       {
@@ -189,7 +197,7 @@ beforeEach(async () => {
         plugins: [],
         provider: 'openai',
         systemRole: 'You are the target agent. Return a concise result.',
-        title: 'callAgent Target',
+        title: 'Delegation Target',
         userId,
       },
     ])
@@ -214,24 +222,32 @@ afterEach(async () => {
   inMemoryStreamEventManager.clear();
 });
 
-describe('Server callAgent deferred execution', () => {
-  it('parks the parent, runs the target agent, backfills the tool message and resumes', async () => {
-    mockResponsesCreate
-      .mockResolvedValueOnce(
-        createToolCallResponse('activate_1', 'lobe-activator____activateTools', {
-          identifiers: ['lobe-agent-management'],
-          reason: 'Delegate the task to the target agent.',
-        }),
-      )
-      .mockResolvedValueOnce(
-        createToolCallResponse('call_agent_1', 'lobe-agent-management____callAgent', {
-          agentId: targetAgentId,
-          instruction: 'Handle the delegated backend integration task.',
-        }),
-      )
-      .mockResolvedValueOnce(createFinalTextResponse(TARGET_ANSWER))
-      .mockResolvedValueOnce(createFinalTextResponse(PARENT_FINAL))
-      .mockRejectedValue(new Error('Unexpected extra model call'));
+describe('Server hand-off to another agent', () => {
+  it('callSubAgent({ agentId }) parks the parent, runs the target, backfills the tool message and resumes', async () => {
+    const tool = CALL_SUB_AGENT;
+    // 1: parent activates lobe-agent  2: parent calls callSubAgent({ agentId })
+    // 3: target's answer  4: parent's final reply
+    let callCount = 0;
+    mockResponsesCreate.mockImplementation(function () {
+      callCount++;
+      if (callCount === 1)
+        return Promise.resolve(
+          createToolCallResponse('activate_1', 'lobe-activator____activateTools', {
+            identifiers: ['lobe-agent'],
+            reason: 'Hand the task to the target agent.',
+          }) as any,
+        );
+      if (callCount === 2)
+        return Promise.resolve(
+          createToolCallResponse('call_agent_1', `${tool.identifier}____${tool.apiName}`, {
+            agentId: targetAgentId,
+            description: 'Backend integration',
+            instruction: 'Handle the delegated backend integration task.',
+          }) as any,
+        );
+      if (callCount === 3) return Promise.resolve(createFinalTextResponse(TARGET_ANSWER) as any);
+      return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
+    });
 
     const caller = aiAgentRouter.createCaller(createTestContext());
 
@@ -276,19 +292,20 @@ describe('Server callAgent deferred execution', () => {
       .where(
         and(
           eq(messages.userId, userId),
-          eq(messagePlugins.identifier, 'lobe-agent-management'),
-          eq(messagePlugins.apiName, 'callAgent'),
+          eq(messagePlugins.identifier, tool.identifier),
+          eq(messagePlugins.apiName, tool.apiName),
         ),
       );
 
     expect(toolMessages).toHaveLength(1);
     expect(toolMessages[0]).toMatchObject({
-      apiName: 'callAgent',
-      content: TARGET_ANSWER,
-      identifier: 'lobe-agent-management',
+      ...tool,
       role: 'tool',
       toolCallId: 'call_agent_1',
     });
+    // The answer, then the follow-up handle: the target can be continued.
+    expect(toolMessages[0].content).toContain(TARGET_ANSWER);
+    expect(toolMessages[0].content).toContain(`<sub_agent id="${childOps[0].threadId}" />`);
     expect(toolMessages[0].state).toMatchObject({
       status: 'completed',
       threadId: childOps[0].threadId,
