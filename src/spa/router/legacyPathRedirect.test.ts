@@ -41,6 +41,7 @@ const renderAt = (url: string, serverConfigInit = true) => {
     // The real tree has static `marketplace/<section>` routes that outrank the workspace ones.
     { children: [marketplaceIndexRoute], path: 'marketplace' },
     { element: currentUrl, path: 'marketplace/*' },
+    { element: currentUrl, path: 'marketplace/connector' },
     { element: currentUrl, path: 'marketplace/agent' },
     { element: currentUrl, path: 'marketplace/agent/:slug' },
     {
@@ -101,8 +102,8 @@ describe('buildLegacyRedirectPath', () => {
 
 describe('legacy URL redirects', () => {
   it.each([
-    [true, '/acme/marketplace/agent?q=developer#results'],
-    [false, '/acme/marketplace/skill/installed?q=developer#results'],
+    [true, '/acme/marketplace/connector?q=developer#results'],
+    [false, '/acme/marketplace/connector/installed?q=developer#results'],
   ] as const)(
     'opens the original bookmark directly after loading showMarket=%s',
     async (showMarket, destination) => {
@@ -136,12 +137,12 @@ describe('legacy URL redirects', () => {
       '/acme/marketplace/connector/installed?open=mcp-connector%3Amwe',
     ],
     // `/community` became `/marketplace`.
-    ['/marketplace', '/marketplace/agent'],
-    ['/community', '/marketplace/agent'],
+    ['/marketplace', '/marketplace/connector'],
+    ['/community', '/marketplace/connector'],
     ['/community/skill?category=dev&page=2', '/marketplace/skill?category=dev&page=2'],
     ['/community/mcp/notion', '/marketplace/mcp/notion'],
-    ['/acme/community', '/acme/marketplace/agent'],
-    ['/acme/marketplace?q=developer#results', '/acme/marketplace/agent?q=developer#results'],
+    ['/acme/community', '/acme/marketplace/connector'],
+    ['/acme/marketplace?q=developer#results', '/acme/marketplace/connector?q=developer#results'],
     ['/acme/community/agent/some-agent#top', '/acme/marketplace/agent/some-agent#top'],
     ['/community/agent', '/marketplace/agent'],
     ['/community/agent/some-agent', '/marketplace/agent/some-agent'],

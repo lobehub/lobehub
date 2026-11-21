@@ -84,9 +84,15 @@ interface DiscoverCatalogHeaderProps {
   group?: { backTo: string; title: string };
   kind: CatalogKind | 'agent';
   sortControl?: ReactNode;
+  titleExtra?: ReactNode;
 }
 
-const DiscoverCatalogHeader = ({ group, kind, sortControl }: DiscoverCatalogHeaderProps) => {
+const DiscoverCatalogHeader = ({
+  group,
+  kind,
+  sortControl,
+  titleExtra,
+}: DiscoverCatalogHeaderProps) => {
   const { t } = useTranslation('discover');
   const { t: ts } = useTranslation('setting');
   const location = useLocation();
@@ -140,9 +146,12 @@ const DiscoverCatalogHeader = ({ group, kind, sortControl }: DiscoverCatalogHead
             {title}
           </WorkspaceLink>
         )}
-        <h1 ref={headingRef} tabIndex={-1} {...stylex.props(styles.title)}>
-          {groupTitle ?? title}
-        </h1>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
+          <h1 ref={headingRef} tabIndex={-1} {...stylex.props(styles.title)}>
+            {groupTitle ?? title}
+          </h1>
+          {titleExtra}
+        </Flexbox>
         {!group && <Text type={'secondary'}>{description}</Text>}
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={8} style={{ flexWrap: 'wrap' }}>

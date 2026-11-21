@@ -33,7 +33,7 @@ export const MARKETPLACE_INSTALLED_CONNECTORS_PATH = `${MARKETPLACE_CONNECTOR_PA
 export const MARKETPLACE_MCP_PATH = `${MARKETPLACE_PATH}/mcp`;
 
 export const getMarketplaceEntryPath = (showMarket: boolean | undefined): string =>
-  showMarket ? MARKETPLACE_AGENT_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH;
+  showMarket ? MARKETPLACE_CONNECTOR_PATH : MARKETPLACE_INSTALLED_CONNECTORS_PATH;
 
 /** Remaining marketplace path after the (optionally workspace-prefixed) marketplace root. */
 export const getMarketplaceSubPath = (pathname: string): string | undefined => {
