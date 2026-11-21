@@ -4109,6 +4109,8 @@ table push_tokens {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   expo_token text [not null]
+  provider text [not null, default: 'expo']
+  bundle_id text
   device_id text [not null]
   platform text [not null]
   apns_environment text

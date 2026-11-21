@@ -1,4 +1,4 @@
-import type { ApnsEnvironment } from '@lobechat/types';
+import type { ApnsEnvironment, PushTokenProvider } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import { check, index, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
@@ -6,7 +6,8 @@ import { createdAt, timestamptz } from './_helpers';
 import { users } from './user';
 
 /**
- * Stores Expo push notification tokens registered by mobile clients.
+ * Stores push tokens registered by mobile clients: Expo push tokens, or raw
+ * APNs device tokens from native iOS clients (`provider = 'apns'`).
  *
  * One row per (userId, deviceId) — a single user may have multiple devices
  * (e.g. iPhone + Android tablet), each receiving its own notifications.
@@ -24,8 +25,18 @@ export const pushTokens = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /** Expo push token, format `ExponentPushToken[xxx]` */
+    /**
+     * The push token. Expo tokens look like `ExponentPushToken[xxx]`; for
+     * `provider = 'apns'` this holds the hex APNs device token (the column
+     * keeps its historical name).
+     */
     expoToken: text('expo_token').notNull(),
+
+    /** Which service delivers to `expoToken`. */
+    provider: text('provider').$type<PushTokenProvider>().default('expo').notNull(),
+
+    /** APNs topic for `provider = 'apns'`; NULL falls back to `APNS_BUNDLE_ID`. */
+    bundleId: text('bundle_id'),
 
     /** Stable device id persisted on the client (expo-secure-store) */
     deviceId: text('device_id').notNull(),
@@ -33,7 +44,7 @@ export const pushTokens = pgTable(
     /** `ios` | `android` */
     platform: text('platform').notNull(),
 
-    /** APNs environment used by native ActivityKit pushes. */
+    /** APNs environment of the signing profile: ActivityKit pushes and `provider = 'apns'`. */
     apnsEnvironment: text('apns_environment').$type<ApnsEnvironment>(),
 
     appVersion: text('app_version'),
