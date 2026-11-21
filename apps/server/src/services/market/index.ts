@@ -797,10 +797,14 @@ export class MarketService {
       if (typeof skillError === 'string') {
         const description =
           typeof errorBody.error_description === 'string' ? errorBody.error_description : undefined;
+        // `{ error: '<message>', code: 'NOT_CONNECTED' }` keeps its machine code
+        // beside the message (the SDK reads it into `MarketAPIError.code`); only
+        // the flat OAuth-style body has no `code`, and its `error` is the code.
+        const machineCode = typeof errorBody.code === 'string' ? errorBody.code : undefined;
         return {
           content: JSON.stringify({ error: skillError, error_description: description }),
           error: {
-            code: skillError,
+            code: machineCode ?? skillError,
             message: description ? `${skillError}: ${description}` : skillError,
           },
           success: false,

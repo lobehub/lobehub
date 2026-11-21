@@ -6,6 +6,7 @@ import {
   getDisabledPluginIds,
   needsConnectorReauthorization,
 } from '@lobechat/types';
+import { findMcpEndpointUnreachableError } from '@lobechat/utils/mcpConnectError';
 import {
   connectorDeviceBinding,
   connectorMcpEndpoint,
@@ -18,6 +19,7 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import type { PluginModel } from '@/database/models/plugin';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { mcpDeviceCallError } from '@/server/services/deviceGateway/mcpCallReply';
 import type { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { callCloudMcpTool, type CloudMcpCaller } from '@/server/services/mcp/cloudTool';
@@ -503,6 +505,12 @@ const runConnectorTool = async (
         }),
         'AUTHORIZATION_ERROR',
       );
+    const unreachable = findMcpEndpointUnreachableError(error);
+    if (unreachable)
+      return {
+        ...failedToolResult(unreachable.message, unreachable.details.code),
+        error: { ...unreachable.details, message: unreachable.message },
+      };
     throw error;
   }
 };
@@ -561,10 +569,7 @@ const runConnectorToolOnBoundDevice = async (
     content: result.content,
     // A failure keeps its marker and structured details, as agent runs do
     ...(!result.success && {
-      error: result.errorData ?? {
-        code: 'MCP_DEVICE_EXECUTION_ERROR',
-        message: result.error || result.content,
-      },
+      error: result.errorData ?? mcpDeviceCallError(result),
     }),
     state: result.state ? state : undefined,
     success: result.success,

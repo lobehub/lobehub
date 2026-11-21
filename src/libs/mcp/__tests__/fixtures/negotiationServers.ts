@@ -8,6 +8,43 @@ import {
   WebStandardStreamableHTTPServerTransport,
 } from '@modelcontextprotocol/server';
 
+type ResultRewrite = (method: string | undefined, result: Record<string, any>) => void;
+
+/** Drop the 2026-07-28 caching hints, as a server built on a draft of that revision does. */
+const dropCacheHints: ResultRewrite = (_method, result) => {
+  delete result.ttlMs;
+  delete result.cacheScope;
+};
+
+/**
+ * Modern paths whose replies are rewritten after the real SDK server answers:
+ * `/modern-no-cache-hints` omits `ttlMs` / `cacheScope`, and
+ * `/modern-broken-tools` also lists a tool without its required `inputSchema`.
+ */
+const MODERN_REWRITES: Record<string, ResultRewrite> = {
+  '/modern-broken-tools': (method, result) => {
+    dropCacheHints(method, result);
+    if (method === 'tools/list' && Array.isArray(result.tools)) delete result.tools[0]?.inputSchema;
+  },
+  '/modern-no-cache-hints': dropCacheHints,
+};
+
+/** Apply `rewrite` to the JSON-RPC result in a JSON or SSE response body. */
+const rewriteResultBody = (
+  body: string,
+  method: string | undefined,
+  rewrite: ResultRewrite,
+): string => {
+  const rewriteJson = (json: string) => {
+    const message = JSON.parse(json);
+    if (message && typeof message.result === 'object' && message.result)
+      rewrite(method, message.result);
+    return JSON.stringify(message);
+  };
+  if (body.trimStart().startsWith('{')) return rewriteJson(body);
+  return body.replaceAll(/^data: (.+)$/gm, (_line, json: string) => `data: ${rewriteJson(json)}`);
+};
+
 /** Real SDK servers shared by client integration tests and local acceptance. */
 export async function startNegotiationServers(port = 0) {
   const requests: {
@@ -82,6 +119,14 @@ export async function startNegotiationServers(port = 0) {
         response = await session.transport.handleRequest(request);
         if (session.transport.sessionId) sessions.set(session.transport.sessionId, session);
         else await session.server.close();
+      } else if (MODERN_REWRITES[path]) {
+        const answer = await modern.fetch(request);
+        const text = answer.body
+          ? rewriteResultBody(await answer.text(), entry.method, MODERN_REWRITES[path])
+          : null;
+        const headers = new Headers(answer.headers);
+        headers.delete('content-length');
+        response = new Response(text, { headers, status: answer.status });
       } else {
         response = await modern.fetch(request);
       }

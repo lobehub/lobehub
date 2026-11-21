@@ -7,6 +7,8 @@ import {
   isMcpToolVisibleTo,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
+import { mcpVersionNegotiation } from '@lobechat/utils/mcpConnectError';
+import { installMcpResultCompat } from '@lobechat/utils/mcpResultCompat';
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
@@ -253,7 +255,8 @@ export class MCPClient {
           : {}),
         // Stdio stays legacy: auto would spawn a sibling probe process and can
         // wait the entire probe timeout on servers that ignore unknown requests.
-        versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
+        // HTTP probes are bounded (MCP_CONNECT_PROBE_TIMEOUT_MS), not the SDK's 60 s default.
+        versionNegotiation: mcpVersionNegotiation(params.type),
         // No elicitation/sampling/roots handlers are registered by this host.
         inputRequired: { autoFulfill: false },
       },
@@ -312,6 +315,12 @@ export class MCPClient {
             : mcpSsrfSafeFetch,
           requestInit: { headers },
         });
+        // A server on a draft of protocol 2026-07-28 may omit the caching hints
+        // its listings must carry; fill them in rather than list no tools.
+        installMcpResultCompat(this.transport, {
+          onWarning: (message) =>
+            console.warn(`${message} (MCP server: ${getMCPLogOrigin(params.url)})`),
+        });
 
         log('HTTP transport created with %d header(s)', Object.keys(headers).length);
 
@@ -369,16 +378,26 @@ export class MCPClient {
             { originalError: e.message },
           );
 
+        // Both keep the SDK error as `cause`: when the endpoint could not be
+        // reached (refused, DNS, timeout, …), `mcpService` reads the reason from
+        // it, opens a fresh session once and reports the endpoint, cause and
+        // retryability instead of a bare "fetch failed".
         if (SdkError.isInstance(e) && e.code === SdkErrorCode.RequestTimeout)
-          throw createMCPError(
-            'INITIALIZATION_TIMEOUT',
-            'MCP server version negotiation timed out. Check the server connection and try again.',
+          throw Object.assign(
+            createMCPError(
+              'INITIALIZATION_TIMEOUT',
+              'MCP server version negotiation timed out. Check the server connection and try again.',
+            ),
+            { cause: e },
           );
 
         if (SdkError.isInstance(e) && e.code === SdkErrorCode.EraNegotiationFailed)
-          throw createMCPError(
-            'CONNECTION_FAILED',
-            `Could not negotiate the MCP server protocol: ${e.message}`,
+          throw Object.assign(
+            createMCPError(
+              'CONNECTION_FAILED',
+              `Could not negotiate the MCP server protocol: ${e.message}`,
+            ),
+            { cause: e },
           );
 
         throw e;

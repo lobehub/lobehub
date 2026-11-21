@@ -1,4 +1,11 @@
 import { getMcpToolVisibility } from '@lobechat/const/mcpApp';
+import { connectMcpWithRetry, mcpVersionNegotiation } from '@lobechat/utils/mcpConnectError';
+import {
+  installMcpResultCompat,
+  type McpResultCompat,
+  withMcpRawResult,
+} from '@lobechat/utils/mcpResultCompat';
+import pc from 'picocolors';
 
 export interface LocalMcpTool {
   description?: string;
@@ -21,6 +28,22 @@ const STDERR_TAIL_LINES = 10;
  * desktop app's local manifest fetch.
  */
 export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMcpTool[]> {
+  if (params.type !== 'http') return listLocalMcpToolsOnce(params);
+  // An endpoint this computer cannot reach is retried once and then reported
+  // with its cause, endpoint, probe timeout and retryability, instead of the
+  // SDK's bare "Version negotiation probe failed: fetch failed". Listing tools
+  // is read-only, so the retry cannot repeat a side effect.
+  return connectMcpWithRetry(() => listLocalMcpToolsOnce(params), {
+    endpoint: params.url,
+    onRetry: (failure) =>
+      console.error(
+        pc.yellow(`MCP server unreachable (${failure.causeCode ?? failure.reason}), retrying…`),
+      ),
+    via: 'this computer',
+  });
+}
+
+async function listLocalMcpToolsOnce(params: LocalMcpParams): Promise<LocalMcpTool[]> {
   // Lazy-load the SDK so other `lh` commands do not pay for it at startup.
   const { Client, StreamableHTTPClientTransport } = await import('@modelcontextprotocol/client');
 
@@ -28,15 +51,19 @@ export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMc
     { name: 'lobehub-cli-mcp-client', version: '1.0.0' },
     {
       inputRequired: { autoFulfill: false },
-      versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
+      versionNegotiation: mcpVersionNegotiation(params.type),
     },
   );
 
   const stderr: string[] = [];
   let transport;
+  let compat: McpResultCompat | undefined;
   if (params.type === 'http') {
     transport = new StreamableHTTPClientTransport(new URL(params.url), {
       requestInit: { headers: params.headers },
+    });
+    compat = installMcpResultCompat(transport, {
+      onWarning: (message) => console.error(pc.yellow(`Warning: ${message}`)),
     });
   } else {
     const { getDefaultEnvironment, StdioClientTransport } =
@@ -65,10 +92,11 @@ export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMc
       // would make a view-only (`['app']`) tool model-visible.
       visibility: getMcpToolVisibility(tool._meta),
     }));
-  } catch (error) {
+  } catch (rawError) {
+    const error = withMcpRawResult(rawError, compat, 'tools/list');
     const message = (error as Error)?.message ?? String(error);
     throw new Error(stderr.length > 0 ? `${message}\n${stderr.join('\n')}` : message, {
-      cause: error,
+      cause: rawError,
     });
   } finally {
     await client.close().catch(() => {});

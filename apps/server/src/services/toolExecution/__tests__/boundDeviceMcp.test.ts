@@ -102,6 +102,32 @@ describe('ToolExecutionService — MCP bound to a device', () => {
     );
   });
 
+  it('reports a device whose lh connect is too old for MCP calls by its own code', async () => {
+    vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+      { channels: [{ channel: 'desktop' }], deviceId: 'nas-box', online: true },
+    ] as any);
+    // What the gateway proxy makes of CLI 0.0.78's `Unknown tool API: do_thing`
+    vi.mocked(deviceGateway.executeMcpCall).mockResolvedValueOnce({
+      content: "MCP tool 'do_thing' of 'my-mcp' did not run: … (`lh update` …)",
+      error: 'MCP_DEVICE_CLIENT_OUTDATED',
+      success: false,
+    } as any);
+
+    const result = await makeService().executeTool(
+      mcpPayload,
+      contextWith({ ...stdio, boundDevice: { deviceId: 'nas-box' } }),
+    );
+
+    expect(result.success).toBe(false);
+    // Never replayed: the device may have run something
+    expect(result.error).toEqual({
+      code: 'MCP_DEVICE_CLIENT_OUTDATED',
+      kind: 'stop',
+      message: "MCP tool 'do_thing' of 'my-mcp' did not run: … (`lh update` …)",
+    });
+    expect(result.content).toContain('lh update');
+  });
+
   it('fails with the reason instead of falling back when the bound device is offline', async () => {
     vi.mocked(getScopedOnlineDevices).mockResolvedValue([
       { channels: [{ channel: 'desktop' }], deviceId: 'laptop', online: true },
