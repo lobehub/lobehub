@@ -1,3 +1,5 @@
+import type { ApnsEnvironment, PushTokenProvider } from '@lobechat/types';
+
 /**
  * Push notification channel contract.
  *
@@ -60,4 +62,22 @@ export interface PushDeliveryResult {
 export interface PushTicketRecord {
   expoToken: string;
   ticketId: string;
+}
+
+/**
+ * The minimum a `push_tokens` row must expose for delivery.
+ *
+ * Declared structurally rather than re-using the Drizzle-inferred schema row so
+ * the delivery layer depends on `@lobechat/types` instead of the database
+ * package; `PushTokenModel.listByUserId()` rows satisfy it as-is.
+ */
+export interface PushTokenTarget {
+  /** APNs gateway for `provider = 'apns'`; NULL falls back to `APNS_ENVIRONMENT`. */
+  apnsEnvironment?: ApnsEnvironment | null;
+  /** APNs topic for `provider = 'apns'`; NULL falls back to `APNS_BUNDLE_ID`. */
+  bundleId?: string | null;
+  deviceId: string;
+  /** Expo token, or the raw APNs device token when `provider` is `apns`. */
+  expoToken: string;
+  provider: PushTokenProvider;
 }

@@ -440,6 +440,54 @@ describe('PushChannel', () => {
       expect(expo.sendPushNotificationsAsync).not.toHaveBeenCalled();
     });
 
+    it('still delivers to APNs when the Expo leg is rate limited', async () => {
+      mockListByUserId.mockResolvedValueOnce([
+        { deviceId: 'native', expoToken: apnsToken, provider: 'apns' },
+        { deviceId: 'pixel', expoToken: 'ExponentPushToken[B]', provider: 'expo' },
+      ]);
+      const expo = makeExpoMock();
+      expo.sendPushNotificationsAsync.mockRejectedValueOnce(
+        Object.assign(new Error('rate'), { statusCode: 429 }),
+      );
+      const apns = makeApnsMock();
+
+      const result = await new PushChannel(expo as any, apns as any).deliver(ctx);
+
+      // An Expo project-level rate limit must not suppress the native leg.
+      expect(apns.send).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ status: 'delivered' });
+    });
+
+    it('still delivers to APNs when the Expo leg throws, and rethrows if nothing was delivered', async () => {
+      mockListByUserId.mockResolvedValueOnce([
+        { deviceId: 'native', expoToken: apnsToken, provider: 'apns' },
+        { deviceId: 'pixel', expoToken: 'ExponentPushToken[B]', provider: 'expo' },
+      ]);
+      const expo = makeExpoMock();
+      expo.sendPushNotificationsAsync.mockRejectedValueOnce(new Error('network down'));
+      const apns = makeApnsMock();
+
+      const result = await new PushChannel(expo as any, apns as any).deliver(ctx);
+
+      expect(apns.send).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ status: 'delivered' });
+    });
+
+    /** The Expo leg's error must still surface when no provider delivered anything. */
+    it('rethrows the Expo error when the APNs leg also delivers nothing', async () => {
+      mockListByUserId.mockResolvedValueOnce([
+        { deviceId: 'native', expoToken: apnsToken, provider: 'apns' },
+        { deviceId: 'pixel', expoToken: 'ExponentPushToken[B]', provider: 'expo' },
+      ]);
+      const expo = makeExpoMock();
+      expo.sendPushNotificationsAsync.mockRejectedValueOnce(new Error('network down'));
+      const apns = { send: vi.fn().mockRejectedValue(new Error('socket hang up')) };
+
+      await expect(new PushChannel(expo as any, apns as any).deliver(ctx)).rejects.toThrow(
+        'network down',
+      );
+    });
+
     it('honours excluded devices for APNs tokens too', async () => {
       mockListByUserId.mockResolvedValueOnce([
         { deviceId: 'native', expoToken: apnsToken, provider: 'apns' },

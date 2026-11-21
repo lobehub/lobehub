@@ -1,19 +1,27 @@
 import { sleep } from '@lobechat/utils';
 import debug from 'debug';
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
+import pMap from 'p-map';
 
 import { PushTokenModel } from '@/database/models/pushToken';
-import type { PushTokenItem } from '@/database/schemas';
 import { serverDB } from '@/database/server';
 
 import { APNS_INVALID_TOKEN_REASONS, ApnsClient } from './apns';
 import { DEFAULT_PUSH_CHANNEL_ID } from './constants';
-import type { PushDeliveryContext, PushDeliveryResult, PushTicketRecord } from './types';
+import type {
+  PushDeliveryContext,
+  PushDeliveryResult,
+  PushTicketRecord,
+  PushTokenTarget,
+} from './types';
 
 const log = debug('lobe-notification:push');
 
 /** Expo Push Service hard rate limit (messages per second per project) */
 const SEND_CHUNK_THROTTLE_MS = 100;
+
+/** Cap on concurrent APNs requests — one token per registered device, unbounded fan-out is a risk. */
+const APNS_CONCURRENCY = 10;
 
 /**
  * Push channel implementation backed by the Expo Push Service, plus direct
@@ -117,6 +125,10 @@ export class PushChannel {
     const ticketRecords: PushTicketRecord[] = [];
     const chunks = messages.length > 0 ? this.expo.chunkPushNotifications(messages) : [];
     let cursor = 0;
+    // The Expo leg records its first failure instead of returning early, so the
+    // independent APNs leg still runs; the outcome is folded in below.
+    let expoFailure: 'error' | 'rate_limited' | undefined;
+    let expoError: unknown;
 
     for (const chunk of chunks) {
       try {
@@ -144,10 +156,12 @@ export class PushChannel {
         const err = error as { statusCode?: number; message?: string };
         if (err.statusCode === 429) {
           log('Rate limited by Expo Push Service for userId=%s', ctx.userId);
-          return { failedReason: 'rate_limited', status: 'failed' };
+          expoFailure = 'rate_limited';
+          break;
         }
-        // Unrecoverable — let the caller log via Promise.allSettled in NotificationService
-        throw error;
+        expoFailure = 'error';
+        expoError = error;
+        break;
       }
 
       // Throttle between chunks to stay under Expo's 600/sec project limit
@@ -157,11 +171,18 @@ export class PushChannel {
       }
     }
 
+    // Deliver to native APNs tokens even when the Expo leg failed: the two
+    // providers are independent, so an Expo outage or project-level rate limit
+    // must not suppress delivery to devices that do not go through Expo.
     const apnsDelivered = await this.deliverApns(ctx, sendableApnsTokens);
 
     if (ticketRecords.length === 0) {
       // APNs accepts synchronously: there is no receipt left to wait for.
       if (apnsDelivered > 0) return { status: 'delivered' };
+      // Unrecoverable Expo failure with nothing delivered anywhere — keep the
+      // original contract and let the caller log it via Promise.allSettled.
+      if (expoError) throw expoError;
+      if (expoFailure === 'rate_limited') return { failedReason: 'rate_limited', status: 'failed' };
       return { failedReason: 'all_send_failed', status: 'failed' };
     }
 
@@ -175,7 +196,7 @@ export class PushChannel {
   }
 
   /** Sends to native APNs tokens; returns how many APNs accepted. */
-  private async deliverApns(ctx: PushDeliveryContext, tokens: PushTokenItem[]): Promise<number> {
+  private async deliverApns(ctx: PushDeliveryContext, tokens: PushTokenTarget[]): Promise<number> {
     const apns = this.apns;
     if (!apns || tokens.length === 0) return 0;
 
@@ -194,8 +215,9 @@ export class PushChannel {
       url: ctx.actionUrl,
     };
 
-    const results = await Promise.all(
-      tokens.map(async (t) => {
+    const results = await pMap(
+      tokens,
+      async (t) => {
         try {
           return await apns.send({
             environment: t.apnsEnvironment ?? 'production',
@@ -207,7 +229,8 @@ export class PushChannel {
           log('APNs request failed for deviceId=%s: %s', t.deviceId, (error as Error).message);
           return { reason: 'network_error', status: 'error' as const, statusCode: 0 };
         }
-      }),
+      },
+      { concurrency: APNS_CONCURRENCY },
     );
 
     const invalid: string[] = [];
