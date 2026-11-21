@@ -93,6 +93,7 @@ export class AgentModel {
   update = this.withContext(update.update);
   setVisibility = this.withContext(update.setVisibility);
   updateConfig = this.withContext(update.updateConfig);
+  resetInboxAgent = this.withContext(update.resetInboxAgent);
   getAssignableSessionGroupVisibility = this.withContext(
     update.getAssignableSessionGroupVisibility,
   );

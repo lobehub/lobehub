@@ -12,11 +12,13 @@ import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgent
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
+import { useRestoreInboxDefaultMenuItem } from '@/hooks/useRestoreInboxDefaultMenuItem';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
+import Actions from './Item/Actions';
 import { usePreservedAgentUrl } from './usePreservedAgentUrl';
 
 const styles = stylex.create({
@@ -59,6 +61,12 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   const inboxAgentAvatar = inboxMeta.avatar || DEFAULT_INBOX_AVATAR;
   const inboxUrl = usePreservedAgentUrl(inboxRouteAgentId);
 
+  // The default assistant cannot be deleted, so its menu carries the one
+  // action that cleans it up instead. No entry, no menu: the row stays bare
+  // until the id is known or when the viewer may not manage it.
+  const restoreDefaultItem = useRestoreInboxDefaultMenuItem(inboxAgentId);
+  const menuItems = restoreDefaultItem ? [restoreDefaultItem] : undefined;
+
   // Prefetch agent layout chunk and data eagerly since Lobe AI is almost always clicked
   if (inboxAgentId) prefetchAgent(inboxAgentId);
 
@@ -69,7 +77,9 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   return (
     <WorkspaceLink aria-label={inboxAgentTitle} to={inboxUrl}>
       <NavItem
+        actions={menuItems && <Actions dropdownMenu={menuItems} />}
         className={className}
+        contextMenuItems={menuItems}
         style={style}
         title={inboxAgentTitle}
         icon={

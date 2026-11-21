@@ -44,6 +44,7 @@ import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
+import { useRestoreInboxDefaultMenuItem } from '@/hooks/useRestoreInboxDefaultMenuItem';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -254,6 +255,8 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   ]);
 
   const copyAgentIdItem = useCopyAgentIdMenuItem(activeAgentId);
+  // The default assistant has no Delete; restoring its defaults takes that slot.
+  const restoreDefaultItem = useRestoreInboxDefaultMenuItem(isInbox ? activeAgentId : undefined);
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
   // Ownership handover to a workspace member — separate from the scope moves.
@@ -366,6 +369,8 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
             onClick: handleDelete,
           }
         : null,
+      restoreDefaultItem ? { type: 'divider' as const } : null,
+      restoreDefaultItem,
       // Author / creation info footer, mirroring the page editor menu.
       ...(!isInbox && (authorName || createdAt)
         ? [
@@ -405,6 +410,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
     handleExportMarkdown,
     handleDelete,
     isInbox,
+    restoreDefaultItem,
     marketSubmission.isSubmitting,
     marketSubmission.open,
     navigate,

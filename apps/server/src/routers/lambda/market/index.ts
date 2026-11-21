@@ -21,6 +21,7 @@ import {
 import { agentRouter } from './agent';
 import { agentGroupRouter } from './agentGroup';
 import { credsRouter } from './creds';
+import { expiredMarketTokenCookies, shouldRetryWithoutMarketToken } from './marketAuthFallback';
 import { mapMarketError } from './marketError';
 import { oidcRouter } from './oidc';
 import { skillRouter } from './skill';
@@ -36,19 +37,27 @@ const marketSourceSchema = z.enum(['legacy', 'new']);
 const marketProcedure = publicProcedure
   .use(serverDatabase)
   .use(marketUserInfo)
-  .use(async ({ ctx, next }) => {
-    return next({
-      ctx: {
-        discoverService: new DiscoverService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: ctx.marketUserInfo,
-        }),
-        marketService: new MarketService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: ctx.marketUserInfo,
-        }),
-      },
+  .use(async ({ ctx, next, path, type }) => {
+    const createServices = (accessToken?: string) => ({
+      discoverService: new DiscoverService({ accessToken, userInfo: ctx.marketUserInfo }),
+      marketService: new MarketService({ accessToken, userInfo: ctx.marketUserInfo }),
     });
+
+    const result = await next({ ctx: createServices(ctx.marketAccessToken) });
+    if (
+      result.ok ||
+      !shouldRetryWithoutMarketToken({
+        accessToken: ctx.marketAccessToken,
+        error: result.error,
+        type,
+      })
+    )
+      return result;
+
+    log('Market rejected the access token for %s; retrying without it', path);
+    for (const cookie of expiredMarketTokenCookies()) ctx.resHeaders?.append('Set-Cookie', cookie);
+
+    return next({ ctx: createServices(undefined) });
   });
 
 export const marketRouter = router({
@@ -84,6 +93,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching agents by plugin: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch agents by plugin',
         });
@@ -109,6 +119,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching assistant categories: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch assistant categories',
         });
@@ -151,6 +162,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching assistant identifiers: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch assistant identifiers',
         });
@@ -184,6 +196,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching assistant list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch assistant list',
         });
@@ -208,6 +221,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching group agent categories: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch group agent categories',
         });
@@ -241,6 +255,7 @@ export const marketRouter = router({
     } catch (error) {
       log('Error fetching group agent identifiers: %O', error);
       throw new TRPCError({
+        cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch group agent identifiers',
       });
@@ -270,6 +285,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching group agent list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch group agent list',
         });
@@ -291,6 +307,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching legacy plugin list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch plugin list',
         });
@@ -315,6 +332,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching mcp categories: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch mcp categories',
         });
@@ -363,6 +381,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching mcp list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch mcp list',
         });
@@ -406,6 +425,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching model categories: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch model categories',
         });
@@ -438,6 +458,7 @@ export const marketRouter = router({
     } catch (error) {
       log('Error fetching model identifiers: %O', error);
       throw new TRPCError({
+        cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch model identifiers',
       });
@@ -466,6 +487,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching model list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch model list',
         });
@@ -490,6 +512,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching plugin categories: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch plugin categories',
         });
@@ -523,6 +546,7 @@ export const marketRouter = router({
     } catch (error) {
       log('Error fetching plugin identifiers: %O', error);
       throw new TRPCError({
+        cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch plugin identifiers',
       });
@@ -551,6 +575,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching plugin list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch plugin list',
         });
@@ -585,6 +610,7 @@ export const marketRouter = router({
     } catch (error) {
       log('Error fetching provider identifiers: %O', error);
       throw new TRPCError({
+        cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch provider identifiers',
       });
@@ -612,6 +638,7 @@ export const marketRouter = router({
       } catch (error) {
         log('Error fetching provider list: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch provider list',
         });
@@ -705,6 +732,7 @@ export const marketRouter = router({
       } catch (error) {
         console.error('Error fetching M2M token: %O', error);
         throw new TRPCError({
+          cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch M2M token',
         });

@@ -424,6 +424,39 @@ export class AgentService {
     return this.saveAgentConfig(agentId, value, replaceWorkingDirDeviceIds);
   }
 
+  /**
+   * Restore the default assistant to its provisioned state and return it, so
+   * the caller can swap its cached config without a second request.
+   */
+  async resetInboxAgent(agentId: string): Promise<UpdateAgentResult> {
+    // The reset clears the model selection, so it takes the same lock as any
+    // other provider change on a shareable agent.
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && !this.workspaceId) {
+      return this.withShareModelLock(agentId, (service) => service.restoreInboxDefaults(agentId));
+    }
+    return this.restoreInboxDefaults(agentId);
+  }
+
+  private async restoreInboxDefaults(agentId: string): Promise<UpdateAgentResult> {
+    // A link-shared agent keeps its pinned selection: clearing it would fall
+    // back to an inherited provider that sharing may not allow.
+    let keepModel = false;
+    if (AGENT_SHARE_ALLOWED_PROVIDERS) {
+      const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
+        agentId,
+      );
+      keepModel = share?.visibility === 'link';
+    }
+
+    const updated = await this.agentModel.resetInboxAgent(agentId, { keepModel });
+    if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Default agent not found' });
+
+    const agent = await this.getAgentConfigById(agentId);
+    if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+    return { agent: agent as any, success: true };
+  }
+
   private async saveAgentConfig(
     agentId: string,
     value: PartialDeep<AgentItem>,

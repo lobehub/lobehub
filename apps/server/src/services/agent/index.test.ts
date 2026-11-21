@@ -1097,6 +1097,61 @@ describe('AgentService', () => {
     });
   });
 
+  describe('resetInboxAgent', () => {
+    const inbox = { id: 'inbox-1', slug: 'inbox' };
+    let resetInboxAgent: ReturnType<typeof vi.fn>;
+    let visibility: string | null;
+
+    beforeEach(() => {
+      visibility = null;
+      resetInboxAgent = vi.fn().mockResolvedValue(inbox);
+      mockDb.transaction = vi.fn(async (action) => action(mockDb));
+      vi.mocked(AgentShareModel.lockScopedAgentRow).mockResolvedValue({
+        id: inbox.id,
+        slug: inbox.slug,
+        workspaceId: null,
+      });
+      vi.mocked(AgentModel).mockImplementation(function () {
+        return {
+          getAgentConfigById: vi.fn(async () => inbox),
+          resetInboxAgent,
+        } as unknown as AgentModel;
+      });
+      vi.mocked(AgentShareModel).mockImplementation(function () {
+        return {
+          getByAgentId: vi.fn(async () => (visibility ? { visibility } : null)),
+        } as unknown as AgentShareModel;
+      });
+      vi.mocked(parseAgentConfig).mockReturnValue({});
+      vi.mocked(isRedisEnabled).mockReturnValue(false);
+      service = new AgentService(mockDb, mockUserId);
+    });
+
+    it('resets the row and returns the refreshed agent', async () => {
+      await expect(service.resetInboxAgent(inbox.id)).resolves.toMatchObject({
+        agent: { id: inbox.id },
+        success: true,
+      });
+      expect(resetInboxAgent).toHaveBeenCalledWith(inbox.id, { keepModel: false });
+    });
+
+    it('keeps the pinned model of a link-shared agent', async () => {
+      visibility = 'link';
+
+      await service.resetInboxAgent(inbox.id);
+
+      expect(resetInboxAgent).toHaveBeenCalledWith(inbox.id, { keepModel: true });
+    });
+
+    it('rejects an agent that is not the default assistant', async () => {
+      resetInboxAgent.mockResolvedValue(null);
+
+      await expect(service.resetInboxAgent('agent-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    });
+  });
+
   describe('updateAgentConfig', () => {
     it('should throw when the updated agent cannot be read back', async () => {
       const mockAgentModel = {

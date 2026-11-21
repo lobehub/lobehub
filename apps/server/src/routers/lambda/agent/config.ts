@@ -11,7 +11,10 @@ import {
   InboxNotProvisionedError,
   resolveAgentReference,
 } from '@/server/services/agent/resolveReference';
-import { assertCanEditResource } from '@/server/services/resourcePermission';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+} from '@/server/services/resourcePermission';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 import { getResourceConfigAccess, redactAgentConfig } from '../_helpers/resourceConfigGuard';
@@ -37,6 +40,29 @@ const stripAgentPermissionPolicies = (value: Record<string, unknown>) => {
   } = policyPatch;
 
   return { ...value, agencyConfig: safeAgencyConfig };
+};
+
+/**
+ * Collaborative edit lock: reject writes to a workspace agent another member
+ * is actively editing. Inert until a client acquires the lock.
+ */
+const assertNotLockedByAnotherEditor = async (
+  ctx: {
+    editLockService: { getBlockingHolder: (type: 'agent', id: string) => Promise<unknown> };
+    workspaceId?: string | null;
+  },
+  agentId: string,
+) => {
+  if (!ctx.workspaceId) return;
+
+  const blockedBy = await ctx.editLockService.getBlockingHolder('agent', agentId);
+  if (blockedBy) {
+    throw new TRPCError({
+      cause: { data: { code: 'DocumentLocked' } },
+      code: 'CONFLICT',
+      message: 'Agent is being edited by another user',
+    });
+  }
 };
 
 const protectAgentConfig = async <T extends Record<string, any>>(
@@ -191,18 +217,7 @@ export const configRouter = router({
         }
       }
 
-      // Collaborative edit lock: reject writes to a workspace agent another
-      // member is actively editing. Inert until a client acquires the lock.
-      if (ctx.workspaceId) {
-        const blockedBy = await ctx.editLockService.getBlockingHolder('agent', agentId);
-        if (blockedBy) {
-          throw new TRPCError({
-            cause: { data: { code: 'DocumentLocked' } },
-            code: 'CONFLICT',
-            message: 'Agent is being edited by another user',
-          });
-        }
-      }
+      await assertNotLockedByAnotherEditor(ctx, agentId);
 
       // Use AgentService to update and return the updated agent data
       return ctx.agentService.updateAgentConfig(
@@ -210,5 +225,38 @@ export const configRouter = router({
         safeValue,
         input.replaceWorkingDirDeviceIds,
       );
+    }),
+  /**
+   * Restore the default assistant (inbox) to its provisioned name, avatar,
+   * prompt, model and chat settings. It cannot be deleted and recreated, so
+   * this is its only way back to a clean state.
+   */
+  resetInboxAgent: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ agentId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { agentId } = await resolveAgentReference(
+        input.agentId,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      // A workspace's default assistant is shared: wiping what every member
+      // sees is a management action, not a collaborative edit.
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'manage',
+          db: ctx.serverDB,
+          resourceId: agentId,
+          resourceType: 'agent',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      await assertNotLockedByAnotherEditor(ctx, agentId);
+
+      return ctx.agentService.resetInboxAgent(agentId);
     }),
 });

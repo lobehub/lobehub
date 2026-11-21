@@ -1,4 +1,4 @@
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import { applyWorkingDirByDevicePatch } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
@@ -429,6 +429,60 @@ export const agentPublishedConcurrentlyError = () =>
  */
 export const sameAgencyConfig = (agencyConfig: AgentItem['agencyConfig'] | null): SQL =>
   agencyConfig == null ? isNull(agents.agencyConfig) : eq(agents.agencyConfig, agencyConfig);
+
+/**
+ * Restore the default assistant (the `inbox` builtin) to the row
+ * `getBuiltinAgent` provisions: the name, avatar, prompt, model and chat
+ * settings a user layered on top are cleared, so the runtime defaults apply
+ * again.
+ *
+ * A dedicated write rather than an `updateConfig` patch because that path
+ * deep-merges: it cannot empty `params` or drop a whole `chatConfig`.
+ *
+ * Deliberately narrow. Topics, files and knowledge bases live in other tables
+ * and stay. `agencyConfig` stays too — it carries device bindings and the
+ * workspace's execution policies, which are not personalization. Only the
+ * inbox qualifies: it is the one builtin a user may rename, and the one that
+ * cannot be deleted and recreated instead.
+ *
+ * `keepModel` leaves `model` / `provider` alone for callers that must not
+ * change the selection (a link-shared agent restricted to allowed providers).
+ */
+export const resetInboxAgent = async (
+  ctx: AgentModelContext,
+  agentId: string,
+  { keepModel = false }: { keepModel?: boolean } = {},
+) => {
+  const persistConfig = getAgentPersistConfig(INBOX_SESSION_ID);
+
+  const [updated] = await ctx.db
+    .update(agents)
+    .set({
+      avatar: null,
+      backgroundColor: null,
+      chatConfig: persistConfig?.chatConfig ?? null,
+      description: null,
+      editorData: null,
+      fewShots: null,
+      name: null,
+      openingMessage: null,
+      openingQuestions: [],
+      params: {},
+      plugins: null,
+      profile: null,
+      systemRole: null,
+      tags: [],
+      title: null,
+      tts: null,
+      ...(keepModel
+        ? {}
+        : { model: persistConfig?.model ?? null, provider: persistConfig?.provider ?? null }),
+    })
+    .where(and(eq(agents.id, agentId), eq(agents.slug, INBOX_SESSION_ID), ctx.ownership()))
+    .returning();
+
+  return updated ?? null;
+};
 
 /**
  * Update the sessionGroupId for an agent
