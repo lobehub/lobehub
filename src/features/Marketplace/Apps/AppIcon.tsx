@@ -11,6 +11,6 @@ export const AppIcon = ({ app, size = 24 }: { app: MarketplaceApp; size?: number
   return typeof icon === 'string' ? (
     <Avatar avatar={icon} size={size} />
   ) : (
-    <Icon icon={icon} size={size} />
+    <Icon fill={'currentColor'} icon={icon} size={size} />
   );
 };

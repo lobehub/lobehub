@@ -33,18 +33,33 @@ export default function AppCatalog() {
   const keyword = params.get('q') ?? '';
   const navigate = useCatalogDetailNavigate();
   const { apps, loading, refreshing, error, retry } = useMarketplaceApps();
-  const rows = apps.filter((app) => {
-    if (connected && !hasAppConnection(app)) return false;
-    return (
-      matchesConnectorKeyword(keyword, [
-        app.name,
-        app.id,
-        t(`apps.category.${app.category}`),
-        app.channel && tm(`messenger.list.${app.channel.id}.description`),
-      ]) ||
-      (app.tool && matchesIntegrationKeyword(app.tool, keyword, ts))
+  const rows = apps
+    .filter((app) => !connected || hasAppConnection(app))
+    .map((app) => {
+      const { channel, tool } = app;
+      const summary = channel
+        ? t(`apps.summary.channel.${channel.id}`, {
+            defaultValue: tm(`messenger.list.${channel.id}.description`),
+          })
+        : t(`apps.summary.tool.${app.id}`, {
+            defaultValue:
+              (tool?.type === 'lobehub'
+                ? tool.provider.description
+                : tool?.serverType.description) ?? '',
+          });
+      return { ...app, summary };
+    })
+    .filter(
+      (app) =>
+        matchesConnectorKeyword(keyword, [
+          app.name,
+          app.id,
+          app.summary,
+          t(`apps.category.${app.category}`),
+          app.channel && tm(`messenger.list.${app.channel.id}.description`),
+        ]) ||
+        (app.tool && matchesIntegrationKeyword(app.tool, keyword, ts)),
     );
-  });
 
   return (
     <div {...stylex.props(catalogStyles.frame)}>
@@ -91,17 +106,6 @@ export default function AppCatalog() {
               loading={false}
             >
               {group.map((app) => {
-                const tool = app.tool;
-                const summary = app.channel
-                  ? tm(`messenger.list.${app.channel.id}.description`)
-                  : tool?.type === 'lobehub'
-                    ? ts(`tools.lobehubSkill.providers.${tool.provider.id}.description`, {
-                        defaultValue: tool.provider.description,
-                      })
-                    : tool &&
-                      ts(`tools.composio.servers.${tool.serverType.identifier}.description`, {
-                        defaultValue: tool.serverType.description,
-                      });
                 const isConnected = hasAppConnection(app);
                 const label = t('catalog.rowAction', {
                   action: isConnected
@@ -116,7 +120,7 @@ export default function AppCatalog() {
                   <SkillListRow
                     icon={() => <AppIcon app={app} size={20} />}
                     key={app.id}
-                    summary={summary}
+                    summary={app.summary}
                     title={app.name}
                     extra={
                       <>
