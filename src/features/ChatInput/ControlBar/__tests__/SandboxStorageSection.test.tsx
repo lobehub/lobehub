@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   consumePendingSandboxSelection,
+  getPendingSandboxSelection,
   toSandboxTopicMetadata,
 } from '@/store/chat/pendingSandboxSelection';
 
@@ -294,13 +295,9 @@ describe('SandboxStorageSection — T-14158', () => {
       render(<SandboxStorageSection agentId={AGENT} />);
       state.topicProjects['topic-1'] = 'project-1';
       await send('topic-1');
-      expect(screen.getByTestId('project').textContent).toBe('project-1');
-
-      await act(async () => fireEvent.click(screen.getByText('pick-repo')));
-      expect(state.updateTopicMetadata).toHaveBeenCalledWith(
-        'topic-1',
-        expect.objectContaining({ sandboxEnvironmentId: 'env_repo' }),
-      );
+      // In a project the environment is picked as part of the execution
+      // environment, so this chip stays out of the temporary sandbox.
+      expect(screen.queryByTestId('chip')).toBeNull();
 
       openNewConversation();
       expect(screen.getByTestId('project').textContent).toBe('');
@@ -321,8 +318,9 @@ describe('SandboxStorageSection — T-14158', () => {
         state.draft = { agentId: AGENT, projectId: 'project-1' };
         commit();
       });
-      expect(screen.getByTestId('project').textContent).toBe('project-1');
-      expect(screen.getByTestId('chip').textContent).toBe('repo:env-project');
+      // The execution environment names it; this chip has nothing to add.
+      expect(screen.queryByTestId('chip')).toBeNull();
+      expect(getPendingSandboxSelection(AGENT)?.environmentId).toBe('env-project');
 
       // Still a default nobody picked: the server keeps applying the project's.
       send('topic-2');
@@ -346,7 +344,7 @@ describe('SandboxStorageSection — T-14158', () => {
         state.draft = { agentId: AGENT, projectId: 'project-1' };
         commit();
       });
-      expect(screen.getByTestId('chip').textContent).toBe('repo:env-project');
+      expect(getPendingSandboxSelection(AGENT)?.environmentId).toBe('env-project');
 
       act(() => {
         state.draft = undefined;
@@ -355,7 +353,7 @@ describe('SandboxStorageSection — T-14158', () => {
         state.creating = ['minted-topic'];
         commit();
       });
-      expect(screen.getByTestId('chip').textContent).toBe('repo:env-project');
+      expect(getPendingSandboxSelection(AGENT)?.environmentId).toBe('env-project');
     });
 
     // The draft's default is kept by agent, not by project: the agent's next
@@ -366,7 +364,7 @@ describe('SandboxStorageSection — T-14158', () => {
         state.draft = { agentId: AGENT, projectId: 'project-1' };
         commit();
       });
-      expect(screen.getByTestId('chip').textContent).toBe('repo:env-project');
+      expect(getPendingSandboxSelection(AGENT)?.environmentId).toBe('env-project');
 
       act(() => {
         state.draft = undefined;
@@ -386,7 +384,19 @@ describe('SandboxStorageSection — T-14158', () => {
         state.draft = { agentId: AGENT, projectId: 'project-empty' };
         commit();
       });
-      expect(screen.getByTestId('chip').textContent).toBe('temporary');
+      expect(screen.queryByTestId('chip')).toBeNull();
+      expect(getPendingSandboxSelection(AGENT)?.environmentId).toBeUndefined();
+    });
+
+    // The drive folder is the one thing the execution environment cannot say,
+    // so a project conversation on the persistent sandbox keeps this chip.
+    it('keeps the chip for a project conversation on a drive folder', async () => {
+      render(<SandboxStorageSection agentId={AGENT} />);
+      await act(async () => fireEvent.click(screen.getByText('pick-folder')));
+      state.topicProjects['topic-1'] = 'project-1';
+      await send('topic-1');
+
+      expect(screen.getByTestId('chip').textContent).toBe('projects/demo');
     });
 
     it('starts the next new conversation without a repository when the last one used none', async () => {

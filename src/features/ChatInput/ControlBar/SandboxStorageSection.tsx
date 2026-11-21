@@ -114,15 +114,15 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     temporary: eligible && (temporary || status === 'upgrade'),
   });
 
-  // A new project conversation nobody placed runs in the project's environment
-  // (the server applies it), so the chip names that rather than its default.
+  // In a project the environment is part of the execution environment the
+  // device chip picks (a cloud sandbox set up from it), so this chip is left
+  // only for what that one cannot say: the drive folder of a persistent
+  // sandbox. A new conversation nobody placed runs in the project's
+  // environment — the server applies it — so it has no folder to show.
   const projectOption = useProjectEnvironmentOption(agentId, scopeTopicId);
-  const value =
-    projectOption.projectDefault && projectOption.environment
-      ? { environmentId: projectOption.environment.id }
-      : selection;
 
   if (status === 'hidden') return null;
+  if (projectId && (projectOption.projectDefault || !isPersistentSelection(selection))) return null;
 
   return (
     <SandboxDrivePicker
@@ -131,7 +131,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
       projectId={projectId}
       sharedAgent={sharedAgent}
       topicId={topicId}
-      value={value}
+      value={selection}
       onChange={pick}
     />
   );
