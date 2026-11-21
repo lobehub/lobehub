@@ -11,7 +11,7 @@ import {
 } from './acpAgentSession';
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpServerRequestError } from './acpStdioClient';
-import type { CliCommandStatus } from './resolveCliCommand';
+import type { CliCommandStatus, ResolvedHeteroCommand } from './resolveCliCommand';
 import { detectValidatedCommand } from './resolveCliCommand';
 
 /**
@@ -67,6 +67,25 @@ export const detectDshCommand = async (
     available: false,
     error: `DeepSeek Harness CLI ${status.version} is too old; LobeHub needs ${DSH_MIN_VERSION} or newer. Update it with: npm i -g @deepseek-ai/dsh`,
   };
+};
+
+/**
+ * The `dsh` binary a session should spawn, with the PATH that validated it.
+ * A custom command is used verbatim; the default one is re-detected so a CLI
+ * installed after the host started (a fresh registry PATH on Windows, a new
+ * login-shell PATH elsewhere) still launches instead of failing with ENOENT.
+ */
+export const resolveDshSpawnCommand = async (
+  command?: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<ResolvedHeteroCommand> => {
+  const requested = command?.trim();
+  if (requested && requested !== DSH_COMMAND) return { command: requested };
+
+  const detected = await detectDshCommand(DSH_COMMAND, env).catch(() => undefined);
+  return detected?.available && detected.path
+    ? { command: detected.path, pathEnv: detected.resolvedPathEnv, version: detected.version }
+    : { command: DSH_COMMAND };
 };
 
 /** Select the CLI's shipped ACP profile, served on stdio until disconnect. */
