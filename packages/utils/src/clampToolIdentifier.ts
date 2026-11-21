@@ -1,3 +1,5 @@
+import { truncateSurrogateSafe } from './truncateSurrogateSafe';
+
 /**
  * Hard cap for `message_plugins.identifier` / `api_name`. Hallucinated tool
  * calls have stuffed multi-KB payloads (artifact XML, shell commands) into
@@ -9,5 +11,5 @@ export const MAX_TOOL_IDENTIFIER_LENGTH = 255;
 
 export const clampToolIdentifier = <T extends string | null | undefined>(value: T): T =>
   value && value.length > MAX_TOOL_IDENTIFIER_LENGTH
-    ? (value.slice(0, MAX_TOOL_IDENTIFIER_LENGTH) as T)
+    ? (truncateSurrogateSafe(value, MAX_TOOL_IDENTIFIER_LENGTH) as T)
     : value;
