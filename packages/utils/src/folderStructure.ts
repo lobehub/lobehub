@@ -14,8 +14,8 @@ interface FolderTree {
  * @returns Object containing folder hierarchy and files grouped by folder path
  */
 export const buildFolderTree = (files: File[]): FolderTree => {
-  const folders: Record<string, FolderInfo> = {};
-  const filesByFolder: Record<string, File[]> = {};
+  const folders: Record<string, FolderInfo> = Object.create(null);
+  const filesByFolder: Record<string, File[]> = Object.create(null);
 
   for (const file of files) {
     // Get the relative path from the browser (e.g., "my-folder/subfolder/file.txt")
