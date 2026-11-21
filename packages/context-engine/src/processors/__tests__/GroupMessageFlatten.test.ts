@@ -686,4 +686,40 @@ describe('GroupMessageFlattenProcessor', () => {
       expect(toolMsg.pluginState.query).toBe('杭州 天气');
     });
   });
+
+  // T-14098: ToolCallProcessor tells an unanswered approval/form apart from an
+  // empty result by `pluginIntervention`, which the flatten used to drop.
+  it('should keep the intervention of a tool result', async () => {
+    const processor = new GroupMessageFlattenProcessor();
+
+    const result = await processor.process(
+      createContext([
+        {
+          children: [
+            {
+              content: '',
+              id: 'msg-1',
+              tools: [
+                {
+                  apiName: 'requestCredsInput',
+                  arguments: '{"key":"weather-api"}',
+                  id: 'call_1',
+                  identifier: 'lobe-creds',
+                  intervention: { status: 'pending' },
+                  result: { content: '', id: 'msg-tool-1' },
+                  type: 'builtin',
+                },
+              ],
+            },
+          ],
+          content: '',
+          id: 'msg-group-1',
+          role: 'assistantGroup',
+        },
+      ]),
+    );
+
+    const toolMsg = result.messages.find((m: any) => m.role === 'tool');
+    expect(toolMsg?.pluginIntervention).toEqual({ status: 'pending' });
+  });
 });

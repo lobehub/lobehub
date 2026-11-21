@@ -1,8 +1,8 @@
-import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { MessageToolCall, PipelineContext, ProcessorOptions } from '../types';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
@@ -36,6 +36,23 @@ export interface ToolCallConfig {
  */
 export const PENDING_TOOL_RESULT_CONTENT =
   'This call is still running in the background and has not returned a result yet. It is not an empty result: its output will be delivered to the turn that started it. Do not repeat the call; tell the user it is still in progress if they ask for it.';
+
+/**
+ * Stand-in for a call parked on a human intervention (an approval card or an
+ * in-app form such as the secure credential form) that the user has not
+ * answered. Such a row is persisted with empty content; a new turn that reaches
+ * it — typically from a surface that cannot show the card, like a bot channel
+ * or the CLI — would otherwise read it as an empty result.
+ */
+export const AWAITING_USER_TOOL_RESULT_CONTENT =
+  'This call is waiting for the user to answer its approval or form in the LobeHub app and has no result yet. It is not an empty result. The user may be on a surface that cannot show it, such as a chat channel or the CLI. Do not repeat the call or assume it succeeded; tell the user it is waiting for them in the LobeHub app.';
+
+/**
+ * Stand-in for an intervention that was dismissed (aborted or rejected) without
+ * a result text, e.g. when the user sent a new message instead of answering.
+ */
+export const DISMISSED_TOOL_RESULT_CONTENT =
+  'This call was dismissed before the user answered its approval or form, so it produced no result. It is not an empty result. Do not assume it succeeded; ask the user before calling it again.';
 
 export class ToolCallProcessor extends BaseProcessor {
   readonly name = 'ToolCallProcessor';
@@ -161,9 +178,7 @@ export class ToolCallProcessor extends BaseProcessor {
    * Process tool message
    */
   private processToolMessage(message: any, supportTools: boolean): any {
-    const content = this.isPendingToolResult(message)
-      ? PENDING_TOOL_RESULT_CONTENT
-      : message.content;
+    const content = this.getPlaceholderContent(message) ?? message.content;
 
     if (!supportTools) {
       // If tools not supported, convert tool message to user message
@@ -197,18 +212,34 @@ export class ToolCallProcessor extends BaseProcessor {
   }
 
   /**
-   * A deferred tool (callSubAgent, callAgent, group members) persists an empty
-   * placeholder with `pluginState.status: 'pending'` and parks its turn until
-   * the result is backfilled. A NEW user turn on the same topic can run in the
-   * meantime and would otherwise read that slot as an empty result.
+   * Text for an empty tool row whose result has not been produced, so the model
+   * never reads the slot as an empty result (`<empty_content>`):
+   * - A deferred tool (callSubAgent, callAgent, group members) persists an
+   *   empty placeholder with `pluginState.status: 'pending'` and parks its turn
+   *   until the result is backfilled.
+   * - A call parked on a human intervention persists an empty row with
+   *   `pluginIntervention.status: 'pending'` until the user answers; a dismissed
+   *   one can stay empty with `aborted` / `rejected`.
+   * A NEW user turn on the same topic can run in the meantime.
    */
-  private isPendingToolResult(message: any): boolean {
+  private getPlaceholderContent(message: any): string | undefined {
     const isEmpty =
       message.content === undefined ||
       message.content === null ||
       (typeof message.content === 'string' && !message.content.trim());
+    if (!isEmpty) return;
 
-    return isEmpty && message.pluginState?.status === 'pending';
+    if (message.pluginState?.status === 'pending') return PENDING_TOOL_RESULT_CONTENT;
+
+    switch (message.pluginIntervention?.status) {
+      case 'pending': {
+        return AWAITING_USER_TOOL_RESULT_CONTENT;
+      }
+      case 'aborted':
+      case 'rejected': {
+        return DISMISSED_TOOL_RESULT_CONTENT;
+      }
+    }
   }
 
   /**
