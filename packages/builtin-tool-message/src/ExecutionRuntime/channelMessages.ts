@@ -1,6 +1,8 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
+  AddBitableRecordsParams,
+  CreateBitableParams,
   CreatePollParams,
   CreateThreadParams,
   DeleteMessageParams,
@@ -161,6 +163,62 @@ export class ChannelMessageRuntime {
         content: `readDocument error: ${(e as Error).message}`,
         success: false,
       };
+    }
+  }
+
+  async createBitable(params: CreateBitableParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.service.createBitable) {
+      return { content: `createBitable is not supported on ${params.platform}`, success: false };
+    }
+    if (!params.name?.trim() || !params.fields?.length) {
+      return {
+        content: 'createBitable error: pass a `name` and at least one entry in `fields`',
+        success: false,
+      };
+    }
+    try {
+      const result = await this.service.createBitable(params);
+      const lines = [
+        `Created Bitable "${result.name ?? params.name}"`,
+        result.url ? `URL: ${result.url}` : undefined,
+        `appToken: ${result.appToken}${result.tableId ? `, tableId: ${result.tableId}` : ''}`,
+        `Records written: ${result.recordIds?.length ?? 0}`,
+        result.collaborators?.length
+          ? `Shared with: ${result.collaborators.join(', ')}`
+          : 'Shared with: nobody — only the bot app can open it until someone is added as a collaborator',
+        ...(result.issues ?? []).map((issue) => `Warning (${issue.target}): ${issue.error}`),
+      ].filter(Boolean);
+      return { content: lines.join('\n'), state: result, success: true };
+    } catch (e) {
+      return { content: `createBitable error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async addBitableRecords(params: AddBitableRecordsParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.service.addBitableRecords) {
+      return {
+        content: `addBitableRecords is not supported on ${params.platform}`,
+        success: false,
+      };
+    }
+    if (!params.url && !params.appToken) {
+      return {
+        content: 'addBitableRecords error: pass the Bitable `url` (preferred) or its `appToken`',
+        success: false,
+      };
+    }
+    if (!params.records?.length) {
+      return { content: 'addBitableRecords error: `records` is empty', success: false };
+    }
+    try {
+      const result = await this.service.addBitableRecords(params);
+      return {
+        content: `Added ${result.recordIds?.length ?? 0} record(s) to Bitable ${result.appToken} (table ${result.tableId})`,
+        state: result,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `addBitableRecords error: ${(e as Error).message}`, success: false };
     }
   }
 

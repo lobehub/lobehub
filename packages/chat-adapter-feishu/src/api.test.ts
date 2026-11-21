@@ -214,3 +214,200 @@ describe('LarkApiClient.getAppOwnerId', () => {
     await expect(client().getAppOwnerId()).rejects.toThrow(/99991672|no permission/);
   });
 });
+
+describe('LarkApiClient bitable', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const lastCall = () => {
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    return { body: init.body ? JSON.parse(init.body) : undefined, method: init.method, url };
+  };
+
+  it('createBitableApp posts the name and folder and returns the app token, url and default table', async () => {
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(
+      jsonResponse({
+        code: 0,
+        data: {
+          app: {
+            app_token: 'bascnABC',
+            default_table_id: 'tblDefault',
+            name: '待办',
+            url: 'https://x.feishu.cn/base/bascnABC',
+          },
+        },
+        msg: 'ok',
+      }),
+    );
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await expect(api.createBitableApp({ folderToken: 'fldX', name: '待办' })).resolves.toEqual({
+      appToken: 'bascnABC',
+      defaultTableId: 'tblDefault',
+      name: '待办',
+      url: 'https://x.feishu.cn/base/bascnABC',
+    });
+    expect(lastCall()).toEqual({
+      body: { folder_token: 'fldX', name: '待办' },
+      method: 'POST',
+      url: 'https://open.feishu.cn/open-apis/bitable/v1/apps',
+    });
+  });
+
+  it('createBitableTable sends the columns under `table` and returns the table id', async () => {
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(
+      jsonResponse({
+        code: 0,
+        data: { default_view_id: 'vew1', field_id_list: ['fld1'], table_id: 'tblNew' },
+        msg: 'ok',
+      }),
+    );
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    const fields = [{ field_name: '任务', type: 1 }];
+    await expect(api.createBitableTable('bascnABC', { fields, name: '任务表' })).resolves.toEqual({
+      defaultViewId: 'vew1',
+      fieldIds: ['fld1'],
+      tableId: 'tblNew',
+    });
+    expect(lastCall()).toEqual({
+      body: { table: { default_view_name: '任务表', fields, name: '任务表' } },
+      method: 'POST',
+      url: 'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables',
+    });
+  });
+
+  it('batchCreateBitableRecords wraps each row in `fields` and asks for open_id person values', async () => {
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(
+      jsonResponse({
+        code: 0,
+        data: { records: [{ record_id: 'rec1' }, { record_id: 'rec2' }] },
+        msg: 'ok',
+      }),
+    );
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await expect(
+      api.batchCreateBitableRecords('bascnABC', 'tblNew', [{ 任务: 'a' }, { 任务: 'b' }]),
+    ).resolves.toEqual({ recordIds: ['rec1', 'rec2'] });
+    expect(lastCall()).toEqual({
+      body: { records: [{ fields: { 任务: 'a' } }, { fields: { 任务: 'b' } }] },
+      method: 'POST',
+      url: 'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables/tblNew/records/batch_create?user_id_type=open_id',
+    });
+  });
+
+  it('batchCreateBitableRecords sends the idempotency client_token', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { records: [] }, msg: 'ok' }));
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await api.batchCreateBitableRecords('bascnABC', 'tblNew', [{ 任务: 'a' }], {
+      clientToken: 'fe599b60-450f-46ff-b2ef-9f6675625b97',
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables/tblNew/records/batch_create?user_id_type=open_id&client_token=fe599b60-450f-46ff-b2ef-9f6675625b97',
+    );
+  });
+
+  it('listBitableTables and listBitableFields map the items', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({ code: 0, data: { items: [{ name: '表1', table_id: 'tbl1' }] }, msg: 'ok' }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 0,
+          data: { items: [{ field_id: 'fld1', field_name: '任务', type: 1 }] },
+          msg: 'ok',
+        }),
+      );
+
+    const api = new LarkApiClient('cli_app', 'secret', 'lark');
+    await expect(api.listBitableTables('bascnABC')).resolves.toEqual([
+      { name: '表1', tableId: 'tbl1' },
+    ]);
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://open.larksuite.com/open-apis/bitable/v1/apps/bascnABC/tables?page_size=100',
+    );
+    await expect(api.listBitableFields('bascnABC', 'tbl1')).resolves.toEqual([
+      { fieldId: 'fld1', fieldName: '任务', type: 1 },
+    ]);
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      'https://open.larksuite.com/open-apis/bitable/v1/apps/bascnABC/tables/tbl1/fields?page_size=100',
+    );
+  });
+
+  it('listBitableFields follows page_token until every column is collected', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 0,
+          data: {
+            has_more: true,
+            items: [{ field_id: 'fld1', field_name: '任务', type: 1 }],
+            page_token: 'p2',
+          },
+          msg: 'ok',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 0,
+          data: {
+            has_more: false,
+            items: [{ field_id: 'fld101', field_name: '第101列', type: 2 }],
+          },
+          msg: 'ok',
+        }),
+      );
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await expect(api.listBitableFields('bascnABC', 'tbl1')).resolves.toEqual([
+      { fieldId: 'fld1', fieldName: '任务', type: 1 },
+      { fieldId: 'fld101', fieldName: '第101列', type: 2 },
+    ]);
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables/tbl1/fields?page_size=100&page_token=p2',
+    );
+  });
+
+  it('addDriveCollaborator adds an open_id member to the bitable without notifying', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { member: {} }, msg: 'ok' }));
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await api.addDriveCollaborator('bascnABC', 'bitable', { openId: 'ou_1', perm: 'full_access' });
+    expect(lastCall()).toEqual({
+      body: { member_id: 'ou_1', member_type: 'openid', perm: 'full_access' },
+      method: 'POST',
+      url: 'https://open.feishu.cn/open-apis/drive/v1/permissions/bascnABC/members?need_notification=false&type=bitable',
+    });
+  });
+
+  it('deleteBitableTable issues a DELETE', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: {}, msg: 'ok' }));
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await api.deleteBitableTable('bascnABC', 'tblDefault');
+    expect(lastCall()).toEqual({
+      body: undefined,
+      method: 'DELETE',
+      url: 'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables/tblDefault',
+    });
+  });
+});

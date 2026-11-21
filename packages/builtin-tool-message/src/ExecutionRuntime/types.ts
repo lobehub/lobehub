@@ -1,5 +1,9 @@
 import type {
+  AddBitableRecordsParams,
+  AddBitableRecordsState,
   ConfiguredBotInfo,
+  CreateBitableParams,
+  CreateBitableState,
   CreatePollParams,
   CreatePollState,
   CreateThreadParams,
@@ -57,6 +61,17 @@ import type { MessageImageResolver } from './messageImages';
  * Unsupported operations should throw an error indicating the platform limitation.
  */
 export interface MessageRuntimeService {
+  /**
+   * Append rows to an existing Bitable (多维表格). Optional, like
+   * `createBitable`: Feishu/Lark only.
+   */
+  addBitableRecords?: (params: AddBitableRecordsParams) => Promise<AddBitableRecordsState>;
+  /**
+   * Create a Bitable (多维表格) with the bot's own app credentials, seed it
+   * and share it. Optional: only Feishu/Lark implement it; the runtime
+   * reports "not supported" elsewhere and `messageCapabilities` trims the tool.
+   */
+  createBitable?: (params: CreateBitableParams) => Promise<CreateBitableState>;
   createPoll: (params: CreatePollParams) => Promise<CreatePollState>;
   createThread: (params: CreateThreadParams) => Promise<CreateThreadState>;
   deleteMessage: (params: DeleteMessageParams) => Promise<DeleteMessageState>;

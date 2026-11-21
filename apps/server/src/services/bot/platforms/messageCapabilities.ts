@@ -27,6 +27,8 @@ export const CHANNEL_MESSAGE_APIS = [
   MessageApiName.listThreads,
   MessageApiName.replyToThread,
   MessageApiName.createPoll,
+  MessageApiName.createBitable,
+  MessageApiName.addBitableRecords,
 ] as const;
 
 export const TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS: string[] = [...CHANNEL_MESSAGE_APIS];
@@ -57,6 +59,8 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   // DingTalk robots can only send: no history, search, edit, delete, reaction,
   // pin, member or channel-listing API → prompt uses pre-injected history.
   dingtalk: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
     MessageApiName.createPoll,
     MessageApiName.createThread,
     MessageApiName.deleteMessage,
@@ -76,9 +80,13 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
-  // Discord implements the full surface — no entry needed, but keep it explicit.
-  // Discord has no document API — `readDocument` is Feishu/Lark only.
-  discord: [MessageApiName.readDocument],
+  // Discord implements the full messaging surface; it only lacks the
+  // Feishu/Lark document (`readDocument`) and Bitable APIs.
+  discord: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
+    MessageApiName.readDocument,
+  ],
   feishu: [
     MessageApiName.createPoll,
     MessageApiName.createThread,
@@ -93,6 +101,8 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   ],
   // iMessage supports readMessages/searchMessages, so history is read on demand.
   imessage: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
     MessageApiName.createPoll,
     MessageApiName.createThread,
     MessageApiName.deleteMessage,
@@ -110,6 +120,13 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   // The shared Linq pool (messenger iMessage / SMS) has no channel API behind
   // the message tool — replies flow through the messenger, nothing else.
   linq: [...CHANNEL_MESSAGE_APIS],
+  // LINE has no document or Bitable API; those Feishu/Lark-only tools are
+  // trimmed so a LINE chat never routes them to an unrelated Feishu bot.
+  line: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
+    MessageApiName.readDocument,
+  ],
   // Lark shares Feishu's service, so it has the same limitations.
   lark: [
     MessageApiName.createPoll,
@@ -125,6 +142,8 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   ],
   // QQ has no history-read API → prompt uses pre-injected recent channel history.
   qq: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
     MessageApiName.createPoll,
     MessageApiName.createThread,
     MessageApiName.deleteMessage,
@@ -145,6 +164,8 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.unpinMessage,
   ],
   slack: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
     MessageApiName.createPoll,
     MessageApiName.createThread,
     MessageApiName.readDocument,
@@ -152,6 +173,8 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   ],
   // Telegram has no history-read API → prompt uses pre-injected recent channel history.
   telegram: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
     MessageApiName.getReactions,
     MessageApiName.listChannels,
     MessageApiName.listPins,
@@ -163,6 +186,8 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   ],
   // WeChat's iLink bot supports only outbound sendMessage → no history-read API.
   wechat: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
     MessageApiName.createPoll,
     MessageApiName.createThread,
     MessageApiName.deleteMessage,

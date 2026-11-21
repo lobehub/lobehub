@@ -1192,6 +1192,25 @@ curl 'https://open.feishu.cn/open-apis/contact/v3/users/ou_7d8a6e6df7621556ce0d2
 | `1770032` | 应用对该文档没有阅读 / 编辑权限。 |
 | `1770033` | 纯文本超出大小限制。              |
 
+## 8.5 多维表格（Bitable）创建与写入
+
+`createBitable` / `addBitableRecords` 用应用自己的 `tenant_access_token` 调用，App Secret 只在服务端使用，模型和沙箱都拿不到。应用创建的多维表格**属主是应用**，所以 `createBitable` 在同一次调用里把请求人（`<speaker>` 的 open\_id）加为协作者，否则除应用外没人能打开。
+
+| 用途                     | 方法 / 路径                                                                           | 所需权限                                         |
+| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 创建多维表格             | `POST /bitable/v1/apps`（`name`、可选 `folder_token`）                                | `bitable:app`                                    |
+| 新增数据表（含字段）     | `POST /bitable/v1/apps/{app_token}/tables`（`table.fields[]`）                        | 同上                                             |
+| 删除默认数据表           | `DELETE /bitable/v1/apps/{app_token}/tables/{table_id}`                               | 同上                                             |
+| 列出数据表 / 字段        | `GET .../tables?page_size=100`、`GET .../tables/{table_id}/fields?page_size=100`      | 同上（或 `bitable:app:readonly`）                |
+| 批量新增记录（≤ 500 条） | `POST .../tables/{table_id}/records/batch_create?user_id_type=open_id`                | 同上                                             |
+| 添加协作者               | `POST /drive/v1/permissions/{app_token}/members?type=bitable&need_notification=false` | `docs:permission.member:create` 或 `drive:drive` |
+
+- 新建的多维表格自带一张默认数据表（`default_table_id`），建好自己的表后删掉它，链接直接落在新表上；删除失败不影响结果。
+- 工具暴露的字段类型与飞书 `type` 的对应：`text`=1、`number`=2、`singleSelect`=3、`multiSelect`=4、`date`=5、`checkbox`=7、`person`=11、`url`=15。记录按列名传值，服务层按列类型转换：日期 → 毫秒时间戳（10 位秒级自动 ×1000），人员 → `[{ id: open_id }]`，超链接 → `{ link, text }`，多选 → 字符串数组。
+- 未知列名在请求前就报错并列出真实列名，不把飞书的 `FieldNameNotFound` 原样抛给模型。
+- 协作者逐个添加，单个失败只记一条告警，不影响表和其他人的权限；记录写入失败同样只告警，表保留，模型可以再用 `addBitableRecords` 重试。
+- `addBitableRecords` 接受 `/base/{app_token}?table={table_id}` 链接；没带 `table` 时取第一张表；`/wiki/` 链接通过 `get_node` 解析（`obj_type = bitable`）。
+
 ## 9. 通用错误码速查
 
 | 错误码   | 含义                               |
