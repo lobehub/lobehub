@@ -3,6 +3,7 @@ export type DatasetFormat = 'auto' | 'csv' | 'json' | 'jsonl' | 'xlsx';
 export interface ParseOptions {
   csvDelimiter?: string;
   format?: DatasetFormat;
+  /** Zero-based header row for spreadsheet imports. Defaults to the first used row. */
   headerRow?: number;
   preview?: number;
   sheet?: number | string;
