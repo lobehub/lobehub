@@ -135,6 +135,9 @@ export class Crawler {
 
     let finalCrawler: string | undefined;
     let finalError: Error | undefined;
+    // Retries re-run the whole chain, which would bill a provider that already answered
+    // "cannot fetch" again, even when a later impl ended on a transient failure.
+    let hasProviderFetchFailure = false;
 
     const filteredRuleImpls = ruleImpls
       ? (ruleImpls.filter((impl) =>
@@ -173,6 +176,7 @@ export class Crawler {
         console.error(`[${impl}]`, error);
         finalError = error as Error;
         finalCrawler = impl;
+        if (error instanceof ProviderFetchError) hasProviderFetchFailure = true;
 
         // A confirmed 404/410 is the page's final answer; asking the next provider
         // only buys the same "not found" again.
@@ -180,9 +184,11 @@ export class Crawler {
       }
     }
 
+    const errorData = buildErrorData(finalError);
+
     return {
       crawler: finalCrawler || finalImpls.at(-1) || 'unknown',
-      data: buildErrorData(finalError),
+      data: hasProviderFetchFailure ? { ...errorData, retryable: false } : errorData,
       originalUrl: url,
       transformedUrl: transformedUrl !== url ? transformedUrl : undefined,
     };

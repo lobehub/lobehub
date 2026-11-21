@@ -410,6 +410,22 @@ describe('Crawler', () => {
       expect(result.data).toMatchObject({ errorType: 'PageNotFoundError', retryable: false });
     });
 
+    it.each([
+      ['empty content', () => Promise.resolve(undefined), 'EmptyCrawlResultError'],
+      ['a transient failure', () => Promise.reject(new Error('socket hang up')), 'Error'],
+    ])('should not re-bill the provider when the next impl ends on %s', async (_, next, type) => {
+      const { crawlImpls } = await import('../crawImpl');
+      vi.mocked(crawlImpls.jina).mockRejectedValue(providerError());
+      vi.mocked(crawlImpls.naive).mockImplementation(next as any);
+
+      const result = await new Crawler({ impls: ['jina', 'naive'] }).crawl({
+        url: 'https://example.com',
+      });
+
+      expect(result.crawler).toBe('naive');
+      expect(result.data).toMatchObject({ errorType: type, retryable: false });
+    });
+
     it('should return an explicit upstream error when no impl is left', async () => {
       const { crawlImpls } = await import('../crawImpl');
       vi.mocked(crawlImpls.jina).mockRejectedValue(providerError());
