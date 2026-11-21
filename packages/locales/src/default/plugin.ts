@@ -18,6 +18,7 @@ export default {
   'builtins.lobe-channel.moreHistory': 'Earlier messages are available',
   'builtins.lobe-channel.empty': 'No messages are visible in this conversation.',
   'builtins.lobe-channel.apiName.readMessage': 'Read Channel message',
+  'builtins.lobe-channel.apiName.askUser': 'Ask with options',
   'builtins.lobe-channel.apiName.createThread': 'Open Thread',
   'builtins.lobe-channel.apiName.listThreads': 'List Threads',
   'builtins.lobe-channel.apiName.steerThread': 'Steer Thread',

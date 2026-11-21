@@ -1,4 +1,5 @@
 import type {
+  ChannelAskAnswerItem,
   ChannelDetail,
   ChannelJoinableItem,
   ChannelListItem,
@@ -33,6 +34,12 @@ export interface ChannelViewParams {
 }
 
 class ChannelService {
+  answerAsk = (input: {
+    answers: ChannelAskAnswerItem[];
+    channelId: string;
+    messageId: string;
+    requestKey: string;
+  }) => lambdaClient.channel.answerAsk.mutate(input);
   archive = (channelId: string) => lambdaClient.channel.archive.mutate({ channelId });
   unarchive = (channelId: string) => lambdaClient.channel.unarchive.mutate({ channelId });
   archiveThread = (channelId: string, threadId: string) =>

@@ -1668,6 +1668,7 @@ table channel_jobs {
   writer_held boolean [not null, default: false]
   isolated_at "timestamp with time zone"
   draft text
+  ask jsonb
   publication_revoked boolean [not null, default: false]
   published_message_id uuid
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1767,6 +1768,7 @@ table channel_messages {
   channel_id text [not null]
   thread_id text
   sequence integer [not null]
+  kind text [not null, default: 'text']
   content text [not null]
   user_id text
   agent_id text

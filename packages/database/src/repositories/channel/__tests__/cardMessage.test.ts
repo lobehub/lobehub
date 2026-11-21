@@ -32,6 +32,7 @@ describe('a contact card message', () => {
     });
 
     expect(sent.content).toBe('[Contact card] mia');
+    expect(sent.kind).toBe('contact');
     const [seen] = (await asOwner.detail(channel.id)).messages;
     expect(seen.card).toEqual({
       avatar: null,

@@ -1,8 +1,14 @@
-import type { ChannelReadMessageParams, ChannelReadMessagesParams } from '@lobechat/types';
+import type {
+  ChannelAskedUser,
+  ChannelAskUserParams,
+  ChannelReadMessageParams,
+  ChannelReadMessagesParams,
+} from '@lobechat/types';
+import { normalizeChannelAskInput } from '@lobechat/types';
 import { inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
-import { ChannelHistoryRepository } from '@/database/repositories/channel';
+import { ChannelError, ChannelHistoryRepository } from '@/database/repositories/channel';
 import { files } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
@@ -21,6 +27,19 @@ export class ChannelHistoryService {
   ) {
     this.repository = new ChannelHistoryRepository(db, userId, workspaceId);
   }
+
+  /** Holds the run's questions; publishing its reply posts them as an `ask` card. */
+  askUser = async (params: ChannelAskUserParams): Promise<ChannelAskedUser> => {
+    await assertChannelEnabled(this.userId);
+    let input;
+    try {
+      input = normalizeChannelAskInput(params);
+    } catch (error) {
+      throw new ChannelError('BAD_REQUEST', (error as Error).message);
+    }
+    await this.repository.ask(this.operationId, input);
+    return { questions: input.questions.length, status: 'posts_with_reply' };
+  };
 
   readMessages = async (params: ChannelReadMessagesParams) => {
     await assertChannelEnabled(this.userId);

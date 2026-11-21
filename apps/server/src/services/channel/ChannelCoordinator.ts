@@ -500,22 +500,26 @@ export class ChannelCoordinator {
         const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
         // A wake nobody asked for may end in silence. Settled like a reply, not a failure.
         // A run that stopped on a tool call (out of steps) did not choose silence: it failed.
-        const silence = final?.tools?.length
-          ? undefined
-          : detectNoReply({ content, wakeKind: job.wake?.kind });
+        // A run that asked its requester something always posts the questions, whatever it
+        // wrote around them: a card nobody sees cannot be answered.
+        const silence =
+          final?.tools?.length || job.ask
+            ? undefined
+            : detectNoReply({ content, wakeKind: job.wake?.kind });
         if (silence && (await this.executions.silence(channelId, jobId, silence.reason))) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);
           return;
         }
-        if (!content?.trim()) {
+        const text = job.ask && detectNoReply({ content, wakeKind: 'followup' }) ? '' : content;
+        if (!text?.trim() && !job.ask) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);
           return;
         }
         await this.executions.accepted(channelId, jobId);
-        await this.executions.saveDraft(channelId, jobId, content);
-        reply = content;
+        await this.executions.saveDraft(channelId, jobId, text ?? '');
+        reply = text ?? '';
       }
       const replyMessageId = await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
