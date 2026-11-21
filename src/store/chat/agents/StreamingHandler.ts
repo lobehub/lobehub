@@ -134,6 +134,9 @@ export class StreamingHandler {
    * Handle streaming finish
    */
   async handleFinish(finishData: FinishData): Promise<StreamingResult> {
+    // Buffered reasoning can reach the handler after the stop event.
+    this.endReasoningIfNeeded();
+
     // Update traceId
     if (finishData.traceId) {
       this.msgTraceId = finishData.traceId;
@@ -340,7 +343,7 @@ export class StreamingHandler {
   }
 
   private endReasoningIfNeeded(): void {
-    if (this.thinkingStartAt && !this.thinkingDuration) {
+    if (this.thinkingStartAt && this.thinkingDuration === undefined) {
       this.thinkingDuration = Date.now() - this.thinkingStartAt;
 
       if (this.reasoningOperationId) {
