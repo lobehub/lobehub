@@ -22,6 +22,7 @@ import {
   ChannelRepository,
   memberEnvironment,
 } from '@/database/repositories/channel';
+import { requirePeerRelation } from '@/database/repositories/channel/peer';
 import { channelMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
@@ -262,7 +263,7 @@ export class ChannelMessagingService {
 
   /**
    * Messages one person for the requester. Only people the requester could message by hand are
-   * reached (`requirePeer`: a mutual contact, or a fellow member or paired external contact in a
+   * reached (`requirePeerRelation`: a mutual contact, or a fellow member or paired external contact in a
    * workspace).
    *
    * A person who can talk to the Agent themselves (a fellow member of the workspace it lives in,
@@ -303,7 +304,9 @@ export class ChannelMessagingService {
         );
       throw error;
     };
-    await this.channels.requirePeer(userId).catch(unreachable);
+    await this.db
+      .transaction((tx) => requirePeerRelation(tx, this.workspaceId ?? null, this.userId, userId))
+      .catch(unreachable);
     const person = await new ContactModel(this.db, this.userId, this.workspaceId)
       .findUser(userId)
       .then((user) => (user ? toPerson(user) : { name: 'Unnamed', userId, username: null }));

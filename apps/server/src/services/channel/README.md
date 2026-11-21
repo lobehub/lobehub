@@ -274,7 +274,7 @@ and the external contacts paired with the requester. `lobe-channel.messagePerson
 reaches that person (`ChannelMessagingService.messagePerson`) in one of two places.
 
 - **Who can be reached.** Exactly the people the requester could message by hand
-  (`ChannelRepository.requirePeer` → `requirePeerRelation`), checked before either path.
+  (`requirePeerRelation`), checked before either path.
 - **From the Agent, when the person can reach it.** The person's own direct conversation with the
   Agent, opened as the person (`ChannelService.openDirect`: a fellow member of the workspace the
   Agent lives in, its owner, or someone who added its share), gets the message as the Agent's own

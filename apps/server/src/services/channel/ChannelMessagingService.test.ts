@@ -44,7 +44,6 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     directory = directory;
     openAgentPair = openAgentPair;
     postAgentMessage = (...args: unknown[]) => postAgentMessage(this.userId, ...args);
-    requirePeer = requirePeer;
   },
 }));
 vi.mock('@/database/models/contact', () => ({
@@ -59,6 +58,10 @@ vi.mock('@/database/models/workspace', () => ({
   },
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com/' } }));
+vi.mock('@/database/repositories/channel/peer', () => ({
+  requirePeerRelation: (_tx: unknown, _workspaceId: unknown, _userId: unknown, peer: string) =>
+    requirePeer(peer),
+}));
 vi.mock('./featureGate', () => ({ assertChannelEnabled: vi.fn() }));
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./ChannelService', () => ({
@@ -110,6 +113,7 @@ const otherDirect = {
 /** Answers the member environment lookup in `askAgent`. */
 const db = {
   select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ config: null }] }) }) }),
+  transaction: (fn: (tx: unknown) => unknown) => fn({}),
 };
 const current = {
   agents: [{ agentId: self.agentId, description: null, memberId: self.memberId, name: self.name }],
