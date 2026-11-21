@@ -87,6 +87,37 @@ export const formatScheduleDescription = (pattern: string, t: TFunction<'chat'>)
   }
 };
 
+const nextDailyScheduleFiring = (
+  now: Dayjs,
+  hour: number,
+  minute: number,
+  timezone: string,
+): Dayjs | null => {
+  // Use UTC for calendar arithmetic so the candidate retains the requested wall time.
+  const today = dayjs.utc(now.format('YYYY-MM-DD')).hour(hour).minute(minute);
+  // A daily slot can be missing on one date, so consider the day after tomorrow too.
+  for (let day = 0; day < 3; day += 1) {
+    const wallTime = today.add(day, 'day');
+    const offsets = new Set([
+      wallTime.subtract(1, 'day').tz(timezone).utcOffset(),
+      wallTime.add(1, 'day').tz(timezone).utcOffset(),
+    ]);
+    // Check both offsets on a transition. The larger offset gives the earlier instant
+    // in a repeated hour, and a skipped wall time does not round-trip with either.
+    for (const offset of [...offsets].sort((a, b) => b - a)) {
+      const candidate = wallTime.subtract(offset, 'minute').tz(timezone);
+      if (
+        candidate.valueOf() > now.valueOf() &&
+        candidate.format('YYYY-MM-DD HH:mm') === wallTime.format('YYYY-MM-DD HH:mm')
+      ) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+};
+
 /**
  * Compute the next firing time for a parsed cron schedule, in the given timezone.
  * Returns a Dayjs in `tz` so callers can format relative to user locale.
@@ -98,7 +129,7 @@ const computeNextScheduleFiring = (
   hourlyInterval: number | undefined,
   weekdays: number[] | undefined,
   tz: string,
-): Dayjs => {
+): Dayjs | null => {
   const now = dayjs().tz(tz);
 
   switch (scheduleType) {
@@ -112,9 +143,7 @@ const computeNextScheduleFiring = (
       return candidate;
     }
     case 'daily': {
-      let candidate = now.hour(triggerHour).minute(triggerMinute).second(0).millisecond(0);
-      if (!candidate.isAfter(now)) candidate = candidate.add(1, 'day');
-      return candidate;
+      return nextDailyScheduleFiring(now, triggerHour, triggerMinute, tz);
     }
     case 'weekly': {
       const days = weekdays && weekdays.length > 0 ? weekdays : [0, 1, 2, 3, 4, 5, 6];
