@@ -5,6 +5,13 @@
  */
 export interface QuotaDeviceAccount {
   accountId: string | null;
+  /**
+   * Accounts with a login recorded on that device: the only ones a Manual
+   * pick there can name (`setDeviceAccount` refuses the rest). A desktop
+   * syncs its full set; any other device records an account once a quota
+   * sample is read there.
+   */
+  signedInAccountIds: string[];
 }
 
 /**
