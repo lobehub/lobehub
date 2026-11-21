@@ -13,6 +13,7 @@ Do not report:
 - inline cell editing in data tables and spreadsheets;
 - rename or create on nodes of any file / folder tree or explorer list (ResourceManager, FileTree, ExplorerTree, DocumentExplorerTree, LibraryHierarchy), from double-click or a context menu — the OS file-manager convention;
 - inline editing inside a component that is itself a modal (`*Modal`, rendered through `createModal`);
+- a titled section card on a settings or detail page whose Edit button turns the card's whole read-only body into a complete multi-field form (two or more fields, for example logo + name + description) with explicit Cancel and Save buttons: the card has room for the form, so editing in place is accepted ("这个就地编辑没问题啊？因为面积够大"). This does not exempt a single title, name, list row or one-field swap, even when it sits inside such a card;
 - a persistent add-row that is always visible, and a title that is always an input (a page title editor);
 - a menu action that only sets state which opens a modal. Report only when you can see this file render the inline input in place of the text.
 
