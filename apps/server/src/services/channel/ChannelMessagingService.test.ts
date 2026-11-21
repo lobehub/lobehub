@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelMessagingService } from './ChannelMessagingService';
 
-const { directory, findUser, listPeople, openAgentPair, openPeer, relaySource, send } = vi.hoisted(
-  () => ({
+const { canUseAgent, directory, findUser, listPeople, openAgentPair, openPeer, relaySource, send } =
+  vi.hoisted(() => ({
+    canUseAgent: vi.fn(),
     directory: vi.fn(),
     findUser: vi.fn(),
     listPeople: vi.fn(),
@@ -12,14 +13,14 @@ const { directory, findUser, listPeople, openAgentPair, openPeer, relaySource, s
     openPeer: vi.fn(),
     relaySource: vi.fn(),
     send: vi.fn(),
-  }),
-);
+  }));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelHistoryRepository: class {
     relaySource = relaySource;
   },
   ChannelRepository: class {
+    canUseAgent = canUseAgent;
     directory = directory;
     openAgentPair = openAgentPair;
   },
@@ -92,6 +93,7 @@ describe('ChannelMessagingService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     relaySource.mockResolvedValue(run());
+    canUseAgent.mockResolvedValue(true);
     directory.mockResolvedValue([current, lobehub]);
     send.mockResolvedValue({ id: 'message-sent' });
   });
@@ -201,6 +203,25 @@ describe('ChannelMessagingService', () => {
     // No channelId at all: found through listChannels' directory.
     await service().sendMessage({ agentIds: ['agent-lobehub'], content: 'And T-2?' }, 'call-2');
     expect(send.mock.calls[1][0]).toBe('channel-pair');
+  });
+
+  it("relays to another person's shared Agent in its shared conversation, which alone runs it", async () => {
+    directory.mockResolvedValue([current, lobehub, otherDirect]);
+    canUseAgent.mockResolvedValue(false);
+
+    await service().sendMessage(
+      { agentIds: ['agent-lobehub'], channelId: 'channel-lobehub', content: 'Is T-1 fixed?' },
+      'call-1',
+    );
+    expect(openAgentPair).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(
+      'channel-direct',
+      expect.objectContaining({
+        content: '@LobeHub Is T-1 fixed?',
+        mentions: ['member-direct'],
+        metadata: { via: expect.objectContaining({ agentId: 'agent-self' }) },
+      }),
+    );
   });
 
   it('refuses relays that would loop, target the current Channel or miss the Agent', async () => {

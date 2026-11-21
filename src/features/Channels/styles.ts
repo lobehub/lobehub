@@ -199,6 +199,24 @@ export const styles = stylex.create({
   eventMemberAgent: {
     cursor: 'pointer',
   },
+  /** A quiet link at the end of a system line, e.g. to open a conversation between Agents. */
+  eventAction: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 2,
+    marginInlineStart: 8,
+    padding: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    lineHeight: 'inherit',
+    color: {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorText,
+    },
+    cursor: 'pointer',
+  },
   eventMemberName: {
     // Let the name supply the inline flex baseline instead of the avatar.
     alignSelf: 'baseline',

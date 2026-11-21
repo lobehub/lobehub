@@ -33,6 +33,8 @@ export const presentChannelTimeline = (
       previous?.kind === 'message' &&
       !breaksAfter.has(previous.message.id) &&
       sameAuthor(item.message, previous.message) &&
+      // A report from an exchange between Agents opens with its own "Messages from" line.
+      !(item.message.receipt && !item.message.via) &&
       item.message.threadId === previous.message.threadId &&
       item.message.replyToId === previous.message.replyToId;
 

@@ -20,9 +20,9 @@ import {
   channelMessages,
   channels,
   channelThreads,
-  workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentUsableByWhere } from '../../utils/agent-access';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
@@ -37,6 +37,7 @@ import {
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
+import { callerRole, membershipWhere } from './caller';
 import { deleteMessage } from './delete';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
@@ -114,9 +115,6 @@ const ROLE_RANK: Record<ChannelMemberRole, number> = { admin: 1, member: 0, owne
 
 const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
   ROLE_RANK[role ?? 'member'] >= ROLE_RANK[minRole];
-
-/** Workspace roles that manage every group Channel they belong to in that workspace. */
-const WORKSPACE_MANAGER_ROLES = ['owner', 'admin'];
 
 /**
  * Membership-scoped access to channels.
@@ -563,7 +561,7 @@ export class ChannelRepository {
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
         pinnedAt: channelMembers.pinnedAt,
-        role: this.callerRole(),
+        role: callerRole(this.userId, this.workspaceId),
         sectionId: channelMembers.sectionId,
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
@@ -572,7 +570,7 @@ export class ChannelRepository {
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .leftJoin(agents, eq(agents.id, channels.agentId))
       .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
-      .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
+      .where(and(membershipWhere(this.userId, this.workspaceId), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
     const open = await listUnjoinedOpenChannels(this.db, this.userId, this.workspaceId);
     const previewIds = [...rows.map(({ channel }) => channel.id), ...open.map(({ id }) => id)];
@@ -770,6 +768,24 @@ export class ChannelRepository {
       return { channel, member };
     });
 
+  /**
+   * Whether the caller may run the Agent anywhere (their own or their workspace's), as opposed to
+   * an Agent another person shared with them, which runs only in its shared direct conversation.
+   */
+  canUseAgent = async (agentId: string): Promise<boolean> => {
+    const [agent] = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        agentUsableByWhere(agentId, {
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? undefined,
+        }),
+      )
+      .limit(1);
+    return !!agent;
+  };
+
   /** The conversation in which one of the caller's Agents asks another. See {@link openAgentPair}. */
   openAgentPair = (params: Parameters<typeof openAgentPair>[2]): Promise<ChannelAgentPairAccess> =>
     this.db.transaction((tx) =>
@@ -797,7 +813,11 @@ export class ChannelRepository {
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .where(
-        and(this.membershipWhere(), notTrashed(channels.isDeleted), eq(channels.status, 'active')),
+        and(
+          membershipWhere(this.userId, this.workspaceId),
+          notTrashed(channels.isDeleted),
+          eq(channels.status, 'active'),
+        ),
       )
       .orderBy(desc(channels.createdAt));
     if (!rows.length) return [];
@@ -854,7 +874,7 @@ export class ChannelRepository {
       .select({ channel: channels, member: channelMembers })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
-      .where(and(eq(channels.id, channelId), this.membershipWhere()))
+      .where(and(eq(channels.id, channelId), membershipWhere(this.userId, this.workspaceId)))
       .limit(1);
 
     return row;
@@ -879,10 +899,14 @@ export class ChannelRepository {
       // Read membership only after the lock: a removal or demotion committed by the previous
       // lock holder must be visible here, not the snapshot from before the wait.
       const [row] = await tx
-        .select({ channel: channels, member: channelMembers, role: this.callerRole() })
+        .select({
+          channel: channels,
+          member: channelMembers,
+          role: callerRole(this.userId, this.workspaceId),
+        })
         .from(channels)
         .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
-        .where(and(eq(channels.id, channelId), this.membershipWhere()))
+        .where(and(eq(channels.id, channelId), membershipWhere(this.userId, this.workspaceId)))
         .limit(1);
       let access: ChannelAccess | undefined = row && {
         channel: row.channel,
@@ -1165,40 +1189,10 @@ export class ChannelRepository {
         and(
           eq(channels.agentId, agentId),
           eq(channels.userId, this.userId),
-          this.membershipWhere(),
+          membershipWhere(this.userId, this.workspaceId),
         ),
       )
       .limit(1);
     return row;
   };
-
-  /**
-   * The caller's role as permission checks see it. A workspace owner or admin counts at least as
-   * an admin of the group Channels they belong to in that workspace; direct and peer
-   * conversations stay with their participants. The stored member row keeps its own role.
-   */
-  private callerRole() {
-    if (!this.workspaceId) return sql<ChannelMemberRole | null>`${channelMembers.role}`;
-    return sql<ChannelMemberRole | null>`CASE
-      WHEN ${channelMembers.role} = 'owner' THEN ${channelMembers.role}
-      WHEN ${channels.agentId} IS NULL AND ${channels.peerUserId} IS NULL AND EXISTS (
-        SELECT 1 FROM ${workspaceMembers}
-        WHERE ${workspaceMembers.workspaceId} = ${channels.workspaceId}
-          AND ${workspaceMembers.userId} = ${this.userId}
-          AND ${workspaceMembers.deletedAt} IS NULL
-          AND ${inArray(workspaceMembers.role, WORKSPACE_MANAGER_ROLES)}
-      ) THEN 'admin'
-      ELSE ${channelMembers.role}
-    END`;
-  }
-
-  private membershipWhere() {
-    return and(
-      eq(channelMembers.actorType, 'user'),
-      eq(channelMembers.userId, this.userId),
-      eq(channelMembers.status, 'active'),
-      or(isNull(channels.agentId), eq(channels.userId, this.userId)),
-      this.workspaceId ? eq(channels.workspaceId, this.workspaceId) : isNull(channels.workspaceId),
-    );
-  }
 }

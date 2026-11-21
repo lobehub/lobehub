@@ -132,6 +132,48 @@ const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
 };
 
+/**
+ * The conversations named in receipts that the viewer can open. An Agent's report from an
+ * exchange between Agents can land in a group, while that conversation has only the person who
+ * asked as a member: everyone else sees the report but cannot open where it came from.
+ */
+const openableReceiptChannels = async (
+  tx: Transaction,
+  rows: MessageRow[],
+  viewerUserId: string | undefined,
+) => {
+  const ids = [
+    ...new Set(rows.flatMap((row) => channelMessageReceipt(row.metadata)?.channelId ?? [])),
+  ];
+  if (!viewerUserId || !ids.length) return new Set<string>();
+  // A Channel in the recycle bin no longer opens, though its memberships remain.
+  const found = await tx
+    .select({ channelId: channelMembers.channelId })
+    .from(channelMembers)
+    .innerJoin(channels, eq(channels.id, channelMembers.channelId))
+    .where(
+      and(
+        inArray(channelMembers.channelId, ids),
+        notTrashed(channels.isDeleted),
+        eq(channelMembers.actorType, 'user'),
+        eq(channelMembers.userId, viewerUserId),
+        eq(channelMembers.status, 'active'),
+      ),
+    );
+  return new Set(found.map(({ channelId }) => channelId));
+};
+
+const withReceiptAccess = <T extends { receipt?: { channelId: string } | null }>(
+  message: T,
+  openable: Set<string>,
+): T =>
+  message.receipt
+    ? {
+        ...message,
+        receipt: { ...message.receipt, canOpen: openable.has(message.receipt.channelId) },
+      }
+    : message;
+
 type AvatarAgent = { agentId: string; avatar: string | null };
 const withRelayAvatar = <
   T extends {
@@ -661,10 +703,11 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works, relayAvatars] = await Promise.all([
+  const [sourceTopics, works, relayAvatars, openable] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
     externalWorksByMessage(tx, channelId, replyIds),
     relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
+    openableReceiptChannels(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
   ]);
   const ids = [...new Set([...files.values()].flat())];
   const attachments = ids.length
@@ -723,9 +766,12 @@ export const readChannelView = async (
     }),
     rootMessage: rootMessage
       ? {
-          ...withRelayAvatar(
-            publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
-            relayAvatars,
+          ...withReceiptAccess(
+            withRelayAvatar(
+              publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+              relayAvatars,
+            ),
+            openable,
           ),
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
@@ -734,7 +780,10 @@ export const readChannelView = async (
         }
       : null,
     messages: page.map((message) => ({
-      ...withRelayAvatar(publicMessage(message, files.get(message.id) ?? []), relayAvatars),
+      ...withReceiptAccess(
+        withRelayAvatar(publicMessage(message, files.get(message.id) ?? []), relayAvatars),
+        openable,
+      ),
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],

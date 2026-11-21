@@ -213,4 +213,33 @@ describe('A conversation between Agents', () => {
     const [reply] = await db.select().from(channelMessages).where(eq(channelMessages.id, replyId));
     expect(reply.routingStatus).toBe('reply');
   });
+  it('lets only members of the conversation between Agents open it from a report', async () => {
+    const { answerer, asker, pair } = await setup();
+    const team = await fixture.createTeamChannel();
+    await team.asOwner.addAgent(team.channel.id, { agentId: asker.id, config: {}, name: 'Asker' });
+    const report = await team.asOwner.postAgentMessage(team.channel.id, {
+      agentId: asker.id,
+      content: 'T-1 is not fixed yet.',
+      metadata: {
+        receipt: {
+          agent: { agentId: answerer.id, name: 'Answerer' },
+          channelId: pair.channel.id,
+          channelTitle: pair.channel.title,
+          messageId: 'reply-1',
+        },
+      },
+      requestKey: 'report',
+    });
+
+    const receiptFor = async (repository: ChannelRepository) =>
+      (await repository.detail(team.channel.id)).messages.find(({ id }) => id === report.id)
+        ?.receipt;
+    // The person who asked owns the conversation between the Agents; another member does not.
+    expect(await receiptFor(team.asOwner)).toMatchObject({ canOpen: true });
+    expect(await receiptFor(team.asMember)).toMatchObject({ canOpen: false });
+
+    // Once the person moves it to the recycle bin, it no longer opens.
+    await new ChannelRepository(db, fixture.ownerId, fixture.workspaceId).remove(pair.channel.id);
+    expect(await receiptFor(team.asOwner)).toMatchObject({ canOpen: false });
+  });
 });
