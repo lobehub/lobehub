@@ -706,6 +706,51 @@ describe('FileS3', () => {
       );
     });
 
+    it('continues listing when the truncation flag is absent and the marker advances', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend
+        .mockResolvedValueOnce({
+          NextPartNumberMarker: '1',
+          Parts: [{ ETag: 'etag-1', PartNumber: 1 }],
+        })
+        .mockResolvedValueOnce({
+          IsTruncated: false,
+          Parts: [{ ETag: 'etag-2', PartNumber: 2 }],
+        })
+        .mockResolvedValue({});
+
+      await s3.completeMultipartUpload('large.bin', 'upload-1', 2);
+
+      expect(ListPartsCommand).toHaveBeenCalledTimes(2);
+      expect(ListPartsCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({ PartNumberMarker: '1' }),
+      );
+      expect(CompleteMultipartUploadCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([true, false])(
+      'rejects an oversized part listing before another request (IsTruncated=%s)',
+      async (isTruncated) => {
+        const s3 = new FileS3();
+        mockS3ClientSend
+          .mockResolvedValueOnce({
+            IsTruncated: isTruncated,
+            NextPartNumberMarker: '2',
+            Parts: [
+              { ETag: 'etag-1', PartNumber: 1 },
+              { ETag: 'etag-2', PartNumber: 2 },
+            ],
+          })
+          .mockResolvedValue({});
+
+        await expect(s3.completeMultipartUpload('large.bin', 'upload-1', 1)).rejects.toThrow(
+          'listed more than 1 parts',
+        );
+        expect(ListPartsCommand).toHaveBeenCalledTimes(1);
+        expect(CompleteMultipartUploadCommand).not.toHaveBeenCalled();
+      },
+    );
+
     it('follows truncated part listings and stops when the marker does not advance', async () => {
       const s3 = new FileS3();
       mockS3ClientSend

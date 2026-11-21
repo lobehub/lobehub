@@ -286,7 +286,7 @@ export class S3 {
    * and `'0'` on the empty page after it, so the SDK paginator re-lists the parts
    * forever and the request hangs until the gateway times out.
    */
-  private async listMultipartParts(key: string, uploadId: string) {
+  private async listMultipartParts(key: string, uploadId: string, expectedPartCount: number) {
     const parts = new Map<number, { ETag: string; PartNumber: number; Size?: number }>();
     let marker: string | undefined;
 
@@ -309,9 +309,15 @@ export class S3 {
         });
       }
 
+      if (parts.size > expectedPartCount) {
+        throw new Error(
+          `S3 multipart upload ${uploadId} listed more than ${expectedPartCount} parts`,
+        );
+      }
+
       const next = result.NextPartNumberMarker;
-      // Stop on the last page, and on any marker that does not move forward.
-      if (!result.IsTruncated || !next || Number(next) <= Number(marker ?? 0)) {
+      // Some S3-compatible stores omit the flag on a page with a valid next marker.
+      if (result.IsTruncated === false || !next || Number(next) <= Number(marker ?? 0)) {
         return [...parts.values()];
       }
       marker = next;
@@ -333,7 +339,7 @@ export class S3 {
       uploadedParts && !expectedFile ? [...uploadedParts] : [];
 
     if (!uploadedParts || expectedFile)
-      parts.push(...(await this.listMultipartParts(key, uploadId)));
+      parts.push(...(await this.listMultipartParts(key, uploadId, expectedPartCount)));
 
     parts.sort((a, b) => a.PartNumber - b.PartNumber);
     const hasAllParts =
