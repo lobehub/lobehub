@@ -5,6 +5,7 @@ import mimetypes
 import os
 from pathlib import Path
 from typing import IO, Any, Dict, List, Mapping, Optional, Tuple, Union
+from uuid import uuid4
 
 FileContent = Union[bytes, bytearray, IO[bytes]]
 
@@ -81,6 +82,9 @@ def _form_value(value: object) -> str:
 MultipartParts = Tuple[Dict[str, Union[str, List[str]]], List[Tuple[str, UploadFile]]]
 """Form fields and `(field, file)` parts, ready for httpx's `data=` and `files=`."""
 
+EncodedMultipart = Tuple[bytes, str]
+"""An already encoded multipart body and the `Content-Type` header it belongs to."""
+
 
 def split_multipart(body: Mapping[str, Any]) -> MultipartParts:
     """Split a multipart body into form fields and files (lists send one part per file)."""
@@ -105,3 +109,42 @@ def split_multipart(body: Mapping[str, Any]) -> MultipartParts:
         else:
             data[key] = _form_value(value)
     return data, files
+
+
+def _quote(value: str) -> str:
+    """A form parameter value safe inside a quoted `Content-Disposition` header."""
+    return value.replace("\r", " ").replace("\n", " ").replace('"', "%22")
+
+
+def encode_multipart(
+    data: Mapping[str, Union[str, List[str]]],
+    files: List[Tuple[str, UploadFile]],
+    boundary: Optional[str] = None,
+) -> EncodedMultipart:
+    """
+    Encode a multipart body to bytes with one fixed boundary.
+
+    The bytes have to be stable across retries: the server fingerprints the raw
+    body under an `Idempotency-Key`, so a freshly generated boundary would make a
+    legitimate resend look like a different request (422 `idempotency_conflict`).
+    """
+    delimiter = boundary or uuid4().hex
+    chunks: List[bytes] = []
+    for key, value in data.items():
+        for item in value if isinstance(value, list) else [value]:
+            chunks.append(
+                f'--{delimiter}\r\nContent-Disposition: form-data; name="{_quote(key)}"\r\n\r\n'.encode()
+            )
+            chunks.append(f"{item}\r\n".encode())
+    for field, (name, content, content_type) in files:
+        chunks.append(
+            (
+                f"--{delimiter}\r\n"
+                f'Content-Disposition: form-data; name="{_quote(field)}"; filename="{_quote(name)}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode()
+        )
+        chunks.append(content)
+        chunks.append(b"\r\n")
+    chunks.append(f"--{delimiter}--\r\n".encode())
+    return b"".join(chunks), f"multipart/form-data; boundary={delimiter}"

@@ -99,3 +99,19 @@ def test_a_retried_upload_resends_the_file_object_bytes(server: MockServer, slee
     assert [request.multipart()[1] for request in server.requests] == [
         [("files", "file", "application/octet-stream", b"HELLO")]
     ] * 2
+
+
+def test_a_retried_upload_resends_the_same_encoded_body(server: MockServer, sleeps: List[float]) -> None:
+    server.reply(Reply(503, api_error("service_unavailable")), Reply(201, envelope({"successful": []})))
+    client = LobeHub(api_key=API_KEY, base_url=server.base_url)
+
+    client.files.upload_batch({"files": [io.BytesIO(b"HELLO")]}, idempotency_key="k1")
+
+    bodies = [record.body for record in server.requests]
+    headers = [record.headers["content-type"] for record in server.requests]
+    # The server fingerprints the raw body under an Idempotency-Key: a rebuilt
+    # multipart would carry a new boundary and be answered 422 instead of replaying.
+    assert len(bodies) == 2 and bodies[0] == bodies[1]
+    assert headers[0] == headers[1]
+    assert headers[0].split("boundary=")[1].encode() in bodies[0]
+    assert b'name="files"; filename="file"' in bodies[0] and b"HELLO" in bodies[0]

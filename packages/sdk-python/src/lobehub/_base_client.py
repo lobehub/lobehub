@@ -24,7 +24,7 @@ from ._errors import (
     parse_retry_after,
 )
 from ._response import BinaryResponse
-from ._uploads import MultipartParts, split_multipart
+from ._uploads import EncodedMultipart, encode_multipart, split_multipart
 from ._version import __version__
 
 #: An OIDC access token, or a function returning the current one (called before every request).
@@ -172,7 +172,7 @@ class BaseClient:
         query: Optional[Mapping[str, Any]],
         headers: Optional[Mapping[str, Optional[str]]],
         json: Any,
-        multipart: Optional[MultipartParts],
+        multipart: Optional[EncodedMultipart],
         extra_headers: Optional[Mapping[str, str]],
         extra_query: Optional[Mapping[str, object]],
         extra_body: Optional[Mapping[str, object]],
@@ -191,8 +191,12 @@ class BaseClient:
         }
         content: Dict[str, Any] = {}
         if multipart is not None:
-            data, files = multipart
-            content = {"data": data, "files": files}
+            # The body is encoded once per call and resent verbatim: httpx would pick a
+            # new boundary on every attempt, and the server's Idempotency-Key fingerprint
+            # hashes the raw bytes, so a rebuilt multipart looks like a different request.
+            body, content_type = multipart
+            merged.setdefault("Content-Type", content_type)
+            content = {"content": body}
         elif extra_body is not None:
             # Fields the spec does not (yet) describe ride along with the typed body.
             content = {"json": {**(json or {}), **extra_body}}
@@ -231,10 +235,13 @@ class BaseClient:
     @staticmethod
     def _split_multipart(
         multipart: Optional[Mapping[str, Any]], extra_body: Optional[Mapping[str, object]]
-    ) -> Optional[MultipartParts]:
-        # Read file sources once, before the retry loop: a file object is at EOF after
-        # the first read, so re-reading it per attempt would resend an empty file.
-        return None if multipart is None else split_multipart({**multipart, **(extra_body or {})})
+    ) -> Optional[EncodedMultipart]:
+        # Encode the whole body once, before the retry loop: a file object is at EOF
+        # after the first read, and a fresh boundary per attempt would change the raw
+        # bytes the server hashes under an Idempotency-Key. Both would break a resend.
+        if multipart is None:
+            return None
+        return encode_multipart(*split_multipart({**multipart, **(extra_body or {})}))
 
     def _retry_delay(self, attempt: int, response: Optional[httpx.Response]) -> Optional[float]:
         """Seconds to wait before the next attempt, or None to give up and return `response`."""
