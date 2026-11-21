@@ -54,6 +54,9 @@ const CONTENT_SIGNALS: [Exclude<SkillEgressContentType, 'unknown'>, RegExp][] = 
 
 const MAX_DEFAULT_LENGTH = 200;
 
+/** A sample value in place of a key: the script still cannot authenticate with it. */
+const PLACEHOLDER_DEFAULT = /your|x{3,}|change.?me|placeholder|replace|example|dummy|todo|^<.*>$/i;
+
 /** One doc sentence says one thing about the credentials it names. */
 const DOC_SENTENCE = /\n|(?<=[.!?;])\s+|(?<=[。！？；])/;
 
@@ -198,7 +201,13 @@ export const scanSkillFiles = (files: SkillPackageFile[]): SkillRequirements => 
   }
 
   const toUsage = (name: string): SkillEnvVarUsage => {
-    const finding = findings.get(name);
+    const found = findings.get(name);
+    const finding =
+      found?.hasDefault &&
+      isCredentialName(name) &&
+      PLACEHOLDER_DEFAULT.test(found.defaultValue ?? '')
+        ? { ...found, defaultValue: null, hasDefault: false, requirement: 'unknown' as const }
+        : found;
     const doc = docRequirements.get(name);
     // The code is the better witness; docs only settle what the code leaves open.
     const requirement =

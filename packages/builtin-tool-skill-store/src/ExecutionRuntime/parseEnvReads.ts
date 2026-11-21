@@ -16,9 +16,15 @@ export interface EnvFinding {
   requirement: SkillEnvRequirement;
 }
 
+/** `unresolved`: a name this file gives no string value for, so it may be empty or None. */
+interface Fallback {
+  unresolved?: boolean;
+  value: string | null;
+}
+
 interface EnvRead {
   end: number;
-  fallback?: { value: string | null };
+  fallback?: Fallback;
   name: string;
   /** Where a read passed as this read's default starts: `getenv("A", getenv("B"))` */
   nestedStart?: number;
@@ -133,7 +139,7 @@ const parseFallback = (
   token: string | undefined,
   constants: Map<string, string>,
   after = '',
-): { value: string | null } | undefined => {
+): Fallback | undefined => {
   if (!token || NO_VALUE.has(token)) return undefined;
   const next = after.trimStart()[0];
   if (next === '(') return undefined;
@@ -145,7 +151,7 @@ const parseFallback = (
     return { value: isComputed || (token[0] === '`' && value.includes('${')) ? null : value };
   }
   const constant = constants.get(token);
-  if (constant === undefined || isComputed) return { value: null };
+  if (constant === undefined || isComputed) return { unresolved: true, value: null };
   return constant ? { value: constant } : undefined;
 };
 
@@ -214,7 +220,7 @@ const addToChain = (chain: EnvRead[], read: EnvRead, reads: Map<number, EnvRead>
   }
 };
 
-const toFinding = (read: EnvRead, chain: EnvRead[], terminal?: { value: string | null }) => {
+const toFinding = (read: EnvRead, chain: EnvRead[], terminal?: Fallback) => {
   // A strict read raises when unset, so nothing after it can stand in for it.
   const strictIndex = chain.findIndex((item) => item.strict);
   const reachable = strictIndex === -1 ? chain : chain.slice(0, strictIndex + 1);
@@ -228,9 +234,20 @@ const toFinding = (read: EnvRead, chain: EnvRead[], terminal?: { value: string |
     } satisfies EnvFinding;
   }
 
-  const fallback =
-    reachable.find((item) => item.fallback)?.fallback ??
-    (strictIndex === -1 ? terminal : undefined);
+  const fallbacks = [
+    ...reachable.flatMap((item) => (item.fallback ? [item.fallback] : [])),
+    ...(strictIndex === -1 && terminal ? [terminal] : []),
+  ];
+  const fallback = fallbacks.find((item) => !item.unresolved);
+  if (!fallback && fallbacks.length > 0) {
+    return {
+      alternatives: [],
+      defaultValue: null,
+      hasDefault: false,
+      name: read.name,
+      requirement: 'unknown',
+    } satisfies EnvFinding;
+  }
   const names = [...new Set(reachable.map((item) => item.name))];
   const requirement: SkillEnvRequirement = fallback
     ? 'optional'
@@ -260,11 +277,10 @@ const parseShellReads = (code: string): EnvFinding[] => {
         name,
         requirement: 'required',
       });
-    } else if (word) {
-      const value = word.replace(/^(["'])(.*)\1$/, '$2');
+    } else if (word && !word.includes('$')) {
       findings.push({
         alternatives: [],
-        defaultValue: value.includes('$') ? null : value,
+        defaultValue: word.replace(/^(["'])(.*)\1$/, '$2'),
         hasDefault: true,
         name,
         requirement: 'optional',
@@ -302,7 +318,7 @@ export const parseEnvReads = (code: string, isShell: boolean): EnvFinding[] => {
     if (visited.has(read.start)) continue;
     const chain: EnvRead[] = [];
     addToChain(chain, read, reads);
-    let terminal: { value: string | null } | undefined;
+    let terminal: Fallback | undefined;
     let cursor = read.end;
 
     for (;;) {

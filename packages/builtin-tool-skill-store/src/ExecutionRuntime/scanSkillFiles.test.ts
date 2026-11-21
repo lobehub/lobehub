@@ -267,6 +267,38 @@ describe('scanSkillFiles', () => {
     });
   });
 
+  it('does not call a variable optional when its default may be empty', () => {
+    const result = scanSkillFiles([
+      {
+        content: [
+          'DEFAULT_KEY = None',
+          'a = os.getenv("VENDOR_API_KEY", DEFAULT_KEY)',
+          'b = os.getenv("IMPORTED_URL", settings.BASE)',
+          'c = os.getenv("SAMPLE_API_KEY", "your-api-key-here")',
+          'd = os.getenv("KNOWN_URL") or os.getenv("OTHER_URL", UNSET) or "https://api.acme.io"',
+        ].join('\n'),
+        path: 'scripts/a.py',
+      },
+      { content: 'curl "${SHELL_URL:-$FALLBACK_URL}"', path: 'scripts/b.sh' },
+    ]);
+    const need = Object.fromEntries(
+      [...result.credentials, ...result.settings].map((v) => [
+        v.name,
+        [v.requirement, v.hasDefault, v.defaultValue],
+      ]),
+    );
+
+    expect(result.requiresApiKey).toBe(true);
+    expect(need).toEqual({
+      IMPORTED_URL: ['unknown', false, null],
+      KNOWN_URL: ['optional', true, 'https://api.acme.io'],
+      OTHER_URL: ['optional', true, 'https://api.acme.io'],
+      SAMPLE_API_KEY: ['unknown', false, null],
+      SHELL_URL: ['unknown', false, null],
+      VENDOR_API_KEY: ['unknown', false, null],
+    });
+  });
+
   it('keeps a strict read required when it comes first in a chain', () => {
     const { credentials, settings } = scanSkillFiles([
       {
