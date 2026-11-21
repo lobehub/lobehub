@@ -65,6 +65,7 @@ export { LobeGoogleAI } from './providers/google';
 export * from './providers/google/modelId';
 export { LobeGroq } from './providers/groq';
 export { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
+export { LobeLiveKitAI } from './providers/livekit';
 export { LobeHubAI } from './providers/lobehub';
 export { LobeLongCatAI } from './providers/longcat';
 export { LobeMinimaxAI } from './providers/minimax';
