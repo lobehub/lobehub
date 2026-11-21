@@ -1,17 +1,18 @@
 ---
 title: Configuring Cloud Sandbox
 description: >-
-  Configure the built-in Cloud Sandbox provider, including Market and
-  self-hosted Onlyboxes.
+  Configure the built-in Cloud Sandbox provider, including Market,
+  self-hosted Onlyboxes and boxd.
 tags:
   - Cloud Sandbox
   - Onlyboxes
+  - boxd
   - Self-hosting
 ---
 
 # Configuring Cloud Sandbox
 
-Cloud Sandbox powers the built-in code execution, shell command, file operation, and file export tools. By default, LobeHub uses the Market sandbox. Self-hosted deployments can switch the same tool surface to an Onlyboxes-compatible sandbox provider.
+Cloud Sandbox powers the built-in code execution, shell command, file operation, and file export tools. By default, LobeHub uses the Market sandbox. Self-hosted deployments can switch the same tool surface to an Onlyboxes-compatible sandbox provider or to boxd.
 
 ## Core Environment Variables
 
@@ -26,6 +27,7 @@ Supported values:
 
 - `market`: Use the existing Market sandbox.
 - `onlyboxes`: Use an Onlyboxes-compatible self-hosted sandbox console.
+- `boxd`: Run each sandbox on a [boxd](https://boxd.sh) cloud computer.
 
 ### `MARKET_BASE_URL`
 
@@ -83,6 +85,48 @@ Supported values:
 - Default: `900`
 - Example: `3600`
 
+### `BOXD_API_KEY`
+
+- Type: Required when `SANDBOX_PROVIDER=boxd`
+- Description: boxd API key. A key belongs to one boxd organization, which owns and pays for every computer LobeHub creates. Create one with `boxd auth keys create lobehub`. It stays on the LobeHub server and never enters a computer.
+- Default: -
+- Example: `bxd_xxxxxxxx`
+
+### `BOXD_REGION`
+
+- Type: Optional
+- Description: The boxd region computers are created in: `fra` (Frankfurt) or `nyc` (New York). Pick the region closest to the LobeHub server, because every tool call and file transfer crosses that link. The organization's default region in boxd does not apply here.
+- Default: `fra`
+- Example: `nyc`
+
+### `BOXD_SNAPSHOT`
+
+- Type: Optional
+- Description: A boxd snapshot every computer starts from, for packages and files that should be there before the first command. Without it, computers start from the boxd base image.
+- Default: -
+- Example: `lobehub-base`
+
+### `BOXD_VCPU`
+
+- Type: Optional
+- Description: Size of each computer: `1` (4 GB memory), `2` (8 GB), `4` (16 GB) or `8` (32 GB). A computer started from `BOXD_SNAPSHOT` keeps the snapshot's size.
+- Default: The organization's default size
+- Example: `4`
+
+### `BOXD_LEASE_TTL_SEC`
+
+- Type: Optional
+- Description: How long a topic's computer is kept after its last tool call. While the topic is in use, the deletion is pushed back at most once a minute. `0` keeps computers until you delete them. Any other value must be at least `600`.
+- Default: `900`
+- Example: `3600`
+
+### `BOXD_BASE_URL`
+
+- Type: Optional
+- Description: boxd API endpoint. Only needed for a dedicated boxd deployment.
+- Default: `https://boxd.sh:9443`
+- Example: `https://boxd.example.com:9443`
+
 ## Market Configuration
 
 By default, LobeHub uses the official Market sandbox and does not require extra sandbox configuration:
@@ -135,4 +179,33 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
 <Callout type={'info'}>
   File export still writes the exported artifact to the configured LobeHub S3 storage. Configure the
   S3 environment variables when users need to download files generated inside the sandbox.
+</Callout>
+
+## boxd Configuration
+
+[boxd](https://boxd.sh) runs each sandbox on its own cloud computer: a KVM virtual machine with a 100 GB disk, created in under a second. LobeHub gives each topic one computer, created by the first tool call, so files, installed packages and background processes stay between calls.
+
+Minimum configuration for using boxd:
+
+```bash
+SANDBOX_PROVIDER=boxd
+BOXD_API_KEY=bxd_xxxxxxxx
+# The region closest to this server
+BOXD_REGION=fra
+```
+
+How LobeHub uses boxd computers:
+
+- Each computer is named `lobehub-<hash>` after its topic and labelled `app=lobehub`, so a restarted server finds the same computer again. `boxd machine list --label app=lobehub` lists them.
+- Computers are created isolated: code the model writes has no route to the boxd API, to the organization's integrations or to its other machines. The API key stays on the LobeHub server.
+- A computer can reach the internet; there is no egress allowlist. It also keeps the public HTTPS address boxd gives every machine, `https://<computer>.boxd.sh` (`<computer>.nyc.boxd.sh` in `nyc`), which forwards to whatever a command leaves listening on port 80, 443, 3000, 5000, 5173, 8000 or 8080. LobeHub turns bot protection on for that address, so scripts and crawlers get a `503` and only a browser that passes a check gets through, and turns SSH off.
+- A computer goes into standby after 5 idle minutes and wakes on the next tool call. It is deleted `BOXD_LEASE_TTL_SEC` seconds after the topic's last tool call. A later call gets a new computer, and the model is told the sandbox was recreated.
+- Every computer counts against the boxd organization's machine limit, standby ones included: 2 for an organization without a payment method, 50 with one. With the default lease, each topic used in the last 15 minutes holds one. When the limit is reached, a new topic's tool call fails with an error that says so. Add a payment method, ask boxd for a higher limit, or lower `BOXD_LEASE_TTL_SEC`.
+- Runs that ask for a drive folder or a persistent environment also get their topic's computer: those are Market features, and boxd runs them as temporary sandboxes.
+- The base image is Ubuntu 24.04 with Python 3, Node.js, Bun, git, curl and Docker. Commands run as the user `boxd`, who can use `sudo`. Put anything else every computer needs into a snapshot and set `BOXD_SNAPSHOT`.
+
+<Callout type={'info'}>
+  The computer itself fetches uploaded files and skill archives from, and uploads exported files to,
+  pre-signed URLs from the LobeHub S3 storage, so `S3_ENDPOINT` must be reachable from the internet,
+  not only from the LobeHub server.
 </Callout>

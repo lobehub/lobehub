@@ -11,7 +11,7 @@ import type { MarketService } from '@/server/services/market';
 
 import type { SandboxInitialization } from './environmentInit';
 
-export type SandboxProviderKind = 'market' | 'onlyboxes';
+export type SandboxProviderKind = 'boxd' | 'market' | 'onlyboxes';
 
 /**
  * The part of an environment's definition the execution plane acts on while a
