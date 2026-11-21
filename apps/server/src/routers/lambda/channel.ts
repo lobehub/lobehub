@@ -336,6 +336,17 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.markRead(input.channelId, input.sequence),
       success: true,
     })),
+  /** Raises the caller's read position in one Thread; returns the position now kept. */
+  markThreadRead: channelProcedure
+    .input(z.object({ channelId, sequence: z.number().int().nonnegative(), threadId }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.markThreadRead(
+        input.channelId,
+        input.threadId,
+        input.sequence,
+      ),
+      success: true,
+    })),
   /** Pins or unpins the conversation atop the caller's own list. */
   setPinned: externalChannelProcedure
     .input(z.object({ channelId, pinned: z.boolean() }))
