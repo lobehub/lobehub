@@ -46,9 +46,11 @@ import { resolveTaskOrThrow, resolveTasksOrThrow } from '@/server/services/task/
 import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
 import { createTaskAssigneeHelpers } from './taskAssignees';
 import { taskResult, taskResultLabel } from './taskResults';
+import { runTaskDispatch, runTasksDispatch } from './taskRunDispatch';
 import { type ServerRuntimeRegistration } from './types';
 
 export interface TaskRuntimeDeps {
+  activeDeviceId?: string;
   agentId?: string;
   agentModel: AgentModel;
   // Assistant message that carried the createTask tool call — the tool-call
@@ -897,96 +899,16 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
-    runTask: async (args: {
+    runTask: (args: {
       continueTopicId?: string;
       identifier?: string;
       model?: string;
       prompt?: string;
       provider?: string;
-    }) => {
-      const id = args.identifier?.trim() || taskId;
-      if (!id) {
-        return {
-          content: 'No task identifier provided and no current task context.',
-          success: false,
-        };
-      }
+    }) => runTaskDispatch(deps, args),
 
-      try {
-        const task = await resolveTaskOrThrow(taskModel(), id);
-        const result = await taskCaller().run({
-          continueTopicId: args.continueTopicId,
-          id: task.id,
-          model: args.model,
-          prompt: args.prompt,
-          provider: args.provider,
-        });
-
-        const topicId = (result as { topicId?: string } | undefined)?.topicId;
-        const operationId = (result as { operationId?: string } | undefined)?.operationId;
-        const lines = [`Task ${taskResultLabel(task)} started.`];
-        if (topicId) lines.push(`  Topic: ${topicId}`);
-        if (operationId) lines.push(`  Operation: ${operationId}`);
-
-        return taskResult(task, lines.join('\n'), { topicId, operationId });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to run task';
-        return { content: `Failed to run task ${id}: ${message}`, success: false };
-      }
-    },
-
-    runTasks: async (args: { identifiers: string[]; model?: string; provider?: string }) => {
-      const identifiers = Array.isArray(args.identifiers)
-        ? args.identifiers.filter(
-            (value): value is string => typeof value === 'string' && !!value.trim(),
-          )
-        : [];
-
-      if (identifiers.length === 0) {
-        return { content: 'No task identifiers provided.', success: false };
-      }
-
-      const resolved = await taskModel().resolveRefs(identifiers);
-      if (resolved.ambiguous.length)
-        throw new Error(`Ambiguous task references: ${resolved.ambiguous.join(', ')}`);
-      const results: {
-        taskId?: string;
-        identifier?: string;
-        refs: string[];
-        success: boolean;
-        error?: string;
-      }[] = [];
-      for (const task of resolved.tasks) {
-        const refs = identifiers.filter((ref) => resolved.byRef.get(ref)?.id === task.id);
-        try {
-          await taskCaller().run({ id: task.id, model: args.model, provider: args.provider });
-          results.push({ taskId: task.id, identifier: task.identifier, refs, success: true });
-        } catch (error) {
-          results.push({
-            taskId: task.id,
-            identifier: task.identifier,
-            refs,
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-        }
-      }
-      for (const ref of resolved.missing)
-        results.push({ refs: [ref], success: false, error: `Task not found: ${ref}` });
-      const succeeded = results.filter((result) => result.success).length;
-      const failed = results.length - succeeded;
-      return {
-        content: [
-          `Started ${succeeded}/${results.length} tasks (${failed} failed):`,
-          ...results.map(
-            (result) =>
-              `${result.identifier ?? result.refs[0]}${result.taskId ? ` (id: ${result.taskId})` : ''} — ${result.success ? 'started' : `failed: ${result.error}`}`,
-          ),
-        ].join('\n'),
-        state: { results, succeeded, failed },
-        success: failed === 0,
-      };
-    },
+    runTasks: (args: { identifiers: string[]; model?: string; provider?: string }) =>
+      runTasksDispatch(deps, args),
 
     updateTaskComment: async (args: { commentId: string; content: string }) => {
       try {
@@ -1091,6 +1013,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
     const db = context.serverDB;
     const userId = context.userId;
     const {
+      activeDeviceId,
       agentId,
       assistantMessageId,
       operationId,
@@ -1122,6 +1045,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
     // `deps` object, so re-assigning the fields below propagates into every
     // method without re-creating the runtime.
     const deps = {
+      activeDeviceId,
       agentId,
       assistantMessageId,
       operationId,
