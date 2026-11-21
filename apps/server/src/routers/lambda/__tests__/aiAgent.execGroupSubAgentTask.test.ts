@@ -168,6 +168,21 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       });
     });
 
+    it('hands the request user agent to the service', async () => {
+      mockExecGroupSubAgentTask.mockResolvedValue(subAgentLaunchResponse());
+      const caller = aiAgentRouter.createCaller({
+        ...createTestContext(),
+        userAgent: 'okhttp/4.12.0',
+      });
+
+      await caller.execSubAgentTask(subAgentInput(testAgentId, testGroupId, testTopicId));
+
+      expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ userAgent: 'okhttp/4.12.0' }),
+      );
+    });
+
     it('should pass parent operation metadata to the service', async () => {
       mockExecGroupSubAgentTask.mockResolvedValue(subAgentLaunchResponse());
       const caller = aiAgentRouter.createCaller(createTestContext());

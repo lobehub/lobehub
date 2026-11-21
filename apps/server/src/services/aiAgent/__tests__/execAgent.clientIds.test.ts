@@ -314,6 +314,23 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
     runSpy.mockRestore();
   });
 
+  it('keeps the request user agent on the group supervisor run', async () => {
+    const runSpy = vi
+      .spyOn(service, 'execAgent')
+      .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+
+    await service.execGroupAgent({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      message: 'Continue',
+      topicId: 'legacy-topic',
+      userAgent: 'okhttp/4.12.0',
+    });
+
+    expect(runSpy).toHaveBeenCalledWith(expect.objectContaining({ userAgent: 'okhttp/4.12.0' }));
+    runSpy.mockRestore();
+  });
+
   it('should forward client-minted ids to topic and message creation on a fresh send', async () => {
     await service.execAgent({
       agentId: 'agent-1',

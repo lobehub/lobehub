@@ -624,7 +624,7 @@ export class AiAgentService {
    */
   async execGroupAgent(
     params: ExecGroupAgentParams &
-      Pick<InternalExecAgentParams, 'clientIds' | 'fileIds' | 'interactiveStart'>,
+      Pick<InternalExecAgentParams, 'clientIds' | 'fileIds' | 'interactiveStart' | 'userAgent'>,
   ): Promise<ExecGroupAgentResult> {
     const {
       agentId,
@@ -635,6 +635,7 @@ export class AiAgentService {
       message,
       topicId: inputTopicId,
       newTopic,
+      userAgent,
     } = params;
 
     log(
@@ -676,6 +677,7 @@ export class AiAgentService {
       interactiveStart,
       prompt: message,
       trigger: RequestTrigger.Chat,
+      userAgent,
     });
 
     log(
@@ -821,6 +823,8 @@ export class AiAgentService {
     options: {
       /** The dispatching tab stands by on this channel to run the child's device-only LLM calls. */
       llmRelay?: SubAgentLlmRelayRequest;
+      /** User agent of the dispatching request, for model-call admission. */
+      userAgent?: string;
     } = {},
   ): Promise<ExecSubAgentResult> => {
     const llmExecutor = await openSubAgentLlmRelay(options.llmRelay, {
@@ -833,6 +837,7 @@ export class AiAgentService {
       isSubAgent: false,
       llmExecutor,
       logScope: 'execSubAgent',
+      userAgent: options.userAgent,
     });
   };
 
