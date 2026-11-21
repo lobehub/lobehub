@@ -14,6 +14,7 @@ import {
 } from '@/features/Settings/skill/features/connectorSections';
 import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import CatalogSection from '../Catalog/CatalogSection';
 import DiscoverCatalogHeader from '../Catalog/DiscoverCatalogHeader';
@@ -50,19 +51,21 @@ export default function AppCatalog() {
       <DiscoverCatalogHeader
         kind={'app'}
         titleExtra={
-          <Button
-            aria-pressed={connected}
-            size={'small'}
-            type={connected ? 'primary' : 'default'}
-            onClick={() => {
-              const next = new URLSearchParams(params);
-              if (connected) next.delete('view');
-              else next.set('view', 'connected');
-              setParams(next);
-            }}
-          >
-            {t('apps.connected')}
-          </Button>
+          isMobileSurface() && (
+            <Button
+              aria-pressed={connected}
+              size={'small'}
+              type={connected ? 'primary' : 'default'}
+              onClick={() => {
+                const next = new URLSearchParams(params);
+                if (connected) next.delete('view');
+                else next.set('view', 'connected');
+                setParams(next);
+              }}
+            >
+              {t('apps.connected')}
+            </Button>
+          )
         }
       />
       {Boolean(error) && <AsyncError error={error} variant={'block'} onRetry={retry} />}
