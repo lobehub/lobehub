@@ -562,6 +562,54 @@ describe('sweepStuckVerifyRuns', () => {
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
   });
 
+  const settledChildTree = async (id: string) =>
+    id === 'op-1'
+      ? [
+          { id: 'op-1', parentOperationId: null },
+          { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+        ]
+      : [{ id: 'op-repair', parentOperationId: 'op-1', status: 'done' }];
+
+  it('keeps a stale repairing claim while its just-settled repair child is still finalizing', async () => {
+    // The repair round outlived the parent's grace, then recomputed itself to
+    // `failed`; its finalizer has not yet collapsed this parent. Reclaiming
+    // now would finalize the original round and spawn a second repair.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockImplementation(settledChildTree);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? { id: 'run-repair', status: 'failed', updatedAt: new Date(NOW.getTime() - 1000) }
+        : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(reclaimRepairing).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('reclaims a stale repairing claim once its settled repair child is past the finalizer grace', async () => {
+    // The child settled long ago, yet the parent is still `repairing`: the
+    // child's finalizer died before collapsing it, so the claim is abandoned.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockImplementation(settledChildTree);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? {
+            id: 'run-repair',
+            status: 'passed',
+            updatedAt: new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000),
+          }
+        : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
   it('reclaims a superseded stale repairing claim without driving its task', async () => {
     // A later round of the same acceptance now owns the task: the reclaimed
     // round only gets its rollup, like every other sweep path.

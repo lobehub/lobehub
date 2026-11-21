@@ -118,7 +118,7 @@ describe('verifyResultRuntime.submitVerifyResult', () => {
     expect(mocks.resultUpdateByCheckItemIfPending).not.toHaveBeenCalled();
     // Duplicate calls execute the idempotent settlement path (rollup recompute
     // + finalizer) so a verdict persisted without a completed settle recovers.
-    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent');
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
     expect(mocks.finalizeVerifyRun).toHaveBeenCalled();
   });
 
@@ -143,7 +143,7 @@ describe('verifyResultRuntime.submitVerifyResult', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('already recorded');
-    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent');
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
     expect(mocks.finalizeVerifyRun).toHaveBeenCalled();
   });
 
@@ -211,7 +211,7 @@ describe('verifyResultRuntime.submitVerifyResult', () => {
       'check-2',
       expect.objectContaining({ status: 'passed', verdict: 'passed' }),
     );
-    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent');
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
     expect(mocks.finalizeVerifyRun).toHaveBeenCalled();
   });
 
@@ -284,7 +284,7 @@ describe('verifyResultRuntime.submitVerifyResult', () => {
     // The loser skips writing (winner owns the verdict) but must still run the
     // idempotent settlement tail — the winner's own settlement may have failed.
     expect(mocks.resultUpdateByCheckItemIfPending).toHaveBeenCalled();
-    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent');
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
     expect(mocks.finalizeVerifyRun).toHaveBeenCalled();
   });
 
@@ -308,7 +308,7 @@ describe('verifyResultRuntime.submitVerifyResult', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent');
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
     expect(mocks.finalizeVerifyRun).toHaveBeenCalled();
   });
 
@@ -353,6 +353,63 @@ describe('verifyResultRuntime.submitVerifyResult', () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain('already recorded');
     expect(mocks.statusRecompute).not.toHaveBeenCalled();
+    expect(mocks.finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('leaves a repair claim taken after the duplicate read the run as failed', async () => {
+    // Interleaving: the duplicate reads the run as `failed`, then another
+    // finalizer claims it `repairing`. The recompute must keep that claim
+    // (reported as `repairing`) and the duplicate must not finalize, or it
+    // would claim and spawn a second repair for the same failures.
+    mocks.operationFindById.mockResolvedValue({ parentOperationId: 'op-parent' });
+    mocks.runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    mocks.resultListByRun.mockResolvedValue([
+      { checkItemId: 'check-1', status: 'failed', verdict: 'failed' },
+    ]);
+    mocks.statusRecompute.mockResolvedValue('repairing');
+
+    const result = await runtime.submitVerifyResult({ checkItemId: 'check-1', verdict: 'failed' });
+
+    expect(result.success).toBe(true);
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
+    expect(mocks.finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('leaves a repair claim taken after a race-lost duplicate read the run as failed', async () => {
+    mocks.operationFindById.mockResolvedValue({ parentOperationId: 'op-parent' });
+    mocks.runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    mocks.resultListByRun
+      .mockResolvedValueOnce([{ checkItemId: 'check-1', status: 'pending', verdict: null }])
+      .mockResolvedValueOnce([{ checkItemId: 'check-1', status: 'failed', verdict: 'failed' }]);
+    mocks.resultUpdateByCheckItemIfPending.mockResolvedValue([]);
+    mocks.statusRecompute.mockResolvedValue('repairing');
+
+    const result = await runtime.submitVerifyResult({ checkItemId: 'check-1', verdict: 'failed' });
+
+    expect(result.success).toBe(true);
+    expect(mocks.finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('records a late optional verdict without finalizing a run a repair round holds', async () => {
+    // A required check already failed and its finalizer claimed the repair;
+    // an optional check's verdict lands afterwards. Its settlement must not
+    // overwrite the claim or finalize the run again.
+    mocks.operationFindById.mockResolvedValue({ parentOperationId: 'op-parent' });
+    mocks.runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'repairing' });
+    mocks.resultListByRun.mockResolvedValue([
+      { checkItemId: 'optional-1', status: 'pending', verdict: null },
+    ]);
+    mocks.resultUpdateByCheckItemIfPending.mockResolvedValue([{ id: 'result-1' }]);
+    mocks.statusRecompute.mockResolvedValue('repairing');
+
+    const result = await runtime.submitVerifyResult({
+      checkItemId: 'optional-1',
+      verdict: 'passed',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Recorded verdict');
+    expect(mocks.statusRecompute).toHaveBeenCalledWith('op-parent', { preserveRepairClaim: true });
     expect(mocks.finalizeVerifyRun).not.toHaveBeenCalled();
   });
 });

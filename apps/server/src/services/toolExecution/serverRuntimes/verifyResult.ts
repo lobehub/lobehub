@@ -175,13 +175,10 @@ class VerifyResultExecutionRuntime {
         success: true,
       };
     }
-    await new VerifyStatusService(this.db, this.userId, this.workspaceId).recompute(
-      targetOperationId,
-    );
     // This may be the last check to resolve — settle the run through the single
     // finalizer (repair-aware → drive the bound task on terminal). No report
     // context here (the verifier sub-agent lacks the builder's deliverable).
-    await finalizeVerifyRun(this.db, this.userId, targetOperationId, {}, this.workspaceId);
+    await this.settle(targetOperationId);
 
     log(
       'submitted verdict %s for check %s (op %s)',
@@ -211,10 +208,7 @@ class VerifyResultExecutionRuntime {
     reported: string,
   ): Promise<{ content: string; error: string; success: false } | null> => {
     try {
-      await new VerifyStatusService(this.db, this.userId, this.workspaceId).recompute(
-        targetOperationId,
-      );
-      await finalizeVerifyRun(this.db, this.userId, targetOperationId, {}, this.workspaceId);
+      await this.settle(targetOperationId);
     } catch (error) {
       log('settlement retry failed for op %s: %O', targetOperationId, error);
       return {
@@ -224,6 +218,26 @@ class VerifyResultExecutionRuntime {
       };
     }
     return null;
+  };
+
+  /**
+   * Recompute the rollup and run the finalizer, unless a repair round holds
+   * the run. The status read before this call can be stale: another finalizer
+   * may have claimed the run `repairing` since. Recomputing over that claim
+   * would put the run back to `failed` and let this finalizer claim and spawn
+   * a second repair for the same failures, so the recompute leaves the claim
+   * in place and the repair round settles the run.
+   */
+  private settle = async (targetOperationId: string): Promise<void> => {
+    const status = await new VerifyStatusService(this.db, this.userId, this.workspaceId).recompute(
+      targetOperationId,
+      { preserveRepairClaim: true },
+    );
+    if (status === 'repairing') {
+      log('op %s is held by a repair round; leaving settlement to it', targetOperationId);
+      return;
+    }
+    await finalizeVerifyRun(this.db, this.userId, targetOperationId, {}, this.workspaceId);
   };
 }
 

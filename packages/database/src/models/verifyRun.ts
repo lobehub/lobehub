@@ -866,6 +866,36 @@ export class VerifyRunModel {
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
+  /**
+   * Write the rollup unless a repair round holds the run. One conditional
+   * UPDATE, so a verdict that lands after another finalizer's
+   * `claimRepairing` cannot overwrite the claim with the derived status and
+   * let a second finalizer claim the same failures again. Only the paths that
+   * own the claim's end (repair-chain collapse, sweep reclaim) may replace
+   * `repairing`, and they use {@link updateStatus}.
+   *
+   * @returns false when the run was `repairing` and nothing was written.
+   */
+  updateStatusUnlessRepairing = async (
+    runId: string,
+    status: VerifyRunStatus | null,
+  ): Promise<boolean> => {
+    const updated = await this.db
+      .update(verifyRuns)
+      .set({ status })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          // `<>` never matches NULL, so a run with no status yet needs its own branch.
+          or(isNull(verifyRuns.status), sql`${verifyRuns.status} <> 'repairing'`),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return updated.length > 0;
+  };
+
   update = async (
     runId: string,
     value: Partial<

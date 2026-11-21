@@ -240,6 +240,40 @@ describe('VerifyRunModel.reclaimRepairing', () => {
   });
 });
 
+describe('VerifyRunModel.updateStatusUnlessRepairing', () => {
+  it('writes the rollup over a non-repairing status', async () => {
+    const runId = await buildRun('op-unless-repairing-1');
+    await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'verifying');
+
+    await expect(
+      new VerifyRunModel(serverDB, userId).updateStatusUnlessRepairing(runId, 'failed'),
+    ).resolves.toBe(true);
+    expect(await statusOf(runId)).toBe('failed');
+  });
+
+  it('leaves an active repair claim in place', async () => {
+    // Another finalizer claimed the run after this caller read it as `failed`.
+    const runId = await buildRun('op-unless-repairing-2');
+    await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    await new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed');
+
+    await expect(
+      new VerifyRunModel(serverDB, userId).updateStatusUnlessRepairing(runId, 'failed'),
+    ).resolves.toBe(false);
+    expect(await statusOf(runId)).toBe('repairing');
+  });
+
+  it('writes a run with a NULL status', async () => {
+    const runId = await buildRun('op-unless-repairing-3');
+    await serverDB.update(verifyRuns).set({ status: null }).where(eq(verifyRuns.id, runId));
+
+    await expect(
+      new VerifyRunModel(serverDB, userId).updateStatusUnlessRepairing(runId, 'passed'),
+    ).resolves.toBe(true);
+    expect(await statusOf(runId)).toBe('passed');
+  });
+});
+
 /**
  * `findStuckVerifying` is deliberately global — no user or workspace scope, since
  * it backs a cross-owner cron. The test database is shared with every other suite,

@@ -308,13 +308,22 @@ const JUDGING_RUN_STATUSES = new Set(['repairing', 'verifying']);
  * otherwise a completion hook that never fired would pin the parent forever.
  */
 const PRE_JUDGING_RUN_STATUSES = new Set(['collecting_evidence', 'planned']);
+/**
+ * States a child round has reached once its rollup is recomputed. Its finalizer
+ * still has to run after that write, and it is what collapses the parent's
+ * claim, so a recent one keeps the claim until the finalizer grace runs out.
+ */
+const SETTLED_RUN_STATUSES = new Set(['errored', 'failed', 'passed']);
 
 /**
  * Whether a repair child still owns its parent's settlement: the repair agent
- * itself is running, its round is still being judged, or one of its verifiers
- * is still working. A `verifying` / `repairing` child round counts however old
- * it is — the sweep recovers that round on its own, and its finalizer collapses
- * this parent.
+ * itself is running, its round is still being judged or finalized, or one of
+ * its verifiers is still working. A `verifying` / `repairing` child round
+ * counts however old it is — the sweep recovers that round on its own, and its
+ * finalizer collapses this parent. A child round that just settled counts for
+ * {@link VERIFY_ROLLUP_GRACE_MS}: its finalizer runs right after the rollup
+ * write and collapses this parent. Still `repairing` after the grace means that
+ * finalizer died, and the claim is reclaimed.
  */
 const isRepairChainLive = async (
   child: { id: string; status: AgentOperationStatus },
@@ -325,13 +334,12 @@ const isRepairChainLive = async (
   if (isAgentOperationInFlight(child.status)) return true;
 
   const childRun = await runModel.findByOperation(child.id);
-  if (childRun?.status && JUDGING_RUN_STATUSES.has(childRun.status)) return true;
-  if (
-    childRun?.status &&
-    PRE_JUDGING_RUN_STATUSES.has(childRun.status) &&
-    now.getTime() - childRun.updatedAt.getTime() < VERIFY_ABANDONED_MS
-  )
-    return true;
+  if (childRun?.status) {
+    if (JUDGING_RUN_STATUSES.has(childRun.status)) return true;
+    const age = now.getTime() - childRun.updatedAt.getTime();
+    if (PRE_JUDGING_RUN_STATUSES.has(childRun.status) && age < VERIFY_ABANDONED_MS) return true;
+    if (SETTLED_RUN_STATUSES.has(childRun.status) && age < VERIFY_ROLLUP_GRACE_MS) return true;
+  }
 
   const verifiers = await operationModel.listOperationTree(child.id);
   return verifiers.some(

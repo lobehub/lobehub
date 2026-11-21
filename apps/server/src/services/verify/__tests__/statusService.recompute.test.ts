@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VerifyStatusService } from '../statusService';
 
-const { acceptanceRecomputeStatus, runFindByOperation, runUpdateStatus, resultListByRun } =
-  vi.hoisted(() => ({
-    acceptanceRecomputeStatus: vi.fn(),
-    resultListByRun: vi.fn(),
-    runFindByOperation: vi.fn(),
-    runUpdateStatus: vi.fn(),
-  }));
+const {
+  acceptanceRecomputeStatus,
+  runFindByOperation,
+  runUpdateStatus,
+  runUpdateStatusUnlessRepairing,
+  resultListByRun,
+} = vi.hoisted(() => ({
+  acceptanceRecomputeStatus: vi.fn(),
+  resultListByRun: vi.fn(),
+  runFindByOperation: vi.fn(),
+  runUpdateStatus: vi.fn(),
+  runUpdateStatusUnlessRepairing: vi.fn(),
+}));
 
 vi.mock('../goalLoop', () => ({
   maybeContinueGoalLoop: vi.fn().mockResolvedValue('spawn-failed'),
@@ -28,6 +34,7 @@ vi.mock('@/database/models/verifyRun', () => ({
     return {
       findByOperation: runFindByOperation,
       updateStatus: runUpdateStatus,
+      updateStatusUnlessRepairing: runUpdateStatusUnlessRepairing,
     };
   }),
 }));
@@ -50,9 +57,13 @@ const runWith = (items: { id: string }[], acceptanceId?: string) => ({
 
 describe('VerifyStatusService.recompute — errored rollup', () => {
   beforeEach(() => {
-    [acceptanceRecomputeStatus, runFindByOperation, runUpdateStatus, resultListByRun].forEach((m) =>
-      m.mockReset(),
-    );
+    [
+      acceptanceRecomputeStatus,
+      runFindByOperation,
+      runUpdateStatus,
+      runUpdateStatusUnlessRepairing,
+      resultListByRun,
+    ].forEach((m) => m.mockReset());
   });
 
   it('an errored required check (none failed) rolls up to `errored`, not `failed`', async () => {
@@ -148,5 +159,70 @@ describe('VerifyStatusService.recompute — errored rollup', () => {
     const status = await new VerifyStatusService(db, 'u1').recompute('op-1');
 
     expect(status).toBe('passed');
+  });
+});
+
+describe('VerifyStatusService.recompute — preserveRepairClaim', () => {
+  beforeEach(() => {
+    [
+      acceptanceRecomputeStatus,
+      runFindByOperation,
+      runUpdateStatus,
+      runUpdateStatusUnlessRepairing,
+      resultListByRun,
+    ].forEach((m) => m.mockReset());
+  });
+
+  it('keeps a repair claim taken between the read and the rollup write', async () => {
+    // Read as `verifying`; another finalizer's `claimRepairing` lands before
+    // this write, so the conditional update matches nothing.
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }], 'acceptance-1'));
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'failed', verdict: 'failed' }]);
+    runUpdateStatusUnlessRepairing.mockResolvedValue(false);
+
+    const status = await new VerifyStatusService(db, 'u1').recompute('op-1', {
+      preserveRepairClaim: true,
+    });
+
+    expect(status).toBe('repairing');
+    expect(runUpdateStatusUnlessRepairing).toHaveBeenCalledWith('run-1', 'failed');
+    expect(runUpdateStatus).not.toHaveBeenCalled();
+    expect(acceptanceRecomputeStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not write over a run already read as repairing', async () => {
+    runFindByOperation.mockResolvedValue({ ...runWith([{ id: 'c1' }]), status: 'repairing' });
+
+    const status = await new VerifyStatusService(db, 'u1').recompute('op-1', {
+      preserveRepairClaim: true,
+    });
+
+    expect(status).toBe('repairing');
+    expect(runUpdateStatus).not.toHaveBeenCalled();
+    expect(runUpdateStatusUnlessRepairing).not.toHaveBeenCalled();
+  });
+
+  it('writes the rollup when no claim is held', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }], 'acceptance-1'));
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'failed', verdict: 'failed' }]);
+    runUpdateStatusUnlessRepairing.mockResolvedValue(true);
+
+    const status = await new VerifyStatusService(db, 'u1').recompute('op-1', {
+      preserveRepairClaim: true,
+    });
+
+    expect(status).toBe('failed');
+    expect(acceptanceRecomputeStatus).toHaveBeenCalledWith('acceptance-1');
+  });
+
+  it('still collapses a repairing run when the caller owns the claim’s end', async () => {
+    // Repair-chain collapse and the sweep reclaim call without the option.
+    runFindByOperation.mockResolvedValue({ ...runWith([{ id: 'c1' }]), status: 'repairing' });
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'failed', verdict: 'failed' }]);
+
+    const status = await new VerifyStatusService(db, 'u1').recompute('op-1');
+
+    expect(status).toBe('failed');
+    expect(runUpdateStatus).toHaveBeenCalledWith('run-1', 'failed');
   });
 });

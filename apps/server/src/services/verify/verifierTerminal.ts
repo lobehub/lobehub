@@ -68,7 +68,13 @@ export const settleVerifierCheckFromTerminal = async (
       verifierOperationId,
     });
 
-    await new VerifyStatusService(db, userId, workspaceId).recompute(parentOperationId);
+    // Leave a repair claim another finalizer took since the read in place: a
+    // recompute over it would let this finalizer spawn a second repair.
+    const status = await new VerifyStatusService(db, userId, workspaceId).recompute(
+      parentOperationId,
+      { preserveRepairClaim: true },
+    );
+    if (status === 'repairing') return;
     await finalizeVerifyRun(db, userId, parentOperationId, {}, workspaceId);
   } catch (error) {
     log(
