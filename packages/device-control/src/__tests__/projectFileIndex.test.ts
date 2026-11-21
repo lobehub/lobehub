@@ -61,6 +61,59 @@ describe('defaultGetProjectFileIndex', () => {
     expect(result).not.toHaveProperty('totalCount');
   });
 
+  it('keeps special characters in git paths instead of C-quoting them', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-quoted-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    // Windows cannot create a file named with a backslash; the index can still
+    // hold one, which is what `git ls-files` reads.
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+      cwd: dir,
+      input: 'x\n',
+    })
+      .toString()
+      .trim();
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'core.protectNTFS=false',
+        'update-index',
+        '--add',
+        '--cacheinfo',
+        `100644,${blob},back\\slash.txt`,
+      ],
+      { cwd: dir },
+    );
+
+    const result = await defaultGetProjectFileIndex({ scope: dir });
+
+    // Without `-z`, git C-quotes this path as "back\\slash.txt". Splitting that
+    // on newlines keeps the quotes in the name, which sorts the row first and
+    // draws it quoted.
+    expect(result.entries.every((entry) => !entry.relativePath.includes('"'))).toBe(true);
+    expect(result.entries.every((entry) => !entry.name.includes('"'))).toBe(true);
+
+    if (process.platform === 'win32') {
+      // Windows cannot host the name, and reading the backslash as a separator
+      // would silently alias a different path. The entry is skipped instead.
+      expect(result.entries.some((entry) => entry.name.includes('slash.txt'))).toBe(false);
+    } else {
+      expect(result.entries.some((entry) => entry.name === 'back\\slash.txt')).toBe(true);
+    }
+  });
+
+  it('keeps top-level names that begin with two dots', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-dotdot-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, '..foo'), 'x\n');
+
+    const result = await defaultGetProjectFileIndex({ scope: dir });
+
+    expect(result.entries.map((entry) => entry.relativePath)).toContain('..foo');
+  });
+
   it('keeps ignored directories unique when git also lists their descendants', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-ignored-parents-'));
     cleanup.push(dir);

@@ -24,6 +24,34 @@ const PROJECT_DIRECTORY_LIST_LIMIT = 1000;
 
 const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
 
+/**
+ * `git ls-files` C-quotes paths that contain `"`, `\`, a newline, a tab or
+ * another control character — even with `core.quotepath=false`, which only
+ * covers bytes above 0x80. A file named `\` therefore arrives as `"\\"`,
+ * quotes included, and sorts to the top of the tree. `-z` emits paths
+ * NUL-delimited and literal, so split on NUL and keep every character.
+ */
+const splitGitPaths = (stdout: string): string[] => stdout.split('\0').filter(Boolean);
+
+/** Resolve a git-provided relative path, rejecting anything that escapes the root. */
+const resolveInsideRoot = (root: string, relativePath: string): string | undefined => {
+  const absolutePath = path.resolve(root, relativePath);
+  const relative = path.relative(root, absolutePath);
+  // `..foo` is a valid in-root name; only the parent entry and paths through it
+  // actually escape.
+  const escapes =
+    relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  return escapes ? undefined : absolutePath;
+};
+
+/**
+ * Windows cannot host a backslash in a file name. A git index entry that carries
+ * one (valid on POSIX) would otherwise be read as a directory separator and
+ * resolve to a different path inside the root.
+ */
+const isHostValidGitPath = (relativePath: string) =>
+  process.platform !== 'win32' || !relativePath.includes('\\');
+
 /** Parent of a posix index path (`a/b/c.ts` → `a/b/`), or null at the root. */
 const getParentRelativePath = (relativePath: string): string | null => {
   const cleaned = relativePath.endsWith('/') ? relativePath.slice(0, -1) : relativePath;
@@ -152,10 +180,10 @@ const findEmptyUntrackedDirectories = async (
   files: string[],
   ignoredPaths: string[],
 ): Promise<string[]> => {
-  const reported = untrackedDirectoryOutput
-    .split('\n')
-    .map((item) => item.trim())
-    .filter((item) => item.endsWith('/'));
+  const reported = splitGitPaths(untrackedDirectoryOutput).filter(
+    (item) =>
+      item.endsWith('/') && isHostValidGitPath(item) && resolveInsideRoot(root, item) !== undefined,
+  );
   if (reported.length === 0) return [];
 
   const directoriesWithFiles = new Set<string>();
@@ -329,7 +357,7 @@ export const defaultGetProjectFileIndex = async (
         await Promise.all([
           execFileAsync(
             'git',
-            ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
+            ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '-z', '--recurse-submodules'],
             { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
           ),
           execFileAsync(
@@ -340,6 +368,7 @@ export const defaultGetProjectFileIndex = async (
               '-c',
               'core.quotepath=false',
               'ls-files',
+              '-z',
               '--others',
               '--exclude-standard',
             ],
@@ -353,6 +382,7 @@ export const defaultGetProjectFileIndex = async (
               '-c',
               'core.quotepath=false',
               'ls-files',
+              '-z',
               '--others',
               '--ignored',
               '--exclude-standard',
@@ -368,6 +398,7 @@ export const defaultGetProjectFileIndex = async (
               '-c',
               'core.quotepath=false',
               'ls-files',
+              '-z',
               '--others',
               '--exclude-standard',
               '--directory',
@@ -377,17 +408,16 @@ export const defaultGetProjectFileIndex = async (
         ]);
 
       const fileRelativePaths = [
-        ...trackedResult.stdout.split('\n'),
-        ...untrackedResult.stdout.split('\n'),
-      ]
-        .map((item) => item.trim())
-        .filter(Boolean);
-      const files = fileRelativePaths.map((relativePath) => path.resolve(root, relativePath));
+        ...splitGitPaths(trackedResult.stdout),
+        ...splitGitPaths(untrackedResult.stdout),
+      ].filter(isHostValidGitPath);
+      const files = fileRelativePaths
+        .map((relativePath) => resolveInsideRoot(root, relativePath))
+        .filter((filePath): filePath is string => Boolean(filePath));
 
-      const ignoredPaths = ignoredResult.stdout
-        .split('\n')
-        .map((item) => item.trim())
-        .filter(Boolean);
+      const ignoredPaths = splitGitPaths(ignoredResult.stdout)
+        .filter(isHostValidGitPath)
+        .filter((relativePath) => resolveInsideRoot(root, relativePath) !== undefined);
       const entries = buildEntries(
         files,
         root,
@@ -486,12 +516,21 @@ export const defaultSearchProjectFiles = async (
       const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
         execFileAsync(
           'git',
-          ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
+          ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '-z', '--recurse-submodules'],
           { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
         ),
         execFileAsync(
           'git',
-          ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'],
+          [
+            '-C',
+            root,
+            '-c',
+            'core.quotepath=false',
+            'ls-files',
+            '-z',
+            '--others',
+            '--exclude-standard',
+          ],
           { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
         ).catch(() => ({ stdout: '' })),
         execFileAsync(
@@ -502,6 +541,7 @@ export const defaultSearchProjectFiles = async (
             '-c',
             'core.quotepath=false',
             'ls-files',
+            '-z',
             '--others',
             '--ignored',
             '--exclude-standard',
@@ -511,14 +551,16 @@ export const defaultSearchProjectFiles = async (
         ).catch(() => ({ stdout: '' })),
       ]);
 
-      const files = [...trackedResult.stdout.split('\n'), ...untrackedResult.stdout.split('\n')]
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .map((relativePath) => path.resolve(root, relativePath));
-      const ignoredPaths = ignoredResult.stdout
-        .split('\n')
-        .map((item) => item.trim())
-        .filter(Boolean);
+      const files = [
+        ...splitGitPaths(trackedResult.stdout),
+        ...splitGitPaths(untrackedResult.stdout),
+      ]
+        .filter(isHostValidGitPath)
+        .map((relativePath) => resolveInsideRoot(root, relativePath))
+        .filter((filePath): filePath is string => Boolean(filePath));
+      const ignoredPaths = splitGitPaths(ignoredResult.stdout)
+        .filter(isHostValidGitPath)
+        .filter((relativePath) => resolveInsideRoot(root, relativePath) !== undefined);
       const entries = filterSearchCandidates(
         includeMissingSearchCandidates(buildEntries(files, root, ignoredPaths), includePaths, root),
         params,
