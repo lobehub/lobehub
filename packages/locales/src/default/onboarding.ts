@@ -158,6 +158,15 @@ export default {
   'responseLanguage.title': 'Which language should we use to communicate?',
   'responseLanguage.title2': 'Start with language, build true understanding.',
   'responseLanguage.title3': 'Let me speak clearly and understand you better~',
+  'taskKickoff.empty': 'No suggested tasks right now — you can start a chat directly.',
+  'taskKickoff.prompt.default': 'Help me figure out a first thing to work on.',
+  'taskKickoff.prompt.withInterests':
+    "I'm interested in {{interests}}. Help me figure out a first thing to work on.",
+  'taskKickoff.skip': 'Skip for now',
+  'taskKickoff.startChat': 'Start a chat',
+  'taskKickoff.subtitle': 'Pick a suggested task to create it, or start a chat directly.',
+  'taskKickoff.title': "Let's get your first thing going",
+  'taskKickoff.title2': "Pick a task and I'll set it up",
   'telemetry.agreement':
     'All data collected is anonymous and used solely to improve the product experience. By continuing, you confirm that you understand and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>.',
   'telemetry.desc':

@@ -3,7 +3,7 @@
 import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useNavigate, useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import OnboardingContainer from '@/features/Onboarding/Layout';
@@ -11,6 +11,7 @@ import AgentPickerStep from '@/features/Onboarding/steps/AgentPickerStep';
 import FullNameStep from '@/features/Onboarding/steps/FullNameStep';
 import InterestsStep from '@/features/Onboarding/steps/InterestsStep';
 import ProSettingsStep from '@/features/Onboarding/steps/ProSettingsStep';
+import TaskKickoffStep from '@/features/Onboarding/steps/TaskKickoffStep';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useSingleton } from '@/hooks/useSingleton';
@@ -34,15 +35,22 @@ const CLASSIC_STEP_TRACKING = {
   [CLASSIC_ONBOARDING_MAX_STEP]: { flow: 'classic', step: 'agentpicker', stepIndex: 4 },
 } as const;
 
+// The closing hand-off renders after onboarding is finished, so it lives in
+// the URL instead of the persisted step (steps past the max are legacy ones).
+const KICKOFF_PARAM = 'kickoff';
+const POST_ONBOARDING_HOME = '/';
+
 const getClassicStepTrackingPayload = (step: number) =>
   CLASSIC_STEP_TRACKING[step as keyof typeof CLASSIC_STEP_TRACKING];
 
 const ClassicOnboardingPage = memo(() => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const [
     isUserStateInit,
     commonStepsCompleted,
+    isFinished,
     currentStep,
     goToNextStep,
     goToPreviousStep,
@@ -50,6 +58,7 @@ const ClassicOnboardingPage = memo(() => {
   ] = useUserStore((s) => [
     s.isUserStateInit,
     onboardingSelectors.commonStepsCompleted(s),
+    onboardingSelectors.isFinished(s),
     onboardingSelectors.currentStep(s),
     s.goToNextStep,
     s.goToPreviousStep,
@@ -61,6 +70,8 @@ const ClassicOnboardingPage = memo(() => {
   const autoSkippedStepKeys = useSingleton(() => new Set<string>());
   const viewedStepKeys = useSingleton(() => new Set<string>());
   const legacyRemappedRef = useRef(false);
+  const showKickoff = isFinished && searchParams.get(KICKOFF_PARAM) === '1';
+  const isAgentSkipEntry = searchParams.get('entry') === 'skip';
 
   useOnboardingAgentTemplates(isUserStateInit && commonStepsCompleted);
 
@@ -112,7 +123,7 @@ const ClassicOnboardingPage = memo(() => {
   ]);
 
   useEffect(() => {
-    if (!isUserStateInit || !commonStepsCompleted) return;
+    if (!isUserStateInit || !commonStepsCompleted || showKickoff) return;
     if (currentStep === PRO_SETTINGS_STEP && (!serverConfigInit || shouldSkipProSettingsStep)) {
       return;
     }
@@ -128,6 +139,7 @@ const ClassicOnboardingPage = memo(() => {
     isUserStateInit,
     serverConfigInit,
     shouldSkipProSettingsStep,
+    showKickoff,
     viewedStepKeys,
   ]);
 
@@ -170,6 +182,19 @@ const ClassicOnboardingPage = memo(() => {
     goToPreviousStep();
   }, [goToPreviousStep, shouldSkipProSettingsStep]);
 
+  // A signup that carried its own target, or the agent flow's skip entry,
+  // goes straight there; a plain classic finish hands off to the kickoff step.
+  const handleAgentPickerFinished = useCallback(
+    (targetUrl: string) => {
+      if (isAgentSkipEntry || targetUrl !== POST_ONBOARDING_HOME) {
+        navigate(targetUrl);
+        return;
+      }
+      setSearchParams({ [KICKOFF_PARAM]: '1' }, { replace: true });
+    },
+    [isAgentSkipEntry, navigate, setSearchParams],
+  );
+
   if (!isUserStateInit) {
     return <Loading debugId="ClassicOnboarding" />;
   }
@@ -179,6 +204,8 @@ const ClassicOnboardingPage = memo(() => {
   }
 
   const renderStep = () => {
+    if (showKickoff) return <TaskKickoffStep />;
+
     switch (renderableStep) {
       case 1: {
         return (
@@ -195,7 +222,12 @@ const ClassicOnboardingPage = memo(() => {
         return <ProSettingsStep onBack={goToPreviousStep} onNext={goToNextStepFromProSettings} />;
       }
       case CLASSIC_ONBOARDING_MAX_STEP: {
-        return <AgentPickerStep onBack={goToPreviousStepFromAgentPicker} />;
+        return (
+          <AgentPickerStep
+            onBack={goToPreviousStepFromAgentPicker}
+            onFinished={handleAgentPickerFinished}
+          />
+        );
       }
       default: {
         return null;
@@ -203,7 +235,8 @@ const ClassicOnboardingPage = memo(() => {
     }
   };
 
-  const contentMaxWidth = renderableStep === CLASSIC_ONBOARDING_MAX_STEP ? 780 : 600;
+  const contentMaxWidth =
+    !showKickoff && renderableStep === CLASSIC_ONBOARDING_MAX_STEP ? 780 : 600;
 
   return (
     <OnboardingContainer>
