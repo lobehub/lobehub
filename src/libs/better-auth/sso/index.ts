@@ -21,6 +21,7 @@ import Keycloak from './providers/keycloak';
 import Logto from './providers/logto';
 import Microsoft from './providers/microsoft';
 import Okta from './providers/okta';
+import Twitter from './providers/twitter';
 import Wechat from './providers/wechat';
 import Zitadel from './providers/zitadel';
 
@@ -42,6 +43,7 @@ const providerDefinitions = [
   Zitadel,
   Feishu,
   Wechat,
+  Twitter,
 ] as const;
 
 const builtInProviderIds = new Set(BUILTIN_BETTER_AUTH_PROVIDERS);

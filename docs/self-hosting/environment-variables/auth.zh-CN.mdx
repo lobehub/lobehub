@@ -165,6 +165,24 @@ LobeHub 在部署时提供了完善的身份验证服务能力，以下是相关
 - 默认值：`-`
 - 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
+### X (Twitter)
+
+X 仅用于账号绑定：已登录用户可以在个人资料设置中绑定 X 账号，但登录页不会显示 X，也不能用 X 登录或注册。在 `AUTH_SSO_PROVIDERS` 中加入 `twitter` 即可启用，并把 X 应用的 OAuth 2.0 回调地址设为 `https://<your-domain>/api/auth/callback/twitter`。
+
+#### `AUTH_TWITTER_ID`
+
+- 类型：必选
+- 描述：X 应用的 OAuth 2.0 Client ID。在 [X Developer Console](https://developer.x.com/en/portal/dashboard) 获取。
+- 默认值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_TWITTER_SECRET`
+
+- 类型：必选
+- 描述：X 应用的 OAuth 2.0 Client Secret。
+- 默认值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
 ### Microsoft
 
 #### `AUTH_MICROSOFT_ID`
