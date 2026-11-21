@@ -1,9 +1,44 @@
-import { and, count, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { agentsToSessions, messages, sessions, tasks, threads, topics } from '../../schemas';
 import { notTrashed } from '../../utils/softDelete';
 import { hasForeignTopicComments } from '../topicComment';
 import { type AgentModelContext } from './context';
+
+/**
+ * Whether any topic matching `topicWhere` holds a message by someone else.
+ *
+ * LATERAL with its own LIMIT keeps this a per-topic probe of
+ * `messages_topic_id_idx`. A plain join or EXISTS is flattened, and for an
+ * agent holding a large share of the table the planner then hashes a Seq Scan
+ * of `messages`, the cost this lookup exists to avoid.
+ */
+const hasForeignMessageInTopics = async (
+  ctx: AgentModelContext,
+  topicWhere: SQL,
+  options: { liveOnly: boolean },
+): Promise<boolean> => {
+  const foreignMessage = ctx.db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.topicId, topics.id),
+        ne(messages.userId, ctx.userId),
+        options.liveOnly ? notTrashed(messages.isDeleted) : undefined,
+      ),
+    )
+    .limit(1)
+    .as('foreign_message');
+  const [row] = await ctx.db
+    .select({ id: foreignMessage.id })
+    .from(topics)
+    .innerJoinLateral(foreignMessage, sql`true`)
+    .where(topicWhere)
+    .limit(1);
+  return !!row;
+};
 
 /**
  * Transfer an agent and all its associated data to a different workspace or personal account.
@@ -26,28 +61,17 @@ export const transferHasForeignRows = async (
   const agentIds = Array.isArray(agentId) ? agentId : [agentId];
   if (agentIds.length === 0) return false;
 
-  const links = await ctx.db
-    .select({ sessionId: agentsToSessions.sessionId })
+  // The transfer still rehomes the linked session shells, and a member who
+  // merely opened the shared agent owns one even with no topics/messages yet.
+  const [foreignSession] = await ctx.db
+    .select({ id: sessions.id })
     .from(agentsToSessions)
-    .where(inArray(agentsToSessions.agentId, agentIds));
-  const sessionIds = [...new Set(links.map((link) => link.sessionId))];
+    .innerJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
+    .where(and(inArray(agentsToSessions.agentId, agentIds), ne(sessions.userId, ctx.userId)))
+    .limit(1);
+  if (foreignSession) return true;
 
-  // A member who merely opened the shared agent already owns a linked
-  // session, even with no topics/messages yet — the transfer would rewrite
-  // that session row too.
-  if (sessionIds.length > 0) {
-    const [foreignSession] = await ctx.db
-      .select({ id: sessions.id })
-      .from(sessions)
-      .where(and(inArray(sessions.id, sessionIds), ne(sessions.userId, ctx.userId)))
-      .limit(1);
-    if (foreignSession) return true;
-  }
-
-  const topicWhere =
-    sessionIds.length > 0
-      ? or(inArray(topics.sessionId, sessionIds), inArray(topics.agentId, agentIds))
-      : inArray(topics.agentId, agentIds);
+  const topicWhere = inArray(topics.agentId, agentIds);
   const [foreignTopic] = await ctx.db
     .select({ id: topics.id })
     .from(topics)
@@ -58,16 +82,16 @@ export const transferHasForeignRows = async (
   // Comments move (or die, when the target is personal scope) with their
   // topics — a teammate's comment on the caller's own topic is still their
   // work. NULL authors (deleted accounts) count as foreign too.
-  if (await hasForeignTopicComments(ctx.db, ctx.userId, topicWhere!)) return true;
+  if (await hasForeignTopicComments(ctx.db, ctx.userId, topicWhere)) return true;
 
-  const messageWhere =
-    sessionIds.length > 0
-      ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
-      : inArray(messages.agentId, agentIds);
+  // Messages move with their topic whatever agent they carry, and by their
+  // own `agent_id` otherwise. Two queries so each one can use its index.
+  if (await hasForeignMessageInTopics(ctx, topicWhere, { liveOnly: false })) return true;
+
   const [foreignMessage] = await ctx.db
     .select({ id: messages.id })
     .from(messages)
-    .where(and(messageWhere, ne(messages.userId, ctx.userId)))
+    .where(and(inArray(messages.agentId, agentIds), ne(messages.userId, ctx.userId)))
     .limit(1);
   if (foreignMessage) return true;
 
@@ -95,8 +119,9 @@ export const transferHasForeignRows = async (
  * What deleting the agent takes down besides the caller's own work, for the
  * delete confirmation and the author's delete guard. Mirrors the trash
  * cascade (`softDeleteAgent`), which stamps only the agent, every live topic
- * under it (with its messages and comments) and its topicless messages —
- * linked sessions, threads and tasks stay where they are, so they never count:
+ * with its `agent_id` (with its messages and comments) and its topicless
+ * messages — linked sessions, rows carrying only a legacy `session_id`,
+ * threads and tasks stay where they are, so they never count:
  * - `foreignTopicCount`: live topics other members started under the agent;
  * - `hasForeignContent`: that, or a teammate's comment / message riding along
  *   inside the caller's own topics or among the topicless messages.
@@ -105,54 +130,43 @@ export const getDeleteImpact = async (
   ctx: AgentModelContext,
   agentId: string,
 ): Promise<{ foreignTopicCount: number; hasForeignContent: boolean }> => {
-  const links = await ctx.db
-    .select({ sessionId: agentsToSessions.sessionId })
-    .from(agentsToSessions)
-    .where(eq(agentsToSessions.agentId, agentId));
-  const sessionIds = [...new Set(links.map((link) => link.sessionId))];
+  const topicWhere = and(eq(topics.agentId, agentId), notTrashed(topics.isDeleted))!;
 
-  const topicWhere = and(
-    sessionIds.length > 0
-      ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
-      : eq(topics.agentId, agentId),
-    notTrashed(topics.isDeleted),
-  )!;
-  const [row] = await ctx.db
-    .select({ count: count() })
-    .from(topics)
-    .where(and(topicWhere, ne(topics.userId, ctx.userId)));
-  const foreignTopicCount = Number(row?.count ?? 0);
-  if (foreignTopicCount > 0) return { foreignTopicCount, hasForeignContent: true };
+  // Independent lookups, each on its own index. The message check is split in
+  // two because one LEFT JOIN with an OR across both tables can use neither
+  // and walks the whole messages table when nothing foreign exists.
+  const [[topicRow], hasForeignComment, hasForeignTopicMessage, [foreignTopiclessMessage]] =
+    await Promise.all([
+      ctx.db
+        .select({ count: count() })
+        .from(topics)
+        .where(and(topicWhere, ne(topics.userId, ctx.userId))),
+      // NULL authors (deleted accounts) count as foreign.
+      hasForeignTopicComments(ctx.db, ctx.userId, topicWhere),
+      // Every message inside an affected live topic, whatever agent it carries.
+      hasForeignMessageInTopics(ctx, topicWhere, { liveOnly: true }),
+      // The topicless messages `softDeleteTopicless` stamps.
+      ctx.db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.agentId, agentId),
+            isNull(messages.topicId),
+            ne(messages.userId, ctx.userId),
+            notTrashed(messages.isDeleted),
+          ),
+        )
+        .limit(1),
+    ]);
+  const foreignTopicCount = Number(topicRow?.count ?? 0);
 
-  // Every live topic here is the caller's, so a foreign comment rides along
-  // inside one of them. NULL authors (deleted accounts) count as foreign.
-  if (await hasForeignTopicComments(ctx.db, ctx.userId, topicWhere))
-    return { foreignTopicCount, hasForeignContent: true };
-
-  // Mirror the cascade exactly: every message inside an affected live topic
-  // (matched through the topic, whatever agent / session the message itself
-  // carries), plus the topicless messages `softDeleteTopicless` stamps by
-  // agent or session. A message in a topic outside the cascade, or inside an
-  // already-trashed topic, stays where it is and does not count.
-  const topiclessScope =
-    sessionIds.length > 0
-      ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
-      : eq(messages.agentId, agentId);
-  const [foreignMessage] = await ctx.db
-    .select({ id: messages.id })
-    .from(messages)
-    .leftJoin(topics, eq(messages.topicId, topics.id))
-    .where(
-      and(
-        ne(messages.userId, ctx.userId),
-        notTrashed(messages.isDeleted),
-        or(
-          and(isNull(messages.topicId), topiclessScope),
-          and(isNotNull(messages.topicId), topicWhere),
-        ),
-      ),
-    )
-    .limit(1);
-
-  return { foreignTopicCount, hasForeignContent: !!foreignMessage };
+  return {
+    foreignTopicCount,
+    hasForeignContent:
+      foreignTopicCount > 0 ||
+      hasForeignComment ||
+      hasForeignTopicMessage ||
+      !!foreignTopiclessMessage,
+  };
 };

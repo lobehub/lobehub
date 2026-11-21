@@ -108,11 +108,12 @@ export const rewriteMessageScopeForTopics = async (
  */
 export const rewriteResidualMessageScope = async (
   executor: Executor,
-  linkage: { agentIds: string[]; groupIds?: string[]; sessionIds: string[] },
+  /** `sessionIds` is only set by jobs enqueued before transfers went agent-only. */
+  linkage: { agentIds: string[]; groupIds?: string[]; sessionIds?: string[] },
   target: AgentTransferTargetScope,
 ): Promise<void> => {
   const arms: SQL[] = [];
-  if (linkage.sessionIds.length > 0) arms.push(inArray(messages.sessionId, linkage.sessionIds));
+  if (linkage.sessionIds?.length) arms.push(inArray(messages.sessionId, linkage.sessionIds));
   if (linkage.agentIds.length > 0) arms.push(inArray(messages.agentId, linkage.agentIds));
   if (linkage.groupIds && linkage.groupIds.length > 0)
     arms.push(inArray(messages.groupId, linkage.groupIds));
@@ -267,7 +268,6 @@ export interface CreateAgentTransferJobParams {
    * drift this framework exists to avoid.
    */
   residualAgentIds?: string[];
-  sessionIds: string[];
   source: AgentTransferTargetScope;
   target: AgentTransferTargetScope;
   /** Topics whose messages await rewrite; `activityAt` orders the drain. */
@@ -309,7 +309,8 @@ export class AgentTransferJobModel {
           params.agentIdRemap && params.agentIdRemap.length > 0
             ? { agentIdRemap: params.agentIdRemap }
             : undefined,
-        sessionIds: params.sessionIds,
+        // NOT NULL column kept for jobs already queued; new jobs are agent-only.
+        sessionIds: [],
         sourceUserId: params.source.userId,
         sourceWorkspaceId: params.source.workspaceId,
         targetUserId: params.target.userId,

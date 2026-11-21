@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentHistoryJobs, topics, users } from '../../schemas';
+import { agentHistoryJobs, messages, sessions, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
   AgentTransferJobModel,
@@ -54,6 +54,24 @@ describe('AgentTransferJobModel coverage edges', () => {
       expect(executor.execute).not.toHaveBeenCalled();
     });
 
+    it('rewriteResidualMessageScope still moves the session residual of an already queued job', async () => {
+      await serverDB.insert(users).values({ id: 'atjcov-target' });
+      await serverDB.insert(sessions).values({ id: 'atjcov-s', slug: 'atjcov-s', userId });
+      await serverDB
+        .insert(messages)
+        .values({ id: 'atjcov-m', role: 'user', sessionId: 'atjcov-s', userId });
+
+      await rewriteResidualMessageScope(
+        serverDB,
+        { agentIds: [], sessionIds: ['atjcov-s'] },
+        { userId: 'atjcov-target', workspaceId: null },
+      );
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'atjcov-m'));
+      expect(row.userId).toBe('atjcov-target');
+      await serverDB.delete(users).where(eq(users.id, 'atjcov-target'));
+    });
+
     it('remapMessageAgentIdsForTopics issues no statement without remap pairs', async () => {
       const executor = { execute: vi.fn() };
 
@@ -101,7 +119,6 @@ describe('AgentTransferJobModel coverage edges', () => {
     const createJob = async () => {
       const jobId = await AgentTransferJobModel.createJob(serverDB, {
         agentIds: [],
-        sessionIds: [],
         source: target,
         target,
         topics: topicIds.map((id, index) => ({ activityAt: new Date(2026, 0, index + 1), id })),
