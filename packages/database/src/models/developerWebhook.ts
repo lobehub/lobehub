@@ -259,7 +259,10 @@ export class WebhookEndpointModel {
 
       if (!current || !current.enabled) return undefined;
       if (current.url !== snapshot.url) return undefined;
-      if (!current.events.includes(payload.type)) return undefined;
+      // `events` lists the subscribable types, so a `webhook.test` payload never matches one:
+      // compare as plain strings instead of narrowing the payload's own delivery type.
+      const subscribed: readonly string[] = current.events;
+      if (!subscribed.includes(payload.type)) return undefined;
 
       const [row] = await tx
         .insert(webhookDeliveries)
