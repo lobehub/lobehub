@@ -1,11 +1,15 @@
 import { TRPCError } from '@trpc/server';
 
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { MAX_PINNED_ORDER_ITEMS } from '@/database/repositories/home/pinnedOrder';
 import type { LobeChatDatabase } from '@/database/type';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
-/** Upper bound for one member's personal pin list in a workspace. */
-export const MAX_SIDEBAR_PINNED_ITEMS = 200;
+/**
+ * Upper bound for one member's pin lists in a workspace. They can hold every
+ * team pin, so this matches the team order cap.
+ */
+export const MAX_SIDEBAR_PINNED_ITEMS = MAX_PINNED_ORDER_ITEMS;
 
 export const TEAM_PIN_FORBIDDEN_MESSAGE = 'Only workspace owners and admins can change team pins';
 
@@ -16,8 +20,8 @@ interface TeamPinCtx {
 }
 
 /**
- * In a workspace, `pinned` on a PUBLIC Agent / chat group is the team pin every
- * member sees in the fixed section of the Agents sidebar, so only roles holding
+ * In a workspace, `pinned` on a PUBLIC Agent / chat group is the team pin
+ * recommended to every member in the Agents sidebar, so only roles holding
  * the all-resource `agent:update` grant (owner, admin) may write it. Members
  * pin for themselves through `workspace_user_settings.sidebarPinnedItemIds`.
  * Personal mode and private rows (only their creator can see them) are not

@@ -10,10 +10,15 @@ export interface WorkspaceSidebarMembership {
 export interface WorkspaceAgentSectionsInput extends WorkspaceSidebarMembership {
   /** Public folders. */
   groups: SidebarGroup[];
-  /** Ids the member pinned for themselves (agents, chat groups, folders), newest first. */
+  /**
+   * The member's pinned ids (agents, chat groups) in their own order. Holds
+   * team pins too once the member rearranged the list.
+   */
   myPinnedIds: readonly string[];
-  /** Public rows whose shared `pinned` column is set — the team pins. */
+  /** Public rows whose shared `pinned` column is set — the team pins, in team order. */
   pinned: SidebarAgentItem[];
+  /** Whether the member rearranged their pinned list. */
+  pinnedOrderCustomized?: boolean;
   /** The member's private folders. */
   privateGroups: SidebarGroup[];
   /** The member's private rows whose own `pinned` column is set. */
@@ -22,20 +27,24 @@ export interface WorkspaceAgentSectionsInput extends WorkspaceSidebarMembership 
   privateUngrouped: SidebarAgentItem[];
   /** Public rows outside any folder. */
   ungrouped: SidebarAgentItem[];
+  /** Team pins the member unpinned for themselves. */
+  unpinnedTeamIds?: readonly string[];
 }
 
 export interface WorkspaceAgentSections {
-  /** The member's private folders; my-pinned rows taken out. */
+  /** The member's private folders; pinned rows taken out. */
   folders: SidebarGroup[];
-  /** The member's own pinned rows, in their pin order. */
-  myPinned: SidebarAgentItem[];
   /**
-   * Rows outside the member's private folders that are their own or that they
-   * added explicitly — public and private together, newest first.
+   * The member's pinned rows in display order: their own pins and the team
+   * pins they did not unpin, in one list the member can rearrange.
+   */
+  pinned: SidebarAgentItem[];
+  /**
+   * Rows outside the member's private folders that are their own, that they
+   * added explicitly or whose team pin they removed — public and private
+   * together, newest first.
    */
   rest: SidebarAgentItem[];
-  /** Rows pinned for everyone by an owner/admin. */
-  teamPinned: SidebarAgentItem[];
 }
 
 const updatedAtMs = (item: SidebarAgentItem) => new Date(item.updatedAt).getTime() || 0;
@@ -65,16 +74,21 @@ export const isListedInWorkspaceSidebar = (
  * Lay out the merged workspace "Agents" section from the server's per-bucket
  * sidebar list:
  *
- * 1. Team pins — public rows with the shared `pinned` column, set by
- *    owners/admins.
- * 2. My pins — ids in the member's `sidebarPinnedItemIds` that are still
- *    listed (dangling ids are skipped), then the member's private rows pinned
- *    through their own column by earlier clients. A team pin never repeats.
- * 3. Folders — only the member's private folders. Public folders are shared
+ * 1. Pinned — one list. Team pins (public rows with the shared `pinned`
+ *    column, set by owners/admins) are only a recommendation: the member can
+ *    unpin them or move them among their own pins.
+ *    - Ids in `myPinnedIds` that are still available, in that order (dangling
+ *      ids are skipped), then the member's private rows pinned through their
+ *      own column by earlier clients.
+ *    - Team pins not placed there and not unpinned by the member go after
+ *      them in team order while the member never rearranged the list, and
+ *      first once they did — a pin added for the team later is a new
+ *      recommendation.
+ * 2. Folders — only the member's private folders. Public folders are shared
  *    catalogue structure browsed on the Agents page.
- * 4. The rest — rows outside the private folders (including rows inside a
- *    public folder) that {@link isListedInWorkspaceSidebar} keeps, newest
- *    first.
+ * 3. The rest — rows outside the private folders (including rows inside a
+ *    public folder) that {@link isListedInWorkspaceSidebar} keeps, plus team
+ *    pins the member unpinned unless they also removed them, newest first.
  *
  * Every row appears at most once.
  */
@@ -82,52 +96,71 @@ export const resolveWorkspaceAgentSections = ({
   currentUserId,
   groups,
   myPinnedIds,
-  pinned,
+  pinned: teamPinned,
+  pinnedOrderCustomized = false,
   privateGroups,
   privatePinned,
   privateUngrouped,
+  unpinnedTeamIds = [],
   ungrouped,
   visibilityOverrides,
 }: WorkspaceAgentSectionsInput): WorkspaceAgentSections => {
-  const teamPinned = pinned;
+  const unpinnedTeam = new Set(unpinnedTeamIds);
   const teamIds = new Set(teamPinned.map((item) => item.id));
-
   const publicFolderItems = groups.flatMap((g) => g.items);
 
   const candidates = new Map<string, SidebarAgentItem>();
   for (const item of [
+    ...teamPinned,
     ...privatePinned,
-    ...groups.flatMap((group) => group.items),
+    ...publicFolderItems,
     ...privateGroups.flatMap((group) => group.items),
     ...ungrouped,
     ...privateUngrouped,
   ]) {
-    if (!teamIds.has(item.id) && !candidates.has(item.id)) candidates.set(item.id, item);
+    if (!candidates.has(item.id)) candidates.set(item.id, item);
   }
 
-  const myPinned: SidebarAgentItem[] = [];
-  const myIds = new Set<string>();
-  const addMine = (item: SidebarAgentItem | undefined) => {
-    if (!item || myIds.has(item.id) || teamIds.has(item.id)) return;
-    myIds.add(item.id);
-    myPinned.push(item);
+  const mine: SidebarAgentItem[] = [];
+  const pinnedIds = new Set<string>();
+  const addPinned = (list: SidebarAgentItem[], item: SidebarAgentItem | undefined) => {
+    if (!item || pinnedIds.has(item.id)) return;
+    pinnedIds.add(item.id);
+    list.push(item);
   };
-  for (const id of myPinnedIds) addMine(candidates.get(id));
+  for (const id of myPinnedIds) addPinned(mine, candidates.get(id));
   for (const item of [...privatePinned].sort((a, b) => updatedAtMs(b) - updatedAtMs(a))) {
-    addMine(item);
+    addPinned(mine, item);
   }
 
-  const notPinned = (item: SidebarAgentItem) => !myIds.has(item.id) && !teamIds.has(item.id);
+  const unplacedTeam: SidebarAgentItem[] = [];
+  for (const item of teamPinned) {
+    if (!unpinnedTeam.has(item.id)) addPinned(unplacedTeam, item);
+  }
+
+  const pinned = pinnedOrderCustomized ? [...unplacedTeam, ...mine] : [...mine, ...unplacedTeam];
+
+  const notPinned = (item: SidebarAgentItem) => !pinnedIds.has(item.id);
 
   const folders = privateGroups.map((group) => ({
     ...group,
     items: group.items.filter(notPinned),
   }));
 
+  // An unpinned team pin stays in the sidebar until the member removes it.
   const membership = { currentUserId, visibilityOverrides };
-  const rest = [...ungrouped, ...privateUngrouped, ...publicFolderItems]
-    .filter((item) => notPinned(item) && isListedInWorkspaceSidebar(item, membership))
+  const isListed = (item: SidebarAgentItem) =>
+    isListedInWorkspaceSidebar(item, membership) ||
+    (teamIds.has(item.id) && visibilityOverrides[item.id] !== false);
+
+  const seen = new Set<string>();
+  const rest = [...teamPinned, ...ungrouped, ...privateUngrouped, ...publicFolderItems]
+    .filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return notPinned(item) && isListed(item);
+    })
     .sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
 
-  return { folders, myPinned, rest, teamPinned };
+  return { folders, pinned, rest };
 };

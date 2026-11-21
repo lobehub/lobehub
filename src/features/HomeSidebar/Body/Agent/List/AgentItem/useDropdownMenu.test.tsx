@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   canManage: false,
   canManageSettings: false,
   myPinnedIds: [] as string[],
+  unpinnedTeamIds: [] as string[],
   confirmModal: vi.fn(),
   confirmRemoveAgent: vi.fn(),
   copyToClipboard: vi.fn(),
@@ -134,14 +135,17 @@ vi.mock('@/store/home/selectors', () => ({
 
 interface UserStateMock {
   userId: string;
-  workspaceUserPreference: { sidebarPinnedItemIds: string[] };
+  workspaceUserPreference: { sidebarPinnedItemIds: string[]; sidebarUnpinnedTeamItemIds: string[] };
 }
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: UserStateMock) => unknown) =>
     selector({
       userId: 'member-1',
-      workspaceUserPreference: { sidebarPinnedItemIds: mocks.myPinnedIds },
+      workspaceUserPreference: {
+        sidebarPinnedItemIds: mocks.myPinnedIds,
+        sidebarUnpinnedTeamItemIds: mocks.unpinnedTeamIds,
+      },
     }),
 }));
 
@@ -150,6 +154,8 @@ vi.mock('@/store/user/selectors', () => ({
   workspaceUserSettingsSelectors: {
     sidebarPinnedItemIds: (state: UserStateMock) =>
       state.workspaceUserPreference.sidebarPinnedItemIds,
+    sidebarUnpinnedTeamItemIds: (state: UserStateMock) =>
+      state.workspaceUserPreference.sidebarUnpinnedTeamItemIds,
   },
 }));
 
@@ -216,6 +222,7 @@ describe('useAgentDropdownMenu', () => {
     mocks.canManage = false;
     mocks.canManageSettings = false;
     mocks.myPinnedIds = [];
+    mocks.unpinnedTeamIds = [];
     mocks.transferMenuItems = null;
   });
 
@@ -250,23 +257,41 @@ describe('useAgentDropdownMenu', () => {
       expect(mocks.home.pinAgent).toHaveBeenCalledWith('agent-1', true);
     });
 
-    it('shows a team-pinned agent as fixed: no hide, no personal pin, admin can unpin', () => {
+    it('lets an owner/admin unpin a team pin for the team and for themselves', () => {
       mocks.canManageSettings = true;
 
       const { result } = renderPublicAgentMenu('creator-1', { pinned: true });
       const keys = getMenuKeys(result.current());
 
-      expect(keys).toContain('pinForTeam');
-      expect(keys).not.toContain('pin');
-      expect(keys).not.toContain('hideFromSidebar');
+      expect(keys).toEqual(expect.arrayContaining(['pin', 'pinForTeam', 'hideFromSidebar']));
     });
 
-    it('gives a member no pin control over a team-pinned agent', () => {
+    it('lets a member unpin a team pin for themselves only', async () => {
       const { result } = renderPublicAgentMenu('creator-1', { pinned: true });
       const keys = getMenuKeys(result.current());
 
-      expect(keys).not.toContain('pin');
+      expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar']));
       expect(keys).not.toContain('pinForTeam');
+      const pinItem = getMenuItem(result.current(), 'pin') as unknown as { label: string };
+      expect(pinItem.label).toBe('pinOff');
+
+      await getMenuItem(result.current(), 'pin').onClick({
+        domEvent: { stopPropagation: vi.fn() },
+      });
+      expect(mocks.home.pinItemForMe).toHaveBeenCalledWith(
+        { id: 'agent-1', pinned: true, type: 'agent', visibility: 'public' },
+        false,
+      );
+      expect(mocks.home.pinAgent).not.toHaveBeenCalled();
+    });
+
+    it('offers to pin again a team pin the member unpinned', () => {
+      mocks.unpinnedTeamIds = ['agent-1'];
+
+      const { result } = renderPublicAgentMenu('creator-1', { pinned: true });
+      const pinItem = getMenuItem(result.current(), 'pin') as unknown as { label: string };
+
+      expect(pinItem.label).toBe('pin');
     });
 
     it('never offers a team pin on a private agent', () => {

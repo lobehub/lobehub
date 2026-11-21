@@ -15,6 +15,7 @@ import { useHomeStore } from '@/store/home';
 
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
+import TeamPinIcon from '../TeamPinIcon';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
@@ -29,7 +30,6 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -74,19 +74,20 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     [id, openAgentInNewWindow],
   );
 
-  // The lock sits with the pin in the fixed trailing slot so a long title
+  // The lock and team marks sit with the pin in the fixed trailing slot so a long title
   // can't truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
+      isMyPinned || isPrivate || isTeamPinned ? (
         <>
           {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
+          {isTeamPinned && <TeamPinIcon />}
+          {isMyPinned && (
             <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
           )}
         </>
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [isMyPinned, isPrivate, isTeamPinned],
   );
 
   // Memoize avatar icon (show loader when updating)

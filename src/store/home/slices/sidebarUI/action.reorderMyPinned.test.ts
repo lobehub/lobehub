@@ -9,10 +9,13 @@ let scope = 'user-a:ws-1';
 
 const updatePreference = vi.fn();
 
-const setPinned = (ids: string[]) =>
+const setPinned = (ids: string[], customized = true) =>
   useUserStore.setState({
     updateWorkspaceUserPreference: updatePreference,
-    workspaceUserPreference: { sidebarPinnedItemIds: ids },
+    workspaceUserPreference: {
+      sidebarPinnedItemIds: ids,
+      sidebarPinnedOrderCustomized: customized,
+    },
   } as any);
 
 const reorder = (ids: string[]) => act(() => useHomeStore.getState().reorderMyPinned(ids));
@@ -29,7 +32,10 @@ describe('reorderMyPinned', () => {
 
     await reorder(['c', 'a', 'b']);
 
-    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['c', 'a', 'b'] });
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['c', 'a', 'b'],
+      sidebarPinnedOrderCustomized: true,
+    });
   });
 
   it('keeps pins that are not shown after the reordered ones', async () => {
@@ -39,6 +45,7 @@ describe('reorderMyPinned', () => {
 
     expect(updatePreference).toHaveBeenCalledWith({
       sidebarPinnedItemIds: ['b', 'a', 'hidden', 'dangling'],
+      sidebarPinnedOrderCustomized: true,
     });
   });
 
@@ -47,7 +54,34 @@ describe('reorderMyPinned', () => {
 
     await reorder(['legacy', 'a']);
 
-    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['legacy', 'a'] });
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['legacy', 'a'],
+      sidebarPinnedOrderCustomized: true,
+    });
+  });
+
+  it('saves team pins placed among the member’s own and marks the order as theirs', async () => {
+    setPinned(['mine'], false);
+
+    // The member never rearranged before: team pins were listed after theirs.
+    await reorder(['team-1', 'mine', 'team-2']);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['team-1', 'mine', 'team-2'],
+      sidebarPinnedOrderCustomized: true,
+    });
+  });
+
+  it('keeps a pinned order longer than 200 rows, since it can hold every team pin', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => `team-${i}`);
+    setPinned([]);
+
+    await reorder(many);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: many,
+      sidebarPinnedOrderCustomized: true,
+    });
   });
 
   it('skips the write when nothing moved', async () => {
@@ -76,8 +110,14 @@ describe('reorderMyPinned', () => {
     finishFirst();
     await act(() => Promise.all([first, second]));
 
-    expect(updatePreference).toHaveBeenNthCalledWith(1, { sidebarPinnedItemIds: ['c', 'a', 'b'] });
-    expect(updatePreference).toHaveBeenNthCalledWith(2, { sidebarPinnedItemIds: ['b', 'c', 'a'] });
+    expect(updatePreference).toHaveBeenNthCalledWith(1, {
+      sidebarPinnedItemIds: ['c', 'a', 'b'],
+      sidebarPinnedOrderCustomized: true,
+    });
+    expect(updatePreference).toHaveBeenNthCalledWith(2, {
+      sidebarPinnedItemIds: ['b', 'c', 'a'],
+      sidebarPinnedOrderCustomized: true,
+    });
   });
 
   it('still saves the next reorder after a failed one', async () => {

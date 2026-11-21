@@ -48,11 +48,20 @@ const isAgentHiddenFromSidebar =
     !!s.workspaceUserPreference.sidebarHiddenAgentIds?.includes(agentId);
 
 /**
- * Agents / chat groups the caller pinned for themselves in the active
- * workspace's merged Agents section, newest first.
+ * Agents / chat groups pinned in the caller's merged Agents section of the
+ * active workspace, in their own order (team pins they kept included once
+ * they rearranged the list).
  */
 const sidebarPinnedItemIds = (s: UserStore): string[] =>
   s.workspaceUserPreference.sidebarPinnedItemIds ?? EMPTY_HIDDEN;
+
+/** Whether the caller rearranged their pinned list in the active workspace. */
+const sidebarPinnedOrderCustomized = (s: UserStore): boolean =>
+  !!s.workspaceUserPreference.sidebarPinnedOrderCustomized;
+
+/** Team pins the caller unpinned for themselves in the active workspace. */
+const sidebarUnpinnedTeamItemIds = (s: UserStore): string[] =>
+  s.workspaceUserPreference.sidebarUnpinnedTeamItemIds ?? EMPTY_HIDDEN;
 
 /** Per-member sidebar sections layout for the active workspace. */
 const sidebarLayout = (s: UserStore) => s.workspaceUserPreference.sidebar;
@@ -70,4 +79,6 @@ export const workspaceUserSettingsSelectors = {
   sidebarHiddenGroupIds,
   sidebarLayout,
   sidebarPinnedItemIds,
+  sidebarPinnedOrderCustomized,
+  sidebarUnpinnedTeamItemIds,
 };

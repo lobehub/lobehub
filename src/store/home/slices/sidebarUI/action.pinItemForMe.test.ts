@@ -43,10 +43,43 @@ describe('pinItemForMe', () => {
   it('unpins a public agent from the member preference only', async () => {
     useUserStore.setState({ workspaceUserPreference: { sidebarPinnedItemIds: ['pub', 'older'] } });
 
-    await pinForMe({ id: 'pub', pinned: true, type: 'agent', visibility: 'public' }, false);
+    await pinForMe({ id: 'pub', pinned: false, type: 'agent', visibility: 'public' }, false);
 
     expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['older'] });
-    // Even when the row is team-pinned, a personal unpin leaves the team pin.
+    expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
+  });
+
+  it('records a team pin the member unpinned, leaving the team pin itself', async () => {
+    useUserStore.setState({
+      workspaceUserPreference: {
+        sidebarPinnedItemIds: ['team', 'older'],
+        sidebarUnpinnedTeamItemIds: ['other-team'],
+      },
+    });
+
+    await pinForMe({ id: 'team', pinned: true, type: 'agent', visibility: 'public' }, false);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['older'],
+      sidebarUnpinnedTeamItemIds: ['team', 'other-team'],
+    });
+    expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
+  });
+
+  it('clears that record when the member pins the team pin again', async () => {
+    useUserStore.setState({
+      workspaceUserPreference: {
+        sidebarPinnedItemIds: ['older'],
+        sidebarUnpinnedTeamItemIds: ['team'],
+      },
+    });
+
+    await pinForMe({ id: 'team', pinned: true, type: 'agent', visibility: 'public' }, true);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['team', 'older'],
+      sidebarUnpinnedTeamItemIds: [],
+    });
     expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
   });
 
