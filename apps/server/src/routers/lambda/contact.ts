@@ -187,6 +187,12 @@ export const contactRouter = router({
     .input(z.object({ share: handle }))
     .mutation(async ({ ctx, input }) => ctx.contactModel.addAgent(input.share)),
 
+  /** Add an Agent from its card message; the owner's card admits the caller to a `card` share. */
+  addAgentFromCard: contactProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
+    .input(z.object({ messageId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ctx.contactModel.addAgentFromCard(input.messageId)),
+
   removeAgent: contactProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
     .input(z.object({ agentId: z.string().min(1).max(64) }))

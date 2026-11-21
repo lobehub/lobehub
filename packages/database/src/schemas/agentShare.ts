@@ -1,8 +1,14 @@
-import type { AgentShareDemoCase, AgentShareToolGrant } from '@lobechat/types';
+import type {
+  AgentShareDemoCase,
+  AgentShareGrantSource,
+  AgentShareToolGrant,
+  AgentShareVisibility,
+} from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { timestamps } from './_helpers';
+import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
+import { users } from './user';
 
 export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'none';
 
@@ -164,7 +170,7 @@ export const agentShares = pgTable(
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
 
-    visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
+    visibility: text('visibility').$type<AgentShareVisibility>().default('private').notNull(),
 
     shareConfig: jsonb('share_config').$type<AgentShareConfig>(),
 
@@ -187,3 +193,40 @@ export const agentShares = pgTable(
 
 export type NewAgentShare = typeof agentShares.$inferInsert;
 export type AgentShareItem = typeof agentShares.$inferSelect;
+
+/**
+ * The people a share admits besides its link: each added the Agent from a card its owner shared
+ * into a Channel they are in, until the owner revokes them. A `card` share admits only them;
+ * pausing the share pauses them too,
+ * and a replaced share (deleted, or its Agent recreated) starts with none.
+ */
+export const agentShareGrants = pgTable(
+  'agent_share_grants',
+  {
+    // Only ever addressed through the share and the person, so no id prefix.
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    shareId: uuid('share_id')
+      .references(() => agentShares.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    source: jsonb('source').$type<AgentShareGrantSource>().notNull(),
+    /**
+     * Set when the owner withdrew the grant. The row is kept so a card sent before the withdrawal
+     * cannot restore it; only a card the owner sends afterwards does.
+     */
+    revokedAt: timestamptz('revoked_at'),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('agent_share_grants_share_user_unique').on(t.shareId, t.userId),
+    // Serves the cascade from users.
+    index('agent_share_grants_user_id_idx').on(t.userId),
+  ],
+);
+
+export type AgentShareGrantRow = typeof agentShareGrants.$inferSelect;
