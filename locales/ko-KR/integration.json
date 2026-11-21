@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}}개의 리포지토리",
   "github.connections.status.connected": "연결됨",
   "github.connections.status.suspended": "중단됨",
-  "github.connections.title": "연결",
   "github.info.docsLink": "가이드 읽기",
   "github.info.enabledBy": "활성화한 사람",
   "github.info.notConfigured": "이 배포에서 구성되지 않음",

@@ -4,6 +4,7 @@ import isEqual from 'fast-deep-equal';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { isGithubConnector } from '@/features/Integrations/Github/home';
 import ComposioSkillItem from '@/features/Settings/skill/features/ComposioSkillItem';
 import {
   buildIntegrationItems,
@@ -67,6 +68,7 @@ export const useCatalogIntegrations = (keyword?: string) => {
             <LobehubSkillItem
               showConnectLabel
               key={id}
+              openWhenDisconnected={isGithubConnector(id)}
               provider={item.provider}
               server={lobehubById.get(id)}
               onSelect={() =>

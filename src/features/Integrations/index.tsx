@@ -4,15 +4,18 @@ import './Github/definition';
 import './Linear/definition';
 
 import { memo, useEffect } from 'react';
-import { useParams } from 'react-router';
+import { useLocation, useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import GithubIntegration from './Github';
+import { buildGithubConnectorPath } from './Github/home';
 import IntegrationsLayout from './Layout';
 import LinearIntegration from './Linear';
 import Overview from './Overview';
 import { type IntegrationId, isIntegrationId } from './registry';
+import { IntegrationDetailSkeleton } from './Skeleton';
+import { useGithubHome } from './useGithubHome';
 
 const BASE_PATH = '/settings/integrations';
 
@@ -24,11 +27,19 @@ const BASE_PATH = '/settings/integrations';
 const IntegrationsSettings = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ sub?: string }>();
+  const { search } = useLocation();
+  const githubHome = useGithubHome();
   const selected: IntegrationId | null = isIntegrationId(params.sub) ? params.sub : null;
+  const githubMoved = selected === 'github' && githubHome.inMarketplace;
 
   useEffect(() => {
     if (params.sub && !selected) navigate(BASE_PATH, { replace: true });
   }, [navigate, params.sub, selected]);
+
+  // Old links and the GitHub App install callback still land on this path.
+  useEffect(() => {
+    if (githubMoved) navigate(buildGithubConnectorPath(search), { replace: true });
+  }, [githubMoved, navigate, search]);
 
   const open = (id: IntegrationId) => navigate(`${BASE_PATH}/${id}`);
   const back = () => navigate(BASE_PATH);
@@ -36,7 +47,11 @@ const IntegrationsSettings = memo(() => {
   return (
     <IntegrationsLayout>
       {selected === 'github' ? (
-        <GithubIntegration onBack={back} />
+        githubHome.isReady && !githubMoved ? (
+          <GithubIntegration onBack={back} />
+        ) : (
+          <IntegrationDetailSkeleton />
+        )
       ) : selected === 'linear' ? (
         <LinearIntegration onBack={back} />
       ) : (

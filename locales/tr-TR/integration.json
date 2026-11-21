@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} depo",
   "github.connections.status.connected": "Bağlı",
   "github.connections.status.suspended": "Askıya alındı",
-  "github.connections.title": "Bağlantılar",
   "github.info.docsLink": "Kılavuzu okuyun",
   "github.info.enabledBy": "Tarafından etkinleştirildi",
   "github.info.notConfigured": "Bu dağıtımda yapılandırılmamış",

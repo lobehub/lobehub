@@ -33,7 +33,6 @@ export default {
   'github.connections.selectedRepositories': '{{count}} repositories',
   'github.connections.status.connected': 'Connected',
   'github.connections.status.suspended': 'Suspended',
-  'github.connections.title': 'Connections',
   'github.info.docsLink': 'Read the guide',
   'github.info.enabledBy': 'Enabled by',
   'github.info.notConfigured': 'Not configured on this deployment',
@@ -57,6 +56,11 @@ export default {
   'github.pending.failed':
     'Could not connect the installation. Please try again from Connect account.',
   'github.pending.title': 'Connect GitHub installation',
+  'github.connectorPage.description':
+    'Connect your account to give agents GitHub tools. Install the app to sync pull requests, CI results and reviews.',
+  'github.repositoryAccess.description':
+    'Install the LobeHub app to sync pull request activity and use repositories in projects and environments.',
+  'github.repositoryAccess.title': 'Repository access',
   'github.tagline': 'Sync pull requests, CI results and reviews with your agents',
   'linear.connections.connect': 'Connect workspace',
   'linear.connections.connectedAs': 'Connected as {{name}} · {{date}}',

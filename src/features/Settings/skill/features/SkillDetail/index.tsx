@@ -14,6 +14,7 @@ import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
+import { isGithubConnector } from '@/features/Integrations/Github/home';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
@@ -30,6 +31,10 @@ const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 // Lazy so `SkillDetail`'s static import graph stays free of the agent-navigation
 // chain (`useNavigateToAgent` → chat store); only agent connectors need it.
 const AgentConnectorUsage = lazy(() => import('../AgentConnectorUsage'));
+const GithubConnectorGate = lazy(() => import('@/features/Integrations/Github/ConnectorGate'));
+const GithubRepositoryAccess = lazy(
+  () => import('@/features/Integrations/Github/RepositoryAccess'),
+);
 
 export type ToolDetailType =
   | 'agent-connector'
@@ -270,6 +275,8 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
     { revalidateOnFocus: false },
   );
 
+  const isGithub = type === 'lobehub-connector' && isGithubConnector(identifier);
+
   const isConnectorType =
     type === 'builtin' ||
     type === 'plugin' ||
@@ -501,6 +508,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
         {canMigrateLegacy
           ? ts('tools.legacyConnector.upgradeDesc')
           : ts('tools.noConfigurablePermissions')}
+        {isGithub && (
+          <div style={{ marginBlockStart: 24 }}>
+            <Suspense fallback={null}>
+              <GithubRepositoryAccess />
+            </Suspense>
+          </div>
+        )}
         {canMigrateLegacy && legacyPlugin && (
           <CustomConnectorModal
             legacyPlugin={legacyPlugin}
@@ -520,6 +534,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
     <ConnectorDetail
       connectorId={connector.id}
       lifecycleActions={renderLobehubConnectorAction(() => setNoManifest(true))}
+      middleSlot={
+        isGithub ? (
+          <Suspense fallback={null}>
+            <GithubRepositoryAccess />
+          </Suspense>
+        ) : undefined
+      }
       onDelete={onDelete}
     />
   );
@@ -527,4 +548,25 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
 
 SkillDetail.displayName = 'SkillDetail';
 
-export default SkillDetail;
+/** GitHub's page also covers the App, so it has content before the account is connected. */
+const SkillDetailEntry = memo<SkillDetailProps>((props) =>
+  props.type === 'lobehub-connector' && isGithubConnector(props.identifier) ? (
+    <Suspense
+      fallback={
+        <div style={{ padding: 24 }}>
+          <Skeleton.Text rows={6} />
+        </div>
+      }
+    >
+      <GithubConnectorGate>
+        <SkillDetail {...props} />
+      </GithubConnectorGate>
+    </Suspense>
+  ) : (
+    <SkillDetail {...props} />
+  ),
+);
+
+SkillDetailEntry.displayName = 'SkillDetailEntry';
+
+export default SkillDetailEntry;

@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} репозиториев",
   "github.connections.status.connected": "Подключено",
   "github.connections.status.suspended": "Приостановлено",
-  "github.connections.title": "Подключения",
   "github.info.docsLink": "Прочитать руководство",
   "github.info.enabledBy": "Включено",
   "github.info.notConfigured": "Не настроено в этом развертывании",

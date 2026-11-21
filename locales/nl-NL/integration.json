@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} repositories",
   "github.connections.status.connected": "Verbonden",
   "github.connections.status.suspended": "Opgeschort",
-  "github.connections.title": "Verbindingen",
   "github.info.docsLink": "Lees de handleiding",
   "github.info.enabledBy": "Ingeschakeld door",
   "github.info.notConfigured": "Niet geconfigureerd in deze implementatie",

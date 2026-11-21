@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} repositorios",
   "github.connections.status.connected": "Conectado",
   "github.connections.status.suspended": "Suspendido",
-  "github.connections.title": "Conexiones",
   "github.info.docsLink": "Leer la guía",
   "github.info.enabledBy": "Habilitado por",
   "github.info.notConfigured": "No configurado en esta implementación",

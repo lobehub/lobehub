@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} kho lưu trữ",
   "github.connections.status.connected": "Đã kết nối",
   "github.connections.status.suspended": "Đã tạm ngưng",
-  "github.connections.title": "Kết nối",
   "github.info.docsLink": "Đọc hướng dẫn",
   "github.info.enabledBy": "Được kích hoạt bởi",
   "github.info.notConfigured": "Chưa được cấu hình trên triển khai này",

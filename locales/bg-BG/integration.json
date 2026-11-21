@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} хранилища",
   "github.connections.status.connected": "Свързан",
   "github.connections.status.suspended": "Спрян",
-  "github.connections.title": "Връзки",
   "github.info.docsLink": "Прочетете ръководството",
   "github.info.enabledBy": "Активирано от",
   "github.info.notConfigured": "Не е конфигурирано в това внедряване",

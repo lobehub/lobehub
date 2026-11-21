@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
+import { isGithubConnector } from '@/features/Integrations/Github/home';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import {
   featureFlagsSelectors,
@@ -408,6 +409,7 @@ const SkillList = memo<SkillListProps>(
               hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
+              openWhenDisconnected={isGithubConnector(item.provider.id)}
               provider={item.provider}
               server={getLobehubSkillServerByProvider(item.provider.id)}
               onDelete={onDeleteSelected}

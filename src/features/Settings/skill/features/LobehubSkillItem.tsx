@@ -39,13 +39,27 @@ interface LobehubSkillItemProps {
   isSelected?: boolean;
   onDelete?: () => void;
   onSelect?: () => void;
+  /** The row opens `onSelect` before connecting too: it leads to a page, not an empty detail. */
+  openWhenDisconnected?: boolean;
   provider: LobehubSkillProviderType;
   server?: LobehubSkillServer;
   showConnectLabel?: boolean;
+  /** Replaces the provider's generic description on the row. */
+  summary?: string;
 }
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
-  ({ hideConnectedStatus, provider, server, isSelected, onSelect, onDelete, showConnectLabel }) => {
+  ({
+    hideConnectedStatus,
+    provider,
+    server,
+    isSelected,
+    onSelect,
+    onDelete,
+    openWhenDisconnected,
+    showConnectLabel,
+    summary,
+  }) => {
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
@@ -401,10 +415,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           // Only connected connectors open the detail panel. When disconnected,
           // the row is inert and the only affordance is the inline Connect button —
           // otherwise clicking opens a blank detail panel that reads as a bug.
-          summary={t(`tools.lobehubSkill.providers.${provider.id}.description`, {
-            defaultValue: provider.description,
-          })}
-          onClick={isConnected ? onSelect : undefined}
+          // `openWhenDisconnected` is for a connector whose detail has content anyway.
+          summary={
+            summary ??
+            t(`tools.lobehubSkill.providers.${provider.id}.description`, {
+              defaultValue: provider.description,
+            })
+          }
+          onClick={isConnected || openWhenDisconnected ? onSelect : undefined}
         />
       );
     }

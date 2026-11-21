@@ -8,6 +8,7 @@ import IntegrationCard from './IntegrationCard';
 import { isDirectorySettling } from './loading';
 import { type IntegrationId, INTEGRATIONS, UPCOMING_INTEGRATIONS } from './registry';
 import { IntegrationsOverviewSkeleton } from './Skeleton';
+import { useGithubHome } from './useGithubHome';
 import { useGithubIntegration } from './useGithubIntegration';
 import { useLinearIntegration } from './useLinearIntegration';
 
@@ -56,19 +57,27 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
   const { t } = useTranslation('integration');
   const github = useGithubIntegration();
   const linear = useLinearIntegration();
+  const githubHome = useGithubHome();
 
   const enabledById: Record<IntegrationId, boolean> = {
     github: github.enabled,
     linear: linear.enabled,
   };
-  const enabled = INTEGRATIONS.filter((item) => enabledById[item.id]);
+  // GitHub is managed from its Marketplace connector wherever that exists.
+  const integrations = INTEGRATIONS.filter(
+    (item) => item.id !== 'github' || !githubHome.inMarketplace,
+  );
+  const enabled = integrations.filter((item) => enabledById[item.id]);
 
   // Statuses and the Enabled strip depend on both connection lookups; swap the
   // directory in once they settle instead of letting the strip pop in later.
-  if (isDirectorySettling([github, linear]))
+  if (
+    !githubHome.isReady ||
+    isDirectorySettling(githubHome.inMarketplace ? [linear] : [github, linear])
+  )
     return (
       <IntegrationsOverviewSkeleton
-        available={INTEGRATIONS.length}
+        available={integrations.length}
         upcoming={UPCOMING_INTEGRATIONS.length}
       />
     );
@@ -89,7 +98,7 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
       <Flexbox gap={10}>
         <span className={styles.sectionLabel}>{t('overview.all')}</span>
         <div className={styles.list}>
-          {INTEGRATIONS.map((item) => (
+          {integrations.map((item) => (
             <IntegrationCard
               enabled={enabledById[item.id]}
               integration={item}

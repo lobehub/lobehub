@@ -25,7 +25,6 @@
   "github.connections.selectedRepositories": "{{count}} مخازن",
   "github.connections.status.connected": "متصل",
   "github.connections.status.suspended": "معلق",
-  "github.connections.title": "اتصالات",
   "github.info.docsLink": "راهنما را بخوانید",
   "github.info.enabledBy": "فعال شده توسط",
   "github.info.notConfigured": "در این استقرار پیکربندی نشده است",
