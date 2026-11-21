@@ -151,15 +151,36 @@ export class TaskModel {
     // direct resets such as a report rerun — is announced once, against the row's
     // status before the write.
     if (data.status === undefined || !hasDatabaseEventListener()) return this.writeUpdate(id, data);
-    const before = await this.findById(id);
-    const task = await this.writeUpdate(id, data);
-    if (task && before) this.announceStatusChange(task, before.status);
-    return task;
+
+    // The prior status has to be read under the same row lock as the write: an
+    // unlocked read lets two concurrent updates both observe `running` (a heartbeat
+    // timeout detected twice) and each announce a `running → paused` transition, and
+    // it lets a stale read suppress a real transition when it already equals the
+    // requested status. Read and write inside one transaction, announce after it
+    // commits so listeners never see a row the transaction has not published.
+    const settled = await this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), taskOwnership(this.ctx)))
+        .for('update')
+        .limit(1);
+      if (!before) return null;
+
+      const task = await this.writeUpdate(id, data, runner);
+      return task ? { previousStatus: before.status, task } : null;
+    });
+    if (!settled) return null;
+
+    this.announceStatusChange(settled.task, settled.previousStatus);
+    return settled.task;
   }
 
   private async writeUpdate(
     id: string,
     data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+    db: LobeChatDatabase = this.db,
   ): Promise<TaskItem | null> {
     // A reassignment is not a plain column write: the row being moved away from
     // decides whether the previous assignee's cloud-repo selection has to go,
@@ -169,9 +190,9 @@ export class TaskModel {
     // handoff/restart, the runner's inbox fallback), so this is the one place
     // the invariant has to hold; `updateWithLog` locks its own read for the
     // activity log and then delegates.
-    if (data.assigneeAgentId === undefined) return rows.writeRow(this.ctx, this.db, id, data);
+    if (data.assigneeAgentId === undefined) return rows.writeRow(this.ctx, db, id, data);
 
-    return this.db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       const runner = tx as LobeChatDatabase;
       const [before] = await runner
         .select({ assigneeAgentId: tasks.assigneeAgentId, config: tasks.config })
