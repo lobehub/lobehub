@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { Client } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -628,3 +629,94 @@ describe('domain events announced by models', () => {
     error.mockRestore();
   });
 });
+
+// Overlapping writers need two real sessions: the client-DB (PGlite) suite has one
+// connection, so these run against the server database that the `Test Database` job
+// provides. Both cases are deterministic — the competitor's write is held open, so the
+// model's read provably happens after it, never before.
+describe.skipIf(!process.env.DATABASE_TEST_URL)(
+  'task.status_changed with an overlapping writer',
+  () => {
+    const capture = () => {
+      const listener = vi.fn<DatabaseEventListener>();
+      setDatabaseEventListener(listener);
+      return listener;
+    };
+
+    /** Hold an uncommitted status write on its own session, so the row lock is real. */
+    const holdStatus = async (client: Client, taskId: string, status: string) => {
+      await client.query('BEGIN');
+      await client.query('UPDATE tasks SET status = $1 WHERE id = $2', [status, taskId]);
+    };
+
+    /** Wait until the model's transaction is queued on the lock the competitor holds. */
+    const waitForRowLock = () =>
+      vi.waitFor(
+        async () => {
+          const { rows } = await serverDB.execute(
+            sql`SELECT count(*)::int AS waiting
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND wait_event_type = 'Lock'
+                  AND query ILIKE '%from "tasks"%'`,
+          );
+          expect((rows[0] as { waiting: number }).waiting).toBeGreaterThan(0);
+        },
+        { interval: 50, timeout: 5000 },
+      );
+
+    const withCompetitor = async (
+      taskId: string,
+      status: string,
+      racing: () => Promise<unknown>,
+    ) => {
+      const client = new Client({ connectionString: process.env.DATABASE_TEST_URL });
+      await client.connect();
+      try {
+        await holdStatus(client, taskId, status);
+        const racer = racing();
+        await waitForRowLock();
+        // Release the competitor first: the racer may only read the committed value.
+        await client.query('COMMIT');
+        return await racer;
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        await client.end();
+      }
+    };
+
+    it('announces nothing when the competitor already moved the row to the requested status', async () => {
+      const tasks = new TaskModel(serverDB, userId, workspaceId);
+      const task = await tasks.create({ instruction: 'Racing pause' });
+      await tasks.updateStatus(task.id, 'running');
+      const listener = capture();
+
+      await expect(
+        withCompetitor(task.id, 'paused', () => tasks.update(task.id, { status: 'paused' })),
+      ).resolves.toMatchObject({ status: 'paused' });
+
+      // A heartbeat timeout detected twice must not announce `running → paused` twice.
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('announces the transition the competitor left behind instead of swallowing it', async () => {
+      const tasks = new TaskModel(serverDB, userId, workspaceId);
+      const task = await tasks.create({ instruction: 'Racing resume' });
+      await tasks.updateStatus(task.id, 'paused');
+      const listener = capture();
+
+      // The row leaves `paused` under the competitor; a read taken before the lock would
+      // see the stale `paused` and discard the real `running → paused` we write next.
+      await expect(
+        withCompetitor(task.id, 'running', () => tasks.update(task.id, { status: 'paused' })),
+      ).resolves.toMatchObject({ status: 'paused' });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][3]).toMatchObject({
+        previousStatus: 'running',
+        status: 'paused',
+        taskId: task.id,
+      });
+    });
+  },
+);
