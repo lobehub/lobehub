@@ -3,13 +3,14 @@ import type { LLMAttemptInput } from '@lobechat/agent-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modules/agent-runtime';
 import { RequestTrigger } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   initModelRuntimeFromDB,
   resolveProviderResponseApiMode,
   resolveServerModel,
 } from '@/server/modules/ModelRuntime';
+import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
 
 import type { RuntimeExecutorContext } from '../context';
 import { ServerLLMTransport } from './ServerLLMTransport';
@@ -655,5 +656,77 @@ describe('ServerLLMTransport · provider Responses API preference', () => {
     });
 
     expect(chat.mock.calls[0][0].apiMode).toBe('responses');
+  });
+});
+
+describe('ServerLLMTransport.runAttempt · step deadline', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the partial output when the call is stopped before the invocation is killed', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    const chat = vi.fn(async (_payload, options) => {
+      await options.callback?.onThinking?.('Long reasoning');
+      await options.callback?.onText?.('Partial answer');
+      await new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(options.signal.reason));
+      });
+      return new Response('');
+    });
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+    vi.mocked(resolveServerModel).mockResolvedValue({ model: 'claude-opus', provider: 'lobehub' });
+
+    const transport = new ServerLLMTransport({
+      messageModel: { update },
+      operationId: 'op-1',
+      serverDB: {},
+      stepIndex: 0,
+      streamManager: {
+        publishStreamChunk: vi.fn().mockResolvedValue('chunk-id'),
+        publishStreamEvent: vi.fn().mockResolvedValue('event-id'),
+      },
+      toolExecutionService: {},
+      userId: 'user-1',
+    } as unknown as RuntimeExecutorContext);
+
+    const run = runWithInvocationDeadline(Date.now() + 100_000, () =>
+      transport.runAttempt({
+        assistantMessageId: 'msg-1',
+        attempt: 1,
+        context: {
+          messages: [{ content: 'Question', role: 'user' }],
+          modelParameters: {},
+          replayAssistantReasoning: false,
+          resolvedTools: {
+            enabledToolIds: [],
+            executorMap: {},
+            manifestMap: {},
+            promptManifestMap: {},
+            sourceMap: {},
+            tools: [],
+          },
+        },
+        events: [],
+        maxAttempts: 6,
+        model: 'claude-opus',
+        provider: 'lobehub',
+        state: {},
+      } as unknown as LLMAttemptInput),
+    );
+    await vi.advanceTimersByTimeAsync(70_000);
+    const execution = await run;
+
+    expect(execution).toMatchObject({ error: { errorType: 'LlmStepTimeout' }, ok: false });
+    expect(update).toHaveBeenCalledWith('msg-1', {
+      content: 'Partial answer',
+      metadata: { interruptedMidStream: true },
+      reasoning: { content: 'Long reasoning' },
+    });
   });
 });

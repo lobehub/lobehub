@@ -22,6 +22,7 @@ import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
 import MessageBranch from '../components/MessageBranch';
+import Reasoning from '../components/Reasoning';
 import RefreshingIndicator from '../components/RefreshingIndicator';
 import {
   useSetMessageItemActionElementPortialContext,
@@ -33,6 +34,7 @@ import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
 import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
+import { shouldShowReasoningAboveError } from './reasoningAboveError';
 
 const actionBarHolder = (
   <div
@@ -68,6 +70,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
       performance,
       usage,
       metadata,
+      reasoning,
       taskDetail,
     } = item;
 
@@ -144,7 +147,16 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={runningThreadId ? undefined : <ThreadExecutionSummary messageId={id} />}
+        aboveMessage={
+          runningThreadId ? undefined : (
+            <>
+              <ThreadExecutionSummary messageId={id} />
+              {shouldShowReasoningAboveError({ hasEmptyErrorMessage, reasoning }) && (
+                <Reasoning {...reasoning} id={id} />
+              )}
+            </>
+          )
+        }
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.

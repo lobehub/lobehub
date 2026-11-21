@@ -6,6 +6,7 @@ import { getInvocationDeadline } from '@/server/utils/invocationDeadline';
 import type * as ScheduleAfterResponseModule from '@/server/utils/scheduleAfterResponse';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { STEP_INVOCATION_MAX_DURATION_MS } from '../../invocationBudget';
 import { runStep, runStepHealth } from '../runStep';
 
 const runningStepResult = (continuation: unknown) => ({
@@ -364,9 +365,9 @@ describe('runStep handler', () => {
     const { ctx } = buildContext({ body: validBody });
     await runStep(ctx);
 
-    // The route's 600s maxDuration, counted from the request.
-    expect(deadlineSeen).toBeGreaterThanOrEqual(startedAt + 600_000);
-    expect(deadlineSeen).toBeLessThanOrEqual(Date.now() + 600_000);
+    // The route's maxDuration, counted from the request.
+    expect(deadlineSeen).toBeGreaterThanOrEqual(startedAt + STEP_INVOCATION_MAX_DURATION_MS);
+    expect(deadlineSeen).toBeLessThanOrEqual(Date.now() + STEP_INVOCATION_MAX_DURATION_MS);
   });
 
   it('kicks the opportunistic stale-operation sweep on a valid delivery', async () => {

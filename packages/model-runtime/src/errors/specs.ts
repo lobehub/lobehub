@@ -539,6 +539,21 @@ export const ERROR_CODE_SPECS: SpecMap = {
       'A harness-side `JSON.parse` threw on data the harness produced or stored ("… in JSON at position N" / "Unexpected end of JSON input") — a serialization bug, not an upstream response.',
   },
 
+  [AgentRuntimeErrorType.LlmStepTimeout]: {
+    code: AgentRuntimeErrorType.LlmStepTimeout,
+    numericId: 7009,
+    category: 'stream',
+    severity: 'error',
+    attribution: 'harness',
+    httpStatus: 504,
+    // The step already used the invocation's whole budget; a retry regenerates
+    // the same long output from scratch and is billed again by the upstream.
+    retryable: false,
+    countAsFailure: true,
+    description:
+      'A server-side LLM call was stopped shortly before its step invocation hit the host function timeout (`maxDuration`), typically a very long reasoning or output stream.',
+  },
+
   // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {
     code: AgentRuntimeErrorType.AgentRuntimeError,
