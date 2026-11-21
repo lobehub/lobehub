@@ -1,6 +1,8 @@
 import { projectChannelHistory } from '@lobechat/prompts/channel';
 import type {
   BuiltinServerRuntimeOutput,
+  ChannelAskedUser,
+  ChannelAskUserParams,
   ChannelCreatedThread,
   ChannelCreateThreadParams,
   ChannelDirectoryPage,
@@ -27,6 +29,8 @@ import type {
 } from '@lobechat/types';
 
 export interface ChannelHistoryService {
+  /** Holds the run's questions for its reply; see `ChannelHistoryRepository.ask`. */
+  askUser?: (params: ChannelAskUserParams) => Promise<ChannelAskedUser>;
   readMessage: (params: ChannelReadMessageParams) => Promise<ChannelHistoryMessageDetail>;
   readMessages: (params: ChannelReadMessagesParams) => Promise<ChannelHistoryPage>;
 }
@@ -108,6 +112,21 @@ export class ChannelExecutionRuntime {
     }
   }
 
+  askUser = async (params: ChannelAskUserParams): Promise<BuiltinServerRuntimeOutput> => {
+    try {
+      if (!this.service.askUser) throw new Error('Asking is not available in this run');
+      const state = await this.service.askUser(params);
+      return {
+        content:
+          'The question will be posted as a card with your final answer. End your turn now with a short lead-in to it, without listing the options. The answer arrives later as a new request replying to your question.',
+        state,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not ask the question';
+      return { content: message, error: { type: 'ChannelAskError', message }, success: false };
+    }
+  };
   readMessages = (params: ChannelReadMessagesParams) =>
     this.result(() => this.service.readMessages(params));
   readMessage = (params: ChannelReadMessageParams) =>

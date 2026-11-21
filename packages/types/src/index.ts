@@ -18,6 +18,7 @@ export * from './asyncTask';
 export * from './auth';
 export * from './brief';
 export * from './channel';
+export * from './channelAsk';
 export * from './chunk';
 export * from './contact';
 export * from './conversation';

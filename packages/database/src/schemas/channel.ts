@@ -1,4 +1,5 @@
 import type {
+  ChannelAskInput,
   ChannelAuditDetails,
   ChannelConfig,
   ChannelExecutionConfig,
@@ -14,6 +15,7 @@ import type {
   ChannelMemberMetadata,
   ChannelMemberRole,
   ChannelMemberStatus,
+  ChannelMessageKind,
   ChannelMessageMetadata,
   ChannelMessageRoutingSource,
   ChannelMessageRoutingStatus,
@@ -365,6 +367,8 @@ export const channelMessages = pgTable(
       .notNull(),
     threadId: text('thread_id'),
     sequence: integer('sequence').notNull(),
+    /** What the message is (`ChannelMessageKind`); its payload is `metadata.<kind>`. */
+    kind: text('kind').$type<ChannelMessageKind>().notNull().default('text'),
     content: text('content').notNull(),
     /** Actual human sender, not the owner/requester of an Agent reply. */
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
@@ -511,6 +515,8 @@ export const channelJobs = pgTable(
     isolatedAt: timestamptz('isolated_at'),
     /** Final answer saved by the run; immutable once set. */
     draft: text('draft'),
+    /** Questions the run asked (`lobe-channel.askUser`), posted with its reply as an `ask`. */
+    ask: jsonb('ask').$type<ChannelAskInput>(),
     /** A revoked job never publishes. Set by stops, failures and isolation. */
     publicationRevoked: boolean('publication_revoked').notNull().default(false),
     publishedMessageId: uuid('published_message_id'),

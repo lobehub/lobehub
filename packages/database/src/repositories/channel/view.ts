@@ -1,5 +1,6 @@
 import {
   type AgentDeviceOverride,
+  channelMessageAsk,
   channelMessageDeletedAt,
   channelMessageEditedAt,
   channelMessageReceipt,
@@ -90,6 +91,11 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    // A deleted question keeps its row as a tombstone, but nothing is left to answer.
+    ask:
+      message.kind === 'ask' && !channelMessageDeletedAt(message.metadata)
+        ? (channelMessageAsk(message.metadata) ?? null)
+        : null,
     card: contactCardOf(message.metadata) ?? null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),

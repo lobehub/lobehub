@@ -1,5 +1,6 @@
 export const ChannelIdentifier = 'lobe-channel';
 export const ChannelApiName = {
+  askUser: 'askUser',
   createThread: 'createThread',
   listChannels: 'listChannels',
   listPeople: 'listPeople',

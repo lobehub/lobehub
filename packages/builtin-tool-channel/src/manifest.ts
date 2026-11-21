@@ -1,4 +1,5 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
+import { CHANNEL_ASK_LIMITS } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import { ChannelApiName, ChannelIdentifier } from './types';
@@ -14,6 +15,63 @@ export const ChannelManifest: BuiltinToolManifest = {
       'Read the current shared conversation, message Agents in your other Channels, and message people for your requester.',
   },
   api: [
+    {
+      name: ChannelApiName.askUser,
+      description:
+        "Ask your requester to choose, as a card of options posted with your final answer. Use it when you need their decision to go on and the choices can be listed, e.g. which area to start with. The run does not wait: after calling it, end your turn with a short lead-in to the question (do not repeat the options, the card shows them). Their pick arrives later as a new request replying to your question, and you continue from there. Every card also offers 'Other' for their own words. Once per reply; only for a person's own request.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['questions'],
+        properties: {
+          questions: {
+            type: 'array',
+            minItems: 1,
+            maxItems: CHANNEL_ASK_LIMITS.maxQuestions,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['question', 'options'],
+              properties: {
+                question: {
+                  type: 'string',
+                  maxLength: CHANNEL_ASK_LIMITS.questionLength,
+                  description: "The question, in your requester's language.",
+                },
+                header: {
+                  type: 'string',
+                  maxLength: CHANNEL_ASK_LIMITS.headerLength,
+                  description: 'Optional short label above the question.',
+                },
+                multiSelect: {
+                  type: 'boolean',
+                  description: 'Allow picking several options. Default false.',
+                },
+                options: {
+                  type: 'array',
+                  minItems: CHANNEL_ASK_LIMITS.minOptions,
+                  maxItems: CHANNEL_ASK_LIMITS.maxOptions,
+                  description: "Distinct choices; do not add an 'Other' option, the card has one.",
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['label'],
+                    properties: {
+                      label: { type: 'string', maxLength: CHANNEL_ASK_LIMITS.labelLength },
+                      description: {
+                        type: 'string',
+                        maxLength: CHANNEL_ASK_LIMITS.descriptionLength,
+                        description: 'Optional one-line explanation.',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     {
       name: ChannelApiName.readMessages,
       description:

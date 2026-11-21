@@ -3,6 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelAsk, ChannelAskInput, ChannelMessageKind } from './channelAsk';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
@@ -631,6 +632,14 @@ export interface ChannelWatchedThreads {
   watchId: string;
 }
 
+/** `lobe-channel.askUser`: questions posted with the reply, answered from a card. */
+export type ChannelAskUserParams = ChannelAskInput;
+
+export interface ChannelAskedUser {
+  questions: number;
+  status: 'posts_with_reply';
+}
+
 export interface ChannelUnwatchThreadsParams {
   watchId: string;
 }
@@ -832,6 +841,8 @@ export interface ChannelPublicMember {
 
 export interface ChannelPublicMessage {
   agentId: string | null;
+  /** An Agent's question with options, on an `ask` message; null otherwise. */
+  ask?: ChannelAsk | null;
   author: {
     avatar: string | null;
     id: string | null;
@@ -851,6 +862,8 @@ export interface ChannelPublicMessage {
   editedAt?: Date | null;
   fileIds: string[];
   id: string;
+  /** What the message is; its payload, if any, is in the field named after it. */
+  kind?: ChannelMessageKind;
   mentions: string[];
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
   receipt?: ChannelMessageReceipt | null;

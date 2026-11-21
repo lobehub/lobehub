@@ -24,6 +24,8 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import type { ChannelAskAnswerInput } from '@/database/repositories/channel/ask';
+import { answerAsk } from '@/database/repositories/channel/ask';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
 import {
   findShareVisitorTopic,
@@ -609,6 +611,15 @@ export class ChannelService {
     // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return message;
+  };
+
+  /** Answers an Agent's question as the person it asked; the answer wakes that Agent. */
+  answerAsk = async (channelId: string, input: ChannelAskAnswerInput) => {
+    const message = await this.repository.write(channelId, (tx, access) =>
+      answerAsk(tx, access, input),
+    );
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
   };
 

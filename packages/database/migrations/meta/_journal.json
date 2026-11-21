@@ -1589,6 +1589,13 @@
       "when": 1795232920077,
       "tag": "0226_agent_share_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 227,
+      "version": "7",
+      "when": 1795282844385,
+      "tag": "0227_channel_message_kind",
+      "breakpoints": true
     }
   ],
   "version": "6"
