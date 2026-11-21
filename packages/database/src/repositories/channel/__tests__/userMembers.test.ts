@@ -265,7 +265,10 @@ describe('Channel human membership', () => {
         owner.create({ title: 'Friends', userIds: [fixture.memberId] }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(
-        await db.select().from(channels).where(and(eq(channels.userId, fixture.ownerId), isNull(channels.workspaceId))),
+        await db
+          .select()
+          .from(channels)
+          .where(and(eq(channels.userId, fixture.ownerId), isNull(channels.workspaceId))),
       ).toEqual([]);
     });
   });

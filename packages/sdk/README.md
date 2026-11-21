@@ -2,7 +2,7 @@
 
 Official TypeScript SDK for the [LobeHub REST API](https://app.lobehub.com/api/v1/docs), generated from the OpenAPI spec in [`packages/openapi`](../openapi) via [@hey-api/openapi-ts](https://heyapi.dev).
 
-Resource-style methods with full typing — every path, parameter, request body, and response comes from `openapi.yml`, and the HTTP runtime is inlined (zero dependencies).
+Resource-style methods with full typing — every path, parameter, request body, and response comes from `openapi.yml` — plus a hand-written layer for workspaces, retries, typed errors, pagination, streaming and uploads. The HTTP runtime is inlined (zero dependencies). See [`CHANGELOG.md`](./CHANGELOG.md) for release notes and [`examples/`](./examples) for runnable scripts.
 
 ## Installation
 
@@ -21,41 +21,161 @@ const lobehub = createLobeHub({
 });
 
 const me = await lobehub.users.me();
-const { data, error } = await lobehub.agents.list();
+const { data, error } = await lobehub.agents.list({ query: { limit: 20 } });
 const agent = await lobehub.agents.get({ path: { id: 'agt_...' } });
 
-await lobehub.agentGroups.create({ body: { name: 'My group' } });
-await lobehub.files.uploadBatch({ body: { files: [/* … */] } });
+await lobehub.topics.create({ body: { agentId: 'agt_...', title: 'Planning' } });
 ```
 
-Resources map to the API's top-level path segments: `health`, `agentGroups`, `agents`, `files`, `knowledgeBases`, `messageTranslations`, `messages`, `models`, `permissions`, `providers`, `responses`, `roles`, `topics`, `users`. Method names follow a fixed rule — `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`) — with a few curated names (`files.uploadBatch`, `files.query`, `knowledgeBases.addFiles`, `users.me`).
+Every method resolves to `{ data, error, request, response }`: `data` is the response body (the `{ success, data, timestamp }` envelope for most routes) and `error` is set instead when the API answers with an error — see [Errors](#errors).
 
 Point the client at another deployment with `baseURL`, and pass any other client option (custom `fetch`, `headers`, …):
 
 ```ts
-const lobehub = createLobeHub({
-  apiKey: 'sk-lh-...',
-  baseURL: 'http://localhost:3010',
-});
+const lobehub = createLobeHub({ apiKey: 'sk-lh-...', baseURL: 'http://localhost:3010' });
 ```
 
-Raw spec types are exported from `@lobehub/sdk/types`.
+Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 
-### Streaming responses
+## Resources
 
-`responses.create` returns Server-Sent Events when `body.stream: true`. Opt out of JSON parsing with `parseAs: 'stream'` and read the raw stream from `response.body`:
+30 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
+
+| Resource              | Methods                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentGroups`         | `create`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `agents`              | `create`, `createAccount`, `createDuplicate`, `delete`, `deleteAccount`, `get`, `getAccount`, `list`, `listAccounts`, `update`, `updateAccount`, `updateAccountCredential`                                                                                                                                                                                                                                                                                                            |
+| `apiKeys`             | `create`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `audio`               | `createSpeech`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `chat`                | `create`, `createGenerateReply`, `createTranslate`                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `chatGroups`          | `addMembers`, `create`, `delete`, `get`, `list`, `removeMembers`, `update`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `documents`           | `create`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `eval`                | `createBenchmarks`, `createDatasets`, `createDatasetsTestCases`, `createRuns`, `createRunsClaim`, `createRunsResults`, `createRunsRetryErrors`, `deleteBenchmarks`, `deleteDatasets`, `deleteTestCases`, `getBenchmarks`, `getDatasets`, `getRuns`, `getTestCases`, `listBenchmarks`, `listDatasets`, `listDatasetsTestCases`, `listRuns`, `listRunsResults`, `listRunsTopics`, `updateBenchmarks`, `updateDatasets`, `updateRunsStatus`, `updateRunsTopicsResult`, `updateTestCases` |
+| `files`               | `create`, `createChunks`, `delete`, `get`, `getUrl`, `list`, `listChunks`, `parse`, `query`, `update`, `uploadBatch`                                                                                                                                                                                                                                                                                                                                                                  |
+| `goals`               | `advance`, `create`, `delete`, `get`, `getSupervision`, `list`, `pause`, `restart`, `resume`, `update`                                                                                                                                                                                                                                                                                                                                                                                |
+| `health`              | `check`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `im`                  | `markRead`, `send`, `sync`                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `knowledgeBases`      | `addFiles`, `create`, `delete`, `get`, `list`, `listFiles`, `moveFiles`, `removeFiles`, `update`                                                                                                                                                                                                                                                                                                                                                                                      |
+| `mcpServers`          | `create`, `createSync`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `memories`            | `deleteAll`, `deleteEntry`, `getPersona`, `listCategory`, `listPersonaVersions`                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `messageTranslations` | `create`, `delete`, `get`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `messages`            | `create`, `createReply`, `delete`, `deleteMany`, `get`, `getCount`, `list`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `models`              | `create`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `notifications`       | `archive`, `archiveAll`, `getCounts`, `getUnreadCount`, `list`, `listSettings`, `markAllRead`, `markRead`, `updateSettings`                                                                                                                                                                                                                                                                                                                                                           |
+| `permissions`         | `create`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `plugins`             | `list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `providers`           | `create`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `pushTokens`          | `register`, `unregister`                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `responses`           | `create`                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `roles`               | `create`, `delete`, `deletePermissions`, `get`, `list`, `listPermissions`, `update`, `updatePermissions`                                                                                                                                                                                                                                                                                                                                                                              |
+| `signals`             | `emit`, `listReceipts`, `trigger`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `tasks`               | `create`, `delete`, `get`, `list`, `listRuns`, `run`, `update`, `updateStatus`                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `topics`              | `create`, `delete`, `get`, `list`, `listThreads`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `usage`               | `list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `users`               | `create`, `delete`, `deleteRoles`, `get`, `list`, `listRoles`, `me`, `update`, `updateRoles`                                                                                                                                                                                                                                                                                                                                                                                          |
+
+## Workspaces
+
+Pass `workspaceId` to act inside a workspace: every request then carries `X-Workspace-Id`. A per-call header still wins.
 
 ```ts
-const { response } = await lobehub.responses.create({
-  body: { input: '…', model: '…', stream: true },
-  parseAs: 'stream',
-});
-for await (const chunk of response.body!) {
-  // decode SSE chunks
+const team = createLobeHub({ apiKey: process.env.LOBEHUB_API_KEY!, workspaceId: 'ws_...' });
+await team.agents.list(); // the workspace's agents
+
+await team.agents.list({ headers: { 'X-Workspace-Id': 'ws_other' } });
+```
+
+A personal API key cannot send the header (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so `workspaceId` may be omitted and, when set, must name that workspace.
+
+## Errors
+
+An error answer comes back as a `LobeHubAPIError` with `status`, `code` (stable, see `ApiErrorCode` — branch on it, not on `message`), `requestId` (quote it when reporting an issue), `details` (one `{ path, message }` per field for `validation_error`), `headers` and the raw `body`. Network failures are `LobeHubConnectionError`, and `LobeHubTimeoutError` when the [`timeout`](#retries-and-timeouts) runs out.
+
+By default methods do not throw:
+
+```ts
+import { LobeHubAPIError } from '@lobehub/sdk';
+
+const { data, error } = await lobehub.agents.get({ path: { id } });
+if (error) {
+  if (error instanceof LobeHubAPIError && error.code === 'not_found') return null;
+  throw error;
 }
 ```
 
-(First-class typed SSE methods will come with the spec's response schemas.)
+Opt into throwing per call with `throwOnError: true`, or for the whole client — then every method rejects with the error and `data` is typed as always present:
+
+```ts
+const lobehub = createLobeHub({ apiKey, throwOnError: true });
+
+try {
+  const { data } = await lobehub.agents.get({ path: { id } });
+  console.log(data.data.title);
+} catch (error) {
+  if (error instanceof LobeHubAPIError) console.error(error.status, error.code, error.requestId);
+}
+```
+
+## Retries and timeouts
+
+Requests that are safe to resend are retried up to `maxRetries` times (default 2) on 408, 429, 5xx and network errors, with exponential backoff (\~0.5s, 1s, 2s … up to 8s, with jitter) or exactly the server's `Retry-After`. Safe means an idempotent method (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) or a `POST` with an idempotency key — a plain `POST` is never resent, and the server only deduplicates keyed `POST`s, so a key on `PATCH` does not make it retryable. A keyed `POST` resent while the first attempt is still running gets 409 `idempotency_conflict`; the SDK waits and retries it, until the stored answer comes back or the retries run out.
+
+`timeout` (default 10 minutes, `0` disables) bounds the wait for the response headers of each attempt. Both work on the client and per call:
+
+```ts
+const lobehub = createLobeHub({ apiKey, maxRetries: 4, timeout: 30_000 });
+
+await lobehub.agents.list({ maxRetries: 0, timeout: 5000 });
+
+// The server runs a keyed request once and replays its answer for repeats,
+// so the key also makes this POST retryable.
+await lobehub.agents.create({
+  body: { title: 'Researcher' },
+  idempotencyKey: crypto.randomUUID(),
+});
+```
+
+## Pagination
+
+List endpoints answer `{ hasMore, nextCursor }` pages. `paginate` walks all of them and yields the items (`items`, or the endpoint's own key such as `agents`):
+
+```ts
+for await (const agent of lobehub.paginate(lobehub.agents.list, { query: { limit: 100 } })) {
+  console.log(agent.id, agent.title);
+}
+```
+
+The method can be passed unbound; query parameters other than `cursor` are sent with every page.
+
+## Streaming responses
+
+`responses.stream` starts a response with `stream: true` and yields typed OpenResponses events (`ResponseStreamEvent`, generated from the spec). `finalResponse()` drains it and resolves with the response object of the last event; `abort()` (or breaking out of the loop) closes the connection.
+
+```ts
+const stream = lobehub.responses.stream({ input: 'Summarize my week', model: 'agt_...' });
+
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') process.stdout.write(event.delta);
+  if (event.type === 'response.failed') console.error(event.response.error);
+}
+```
+
+```ts
+const response = await lobehub.responses.stream({ input, model }).finalResponse();
+console.log(response.output_text);
+```
+
+## Uploads
+
+`files.upload` takes a `File`, a `Blob`, raw bytes (`Buffer`, `Uint8Array`, `ArrayBuffer`) or a local file path (Node, Bun, Deno), plus the other upload fields:
+
+```ts
+await lobehub.files.upload('./report.pdf', { knowledgeBaseId: 'kb_...' });
+await lobehub.files.upload(new File([text], 'notes.md', { type: 'text/markdown' }));
+await lobehub.files.upload(buffer, { name: 'image.png', type: 'image/png' });
+```
+
+The file name defaults to the `File` name or the path's base name, and the type to the `Blob` type.
 
 ### Signing in with OAuth (native apps)
 
@@ -95,12 +215,17 @@ Refresh tokens rotate, so persist the one returned by every refresh. A `LobeHubO
 
 ## Development
 
-- `bun generate` — regenerate `src/generated/` from `../openapi/openapi.yml` (run after the spec changes; naming rules live in `openapi-ts.config.ts`)
+- `bun generate` — regenerate `src/generated/` from `../openapi/openapi.yml` (run after the spec changes). Names come from the spec's operationIds; the naming rule lives in `packages/openapi/src/common/operation-id.ts`.
 - `bun run build` — build ESM + d.ts to `dist/`
-- `bun run test` — unit tests + generated-output drift check (local and release workflow only; not wired into PR CI)
+- `bun run test` — unit tests (mock `fetch`) + the generated-output drift check
+
+PR CI runs this package's tests (it is in the `PACKAGES` list of [`test.yml`](../../.github/workflows/test.yml)), so a spec change without the regenerated SDK fails the PR.
 
 ## Releasing
 
-Publishing is automated by [`release-sdk.yml`](../../.github/workflows/release-sdk.yml): every push to `canary` touching `packages/sdk/**` publishes `1.0.<UTC timestamp>` to npm with provenance (manual `workflow_dispatch` also available). To ship a spec change, run `bun generate` and commit the regenerated output — the workflow's drift check (`bun scripts/generate-sdk.ts --check`) guards the published artifact.
+[`release-sdk.yml`](../../.github/workflows/release-sdk.yml) publishes on every push to `canary` that touches `packages/sdk/**` or `packages/openapi/openapi.yml` (and on `workflow_dispatch`), after the drift check, tests and build. [`scripts/release-version.ts`](./scripts/release-version.ts) picks the version:
 
-Regular PR CI does not gate on spec drift — the check runs locally (`bun run test`) and inside the release workflow only.
+- `package.json` `version` not on npm yet → published to `latest`. It needs a `## [x.y.z] - date` section in `CHANGELOG.md`, and the bump has to match the section: `### Breaking` → major, `### Added` → at least minor, `### Changed` / `### Fixed` → patch. A breaking change is expressed this way and cannot go out as a smaller bump.
+- Already on npm → `x.y.(z+1)-canary.<UTC timestamp>` under the `canary` dist-tag, so `latest` only moves on a changelogged release.
+
+To cut a release, bump `version` and add its CHANGELOG section in the PR that changes the SDK's surface.
