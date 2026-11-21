@@ -12,7 +12,7 @@ import type {
   ContactUserProfile,
 } from '@lobechat/types';
 import { CHANNEL_LIMITS } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { ContactModel } from '@/database/models/contact';
 import { WorkspaceModel } from '@/database/models/workspace';
@@ -22,12 +22,15 @@ import {
   ChannelRepository,
   memberEnvironment,
 } from '@/database/repositories/channel';
-import { channelMembers } from '@/database/schemas';
+import { findPeer, requirePeerRelation } from '@/database/repositories/channel/peer';
+import { channelMembers, channelMessages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 
 import { ChannelService } from './ChannelService';
+import { notifyChannelAgentDirectMessage } from './directMessage';
 import { assertChannelEnabled } from './featureGate';
+import { notifyChannel } from './notify';
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 20;
@@ -260,11 +263,15 @@ export class ChannelMessagingService {
   };
 
   /**
-   * Messages one person for the requester, in the requester's conversation with them, opened on
-   * first use. That conversation decides who can be reached (a mutual contact, or a fellow member
-   * or paired external contact in a workspace) and notifies the person of every message. The
-   * requester stays the sender; `metadata.via` names the Agent that wrote it. No Agent answers
-   * there, so nothing comes back to the run.
+   * Messages one person for the requester. Only people the requester could message by hand are
+   * reached (`requirePeerRelation`: a mutual contact, or a fellow member or paired external contact in a
+   * workspace).
+   *
+   * A person who can talk to the Agent themselves (a fellow member of the workspace it lives in,
+   * or its owner) gets it from the Agent, in their own direct conversation with it, opened on
+   * first use: the Agent is the sender, the person is notified, and their reply there wakes the
+   * Agent. Only a person who cannot reach the Agent gets it in the requester's conversation with
+   * them, as the requester's message with the Agent in `metadata.via`; nobody answers there.
    *
    * `requestId` (the tool call id, or the CLI's request key) makes a retried call return the
    * message it already posted.
@@ -287,8 +294,7 @@ export class ChannelMessagingService {
         'That is your requester; your final answer already reaches them',
       );
 
-    const service = new ChannelService(this.db, this.userId, this.workspaceId);
-    const access = await service.openPeer(userId).catch((error: unknown) => {
+    const unreachable = (error: unknown) => {
       if (
         error instanceof ChannelError &&
         (error.code === 'FORBIDDEN' || error.code === 'NOT_FOUND')
@@ -298,7 +304,59 @@ export class ChannelMessagingService {
           `${error.message}: your requester cannot message this person; use listPeople`,
         );
       throw error;
-    });
+    };
+    await this.db
+      .transaction((tx) => requirePeerRelation(tx, this.workspaceId ?? null, this.userId, userId))
+      .catch(unreachable);
+    const person = await new ContactModel(this.db, this.userId, this.workspaceId)
+      .findUser(userId)
+      .then((user) => (user ? toPerson(user) : { name: 'Unnamed', userId, username: null }));
+
+    const requestKey = `agent-dm:${this.operationId}:${requestId}`;
+    const sent = (conversation: 'agent' | 'requester', channelId: string, messageId: string) =>
+      conversation === 'agent'
+        ? // The requester is no member of the person's conversation, so there is nothing to link.
+          { channelId, conversation, messageId, person }
+        : this.channelUrl(channelId, null).then((url) => ({
+            channelId,
+            conversation,
+            messageId,
+            person,
+            url,
+          }));
+    // A retry answers with what the first call posted, wherever it went, even if the person has
+    // since lost or trashed their conversation with the Agent.
+    const prior = await this.priorPersonMessage(userId, run.self.agentId, requestKey);
+    if (prior) return sent(prior.conversation, prior.channelId, prior.messageId);
+
+    // Opened as the person, so it is exactly the conversation they would open with the Agent; one
+    // they moved to the trash stays there and the message takes the requester's conversation.
+    const direct = await new ChannelService(this.db, userId, this.workspaceId)
+      .openDirect(run.self.agentId)
+      .catch(() => undefined);
+    if (direct) {
+      const message = await new ChannelRepository(
+        this.db,
+        userId,
+        this.workspaceId,
+      ).postAgentMessage(direct.channel.id, {
+        agentId: run.self.agentId,
+        content,
+        metadata: { operationId: this.operationId, source: 'agent-dm' },
+        requestKey,
+      });
+      await notifyChannel(this.db, direct.channel.id);
+      notifyChannelAgentDirectMessage({
+        agentId: run.self.agentId,
+        channelId: direct.channel.id,
+        messageId: message.id,
+        recipientUserId: userId,
+      });
+      return sent('agent', direct.channel.id, message.id);
+    }
+
+    const service = new ChannelService(this.db, this.userId, this.workspaceId);
+    const access = await service.openPeer(userId).catch(unreachable);
     if (access.channel.isDeleted)
       throw new ChannelError(
         'FORBIDDEN',
@@ -309,16 +367,41 @@ export class ChannelMessagingService {
       metadata: {
         via: { agentId: run.self.agentId, name: run.self.name, operationId: this.operationId },
       },
-      requestKey: `agent-dm:${this.operationId}:${requestId}`,
+      requestKey,
     });
-    const person = await new ContactModel(this.db, this.userId, this.workspaceId).findUser(userId);
+    return sent('requester', access.channel.id, message.id);
+  };
 
-    return {
-      channelId: access.channel.id,
-      messageId: message.id,
-      person: person ? toPerson(person) : { name: 'Unnamed', userId, username: null },
-      url: await this.channelUrl(access.channel.id, access.channel.projectId),
-    };
+  /**
+   * The message an earlier call with this request key posted: in the person's direct conversation
+   * with the Agent or in the requester's conversation with them, the only two places it goes.
+   * Looks both up without opening either.
+   */
+  private priorPersonMessage = async (userId: string, agentId: string, requestKey: string) => {
+    const [direct, peer] = await Promise.all([
+      new ChannelRepository(this.db, userId, this.workspaceId).findDirectAccess(agentId),
+      this.db.transaction((tx) => findPeer(tx, this.workspaceId ?? null, this.userId, userId)),
+    ]);
+    const conversations = [
+      direct && { channelId: direct.channel.id, conversation: 'agent' as const },
+      peer && { channelId: peer.channel.id, conversation: 'requester' as const },
+    ].filter((entry) => !!entry);
+    if (!conversations.length) return;
+    const [message] = await this.db
+      .select({ channelId: channelMessages.channelId, id: channelMessages.id })
+      .from(channelMessages)
+      .where(
+        and(
+          inArray(
+            channelMessages.channelId,
+            conversations.map(({ channelId }) => channelId),
+          ),
+          eq(channelMessages.requestKey, requestKey),
+        ),
+      )
+      .limit(1);
+    const found = message && conversations.find(({ channelId }) => channelId === message.channelId);
+    return found && { ...found, messageId: message.id };
   };
 
   /**
