@@ -304,7 +304,10 @@ export class CompletionLifecycle {
         { content: input.deliverable ?? '', role: 'assistant' },
       ],
       host: { hooks: input.serializedHooks },
-      metadata: { assistantMessageId: input.assistantMessageId },
+      metadata: {
+        assistantMessageId: input.assistantMessageId,
+        ...(input.worksRegistered && { _fileWorksRegistered: true }),
+      },
       ...(input.shareVisitor && { principal: { actor: { shareVisitor: input.shareVisitor } } }),
       origin: {
         agentId: input.agentId,
@@ -327,6 +330,13 @@ export class CompletionLifecycle {
    */
   async registerFileWorks(operationId: string, state: any): Promise<void> {
     return registerFileWorks(this.deps(), operationId, state);
+  }
+
+  // Feed the result back as `worksRegistered` so completeOperation's backstop skips a second scan.
+  async registerOperationWorks(input: OperationCompletionInput): Promise<boolean> {
+    const state = this.buildStateFromInput(input);
+    await this.registerFileWorks(input.operationId, state);
+    return (state.metadata as { _fileWorksRegistered?: boolean })._fileWorksRegistered === true;
   }
 
   /**
