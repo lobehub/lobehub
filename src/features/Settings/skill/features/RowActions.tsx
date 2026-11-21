@@ -69,6 +69,7 @@ type MenuItems = DropdownItem[];
 interface RowMoreMenuProps {
   /** Lifecycle items after "View details", e.g. Disconnect / Uninstall. */
   items?: MenuItems;
+  label?: string;
   onOpenDetail?: () => void;
 }
 
@@ -76,8 +77,9 @@ interface RowMoreMenuProps {
  * The page row's manage menu for an added entry: open the detail page, plus the
  * row's lifecycle actions (each keeps its own confirmation).
  */
-export const RowMoreMenu = memo<RowMoreMenuProps>(({ items = [], onOpenDetail }) => {
+export const RowMoreMenu = memo<RowMoreMenuProps>(({ items = [], label, onOpenDetail }) => {
   const { t } = useTranslation('setting');
+  const manageLabel = label ?? t('connectorMarket.action.manage');
   const menuItems: MenuItems = [
     ...(onOpenDetail
       ? [
@@ -99,11 +101,7 @@ export const RowMoreMenu = memo<RowMoreMenuProps>(({ items = [], onOpenDetail })
     // lobe-design-ignore LOBE-DIV-CLICK: not a control; only stops propagation to the row
     <span style={{ display: 'inline-flex' }} onClick={(event) => event.stopPropagation()}>
       <DropdownMenu items={menuItems} placement={'bottomRight'}>
-        <ActionIcon
-          aria-label={t('connectorMarket.action.manage')}
-          icon={MoreHorizontalIcon}
-          title={t('connectorMarket.action.manage')}
-        />
+        <ActionIcon aria-label={manageLabel} icon={MoreHorizontalIcon} title={manageLabel} />
       </DropdownMenu>
     </span>
   );

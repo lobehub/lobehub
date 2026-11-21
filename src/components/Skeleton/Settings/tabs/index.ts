@@ -14,7 +14,6 @@ import HotkeySkeleton from './Hotkey';
 import LabelsSkeleton from './Labels';
 import LabsSkeleton from './Labs';
 import MemorySkeleton from './Memory';
-import MessengerSkeleton from './Messenger';
 import NotificationSkeleton from './Notification';
 import OAuthAppsSkeleton from './OAuthApps';
 import PlansSkeleton from './Plans';
@@ -52,7 +51,6 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.Labels]: LabelsSkeleton,
   [SettingsTabs.Labs]: LabsSkeleton,
   [SettingsTabs.Memory]: MemorySkeleton,
-  [SettingsTabs.Messenger]: MessengerSkeleton,
   [SettingsTabs.Notification]: NotificationSkeleton,
   [SettingsTabs.OAuthApps]: OAuthAppsSkeleton,
   [SettingsTabs.Plans]: PlansSkeleton,

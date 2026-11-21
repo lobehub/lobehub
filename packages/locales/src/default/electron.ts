@@ -21,6 +21,7 @@ export default {
   'navigation.marketplaceModels': 'Marketplace · Models',
   'navigation.marketplaceProviders': 'Marketplace · Providers',
   'navigation.marketplaceSkills': 'Marketplace · Skills',
+  'navigation.marketplaceApps': 'Apps',
   'navigation.marketplaceConnectors': 'Connectors',
   'navigation.marketplaceInstalledSkills': 'Installed Skills',
   'navigation.appMenu': 'App menu',

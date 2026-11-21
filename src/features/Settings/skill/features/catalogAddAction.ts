@@ -33,7 +33,7 @@ export const getCatalogAddAction = ({
   viewMode,
   visibility,
 }: CatalogAddActionInput): CatalogAddAction => {
-  if (viewMode !== 'connector') return { disabled: !canCreate, kind: 'importSkill' };
+  if (viewMode === 'skill') return { disabled: !canCreate, kind: 'importSkill' };
 
   // A private connector is the caller's own; only the shared pool follows the policy.
   if (visibility === 'private' || canManageShared)

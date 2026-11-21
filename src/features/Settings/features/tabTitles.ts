@@ -27,7 +27,6 @@ export const SETTINGS_TAB_TITLE_KEYS: Partial<Record<SettingsTabs, TitleKey>> = 
   // Labs has no `setting:tab.*` entry — the nav label comes from the labs namespace.
   [SettingsTabs.Labs]: ['labs', 'title'],
   [SettingsTabs.Memory]: ['setting', 'tab.memory'],
-  [SettingsTabs.Messenger]: ['setting', 'tab.messenger'],
   [SettingsTabs.Notification]: ['setting', 'tab.notification'],
   [SettingsTabs.OAuthApps]: ['auth', 'tab.oauthApps'],
   [SettingsTabs.Plans]: ['subscription', 'tab.plans'],

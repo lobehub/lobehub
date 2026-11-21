@@ -493,41 +493,36 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     }
 
     return (
-      <Flexbox
-        horizontal
-        align="center"
-        className={stylex.props(styles.container).className}
-        gap={8}
-        justify="space-between"
-        style={{
-          ...(isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : {}),
-          ...(onSelect ? { cursor: 'pointer' } : {}),
-        }}
-        onClick={onSelect}
-      >
-        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
-          <Flexbox
-            horizontal
-            align="center"
-            gap={8}
-            style={{ cursor: onSelect ? undefined : 'pointer' }}
-          >
-            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
-              {renderIcon()}
-            </div>
-            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
-              {serverType.label}
-            </span>
+      <>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.container).className}
+          gap={8}
+          justify="space-between"
+          style={
+            isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : undefined
+          }
+        >
+          <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
+            <Flexbox horizontal align="center" gap={8}>
+              <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
+                {renderIcon()}
+              </div>
+              <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
+                {serverType.label}
+              </span>
+            </Flexbox>
+            {!isConnected && renderStatus()}
           </Flexbox>
-          {!isConnected && renderStatus()}
-        </Flexbox>
-        {!onSelect && (
           <Flexbox horizontal align="center" gap={8}>
             {isConnected && renderStatus()}
             {renderAction()}
           </Flexbox>
-        )}
-      </Flexbox>
+        </Flexbox>
+        {actionError &&
+          renderConnectorRowDescription({ error: actionError, name: serverType.label })}
+      </>
     );
   },
 );

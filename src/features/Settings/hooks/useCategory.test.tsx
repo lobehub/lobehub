@@ -70,7 +70,6 @@ describe('settings useCategory', () => {
       SettingsGroupKey.Account,
       SettingsGroupKey.Subscription,
       SettingsGroupKey.Agent,
-      SettingsGroupKey.Connection,
       SettingsGroupKey.Resource,
       SettingsGroupKey.System,
     ]);
@@ -83,8 +82,7 @@ describe('settings useCategory', () => {
       SettingsTabs.Stats,
     ]);
 
-    expect(groupKeys(SettingsGroupKey.Connection)).toEqual([SettingsTabs.Messenger]);
-    // Skills, connectors and integrations moved to the Marketplace.
+    expect(groupKeys(SettingsGroupKey.Connection)).toBeUndefined();
     expect(getItemKeys()).not.toContain(SettingsTabs.Skill);
     expect(getItemKeys()).not.toContain(SettingsTabs.Connector);
 
@@ -98,12 +96,10 @@ describe('settings useCategory', () => {
     expect(keys).not.toContain('drive');
   });
 
-  // Messenger bots are LobeHub-operated and only configurable from the cloud
-  // admin, so the tab is a dead end on self-hosted deployments.
   it('keeps Provider and hides Messenger and OAuth Apps by default', () => {
     const keys = getItemKeys();
 
-    expect(keys).not.toContain(SettingsTabs.Messenger);
+    expect(keys).not.toContain('messenger');
     expect(keys).toContain(SettingsTabs.Provider);
     expect(keys).not.toContain(SettingsTabs.OAuthApps);
   });

@@ -1,23 +1,27 @@
 'use client';
 
 import { Blocks, ShapesIcon } from 'lucide-react';
-import type { RouteObject } from 'react-router';
+import { lazy } from 'react';
+import { type RouteObject, useParams, useSearchParams } from 'react-router';
 
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import {
+  getLegacyConnectorCatalogPath,
   getMarketplaceEntryPath,
   LEGACY_COMMUNITY_SEGMENT,
-  MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_APPS_PATH,
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
   MARKETPLACE_SEGMENT,
+  marketplaceAppPath,
 } from '@/features/Marketplace/paths';
 import {
   marketplaceConnectorsRouteMeta,
   marketplaceInstalledSkillsRouteMeta,
 } from '@/features/Marketplace/routeMeta';
+import { SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/platforms';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
 import {
   LegacyCommunityRedirect,
@@ -36,6 +40,20 @@ import { dynamicElement, ErrorBoundary } from '@/utils/router';
  * Mobile reuses these with a shell header (`mobileRouter.config.tsx`).
  */
 export const marketplaceManageRoutes: RouteObject[] = [
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/community/(manage)/mcp'),
+      'Marketplace > Installed MCP',
+    ),
+    handle: {
+      meta: routeMeta({
+        icon: Blocks,
+        Skeleton: MarketplaceCatalogSkeleton,
+        titleKey: 'navigation.marketplaceMcp',
+      }),
+    },
+    path: 'mcp/installed',
+  },
   {
     element: dynamicElement(
       () => import('@/routes/(main)/community/(manage)/skill-installed'),
@@ -76,12 +94,62 @@ export const marketplaceIndexRoute: RouteObject = {
   index: true,
 };
 
-/** `mcp` (the former MCP list) → the Connectors Discover page, query kept. */
-export const marketplaceMcpListRedirect: RouteObject = {
-  element: <LegacyPathRedirect to={MARKETPLACE_CONNECTOR_PATH} />,
-  handle: LEGACY_REDIRECT_HANDLE,
-  path: 'mcp',
+const LegacyConnectorCatalog = () => {
+  const [params] = useSearchParams();
+  return <LegacyPathRedirect to={getLegacyConnectorCatalogPath(params)} />;
 };
+
+export const legacyConnectorCatalogRoute: RouteObject = {
+  element: <LegacyConnectorCatalog />,
+  handle: LEGACY_REDIRECT_HANDLE,
+  path: 'connector',
+};
+
+export const marketplaceAppAndMcpRoutes: RouteObject[] = [
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/community/(list)/app'),
+      'Marketplace > Apps',
+    ),
+    handle: {
+      meta: routeMeta({
+        icon: Blocks,
+        Skeleton: MarketplaceCatalogSkeleton,
+        titleKey: 'navigation.marketplaceApps',
+      }),
+    },
+    path: 'app',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/community/(detail)/app'),
+      'Marketplace > App detail',
+    ),
+    handle: {
+      meta: routeMeta({
+        DynamicMeta: lazy(() => import('@/features/Marketplace/Apps/AppDynamicMeta')),
+        icon: Blocks,
+        Skeleton: createSurfaceSkeleton('detail'),
+        titleKey: 'navigation.marketplaceApps',
+      }),
+    },
+    path: 'app/:appId',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/community/(list)/mcp'),
+      'Marketplace > MCP',
+    ),
+    handle: {
+      meta: routeMeta({
+        icon: Blocks,
+        Skeleton: MarketplaceCatalogSkeleton,
+        titleKey: 'navigation.marketplaceMcp',
+      }),
+    },
+    path: 'mcp',
+  },
+];
 
 /**
  * `/marketplace/*` (and `/:workspaceSlug/marketplace/*`), formerly `/community`.
@@ -100,9 +168,7 @@ export const marketplaceRoute: RouteObject = {
     },
     marketplaceIndexRoute,
     ...marketplaceManageRoutes,
-    // The MCP list merged into Connectors; its URL (with `?category=` / `?q=`)
-    // forwards there. MCP detail pages stay at `mcp/:slug`.
-    marketplaceMcpListRedirect,
+    legacyConnectorCatalogRoute,
     // List routes (with ListLayout)
     {
       children: [
@@ -163,20 +229,7 @@ export const marketplaceRoute: RouteObject = {
           },
           path: 'skill',
         },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/community/(list)/connector'),
-            'Desktop > Discover > List > Connector',
-          ),
-          handle: {
-            meta: routeMeta({
-              icon: Blocks,
-              Skeleton: MarketplaceCatalogSkeleton,
-              titleKey: 'navigation.marketplaceConnectors',
-            }),
-          },
-          path: 'connector',
-        },
+        ...marketplaceAppAndMcpRoutes,
         {
           element: dynamicElement(
             () => import('@/routes/(main)/community/(detail)/workspace'),
@@ -323,6 +376,14 @@ export const legacyCommunityRoutes: RouteObject[] = [
   legacyCommunityRedirect(`${LEGACY_COMMUNITY_SEGMENT}/*`),
 ];
 
+const LegacyMessengerRedirect = () => {
+  const { sub } = useParams();
+  const platform = SUPPORTED_MESSENGER_PLATFORMS.find(({ id }) => id === sub);
+  return (
+    <LegacyPathRedirect to={platform ? marketplaceAppPath(platform.id) : MARKETPLACE_APPS_PATH} />
+  );
+};
+
 /**
  * `settings/skill`, `settings/connector` and `settings/integrations` (plus their
  * `/:sub` forms) moved to
@@ -330,20 +391,23 @@ export const legacyCommunityRoutes: RouteObject[] = [
  * workspace `/:workspaceSlug/settings` routes (desktop and mobile); the redirect
  * re-applies the slug and keeps `?open=` / `?skill=` deep links.
  */
+const legacySettingsLibraryRedirects: RouteObject[] = [
+  ['skill', MARKETPLACE_INSTALLED_SKILLS_PATH],
+  ['skill/:sub', MARKETPLACE_INSTALLED_SKILLS_PATH],
+  ['connector', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
+  ['connector/:sub', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
+].map(([path, to]) => ({
+  element: <LegacyPathRedirect to={to} />,
+  handle: LEGACY_REDIRECT_HANDLE,
+  path,
+}));
+
 export const legacySettingsMarketplaceRedirects: RouteObject[] = [
-  ...[
-    ['skill', MARKETPLACE_INSTALLED_SKILLS_PATH],
-    ['skill/:sub', MARKETPLACE_INSTALLED_SKILLS_PATH],
-    ['connector', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
-    ['connector/:sub', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
-  ].map(([path, to]) => ({
-    element: <LegacyPathRedirect to={to} />,
-    handle: LEGACY_REDIRECT_HANDLE,
-    path,
-  })),
-  ...['integrations', 'integrations/:sub'].map((path) => ({
+  ...legacySettingsLibraryRedirects,
+  { element: <LegacyMessengerRedirect />, handle: LEGACY_REDIRECT_HANDLE, path: 'messenger/:sub?' },
+  {
     element: <LegacyIntegrationRedirect />,
     handle: LEGACY_REDIRECT_HANDLE,
-    path,
-  })),
+    path: 'integrations/:sub?',
+  },
 ];

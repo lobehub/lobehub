@@ -47,6 +47,7 @@ const styles = stylex.create({
 
 const ConnectorAddAction = () => {
   const { t } = useTranslation('setting');
+  const { t: td } = useTranslation('discover');
   const [open, setOpen] = useState(false);
   const { canManage, isPending } = useConnectorManageable();
 
@@ -61,7 +62,7 @@ const ConnectorAddAction = () => {
           type={'primary'}
           onClick={() => setOpen(true)}
         >
-          {t('connectorMarket.add.custom')}
+          {td('apps.addMcp')}
         </Button>
       </Tooltip>
       {open && <CustomConnectorModal open onClose={() => setOpen(false)} />}
@@ -82,7 +83,7 @@ const SkillImportAction = () => {
 
 interface DiscoverCatalogHeaderProps {
   group?: { backTo: string; title: string };
-  kind: CatalogKind | 'agent';
+  kind: Exclude<CatalogKind, 'connector'> | 'agent' | 'app';
   sortControl?: ReactNode;
   titleExtra?: ReactNode;
 }
@@ -114,7 +115,8 @@ const DiscoverCatalogHeader = ({
       value: draft.value.trim() === query ? draft.value : query,
     });
   }
-  const isConnector = kind === 'connector';
+  const isMcp = kind === 'mcp';
+  const isApp = kind === 'app';
   const isAgent = kind === 'agent';
 
   const search = (keyword: string) => {
@@ -127,15 +129,25 @@ const DiscoverCatalogHeader = ({
 
   const title = isAgent
     ? t('tab.assistant')
-    : ts(isConnector ? 'skillView.connectors' : 'skillView.skills');
+    : isApp
+      ? t('tab.apps')
+      : isMcp
+        ? t('tab.mcp')
+        : ts('skillView.skills');
   const description = isAgent
     ? t('catalog.agentDescription')
-    : ts(isConnector ? 'skillView.connectorsDesc' : 'skillView.skillsDesc');
+    : isApp
+      ? t('apps.description')
+      : isMcp
+        ? t('apps.mcpDescription')
+        : ts('skillView.skillsDesc');
   const searchLabel = group
     ? t('catalog.searchIn', { name: group.title })
     : isAgent
       ? t('catalog.searchAgents')
-      : ts(isConnector ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder');
+      : isApp || isMcp
+        ? t('catalog.searchIn', { name: title })
+        : ts('skillView.search.placeholder');
 
   return (
     <header {...stylex.props(styles.header, isMobileSurface() && styles.headerMobile)}>
@@ -176,9 +188,9 @@ const DiscoverCatalogHeader = ({
             search(value);
           }}
         />
-        {group || isAgent ? (
+        {group || isAgent || isApp ? (
           sortControl
-        ) : isConnector ? (
+        ) : isMcp ? (
           <ConnectorAddAction />
         ) : (
           <SkillImportAction />

@@ -1,8 +1,4 @@
-import { MARKETPLACE_INSTALLED_CONNECTORS_PATH } from '@/features/Marketplace/paths';
-import {
-  encodeMobileSelection,
-  MOBILE_SELECTION_PARAM,
-} from '@/features/Settings/skill/mobileSelection';
+import { MARKETPLACE_APPS_PATH, marketplaceAppPath } from '@/features/Marketplace/paths';
 
 /**
  * Connectors whose Marketplace page also manages a LobeHub-owned integration
@@ -22,14 +18,13 @@ export const hasConnectorPage = (identifier: string): identifier is ConnectorPag
 /** The connector's Marketplace page, carrying an install result over from `search`. */
 export const buildConnectorPagePath = (identifier: ConnectorPageId, search = ''): string => {
   const source = new URLSearchParams(search);
-  const params = new URLSearchParams({
-    [MOBILE_SELECTION_PARAM]: encodeMobileSelection({ identifier, type: 'lobehub-connector' }),
-  });
+  const params = new URLSearchParams();
   for (const key of INSTALL_RESULT_PARAMS) {
     const value = source.get(key);
     if (value) params.set(key, value);
   }
-  return `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?${params}`;
+  const path = marketplaceAppPath(identifier);
+  return params.size ? `${path}?${params}` : path;
 };
 
 /**
@@ -37,6 +32,4 @@ export const buildConnectorPagePath = (identifier: ConnectorPageId, search = '')
  * callbacks still return to those paths, so their result must survive this.
  */
 export const buildLegacyIntegrationPath = (sub: string | undefined, search = ''): string =>
-  sub && hasConnectorPage(sub)
-    ? buildConnectorPagePath(sub, search)
-    : MARKETPLACE_INSTALLED_CONNECTORS_PATH;
+  sub && hasConnectorPage(sub) ? buildConnectorPagePath(sub, search) : MARKETPLACE_APPS_PATH;

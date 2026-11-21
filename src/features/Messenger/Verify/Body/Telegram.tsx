@@ -3,6 +3,8 @@
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
+
 import { buildTelegramBotUrl } from '../../constants';
 import {
   ConfirmCard,
@@ -64,9 +66,9 @@ const TelegramBody = memo<TelegramBodyProps>(
         blockingNotice={
           rebindBlocked
             ? {
-                ctaHref: '/settings/messenger/telegram',
-                ctaLabel: t('verify.confirm.relink.manage'),
-                description: t('verify.confirm.relink.description', {
+                ctaHref: marketplaceAppPath('telegram'),
+                ctaLabel: t('verify.confirm.relink.openApp'),
+                description: t('verify.confirm.relink.disconnectInMarketplace', {
                   account:
                     existingLink?.platformUsername ?? `ID ${existingLink?.platformUserId ?? ''}`,
                   platform: platformLabel,

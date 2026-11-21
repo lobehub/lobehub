@@ -32,7 +32,6 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.Labels,
   WorkspaceSettingsTabs.Labs,
   WorkspaceSettingsTabs.Members,
-  WorkspaceSettingsTabs.Messenger,
   WorkspaceSettingsTabs.Notification,
   WorkspaceSettingsTabs.Plans,
   WorkspaceSettingsTabs.Profile,

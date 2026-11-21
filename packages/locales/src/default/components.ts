@@ -73,7 +73,7 @@ export default {
   'FileManager.actions.renameSuccess': 'Rename successful',
   'FileManager.actions.reorderError': 'Failed to update order, please try again',
   'FileManager.actions.sendToMessenger': 'Send to Messenger',
-  'FileManager.actions.sendToMessengerSettings': 'Messenger Settings',
+  'FileManager.actions.manageChatApps': 'Manage chat apps',
   'FileManager.actions.sendToMessengerSetup': 'Set Up Channels',
   'FileManager.actions.sendToMessengerSetupAction': 'Set Up',
   'FileManager.bottom': "You've reached the end.",

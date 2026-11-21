@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMobileSelection } from '@/features/Settings/skill/mobileSelection';
-
 import {
   buildConnectorPagePath,
   buildLegacyIntegrationPath,
@@ -14,11 +12,7 @@ describe('buildConnectorPagePath', () => {
   it.each(['github', 'linear'] as const)('opens the %s connector in the Marketplace', (id) => {
     const path = buildConnectorPagePath(id);
 
-    expect(path.startsWith('/marketplace/connector/installed?')).toBe(true);
-    expect(parseMobileSelection(query(path).get('open'))).toEqual({
-      identifier: id,
-      type: 'lobehub-connector',
-    });
+    expect(path).toBe(`/marketplace/app/${id}`);
   });
 
   it('carries the install result over', () => {
@@ -35,7 +29,7 @@ describe('buildConnectorPagePath', () => {
     const params = query(buildConnectorPagePath('linear', '?open=plugin:other&foo=1'));
 
     expect(params.get('foo')).toBeNull();
-    expect(params.get('open')).toBe('lobehub-connector:linear');
+    expect(params.get('open')).toBeNull();
   });
 });
 
@@ -43,15 +37,13 @@ describe('buildLegacyIntegrationPath', () => {
   it('sends an integration page to its connector with the callback result', () => {
     const params = query(buildLegacyIntegrationPath('linear', '?error=access_denied'));
 
-    expect(params.get('open')).toBe('lobehub-connector:linear');
+    expect(params.get('open')).toBeNull();
     expect(params.get('error')).toBe('access_denied');
   });
 
-  it('sends the directory and unknown pages to the installed connectors', () => {
-    expect(buildLegacyIntegrationPath(undefined)).toBe('/marketplace/connector/installed');
-    expect(buildLegacyIntegrationPath('vercel', '?installed=ok')).toBe(
-      '/marketplace/connector/installed',
-    );
+  it('sends the directory and unknown pages to Apps', () => {
+    expect(buildLegacyIntegrationPath(undefined)).toBe('/marketplace/app');
+    expect(buildLegacyIntegrationPath('vercel', '?installed=ok')).toBe('/marketplace/app');
   });
 });
 

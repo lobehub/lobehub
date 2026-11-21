@@ -25,7 +25,6 @@ export enum WorkspaceSettingsTabs {
   Labels = 'labels',
   Labs = 'labs',
   Members = 'members',
-  Messenger = 'messenger',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',
   Plans = 'plans',

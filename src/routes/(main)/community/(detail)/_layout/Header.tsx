@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
-import { MARKETPLACE_CONNECTOR_PATH, MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
+import { MARKETPLACE_MCP_PATH, MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
@@ -45,7 +45,7 @@ const Header = memo(() => {
       return;
     }
     if (detailType === 'mcp') {
-      navigate(MARKETPLACE_CONNECTOR_PATH);
+      navigate(MARKETPLACE_MCP_PATH);
       return;
     }
     // group_agent goes back to agent list page

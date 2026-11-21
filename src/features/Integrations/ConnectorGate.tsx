@@ -40,7 +40,7 @@ interface ConnectorGateProps {
  * separate authorization, so it stays here under the connect row.
  */
 const ConnectorGate = memo<ConnectorGateProps>(({ children, identifier }) => {
-  const { t } = useTranslation('integration');
+  const { t, ready } = useTranslation('integration');
   const { available, connected, error, isInitialLoading, provider, retry, server } =
     useConnectorConnection(identifier);
   const view = resolveConnectorPageView({
@@ -51,6 +51,7 @@ const ConnectorGate = memo<ConnectorGateProps>(({ children, identifier }) => {
     isInitialLoading,
   });
 
+  if (!ready) return <IntegrationConnectionsSkeleton />;
   if (view === 'ready' && connected) return children;
 
   return (

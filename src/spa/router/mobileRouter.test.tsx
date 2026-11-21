@@ -125,6 +125,7 @@ describe('mobile community route layouts', () => {
 
 describe('mobile Marketplace skill and connector pages', () => {
   it.each([
+    ['/marketplace/mcp/installed', 'mcp/installed'],
     ['/marketplace/skill/installed', 'skill/installed'],
     ['/acme/marketplace/skill/installed', 'skill/installed'],
     ['/marketplace/connector/installed', 'connector/installed'],
@@ -145,9 +146,6 @@ describe('mobile Marketplace skill and connector pages', () => {
     ['/settings/connector/sub', '/marketplace/connector/installed'],
     ['/acme/settings/skill', '/marketplace/skill/installed'],
     ['/acme/settings/connector', '/marketplace/connector/installed'],
-    // The MCP list merged into the Connectors Discover page.
-    ['/marketplace/mcp', '/marketplace/connector'],
-    ['/acme/marketplace/mcp', '/marketplace/connector'],
   ])('redirects %s to %s', (url, to) => {
     const element = matchRoutes(mobileRoutes, url)?.at(-1)?.route.element as
       ReactElement<{ to: string }> | undefined;

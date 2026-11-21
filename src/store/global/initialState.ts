@@ -94,7 +94,6 @@ export enum SettingsTabs {
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
-  Messenger = 'messenger',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',
   // business

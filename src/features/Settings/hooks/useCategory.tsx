@@ -20,7 +20,6 @@ import {
   KeyboardIcon,
   KeyIcon,
   Map,
-  MessageCircleIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
   Sparkles,
@@ -196,13 +195,6 @@ export const useCategory = () => {
     // Connection group — the outside services agents can reach, whoever owns
     // the binding. Every entry here is already the user's own.
     const connectionItems: CategoryItem[] = [
-      // The bots are LobeHub-operated: their credentials are only ever written
-      // by the cloud admin, so a self-hosted deployment has nothing to bind to.
-      enableBusinessFeatures && {
-        icon: MessageCircleIcon,
-        key: SettingsTabs.Messenger,
-        label: t('tab.messenger'),
-      },
       // What connectors fire on their own: the event subscriptions agents made
       // through them. Connectors themselves are managed in the Marketplace.
       enableWebhook && {
