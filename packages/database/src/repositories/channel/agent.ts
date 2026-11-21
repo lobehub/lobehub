@@ -9,95 +9,137 @@ import type {
 } from '@lobechat/types';
 import { agentDisplayName, isChannelRuntime } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
 import { agents, agentShares, channelMembers, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
-import { agentUsableByWhere } from '../../utils/agent-access';
+import { agentsNotUsableByWhere, agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
 
 /**
- * Whether a direct conversation is with an Agent reached through its share: someone else's Agent
- * this scope does not hold. A workspace colleague's public Agent is the workspace's own.
+ * A link share that is open to `userId`: shared by someone else, for an Agent not in the trash.
+ * Anyone signed in may talk to the Agent through it, so no contact entry is needed.
  */
-export const isSharedAgentChannel = (
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
-  agent: {
-    agentOwnerId: string | null;
-    agentVisibility: string | null;
-    agentWorkspaceId: string | null;
-  },
-  viewerId: string,
-): boolean =>
-  !!channel.agentId &&
-  agent.agentOwnerId !== viewerId &&
-  !(
-    channel.workspaceId &&
-    agent.agentWorkspaceId === channel.workspaceId &&
-    agent.agentVisibility !== 'private'
-  );
+const liveLinkShareWhere = (userId: string) =>
+  and(eq(agentShares.visibility, 'link'), notTrashed(agents.isDeleted), ne(agents.userId, userId));
+
+/** Another person's Agent a direct conversation is with. */
+export interface SharedChannelAgent {
+  /** Its visitor page (`/a/<handle>`): the share's custom slug, else the share id; `null` once the share row is gone. */
+  handle: string | null;
+  /** The profile a refused reply's contact card shows. */
+  owner: ContactUserProfile;
+  /** The share a reply runs under: present only while the share is live (link, Agent not trashed). */
+  share?: ChannelSharedAgentAccess;
+}
 
 /**
- * What a listed Channel tells its viewer about another person's shared Agent it is with: that it
- * is one, and its visitor page (`/a/<handle>`), the only page of the Agent the viewer can open.
+ * The one rule for whether a direct conversation is with another person's shared Agent, read by
+ * the list, the conversation view, send and the reply opener: its Agent is someone else's that the
+ * viewer cannot use as their own (`agentUsableByWhere`, so a colleague's public workspace Agent is
+ * the workspace's own).
+ *
+ * The mark does not depend on the share's state: a paused or deleted share, or a trashed Agent,
+ * still leaves the conversation with another person's Agent, so clients keep listing it as one
+ * (with its tag, owner and no upload) while the reply is refused. Only `share`, the live share,
+ * decides whether a reply runs, exactly as `resolveExecutionConfig` does.
+ *
+ * Batched for the list: one query per scope, whatever the number of Channels.
+ * Returns the shared Agent by Channel id; a Channel absent from the map is not with one.
  */
-export const sharedAgentFields = (
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
-  agent: Parameters<typeof isSharedAgentChannel>[1],
+export const sharedChannelAgents = async (
+  db: LobeChatDatabase | Transaction,
+  channels: Pick<ChannelItem, 'agentId' | 'id' | 'workspaceId'>[],
   viewerId: string,
-  handle: string | null,
-) => {
-  const sharedAgent = isSharedAgentChannel(channel, agent, viewerId);
-  return {
-    sharedAgent,
-    sharedAgentHandle: sharedAgent ? handle : null,
-  };
+): Promise<Map<string, SharedChannelAgent>> => {
+  const result = new Map<string, SharedChannelAgent>();
+  const agentIdsOf = new Map<string | null, Set<string>>();
+  for (const { agentId, workspaceId } of channels) {
+    if (!agentId) continue;
+    const ids = agentIdsOf.get(workspaceId) ?? new Set();
+    ids.add(agentId);
+    agentIdsOf.set(workspaceId, ids);
+  }
+
+  // One statement per scope, so the "usable as own" exclusion and the share lookup read the same
+  // snapshot of the Agent's visibility.
+  const sharedOf = new Map<string | null, Map<string, SharedChannelAgent>>();
+  for (const [workspaceId, ids] of agentIdsOf) {
+    const rows = await db
+      .select({
+        agentId: agents.id,
+        live: sql<boolean>`coalesce(${liveLinkShareWhere(viewerId)}, false)`,
+        owner: {
+          avatar: users.avatar,
+          fullName: users.fullName,
+          id: users.id,
+          username: users.username,
+        },
+        shareId: agentShares.id,
+        slug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
+        workspaceId: agents.workspaceId,
+      })
+      .from(agents)
+      .innerJoin(users, eq(users.id, agents.userId))
+      .leftJoin(agentShares, eq(agentShares.agentId, agents.id))
+      .where(
+        and(
+          // The viewer's own trashed Agent is not usable either, but it is not someone else's.
+          ne(agents.userId, viewerId),
+          agentsNotUsableByWhere([...ids], {
+            userId: viewerId,
+            workspaceId: workspaceId ?? undefined,
+          }),
+        ),
+      );
+    sharedOf.set(
+      workspaceId,
+      new Map(
+        rows.map(({ agentId, live, owner, shareId, slug, workspaceId: agentWorkspaceId }) => [
+          agentId,
+          {
+            handle: slug ?? shareId,
+            owner,
+            share:
+              live && shareId
+                ? { ownerId: owner.id, shareId, workspaceId: agentWorkspaceId }
+                : undefined,
+          },
+        ]),
+      ),
+    );
+  }
+
+  for (const { agentId, id, workspaceId } of channels) {
+    const shared = agentId && sharedOf.get(workspaceId)?.get(agentId);
+    if (shared) result.set(id, shared);
+  }
+  return result;
 };
 
-/**
- * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
- * (`isSharedAgentChannel`): the profile a refused reply's contact card shows. `null` otherwise.
- */
-export const sharedAgentOwner = async (
-  tx: Transaction,
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+/** {@link sharedChannelAgents} for one Channel. */
+export const sharedChannelAgent = async (
+  db: LobeChatDatabase | Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'id' | 'workspaceId'>,
   viewerId: string,
-): Promise<ContactUserProfile | null> => {
-  if (!channel.agentId) return null;
-  const [agent] = await tx
-    .select({
-      agentOwnerId: agents.userId,
-      agentVisibility: agents.visibility,
-      agentWorkspaceId: agents.workspaceId,
-      owner: {
-        avatar: users.avatar,
-        fullName: users.fullName,
-        id: users.id,
-        username: users.username,
-      },
-    })
-    .from(agents)
-    .innerJoin(users, eq(users.id, agents.userId))
-    .where(eq(agents.id, channel.agentId));
-  return agent && isSharedAgentChannel(channel, agent, viewerId) ? agent.owner : null;
-};
+) => (await sharedChannelAgents(db, [channel], viewerId)).get(channel.id);
 
 /**
- * What a conversation view says about another person's shared Agent it is with: the same marks as
- * `list` (the composer reads them there to hide upload) and the owner's contact card.
+ * What a conversation view says about another person's shared Agent it is with: the same mark as
+ * `list` (the composer reads it there to hide upload) and the owner's contact card.
  */
 export const sharedAgentView = async (
   tx: Transaction,
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  channel: Pick<ChannelItem, 'agentId' | 'id' | 'workspaceId'>,
   viewerId: string,
 ) => {
-  const owner = await sharedAgentOwner(tx, channel, viewerId);
-  return { channel: { sharedAgent: !!owner }, owner };
+  const shared = await sharedChannelAgent(tx, channel, viewerId);
+  return { channel: { sharedAgent: !!shared }, owner: shared?.owner ?? null };
 };
 
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
@@ -117,10 +159,10 @@ export interface ChannelAddAgentInput {
 }
 
 /**
- * Another person's Agent that `userId` may talk to through its live link share. A link share is
- * open to anyone signed in, so no contact entry is needed; only a direct conversation (personal
- * or in a workspace) can hold one, because the share admits one person at a time and counts its
- * limits per person.
+ * Another person's Agent that `userId` may talk to through its live link share, locked for the
+ * caller's write. Only a direct conversation (personal or in a workspace) can hold one, because
+ * the share admits one person at a time and counts its limits per person. Callers check
+ * `agentUsableByWhere` first, as {@link sharedChannelAgents} does.
  */
 export const findSharedChannelAgent = async (
   tx: LobeChatDatabase | Transaction,
@@ -140,14 +182,7 @@ export const findSharedChannelAgent = async (
     })
     .from(agents)
     .innerJoin(agentShares, eq(agentShares.agentId, agents.id))
-    .where(
-      and(
-        eq(agents.id, agentId),
-        eq(agentShares.visibility, 'link'),
-        notTrashed(agents.isDeleted),
-        ne(agents.userId, userId),
-      ),
-    )
+    .where(and(eq(agents.id, agentId), liveLinkShareWhere(userId)))
     .for('share', { of: agents });
   if (!row?.ownerId) return undefined;
   return {
@@ -167,25 +202,17 @@ const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: stri
   channel.agentId === agentId;
 
 /**
- * The share a member's reply runs under, resolved as {@link resolveExecutionConfig} does: only in a
- * direct conversation, and only for an Agent the requester cannot use as their own.
+ * The share a member's reply runs under: only in a direct conversation, for the Agent
+ * {@link sharedChannelAgents} marks as shared there, and only while that share is live.
  */
 export const channelReplyShare = async (
   db: LobeChatDatabase | Transaction,
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  channel: Pick<ChannelItem, 'agentId' | 'id' | 'workspaceId'>,
   agentId: string,
   userId: string,
-) => {
+): Promise<ChannelSharedAgentAccess | undefined> => {
   if (!acceptsSharedAgent(channel, agentId)) return;
-  const [usable] = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(agentUsableByWhere(agentId, { userId, workspaceId: channel.workspaceId ?? undefined }));
-  if (usable) return;
-  const share = await findSharedChannelAgent(db, userId, agentId);
-  return (
-    share && { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId }
-  );
+  return (await sharedChannelAgent(db, channel, userId))?.share;
 };
 
 /** Check Agent scope and hold it through creation of the Channel/member reference. */

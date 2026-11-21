@@ -236,7 +236,7 @@ export const findOpeningCandidate = async (
           .where(eq(channelThreads.id, job.threadId))
       : [],
     db
-      .select({ agentId: channels.agentId, workspaceId: channels.workspaceId })
+      .select({ agentId: channels.agentId, id: channels.id, workspaceId: channels.workspaceId })
       .from(channels)
       .where(eq(channels.id, channelId)),
   ]);

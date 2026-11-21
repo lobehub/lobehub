@@ -14,7 +14,6 @@ import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
   agents,
-  agentShares,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -32,8 +31,8 @@ import {
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
-  sharedAgentFields,
   sharedAgentView,
+  sharedChannelAgents,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
@@ -555,9 +554,6 @@ export class ChannelRepository {
   > => {
     const rows = await this.db
       .select({
-        agentOwnerId: agents.userId,
-        agentVisibility: agents.visibility,
-        agentWorkspaceId: agents.workspaceId,
         channel: channels,
         hidden: channelMembers.hidden,
         lastReadSequence: channelMembers.lastReadSequence,
@@ -565,19 +561,22 @@ export class ChannelRepository {
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         sectionId: channelMembers.sectionId,
-        shareId: agentShares.id,
-        shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
-      .leftJoin(agents, eq(agents.id, channels.agentId))
-      .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
     const open = await listUnjoinedOpenChannels(this.db, this.userId, this.workspaceId);
     const previewIds = [...rows.map(({ channel }) => channel.id), ...open.map(({ id }) => id)];
 
-    const lastMessageOf = await channelLastMessages(this.db, previewIds);
+    const [lastMessageOf, sharedOf] = await Promise.all([
+      channelLastMessages(this.db, previewIds),
+      sharedChannelAgents(
+        this.db,
+        rows.map(({ channel }) => channel),
+        this.userId,
+      ),
+    ]);
 
     // Main-conversation replies the list row shows as in progress: ones that can still publish,
     // and stopped ones whose writer has not exited yet.
@@ -676,38 +675,28 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    const joined = rows.map(
-      ({
-        channel,
+    const joined = rows.map(({ channel, hidden, lastReadSequence, pinnedAt, role, sectionId }) => {
+      const shared = sharedOf.get(channel.id);
+      return {
+        ...channel,
+        agentIds: agentIdsOf.get(channel.id) ?? [],
+        sharedAgent: !!shared,
+        sharedAgentHandle: shared?.handle ?? null,
+        canDelete: hasRole(role, 'admin'),
         hidden,
-        lastReadSequence,
+        joined: true,
+        lastMessage: lastMessageOf.get(channel.id) ?? null,
+        memberAvatars: avatarsOf.get(channel.id) ?? [],
+        memberRole: role,
+        mentionCount: mentionCountOf.get(channel.id) ?? 0,
+        peerUserId: peerOf(channel, this.userId),
         pinnedAt,
-        role,
+        replyJobs: replyJobsOf.get(channel.id) ?? [],
         sectionId,
-        shareId,
-        shareSlug,
-        ...agent
-      }) => {
-        return {
-          ...channel,
-          agentIds: agentIdsOf.get(channel.id) ?? [],
-          ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
-          canDelete: hasRole(role, 'admin'),
-          hidden,
-          joined: true,
-          lastMessage: lastMessageOf.get(channel.id) ?? null,
-          memberAvatars: avatarsOf.get(channel.id) ?? [],
-          memberRole: role,
-          mentionCount: mentionCountOf.get(channel.id) ?? 0,
-          peerUserId: peerOf(channel, this.userId),
-          pinnedAt,
-          replyJobs: replyJobsOf.get(channel.id) ?? [],
-          sectionId,
-          threadMentions: threadMentionsOf.get(channel.id) ?? [],
-          unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
-        };
-      },
-    );
+        threadMentions: threadMentionsOf.get(channel.id) ?? [],
+        unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+      };
+    });
     return [
       ...joined,
       // Not joined: nothing is unread or pending for the caller yet.
