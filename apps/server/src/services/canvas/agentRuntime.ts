@@ -1,11 +1,14 @@
-import { CanvasApiName, CanvasIdentifier } from '@lobechat/builtin-tool-canvas';
+import { buildCanvasOpenUrl, CanvasApiName, CanvasIdentifier } from '@lobechat/builtin-tool-canvas';
 import { CanvasExecutionRuntime } from '@lobechat/builtin-tool-canvas/executionRuntime';
 import { createMediaFileItemsFromMessage } from '@lobechat/builtin-tool-lobe-agent';
 
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
+import { WorkspaceModel } from '@/database/models/workspace';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import { FileService } from '@/server/services/file';
 
 import { type CanvasFileRefResolver, createCanvasFileRefResolver } from './fileRefs';
@@ -51,6 +54,42 @@ export const createCanvasFileRefResolverFor = (
   });
 };
 
+const getAppUrl = (): string | undefined => {
+  try {
+    return appEnv.APP_URL;
+  } catch {
+    return process.env.APP_URL;
+  }
+};
+
+/**
+ * Resolve the conversation link for a Canvas. The route is built from the topic
+ * row because a sub-agent's scope names a different agent than the conversation.
+ * Group conversations have no working sidebar to open, and a workspace
+ * conversation only resolves under its slug, so both cases return no link.
+ */
+export const createCanvasOpenUrlResolver =
+  (db: LobeChatDatabase, scope: CanvasAgentRuntimeScope) =>
+  async (canvasId: string): Promise<string | undefined> => {
+    const { topicId, userId, workspaceId } = scope;
+    if (!topicId) return undefined;
+
+    const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
+    if (!topic || topic.groupId) return undefined;
+
+    const workspaceSlug = workspaceId
+      ? (await new WorkspaceModel(db, userId).findById(workspaceId))?.slug
+      : undefined;
+    if (workspaceId && !workspaceSlug) return undefined;
+
+    return buildCanvasOpenUrl(getAppUrl(), {
+      agentId: topic.agentId ?? scope.agentId,
+      canvasId,
+      topicId,
+      workspaceSlug,
+    });
+  };
+
 export const createCanvasAgentRuntime = (db: LobeChatDatabase, scope: CanvasAgentRuntimeScope) => {
   const { userId, workspaceId } = scope;
 
@@ -58,6 +97,7 @@ export const createCanvasAgentRuntime = (db: LobeChatDatabase, scope: CanvasAgen
     new CanvasToolServiceImpl({
       agentId: scope.agentId,
       resolveFileRefs: createCanvasFileRefResolverFor(db, scope),
+      resolveOpenUrl: createCanvasOpenUrlResolver(db, scope),
       findGuideState: () =>
         new MessageModel(db, userId, workspaceId).findLatestPluginStateInTopic({
           apiName: CanvasApiName.readCanvasGuide,
