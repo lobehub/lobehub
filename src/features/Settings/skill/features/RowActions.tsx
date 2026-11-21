@@ -1,6 +1,13 @@
 'use client';
 
-import { ActionIcon, Button, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import {
+  ActionIcon,
+  type ActionIconProps,
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+} from '@lobehub/ui';
 import { MoreHorizontalIcon, PanelRightOpen, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +16,7 @@ interface RowAddActionProps {
   disabled?: boolean;
   /** Why it is disabled; replaces the action name in the tooltip. */
   disabledReason?: string;
+  icon?: ActionIconProps['icon'];
   /** Accessible name and tooltip, e.g. "Connect" or "Install". */
   label: string;
   loading?: boolean;
@@ -21,7 +29,7 @@ interface RowAddActionProps {
  * that connects or installs in place. Once added it becomes {@link RowMoreMenu}.
  */
 export const RowAddAction = memo<RowAddActionProps>(
-  ({ disabled, disabledReason, label, loading, onClick, showLabel }) => {
+  ({ disabled, disabledReason, icon = Plus, label, loading, onClick, showLabel }) => {
     const handleClick = (event: React.MouseEvent) => {
       event.stopPropagation();
       onClick();
@@ -31,9 +39,9 @@ export const RowAddAction = memo<RowAddActionProps>(
       return (
         <Button
           disabled={disabled || loading}
-          icon={Plus}
+          icon={icon}
           loading={loading}
-          size={'small'}
+          size="small"
           title={disabled ? disabledReason : undefined}
           onClick={handleClick}
         >
@@ -45,7 +53,7 @@ export const RowAddAction = memo<RowAddActionProps>(
       <ActionIcon
         aria-label={label}
         disabled={disabled || loading}
-        icon={Plus}
+        icon={icon}
         loading={loading}
         title={disabled && disabledReason ? disabledReason : label}
         onClick={handleClick}

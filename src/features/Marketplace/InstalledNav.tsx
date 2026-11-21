@@ -1,11 +1,11 @@
 'use client';
 
 import type { ConnectorVisibility } from '@lobechat/types';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { SlidersHorizontalIcon } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
@@ -18,6 +18,7 @@ import {
   parseMobileSelection,
 } from '@/features/Settings/skill/mobileSelection';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 import {
@@ -25,6 +26,18 @@ import {
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
 } from './paths';
+
+const styles = stylex.create({
+  collectionLink: {
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+      ':focus-visible': cssVar.colorFillTertiary,
+    },
+    borderRadius: cssVar.borderRadiusSM,
+    display: 'flex',
+  },
+});
 
 export type InstalledKind = 'connector' | 'skill';
 
@@ -71,8 +84,8 @@ export const buildInstalledDetailPath = (
  */
 const InstalledNav = memo(() => {
   const { t } = useTranslation('discover');
-  const { pathname } = useActiveLocation();
-  const [searchParams] = useSearchParams();
+  const { pathname, search } = useActiveLocation();
+  const searchParams = new URLSearchParams(search);
   const navigate = useWorkspaceAwareNavigate();
   const sectionTriggerStyle = useSectionTriggerStyle();
 
@@ -97,22 +110,19 @@ const InstalledNav = memo(() => {
 
   return (
     <Flexbox gap={2} paddingBlock={8} paddingInline={4}>
-      <Flexbox horizontal align={'center'} justify={'space-between'} style={sectionTriggerStyle}>
+      <WorkspaceLink
+        aria-current={onInstalledPage && !selectedIdentifier ? 'page' : undefined}
+        className={stylex.props(styles.collectionLink).className}
+        style={sectionTriggerStyle}
+        title={t('catalog.manageInstalledConnectors')}
+        to={
+          visibility === 'private'
+            ? `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?visibility=private`
+            : MARKETPLACE_INSTALLED_CONNECTORS_PATH
+        }
+      >
         <SectionTitle>{t('catalog.installed')}</SectionTitle>
-        <ActionIcon
-          active={onInstalledPage && !selectedIdentifier}
-          icon={SlidersHorizontalIcon}
-          size={'small'}
-          title={t('catalog.manageInstalledConnectors')}
-          onClick={() =>
-            navigate(
-              visibility === 'private'
-                ? `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?visibility=private`
-                : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-            )
-          }
-        />
-      </Flexbox>
+      </WorkspaceLink>
       <SkillListVariantProvider value={'nav'}>
         <SkillList
           installedOnly

@@ -76,8 +76,9 @@ Feature: Discover Interactions
   @COMMUNITY-INTERACT-008 @P1
   Scenario: Browse a category in Connectors Discover
     Given I navigate to "/marketplace/connector"
-    When I open the MCP category "developer"
-    Then I should be navigated to "/marketplace/connector?category=developer"
+    When I select the "Public" connector filter
+    And I open the MCP category "developer"
+    Then I should be navigated to "/marketplace/connector?category=developer&source=public"
     And I should see only these MCP cards
       | File Manager      |
       | Build Runner      |
@@ -89,7 +90,7 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-009 @P1
   Scenario: Navigate to MCP detail page
-    Given I navigate to "/marketplace/connector"
+    Given I navigate to "/marketplace/connector?source=public"
     When I click on the first MCP card
     Then I should be navigated to the MCP detail page
     And I should see the MCP detail content
@@ -97,5 +98,8 @@ Feature: Discover Interactions
   @COMMUNITY-INTERACT-010 @P1
   Scenario: Open an old marketplace bookmark with a search
     Given I navigate to "/community?q=developer"
-    Then I should be navigated to "/marketplace/agent?q=developer"
-    And I should see only "Code Assistant" in the assistant catalog
+    Then I should be navigated to "/marketplace/connector?q=developer"
+    And the "Verified" connector filter should be selected
+    When I select the "Public" connector filter
+    Then I should see only these MCP cards
+      | File Manager |

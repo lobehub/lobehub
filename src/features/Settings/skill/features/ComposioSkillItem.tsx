@@ -42,11 +42,10 @@ interface ComposioSkillItemProps {
   onSelect?: () => void;
   server?: ComposioServer;
   serverType: ComposioAppType;
-  showConnectLabel?: boolean;
 }
 
 const ComposioSkillItem = memo<ComposioSkillItemProps>(
-  ({ hideConnectedStatus, serverType, server, isSelected, onSelect, showConnectLabel }) => {
+  ({ hideConnectedStatus, serverType, server, isSelected, onSelect }) => {
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
@@ -389,8 +388,6 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // A restricted or stale (pending / errored) connection keeps its explicit
     // control, since a bare `+` would not say why the first try did not stick.
     const renderPageExtra = () => {
-      if (isConnected && showConnectLabel)
-        return <ConnectedStatus label={t('tools.composio.connected')} />;
       if (isConnected)
         return (
           <RowMoreMenu
@@ -407,21 +404,27 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
             onOpenDetail={onSelect}
           />
         );
+      const needsAuth = isPending || isError;
       return (
         <RowAddAction
           disabled={!canCreate || !canEdit || !canManage}
-          disabledReason={!canCreate ? createReason : editReason}
-          label={t('connectorMarket.action.connect')}
+          icon={needsAuth ? RotateCcw : undefined}
+          label={t(needsAuth ? 'tools.composio.reauthorize' : 'connectorMarket.action.connect')}
           loading={isConnecting || isWaitingAuth}
-          showLabel={showConnectLabel}
-          onClick={handleConnect}
+          disabledReason={
+            isRestricted
+              ? t('tools.connectorFeedback.manageOnly')
+              : !canCreate
+                ? createReason
+                : editReason
+          }
+          onClick={needsAuth ? handleReauthorize : handleConnect}
         />
       );
     };
 
     const renderNavExtra = () => {
-      if (isPage && (isConnected || (!isRestricted && !isPending && !isError)))
-        return renderPageExtra();
+      if (isPage) return renderPageExtra();
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }
@@ -437,9 +440,9 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
           <Tooltip title={!canCreate ? createReason : editReason}>
             <Button
               disabled={!canCreate || !canEdit || !canManage}
-              icon={isPage ? undefined : <Icon icon={SquareArrowOutUpRight} />}
+              icon={<Icon icon={SquareArrowOutUpRight} />}
               size="small"
-              type={isPage ? 'default' : 'text'}
+              type={'text'}
               onClick={handleReauthorize}
             >
               {t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' })}
@@ -451,9 +454,9 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         <Tooltip title={!canCreate ? createReason : editReason}>
           <Button
             disabled={!canCreate || !canEdit || !canManage}
-            icon={isPage ? undefined : <Icon icon={SquareArrowOutUpRight} />}
+            icon={<Icon icon={SquareArrowOutUpRight} />}
             size="small"
-            type={isPage ? 'default' : 'text'}
+            type={'text'}
             onClick={handleConnect}
           >
             {t('tools.composio.connect', { defaultValue: 'Connect' })}

@@ -1,11 +1,27 @@
+import { fireEvent, render } from '@testing-library/react';
+import { createElement } from 'react';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/Settings/skill/features/SkillList', () => ({ default: () => null }));
+const { installedList, activeLocation } = vi.hoisted(() => ({
+  activeLocation: { pathname: '/acme/marketplace/connector/installed', search: '' },
+  installedList: vi.fn(() => null),
+}));
+vi.mock('@/features/Settings/skill/features/SkillList', () => ({ default: installedList }));
+vi.mock('@/hooks/useActiveLocation', () => ({ useActiveLocation: () => activeLocation }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  useActiveWorkspaceId: () => null,
+  useActiveWorkspaceId: () => 'ws_1',
 }));
 
-const { buildInstalledDetailPath, getInstalledVisibility } = await import('./InstalledNav');
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => 'acme',
+}));
+
+const {
+  default: InstalledNav,
+  buildInstalledDetailPath,
+  getInstalledVisibility,
+} = await import('./InstalledNav');
 
 describe('buildInstalledDetailPath', () => {
   it('opens one installed item on its installed page', () => {
@@ -44,4 +60,42 @@ describe('buildInstalledDetailPath in a workspace', () => {
       '/marketplace/connector/installed?open=mcp-connector%3Aacme',
     );
   });
+});
+
+describe('installed connector sidebar selection', () => {
+  it('highlights the connector from the active desktop tab even when the shell router is on another URL', () => {
+    activeLocation.search = '?open=mcp-connector%3Aacme%3Aci&visibility=private';
+    render(createElement(MemoryRouter, { initialEntries: ['/'] }, createElement(InstalledNav)));
+    expect(installedList).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedIdentifier: 'acme:ci', visibility: 'private' }),
+      undefined,
+    );
+  });
+});
+
+describe('installed connector collection link', () => {
+  it.each([
+    ['/acme/marketplace/connector', '', ''],
+    [
+      '/acme/marketplace/connector/installed',
+      '?open=mcp-connector%3Aexample&visibility=private',
+      '?visibility=private',
+    ],
+  ])(
+    'opens the collection from %s%s even without visible rows',
+    (pathname, search, expectedSearch) => {
+      Object.assign(activeLocation, { pathname, search });
+      const router = createMemoryRouter([{ path: '*', element: createElement(InstalledNav) }], {
+        initialEntries: [pathname + search],
+      });
+      const view = render(createElement(RouterProvider, { router }));
+      const link = view.getByRole('link', { name: /installed/i });
+      const expectedPath = '/acme/marketplace/connector/installed';
+      expect(link.getAttribute('href')).toBe(expectedPath + expectedSearch);
+      fireEvent.click(link);
+      expect(router.state.location.pathname + router.state.location.search).toBe(
+        expectedPath + expectedSearch,
+      );
+    },
+  );
 });
