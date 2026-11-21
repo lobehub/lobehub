@@ -59,6 +59,7 @@ export class AntigravityLiveInput {
   private lineBuffer = '';
   private readonly pendingAdapterUuids: string[] = [];
   private readonly seenUserInputSteps = new Set<number>();
+  private sessionId: string | undefined;
   private turnOpen = false;
   private readonly unconsumed: string[] = [];
 
@@ -139,12 +140,22 @@ export class AntigravityLiveInput {
     if (!message || typeof message !== 'object') return;
 
     if (message.event === 'init') {
+      if (typeof message.conversation_id === 'string' && message.conversation_id) {
+        this.sessionId = message.conversation_id;
+      }
       this.openTurn();
       return;
     }
 
     if (message.event === 'step_update' && message.step_update && typeof message.step_update === 'object') {
       const step = message.step_update;
+      const conversationId =
+        typeof step.conversation_id === 'string' && step.conversation_id
+          ? step.conversation_id
+          : undefined;
+      // Child conversations must never consume the parent run's pending steer count.
+      if (this.sessionId && conversationId && conversationId !== this.sessionId) return;
+      this.sessionId ??= conversationId;
       if (step.step_type === 'user_input') {
         const index = typeof step.step_index === 'number' ? step.step_index : undefined;
         const isNewStep = index === undefined || !this.seenUserInputSteps.has(index);

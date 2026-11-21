@@ -69,6 +69,28 @@ describe('AntigravityLiveInput', () => {
     expect(live.isOpen).toBe(false);
     expect(live.lastTurn).toEqual({ ok: false, status: 'ERROR' });
   });
+
+  it('ignores child-conversation user_input updates when tracking pending steers', () => {
+    const stdin = new PassThrough();
+    const live = new AntigravityLiveInput(stdin);
+    live.send('{"event":"user","message":{"content":"first"}}\n');
+    live.observe('{"event":"init","conversation_id":"parent-conv"}\n');
+    live.observe(
+      '{"event":"step_update","step_update":{"conversation_id":"parent-conv","step_index":0,"state":"DONE","step_type":"user_input"}}\n',
+    );
+
+    // Queue a steer for the parent conversation
+    expect(live.send('{"event":"user","message":{"content":"steer"}}\n', 'u-steer')).toBe(true);
+    // Child subagent conversation emits its own user_input — must NOT consume parent's pending steer
+    live.observe(
+      '{"event":"step_update","step_update":{"conversation_id":"child-conv","step_index":1,"state":"DONE","step_type":"user_input"}}\n',
+    );
+    // Parent turn 1 completes: stdin must stay open because u-steer is still pending
+    live.observe('{"event":"result","result":{"conversation_id":"parent-conv","status":"SUCCESS"}}\n');
+
+    expect(live.isOpen).toBe(true);
+    expect(live.takeSteerUuid()).toBe('u-steer');
+  });
 });
 
 describe('resolveAntigravityLiveRuntimeEnd', () => {

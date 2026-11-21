@@ -2343,12 +2343,7 @@ export default class HeterogeneousAgentCtr {
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
       const live = !!spawnPlan.liveInput;
-      session.liveInput = writeCliPrompt(
-        proc.stdin as Writable,
-        spawnPlan.stdinPayload,
-        live,
-        session.agentType,
-      );
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live, session.agentType);
     }
 
     session.process = proc;
@@ -2445,12 +2440,7 @@ export default class HeterogeneousAgentCtr {
       });
       const slot = this.opIdToIntervention.get(params.operationId);
       if (slot) slot.pumpDone = pumpDone;
-      if (
-        session.liveInput &&
-        'sendControlRequest' in session.liveInput &&
-        params.permissionMode &&
-        session.agentType === 'claude-code'
-      ) {
+      if (session.liveInput && params.permissionMode && session.agentType === 'claude-code') {
         attachCliPermissionPrompts({
           bridge: intervention.bridge,
           emit: broadcastBridgeEvent,

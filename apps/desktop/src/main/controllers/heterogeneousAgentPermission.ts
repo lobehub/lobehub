@@ -38,10 +38,11 @@ export const attachCliPermissionPrompts = ({
 }: {
   bridge: AskUserBridge;
   emit: (event: AgentStreamEvent) => void;
-  live: ClaudeCodeLiveInput;
+  live: AntigravityLiveInput | ClaudeCodeLiveInput;
   operationId: string;
   permissionMode: HeteroPermissionMode;
 }): void => {
+  if (!('sendControlRequest' in live)) return;
   const isRoot = isRunningAsRoot();
   attachClaudeCodePermissionResponder(live, {
     ask: askThroughBridge(bridge),

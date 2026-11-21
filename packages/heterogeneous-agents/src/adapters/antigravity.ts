@@ -65,9 +65,9 @@ export class AntigravityAdapter implements AgentEventAdapter {
   sessionId?: string;
 
   private completedSteps = new Set<number>();
-  private completedTurnCount = 0;
   private flushed = false;
   private hasResponseText = false;
+  private latestTurnCompleted = false;
   private model?: string;
   private pendingTools = new Map<number, PendingTool>();
   private resultReceived = false;
@@ -91,6 +91,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
   adapt(raw: unknown): HeterogeneousAgentEvent[] {
     if (this.flushed || this.resultReceived || !isRecord(raw)) return [];
     if (raw.event === 'init') {
+      this.latestTurnCompleted = false;
       this.sessionId = pickString(raw.conversation_id);
       this.model = pickString(toRecord(raw.init)?.model);
       return this.openStream();
@@ -106,6 +107,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
     if (this.sessionId && conversationId && conversationId !== this.sessionId) return [];
     this.sessionId ??= conversationId;
     if (this.completedSteps.has(index)) return [];
+    this.latestTurnCompleted = false;
 
     const events: HeterogeneousAgentEvent[] = [];
     if (step.step_type === 'user_input') {
@@ -160,7 +162,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
   }
 
   validateCompletion(): HeterogeneousAgentEvent[] {
-    if (this.resultReceived || this.completedTurnCount > 0 || this.completionValidated) return [];
+    if (this.resultReceived || this.latestTurnCompleted || this.completionValidated) return [];
     this.completionValidated = true;
     return [
       this.event('error', {
@@ -305,7 +307,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
     const keepOpenForMoreTurns =
       this.runtimeEndStrategy === 'on-transport-close' && result.status === 'SUCCESS';
     if (!keepOpenForMoreTurns) this.resultReceived = true;
-    this.completedTurnCount += 1;
+    this.latestTurnCompleted = true;
     this.sessionId ??= pickString(result.conversation_id);
     const hasPendingTools = this.pendingTools.size > 0;
     // Materialize unfinished tools in their owning turn before a fallback response opens a new one.
