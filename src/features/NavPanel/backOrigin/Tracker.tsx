@@ -25,9 +25,7 @@ const BackOriginTracker = () => {
 
   useEffect(() => {
     // Desktop tab urls carry no hash; on web it brings back a section anchor.
-    record(owner, `${pathname}${search}${hash}`, readHistoryIndex());
-    // `key` changes when the same url is pushed or popped again (a new history
-    // entry with a new index).
+    record(owner, `${pathname}${search}${hash}`, readHistoryIndex(), key);
   }, [owner, pathname, search, hash, key, record]);
 
   return null;
