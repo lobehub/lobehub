@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useExpandedSettingsGroups } from '@/features/Settings/hooks/useExpandedSettingsGroups';
 import { SearchSection } from '@/features/SettingsSearch';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -20,6 +21,7 @@ import {
 } from '../hooks/useSettingsSearchScope';
 
 const Body = memo(() => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
   const slug = useActiveWorkspaceSlug();
@@ -49,15 +51,11 @@ const Body = memo(() => {
         <Accordion
           gap={8}
           indicatorPlacement="inline"
-          styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+          styles={{ trigger: sectionTriggerStyle }}
           value={expandedGroups}
           items={groups.map((group) => ({
             key: group.key,
-            title: (
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {group.title}
-              </Text>
-            ),
+            title: <SectionTitle>{group.title}</SectionTitle>,
             children: (
               <Flexbox gap={1} paddingBlock={1}>
                 {group.items.map((item) => {

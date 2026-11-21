@@ -7,12 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import MessageItem from '@/features/Conversation/Messages';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   header: css`
     flex: none;
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   scroll: css`

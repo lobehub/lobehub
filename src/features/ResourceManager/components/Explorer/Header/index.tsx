@@ -14,6 +14,7 @@ import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal'
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
+import { useHeaderActionSize } from '@/styles/density';
 
 import AddButton from '../../Header/AddButton';
 import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
@@ -29,6 +30,7 @@ import SearchInput from './SearchInput';
  */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
+  const headerActionSize = useHeaderActionSize(true);
 
   const activeWorkspaceId = useActiveWorkspaceId();
 
@@ -69,6 +71,7 @@ const Header = memo(() => {
         <ActionIcon
           disabled={!canEditResources}
           icon={BookMinusIcon}
+          size={headerActionSize}
           title={canEditResources ? t('FileManager.actions.removeFromLibrary') : reason}
           onClick={() => {
             if (!canEditResources) return;
@@ -94,6 +97,7 @@ const Header = memo(() => {
       <ActionIcon
         disabled={!canEditResources}
         icon={FileBoxIcon}
+        size={headerActionSize}
         title={canEditResources ? t('FileManager.actions.batchChunking') : reason}
         onClick={async () => {
           if (!canEditResources) return;
@@ -106,6 +110,7 @@ const Header = memo(() => {
           disabled={!canEditResources}
           icon={action.icon}
           key={action.key}
+          size={headerActionSize}
           title={canEditResources ? action.label : reason}
           onClick={() => {
             if (!canEditResources) return;
@@ -117,6 +122,7 @@ const Header = memo(() => {
       <ActionIcon
         disabled={!canEditResources}
         icon={Trash2Icon}
+        size={headerActionSize}
         title={
           canEditResources
             ? t(isWorkspaceDeleteAll ? 'FileManager.actions.deleteAll' : 'delete', {

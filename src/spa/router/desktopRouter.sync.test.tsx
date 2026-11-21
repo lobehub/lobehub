@@ -17,6 +17,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
+import ProjectHomeSkeleton from '@/components/Skeleton/ProjectHome';
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
@@ -31,6 +32,7 @@ import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetail
 import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
+import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
 import { createTabRouter } from '@/spa/router/tabRouter';
 import { resolveRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
@@ -89,6 +91,7 @@ async function readRouterSources() {
       'onboardingRoute.tsx',
       'collaborationRoutes.tsx',
       'evalRoutes.tsx',
+      'marketplaceRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -191,6 +194,21 @@ describe('desktop router shared definition', () => {
       expect(matches?.at(-1)?.route.path).toBe('self-evolving/new');
       expect(matches?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
       expect(matches?.at(-1)?.params).not.toHaveProperty('domainId');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s renders the project home skeleton on the composer layout',
+    (_, factory) => {
+      // Regression: the home is a centered composer page (title, subtitle, then the
+      // tray + card), but its route skeleton was the generic avatar/detail surface,
+      // so the first paint and the loaded page had different layouts.
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1');
+      const Skeleton = resolveRouteSkeleton(
+        matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
+      );
+
+      expect(Skeleton).toBe(ProjectHomeSkeleton);
     },
   );
 
@@ -703,6 +721,124 @@ describe('desktop router shared definition', () => {
 
       expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
       expect(registeredTabs).toEqual([...WORKSPACE_SETTINGS_TABS].sort());
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s serves installed skills and connectors in the Marketplace, beside the skill detail',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const [url, leaf, titleKey] of [
+        [
+          '/marketplace/skill/installed',
+          'skill/installed',
+          'navigation.marketplaceInstalledSkills',
+        ],
+        [
+          '/acme/marketplace/skill/installed',
+          'skill/installed',
+          'navigation.marketplaceInstalledSkills',
+        ],
+        [
+          '/marketplace/connector/installed',
+          'connector/installed',
+          'navigation.marketplaceConnectors',
+        ],
+        [
+          '/acme/marketplace/connector/installed',
+          'connector/installed',
+          'navigation.marketplaceConnectors',
+        ],
+      ] as const) {
+        const matches = matchRoutes(routes, url);
+        const handle = matches?.at(-1)?.route.handle as {
+          meta?: { Skeleton?: unknown; titleKey?: string };
+        };
+
+        expect(matches?.at(-1)?.route.path, url).toBe(leaf);
+        // Inside the marketplace root (its sidebar), not the list or detail layouts.
+        expect(matches?.at(-2)?.route.path, url).toBe('marketplace');
+        expect(handle.meta?.titleKey, url).toBe(titleKey);
+        expect(handle.meta?.Skeleton, url).toBeDefined();
+      }
+
+      // A real skill identifier still opens the catalog detail page.
+      expect(matchRoutes(routes, '/marketplace/skill/some-skill')?.at(-1)?.route.path).toBe(
+        'skill/:slug',
+      );
+      // Discover pages: no category column layout, the Codex groups are the page.
+      expect(matchRoutes(routes, '/marketplace/skill')?.at(-1)?.route.path).toBe('skill');
+      const connectorDiscover = matchRoutes(routes, '/marketplace/connector')?.at(-1)?.route;
+      expect(connectorDiscover?.path).toBe('connector');
+      expect(
+        (connectorDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
+      ).toBe('navigation.marketplaceConnectors');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s folds the MCP list into Connectors and keeps MCP detail pages',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const url of ['/marketplace/mcp', '/acme/marketplace/mcp']) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
+          ReactElement<{ to: string }> | undefined;
+
+        expect(element?.type, url).toBe(LegacyPathRedirect);
+        expect(element?.props.to, url).toBe('/marketplace/connector');
+      }
+
+      expect(matchRoutes(routes, '/marketplace/mcp/notion')?.at(-1)?.route.path).toBe('mcp/:slug');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s redirects settings skill / connector URLs to the Marketplace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const [url, to] of [
+        ['/settings/skill', '/marketplace/skill/installed'],
+        ['/settings/skill/sub', '/marketplace/skill/installed'],
+        ['/settings/connector', '/marketplace/connector/installed'],
+        ['/settings/connector/sub', '/marketplace/connector/installed'],
+        ['/acme/settings/skill', '/marketplace/skill/installed'],
+        ['/acme/settings/connector', '/marketplace/connector/installed'],
+      ] as const) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
+          ReactElement<{ to: string }> | undefined;
+
+        // Before the static routes existed, `/settings/skill` fell into `:tab` and
+        // rendered the default tab once the componentMap entry was gone.
+        expect(element?.type, url).toBe(LegacyPathRedirect);
+        expect(element?.props.to, url).toBe(to);
+      }
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s forwards every old /community URL to the Marketplace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      const entry = matchRoutes(routes, '/marketplace')?.at(-1)?.route.element;
+      expect(matchRoutes(routes, '/community')?.at(-1)?.route.element).toBe(entry);
+
+      for (const url of [
+        '/community/mcp/notion',
+        '/acme/community/skill',
+        // Compete with `/:workspaceSlug/agent[/:aid]`; a lone `community/*`
+        // splat lost and read `community` as a workspace slug.
+        '/community/agent',
+        '/community/agent/some-agent',
+        '/acme/community/agent/some-agent',
+        '/community/workspace/settings',
+      ]) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as ReactElement | undefined;
+        expect(element?.type, url).toBe(LegacyCommunityRedirect);
+      }
     },
   );
 

@@ -4,12 +4,14 @@ import { Block, createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
 import { type KeyboardEvent, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import type { IntegrationDefinition, UpcomingIntegration } from './registry';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorFillQuaternary};
@@ -19,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-color 0.2s ease;
   `,
   compact: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
   `,
   dot: css`
     display: inline-block;

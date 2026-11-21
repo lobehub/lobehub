@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MemoryEntities from '@/features/MemoryEntities';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   root: { display: 'flex', flexDirection: 'column', height: '100%', width: '100%' },
@@ -19,9 +20,9 @@ const styles = stylex.create({
     flexShrink: 0,
     flexWrap: 'wrap',
     fontSize: '13px',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlock: '8px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   body: { display: 'flex', flex: '1', minHeight: 0 },
 });

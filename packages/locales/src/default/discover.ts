@@ -50,13 +50,14 @@ export default {
   'assistants.duplicateAdd.content': '“{{title}}” is already in your Agents. Add another copy?',
   'assistants.duplicateAdd.ok': 'Add copy',
   'assistants.duplicateAdd.title': 'Add duplicate?',
-  'assistants.empty.description': 'Try adjusting filters, or explore more Agents in the Community.',
+  'assistants.empty.description':
+    'Try adjusting filters, or explore more Agents in the Marketplace.',
   'assistants.empty.search': 'No matching Agents found',
   'assistants.empty.title': 'No Agents found',
   'assistants.list': 'Agent List',
-  'assistants.marketSource.label': 'Switch Community Source',
-  'assistants.marketSource.legacy': 'Legacy Community',
-  'assistants.marketSource.new': 'New Community',
+  'assistants.marketSource.label': 'Switch Marketplace Source',
+  'assistants.marketSource.legacy': 'Legacy Marketplace',
+  'assistants.marketSource.new': 'New Marketplace',
   'assistants.more': 'More',
   'assistants.plugins': 'Integrated Skills',
   'assistants.recentSubmits': 'Recent Updates',
@@ -69,7 +70,7 @@ export default {
   'assistants.status.archived.reasons.owner': 'The creator archived or removed this Agent.',
   'assistants.status.archived.subtitle': 'This Agent has been archived. Possible reasons:',
   'assistants.status.archived.title': 'Agent archived',
-  'assistants.status.backToMarket': 'Back to Agent Community',
+  'assistants.status.backToMarket': 'Back to Marketplace',
   'assistants.status.deprecated.reasons.official':
     'The platform removed this Agent due to security, policy, or other concerns.',
   'assistants.status.deprecated.reasons.owner': 'The creator rejected or removed this Agent.',
@@ -87,6 +88,28 @@ export default {
   'assistants.withKnowledge': 'This Agent includes Libraries',
   'assistants.withPlugin': 'This Agent includes Skills',
   'back': 'Back to Discovery',
+  'catalog.add': 'Add',
+  'catalog.agentDescription':
+    'Find Agents and groups for tasks like writing, coding, and research.',
+  'catalog.allAgents': 'All Agents',
+  'catalog.allConnectors': 'All connectors',
+  'catalog.allSkills': 'All skills',
+  'catalog.back': 'Back to Discover',
+  'catalog.installed': 'Installed',
+  'catalog.manageInstalledConnectors': 'Manage installed connectors',
+  'catalog.manageInstalledSkills': 'Manage installed skills',
+  'catalog.new': 'New & Noteworthy',
+  'catalog.popular': 'Popular',
+  'catalog.recommended': 'Recommended',
+  'catalog.retry': 'Retry',
+  'catalog.rowAction': '{{action}} {{name}}',
+  'catalog.searchAgents': 'Search Agents',
+  'catalog.searchIn': 'Search in {{name}}',
+  'catalog.searchResults': 'Results for “{{keyword}}”',
+  'catalog.sectionError': "Couldn't load this group",
+  'catalog.viewAll': 'View all',
+  'catalog.viewAllIn': 'View all in {{name}}',
+  'catalog.yourSkills': 'Your skills',
   'category.assistant.academic': 'Academic',
   'category.assistant.all': 'All',
   'category.assistant.career': 'Career',
@@ -117,7 +140,7 @@ export default {
   'cleanFilter': 'Clear Filter',
   'create': 'Create',
   'createGuide.func1.desc1': 'In a conversation, open the Agent settings from the top-right menu.',
-  'createGuide.func1.desc2': 'Then click Submit to Agent Community in the top-right corner.',
+  'createGuide.func1.desc2': 'Then click Submit to Marketplace in the top-right corner.',
   'createGuide.func1.tag': 'Option 1',
   'createGuide.func1.title': 'Submit in LobeHub',
   'createGuide.func2.button': 'Open GitHub Agent repo',
@@ -146,8 +169,8 @@ export default {
   'filterBy.timePeriod.week': 'Last 7 Days',
   'filterBy.timePeriod.year': 'Last Year',
   'footer.desc':
-    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Community.',
-  'footer.title': 'Share your creation on LobeHub Community today',
+    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Marketplace.',
+  'footer.title': 'Share your creation on LobeHub Marketplace today',
 
   'fork.alreadyForked': 'You have already forked this agent. Navigating to your fork...',
 
@@ -165,7 +188,7 @@ export default {
   'fork.forksCount_other': '{{count}} forks',
 
   'fork.orgSetupRequired.memberContent':
-    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Community → Workspace.",
+    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Marketplace → Workspace.",
   'fork.orgSetupRequired.ownerContent':
     'This workspace has not yet set up a Community profile. Set one up to fork agents from the marketplace into your workspace.',
   'fork.orgSetupRequired.ownerOk': 'Go to setup',
@@ -186,7 +209,7 @@ export default {
   'home.creatorReward.subtitle': '2026 Creator Reward Program is officially live.',
   'home.creatorReward.title': 'Create. Share. Get Paid.',
 
-  'home.communityAgents': 'Community Agents',
+  'home.communityAgents': 'Marketplace Agents',
 
   'home.featuredAssistants': 'Featured Agents',
 
@@ -654,7 +677,7 @@ export default {
 
   'mcp.sorts.updatedAt': 'Recently Updated',
 
-  'mcp.title': 'MCP Community',
+  'mcp.title': 'MCP Marketplace',
 
   'mcp.unvalidated.desc': 'This MCP Server has not been validated yet',
 
@@ -787,7 +810,7 @@ export default {
 
   'plugins.builtinTag': 'Built-in',
 
-  'plugins.community': 'Community Skills',
+  'plugins.community': 'Marketplace Skills',
 
   'plugins.details.settings.title': 'Skill Settings',
 
@@ -1127,9 +1150,14 @@ export default {
 
   'skills.sorts.updatedAt': 'Recently Updated',
 
+  'skillView.discover': 'Discover',
+  'skillView.installed': 'Installed',
+
   'toc.permalink': 'Permalink for this section',
 
   'tab.assistant': 'Agent',
+
+  'tab.connector': 'Connectors',
 
   'tab.home': 'Home',
 
@@ -1178,7 +1206,8 @@ export default {
   'user.myProfile': 'My Profile',
 
   'user.workspaceProfile.cancel': 'Cancel',
-  'user.workspaceProfile.description': 'Update the public workspace profile shown in Community.',
+  'user.workspaceProfile.description':
+    'Update the public workspace profile shown in the Marketplace.',
   'user.workspaceProfile.errors.displayName': 'Enter a workspace name',
   'user.workspaceProfile.errors.fileTooLarge': 'Image must be smaller than 2 MB',
   'user.workspaceProfile.errors.namespace.length': 'Handle must be 3-32 characters',
@@ -1271,13 +1300,14 @@ export default {
 
   'user.noAgents': 'This user hasn’t published any Agents yet',
 
-  'user.noAgents.ownerDescription': 'Create your first Agent and share it with the Community.',
+  'user.noAgents.ownerDescription': 'Create your first Agent and share it on the Marketplace.',
 
   'user.noAgents.title': 'No Agents yet',
 
   'user.org.noAgents': 'This organization hasn’t published any Agents yet',
 
-  'user.workspace.noAgents': 'This organization has not published any Agents to Community yet.',
+  'user.workspace.noAgents':
+    'This organization has not published any Agents to the Marketplace yet.',
 
   'user.noFavoriteAgents': 'No saved Agents yet',
 
@@ -1286,7 +1316,7 @@ export default {
   'user.noGroups.title': 'No Agent Groups yet',
 
   'user.workspace.noGroups':
-    'This organization has not published any Agent Groups to Community yet.',
+    'This organization has not published any Agent Groups to the Marketplace yet.',
 
   'user.noForkedAgentGroups': 'No forked Agent Groups yet',
 
@@ -1334,7 +1364,7 @@ export default {
   'user.submit': 'Submit',
   'user.submitRepo': 'Submit Repo',
   'user.submitRepoDescription':
-    'Submit your GitHub repository to import your Skills or MCPs to the community.',
+    'Submit your GitHub repository to import your Skills or MCPs to the Marketplace.',
   'user.submitRepoError': 'Failed to submit repository. Please try again.',
   'user.submitRepoHint': 'The repository will be reviewed before being published.',
   'user.submitRepoSuccess': 'Repository submitted successfully! It will be reviewed shortly.',

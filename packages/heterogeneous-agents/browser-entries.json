@@ -1,1 +1,1 @@
-[".", "./client", "./errors", "./quota"]
+[".", "./claudeCodePermission/shared", "./client", "./errors", "./quota"]

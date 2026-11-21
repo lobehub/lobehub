@@ -4,6 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import { agents, projects, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -35,7 +36,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   // Projects, agents, project members and tasks cascade with their owner.
-  await serverDB.delete(users).where(inArray(users.id, [userId, otherUserId]));
+  await deleteTestUsers(serverDB, [userId, otherUserId]);
 });
 
 describe('ProjectModel coverage', () => {

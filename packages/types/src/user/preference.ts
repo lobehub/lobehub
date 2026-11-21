@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
 import type { AgentModelOverride } from '../agent/modelSelection';
+import type { HeteroPermissionModeDir } from '../heteroPermissionMode';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -68,6 +69,12 @@ export interface WorkspaceUserPreference {
   agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
   /** Per-member Agent/Chat runtime mode for shared workspace agents. */
   agentModeOverrides?: Record<string /* agentId */, boolean>;
+  /**
+   * The Claude Code permission mode this member last picked per directory (see
+   * `HeteroPermissionModeDir`), which a new topic there starts in. Written only
+   * through `workspaceUserSettings.setHeteroPermissionModeDir`.
+   */
+  heteroPermissionModeDirs?: HeteroPermissionModeDir[];
   /**
    * This member's notification preferences for workspace-scoped scenarios
    * (the `workspace` category of the scenario registry). Same shape as the
@@ -268,15 +275,9 @@ export const UserLabSchema = z.object({
    * (its ids and the client environment) to the support team
    */
   enableTopicBugReport: z.boolean().optional(),
-  /**
-   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
-   */
+  /** @deprecated Legacy client preference. Goals are available to everyone. */
   enableGoals: z.boolean().optional(),
-  /**
-   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
-   * while older clients that only know this key are still around: their writes
-   * touch only this key, so it carries the latest choice.
-   */
+  /** @deprecated Legacy alias for the Goals lab preference. */
   enableTopicAcceptance: z.boolean().optional(),
   /**
    * expose a port on the working device through a tunnel link, so a dev server
@@ -346,6 +347,12 @@ export interface UserPreference {
    */
   fontFamily?: string;
   guide?: UserGuide;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.heteroPermissionModeDirs};
+   * written only through `user.setHeteroPermissionModeDir`, absent from the
+   * schema for the same reason as `worktreeModeDirs`.
+   */
+  heteroPermissionModeDirs?: HeteroPermissionModeDir[];
   hideSyncAlert?: boolean;
   /**
    * lab experimental features

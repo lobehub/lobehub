@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { usePermission } from '@/hooks/usePermission';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
@@ -45,6 +46,7 @@ interface PageSectionProps {
  * `shared` is what other workspace members published.
  */
 const PageSection = memo<PageSectionProps>(({ itemKey, scope }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('file');
   const [creating, setCreating] = useState(false);
   const { allowed: canCreate, reason } = usePermission('create_content');
@@ -109,11 +111,9 @@ const PageSection = memo<PageSectionProps>(({ itemKey, scope }) => {
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align={'center'} gap={4}>
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {title}
-            </Text>
+            <SectionTitle>{title}</SectionTitle>
             {isValidating && !!groups?.length && <Spin size={'small'} variant={'network'} />}
           </Flexbox>
         </AccordionTrigger>

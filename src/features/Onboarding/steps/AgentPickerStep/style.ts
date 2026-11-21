@@ -1,5 +1,7 @@
 import { createStaticStyles, keyframes } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 const pulse = keyframes`
   0%,
   100% {
@@ -16,10 +18,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: flex-start;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 14px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: ${cssVar.borderRadiusLG};
@@ -76,7 +78,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   cardTitle: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
@@ -120,7 +122,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
 
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 999px;
 
@@ -180,9 +182,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   skeletonCard: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 14px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: ${cssVar.borderRadiusLG};

@@ -285,6 +285,8 @@ export interface QueuedFile {
   /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
   mimeType: string;
   name: string;
+  /** Byte size, so the sent bubble's file card shows it before the server answers. */
+  size?: number;
   /** Preview URL — S3 URL for uploaded files, blob/base64 for in-memory items */
   url: string;
 }
@@ -293,8 +295,9 @@ export interface QueuedFile {
  * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
  * `sendMessage` can derive audioList/imageList/videoList AND so we can repopulate
  * `chatUploadFileList` when the user edits a queued message. The synthesized
- * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
- * read `file.name`, `file.type`, plus the URL fields we set below.
+ * `File` carries only `name`, `type` and the snapshotted `size` (zero bytes of
+ * content) — the consumers we hit only read `file.name`, `file.type`,
+ * `file.size`, plus the URL fields we set below.
  *
  * We mirror the snapshotted `url` into both `fileUrl` and `previewUrl`: the
  * optimistic-message path uses the `fileUrl || base64Url || previewUrl` fallback
@@ -311,17 +314,32 @@ export const snapshotQueuedFiles = (files?: UploadFileItem[]): QueuedFile[] | un
   return files.map((f) => ({
     audioMetadata: f.audioMetadata,
     id: f.id,
-    mimeType: f.file?.type ?? '',
+    mimeType: f.fileType || f.file?.type || '',
     name: f.file?.name ?? f.id,
+    size: f.file?.size,
     url: f.fileUrl || f.base64Url || f.previewUrl || '',
   }));
+};
+
+/** Placeholders rebuilt from a queued preview saved without its size (older clients). */
+const sizeUnknownPlaceholders = new WeakSet<File>();
+
+/** Whether `file` stands in for a queued upload whose real size was never recorded. */
+export const isSizeUnknownPlaceholder = (file: File) => sizeUnknownPlaceholders.has(file);
+
+/** A zero-byte `File` that reports the original upload's size. */
+const placeholderFile = ({ mimeType, name, size }: QueuedFile) => {
+  const file = new File([], name, { type: mimeType });
+  if (size === undefined) sizeUnknownPlaceholders.add(file);
+  else Object.defineProperty(file, 'size', { value: size });
+  return file;
 };
 
 export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
   files.map((f) => ({
     audioMetadata: f.audioMetadata,
     id: f.id,
-    file: new File([], f.name, { type: f.mimeType }),
+    file: placeholderFile(f),
     fileUrl: f.url || undefined,
     previewUrl: f.url || undefined,
     status: 'success',
@@ -458,6 +476,7 @@ const normalizeQueuedEditorData = (message: QueuedMessage): Record<string, any> 
 };
 
 const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> | undefined => {
+  if (!messages.some((message) => message.editorData?.root)) return undefined;
   const mergedChildren: any[] = [];
   let baseRoot: Record<string, any> | undefined;
 

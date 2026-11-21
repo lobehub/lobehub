@@ -5,9 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
+/** Rows the router's Agent-owner lookup (`select … from agents`) returns. */
+const mockAgentOwnerRows = vi.fn(async () => [{ userId: 'user-1' }]);
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(function () {
-    return {};
+    return {
+      select: () => ({ from: () => ({ where: () => ({ limit: () => mockAgentOwnerRows() }) }) }),
+    };
   }),
 }));
 
@@ -106,6 +110,19 @@ vi.mock('@/business/server/agent-share/spendGate', () => ({
   getAgentShareMonthlySpend: (...args: unknown[]) => mockGetAgentShareMonthlySpend(...args),
 }));
 
+const mockFilterAddressBookPeople = vi.fn();
+const mockListAddressBookPeople = vi.fn();
+const mockFindUser = vi.fn();
+vi.mock('@/database/models/contact', () => ({
+  ContactModel: vi.fn(function () {
+    return {
+      filterAddressBookPeople: mockFilterAddressBookPeople,
+      findUser: mockFindUser,
+      listAddressBookPeople: mockListAddressBookPeople,
+    };
+  }),
+}));
+
 const mockGetFeatureFlagsState = vi.fn();
 vi.mock('@/server/featureFlags', () => ({
   getServerFeatureFlagsStateFromRuntimeConfig: (...args: unknown[]) =>
@@ -144,7 +161,7 @@ describe('share profile configuration', () => {
 const share = {
   agentId: 'agent-1',
   id: 'share-1',
-  shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
+  shareConfig: { maxMessagesPerVisitor: 100 },
   visibility: 'private',
 };
 
@@ -312,7 +329,7 @@ describe('agentShareRouter', () => {
 
   it('forwards an atomic share configuration patch', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
-    const config = { maxTopicsPerVisitor: 10 };
+    const config = { maxMessagesPerVisitor: 10 };
 
     await caller.updateShareConfig({ agentId: 'agent-1', config });
 
@@ -323,43 +340,115 @@ describe('agentShareRouter', () => {
     expect(agentShareConfigPatchSchema.safeParse({}).success).toBe(false);
   });
 
-  it('requires positive integer topic and turn limits', async () => {
+  it('requires a positive integer message limit', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
     await expect(
       caller.updateShareConfig({
         agentId: 'agent-1',
-        config: { maxTopicsPerVisitor: 0 },
+        config: { maxMessagesPerVisitor: 0 },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await expect(
       caller.updateShareConfig({
         agentId: 'agent-1',
-        config: { maxTurnsPerTopic: 1.5 },
+        config: { maxMessagesPerVisitor: 1.5 },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
-  it('caps maxTopicsPerVisitor at the visitor topic list limit', async () => {
-    // The visitor topic list (`TopicModel.queryBySender`) is not paginated
-    // and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT` (200), so a
-    // cap above it would let visitors create topics they can never reopen.
-    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+  describe('execution environment grant', () => {
+    const bob = { avatar: null, fullName: 'Bob', id: 'user-bob', username: 'bob' };
 
-    await expect(
-      caller.updateShareConfig({
-        agentId: 'agent-1',
-        config: { maxTopicsPerVisitor: 201 },
-      }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(mockUpdateConfig).not.toHaveBeenCalled();
-
-    await caller.updateShareConfig({
-      agentId: 'agent-1',
-      config: { maxTopicsPerVisitor: 200 },
+    beforeEach(() => {
+      mockAgentOwnerRows.mockResolvedValue([{ userId: 'user-1' }]);
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: true });
     });
-    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { maxTopicsPerVisitor: 200 });
+
+    it('grants only people in the address book', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockFilterAddressBookPeople.mockResolvedValue(['user-bob']);
+
+      await expect(
+        caller.updateShareConfig({
+          agentId: 'agent-1',
+          config: { deviceAccess: 'allowlist', deviceAllowUserIds: ['user-bob', 'stranger'] },
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+
+      const config = { deviceAccess: 'allowlist' as const, deviceAllowUserIds: ['user-bob'] };
+      await caller.updateShareConfig({ agentId: 'agent-1', config });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+    });
+
+    it('stores an address-book-wide grant without a list', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'contacts' } });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { deviceAccess: 'contacts' });
+    });
+
+    // The runtime grants nothing while contacts are off, so a grant must not be
+    // stored then either (it would also come alive when they turn on).
+    it('refuses a grant while contacts are off for the Agent owner', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: false });
+      mockFilterAddressBookPeople.mockResolvedValue(['user-bob']);
+
+      await expect(
+        caller.updateShareConfig({
+          agentId: 'agent-1',
+          config: { deviceAccess: 'allowlist', deviceAllowUserIds: ['user-bob'] },
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'allowlist' } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'contacts' } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+
+      await expect(caller.listDeviceGrantablePeople({ agentId: 'agent-1' })).resolves.toMatchObject(
+        { enabled: false, people: [] },
+      );
+      expect(mockListAddressBookPeople).not.toHaveBeenCalled();
+    });
+
+    // A workspace manager other than the owner must see and save the same
+    // people the run accepts: the runtime keys the book by the Agent owner.
+    it('keys the address book by the Agent owner, not the calling manager', async () => {
+      const { ContactModel } = await import('@/database/models/contact');
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockAgentOwnerRows.mockResolvedValue([{ userId: 'owner-9' }]);
+      mockListAddressBookPeople.mockResolvedValue([]);
+
+      await caller.listDeviceGrantablePeople({ agentId: 'agent-1' });
+
+      expect(ContactModel).toHaveBeenCalledWith(expect.anything(), 'owner-9', undefined);
+      expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('owner-9');
+    });
+
+    it('lists the address book and the granted people who left it', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      const carol = { avatar: null, fullName: 'Carol', id: 'user-carol', username: 'carol' };
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, deviceAllowUserIds: ['user-bob', 'user-carol'] },
+      });
+      mockListAddressBookPeople.mockResolvedValue([bob]);
+      mockFindUser.mockResolvedValue(carol);
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: true });
+
+      await expect(caller.listDeviceGrantablePeople({ agentId: 'agent-1' })).resolves.toEqual({
+        enabled: true,
+        people: [bob],
+        unlisted: [carol],
+      });
+      expect(mockFindUser).toHaveBeenCalledWith('user-carol');
+    });
   });
 
   it('accepts a toolset-level grant and a per-API scoped grant in toolGrants', async () => {
@@ -427,13 +516,13 @@ describe('agentShareRouter', () => {
     expect(
       agentShareConfigSchema.safeParse({
         filePermissionConfig: { agentFiles: 'read' },
-        maxTopicsPerVisitor: 5,
+        maxMessagesPerVisitor: 5,
       }).success,
     ).toBe(false);
     expect(
       agentShareConfigSchema.safeParse({
         guestEnabled: true,
-        maxTopicsPerVisitor: 5,
+        maxMessagesPerVisitor: 5,
       }).success,
     ).toBe(false);
   });
@@ -501,7 +590,7 @@ describe('agentShareRouter', () => {
     await expect(
       caller.updateShareConfig({
         agentId: 'agent-1',
-        config: { maxTopicsPerVisitor: 5 },
+        config: { maxMessagesPerVisitor: 5 },
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(
@@ -554,7 +643,7 @@ describe('agentShareRouter', () => {
       await caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' });
       await caller.disableShare({ agentId: 'agent-1' });
       await caller.getShareStatus({ agentId: 'agent-1' });
-      await caller.updateShareConfig({ agentId: 'agent-1', config: { maxTurnsPerTopic: 3 } });
+      await caller.updateShareConfig({ agentId: 'agent-1', config: { maxMessagesPerVisitor: 3 } });
 
       expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'private');
       expect(mockUpdateVisibility).toHaveBeenCalledTimes(2);

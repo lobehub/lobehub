@@ -13,11 +13,13 @@ import type { MouseEvent, ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { getContainerTopInset } from '@/features/DesktopLayoutContainer/cssVariables';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
+import { useNavItemMetrics } from './density';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -66,6 +68,10 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     showTogglePanelButton = true,
   }) => {
     const navigate = useWorkspaceAwareNavigate();
+    const { headerTitleFontSize, headerTitleWeight } = useNavItemMetrics();
+    const { headerHeight } = useDensityTokens();
+    const topInset = getContainerTopInset();
+    const headerActionSize = useHeaderActionSize(true);
     const leftContent = left ? (
       <Flexbox
         horizontal
@@ -77,15 +83,10 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         }}
       >
         {showBack && (
-          <BackButton
-            escape={backEscape}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            to={backTo}
-            onClick={onBack}
-          />
+          <BackButton escape={backEscape} size={headerActionSize} to={backTo} onClick={onBack} />
         )}
         {left && typeof left === 'string' ? (
-          <Text ellipsis fontSize={16} weight={500}>
+          <Text ellipsis fontSize={headerTitleFontSize} weight={headerTitleWeight}>
             {left}
           </Text>
         ) : (
@@ -126,11 +127,13 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         align={'center'}
         className={styles.container}
         flex={'none'}
+        height={headerHeight + topInset}
         justify={'space-between'}
-        padding={'8px 6px'}
+        paddingInline={6}
+        style={{ paddingBlockStart: topInset }}
       >
         {leftContent}
-        <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>
+        <Flexbox horizontal align={'center'} flex={'none'} gap={2} justify={'flex-end'}>
           {showTogglePanelButton && <ToggleLeftPanelButton />}
           {right}
         </Flexbox>

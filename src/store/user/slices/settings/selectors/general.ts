@@ -1,5 +1,4 @@
-import { isDesktop } from '@lobechat/const';
-import { type FollowUpMode, resolveFollowUpMode } from '@lobechat/types';
+import { type FollowUpMode, type InterfaceDensity, resolveFollowUpMode } from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
@@ -18,11 +17,6 @@ const highlighterTheme = (s: UserStore) => generalConfig(s).highlighterTheme;
 const mermaidTheme = (s: UserStore) => generalConfig(s).mermaidTheme;
 const transitionMode = (s: UserStore) => generalConfig(s).transitionMode;
 const animationMode = (s: UserStore) => generalConfig(s).animationMode;
-const contextMenuMode = (s: UserStore) => {
-  const config = generalConfig(s).contextMenuMode;
-  if (config !== undefined) return config;
-  return isDesktop ? 'default' : 'disabled';
-};
 const responseLanguage = (s: UserStore) => generalConfig(s).responseLanguage;
 const currentResponseLanguage = (s: UserStore): Locales => {
   const locale = responseLanguage(s);
@@ -46,6 +40,8 @@ const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
+const interfaceDensity = (s: UserStore): InterfaceDensity =>
+  generalConfig(s).interfaceDensity ?? 'loose';
 /** The setting is a boolean: either the live tool list is open or it is a
  *  summary row. "Open" means the full list — the height-capped middle level
  *  just hid part of what the user asked to see. */
@@ -65,7 +61,6 @@ const followUpBehavior = (s: UserStore): FollowUpMode =>
 export const userGeneralSettingsSelectors = {
   animationMode,
   config: generalConfig,
-  contextMenuMode,
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
   enablePasteAutoConvert,
@@ -73,6 +68,7 @@ export const userGeneralSettingsSelectors = {
   fontAntialiasing,
   fontSize,
   highlighterTheme,
+  interfaceDensity,
   mermaidTheme,
   neutralColor,
   primaryColor,

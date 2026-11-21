@@ -17,6 +17,13 @@ const MAX_RETRY_AFTER = 60_000;
 
 export interface TransportSettings {
   maxRetries: number;
+  /**
+   * The caller asked for the response body itself (`parseAs: 'stream'`), which
+   * the server answers as `text/event-stream`. Its idempotency middleware keeps
+   * no replay record for that media type, so a retry starts a second run
+   * instead of replaying the first one: such requests never retry.
+   */
+  streaming?: boolean;
   timeout: number;
 }
 
@@ -97,8 +104,11 @@ export const createTransport = (
 ): typeof globalThis.fetch => {
   const transport = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = input instanceof Request && !init ? input : new Request(input, init);
-    const { maxRetries, timeout } = requestSettings.get(request) ?? defaults;
-    const retries = isRetryable(request) ? Math.max(0, maxRetries) : 0;
+    const settings = requestSettings.get(request) ?? defaults;
+    const { maxRetries, timeout } = settings;
+    // A streaming answer is never safe to resend, even keyed: the server
+    // deduplicates JSON bodies only, so a retry would start another run.
+    const retries = !settings.streaming && isRetryable(request) ? Math.max(0, maxRetries) : 0;
     const callerSignal = request.signal;
 
     for (let attempt = 0; ; attempt++) {

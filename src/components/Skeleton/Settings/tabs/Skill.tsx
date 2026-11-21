@@ -15,8 +15,8 @@ interface NavSection {
 }
 
 const SKILL_SECTIONS: NavSection[] = [
-  { key: 'skillGroup.builtinSkills', rows: 6 },
-  { key: 'skillGroup.communitySkills', rows: 4 },
+  { key: 'skillGroup.communitySkills', rows: 6 },
+  { key: 'skillGroup.customSkills', rows: 4 },
 ];
 
 /**

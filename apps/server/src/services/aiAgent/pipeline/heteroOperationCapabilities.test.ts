@@ -54,6 +54,7 @@ describe('heteroOperationCapabilities', () => {
       'hetero:ingest',
       'hetero:finish',
       'hetero:intervention:read',
+      'work:write',
     ]);
     expect(heteroOperationCapabilities(undefined)).not.toContain('goal:manage');
   });
@@ -68,5 +69,29 @@ describe('heteroOperationCapabilities', () => {
 
   it('keeps acceptance evidence out of a run with no Task', () => {
     expect(heteroOperationCapabilities('fix the build', {})).not.toContain('acceptance:evidence');
+  });
+
+  it.each([
+    ['an ordinary run', {}],
+    ['a Task run', { taskId: 'task_1' }],
+    ['a Channel dispatch', { channel: true }],
+    ['a user turn', { userTurn: true }],
+  ])('lets %s register its own Works', (_, options) => {
+    expect(heteroOperationCapabilities('make the deck', options)).toContain('work:write');
+  });
+});
+
+describe('heteroOperationCapabilities for a share visitor', () => {
+  it.each([
+    ['a /goal prompt', '/goal ship the report', { userTurn: true }],
+    ['a task', 'do the step', { taskId: 'task_1', userTurn: true }],
+    ['a channel', 'read the discussion', { channel: true, ownerBotTurn: true }],
+  ])('grants only the run callbacks and its own Works for %s', (_, prompt, options) => {
+    expect(heteroOperationCapabilities(prompt, { ...options, shareVisitor: true })).toEqual([
+      'hetero:ingest',
+      'hetero:finish',
+      'hetero:intervention:read',
+      'work:write',
+    ]);
   });
 });

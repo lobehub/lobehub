@@ -4,11 +4,11 @@ import { LobeAgentManifest } from './manifest';
 import { LobeAgentApiName } from './types';
 
 describe('LobeAgentManifest', () => {
-  it('should keep the package metadata generic for future Lobe Agent capabilities', () => {
+  it('describes the capabilities the model can discover before activation', () => {
     expect(LobeAgentManifest.meta.avatar).toBe('🤖');
-    expect(LobeAgentManifest.meta.description).toBe(
-      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and multimodal media analysis.',
-    );
+    for (const capability of ['plans', 'todos', 'question', 'media', 'sub-agent']) {
+      expect(LobeAgentManifest.meta.description).toContain(capability);
+    }
     expect(LobeAgentManifest.meta.readme).toContain(
       'built-in assistant capabilities that can be expanded over time',
     );

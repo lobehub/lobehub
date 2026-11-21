@@ -471,7 +471,11 @@ export const dispatchClaimedAgentIntervention = async (
    * inherits the parked operation's declaration. `acceptsFileWorks` follows
    * the same rule.
    */
-  options: { acceptsFileWorks?: boolean; acceptsMemberRuntimeEnd?: boolean } = {},
+  options: {
+    acceptsArtboardWorks?: boolean;
+    acceptsFileWorks?: boolean;
+    acceptsMemberRuntimeEnd?: boolean;
+  } = {},
 ): Promise<{ execution?: ExecAgentResult; status: AgentInterventionReviewStatus }> => {
   const { runtimeAction } = resolution;
   let execution: ExecAgentResult | undefined;
@@ -555,6 +559,7 @@ export const dispatchClaimedAgentIntervention = async (
             const skipped = customAction.type === 'skipped';
             execution = await ctx.aiAgentService.execAgent({
               agentId: runtimeAction.agentId,
+              acceptsArtboardWorks: options.acceptsArtboardWorks,
               acceptsFileWorks: options.acceptsFileWorks,
               acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
               approvalResolutionRequestId: resolution.resolutionRequestId,
@@ -592,6 +597,7 @@ export const dispatchClaimedAgentIntervention = async (
           const [singleDecision] = runtimeAction.decisions;
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsArtboardWorks: options.acceptsArtboardWorks,
             acceptsFileWorks: options.acceptsFileWorks,
             acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
@@ -615,6 +621,7 @@ export const dispatchClaimedAgentIntervention = async (
         case 'resume_tool_result': {
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsArtboardWorks: options.acceptsArtboardWorks,
             acceptsFileWorks: options.acceptsFileWorks,
             acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,

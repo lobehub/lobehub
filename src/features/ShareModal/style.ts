@@ -1,5 +1,7 @@
 import { createStaticStyles, responsive } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export { styles as containerStyles } from './useContainerStyles';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -8,15 +10,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
 
     min-height: 64px;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     ${responsive.sm} {
       flex-direction: column;
       align-items: stretch;
-      padding-block-end: 16px;
-      padding-inline: 16px;
+      padding-block-end: ${densityVars.cardPadding};
+      padding-inline: ${densityVars.cardPadding};
     }
   `,
   footerActions: css`
@@ -52,8 +54,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgLayout};
 
     ${responsive.sm} {
-      padding-block-start: 16px;
-      padding-inline: 16px;
+      padding-block-start: ${densityVars.cardPadding};
+      padding-inline: ${densityVars.cardPadding};
     }
   `,
   toolbar: css`
@@ -62,7 +64,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
 
     min-height: 48px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     white-space: nowrap;

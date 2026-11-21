@@ -1,6 +1,7 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
+import { layoutRepositorySources } from '@lobechat/types';
 import {
   Button,
   confirmModal,
@@ -15,10 +16,16 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
+import RepositoryField, {
+  AdvancedRepositories,
+  type PickedRepository,
+} from '@/features/Projects/CreateFromGithub/RepositoryField';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
-import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 /**
@@ -49,7 +56,14 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // the person typed is theirs, and picking a different repository must not
     // overwrite it; a suggested one is just a default and follows the pick.
     const [nameIsSuggested, setNameIsSuggested] = useState(true);
-    const [repository, setRepository] = useState<GithubRepositorySelection | undefined>();
+    // Picked from the list or pasted, the same field the create-project dialog
+    // uses. None is fine; several are laid out side by side.
+    const [repositories, setRepositories] = useState<PickedRepository[]>([]);
+    const navigate = useWorkspaceAwareNavigate();
+    const connectGithub = () => {
+      close();
+      navigate(GITHUB_RETURN_TO);
+    };
     const [creating, setCreating] = useState(false);
     // The Enter that confirms an IME candidate reaches `keydown` as an Enter,
     // so a Chinese name would submit the dialog on the keystroke that picked it.
@@ -58,13 +72,13 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
 
     const trimmed = name.trim();
 
-    const pickRepository = (selection: GithubRepositorySelection | undefined) => {
-      setRepository(selection);
+    const changeRepositories = (next: PickedRepository[]) => {
+      setRepositories(next);
       setError(undefined);
       // Naming a thing that does not exist yet is the harder half of this dialog,
-      // so the repository answers it: an environment for a repository is almost
-      // always called after it.
-      if (nameIsSuggested) setName(selection?.repository ?? '');
+      // so the first repository answers it: an environment for a repository is
+      // almost always called after it.
+      if (nameIsSuggested) setName((next[0] && parseGithubRepository(next[0].url)?.name) ?? '');
     };
 
     const create = async () => {
@@ -72,26 +86,26 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
       setError(undefined);
       try {
         const created = await actions.createEnvironment({
-          // The repository is the environment's one source. Every repository
-          // carries the owner GitHub reported for it, so the checkout URL is
-          // built from the pair rather than from whichever owner the list was
-          // filtered by — those differ for a repository reached as a collaborator.
-          configuration: repository
-            ? {
-                kind: 'code',
-                sources: [
-                  {
-                    kind: 'git',
-                    ref: repository.defaultBranch,
-                    url: `https://github.com/${repository.owner}/${repository.repository}`,
-                  },
-                ],
-              }
-            : { kind: 'code' },
+          // Each picked repository is a source, checked out from the URL GitHub
+          // reported for it. No repository at all is a valid environment: setup
+          // and variables only, cloning nothing. Several are laid out side by side.
+          configuration:
+            repositories.length > 0
+              ? {
+                  kind: 'code',
+                  sources: layoutRepositorySources(
+                    repositories.map((repository) => ({
+                      kind: 'git' as const,
+                      url: repository.url,
+                      ...(repository.defaultBranch && { ref: repository.defaultBranch }),
+                    })),
+                  ) as { kind: 'git'; path?: string; ref?: string; url: string }[],
+                }
+              : { kind: 'code' },
           name: trimmed,
-          // Created into the pool the person is looking at. Opening the dialog
-          // from the Private tab and having the result land in the workspace's
-          // shared list would be a publication nobody asked for.
+          // Created into the pool the host chose (private on the workspace
+          // page). Landing in the workspace's shared pool by default would be
+          // a publication nobody asked for.
           visibility,
         });
         close();
@@ -116,7 +130,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // first instance on — and an instance keeps whatever a session leaves in its
     // home directory, credentials included. So creating one there asks the same
     // question publishing one does, with the same explanation, rather than
-    // publishing it silently because of which tab happened to be open.
+    // publishing it silently.
     const submit = () => {
       if (!trimmed || creating) return;
       if (visibility !== 'public') return void create();
@@ -135,7 +149,12 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
           {/* Repository first, name second. The name is the harder question and the
             repository usually answers it, so asking for the name first makes the
             person invent something they are about to be handed. */}
-          <GithubRepositoryPicker value={repository} onChange={pickRepository} onLeave={close} />
+          <RepositoryField
+            emptyHint={t('environments.form.repositoryOptional')}
+            value={repositories}
+            onChange={changeRepositories}
+            onConnect={connectGithub}
+          />
 
           <Flexbox gap={6}>
             <Text fontSize={12} type={'secondary'} weight={500}>
@@ -161,6 +180,13 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
               </Text>
             )}
           </Flexbox>
+
+          <AdvancedRepositories
+            layoutHint={t('environments.form.layoutHint')}
+            value={repositories}
+            onChange={changeRepositories}
+            onConnect={connectGithub}
+          />
         </Flexbox>
         <ModalFooter>
           <Button onClick={close}>{t('environments.cancel')}</Button>
@@ -191,5 +217,5 @@ export const openCreateEnvironmentModal = (
     maskClosable: true,
     styles: { content: { padding: 0 } },
     title,
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 520px)',
   });

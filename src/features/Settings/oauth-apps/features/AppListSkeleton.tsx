@@ -5,6 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import { SkeletonBar } from '@/components/Skeleton';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   // Same card chrome as the loaded list column in `OAuthApps`.
@@ -18,7 +19,10 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   // Same padding and gap as `AppItem`'s row.
-  row: { paddingBlock: '12px', paddingInline: '12px' },
+  row: {
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
 });
 
 /** Centres a text-height skeleton bar inside the line box of the text it replaces. */

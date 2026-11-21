@@ -745,3 +745,35 @@ describe('normalizeGithubToolResult (gh CLI edge cases)', () => {
     ).toBeNull();
   });
 });
+
+describe('normalizeGithubToolResult (pull-request lifecycle status)', () => {
+  const lifecycle = (command: string, output: string) =>
+    normalizeGithubShellToolResult(
+      { data: { command, exitCode: 0, output }, toolName: 'Bash' },
+      { pullRequestLifecycle: true },
+    );
+
+  it('reads a merge that landed from the command output', () => {
+    const operation = lifecycle(
+      'gh pr merge 42 --repo lobehub/lobehub --squash',
+      '✓ Merged pull request lobehub/lobehub#42',
+    );
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'updated',
+      identifier: 'lobehub/lobehub#42',
+      status: 'merged',
+    });
+  });
+
+  it('leaves the status alone for a merge only queued for auto-merge', () => {
+    const operation = lifecycle(
+      'gh pr merge 43 --repo lobehub/lobehub --auto --squash',
+      '✓ Merged pull request lobehub/lobehub#43',
+    );
+
+    // Nothing merged yet: the queued auto-merge must not read as `merged`.
+    expect(operation?.params.patchFields).not.toContain('status');
+    expect(operation?.params.status).toBeUndefined();
+  });
+});

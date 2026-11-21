@@ -1,5 +1,5 @@
 import type { ShareVisibility } from '../topic';
-import type { WorkItem } from '../work';
+import type { CollectionWorkVersionMetadata, WorkItem } from '../work';
 
 /** A creator-authored visitor task, independent of the agent's opening questions. */
 export interface AgentShareDemoCase {
@@ -21,7 +21,11 @@ export type SharedAgentWork = Pick<
   | 'type'
   | 'updatedAt'
   | 'url'
-> & { totalCost: number | null };
+> & {
+  /** A collection Work's images, so its card shows the count and opens the grid; `url` is the cover. */
+  collection?: CollectionWorkVersionMetadata;
+  totalCost: number | null;
+};
 
 /** Creator-side delivery aggregates; selection for the showcase does not change the sample. */
 export interface SharedAgentDeliveryStats {
@@ -47,10 +51,8 @@ export interface SharedAgentTerms {
    * this share; `0` means attachments are off and the composer hides them.
    */
   maxFileStorage: number;
-  /** Maximum conversations this visitor may open against the share. */
-  maxTopicsPerVisitor: number;
-  /** Maximum message turns allowed inside one shared conversation. */
-  maxTurnsPerTopic: number;
+  /** Messages this visitor may send to the share in total. */
+  maxMessagesPerVisitor: number;
 }
 
 /**
@@ -123,9 +125,9 @@ export interface SharedAgentData {
   toolGrants: string[];
   /**
    * Which media the visitor composer may attach, derived server-side from
-   * the agent's model abilities so the model itself stays hidden (it is
-   * owner-facing unless `showModelInfo` opts in). Documents are always
-   * allowed; these only gate direct media input.
+   * the agent's model abilities so the model itself, which is
+   * owner-facing, stays hidden. Documents are always allowed; these only gate
+   * direct media input.
    */
   uploadAbility: SharedAgentUploadAbility;
   visibility: ShareVisibility;

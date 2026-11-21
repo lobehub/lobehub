@@ -7,6 +7,8 @@ import { Forward, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { messageStateSelectors, useConversationStore, useConversationStoreApi } from '../store';
 import { openForwardModal } from './ForwardModal';
 
@@ -14,8 +16,8 @@ const styles = stylex.create({
   bar: {
     position: 'relative',
     inlineSize: '100%',
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,

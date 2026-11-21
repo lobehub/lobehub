@@ -47,6 +47,24 @@ describe('retries', () => {
     expect(calls[1].at - calls[0].at).toBe(2000);
   });
 
+  it('does not retry a streaming POST even though it carries an idempotency key', async () => {
+    const { calls, fetch } = scripted([() => status(503), ok]);
+    const lobehub = createLobeHub({ apiKey: 'k', fetch, maxRetries: 3 });
+
+    const iterate = async () => {
+      for await (const _ of lobehub.responses.stream(
+        { input: 'hi', model: 'agt_1' },
+        { idempotencyKey: 'run-1' },
+      )) {
+        // the first attempt fails before any event arrives
+      }
+    };
+
+    await expect(iterate()).rejects.toMatchObject({ status: 503 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].request.headers.get('Idempotency-Key')).toBe('run-1');
+  });
+
   it('backs off exponentially on 5xx and gives up after maxRetries', async () => {
     const { calls, fetch } = scripted([() => status(503)]);
     const lobehub = createLobeHub({ apiKey: 'k', fetch, maxRetries: 3 });

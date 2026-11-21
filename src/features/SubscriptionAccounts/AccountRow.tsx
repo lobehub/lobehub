@@ -29,12 +29,15 @@ import {
 import { type CSSProperties, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import { formatPercent, usageLevel } from '@/features/DeviceManager/DeviceHealth/format';
 import { usageTextColor } from '@/features/DeviceManager/DeviceHealth/shared';
 import { UsageBar } from '@/features/DeviceManager/DeviceHealth/UsageMeter';
 import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   type AccountStatus,
@@ -80,9 +83,9 @@ const styles = stylex.create({
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
-    paddingBlock: '12px',
-    paddingInline: '12px',
+    gap: densityTokens['--lobe-density-section-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     cursor: 'pointer',
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
@@ -90,6 +93,8 @@ const styles = stylex.create({
   },
   // The account whose panel is open.
   rowActive: { backgroundColor: cssVar.colorFillSecondary },
+  // Compact density: 6px block padding and a 24px provider avatar → ~56px rows.
+  rowCompact: { paddingBlock: '6px' },
 });
 
 const PROVIDER_META: Record<
@@ -190,6 +195,7 @@ interface AccountRowProps {
 
 const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   const { t } = useTranslation('setting');
+  const { compact, tokens } = useDensity();
   const { t: tCommon } = useTranslation('common');
   const [
     useFetchQuotaReadings,
@@ -216,7 +222,6 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   // Only workspace accounts carry a visibility; personal ones have no team to hide from.
   const isPrivate = !!account.workspaceId && account.visibility === 'private';
   // With a label set, the email moves to the subtitle so the account stays identifiable.
-  // Private or shared is the page's tab, so the row does not repeat it.
   const subtitle = [meta.name, account.label ? account.email : undefined]
     .filter(Boolean)
     .join(' · ');
@@ -253,7 +258,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
       okButtonProps: visibility === 'private' ? { danger: true } : undefined,
       okText: t(`subscriptionAccounts.visibility.${visibility}Action`),
       onOk: async () => {
-        // The account leaves this tab, so say where it went.
+        // Say who can use the account now.
         if (await run(() => setQuotaAccountVisibility(account.id, visibility)))
           toast.success(t(`subscriptionAccounts.visibility.${visibility}Done`));
       },
@@ -306,7 +311,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
 
   return (
     <div
-      {...stylex.props(styles.row, active && styles.rowActive)}
+      {...stylex.props(styles.row, compact && styles.rowCompact, active && styles.rowActive)}
       aria-current={active || undefined}
       role={'button'}
       tabIndex={0}
@@ -329,7 +334,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
           opacity: view.status === 'disabled' ? 0.55 : undefined,
         }}
       >
-        <span style={{ display: 'flex', flex: 'none' }}>{meta.icon(28)}</span>
+        <span style={{ display: 'flex', flex: 'none' }}>{meta.icon(tokens.iconBox)}</span>
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           {editing ? (
             <Flexbox horizontal align={'center'} gap={4} {...stop}>
@@ -360,9 +365,12 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
               />
             </Flexbox>
           ) : (
-            <Text ellipsis title={name} weight={500}>
-              {name}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              <Text ellipsis title={name} weight={500}>
+                {name}
+              </Text>
+              {isPrivate && <PrivateLockIcon />}
+            </Flexbox>
           )}
           <Text ellipsis fontSize={12} type={'secondary'}>
             {subtitle}

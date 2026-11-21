@@ -519,8 +519,12 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ ...params, type: PortalViewType.MemoryDetail });
   };
 
-  openFilePreview = (file: PortalFile): void => {
-    this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
+  openFilePreview = (file: PortalFile, options?: { sourceTopicId?: string }): void => {
+    this.#get().pushPortalView({
+      file,
+      ...(options?.sourceTopicId ? { sourceTopicId: options.sourceTopicId } : {}),
+      type: PortalViewType.FilePreview,
+    });
   };
 
   openLocalFile = ({

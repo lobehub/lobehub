@@ -3,8 +3,8 @@ import { ArchiveIcon, ArchiveRestoreIcon, MoreHorizontalIcon } from 'lucide-reac
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { useGoalArchiveToggle } from './useGoalArchiveToggle';
 import { useGoalMenuItems } from './useGoalMenuItems';
@@ -23,6 +23,7 @@ interface GoalDetailActionsProps {
 const GoalDetailActions = memo<GoalDetailActionsProps>(
   ({ agentId, archivedAt, goalId, onRename, projectId }) => {
     const { t } = useTranslation('chat');
+    const headerActionSmallSize = useHeaderActionSize(true);
     const status = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.status);
     const creatorUserId = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.userId);
     const title = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.title);
@@ -53,7 +54,7 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(
           aria-label={archive.label}
           color={canArchive ? undefined : cssVar.colorTextDisabled}
           icon={archive.isArchived ? ArchiveRestoreIcon : ArchiveIcon}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={headerActionSmallSize}
           style={canArchive ? undefined : { cursor: 'not-allowed' }}
           title={archive.deniedReason ?? archive.label}
           tooltipProps={{ placement: 'bottom' }}

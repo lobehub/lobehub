@@ -1,3 +1,4 @@
+import { buildClaudeCodePermissionArgs } from '@lobechat/heterogeneous-agents/claudeCodePermission';
 import {
   buildClaudeCodeDirectEnv,
   CLAUDE_CODE_BASE_ARGS,
@@ -9,16 +10,10 @@ import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
-// Desktop runs CC as the user (never root, so bypassPermissions is fine) and
-// renders the chat bubble live, so it always wants partial deltas. Compose
-// the shared invariant base args (`@lobechat/heterogeneous-agents/spawn`)
-// with those caller-specific flags.
-const DESKTOP_CLAUDE_CODE_ARGS = [
-  ...CLAUDE_CODE_BASE_ARGS,
-  '--include-partial-messages',
-  '--permission-mode',
-  'bypassPermissions',
-] as const;
+// Desktop renders the chat bubble live, so it always wants partial deltas.
+// Compose the shared invariant base args (`@lobechat/heterogeneous-agents/spawn`)
+// with that caller-specific flag; permission flags depend on the run's mode.
+const DESKTOP_CLAUDE_CODE_ARGS = [...CLAUDE_CODE_BASE_ARGS, '--include-partial-messages'] as const;
 
 export const claudeCodeDriver: HeterogeneousAgentDriver = {
   async buildSpawnPlan({
@@ -26,6 +21,8 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     cliVersion,
     helpers,
     mcpConfigPath,
+    permissionMode,
+    permissionPrompts,
     promptInput,
     resumeSessionId,
   }: HeterogeneousAgentBuildPlanParams) {
@@ -39,6 +36,12 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     return {
       args: [
         ...DESKTOP_CLAUDE_CODE_ARGS,
+        // Lab off (no mode): every action allowed, as before. With a mode the
+        // host answers Claude Code's prompts over stdio.
+        ...buildClaudeCodePermissionArgs({
+          hostPrompts: permissionPrompts ?? true,
+          mode: permissionMode,
+        }),
         // Wire the controller-managed temp mcp.json (AskUserQuestion server,
         // see ) when present. Path-based config is required — CC
         // does not accept inline JSON for `--mcp-config`.

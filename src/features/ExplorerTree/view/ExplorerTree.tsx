@@ -749,7 +749,7 @@ function ExplorerTree<TData>({ ref, ...props }: ExplorerTreeProps<TData>) {
 
   return (
     <ExplorerTreeInner
-      key={generation}
+      key={`${generation}:${props.itemHeight ?? ''}:${props.density ?? ''}`}
       {...props}
       ref={ref}
       requestTreeRebuild={requestTreeRebuild}

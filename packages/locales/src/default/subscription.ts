@@ -219,6 +219,9 @@ export default {
   'credits.dedicatedBudget.createTitle': 'New dedicated budget',
   'credits.dedicatedBudget.details.action': 'View details',
   'credits.dedicatedBudget.details.empty': 'No shared members yet',
+  'credits.dedicatedBudget.details.customLimit': 'Custom limit',
+  'credits.dedicatedBudget.details.limitReached': 'Limit reached',
+  'credits.dedicatedBudget.details.noLimit': 'No limit',
   'credits.dedicatedBudget.details.removedShare': 'Spent by removed members',
   'credits.dedicatedBudget.details.title': 'Dedicated budget details',
   'credits.dedicatedBudget.details.total': 'Total spent',
@@ -229,6 +232,10 @@ export default {
   'credits.dedicatedBudget.membersCount_other': '{{count}} members',
   'credits.dedicatedBudget.membersEmpty': 'No shared members yet',
   'credits.dedicatedBudget.membersPlaceholder': 'Select members to share this budget',
+  'credits.dedicatedBudget.memberLimit': 'Per-member limit',
+  'credits.dedicatedBudget.memberLimitHint':
+    'The most each member can use from this budget per billing cycle. Members who reach it move on to their next budget. Leave empty for no limit.',
+  'credits.dedicatedBudget.memberLimitPlaceholder': 'No limit',
   'credits.dedicatedBudget.desc':
     'Carve out shared allowances for groups of members — consumed before their personal quotas',
   'credits.dedicatedBudget.name': 'Name',
@@ -239,6 +246,21 @@ export default {
   'credits.dedicatedBudget.removeConfirm.desc':
     'Shared members will fall back to their own budget immediately after confirmation.',
   'credits.dedicatedBudget.removeConfirm.title': 'Remove this dedicated budget?',
+  'credits.dedicatedBudget.rules.action': 'Member limits',
+  'credits.dedicatedBudget.rules.defaultHint': 'Applies to members without a rule of their own.',
+  'credits.dedicatedBudget.rules.desc':
+    'Cap how much each member can use from this budget per billing cycle. Members who reach their limit move on to their next budget.',
+  'credits.dedicatedBudget.rules.empty':
+    'Any member can use the whole budget. Add a rule to cap each member.',
+  'credits.dedicatedBudget.rules.emptyTitle': 'No member limits yet',
+  'credits.dedicatedBudget.rules.overrideCount_one': '{{count}} custom',
+  'credits.dedicatedBudget.rules.overrideCount_other': '{{count}} custom',
+  'credits.dedicatedBudget.rules.removeConfirm.defaultDesc':
+    'Members without a rule of their own will no longer be capped. Members with their own rule keep it.',
+  'credits.dedicatedBudget.rules.removeConfirm.memberDesc':
+    'This member will follow the rule for all members again.',
+  'credits.dedicatedBudget.rules.removeConfirm.title': 'Remove the limit for {{name}}?',
+  'credits.dedicatedBudget.rules.title': 'Member limits · {{name}}',
   'credits.dedicatedBudget.saveError': 'Failed to save the dedicated budget',
   'credits.dedicatedBudget.saveSuccess': 'Dedicated budget saved',
   'credits.dedicatedBudget.userPanel.label': 'Dedicated budget',
@@ -440,6 +462,18 @@ export default {
   'limitation.workspace.insufficientBudget.upgradeToPro': 'Upgrade to Pro',
   'limitation.workspace.memberBudget.desc':
     'You have reached the personal budget set by this workspace. Contact a workspace admin to adjust your quota — top-up and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.adminDesc':
+    'You have reached your member budget in this workspace. As an admin, you can raise it in budget settings — top-ups and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.notify.action': 'Notify admins',
+  'limitation.workspace.memberBudget.notify.error': "Couldn't notify admins. Please try again.",
+  'limitation.workspace.memberBudget.notify.manage': 'Adjust in budget settings',
+  'limitation.workspace.memberBudget.notify.noAdmin':
+    'This workspace has no other admin to notify.',
+  'limitation.workspace.memberBudget.notify.sent': 'Admins notified',
+  'limitation.workspace.memberBudget.notify.sentHint':
+    'Retry once an admin has raised your budget.',
+  'limitation.workspace.memberBudget.notifyDesc':
+    'You have reached the member budget this workspace set for you. Let the workspace admins know so they can raise it — top-ups and plan upgrades do not change member limits.',
   'limitation.workspace.memberBudget.retry': 'Retry',
   'limitation.workspace.memberBudget.title': 'Member budget reached',
   'limitation.hobby.action': 'Configured, continue chatting',

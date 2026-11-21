@@ -7,7 +7,7 @@ import { useConnectorConfigure } from './useConnectorConfigure';
 
 const mocks = vi.hoisted(() => ({
   isOwner: false,
-  openConnectorEditDrawer: vi.fn(),
+  openConnectorEditModal: vi.fn(),
   policy: undefined as
     { canEditPolicy: boolean; canManage: boolean; memberManage: string } | undefined,
 }));
@@ -19,7 +19,7 @@ vi.mock('@/libs/swr', async (importOriginal) => ({
 vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
   useIsWorkspaceOwner: () => mocks.isOwner,
 }));
-vi.mock('./imperative', () => ({ openConnectorEditDrawer: mocks.openConnectorEditDrawer }));
+vi.mock('./imperative', () => ({ openConnectorEditModal: mocks.openConnectorEditModal }));
 
 const connector = (overrides: Record<string, unknown> = {}) => ({
   id: 'conn-1',
@@ -42,7 +42,7 @@ describe('useConnectorConfigure', () => {
   it("opens the edit drawer on the viewer's own connector", () => {
     configureOf(connector())?.onConfigure();
 
-    expect(mocks.openConnectorEditDrawer).toHaveBeenCalledWith('conn-1');
+    expect(mocks.openConnectorEditModal).toHaveBeenCalledWith('conn-1');
   });
 
   // The drawer reads the stored credentials (`connector.getForEdit`), which the

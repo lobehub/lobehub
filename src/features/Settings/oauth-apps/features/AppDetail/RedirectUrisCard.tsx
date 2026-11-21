@@ -8,6 +8,7 @@ import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { type OAuthAppItem, type UpdateOAuthAppParams } from '@/types/oauthApp';
 
 import {
@@ -20,17 +21,21 @@ import SectionCard from './SectionCard';
 
 const styles = stylex.create({
   empty: {
-    padding: '16px',
+    padding: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'dashed',
     borderColor: cssVar.colorBorder,
     borderRadius: cssVar.borderRadius,
   },
   fieldError: { fontSize: '12px', color: cssVar.colorError },
-  listError: { fontSize: '14px', lineHeight: 1.5, color: cssVar.colorError },
+  listError: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: 1.5,
+    color: cssVar.colorError,
+  },
   uri: {
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '13px',

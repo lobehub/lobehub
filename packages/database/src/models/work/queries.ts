@@ -54,7 +54,8 @@ const MAX_SUMMARY_ROW_LIMIT = 1000;
 export const listByRootOperation = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationId?: string | null;
@@ -63,6 +64,7 @@ export const listByRootOperation = async (
   if (!params.rootOperationId) return [];
 
   const map = await listByRootOperations(ctx, {
+    includeArtboardWorks: params.includeArtboardWorks,
     includeFileWorks: params.includeFileWorks,
     limit: params.limit,
     rootOperationIds: [params.rootOperationId],
@@ -75,7 +77,8 @@ export const listByRootOperation = async (
 export const listByRootOperations = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
@@ -97,7 +100,7 @@ export const listByRootOperations = async (
   const filters = [inArray(workVersions.rootOperationId, rootOperationIds)];
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
   const itemsByType = await Promise.all(
-    resolveWorkTypeAdapters(params.includeFileWorks).map((adapter) =>
+    resolveWorkTypeAdapters(params).map((adapter) =>
       adapter.listVersionEvents(ctx, filters, rowLimit),
     ),
   );
@@ -167,7 +170,8 @@ export const listSummariesByIds = async (
 export const listSummariesByRootOperations = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
@@ -201,7 +205,7 @@ export const listSummariesByRootOperations = async (
     .where(
       and(
         inArray(workVersions.rootOperationId, rootOperationIds),
-        inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+        inArray(works.type, resolveAllowedWorkTypes(params)),
       ),
     )
     .orderBy(desc(workVersions.createdAt))
@@ -231,7 +235,8 @@ export const listSummariesByRootOperations = async (
 export const listByConversation = async (
   ctx: WorkContext,
   params: {
-    /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+    /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;
@@ -246,7 +251,7 @@ export const listByConversation = async (
     : isNull(workVersions.threadId);
 
   const rowsByType = await Promise.all(
-    resolveWorkTypeAdapters(params.includeFileWorks).map((adapter) =>
+    resolveWorkTypeAdapters(params).map((adapter) =>
       adapter.listConversationRows(ctx, {
         rowLimit: limit * WORK_TYPE_COUNT,
         threadFilter,
@@ -290,7 +295,8 @@ const WORKSPACE_WORK_LIMIT = 30;
 
 export interface ListByWorkspaceParams {
   cursor?: string | null;
-  /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
+  /** Opt-in gates for newer work types; see {@link resolveAllowedWorkTypes}. */
+  includeArtboardWorks?: boolean;
   includeFileWorks?: boolean;
   limit?: number;
   /** Narrow results to Works first produced by one agent. */
@@ -350,7 +356,7 @@ export const listByWorkspace = async (
     workOwnership(ctx),
     // Row-level gate: un-opted-in requests never see `file` works, even in the
     // combined (no `type`) view (see resolveAllowedWorkTypes).
-    inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+    inArray(works.type, resolveAllowedWorkTypes(params)),
     // Orphaned Works (backing resource deleted or trashed) are hidden here
     // rather than shown as dead cards; see resourceLiveFilter.
     resourceLiveFilter,

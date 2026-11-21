@@ -14,6 +14,7 @@ import {
   resolveMyTaskScope,
   resolveTaskCollection,
   resolveTaskCollectionView,
+  taskCollectionParam,
 } from './AgentTasksPage';
 import {
   collapseSubTasks,
@@ -229,6 +230,33 @@ describe('AgentTasksPage', () => {
     it('falls back to ordinary tasks for absent or unknown values', () => {
       expect(resolveTaskCollection(new URLSearchParams())).toBe('tasks');
       expect(resolveTaskCollection(new URLSearchParams('collection=unknown'))).toBe('tasks');
+    });
+
+    it('lands on "My tasks" where the tab is offered', () => {
+      expect(resolveTaskCollection(new URLSearchParams(), { allowMine: true })).toBe('mine');
+      expect(
+        resolveTaskCollection(new URLSearchParams('collection=all'), { allowMine: true }),
+      ).toBe('tasks');
+      // Links written before "My tasks" became the default still open the ordinary list.
+      expect(
+        resolveTaskCollection(new URLSearchParams('collection=tasks'), { allowMine: true }),
+      ).toBe('tasks');
+      expect(
+        resolveTaskCollection(new URLSearchParams('collection=scheduled'), { allowMine: true }),
+      ).toBe('scheduled');
+    });
+
+    it('round-trips every tab through its URL param', () => {
+      for (const allowMine of [true, false]) {
+        const tabs = allowMine
+          ? (['mine', 'tasks', 'scheduled'] as const)
+          : (['tasks', 'scheduled'] as const);
+        for (const tab of tabs) {
+          const param = taskCollectionParam(tab, { allowMine });
+          const params = new URLSearchParams(param ? { collection: param } : {});
+          expect(resolveTaskCollection(params, { allowMine })).toBe(tab);
+        }
+      }
     });
 
     it('opens "My tasks" only where the tab is offered', () => {

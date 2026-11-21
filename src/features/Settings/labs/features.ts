@@ -23,7 +23,6 @@ type LabFeatureI18nKey =
   | 'desktopSplitView'
   | 'deviceTunnel'
   | 'evalCapture'
-  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
   | 'messageTextSelectionActions'
@@ -106,12 +105,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'topicBugReport',
     searchKeywords: ['bug', 'report', 'feedback', 'issue', 'support'],
     stage: 'alpha',
-  },
-  {
-    flag: 'enableGoals',
-    i18nKey: 'goals',
-    searchKeywords: ['goal', 'goals', 'objective'],
-    stage: 'beta',
   },
   {
     flag: 'enableDeviceTunnel',

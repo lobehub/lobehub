@@ -59,7 +59,7 @@ export const installOAuthPlugin = async (
   signal.throwIfAborted();
   await fetchConnectors();
   signal.throwIfAborted();
-  const connector = connectorSelectors.connectorByIdentifier(identifier)(get());
+  const connector = connectorSelectors.sharedConnectorByIdentifier(identifier)(get());
   if (!connector || connector.status !== 'connected') {
     throw new Error('The MCP connector did not finish authorization');
   }

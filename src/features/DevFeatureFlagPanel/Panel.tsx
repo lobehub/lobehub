@@ -11,6 +11,7 @@ import {
   type FeatureFlagKey,
   isFeatureFlagOverridable,
 } from '@/store/serverConfig/slices/featureFlagOverride/action';
+import { densityVars } from '@/styles/densityVars';
 
 import FlagRow from './FlagRow';
 
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: space-between;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   toolbar: css`
@@ -51,7 +52,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 100%;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

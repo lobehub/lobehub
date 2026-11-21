@@ -12,9 +12,16 @@ export interface EditCredModalContentProps {
   cred: UserCredSummary;
   credsApi: CredsApi;
   onSuccess?: () => void;
+  /** Values cannot be read back (see `isWriteOnlyCredRow`); they can only be replaced. */
+  writeOnly?: boolean;
 }
 
-const EditCredModalContent: FC<EditCredModalContentProps> = ({ cred, credsApi, onSuccess }) => {
+const EditCredModalContent: FC<EditCredModalContentProps> = ({
+  cred,
+  credsApi,
+  onSuccess,
+  writeOnly,
+}) => {
   const { close } = useModalContext();
 
   const isKVType = cred.type === 'kv-env' || cred.type === 'kv-header';
@@ -25,7 +32,13 @@ const EditCredModalContent: FC<EditCredModalContentProps> = ({ cred, credsApi, o
   };
 
   return isKVType ? (
-    <EditKVForm cred={cred} credsApi={credsApi} onCancel={close} onSuccess={handleSuccess} />
+    <EditKVForm
+      cred={cred}
+      credsApi={credsApi}
+      writeOnly={writeOnly}
+      onCancel={close}
+      onSuccess={handleSuccess}
+    />
   ) : (
     <EditMetaForm cred={cred} credsApi={credsApi} onCancel={close} onSuccess={handleSuccess} />
   );

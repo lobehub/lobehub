@@ -2,9 +2,11 @@ import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FolderGit2Icon, FolderIcon } from 'lucide-react';
+import { ChevronRightIcon, FolderGit2Icon, FolderIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sidebarRow } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   dot: {
@@ -15,27 +17,41 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorSuccess,
     backgroundImage: 'none',
   },
+  chevron: {
+    display: 'grid',
+    flexShrink: 0,
+    placeItems: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
+    color: cssVar.colorTextTertiary,
+  },
   header: {
     cursor: 'pointer',
     flexShrink: 0,
-    paddingBlockStart: '14px',
-    paddingBlockEnd: '2px',
-    paddingInlineStart: '16px',
-    paddingInlineEnd: '14px',
+    gap: sidebarRow.gap,
+    minHeight: '40px',
+    marginBlockStart: '4px',
+    marginBlockEnd: '8px',
+    paddingBlock: '6px',
+    paddingInline: '6px',
+    borderRadius: sidebarRow.radius,
+    transition: 'background-color 0.12s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
   },
   identity: {
     overflow: 'hidden',
     display: 'flex',
     flex: '1',
     flexDirection: 'column',
-    gap: '1px',
     minWidth: '0',
   },
   name: {
     overflow: 'hidden',
-    fontSize: '14px',
+    fontSize: sidebarRow.textFontSize,
     fontWeight: 600,
-    lineHeight: '18px',
+    lineHeight: sidebarRow.textLineHeight,
+    color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -45,7 +61,7 @@ const styles = stylex.create({
     gap: '6px',
     alignItems: 'center',
     fontSize: '12px',
-    lineHeight: '16px',
+    lineHeight: '18px',
     color: cssVar.colorTextTertiary,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -55,12 +71,12 @@ const styles = stylex.create({
     display: 'grid',
     flexShrink: 0,
     placeItems: 'center',
-    width: '32px',
-    height: '32px',
+    width: '28px',
+    height: '28px',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: '9px',
+    borderRadius: '8px',
     color: cssVar.colorText,
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
@@ -86,16 +102,15 @@ const OverviewHeader = memo<OverviewHeaderProps>(
         horizontal
         align={'center'}
         className={stylex.props(styles.header).className}
-        gap={10}
         role={'button'}
         title={path}
         onClick={onClick}
       >
         <span {...stylex.props(styles.tile)}>
           {repoType === 'github' ? (
-            <Github size={18} />
+            <Github size={16} />
           ) : (
-            <Icon icon={repoType ? FolderGit2Icon : FolderIcon} size={18} />
+            <Icon icon={repoType ? FolderGit2Icon : FolderIcon} size={16} />
           )}
         </span>
         <span {...stylex.props(styles.identity)}>
@@ -115,6 +130,9 @@ const OverviewHeader = memo<OverviewHeaderProps>(
               {path}
             </span>
           </span>
+        </span>
+        <span {...stylex.props(styles.chevron)}>
+          <Icon icon={ChevronRightIcon} size={14} />
         </span>
       </Flexbox>
     );

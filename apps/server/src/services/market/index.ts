@@ -100,6 +100,7 @@ export interface MarketOAuthProxyRequest {
   parameters?: MarketOAuthProxyParameter[];
   /** Market OAuth provider identifier. */
   provider: string;
+  signal?: AbortSignal;
 }
 
 /** Provider response returned through the Market OAuth proxy. */
@@ -241,6 +242,7 @@ export class MarketService {
     method,
     parameters,
     provider,
+    signal,
   }: MarketOAuthProxyRequest): Promise<MarketOAuthProxyResponse> => {
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = new URL(
@@ -286,6 +288,7 @@ export class MarketService {
       body: body === undefined ? undefined : JSON.stringify(body),
       headers: forwardedHeaders,
       method,
+      signal,
     });
 
     return { data: (await response.json()) as unknown, status: response.status };

@@ -1,9 +1,10 @@
 import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
 import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getMarketplaceSubPath } from '@/features/Marketplace/paths';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname, useQuery } from '@/libs/router/navigation';
 import {
@@ -16,18 +17,20 @@ import {
   SkillSorts,
 } from '@/types/discover';
 
-const SortButton = memo(() => {
+import { MARKETPLACE_CONNECTOR_TAB } from '../../../features/useNav';
+
+const SortButton = memo<{ resetPage?: boolean }>(({ resetPage }) => {
   const { t } = useTranslation('discover');
   const pathname = usePathname();
   const { sort } = useQuery();
   const router = useQueryRoute();
-  const activeTab = useMemo(() => pathname.split('community/')[1] as DiscoverTab, [pathname]);
+  const activeTab = useMemo(() => getMarketplaceSubPath(pathname) as DiscoverTab, [pathname]);
   type SortItem = Extract<DropdownItem, { type?: 'item' }> & {
     key: string;
   };
 
   const items = useMemo<SortItem[]>(() => {
-    switch (activeTab) {
+    switch (activeTab as string) {
       case DiscoverTab.Assistants: {
         return [
           {
@@ -108,6 +111,8 @@ const SortButton = memo(() => {
           },
         ];
       }
+      // Connectors' Discover view lists the MCP catalog.
+      case MARKETPLACE_CONNECTOR_TAB:
       case DiscoverTab.Mcp: {
         return [
           {
@@ -178,9 +183,12 @@ const SortButton = memo(() => {
     return items[0];
   }, [items, sort]);
 
-  const handleSort = (config: string) => {
-    router.push(pathname, { query: { sort: config } });
-  };
+  const handleSort = useCallback(
+    (config: string) => {
+      router.push(pathname, { query: { ...(resetPage ? { page: null } : {}), sort: config } });
+    },
+    [pathname, resetPage, router],
+  );
 
   const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>

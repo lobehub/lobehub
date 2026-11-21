@@ -11,7 +11,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { BookOpen, FileText, Settings, SquareTerminal, UserRound } from 'lucide-react';
+import { BookOpen, FileText, Settings, SquareTerminal, UserRound, X } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,6 +28,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentProfileCard from '.';
 import { resolveAgentRuntimeLabel } from './runtime';
@@ -35,16 +36,50 @@ import {
   type AgentProfilePreview as AgentPreview,
   useAgentProfileDetail,
 } from './useAgentProfileDetail';
+import { useAutoClosePopup } from './useAutoClosePopup';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  closeButton: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+
+    color: ${cssVar.colorText};
+    opacity: 0;
+    filter: drop-shadow(0 0 2px ${cssVar.colorBgElevated});
+
+    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseOut};
+
+    @media (hover: none) {
+      opacity: 1;
+    }
+  `,
+  content: css`
+    position: relative;
+
+    &:hover [data-profile-card-close],
+    &:focus-within [data-profile-card-close] {
+      opacity: 1;
+    }
+  `,
+  // A replaced card (another card opened, its trigger was pressed, the route changed)
+  // leaves at once instead of fading out over whatever replaced it.
+  instantClose: css`
+    &[data-ending-style],
+    &[data-closed] {
+      visibility: hidden;
+      transition: none;
+    }
+  `,
   footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   section: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
   `,
   sectionTitle: css`
     margin-block-end: 8px;
@@ -80,6 +115,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const [open, setOpen] = useState(false);
+    const { detached, instant, onOpenChange, triggerProps } = useAutoClosePopup({
+      open,
+      setOpen,
+      trigger,
+    });
     const [loading, setLoading] = useState(false);
     const { allowed: canEditContent } = usePermission('edit_own_content');
     const { canEditResource: canEditAgent, isAccessResolved: isAgentAccessResolved } =
@@ -266,20 +306,34 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     return (
       <Popover
+        className={instant ? styles.instantClose : undefined}
         classNames={trigger === 'click' ? { trigger: styles.trigger } : undefined}
         nativeButton={false}
         open={open}
         placement={placement ?? (trigger === 'hover' ? 'top' : 'right')}
         trigger={trigger}
+        triggerProps={triggerProps}
         content={
-          <div role="presentation" onClick={stopCardClick}>
-            {content}
-          </div>
+          // A hidden or unmounted trigger takes the whole popover with it (see useAutoClosePopup).
+          detached ? null : (
+            <div className={styles.content} role="presentation" onClick={stopCardClick}>
+              {content}
+              <ActionIcon
+                data-profile-card-close
+                aria-label={t('close', { ns: 'common' })}
+                className={styles.closeButton}
+                icon={X}
+                size={'small'}
+                title={t('close', { ns: 'common' })}
+                onClick={() => setOpen(false)}
+              />
+            </div>
+          )
         }
         styles={{
           content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
         }}
-        onOpenChange={setOpen}
+        onOpenChange={onOpenChange}
       >
         {children}
       </Popover>

@@ -26,6 +26,8 @@ import {
 import { type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
+
 import { styles } from './style';
 
 interface CredItemProps {
@@ -43,6 +45,8 @@ interface CredItemProps {
   onView?: (cred: UserCredSummary) => void;
   /** Tags shown after the type tag (owner, sharing state). */
   tags?: React.ReactNode;
+  /** Inline marker right after the name, e.g. the private lock in the workspace list. */
+  titleSuffix?: React.ReactNode;
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -60,8 +64,9 @@ const typeColors: Record<string, string> = {
 };
 
 const CredItem: FC<CredItemProps> = memo(
-  ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags }) => {
+  ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags, titleSuffix }) => {
     const { t } = useTranslation('setting');
+    const { compact, tokens } = useDensity();
 
     const handleDelete = () => {
       if (!canManage) return;
@@ -116,7 +121,7 @@ const CredItem: FC<CredItemProps> = memo(
 
     const renderAvatar = () => {
       if (cred.type === 'oauth' && cred.oauthAvatar) {
-        return <Avatar avatar={cred.oauthAvatar} size={32} />;
+        return <Avatar avatar={cred.oauthAvatar} size={tokens.controlHeight} />;
       }
       return (
         // `display: flex` collapses the inline span's line box so the svg sits
@@ -131,19 +136,32 @@ const CredItem: FC<CredItemProps> = memo(
       <Flexbox
         horizontal
         align="center"
-        className={stylex.props(styles.container).className}
-        gap={16}
+        className={stylex.props(styles.container, compact && styles.containerCompact).className}
+        gap={tokens.sectionGap}
         justify="space-between"
       >
-        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
-          <div {...stylex.props(styles.icon)}>{renderAvatar()}</div>
-          <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+        <Flexbox
+          horizontal
+          align="center"
+          gap={tokens.sectionGap}
+          style={{ flex: 1, overflow: 'hidden' }}
+        >
+          <div {...stylex.props(styles.icon, compact && styles.iconCompact)}>{renderAvatar()}</div>
+          <Flexbox gap={compact ? 2 : 4} style={{ overflow: 'hidden' }}>
             <Flexbox horizontal align="center" gap={8}>
-              <span {...stylex.props(styles.title)}>{cred.name}</span>
+              <span {...stylex.props(styles.title, compact && styles.titleCompact)}>
+                {cred.name}
+              </span>
+              {titleSuffix}
               <Tag color={typeColors[cred.type]}>{t(`creds.types.${cred.type}`)}</Tag>
               {tags}
             </Flexbox>
-            <Flexbox horizontal align="center" gap={8}>
+            <Flexbox
+              horizontal
+              align="center"
+              gap={8}
+              style={{ lineHeight: compact ? '18px' : undefined }}
+            >
               <code {...stylex.props(styles.key)}>{cred.key}</code>
               {cred.description && (
                 <>

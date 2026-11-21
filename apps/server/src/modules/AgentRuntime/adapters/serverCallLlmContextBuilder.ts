@@ -14,7 +14,7 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import {
@@ -135,6 +135,7 @@ export const buildServerCallLlmContext = async ({
       },
       agentId,
       disabledPluginIds: state.world?.disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       editingAgentId: state.origin?.editingAgentId,
       editingGroupId,
       enabledToolIds: resolved.enabledToolIds,

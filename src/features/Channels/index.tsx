@@ -24,9 +24,10 @@ import { openTopic } from './openTopic';
 import { CHANNEL_ENTITY_PORTAL_SCOPE, PortalPanel } from './PortalPanel';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
-import { ThreadPageActions, ThreadPageTitle } from './ThreadPageTitle';
-import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
+import { ThreadPageTitle } from './ThreadPageTitle';
+import { THREAD_FLOAT_BREAKPOINT, ThreadFollowers, ThreadPanel } from './ThreadPanel';
 import { channelBrowserSessionId, usePortalPanelOpen } from './usePortalPanel';
+import { useThreadMenu } from './useThreadMenu';
 import { useThreadPanel } from './useThreadPanel';
 
 /** One Channel: the main conversation, with a thread beside it, or one thread as the page. */
@@ -56,6 +57,10 @@ function EnabledChannelPage() {
   const threadId = portalOpen ? null : panel.threadId;
   const threadDraft = portalOpen ? null : panel.draft;
   const pageThreadId = panel.pageThreadId;
+  const threadMenu = useThreadMenu();
+  const pageThread = pageThreadId
+    ? detail?.threads.find((entry) => entry.id === pageThreadId)
+    : undefined;
   // A direct conversation's side panel is its Agent's profile; a workspace group's is the roster.
   const hasMemberPanel =
     !!directAgent || (!!detail?.channel.workspaceId && !detail.channel.agentId);
@@ -91,9 +96,10 @@ function EnabledChannelPage() {
         right={
           detail && (
             <Flexbox horizontal align="center" gap={8}>
-              {pageThreadId && <ThreadPageActions detail={detail} threadId={pageThreadId} />}
+              {pageThreadId && <ThreadFollowers detail={detail} target={pageThreadId} />}
               <MemberStatus
                 detail={detail}
+                threadMenu={pageThread ? threadMenu(detail.channel, pageThread) : undefined}
                 memberPanel={
                   hasMemberPanel
                     ? {

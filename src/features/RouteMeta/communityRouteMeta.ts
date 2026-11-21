@@ -14,10 +14,10 @@ const createCommunityDetailRouteMeta = (name: CommunityDynamicMetaName): RouteMe
       import('./CommunityDynamicMeta').then((module) => ({ default: module[name] })),
     ),
     icon: ShapesIcon,
-    titleKey: 'navigation.discover',
+    titleKey: 'navigation.marketplace',
   });
 
-/** Community detail routes (`/community/<type>/:slug`), titled after the item they show. */
+/** Community detail routes (`/marketplace/<type>/:slug`), titled after the item they show. */
 export const communityDetailRouteMeta = {
   agent: createCommunityDetailRouteMeta('AssistantDynamicMeta'),
   groupAgent: createCommunityDetailRouteMeta('GroupAgentDynamicMeta'),

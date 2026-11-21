@@ -112,8 +112,18 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
   return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };
 
+/** Lead a new project with an agent created for it, or with an existing one. */
+export type MainAgentMode = 'dedicated' | 'existing';
+
+/**
+ * A new project is led by an agent the workspace already has, LobeAI unless
+ * another one is picked. Creating an agent for it is an explicit choice in the
+ * modal and is not carried over to the next project.
+ */
+export const DEFAULT_MAIN_AGENT_MODE: MainAgentMode = 'existing';
+
 export interface ReservedProjectIds {
-  /** Id of the dedicated main agent the project creates. */
+  /** Id of the dedicated main agent, used only when the project creates one. */
   agentId: string;
   projectId: string;
 }
@@ -134,19 +144,23 @@ export const reserveProjectIds = (): ReservedProjectIds => ({
 export interface CreateProjectExtras {
   avatar?: string;
   ids: ReservedProjectIds;
+  /** The picked agent; only sent when the project reuses an existing agent. */
+  mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
 }
 
 /**
  * Leaving `coordinatorAgentId` out is what makes the server create an agent
- * for the project, named after it and wearing its avatar. Every project the
- * create dialogs make is led by such a dedicated agent.
+ * for the project, named after it and wearing its avatar.
  */
 export const buildCreateProjectRequest = (
   input: NonNullable<ReturnType<typeof getCreateProjectInput>>,
-  { avatar, ids }: CreateProjectExtras,
+  { avatar, ids, mainAgentId, mainAgentMode }: CreateProjectExtras,
 ) => ({
   ...input,
-  dedicatedAgentId: ids.agentId,
   id: ids.projectId,
   ...(avatar ? { avatar } : {}),
+  ...(mainAgentMode === 'existing' && mainAgentId
+    ? { coordinatorAgentId: mainAgentId }
+    : { dedicatedAgentId: ids.agentId }),
 });

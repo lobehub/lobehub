@@ -13,6 +13,7 @@ import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { discoverService } from '@/services/discover';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverSkillItem } from '@/types/discover';
 
 const styles = stylex.create({
@@ -29,7 +30,7 @@ const styles = stylex.create({
   secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },
@@ -54,7 +55,7 @@ const UserSkillCard = memo<UserSkillCardProps>(
   }) => {
     const { t } = useTranslation('discover');
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/skill', identifier);
+    const link = urlJoin('/marketplace/skill', identifier);
 
     const handleClick = useCallback(() => {
       discoverService

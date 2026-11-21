@@ -10,6 +10,7 @@ import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import dynamic from '@/libs/next/dynamic';
+import { densityTokens } from '@/styles/density.stylex';
 
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
@@ -25,7 +26,7 @@ const styles = stylex.create({
     inset: 0,
     width: '100%',
     height: '100%',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     backgroundColor: cssVar.colorBgLayout,
     backgroundImage: 'none',
   },

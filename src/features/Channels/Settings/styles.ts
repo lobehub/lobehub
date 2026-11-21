@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const settingsStyles = stylex.create({
   scroll: {
     overflowY: 'auto',
@@ -37,16 +39,16 @@ export const settingsStyles = stylex.create({
   body: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     padding: 24,
   },
   footer: {
     display: 'flex',
-    gap: 16,
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 56,
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 24,
     borderBlockStartWidth: 1,
     borderBlockStartStyle: 'solid',

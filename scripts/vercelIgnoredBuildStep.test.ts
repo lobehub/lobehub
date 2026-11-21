@@ -26,7 +26,7 @@ describe('isNonRuntimePath', () => {
   it.each([
     'src/app/page.tsx',
     'packages/agent-templates/src/templates/claw/SOUL.md',
-    'packages/builtin-skills/src/task/SKILL.md',
+    'packages/builtin-skills/src/lobehub/references/task.md',
     'scripts/migrateServerDB/index.ts',
     'package.json',
   ])('builds for %s', (file) => {
