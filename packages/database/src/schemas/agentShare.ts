@@ -1,8 +1,14 @@
-import type { AgentShareDemoCase, AgentShareToolGrant } from '@lobechat/types';
+import type {
+  AgentShareDemoCase,
+  AgentShareGrantSource,
+  AgentShareToolGrant,
+  AgentShareVisibility,
+} from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { timestamps } from './_helpers';
+import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
+import { users } from './user';
 
 export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'none';
 
@@ -19,10 +25,22 @@ export interface AgentShareConfig {
    */
   allowReadMemory?: boolean;
   /**
+   * Whether visitors also get every tool and skill the Agent currently turns
+   * on, beyond the explicit {@link toolGrants} / {@link skillGrants}. Resolved
+   * per visitor run from the Agent config (`withShareAutoAgentGrants`), never
+   * persisted as grants, so a tool added to the Agent later is open to
+   * visitors without the creator revisiting the share, and one turned off on
+   * the Agent leaves with it. {@link declinedGrantIds} still keeps an
+   * identifier closed. Absent reads as off.
+   */
+  autoGrantAgentTools?: boolean;
+  /**
    * Tool and skill identifiers the creator chose NOT to grant: dismissed from
    * the "new on this Agent" prompt, or unticked in a picker. Grants nothing and
-   * revokes nothing — the server gate never reads it. It only stops the share
-   * settings from offering these identifiers again as newly added to the Agent.
+   * revokes nothing explicit — the server gate reads it only to keep these
+   * identifiers out of {@link autoGrantAgentTools}. Otherwise it only stops the
+   * share settings from offering these identifiers again as newly added to the
+   * Agent.
    * Absent on shares created before the prompt existed, so their ungranted
    * Agent tools surface once for review instead of being granted silently.
    */
@@ -152,7 +170,7 @@ export const agentShares = pgTable(
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
 
-    visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
+    visibility: text('visibility').$type<AgentShareVisibility>().default('private').notNull(),
 
     shareConfig: jsonb('share_config').$type<AgentShareConfig>(),
 
@@ -175,3 +193,40 @@ export const agentShares = pgTable(
 
 export type NewAgentShare = typeof agentShares.$inferInsert;
 export type AgentShareItem = typeof agentShares.$inferSelect;
+
+/**
+ * The people a share admits besides its link: each added the Agent from a card its owner shared
+ * into a Channel they are in, until the owner revokes them. A `card` share admits only them;
+ * pausing the share pauses them too,
+ * and a replaced share (deleted, or its Agent recreated) starts with none.
+ */
+export const agentShareGrants = pgTable(
+  'agent_share_grants',
+  {
+    // Only ever addressed through the share and the person, so no id prefix.
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    shareId: uuid('share_id')
+      .references(() => agentShares.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    source: jsonb('source').$type<AgentShareGrantSource>().notNull(),
+    /**
+     * Set when the owner withdrew the grant. The row is kept so a card sent before the withdrawal
+     * cannot restore it; only a card the owner sends afterwards does.
+     */
+    revokedAt: timestamptz('revoked_at'),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('agent_share_grants_share_user_unique').on(t.shareId, t.userId),
+    // Serves the cascade from users.
+    index('agent_share_grants_user_id_idx').on(t.userId),
+  ],
+);
+
+export type AgentShareGrantRow = typeof agentShareGrants.$inferSelect;

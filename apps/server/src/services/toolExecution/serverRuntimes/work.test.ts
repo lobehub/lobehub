@@ -114,6 +114,8 @@ describe('workRuntime', () => {
     expect(mocks.resolveCollection).toHaveBeenCalledWith({
       db: context.serverDB,
       items: [{ image: 'file_a' }, { caption: 'Night', image: '/f/file_b' }],
+      shareVisitor: false,
+      topicId: 'topic',
       userId: 'user',
       workspaceId: 'workspace',
     });
@@ -282,7 +284,7 @@ describe('workRuntime', () => {
       .createWork({ items: [{ image: 'file_a' }], title: 'Covers', type: 'collection' });
 
     expect(mocks.resolveCollection).toHaveBeenCalledWith(
-      expect.objectContaining({ visitorTopicId: context.topicId }),
+      expect.objectContaining({ shareVisitor: true, topicId: context.topicId }),
     );
   });
 

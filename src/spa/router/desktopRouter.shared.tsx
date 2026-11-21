@@ -18,6 +18,7 @@ import ProviderSettingsSkeleton, {
   ProviderDetailSkeleton,
 } from '@/components/Skeleton/Settings/Provider';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import { VAULT_TAB_SEARCH } from '@/features/EnvironmentsAndCreds/const';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
 import {
@@ -389,8 +390,14 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
         path: 'memory',
       },
+      // The personal vault is a tab of the Environments & Vault page; old
+      // links open that tab.
       {
-        element: redirectElement('/settings/credential'),
+        element: redirectElement(`/settings/environments${VAULT_TAB_SEARCH}`),
+        path: 'credential',
+      },
+      {
+        element: redirectElement(`/settings/environments${VAULT_TAB_SEARCH}`),
         path: 'creds',
       },
       // Skills and connectors moved to the Marketplace. Static routes keep the
@@ -433,7 +440,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         loader: settingsTabLoader,
         path: ':tab',
       },
-      // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
+      // Tabs that need a sub-segment reuse
       // the same tab page; nested feature components read `:sub` via useParams.
       {
         element: dynamicElement(

@@ -1,5 +1,6 @@
 'use client';
 
+import { hasCallableMcpEndpoint } from '@lobechat/const';
 import type { ConnectorVisibility } from '@lobechat/types';
 import { Button, Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -14,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
+import { CONNECTOR_PAGE_IDS, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import {
   featureFlagsSelectors,
@@ -44,6 +46,7 @@ import ComposioSkillItem from './ComposioSkillItem';
 import { AccountsNeedReauth, countAccountsNeedingReauth } from './ConnectorRowFeedback';
 import {
   buildIntegrationItems,
+  countConnectorTabItems,
   getVisibleSectionItems,
   type IntegrationItem,
   isIntegrationConnected,
@@ -100,22 +103,11 @@ export interface SkillListHeaderContext {
   refreshing: boolean;
 }
 
-export type SkillViewMode = 'connector' | 'skill';
+export type SkillViewMode = 'connector' | 'mcp' | 'skill';
 
 interface SkillListProps {
-  /**
-   * Sidebar mode (the Marketplace `Installed` section): one flat list of what
-   * is already in the library, no group headers and nothing left to add.
-   */
-  installedOnly?: boolean;
   /** Page search: filters every group by name, identifier and description. */
   keyword?: string;
-  /**
-   * Page mode for the Connectors Discover page: only LobeHub's own OAuth
-   * connectors (LobeHub / Composio integrations), connected or not, as one
-   * group. The installed manager then leaves out the ones not connected yet.
-   */
-  lobehubConnectors?: boolean;
   onClearKeyword?: () => void;
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
@@ -133,8 +125,6 @@ interface SkillListProps {
 
 const SkillList = memo<SkillListProps>(
   ({
-    installedOnly,
-    lobehubConnectors,
     keyword,
     onClearKeyword,
     onSelect,
@@ -192,10 +182,12 @@ const SkillList = memo<SkillListProps>(
     // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
     // of a fake-empty list (each hook syncs into the store only on success —
     //
-    const isConnectorView = viewMode === 'connector';
-    const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-    const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
-    const agentSkillsSWR = useFetchAgentSkills(true);
+    const isConnectorView = viewMode !== 'skill';
+    const lobehubSkillsSWR = useFetchLobehubSkillConnections(
+      isLobehubSkillEnabled && viewMode !== 'mcp',
+    );
+    const composioSWR = useFetchUserComposioConnections(isComposioEnabled && viewMode !== 'mcp');
+    const agentSkillsSWR = useFetchAgentSkills(viewMode === 'skill');
     const skillsError =
       viewMode === 'skill'
         ? agentSkillsSWR.error
@@ -205,8 +197,10 @@ const SkillList = memo<SkillListProps>(
         void agentSkillsSWR.mutate();
         return;
       }
-      void lobehubSkillsSWR.mutate();
-      void composioSWR.mutate();
+      if (viewMode !== 'mcp') {
+        void lobehubSkillsSWR.mutate();
+        void composioSWR.mutate();
+      }
       void connectorsSWR.mutate();
     };
 
@@ -239,10 +233,14 @@ const SkillList = memo<SkillListProps>(
 
     // The connector catalog contains OAuth integrations, connected first.
     // A few dozen entries: cheap enough to derive on each render.
-    const allIntegrations = buildIntegrationItems({
-      ...connectionState,
-      connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
-    });
+    const allIntegrations =
+      viewMode === 'mcp'
+        ? []
+        : buildIntegrationItems({
+            ...connectionState,
+            pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
+            connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
+          });
 
     // Each workspace tab lists its own pool. Built-in tools, plugins and agent
     // connectors carry no visibility and stay with the shared pool; a connector
@@ -269,14 +267,22 @@ const SkillList = memo<SkillListProps>(
     const customMCPs = isPrivateTab
       ? []
       : installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
-    const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
+    const agentBoundConnectors = isPrivateTab
+      ? []
+      : viewMode === 'mcp'
+        ? allAgentBoundConnectors.filter(hasCallableMcpEndpoint)
+        : allAgentBoundConnectors;
 
+    const connectorTabCount = countConnectorTabItems({
+      customConnectors,
+      integrations,
+      marketplaceConnectors,
+    });
     const hasAnySkills =
       viewMode === 'skill'
         ? marketAgentSkills.length > 0 || userAgentSkills.length > 0
-        : integrations.length > 0 ||
+        : connectorTabCount > 0 ||
           communityMCPs.length > 0 ||
-          marketplaceConnectors.length > 0 ||
           customMCPs.length > 0 ||
           agentBoundConnectors.length > 0;
 
@@ -287,8 +293,7 @@ const SkillList = memo<SkillListProps>(
       setRefreshing(true);
       const requests = isConnectorView
         ? [
-            lobehubSkillsSWR.mutate(),
-            composioSWR.mutate(),
+            ...(viewMode === 'mcp' ? [] : [lobehubSkillsSWR.mutate(), composioSWR.mutate()]),
             connectorsSWR.mutate(),
             fetchAgentBoundConnectors(),
           ]
@@ -299,7 +304,7 @@ const SkillList = memo<SkillListProps>(
 
     const privateState = isPrivateTab
       ? privateTabState({
-          count: customConnectors.length + marketplaceConnectors.length + integrations.length,
+          count: connectorTabCount,
           error: connectorsSWR.error,
           isConnectorsInit,
         })
@@ -357,18 +362,22 @@ const SkillList = memo<SkillListProps>(
     }
 
     if (!hasAnySkills) {
-      // The Discover group has nothing to lead with; the page's other groups carry on.
-      if (lobehubConnectors) return null;
       return (
         <>
           {header}
           <Center className={stylex.props(styles.container).className} paddingBlock={48}>
             <Empty
               icon={SkillsIcon}
-              title={t(viewMode === 'skill' ? 'skillView.empty.title' : 'tab.skillEmpty')}
-              description={t(
-                viewMode === 'skill' ? 'skillView.empty.description' : 'tab.skillDesc',
-              )}
+              description={
+                viewMode === 'mcp'
+                  ? t('apps.mcpDescription', { ns: 'discover' })
+                  : t(viewMode === 'skill' ? 'skillView.empty.description' : 'tab.skillDesc')
+              }
+              title={
+                viewMode === 'mcp'
+                  ? t('apps.noInstalledMcp', { ns: 'discover' })
+                  : t(viewMode === 'skill' ? 'skillView.empty.title' : 'tab.skillEmpty')
+              }
             />
           </Center>
         </>
@@ -409,8 +418,10 @@ const SkillList = memo<SkillListProps>(
         case 'lobehub': {
           return (
             <LobehubSkillItem
+              connectable={isLobehubSkillEnabled}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
+              openWhenDisconnected={hasConnectorPage(item.provider.id)}
               provider={item.provider}
               server={getLobehubSkillServerByProvider(item.provider.id)}
               onDelete={onDeleteSelected}
@@ -529,38 +540,6 @@ const SkillList = memo<SkillListProps>(
       const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
       const oauth = partitionByInstalled(communitySkillItems, isConnected);
 
-      // Connectors Discover: LobeHub's OAuth connectors lead the page as one
-      // group, connected ones keeping their status and menu (Codex `⋯`).
-      if (lobehubConnectors) {
-        if (communitySkillItems.length === 0) return null;
-        const key = 'lobehubConnectors';
-        const isExpanded = expanded.has(key);
-        const { hiddenCount, visible } = getVisibleSectionItems(
-          communitySkillItems.map(renderIntegration),
-          isExpanded,
-        );
-        return (
-          <section {...stylex.props(styles.pageSection)}>
-            <PageSectionHeading
-              expanded={isExpanded}
-              label={t('connectorMarket.section.lobehub')}
-              expandable={isSectionExpandable({
-                expanded: isExpanded,
-                hiddenCount,
-                searching: false,
-              })}
-              toggleLabel={
-                isExpanded
-                  ? t('connectorMarket.section.showLess')
-                  : `${t('connectorMarket.section.showAll')} (${communitySkillItems.length})`
-              }
-              onToggle={() => toggleExpanded(key)}
-            />
-            <div {...stylex.props(styles.pageGrid)}>{visible}</div>
-          </section>
-        );
-      }
-
       const sections = (
         isConnectorView
           ? [
@@ -571,7 +550,7 @@ const SkillList = memo<SkillListProps>(
               },
               {
                 // With the market on, the ones left to connect lead the
-                // Connectors Discover page (`lobehubConnectors`) instead.
+                // Connectors Discover page instead.
                 items: showMarket ? [] : oauth.available.map(renderIntegration),
                 key: 'communityConnectors',
                 label: t('skillGroup.communityConnectors', 'OAuth Connectors'),
@@ -672,21 +651,6 @@ const SkillList = memo<SkillListProps>(
     }
 
     // ── Sidebar list (skills page, mobile) ───────────────────────────────────
-    if (installedOnly) {
-      const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
-      const items = isConnectorView
-        ? [
-            ...partitionByInstalled(communitySkillItems, isConnected).installed.map(
-              renderIntegration,
-            ),
-            ...renderCommunityMCPs(),
-            ...renderCustomConnectors(),
-          ]
-        : [...renderAgentSkills(marketAgentSkills), ...renderAgentSkills(userAgentSkills)];
-
-      return <div {...stylex.props(styles.container)}>{items}</div>;
-    }
-
     const renderSection = (key: string, label: string, children: React.ReactNode) => {
       const isCollapsed = collapsed.has(key);
       return (

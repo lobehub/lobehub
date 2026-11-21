@@ -283,6 +283,8 @@ const publicJobColumns = {
       WHERE ${channelMessages.channelId} = ${channelJobs.channelId}
         AND ${channelMessages.requestKey} = 'opening:' || ${channelJobs.id}::text)`,
   topicId: channelJobs.topicId,
+  // Its name, under the same owner-only rule as the id, so a reply at work says which topic it is.
+  topicTitle: topics.title,
   // A trashed topic has no owner here, so its link goes with it.
   topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
       THEN ${topics.userId} ELSE NULL END`,
@@ -494,18 +496,18 @@ const environmentViewer = async (
 };
 
 /**
- * A view's jobs as one viewer sees them: who may stop each, and the run's topic only for the
- * viewer who runs the reply; for anyone else the job carries no topic at all.
+ * A view's jobs as one viewer sees them: who may stop each, and the run's topic (id and title)
+ * only for the viewer who runs the reply; for anyone else the job carries no topic at all.
  */
 export const viewerJobs = (
   jobs: Awaited<ReturnType<typeof readChannelView>>['jobs'],
   viewerUserId: string,
   canStop: (requesterMemberId: string | null) => boolean,
 ) =>
-  jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
+  jobs.map(({ requesterMemberId, topicId, topicOwnerId, topicTitle, ...job }) => ({
     ...job,
     canStop: canStop(requesterMemberId),
-    ...(topicId && topicOwnerId === viewerUserId ? { topicId } : {}),
+    ...(topicId && topicOwnerId === viewerUserId ? { topicId, topicTitle } : {}),
   }));
 
 export const readChannelView = async (

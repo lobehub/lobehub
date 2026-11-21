@@ -14,6 +14,7 @@ import {
   readOverridableField,
   reorderSidebarItems,
   routeOverlayWrites,
+  setSidebarSectionHidden,
   SIDEBAR_SPACER_ID,
   systemStatusSelectors,
 } from './systemStatus';
@@ -731,6 +732,21 @@ describe('systemStatusSelectors', () => {
         expect(systemStatusSelectors.sessionGroupKeys(null)(stateWithOverlay)).toEqual([
           'personal-group',
         ]);
+      });
+
+      it('keeps the merged personal entry visible if either old entry was visible', () => {
+        const personalHidden = (keys: string[]) =>
+          systemStatusSelectors.hiddenSidebarSections(null)(
+            merge(initialState, {
+              status: { hiddenSidebarSections: keys },
+            }),
+          );
+        expect(personalHidden(['tasks'])).not.toContain('tasks');
+        expect(personalHidden(['goals'])).not.toContain('tasks');
+        const hidden = setSidebarSectionHidden(['recents'], 'tasks', true, false);
+        expect(personalHidden(hidden)).toContain('tasks');
+        expect(setSidebarSectionHidden(hidden, 'tasks', false, false)).toEqual(['recents']);
+        expect(setSidebarSectionHidden([], 'tasks', true, true)).toEqual(['tasks']);
       });
 
       it('hiddenSidebarSections prefers overlay in workspace mode', () => {

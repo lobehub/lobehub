@@ -199,6 +199,18 @@ export const WORKSPACE_DEFAULT_HIDDEN_SECTIONS: string[] = ['recents'];
 export const getDefaultHiddenSections = (isWorkspaceMode: boolean): string[] =>
   isWorkspaceMode ? [...WORKSPACE_DEFAULT_HIDDEN_SECTIONS] : DEFAULT_HIDDEN_SECTIONS;
 
+/** A personal sidebar has one control for the two previously independent entries. */
+export const setSidebarSectionHidden = (
+  hidden: string[],
+  key: string,
+  hide: boolean,
+  workspace: boolean,
+): string[] => {
+  const keys = !workspace && key === 'tasks' ? ['tasks', 'goals'] : [key];
+  const remaining = hidden.filter((item) => !keys.includes(item));
+  return hide ? [...remaining, ...keys] : remaining;
+};
+
 const hiddenSidebarSections =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] => {
@@ -216,7 +228,13 @@ const hiddenSidebarSections =
       }
       return merged;
     }
-    return normalizeLegacyHiddenSections(s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS);
+    const hidden = normalizeLegacyHiddenSections(
+      s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS,
+    );
+    // Keep the combined entry reachable if either destination was visible before the merge.
+    return hidden.includes('tasks') && !hidden.includes('goals')
+      ? hidden.filter((key) => key !== 'tasks')
+      : hidden;
   };
 
 const sidebarExpandedKeys =

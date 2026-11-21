@@ -37,9 +37,6 @@ export default {
     'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
   'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
-  'features.goals.desc':
-    'Hand the agent a goal: it breaks the goal into tasks, tracks progress, and delivers the result for you to review.',
-  'features.goals.title': 'Goals',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',

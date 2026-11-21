@@ -1,9 +1,9 @@
 'use client';
 
 import type { ConversationContext } from '@lobechat/types';
-import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
+import { formatTokenNumber, formatUsd } from '@lobechat/utils/format';
 import { Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { CircleDollarSign, Zap } from 'lucide-react';
+import { CoinsIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -16,7 +16,11 @@ import NavHeader from '@/features/NavHeader';
 
 import { useShareVisitorTopic } from './useShareVisitorTopics';
 
-/** Counts and amounts are compared across topics, so digits keep the same width. */
+/**
+ * Counts and amounts are compared across topics, so digits keep the same width. Tokens and cost
+ * read the way each reply's usage footer below shows them: a coins icon before the token count,
+ * and a bare dollar amount (`formatUsd`) for the cost.
+ */
 const NUMBER_STYLE = { fontVariantNumeric: 'tabular-nums' } as const;
 
 const renderMessage = (index: number, id: string) => (
@@ -79,19 +83,16 @@ const ShareVisitorTopicView = () => {
           <Flexbox horizontal align={'center'} gap={12} style={NUMBER_STYLE}>
             {topic.totalTokens > 0 && (
               <Flexbox horizontal align={'center'} gap={3} title={`${topic.totalTokens} tokens`}>
-                <Icon icon={Zap} size={12} />
+                <Icon icon={CoinsIcon} size={12} />
                 <Text fontSize={12} type={'secondary'}>
                   {formatTokenNumber(topic.totalTokens)}
                 </Text>
               </Flexbox>
             )}
             {topic.totalCost > 0 && (
-              <Flexbox horizontal align={'center'} gap={3} title={`$${topic.totalCost.toFixed(4)}`}>
-                <Icon icon={CircleDollarSign} size={12} />
-                <Text fontSize={12} type={'secondary'}>
-                  {formatPrice(topic.totalCost, 2)}
-                </Text>
-              </Flexbox>
+              <Text fontSize={12} type={'secondary'}>
+                {formatUsd(topic.totalCost)}
+              </Text>
             )}
             <Tag title={t('shareVisitorTopics.readOnlyHint')}>
               {t('shareVisitorTopics.readOnly')}

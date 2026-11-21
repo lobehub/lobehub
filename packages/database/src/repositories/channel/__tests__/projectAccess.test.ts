@@ -92,6 +92,7 @@ describe('open project Channels', () => {
 
     expect(jobs).toEqual([expect.objectContaining({ canStop: false, id: job.id })]);
     expect(jobs[0]).not.toHaveProperty('topicId');
+    expect(jobs[0]).not.toHaveProperty('topicTitle');
     expect(jobs[0]).not.toHaveProperty('topicOwnerId');
   });
 

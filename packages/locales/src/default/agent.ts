@@ -924,6 +924,9 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'share.entry': 'Share this Agent',
+  'share.settings.autoGrant.desc':
+    'Visitors get every tool and skill turned on in this Agent, including ones you turn on later. Anything you untick below stays closed.',
+  'share.settings.autoGrant.title': 'Open new Agent tools and skills automatically',
   'share.settings.device.desc':
     'Choose who may run this Agent on your execution environment, for example to read files or run commands. Local CLI Agents such as Claude Code and Codex run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
   'share.settings.device.title': 'Device access',
@@ -1038,10 +1041,12 @@ export default {
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
+  'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
+  'share.settings.tools.autoGranted': 'Open automatically because it’s turned on in this Agent',
   'share.settings.usage.conversations': 'Topics',
   'share.settings.usage.conversationsHint': 'Topics created by visitors through this share.',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
@@ -1073,6 +1078,9 @@ export default {
     'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
+  'share.settings.tools.agentOffDesc':
+    'This tool is not turned on in the Agent’s Tools and connectors.',
+  'share.settings.tools.agentOffLegend': 'Tools not turned on in the Agent’s Tools and connectors',
   'share.settings.tools.apiWritesOwnerDocuments':
     'Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.',
   'share.settings.tools.desc':
@@ -1095,10 +1103,12 @@ export default {
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
+  /** @deprecated Unused since the on-demand filter was removed; delete after the Cloud picker stops reading it. */
   'share.settings.tools.onDemandDesc':
     'Not enabled on this Agent. Once granted, the model turns it on in a visitor run only when needed.',
   'share.settings.tools.ownerCredentials':
     'Visitors use MCP servers, connections and plugins with your accounts and credentials.',
+  /** @deprecated See `share.settings.tools.onDemandDesc`. */
   'share.settings.tools.showOnDemand': 'Show on-demand tools',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',

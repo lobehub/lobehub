@@ -124,10 +124,13 @@ export class PluginActionImpl {
    * plugin again.
    */
   uninstallPlugin = async (identifier: string): Promise<void> => {
+    await this.removeInstalledPluginRecord(identifier);
+    await this.#get().refreshPlugins();
+  };
+
+  removeInstalledPluginRecord = async (identifier: string): Promise<void> => {
     await pluginService.uninstallPlugin(identifier);
     this.#installedPlugins.removeEntity(identifier);
-
-    await this.#get().refreshPlugins();
   };
 
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {

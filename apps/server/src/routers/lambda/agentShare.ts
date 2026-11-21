@@ -1,24 +1,7 @@
-import { builtinSkills } from '@lobechat/builtin-skills';
-import {
-  resolveUninstalledBuiltinTools,
-  type UninstalledBuiltinToolsScope,
-} from '@lobechat/builtin-tools';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
 } from '@lobechat/const';
-import { assembleSkillPool } from '@lobechat/mecha';
-import {
-  getImplicitBuiltinSkillIds,
-  getLegacyDisabledBuiltinSkillIds,
-  legacyBuiltinSkillIds,
-} from '@lobechat/mecha/builtinSkillGate';
-import {
-  getActivePluginIds,
-  getAutoPluginIds,
-  getBuiltinOverrides,
-  getDisabledPluginIds,
-} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -30,24 +13,24 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
-import { AgentSkillModel } from '@/database/models/agentSkill';
 import { ContactModel } from '@/database/models/contact';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
-import { UserModel } from '@/database/models/user';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
-import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
+
+const shareVisibilitySchema = z.enum(['private', 'card', 'link']);
 
 /**
  * One `toolGrants` entry: a tool identifier, optionally narrowed to specific
@@ -74,6 +57,7 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
+    autoGrantAgentTools: z.boolean().optional(),
     demoCases: z
       .array(
         z
@@ -248,20 +232,53 @@ export const agentShareRouter = router({
     return requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private'));
   }),
 
+  /**
+   * Let the Agent be shared by card, in one step from a card's send: a missing share is created
+   * as `card`, a paused one resumes as `card`, a live one is left as it is. A `card` share admits
+   * only the people who add the Agent from its owner's card; its link page stays closed. Same
+   * preconditions as publishing a link.
+   */
+  enableCardShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    await assertAgentShareCreationEnabled(ctx.userId);
+
+    return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
+      await service.prepareShareModel(input.agentId);
+      const share = await shares.create(input.agentId, 'card');
+      if (share.visibility !== 'private') return share;
+      return requireShare(await shares.updateVisibility(input.agentId, 'card'));
+    });
+  }),
+
   enableShare: agentShareProcedure
-    .input(agentIdInput.extend({ visibility: z.enum(['private', 'link']).optional() }).strict())
+    .input(agentIdInput.extend({ visibility: shareVisibilitySchema.optional() }).strict())
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
 
-      if (input.visibility === 'link') {
+      const visibility = input.visibility;
+      if (visibility === 'link' || visibility === 'card') {
         return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
           await service.prepareShareModel(input.agentId);
-          return shares.create(input.agentId, 'link');
+          return shares.create(input.agentId, visibility);
         });
       }
 
-      return ctx.agentShareModel.create(input.agentId, input.visibility);
+      return ctx.agentShareModel.create(input.agentId, visibility);
+    }),
+
+  /** The people this Agent's share admits by card, for its owner's share settings. */
+  listCardGrants: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    return ctx.agentShareModel.listGrants(input.agentId);
+  }),
+
+  /** Withdraw one person's card grant; a run of theirs stops at its next step. */
+  revokeCardGrant: agentShareProcedure
+    .input(agentIdInput.extend({ userId: z.string().trim().min(1) }).strict())
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return { revoked: await ctx.agentShareModel.revokeGrant(input.agentId, input.userId) };
     }),
 
   /**
@@ -394,21 +411,7 @@ export const agentShareRouter = router({
     }),
   /**
    * Skills this agent could offer a visitor — the candidate list behind the
-   * share settings skill picker, and the set `shareConfig.skillGrants` entries
-   * are chosen from.
-   *
-   * Built through the SAME `assembleSkillPool` a real run uses, on the same
-   * server-side sources, so the picker cannot offer a skill the run would never
-   * assemble (nor hide one it would). Three deliberate differences from a run:
-   *
-   * - no `shareAllowedIds` — the whole point is to list what COULD be granted;
-   * - no project/device skills — those are discovered on the execution device's
-   *   filesystem, and a visitor run never routes a device;
-   * - `canExecuteOnDevice: false`, for the same reason.
-   *
-   * Skills are opt-in per agent (`auto` or legacy `pinned`), with legacy
-   * agents retaining implicit builtin skills (minus legacy library uninstalls)
-   * exactly as `execTurn` / `operationSkillSet` assemble them at run time.
+   * share settings skill picker (see `listShareGrantableSkills`).
    *
    * Authorization matches the other share reads: `assertCanManageAgentShare`
    * for the workspace case, then `requireShare` on the ownership-scoped
@@ -427,69 +430,14 @@ export const agentShareRouter = router({
       workspaceId,
     ).getAgentConfigById(input.agentId);
 
-    const [dbSkills, agentSkills, userSettings] = await Promise.all([
-      new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId)
-        .findAll()
-        .then((result) => result.data),
-      // A bundle-less agent is the common case and throws nothing; a genuine
-      // failure here must not take the whole picker down with it — the DB and
-      // builtin skills are still grantable.
-      new AgentDocumentsService(ctx.serverDB, ctx.userId, workspaceId)
-        .getAgentSkills(input.agentId)
-        .catch(() => []),
-      new UserModel(ctx.serverDB, ctx.userId).getUserSettings().catch(() => null),
-    ]);
-
-    const rawPlugins = agentConfig?.plugins ?? undefined;
-    const uninstalledBuiltinIds = userSettings
-      ? resolveUninstalledBuiltinTools(
-          userSettings.tool as UninstalledBuiltinToolsScope | undefined,
-          workspaceId,
-        )
-      : legacyBuiltinSkillIds;
-
-    const { skills } = assembleSkillPool(
-      {
-        agentSkills: agentSkills.map((skill) => ({
-          description: skill.description,
-          identifier: skill.identifier,
-          name: skill.name,
-        })),
-        builtin: builtinSkills.map((skill) => ({
-          description: skill.description,
-          identifier: skill.identifier,
-          name: skill.name,
-        })),
-        db: dbSkills.map((skill) => ({
-          description: skill.description ?? '',
-          identifier: skill.identifier,
-          name: skill.name,
-        })),
-      },
-      {
-        autoSkillIds: getAutoPluginIds(rawPlugins),
-        canExecuteOnDevice: false,
-        disabledIds: [
-          ...getDisabledPluginIds(rawPlugins),
-          ...getLegacyDisabledBuiltinSkillIds(
-            uninstalledBuiltinIds,
-            getBuiltinOverrides(rawPlugins),
-          ),
-        ],
-        enabledPluginIds: getActivePluginIds(rawPlugins),
-        implicitBuiltinSkillIds: getImplicitBuiltinSkillIds(
-          agentConfig?.createdAt,
-          agentConfig?.chatConfig,
-        ),
-        skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,
-      },
-    );
-
-    return skills.map((skill) => ({
-      description: skill.description,
-      identifier: skill.identifier,
-      name: skill.name,
-    }));
+    return listShareGrantableSkills({
+      agentConfig,
+      agentId: input.agentId,
+      db: ctx.serverDB,
+      includeLegacyBuiltinSkills: true,
+      userId: ctx.userId,
+      workspaceId,
+    });
   }),
 
   /**
@@ -583,19 +531,20 @@ export const agentShareRouter = router({
       z
         .object({
           agentId: z.string().trim().min(1),
-          visibility: z.enum(['private', 'link']),
+          visibility: shareVisibilitySchema,
         })
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
-      // Flipping to `link` publishes the share, so it is the same capability
+      // Flipping to `link` or `card` admits others, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
-      if (input.visibility === 'link') {
+      const visibility = input.visibility;
+      if (visibility === 'link' || visibility === 'card') {
         await assertAgentShareCreationEnabled(ctx.userId);
         return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
           await service.prepareShareModel(input.agentId);
-          return requireShare(await shares.updateVisibility(input.agentId, 'link'));
+          return requireShare(await shares.updateVisibility(input.agentId, visibility));
         });
       }
 

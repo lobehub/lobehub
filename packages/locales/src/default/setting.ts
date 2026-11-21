@@ -3,18 +3,14 @@ export default {
   'connectorMarket.action.details': 'View details',
   'connectorMarket.action.install': 'Install',
   'connectorMarket.action.manage': 'Manage',
-  'connectorMarket.add': 'Add',
-  'connectorMarket.add.browseStore': 'Browse Skill Store',
-  'connectorMarket.add.browseStoreDesc': 'Built-in tools, skills and MCP servers',
   'connectorMarket.add.custom': 'Add custom connector',
-  'connectorMarket.add.customDesc': 'Connect your own MCP server',
   'connectorMarket.detail.byAuthor': 'By {{author}}',
   'connectorMarket.detail.information': 'Information',
   'connectorMarket.detail.tools': 'Tools',
   'connectorMarket.detail.type': 'Type',
   'connectorMarket.empty.clear': 'Clear search',
   'connectorMarket.empty.search': 'No connectors match “{{keyword}}”',
-  'connectorMarket.empty.searchDesc': 'Try another name, or find more in the Skill Store.',
+  'connectorMarket.empty.searchDesc': 'Try another name, or find more in the Marketplace.',
   'connectorMarket.refresh': 'Refresh',
   'connectorMarket.search.placeholder': 'Search connectors',
   'connectorMarket.section.installed': 'Installed',
@@ -309,17 +305,21 @@ export default {
 
   'agentInfoDescription.value.untitled': 'Untitled Agent',
   'agentSkillDetail.addedAt': 'Added',
+  'agentSkillDetail.githubSource': 'GitHub source',
+  'agentSkillDetail.installedSource': 'View installed source',
   'agentSkillDetail.publishedAt': 'Published',
   'agentSkillDetail.repository': 'GitHub Repository',
   'agentSkillDetail.skillContent': 'Skill Content',
   'agentSkillDetail.sourceUrl': 'Skill Import Source',
   'agentSkillDetail.updatedAt': 'Updated',
   'agentSkillUpdate.apply': 'Update skill',
+  'agentSkillUpdate.available': 'Update available',
   'agentSkillUpdate.branch': 'Branch name (HEAD follows the default branch)',
   'agentSkillUpdate.check': 'Check for updates',
   'agentSkillUpdate.checking': 'Checking GitHub…',
   'agentSkillUpdate.chooseRef': 'Choose a branch to track',
   'agentSkillUpdate.current': 'Up to date',
+  'agentSkillUpdate.defaultBranch': 'Default branch',
   'agentSkillUpdate.failed': 'Couldn’t update the skill',
   'agentSkillUpdate.limited': 'GitHub rate limit reached',
   'agentSkillUpdate.missing': 'Removed from the source repository',
@@ -1073,6 +1073,8 @@ export default {
   'devices.status.onlineConnections_one': 'Online · {{count}} connection',
   'devices.status.onlineConnections_other': 'Online · {{count}} connections',
   'devices.title': 'My Devices',
+  'devices.summary_one': '{{count}} device',
+  'devices.summary_other': '{{count}} devices',
   'devices.visibility.publish': 'Publish to Workspace',
   'devices.visibility.publishConfirmTitle': 'Publish this device to the workspace?',
   'devices.visibilityTabs.private': 'Private',
@@ -1094,7 +1096,7 @@ export default {
   'apps.desktop.title': 'Desktop',
   'apps.messenger.desc':
     'Talk to your agents where your team already is — replies land back in LobeHub.',
-  'apps.messenger.setup': 'Set up',
+  'apps.messenger.openApp': 'Open app',
   'apps.messenger.title': 'Messenger',
   'apps.mobile.cta': 'Get mobile app',
   'apps.mobile.desc': 'Pick up where you left off — your chats, agents, and files travel with you.',
@@ -1875,8 +1877,6 @@ export default {
   'settingsSearch.tabKeywords.hotkey': 'hotkey, shortcut, keyboard',
   'settingsSearch.tabKeywords.labels': 'labels, tags, grouping',
   'settingsSearch.tabKeywords.labs': 'labs, experiment, beta, preview, developer',
-  'settingsSearch.tabKeywords.integrations':
-    'integrations, github, pull request, ci, review, merge, repository',
   'settingsSearch.tabKeywords.memory': 'memory, memories, personalization',
   'settingsSearch.tabKeywords.messenger':
     'messenger, chat platform, bot, telegram, slack, discord, wechat',
@@ -2061,13 +2061,13 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
-  'skillView.browseStoreDesc': 'Find and install skills for your agents',
   'skillView.connectorTabs.private': 'Private',
   'skillView.connectorTabs.workspace': 'Workspace',
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
-  'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
+  'skillView.empty.description':
+    'Find skills in the Marketplace, or import one from GitHub, a link, or a local file.',
   'skillView.empty.search': 'No skills match “{{keyword}}”',
   'skillView.empty.title': 'No skills yet',
   'skillView.privateConnectorsDesc':
@@ -2311,7 +2311,7 @@ When I am ___, I need ___
   'tab.chatPreference': 'Chat Preferences',
   'tab.common': 'Appearance',
   'tab.connector': 'Connectors',
-  'tab.creds': 'Credentials',
+  'tab.creds': 'Vault',
   'tab.devices': 'Devices',
   'tab.experiment': 'Experiment',
   'tab.hotkey': 'Hotkeys',
@@ -2324,7 +2324,6 @@ When I am ___, I need ___
   'tab.llm': 'Language Model',
   'tab.manualFill': 'Manually Fill In',
   'tab.manualFill.desc': 'Configure a custom MCP skill manually',
-  'tab.integrations': 'Integrations',
   'tab.memory': 'Memory',
   'tab.messenger': 'Messenger',
   'tab.notification': 'Notifications',
@@ -4787,6 +4786,14 @@ When I am ___, I need ___
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
+  'tab.environmentsAndCreds': 'Environments & Vault',
+  'environmentsAndCreds.tabs.environments': 'Environments',
+  'environmentsAndCreds.tabs.vault': 'Vault',
+  'creds.writeOnly.tag': 'Write-only',
+  'creds.writeOnly.tooltip':
+    'Shared with the workspace: its values are no longer shown in settings and can only be replaced.',
+  'creds.writeOnly.editHint':
+    'Stored values are not shown. Leave the pairs empty to keep them, or enter every pair to replace them all.',
   'environments.desc':
     "How to set up a project: the repository to check out, the setup command, the variables. Pick one from the environment menu under the chat input, and the conversation's working directory — a temporary sandbox or a folder on your drive — is initialized from it once.",
   'environments.create': 'New environment',
@@ -5452,10 +5459,6 @@ When I am ___, I need ___
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',
-  'creds.listDesc':
-    'Shared credentials everyone in this workspace can use, plus your private ones (marked with a lock). New credentials start private; publish one to share it with the workspace.',
-  'environments.workspaceListDesc':
-    'Environments published to this workspace, plus your private ones (marked with a lock). New environments start private; publish one to share it with the workspace.',
   'workspaceSetting.devices.enrollPrivateDesc':
     'Run this on the machine you want to connect. It starts private to you; publish it to the workspace from its card menu.',
 };

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import zhSetting from '../../../../../locales/zh-CN/setting.json';
 import {
   buildIntegrationItems,
+  countConnectorTabItems,
   getVisibleSectionItems,
   isSectionExpandable,
   matchesConnectorKeyword,
@@ -15,7 +16,44 @@ import {
 
 const noConnectors = { composio: false, lobehub: false };
 
+describe('countConnectorTabItems', () => {
+  it('counts an installed custom MCP connector when the other sources are empty', () => {
+    expect(
+      countConnectorTabItems({
+        customConnectors: [{ identifier: 'private-mcp' }],
+        integrations: [],
+        marketplaceConnectors: [],
+      }),
+    ).toBe(1);
+  });
+});
+
 describe('buildIntegrationItems', () => {
+  const pageOnly = {
+    connectorAvailability: noConnectors,
+    isComposioActive: () => false,
+    isLobehubConnected: () => false,
+    pageOnlyProviderIds: ['github', 'linear'],
+  };
+  const ids = (items: ReturnType<typeof buildIntegrationItems>) =>
+    items.map((item) => (item.type === 'lobehub' ? item.provider.id : item.serverType.identifier));
+
+  it('keeps pages for integrations on a deployment without LobeHub connectors', () => {
+    expect(ids(buildIntegrationItems(pageOnly))).toEqual(['github', 'linear']);
+  });
+
+  it('does not list a page twice when LobeHub connectors are on', () => {
+    const listed = ids(
+      buildIntegrationItems({
+        ...pageOnly,
+        connectorAvailability: { composio: false, lobehub: true },
+      }),
+    );
+
+    expect(listed.filter((id) => id === 'github')).toHaveLength(1);
+    expect(listed.filter((id) => id === 'linear')).toHaveLength(1);
+  });
+
   it('omits builtin recommendations from the connector catalog', () => {
     const fixtures = {
       connectorAvailability: noConnectors,

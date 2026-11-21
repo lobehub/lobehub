@@ -78,6 +78,8 @@ export default {
     'Choose an online device and working directory for every coding Agent.',
   'environment.permissionRequired':
     'You do not have permission to save these members. Check channel and Agent access.',
+  'environment.privateAgent':
+    'A private Agent cannot join a group. Make it visible to the workspace first, or remove it.',
   'environment.resolveRequired': 'Resolve the issues shown under the selected Agents first.',
   'environment.saveFailed':
     'Could not save channel members. Your choices are preserved; try again.',
@@ -146,6 +148,8 @@ export default {
   'threadCard.messages_other': '{{count}} messages',
   'closeThread': 'Close thread',
   'thread': 'Thread',
+  /** Heads the Channel's own actions in a menu that also holds a thread's. */
+  'channel': 'Channel',
   'threadDivider': 'Replies in this thread',
   'followers': 'Replies from: {{names}}',
   'olderMessages': 'Older messages',

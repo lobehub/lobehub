@@ -304,6 +304,24 @@ export const mockMcpItems: DiscoverMcpItem[] = [
     toolsCount: 2,
     updatedAt: UPDATED_AT,
   },
+  // Keep Developer above the six-item preview so it has a "View all" link.
+  ...[
+    ['build-runner', 'Build Runner'],
+    ['code-search', 'Code Search'],
+    ['container-manager', 'Container Manager'],
+    ['database-browser', 'Database Browser'],
+    ['git-client', 'Git Client'],
+    ['log-viewer', 'Log Viewer'],
+  ].map<DiscoverMcpItem>(([identifier, name]) => ({
+    capabilities: { prompts: false, resources: false, tools: true },
+    category: 'developer',
+    connectionType: 'stdio',
+    createdAt: CREATED_AT,
+    description: `${name} MCP fixture.`,
+    identifier,
+    name,
+    updatedAt: UPDATED_AT,
+  })),
 ];
 
 export const mockMcpList: McpListResponse = {
@@ -314,12 +332,6 @@ export const mockMcpList: McpListResponse = {
   totalCount: mockMcpItems.length,
   totalPages: 1,
 };
-
-export const mockMcpCategories = [
-  { category: 'business', count: 7 },
-  { category: 'developer', count: 5 },
-  { category: 'productivity', count: 3 },
-];
 
 // ============================================
 // Detail Mock Data

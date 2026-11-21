@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./agentShare": "./src/agentShare.ts",
     "./renders": "./src/renders.ts",
     "./register": "./src/register.ts",
     "./displayControls": "./src/displayControls.ts",

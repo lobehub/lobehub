@@ -42,11 +42,13 @@ describe('CustomizeSidebarModal', () => {
     );
   });
 
-  it('offers Goals only while the goals lab is on', () => {
-    expect(getSortableSidebarItemIds(false).has('goals')).toBe(false);
-    expect(getSortableSidebarItemIds(false, { goalsEnabled: true }).has('goals')).toBe(true);
-    expect(getSortableSidebarItemIds(true, { goalsEnabled: true }).has('goals')).toBe(true);
-  });
+  it.each([false, true])(
+    'shows the separate Goals option only in workspace mode (%s)',
+    (workspace) => {
+      expect(getSortableSidebarItemIds(workspace).has('goals')).toBe(workspace);
+      expect(getSortableSidebarItemIds(workspace).has('tasks')).toBe(true);
+    },
+  );
 
   it('offers Channels, hideable, only while Channels are enabled', () => {
     expect(getSortableSidebarItemIds(false).has('channels')).toBe(false);

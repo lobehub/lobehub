@@ -1,6 +1,6 @@
 'use client';
 
-import { Blocks, BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
+import { BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -10,6 +10,7 @@ import {
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
+import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
@@ -21,10 +22,11 @@ import {
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
   legacyCommunityRoutes,
+  legacyConnectorCatalogRoute,
   legacySettingsMarketplaceRedirects,
+  marketplaceAppAndMcpRoutes,
   marketplaceIndexRoute,
   marketplaceManageRoutes,
-  marketplaceMcpListRedirect,
 } from '@/spa/router/marketplaceRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
@@ -50,9 +52,10 @@ const settingsTabSubElement = dynamicElement(
 );
 
 // Skills and connectors moved to the Marketplace; their old tabs are redirects.
+// Credentials keep their own mobile page: mobile has no environments page to
+// share, while desktop redirects `/settings/credential` to it.
 const TABS_WITHOUT_SETTINGS_PAGE = new Set<string>([
   SettingsTabs.Connector,
-  SettingsTabs.Creds,
   SettingsTabs.Provider,
   SettingsTabs.Skill,
 ]);
@@ -121,11 +124,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
       // Installed skills and connectors: second-level pages with the shell's
       // back header (the settings layout drew it before they moved here).
       ...overlayRoutes(marketplaceManageRoutes, {
+        'mcp/installed': withHandle({ mobileShellHeader: true }),
         'connector/installed': withHandle({ mobileShellHeader: true }),
         'skill/installed': withHandle({ mobileShellHeader: true }),
       }),
       marketplaceIndexRoute,
-      marketplaceMcpListRedirect,
+      legacyConnectorCatalogRoute,
       // List routes (with ListLayout)
       {
         children: [
@@ -137,7 +141,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Agent',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceAgents' }),
+                  meta: routeMeta({
+                    icon: ShapesIcon,
+                    Skeleton: MarketplaceCatalogSkeleton,
+                    titleKey: 'navigation.marketplaceAgents',
+                  }),
                 },
                 path: 'agent',
               },
@@ -167,23 +175,18 @@ export const sharedMainAreaChildren: RouteObject[] = [
             },
             path: 'provider',
           },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/connector'),
-              'Mobile > Discover > List > Connector',
-            ),
-            handle: {
-              meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
-            },
-            path: 'connector',
-          },
+          ...marketplaceAppAndMcpRoutes,
           {
             element: dynamicElement(
               () => import('@/routes/(main)/community/(list)/skill'),
               'Mobile > Discover > List > Skill',
             ),
             handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+              meta: routeMeta({
+                icon: ShapesIcon,
+                Skeleton: MarketplaceCatalogSkeleton,
+                titleKey: 'navigation.marketplaceSkills',
+              }),
             },
             path: 'skill',
           },

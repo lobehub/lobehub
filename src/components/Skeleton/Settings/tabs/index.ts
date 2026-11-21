@@ -11,11 +11,9 @@ import CredsSkeleton from './Creds';
 import DevicesSkeleton from './Devices';
 import EnvironmentsSkeleton from './Environments';
 import HotkeySkeleton from './Hotkey';
-import IntegrationsSkeleton from './Integrations';
 import LabelsSkeleton from './Labels';
 import LabsSkeleton from './Labs';
 import MemorySkeleton from './Memory';
-import MessengerSkeleton from './Messenger';
 import NotificationSkeleton from './Notification';
 import OAuthAppsSkeleton from './OAuthApps';
 import PlansSkeleton from './Plans';
@@ -50,11 +48,9 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.Devices]: DevicesSkeleton,
   [SettingsTabs.Environments]: EnvironmentsSkeleton,
   [SettingsTabs.Hotkey]: HotkeySkeleton,
-  [SettingsTabs.Integrations]: IntegrationsSkeleton,
   [SettingsTabs.Labels]: LabelsSkeleton,
   [SettingsTabs.Labs]: LabsSkeleton,
   [SettingsTabs.Memory]: MemorySkeleton,
-  [SettingsTabs.Messenger]: MessengerSkeleton,
   [SettingsTabs.Notification]: NotificationSkeleton,
   [SettingsTabs.OAuthApps]: OAuthAppsSkeleton,
   [SettingsTabs.Plans]: PlansSkeleton,

@@ -822,6 +822,16 @@ export class MarketService {
     }
   }
 
+  /** The provider ids of the user's LobeHub Skills connections, without listing their tools. */
+  async listLobehubSkillProviderIds(): Promise<string[]> {
+    const { connections } = await this.market.connect.listConnections({
+      signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
+    });
+    return (connections ?? [])
+      .map((connection) => (connection as { providerId?: string }).providerId)
+      .filter((providerId): providerId is string => !!providerId);
+  }
+
   /**
    * Fetch LobeHub Skills manifests from Market API
    * Gets user's connected skills and builds tool manifests for agent execution

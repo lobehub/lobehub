@@ -8,6 +8,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { projectWorks } from '../../schemas/projectWork';
 import { works } from '../../schemas/work';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import { type WorkContext, workOwnership } from './context';
 import { createDisplayWorkAdapter } from './displayWork';
 import { registerWorkVersion } from './writes';
@@ -18,6 +19,48 @@ const artboardResource = (ctx: WorkContext, artboardId: string) =>
   and(workOwnership(ctx), eq(works.resourceType, 'artboard'), eq(works.resourceId, artboardId));
 
 export type ArtboardWork = WorkItem & { metadata: WorkMetadata | null };
+
+// Recycle-bin cleanup only: a teammate's private Work still has to come down with the task.
+const artboardWorksInScope = (ctx: WorkContext, artboardIds: string[]) =>
+  and(
+    buildWorkspaceWhere(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      { userId: works.userId, workspaceId: works.workspaceId },
+    ),
+    eq(works.resourceType, 'artboard'),
+    inArray(works.resourceId, artboardIds),
+  );
+
+export const findArtboardWorksForTrash = async (
+  ctx: WorkContext,
+  artboardIds: string[],
+): Promise<ArtboardWork[]> => {
+  if (artboardIds.length === 0) return [];
+  const rows = await ctx.db.select().from(works).where(artboardWorksInScope(ctx, artboardIds));
+  return rows as ArtboardWork[];
+};
+
+export const clearArtboardPublishForTrash = async (
+  ctx: WorkContext,
+  artboardIds: string[],
+): Promise<void> => {
+  if (artboardIds.length === 0) return;
+  await ctx.db
+    .update(works)
+    .set({
+      metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) - 'artboardPublish'`,
+      url: null,
+    })
+    .where(artboardWorksInScope(ctx, artboardIds));
+};
+
+export const deleteArtboardWorksForTrash = async (
+  ctx: WorkContext,
+  artboardIds: string[],
+): Promise<void> => {
+  if (artboardIds.length === 0) return;
+  await ctx.db.delete(works).where(artboardWorksInScope(ctx, artboardIds));
+};
 
 export const registerArtboardWork = async (
   ctx: WorkContext,
