@@ -2,6 +2,7 @@ import { CANVAS_OPEN_QUERY } from '@lobechat/builtin-tool-canvas';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 
+import { COMMENT_THREAD_QUERY } from '@/features/TopicComment/useTopicCommentDeepLink';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 
@@ -17,6 +18,10 @@ export const useCanvasDeepLink = (topicId?: string) => {
     if (!topicId) return;
 
     const searchParams = new URLSearchParams(location.search);
+    // The comment deep link rewrites the URL from this same render. Replacing it
+    // here too would restore the params it just consumed, so wait for its update.
+    if (searchParams.has(COMMENT_THREAD_QUERY)) return;
+
     const canvasId = searchParams.get(CANVAS_OPEN_QUERY);
     if (!canvasId || !CANVAS_ID_PATTERN.test(canvasId)) return;
 

@@ -42,6 +42,22 @@ describe('useCanvasDeepLink', () => {
     expect(mocks.openCanvas).toHaveBeenCalledTimes(1);
   });
 
+  it('waits for the comment deep link to consume its params first', async () => {
+    mocks.location.search = '?canvas=cvs_abc-1&comment=reply-1&commentThread=root-1';
+    const { rerender } = renderHook(() => useCanvasDeepLink('tpc_1'));
+
+    expect(mocks.openCanvas).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+
+    mocks.location.search = '?canvas=cvs_abc-1';
+    rerender();
+
+    await waitFor(() => expect(mocks.openCanvas).toHaveBeenCalledWith('cvs_abc-1'));
+    expect(mocks.navigate).toHaveBeenCalledWith('/acme/agent/agt_1/tpc_1#section', {
+      replace: true,
+    });
+  });
+
   it('waits for the topic route', () => {
     renderHook(() => useCanvasDeepLink(undefined));
 
