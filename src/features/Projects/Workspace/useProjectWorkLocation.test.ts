@@ -17,15 +17,6 @@ const mocks = vi.hoisted(() => ({
     workspaceScoped: false,
   },
   selectExecutionTarget: vi.fn(),
-  selectTarget: vi.fn(),
-  topicDeviceId: undefined as string | undefined,
-}));
-
-vi.mock('@/features/ChatInput/ControlBar/useTopicAwareTargetSelect', () => ({
-  useTopicAwareTargetSelect: () => ({
-    selectTarget: mocks.selectTarget,
-    topicDeviceId: mocks.topicDeviceId,
-  }),
 }));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
@@ -54,27 +45,9 @@ beforeEach(() => {
   mocks.agency.canSelectExecutionTarget = true;
   mocks.selectExecutionTarget.mockReset();
   mocks.selectExecutionTarget.mockResolvedValue(true);
-  mocks.selectTarget.mockReset();
-  mocks.selectTarget.mockResolvedValue(undefined);
-  mocks.topicDeviceId = undefined;
 });
 
 describe('useProjectWorkLocation', () => {
-  // An open conversation is on the machine it ran on, and moves through the
-  // topic-aware pick that confirms leaving it.
-  it("reads and moves an open conversation's own place", async () => {
-    mocks.agency.agencyConfig = { boundDeviceId: 'device_2', executionTarget: 'device' };
-    mocks.topicDeviceId = 'device_1';
-    const location = renderHook(() => useProjectWorkLocation('agent_1', 'topic_1')).result.current;
-
-    expect(location.boundDevice?.deviceId).toBe('device_1');
-    expect(location.machineDeviceId).toBe('device_1');
-
-    await expect(location.select('sandbox')).resolves.toBe(true);
-    expect(mocks.selectTarget).toHaveBeenCalledWith('sandbox', undefined, undefined);
-    expect(mocks.selectExecutionTarget).not.toHaveBeenCalled();
-  });
-
   it('moves a cloud-sandbox agent to one of its devices', async () => {
     const location = render();
 

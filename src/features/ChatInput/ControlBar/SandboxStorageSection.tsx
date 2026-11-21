@@ -15,6 +15,7 @@ import SandboxDrivePicker from './SandboxDrivePicker';
 import { projectStartEnvironmentId } from './sandboxEnvironmentOptions';
 import { usePrefersTemporarySandbox } from './temporarySandboxPreference';
 import { useFollowSandboxModePreference } from './useFollowSandboxModePreference';
+import { useProjectEnvironmentOption } from './useProjectEnvironmentOption';
 import { useIsSharedAgent, useProjectSandboxEnvironments } from './useSandboxEnvironmentList';
 import {
   isPersistentSelection,
@@ -113,6 +114,14 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     temporary: eligible && (temporary || status === 'upgrade'),
   });
 
+  // A new project conversation nobody placed runs in the project's environment
+  // (the server applies it), so the chip names that rather than its default.
+  const projectOption = useProjectEnvironmentOption(agentId, scopeTopicId);
+  const value =
+    projectOption.projectDefault && projectOption.environment
+      ? { environmentId: projectOption.environment.id }
+      : selection;
+
   if (status === 'hidden') return null;
 
   return (
@@ -122,7 +131,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
       projectId={projectId}
       sharedAgent={sharedAgent}
       topicId={topicId}
-      value={selection}
+      value={value}
       onChange={pick}
     />
   );

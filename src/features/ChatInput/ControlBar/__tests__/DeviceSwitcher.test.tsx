@@ -23,17 +23,6 @@ const directories = vi.hoisted(() => [
 
 const pickerProps = vi.hoisted(() => ({ current: undefined as any }));
 
-const conversationProject = vi.hoisted(() => ({ id: undefined as string | undefined }));
-
-vi.mock('../ProjectConversationLocation', () => ({
-  default: (props: { projectId: string }) => <div>project-location:{props.projectId}</div>,
-  useConversationProjectId: () => conversationProject.id,
-}));
-
-vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
-  useChatInputResourceAccess: () => ({ canUseResource: true }),
-}));
-
 vi.mock('../../store', () => ({
   useChatInputStore: (selector: (s: object) => unknown) => selector({ topicId: undefined }),
 }));
@@ -73,23 +62,12 @@ vi.mock('../ProjectDeviceSwitcher', () => ({
 }));
 
 describe('DeviceSwitcher', () => {
-  // Same picker as the project home: a project conversation's place and its
-  // code environment in one control.
-  it("shows a project conversation the project home's work-location picker", () => {
-    conversationProject.id = 'project-1';
-    render(<DeviceSwitcher agentId="agent-1" />);
-
-    expect(screen.getByText('project-location:project-1')).toBeInTheDocument();
-    expect(screen.queryByText('general-picker')).not.toBeInTheDocument();
-  });
-
   beforeEach(() => {
     state.activeTopicId = undefined;
     state.pendingNewTopicDirectory = undefined;
     state.setPendingNewTopicDirectory.mockClear();
     state.topics = {};
     pickerProps.current = undefined;
-    conversationProject.id = undefined;
     directoryState.all = directories;
     directoryState.directoriesMap = { 'project-1': directories };
   });

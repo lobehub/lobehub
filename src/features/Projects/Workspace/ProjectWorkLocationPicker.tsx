@@ -4,15 +4,12 @@ import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, FolderIcon, HardDriveIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { ChevronDownIcon, FolderIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { Fragment, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import OptionRow from '@/features/ChatInput/ControlBar/OptionRow';
-import SandboxDriveMenu, {
-  type SandboxDriveFolderPick,
-} from '@/features/ChatInput/ControlBar/SandboxDriveMenu';
 import {
   repositoriesLabel,
   repositorySlug,
@@ -73,12 +70,6 @@ const styles = stylex.create({
 });
 
 interface ProjectWorkLocationPickerProps {
-  /**
-   * Which edge of the composer the chip sits on, so the second level opens
-   * inward. The project home puts it on the right; a conversation's bar on
-   * the left.
-   */
-  align?: 'left' | 'right';
   /** Whether this member may give the project another environment. */
   canManage: boolean;
   /** Icon only, the place in the tooltip — for a narrow composer. */
@@ -90,26 +81,8 @@ interface ProjectWorkLocationPickerProps {
     setPickedId: (directoryId: string) => void;
   };
   disabled?: boolean;
-  /**
-   * The cloud sandbox that keeps the conversation's files on the drive, offered
-   * beside the environment when the plan includes a drive: the folder picked,
-   * and how to pick another.
-   */
-  drive?: {
-    /** The picked folder's name, when the conversation is on one. */
-    label?: string;
-    onBrowse: () => void;
-    onOpenStorage: () => void;
-    onPick: (pick: SandboxDriveFolderPick) => void;
-    selectedPath?: string;
-  };
   /** Where the agent runs and where it can be moved to. */
   location: ReturnType<typeof useProjectWorkLocation>;
-  /**
-   * Picking a folder, when it means more than staging it: an existing
-   * conversation moves there, which also moves it to that folder's machine.
-   */
-  onPickDirectory?: (directoryId: string) => void;
   projectId: string;
   /** A task starts no conversation, so it has no code environment or folder to pick. */
   showRepositories?: boolean;
@@ -126,14 +99,11 @@ interface ProjectWorkLocationPickerProps {
  * picker writes it; the code environment is this conversation's.
  */
 const ProjectWorkLocationPicker = ({
-  align = 'right',
   canManage,
   compact,
   directoryState,
   disabled,
-  drive,
   location,
-  onPickDirectory,
   projectId,
   showRepositories = true,
   state,
@@ -157,9 +127,8 @@ const ProjectWorkLocationPicker = ({
 
   const { repositories, repository, setPickedId, withoutEnvironment } = state;
   const repositoryShown = showRepositories && onSandbox && !!repository;
-  // On the drive, the folder is where the conversation works.
-  const driveShown = showRepositories && !!drive?.label;
-  const submenuPlacement = align === 'right' ? 'leftTop' : 'rightTop';
+  // The chip sits at the composer's right edge, so the second level opens inward.
+  const submenuPlacement = 'leftTop';
 
   const select = async (next: DeviceExecutionTarget, deviceId?: string) => {
     setOpen(false);
@@ -177,11 +146,6 @@ const ProjectWorkLocationPicker = ({
 
   /** A folder belongs to one machine; picking it moves the run there too. */
   const pickDirectory = (directoryId: string, next: 'device' | 'local', deviceId?: string) => {
-    if (onPickDirectory) {
-      setOpen(false);
-      onPickDirectory(directoryId);
-      return;
-    }
     setDirectoryId(directoryId);
     void select(next, deviceId);
   };
@@ -217,9 +181,6 @@ const ProjectWorkLocationPicker = ({
     const slug = repositorySlug(repository) ?? repository.name;
     chipIcon = <RepositoryAvatar size={16} url={environmentRepositoryUrl(repository)} />;
     chipLabel = slug.split('/').pop() || repository.name;
-  } else if (onSandbox && driveShown) {
-    chipIcon = <Icon icon={HardDriveIcon} size={16} />;
-    chipLabel = drive?.label ?? chipLabel;
   } else if (target === 'device') {
     chipIcon = <ExecutionTargetIcon devicePlatform={boundDevice?.platform} target={'device'} />;
   }
@@ -252,51 +213,9 @@ const ProjectWorkLocationPicker = ({
         !!location.machineDeviceId &&
         (machineFolders.length > 1 || canManage)));
 
-  // The persistent sandbox, beside the temporary one: its folder one level down.
-  const driveRow = drive && (
-    <Popover
-      arrow={false}
-      closeDelay={150}
-      placement={submenuPlacement}
-      styles={SUBMENU_STYLES}
-      trigger={['hover', 'click']}
-      content={
-        <SandboxDriveMenu
-          selectedLabel={drive.label}
-          selectedPath={drive.selectedPath}
-          onBrowse={() => {
-            setOpen(false);
-            drive.onBrowse();
-          }}
-          onOpenStorage={() => {
-            setOpen(false);
-            drive.onOpenStorage();
-          }}
-          onPick={(pick) => {
-            setOpen(false);
-            drive.onPick(pick);
-          }}
-        />
-      }
-    >
-      <div data-testid={'project-location-drive'}>
-        <OptionRow
-          arrow
-          compact
-          active={onSandbox && driveShown}
-          hint={driveShown ? drive.label : undefined}
-          icon={<Icon icon={HardDriveIcon} size={16} />}
-          label={tChat('heteroAgent.executionTarget.persistentSandbox')}
-          // The folder is picked one level down; the row itself only opens it.
-          onClick={() => {}}
-        />
-      </div>
-    </Popover>
-  );
-
   // An execution environment is one thing to pick: a cloud sandbox set up
   // from the project's environment (its repositories, setup and variables),
-  // an empty one, one on the drive — or, below, a device with its local folder.
+  // an empty one — or, below, a device with its local folder.
   const sandboxEntities = (
     <>
       <div {...stylex.props(styles.header)}>{t('overview.context.location.sandboxes')}</div>
@@ -304,7 +223,7 @@ const ProjectWorkLocationPicker = ({
         {repositories.map((environment) => (
           <OptionRow
             compact
-            active={onSandbox && !driveShown && environment.id === repository?.id}
+            active={onSandbox && environment.id === repository?.id}
             desc={repositoriesLabel(environment) ?? undefined}
             icon={<RepositoryAvatar size={16} url={environmentRepositoryUrl(environment)} />}
             key={environment.id}
@@ -316,7 +235,7 @@ const ProjectWorkLocationPicker = ({
             in an empty working directory. */}
         <OptionRow
           compact
-          active={onSandbox && !driveShown && (withoutEnvironment || repositories.length === 0)}
+          active={onSandbox && (withoutEnvironment || repositories.length === 0)}
           desc={t('overview.context.location.emptySandboxDesc')}
           icon={<ExecutionTargetIcon target={'sandbox'} />}
           label={t('overview.context.location.emptySandbox')}
@@ -329,7 +248,6 @@ const ProjectWorkLocationPicker = ({
           }
         />
       </div>
-      {driveRow}
       {canManage && (
         <OptionRow
           compact
@@ -402,14 +320,12 @@ const ProjectWorkLocationPicker = ({
 
   const sandboxRow = (
     <OptionRow
-      active={onSandbox && !driveShown}
+      active={onSandbox}
       disabled={!switchable && !onSandbox}
       icon={<ExecutionTargetIcon target={'sandbox'} />}
       label={tChat('heteroAgent.executionTarget.sandbox')}
       onClick={() => {
-        // Off the drive, back to a temporary sandbox in the environment shown.
-        if (driveShown) pickRepository(repositories[0]?.id ?? NO_ENVIRONMENT);
-        else if (switchable) void select('sandbox');
+        if (switchable) void select('sandbox');
         else setOpen(false);
       }}
     />
@@ -537,7 +453,7 @@ const ProjectWorkLocationPicker = ({
       arrow={false}
       content={content}
       open={open}
-      placement={align === 'right' ? 'bottomRight' : 'bottomLeft'}
+      placement={'bottomRight'}
       styles={{ content: { padding: 4 } }}
       trigger={'click'}
       onOpenChange={setOpen}

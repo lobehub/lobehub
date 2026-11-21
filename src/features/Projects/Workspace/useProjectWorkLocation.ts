@@ -3,7 +3,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 
-import { useTopicAwareTargetSelect } from '@/features/ChatInput/ControlBar/useTopicAwareTargetSelect';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { devicePoolForAgent } from '@/features/ExecutionTargetPicker';
 import {
@@ -21,14 +20,10 @@ import { useElectronStore } from '@/store/electron';
  * resolves it, and the places it can be moved to: the cloud sandbox and the
  * devices the agent's runs can reach. Written the way the conversation's own
  * device picker writes it, so the two never disagree.
- *
- * With `topicId` it is that conversation's place instead: the machine it ran
- * on, and a move that is confirmed first when it would leave that machine —
- * the same rule the conversation's own device picker applies.
  */
-export const useProjectWorkLocation = (agentId: string, topicId: string | null = null) => {
+export const useProjectWorkLocation = (agentId: string) => {
   const { agencyConfig, canDisplayExecutionTarget, canSelectExecutionTarget, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId, { topicId });
+    useEffectiveAgencyConfig(agentId, { topicId: null });
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const isWorkspaceAgent = useAgentStore((s) => Boolean(s.agentMap[agentId]?.workspaceId));
@@ -41,20 +36,11 @@ export const useProjectWorkLocation = (agentId: string, topicId: string | null =
     isHetero: !!heteroType,
     workspaceScoped,
   });
+  const boundDevice = devices?.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
   // This desktop's own gateway id, which a `local` run works on.
   const currentDeviceId = useElectronStore((s) =>
     isDesktop ? s.gatewayDeviceInfo?.deviceId : undefined,
   );
-  const { selectTarget, topicDeviceId } = useTopicAwareTargetSelect({
-    agentId,
-    currentDeviceId,
-    devices,
-    selectExecutionTarget,
-    topicId,
-  });
-  // A conversation that already ran somewhere is on that machine.
-  const boundDeviceId = topicDeviceId ?? agencyConfig?.boundDeviceId;
-  const boundDevice = devices?.find((device) => device.deviceId === boundDeviceId);
   const switchable = canDisplayExecutionTarget && canSelectExecutionTarget;
 
   /** Resolves `false` when the move was refused or failed; picking the current place is a no-op. */
@@ -62,10 +48,7 @@ export const useProjectWorkLocation = (agentId: string, topicId: string | null =
     if (next === target && (next !== 'device' || deviceId === boundDevice?.deviceId)) return true;
     // The plain local row clears the local fence, as the conversation picker's does.
     const options = next === 'local' ? { localSandbox: false } : undefined;
-    if (!topicId) return selectExecutionTarget(next, deviceId, options);
-    // A cancelled move is not a failure: nothing changed, and nothing to report.
-    await selectTarget(next, deviceId, options?.localSandbox);
-    return true;
+    return selectExecutionTarget(next, deviceId, options);
   };
 
   return {
@@ -100,9 +83,9 @@ export const useProjectWorkLocation = (agentId: string, topicId: string | null =
     /** The machine a device or local run works on; none for the sandbox. */
     machineDeviceId:
       target === 'device'
-        ? boundDeviceId
+        ? agencyConfig?.boundDeviceId
         : target === 'local'
-          ? (currentDeviceId ?? boundDeviceId)
+          ? (currentDeviceId ?? agencyConfig?.boundDeviceId)
           : undefined,
   };
 };

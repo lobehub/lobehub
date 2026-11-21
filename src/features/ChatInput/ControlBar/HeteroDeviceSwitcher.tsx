@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import InstantSwitch from '@/components/InstantSwitch';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { DOWNLOAD_URL } from '@/const/url';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useLocalSandboxCapability } from '@/features/ChatInput/hooks/useLocalSandboxCapability';
@@ -34,6 +35,7 @@ import {
   groupExecutionTargetDevices,
 } from '@/features/ExecutionTargetPicker';
 import { getPrivateDeviceBlock } from '@/features/HeterogeneousAgent/ExecutionEnvironment/heteroTargetSelection';
+import { environmentRepositoryUrl } from '@/features/Projects/environmentSource';
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
@@ -59,6 +61,7 @@ import GroupSubmenu from './GroupSubmenu';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
 import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
+import { useProjectEnvironmentOption } from './useProjectEnvironmentOption';
 import { useSandboxModeSelect } from './useSandboxModeSelect';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
@@ -375,6 +378,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
     topicId,
   });
+  // In a project, its own environment is a choice of its own: a cloud sandbox
+  // set up from it, and what a new conversation there runs in by default.
+  const projectOption = useProjectEnvironmentOption(agentId, topicId);
+  const projectEnvironment = supportsSandbox ? projectOption.environment : undefined;
   const offersPersistentSandbox =
     supportsSandbox &&
     (sandboxMode.driveStatus === 'ready' || sandboxMode.driveStatus === 'upgrade');
@@ -633,6 +640,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     topicDeviceId && effectiveMachineId === topicDeviceId
       ? t('heteroAgent.executionTarget.topicTag')
       : undefined;
+  // Running in the project's environment, the chip names it.
+  if (chipExecutionTarget === 'sandbox' && projectEnvironment && projectOption.selected) {
+    chipIcon = <RepositoryAvatar size={14} url={environmentRepositoryUrl(projectEnvironment)} />;
+    chipLabel = projectEnvironment.name;
+  }
+
   const tagsFor = (active: boolean, tags: ReactNode[] = []) =>
     active && topicTag ? [...tags, topicTag] : tags;
 
@@ -646,8 +659,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // The sandboxes share one first-level row, which names the one in use.
   const isLocalSandboxActive = executionTarget === 'local' && localSandboxEnabled;
-  const isPersistentSandboxActive = isActive('sandbox') && sandboxMode.persistent;
-  const isTemporarySandboxActive = isActive('sandbox') && !sandboxMode.persistent;
+  const onProjectEnvironment =
+    !!projectEnvironment && projectOption.selected && isActive('sandbox');
+  const isPersistentSandboxActive =
+    isActive('sandbox') && sandboxMode.persistent && !onProjectEnvironment;
+  const isTemporarySandboxActive =
+    isActive('sandbox') && !sandboxMode.persistent && !onProjectEnvironment;
   const activeSandboxLabel = isLocalSandboxActive
     ? t('heteroAgent.executionTarget.localSandbox')
     : isPersistentSandboxActive
@@ -743,6 +760,25 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           — sandboxes, then devices — whose choices open beside it. The rows
           are titles only; what each choice means is said one level down. A
           heterogeneous agent has neither of the first two rows. */}
+      {projectEnvironment ? (
+        <OptionRow
+          compact
+          active={onProjectEnvironment}
+          desc={t('heteroAgent.executionTarget.projectEnvironmentDesc')}
+          icon={<RepositoryAvatar size={14} url={environmentRepositoryUrl(projectEnvironment)} />}
+          label={projectEnvironment.name}
+          tags={tagsFor(onProjectEnvironment)}
+          onClick={() =>
+            void handleSelect('sandbox', undefined, undefined, async () => {
+              try {
+                await projectOption.apply();
+              } catch {
+                toast.error(t('sandboxEnvironment.saveFailed'));
+              }
+            })
+          }
+        />
+      ) : null}
       {isHetero ? null : (
         <OptionRow
           compact

@@ -1019,6 +1019,8 @@ export default {
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
   'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
+  'heteroAgent.executionTarget.projectEnvironmentDesc':
+    'Cloud sandbox set up with the project environment',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
