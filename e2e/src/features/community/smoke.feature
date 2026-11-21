@@ -3,12 +3,12 @@ Feature: Community Smoke Tests
   Critical path tests to ensure the community/discover module is functional
 
   @COMMUNITY-SMOKE-001 @P0
-  Scenario: Open the marketplace at the assistant list
+  Scenario: Open the marketplace at the verified connector list
     Given I navigate to "/marketplace"
     Then the page should load without errors
     And I should see the page body
-    And I should be navigated to "/marketplace/agent"
-    And I should see assistant cards
+    And I should be navigated to "/marketplace/connector"
+    And the "Verified" connector filter should be selected
 
   @COMMUNITY-SMOKE-002 @P0
   Scenario: Load Assistant List Page
@@ -39,6 +39,8 @@ Feature: Community Smoke Tests
     Given I navigate to "/marketplace/connector"
     Then the page should load without errors
     And I should see the page body
+    When I select the "Public" connector filter
+    Then the "Public" connector filter should be selected
     And I should see MCP cards
     And I should see the MCP category "developer"
 

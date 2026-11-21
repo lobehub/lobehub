@@ -78,7 +78,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-007 @P1
   Scenario: Load MCP detail page and verify content
-    Given I navigate to "/marketplace/connector"
+    Given I navigate to "/marketplace/connector?source=public"
     And I wait for the page to fully load
     When I click on the first MCP card
     Then I should be on an MCP detail page
@@ -88,8 +88,8 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-008 @P1
   Scenario: Navigate back from MCP detail page
-    Given I navigate to "/marketplace/connector"
+    Given I navigate to "/marketplace/connector?source=public"
     And I wait for the page to fully load
     And I click on the first MCP card
     When I click the back button
-    Then I should be navigated to "/marketplace/connector"
+    Then I should be navigated to "/marketplace/connector?source=public"

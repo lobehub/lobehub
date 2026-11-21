@@ -85,7 +85,9 @@ Then(
   'I should see the MCP category {string}',
   async function (this: CustomWorld, category: string) {
     await expect(
-      this.page.locator(`section a[href="/marketplace/connector?category=${category}"]`),
+      this.page.locator(
+        `section a[href="/marketplace/connector?category=${category}&source=public"]`,
+      ),
     ).toBeVisible();
   },
 );
