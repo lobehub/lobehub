@@ -55,7 +55,7 @@ import {
   readOpenChannel,
 } from './projectAccess';
 import { joinPublicChannel, listJoinableChannels } from './publicAccess';
-import { retryJob } from './retry';
+import { type ChannelRetryMode, retryJob } from './retry';
 import { retryRouting } from './routing';
 import { type ChannelSearchOptions, searchChannelMessages } from './search';
 import { ChannelSectionRepository } from './sections';
@@ -99,6 +99,8 @@ export type {
   ChannelOpeningDecision,
 } from './opening';
 export type { ChannelAgentPostInput } from './post';
+export type { ChannelReplyErrorDraft, ChannelReplyErrorFacts } from './replyError';
+export type { ChannelRetryMode } from './retry';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export { ChannelSectionRepository } from './sections';
 export type { ChannelSendInput } from './send';
@@ -1122,22 +1124,15 @@ export class ChannelRepository {
       return retryRouting(tx, channelId, messageId);
     });
 
-  /**
-   * Queues a reply that could not reach its device again. Like a stop, only its requester or an
-   * admin may retry it.
-   */
-  retryJob = async (channelId: string, jobId: string): Promise<ChannelJobItem> =>
-    this.write(channelId, async (tx, { member }) => {
-      if (!hasRole(member.role, 'admin')) {
-        const [job] = await tx
-          .select({ requesterMemberId: channelJobs.requesterMemberId })
-          .from(channelJobs)
-          .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
-        if (job && job.requesterMemberId !== member.id)
-          throw new ChannelError('FORBIDDEN', 'Only the requester or an admin can retry this job');
-      }
-      return retryJob(tx, channelId, jobId);
-    });
+  /** Queues a failed reply again, like a stop only by its requester or an admin. */
+  retryJob = async (
+    channelId: string,
+    jobId: string,
+    mode: ChannelRetryMode = 'retry',
+  ): Promise<ChannelJobItem> =>
+    this.write(channelId, (tx, { member }) =>
+      retryJob(tx, channelId, jobId, mode, hasRole(member.role, 'admin') ? undefined : member.id),
+    );
 
   private addOwner = async (tx: Transaction, channelId: string) => {
     const [member] = await tx

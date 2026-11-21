@@ -163,7 +163,61 @@ export type ChannelMemberGrantMetadata = Record<string, unknown>;
 export type ChannelThreadMetadata = Record<string, unknown>;
 
 /** Free-form public message state that does not need its own column. */
-export type ChannelMessageMetadata = Record<string, unknown>;
+export type ChannelMessageMetadata = Record<string, unknown> & {
+  /** Present while an Agent's reply slot shows why its reply failed; see {@link ChannelReplyError}. */
+  replyError?: ChannelReplyError;
+};
+
+/**
+ * What the person can do about a failed reply, recommended first:
+ * - `resume`: run it again in the same conversation (`channel.resumeJob`), continuing the
+ *   Agent's session where it stopped.
+ * - `retry`: run it again from the start (`channel.retryJob`).
+ * - `switch_device`: the device was the cause; pick another one for the Agent, then retry.
+ */
+export type ChannelReplyErrorAction = 'resume' | 'retry' | 'switch_device';
+
+/**
+ * `metadata.replyError` of an Agent's message that stands in its reply slot (the request and the
+ * Agent member) after the reply ended for a system reason. One per slot: a repeated failure
+ * updates it (`attempts`), and the reply a later resume or retry publishes replaces it in place,
+ * clearing this field. The message never wakes, mentions or routes anyone, and other Agents read
+ * it only as a one-line note that the reply did not finish.
+ */
+export interface ChannelReplyError {
+  actions: ChannelReplyErrorAction[];
+  /** Failures of this reply so far, counting this one. */
+  attempts: number;
+  /** The device that caused it, when it did. */
+  deviceId?: string | null;
+  /** Raw failure message, shown under "details"; redacted for a shared Agent's visitor. */
+  errorMessage?: string | null;
+  /** Raw failure type (a `ChatErrorType`, or a job-level cause such as `OperationAbandoned`). */
+  errorType?: string | null;
+  /** The failed job; its retry/resume procedures take this id. */
+  jobId: string;
+  /** ISO time of this failure. */
+  occurredAt: string;
+  /** The failed run; a repeated report of the same run changes nothing. */
+  operationId?: string | null;
+  /** One sentence explaining what happened, in the requester's language. */
+  summary: string;
+}
+
+/** `metadata.replyError` of a failed reply's card, or undefined for anything else. */
+export const channelMessageReplyError = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelReplyError | undefined => {
+  const error = metadata?.replyError as Partial<ChannelReplyError> | undefined;
+  return typeof error?.jobId === 'string' && typeof error.summary === 'string'
+    ? ({
+        ...error,
+        actions: Array.isArray(error.actions) ? error.actions : [],
+        attempts: typeof error.attempts === 'number' ? error.attempts : 1,
+        occurredAt: typeof error.occurredAt === 'string' ? error.occurredAt : '',
+      } as ChannelReplyError)
+    : undefined;
+};
 
 /**
  * The Agent that wrote a message on its requester's behalf (`lobe-channel.sendMessage` /
@@ -657,6 +711,11 @@ export interface ChannelInputManifest {
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
   requestMessageId: string;
+  /**
+   * Set when the run resumes a failed reply in the same topic (`resumeJob`), so the run gets a
+   * short continuation prompt and the runtime resumes its session.
+   */
+  resumed?: boolean;
   /** Fixed at claim time. */
   self: { agentId: string; memberId: string; name: string };
   threadId: string | null;
@@ -855,6 +914,8 @@ export interface ChannelPublicMessage {
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
   receipt?: ChannelMessageReceipt | null;
   recipientMemberIds: string[];
+  /** Set while this Agent message is the card of a failed reply; null otherwise. */
+  replyError?: ChannelReplyError | null;
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
     ChannelPublicMessage,
