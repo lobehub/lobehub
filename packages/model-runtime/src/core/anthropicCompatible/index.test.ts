@@ -727,6 +727,53 @@ describe('createAnthropicCompatibleRuntime', () => {
     );
   });
 
+  it('should replay only the app tool call when a non-stream response also used web search', async () => {
+    const messagesCreate = vi.fn().mockResolvedValue({
+      content: [
+        {
+          id: 'srvtoolu_01',
+          input: { query: 'lobehub' },
+          name: 'web_search',
+          type: 'server_tool_use',
+        },
+        { content: [], tool_use_id: 'srvtoolu_01', type: 'web_search_tool_result' },
+        {
+          id: 'toolu_01',
+          input: { city: 'Hangzhou' },
+          name: 'weather____current',
+          type: 'tool_use',
+        },
+      ],
+      id: 'msg_search',
+      model: 'custom-model',
+      role: 'assistant',
+      stop_reason: 'tool_use',
+      stop_sequence: null,
+      type: 'message',
+      usage: { input_tokens: 12, output_tokens: 42 },
+    });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: createQuestionChatConfig(),
+      customClient: createCustomClientConfig(messagesCreate),
+      provider: 'test-provider',
+    });
+    const response = await new Runtime({ apiKey: 'test-key' }).chat({
+      messages: [{ content: 'Question', role: 'user' }],
+      model: 'custom-model',
+      stream: false,
+    });
+    const calls = (await response.text())
+      .split('\n\n')
+      .filter((sse) => sse.includes('event: tool_calls'))
+      .flatMap((sse) => JSON.parse(sse.split('\ndata: ')[1]));
+
+    expect(
+      calls.map((call: any) => [call.index, call.function.name, call.function.arguments]),
+    ).toEqual([
+      [0, 'weather____current', ''],
+      [0, undefined, '{"city":"Hangzhou"}'],
+    ]);
+  });
   it('should keep the real output tokens when replaying a non-stream response as a stream', async () => {
     const messagesCreate = vi.fn().mockResolvedValue({
       content: [{ text: 'Answer', type: 'text' }],
