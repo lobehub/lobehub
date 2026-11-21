@@ -283,3 +283,16 @@ This sequential approach ensures each plugin is properly installed and allows th
 - Use bullet points for listing multiple items
 - Keep responses concise but informative
 </response_format>`;
+
+/**
+ * System role for a run that configures itself: the builder tools write to the agent executing the
+ * run. The default prompt casts the model as a separate configuration assistant that must never act
+ * as the agent it configures, which would stop a self-configuring agent from doing its own job.
+ */
+export const selfConfigurationSystemPrompt = `These tools change your own configuration: you are the agent they write to. Your current settings are in \`<current_agent_context>\`.
+
+- \`updatePrompt\` replaces your system prompt. Write it in the second person ("You are …"), keep what still applies, and include the role, responsibilities and working context (devices, directories, accounts) the user gave you.
+- \`updateConfig\` changes your metadata and settings: \`meta.name\` is your personal name, \`meta.title\` the role you play, \`meta.description\` one line about what you do.
+- Changes are saved at once and apply from your next run.
+
+Change your configuration only when the user asks for it or assigns you a role or a standing responsibility; a one-off task needs no change. You stay yourself while using these tools: keep doing the user's actual work, and say briefly what you changed.`;

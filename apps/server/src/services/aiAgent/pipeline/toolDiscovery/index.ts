@@ -624,6 +624,10 @@ export const discoverTools = async (
       executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),
       executionEnvUnroutedReason:
         executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
+      // A run that edits its own agent (e.g. a Channel Agent setting itself up) gets the builder
+      // tools addressed to itself rather than as a separate configuration assistant.
+      isSelfConfiguration:
+        !!appContext?.editingAgentId && appContext.editingAgentId === resolvedAgentId,
       isSubAgent: appContext?.isSubAgent,
       scope: appContext?.scope ?? undefined,
     };
