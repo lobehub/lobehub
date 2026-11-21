@@ -46,7 +46,13 @@ const userProfileColumns = {
 
 const referrers = alias(users, 'contact_request_referrer');
 
-/** Where a market page ends: the last share's creation time (ISO) and id. */
+/**
+ * A share's creation time as microsecond ISO text: a `Date` keeps only milliseconds, and a
+ * cursor cut to them would skip shares created later within the same millisecond.
+ */
+const shareCreatedAtIso = sql<string>`to_char(${agentShares.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
+/** Where a market page ends: the last share's creation time (microsecond ISO) and id. */
 export interface MarketAgentCursor {
   createdAt: string;
   id: string;
@@ -1022,7 +1028,7 @@ export class ContactModel {
     const { cursor, limit } = options;
     const query = options.query?.trim();
     const rows = await this.db
-      .select({ ...agentProfileColumns, shareCreatedAt: agentShares.createdAt })
+      .select({ ...agentProfileColumns, shareCreatedAt: shareCreatedAtIso })
       .from(agentShares)
       .innerJoin(agents, eq(agents.id, agentShares.agentId))
       .leftJoin(owners, eq(owners.id, agents.userId))
@@ -1036,9 +1042,9 @@ export class ContactModel {
             : undefined,
           cursor
             ? or(
-                lt(agentShares.createdAt, new Date(cursor.createdAt)),
+                sql`${agentShares.createdAt} < ${cursor.createdAt}::timestamptz`,
                 and(
-                  eq(agentShares.createdAt, new Date(cursor.createdAt)),
+                  sql`${agentShares.createdAt} = ${cursor.createdAt}::timestamptz`,
                   lt(agentShares.id, cursor.id),
                 ),
               )
@@ -1053,9 +1059,7 @@ export class ContactModel {
     return {
       items: page.map(toAgentProfile),
       nextCursor:
-        rows.length > limit && last
-          ? { createdAt: last.shareCreatedAt.toISOString(), id: last.shareId }
-          : null,
+        rows.length > limit && last ? { createdAt: last.shareCreatedAt, id: last.shareId } : null,
     };
   };
 

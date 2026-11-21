@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -302,6 +302,20 @@ describe('shared-Agent market', () => {
     });
     expect(second.items.map((a) => a.agentId)).toEqual([bobAgent]);
     expect(second.nextCursor).toBeNull();
+
+    // Two shares inside one millisecond: the cursor keeps microseconds, so none is skipped.
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: sql`'2026-03-01T00:00:00.123900Z'::timestamptz` })
+      .where(eq(agentShares.agentId, aliceAgent));
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: sql`'2026-03-01T00:00:00.123800Z'::timestamptz` })
+      .where(eq(agentShares.agentId, bobAgent));
+    const sameMs = await carolModel.listMarketAgents({ limit: 1 });
+    expect(sameMs.nextCursor?.createdAt).toBe('2026-03-01T00:00:00.123900Z');
+    const rest = await carolModel.listMarketAgents({ cursor: sameMs.nextCursor!, limit: 1 });
+    expect(rest.items.map((a) => a.agentId)).toEqual([bobAgent]);
 
     const found = await carolModel.listMarketAgents({ limit: 10, query: 'bob' });
     expect(found.items.map((a) => a.agentId)).toEqual([bobAgent]);
