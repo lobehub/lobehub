@@ -64,7 +64,7 @@ import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
-import { channelThreadMentions } from './threadMentions';
+import { channelMentionCounts, channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView, viewerJobs } from './view';
@@ -452,15 +452,11 @@ export class ChannelRepository {
       async (tx, access) => {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
+        const notificationsMuted = access.member.metadata?.notificationsMuted === true;
         const view = await readChannelView(tx, channelId, options, this.userId);
         const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: {
-            ...access.channel,
-            canDelete: admin,
-            notificationsMuted: access.member.metadata?.notificationsMuted === true,
-            ...shared.channel,
-          },
+          channel: { ...access.channel, canDelete: admin, notificationsMuted, ...shared.channel },
           joined: true,
           sharedAgentOwner: shared.owner,
           ...view,
@@ -639,24 +635,7 @@ export class ChannelRepository {
     const unreadMemberIds = rows
       .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
       .map(({ memberId }) => memberId);
-    const mentioned = unreadMemberIds.length
-      ? await this.db
-          .select({
-            channelId: channelMessages.channelId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(channelMessages)
-          .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
-          .where(
-            and(
-              inArray(channelMembers.id, unreadMemberIds),
-              sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
-              sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
-            ),
-          )
-          .groupBy(channelMessages.channelId)
-      : [];
-    const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
+    const mentionCountOf = await channelMentionCounts(this.db, unreadMemberIds);
 
     // Thread mentions outlive the read position, which opening the main conversation moves.
     const threadMentionsOf = await channelThreadMentions(
