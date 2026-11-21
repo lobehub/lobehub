@@ -451,6 +451,21 @@ describe('ChannelMessagingService', () => {
       expect(send).not.toHaveBeenCalled();
     });
 
+    it('falls back only when the person cannot reach the Agent, and fails on anything else', async () => {
+      const { ChannelError } = await import('@/database/repositories/channel');
+      openDirect.mockRejectedValueOnce(new ChannelError('FORBIDDEN', 'No access'));
+      expect(
+        await service().messagePerson({ content: 'Hi', userId: 'user-alice' }, 'call-1'),
+      ).toMatchObject({ conversation: 'requester' });
+
+      send.mockClear();
+      openDirect.mockRejectedValueOnce(new Error('connection reset'));
+      await expect(
+        service().messagePerson({ content: 'Hi', userId: 'user-alice' }, 'call-2'),
+      ).rejects.toThrow('connection reset');
+      expect(send).not.toHaveBeenCalled();
+    });
+
     it('works from an owner bot run, which has no Channel of its own', async () => {
       relaySource.mockResolvedValue(botRun);
       await service().messagePerson({ content: 'Done', userId: 'user-alice' }, 'call-1');

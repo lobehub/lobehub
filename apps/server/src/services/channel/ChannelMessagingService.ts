@@ -333,7 +333,16 @@ export class ChannelMessagingService {
     // they moved to the trash stays there and the message takes the requester's conversation.
     const direct = await new ChannelService(this.db, userId, this.workspaceId)
       .openDirect(run.self.agentId)
-      .catch(() => undefined);
+      // Only "this person cannot reach the Agent" picks the fallback; anything else fails the call,
+      // so a retry can still reach the Agent's conversation instead of settling on the requester's.
+      .catch((error: unknown) => {
+        if (
+          error instanceof ChannelError &&
+          (error.code === 'FORBIDDEN' || error.code === 'NOT_FOUND')
+        )
+          return undefined;
+        throw error;
+      });
     if (direct) {
       const message = await new ChannelRepository(
         this.db,
