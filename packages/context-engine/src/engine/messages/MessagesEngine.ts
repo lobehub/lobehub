@@ -242,12 +242,11 @@ export class MessagesEngine {
           : undefined;
     const isTodoEnabled = effectiveTodos !== undefined;
 
-    // System date is redundant when web-browsing or memory tools are enabled,
-    // as they already include current date in their system prompts
     const toolIds = toolsConfig?.tools || [];
-    const hasDateAwareTools =
-      toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
-    const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    // Keep SystemDateProvider independent of dynamically activated tools:
+    // toggling it off when web-browsing or user-memory is activated mid-run
+    // mutates the leading system message and invalidates the prompt-cache prefix.
+    const isSystemDateEnabled = enableSystemDate !== false;
     // An eval attempt renders "today" from its case clock, never the wall clock.
     const evalClock = evalContext?.sessionDate ? new Date(evalContext.sessionDate) : undefined;
     const currentUserMessage = [...messages]
