@@ -1,4 +1,4 @@
-import type { NewTask } from '@lobechat/types';
+import type { NewTask, TaskItem } from '@lobechat/types';
 import { withoutTaskExecutionSelection } from '@lobechat/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
@@ -160,29 +160,20 @@ export const copyToWorkspace = async (
     const visibilityOverride =
       targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
-    // BFS clone — parent inserted before children, so we always know the
-    // new parentTaskId by the time we reach the child.
+    // BFS clone — parent inserted before children; each child is queued with
+    // its parent's new id. collectTaskSubtree returns the root first, and a
+    // subtree is a tree, so every task is queued exactly once.
     const idMap = new Map<string, string>();
     const relocations: CheckpointTaskRelocation[] = [];
-    const byId = new Map(subtree.map((t) => [t.id, t]));
-    const queue: string[] = [taskId];
-    const seen = new Set<string>();
+    const [root] = subtree;
+    const queue: { newParentId: string | null; original: TaskItem }[] = [
+      { newParentId: null, original: root },
+    ];
 
     let seq = await nextSeqIn(trx as LobeChatDatabase, targetWorkspaceId, targetUserId);
 
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      /* v8 ignore next -- unreachable: each subtree id is queued once, by its single parent */
-      if (seen.has(currentId)) continue;
-      seen.add(currentId);
-      const original = byId.get(currentId);
-      /* v8 ignore next -- unreachable: the queue only holds ids taken from the subtree */
-      if (!original) continue;
-
-      /* v8 ignore start -- unreachable `?? null`: BFS clones a parent before its children, so idMap always holds it */
-      const newParentId = currentId === taskId ? null : (idMap.get(original.parentTaskId!) ?? null);
-      /* v8 ignore stop */
-
+    // for…of also visits the entries pushed while iterating.
+    for (const { newParentId, original } of queue) {
       const identifier = `${DEFAULT_TASK_IDENTIFIER_PREFIX}-${seq}`;
       const inserted = (await (trx as LobeChatDatabase)
         .insert(tasks)
@@ -233,7 +224,8 @@ export const copyToWorkspace = async (
       seq++;
 
       for (const c of subtree) {
-        if (c.parentTaskId === original.id) queue.push(c.id);
+        if (c.parentTaskId === original.id)
+          queue.push({ newParentId: inserted[0]!.id, original: c });
       }
     }
 
