@@ -43,6 +43,49 @@ describe('EnvironmentModel coverage', () => {
     expect(updated.name).toBe('No repo');
     expect(updated.configuration.sources).toEqual([]);
   });
+
+  it('pins the requested default branch when one is given', async () => {
+    const env = await environmentModel.ensureForRepository({
+      defaultBranch: '  develop  ',
+      name: 'lobehub/lobehub',
+      repositoryUrl: 'https://github.com/lobehub/lobehub',
+    });
+
+    expect(env.configuration.sources).toEqual([
+      { kind: 'git', ref: 'develop', url: 'https://github.com/lobehub/lobehub' },
+    ]);
+  });
+
+  it('leaves the configuration untouched when an update does not carry one', async () => {
+    const env = await environmentModel.create({
+      configuration: { kind: 'code', sources: [] },
+      name: 'Untouched',
+    });
+
+    const updated = await environmentModel.update(env.id, { name: 'Renamed only' });
+
+    expect(updated).toMatchObject({ id: env.id, name: 'Renamed only' });
+    expect(updated?.configuration).toMatchObject({ kind: 'code', sources: [] });
+  });
+
+  it('lays out repository sources when an update carries a configuration', async () => {
+    const env = await environmentModel.create({
+      configuration: { kind: 'code', sources: [] },
+      name: 'Relayout',
+    });
+
+    const updated = await environmentModel.update(env.id, {
+      configuration: {
+        kind: 'code',
+        sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
+      },
+    });
+
+    // Stored with the folders it is checked out into, so the form shows what runs.
+    expect(updated?.configuration.sources).toEqual([
+      expect.objectContaining({ kind: 'git', url: 'https://github.com/lobehub/lobehub' }),
+    ]);
+  });
 });
 
 describe('EnvironmentInstanceModel coverage', () => {

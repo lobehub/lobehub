@@ -283,4 +283,33 @@ describe('ArtboardCommentModel', () => {
     await expectCode(member.resolve(root.id), 'not_found');
     expect((await comments.listThreads(artboard.id))[0].replies).toEqual([]);
   });
+
+  it('writes a comment on the caller transaction', async () => {
+    const { artboard, page } = await seed();
+
+    await serverDB.transaction(async (tx) => {
+      const scoped = comments.withTransaction(tx);
+      const comment = await scoped.create(artboard.id, {
+        clientId: 'tx-1',
+        content: '事务里的评论',
+        pageId: page.id,
+      });
+      expect(comment).toMatchObject({ authorUserId: userId, clientId: 'tx-1' });
+    });
+
+    expect((await comments.listThreads(artboard.id)).map((t) => t.root.clientId)).toEqual(['tx-1']);
+  });
+
+  it('leaves every thread undelivered when asked to deliver nothing', async () => {
+    const { artboard, page } = await seed();
+    const root = await comments.create(artboard.id, {
+      clientId: 'none',
+      content: '还没人看',
+      pageId: page.id,
+    });
+
+    await comments.markDelivered([], new Date('2026-11-10T09:00:00Z'));
+
+    expect((await comments.listUndelivered(artboard.id)).map((t) => t.root.id)).toEqual([root.id]);
+  });
 });

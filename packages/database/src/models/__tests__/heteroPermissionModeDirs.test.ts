@@ -45,6 +45,14 @@ describe('UserModel.setHeteroPermissionModeDir', () => {
       { key: 'd::/b', mode: 'default' },
     ]);
   });
+
+  it('answers with an empty list when the user row is gone', async () => {
+    // `mutatePreference` returns undefined for a deleted account; the caller
+    // still gets the list shape it asked for.
+    const gone = new UserModel(serverDB, 'user-permission-mode-gone');
+
+    await expect(gone.setHeteroPermissionModeDir('d::/a', 'plan')).resolves.toEqual([]);
+  });
 });
 
 describe('WorkspaceUserSettingsModel.setHeteroPermissionModeDir', () => {

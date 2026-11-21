@@ -72,6 +72,14 @@ describe('UserModel.setWorktreeModeDir', () => {
     expect(stored).toHaveLength(WORKTREE_MODE_DIRS_LIMIT);
     expect(stored[0]).toBe('newest');
   });
+
+  it('reports an empty list when the user row is gone', async () => {
+    // The row lock finds nothing to update, so the write is skipped and the
+    // caller still gets a list to render.
+    const missing = new UserModel(serverDB, 'user-worktree-mode-missing');
+
+    await expect(missing.setWorktreeModeDir('d::/a', true)).resolves.toEqual([]);
+  });
 });
 
 describe('WorkspaceUserSettingsModel.setWorktreeModeDir', () => {

@@ -483,4 +483,86 @@ describe('ArtboardStructureModel', () => {
     );
     expect((await owner.listBoardsByProject(projectId)).map((b) => b.title)).toEqual(['首页']);
   });
+
+  it('edits a page and a group in place', async () => {
+    const { artboard, group } = await seedOptions();
+    const extra = await structure.createPage(artboard.id, { name: '验收', sortOrder: 1 });
+
+    expect(await structure.updatePage(extra.id, { name: '验收页' })).toMatchObject({
+      id: extra.id,
+      name: '验收页',
+    });
+    expect(await structure.updateGroup(group.id, { title: '登录方式怎么放' })).toMatchObject({
+      id: group.id,
+      title: '登录方式怎么放',
+    });
+
+    await expectCode(structure.updatePage('apg_missing', { name: '改掉' }), 'not_found');
+    await expectCode(structure.updateGroup('agr_missing', { title: '改掉' }), 'not_found');
+  });
+
+  it('updates and removes an edge', async () => {
+    const { a, artboard, b } = await seedOptions();
+    const edge = await structure.createEdge(artboard.id, {
+      sourceBoardId: a.id,
+      targetBoardId: b.id,
+    });
+
+    expect(
+      await structure.updateEdge(edge.id, { condition: '已登录', label: '继续' }),
+    ).toMatchObject({ condition: '已登录', id: edge.id, label: '继续' });
+    await expectCode(
+      structure.updateEdge('00000000-0000-4000-8000-000000000000', { label: '改掉' }),
+      'not_found',
+    );
+
+    await structure.deleteEdge(edge.id);
+    expect(
+      await serverDB.select().from(artboardEdges).where(eq(artboardEdges.id, edge.id)),
+    ).toEqual([]);
+    await expectCode(structure.deleteEdge(edge.id), 'not_found');
+  });
+
+  it('reports a missing page, group or round instead of writing to it', async () => {
+    const missing = '00000000-0000-4000-8000-000000000000';
+
+    await expectCode(structure.deletePage(missing), 'not_found');
+    await expectCode(structure.deleteGroup(missing), 'not_found');
+    await expectCode(structure.updateRound(missing, { title: '改掉' }), 'not_found');
+    await expectCode(structure.chooseBoard(missing, missing), 'not_found');
+    await expectCode(structure.submitRound(missing), 'not_found');
+  });
+
+  it('freezes a submitted round against later edits', async () => {
+    const { a, round } = await seedOptions();
+    await structure.chooseBoard(round.id, a.id);
+    await structure.submitRound(round.id);
+
+    await expectCode(structure.updateRound(round.id, { title: '改掉' }), 'round_submitted');
+  });
+
+  it('moves a board in and out of a group and a round', async () => {
+    const { artboard, group, page, round } = await seedOptions();
+    const loose = await structure.createBoard(artboard.id, board(page.id, null, '散图'));
+
+    expect(await structure.updateBoard(loose.id, { groupId: group.id })).toMatchObject({
+      groupId: group.id,
+      roundId: null,
+    });
+    expect(await structure.updateBoard(loose.id, { roundId: round.id })).toMatchObject({
+      groupId: group.id,
+      roundId: round.id,
+    });
+    expect(await structure.updateBoard(loose.id, { groupId: null, roundId: null })).toMatchObject({
+      groupId: null,
+      roundId: null,
+    });
+  });
+
+  it('refuses to submit a set of open rounds that changed since it was read', async () => {
+    const { artboard, round } = await seedOptions();
+
+    await expectCode(structure.submitOpenRounds(artboard.id, ['00000000-0000-4000-8000-000000000000']), 'rounds_changed');
+    expect((await readRound(round.id)).status).toBe('open');
+  });
 });

@@ -450,6 +450,8 @@ describe('address book of a scope', () => {
     expect(ids(await aliceModel.listAddressBookPeople())).toEqual([bob]);
     expect(await aliceModel.filterAddressBookPeople([bob, carol, alice])).toEqual([bob]);
     expect(await carolModel.filterAddressBookPeople([bob])).toEqual([]);
+    // Nothing to keep once the caller filters themselves out: no query is needed.
+    expect(await aliceModel.filterAddressBookPeople([alice, alice])).toEqual([]);
   });
 
   it('holds every member and every external contact of a workspace', async () => {
@@ -903,5 +905,128 @@ describe('a contact request from a card', () => {
     const rows = await serverDB.select().from(userContactRequests);
     expect(rows.map((row) => row.source)).toEqual([null, null]);
     expect((await aliceModel.listRequests())[0].source).toBeNull();
+  });
+});
+
+describe('contact edges', () => {
+  it('lists a personal request without a workspace or a card source', async () => {
+    await aliceModel.sendRequest(bob, 'hello');
+
+    const [request] = await bobModel.listRequests();
+    expect(request).toMatchObject({ direction: 'incoming', user: { id: alice } });
+    // A personal request belongs to no workspace, and was not sent from a card.
+    expect(request.workspace).toBeNull();
+    expect(request.source).toBeNull();
+  });
+
+  it('reports no workspace membership in a personal scope', async () => {
+    // `scopeRole` answers 'personal' before it asks; the guard keeps the helper
+    // safe on its own, without a workspace to look the user up in.
+    const helper = aliceModel as unknown as { isMember: (userId: string) => Promise<boolean> };
+    await expect(helper.isMember(alice)).resolves.toBe(false);
+  });
+
+  it('does not open an Agent that does not exist', async () => {
+    await expect(
+      aliceModel.resolveCard({ agentId: 'agt_contact_missing', type: 'agent' }),
+    ).rejects.toThrow('Agent not found');
+  });
+
+  it('keeps a card source whose referrer is gone, without a referrer', async () => {
+    await aliceModel.sendRequest(bob, 'hello');
+    const [request] = await serverDB.select().from(userContactRequests);
+    // The source outlives the account that shared the card: the request stays,
+    // and is listed without a referrer rather than with a blank person.
+    await serverDB
+      .update(userContactRequests)
+      .set({
+        source: {
+          channelId: 'contact-test-channel',
+          messageId: 'contact-test-message',
+          referrerId: 'contact-test-gone',
+          type: 'card',
+        },
+      })
+      .where(eq(userContactRequests.id, request.id));
+
+    const [listed] = await bobModel.listRequests();
+    expect(listed.source).toEqual({ referrer: null, type: 'card' });
+  });
+
+  it('names an Agent owner by handle when they have no full name', async () => {
+    await serverDB.insert(users).values({ id: 'contact-test-dave', username: 'dave' });
+    await serverDB
+      .insert(agents)
+      .values({ id: 'agt_contact_dave', title: 'Dave Helper', userId: 'contact-test-dave' });
+    await serverDB.insert(agentShares).values({
+      agentId: 'agt_contact_dave',
+      shareConfig: { monthlySpendLimit: 1, slug: 'dave-helper' },
+      visibility: 'link',
+    });
+
+    await expect(
+      aliceModel.resolveCard({ agentId: 'agt_contact_dave', type: 'agent' }),
+    ).resolves.toMatchObject({ name: 'Dave Helper', ownerName: 'dave' });
+  });
+
+  it('refuses to share from a workspace I am only an external contact of', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    await bobModel.acceptRequest(requestId);
+
+    await expect(bobInTeam().resolveCard({ type: 'user', userId: alice })).rejects.toThrow(
+      'Only members share contacts here',
+    );
+  });
+});
+
+describe('a card source that cannot be verified', () => {
+  let channelId: string;
+  let agentCardMessageId: string;
+
+  beforeEach(async () => {
+    const [channel] = await serverDB
+      .insert(channels)
+      .values({ title: 'Agent card', userId: alice })
+      .returning();
+    channelId = channel.id;
+    await serverDB.insert(channelMembers).values([
+      { actorType: 'user', channelId, role: 'owner', userId: alice },
+      { actorType: 'user', channelId, role: 'member', userId: bob },
+    ]);
+    const [message] = await serverDB
+      .insert(channelMessages)
+      .values({
+        channelId,
+        content: '[Agent card] Bob Helper',
+        metadata: {
+          card: { agentId: bobAgent, name: 'Bob Helper', shareId: bobShareId, type: 'agent' },
+        },
+        requestKey: 'agent-card',
+        routingStatus: 'skipped',
+        sequence: 1,
+        userId: alice,
+      })
+      .returning();
+    agentCardMessageId = message.id;
+  });
+
+  afterEach(async () => {
+    await serverDB.delete(channels);
+  });
+
+  it('drops a message id that is not a uuid instead of reading one', async () => {
+    await bobModel.sendRequest(carol, undefined, { cardMessageId: 'card-of-carol' });
+
+    const rows = await serverDB.select().from(userContactRequests);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBeNull();
+  });
+
+  it('drops a card that shares an Agent, not the addressee', async () => {
+    await bobModel.sendRequest(carol, undefined, { cardMessageId: agentCardMessageId });
+
+    const rows = await serverDB.select().from(userContactRequests);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBeNull();
   });
 });
