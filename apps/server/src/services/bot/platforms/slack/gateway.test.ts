@@ -93,6 +93,7 @@ describe('SlackSocketModeConnection', () => {
   function createConnection(overrides?: Partial<SlackSocketModeOptions>) {
     const options: SlackSocketModeOptions = {
       appToken: 'xapp-test-token',
+      onForwardResult: vi.fn(),
       signingSecret: 'test-signing-secret',
       webhookUrl: 'http://localhost:3000/api/agent/webhooks/slack/test_app',
       ...overrides,
@@ -200,6 +201,37 @@ describe('SlackSocketModeConnection', () => {
         expect.objectContaining({ 'Content-Type': 'application/json' }),
       );
       expectSlackSignature(forwardCall, body);
+    });
+
+    it('reports each forward outcome, so a dropped event is not silent', async () => {
+      const refused = Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED' },
+      });
+      const onForwardResult = vi.fn();
+      const { connectPromise, ws } = await connectAndGetWs({ onForwardResult });
+      ws.simulateMessage({ type: 'hello' });
+      await connectPromise;
+
+      const forwardResponses = [
+        () => Promise.resolve(new Response('ok', { status: 200 })),
+        () => Promise.resolve(new Response('Invalid signature', { status: 401 })),
+        () => Promise.reject(refused),
+      ];
+      for (const [index, respond] of forwardResponses.entries()) {
+        vi.mocked(fetch).mockImplementationOnce(respond);
+        ws.simulateMessage({
+          envelope_id: `env_${index}`,
+          payload: { event: { text: 'hello', type: 'app_mention' } },
+          type: 'events_api',
+        });
+        await vi.advanceTimersByTimeAsync(10);
+      }
+
+      expect(onForwardResult.mock.calls.map(([result]) => result)).toEqual([
+        { ok: true, status: 200 },
+        { ok: false, status: 401 },
+        { error: refused, ok: false },
+      ]);
     });
 
     it('should forward message.mpim events without dropping them', async () => {

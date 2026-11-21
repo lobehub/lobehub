@@ -17,6 +17,7 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 import { redisService } from '@/server/services/redis';
 
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import { stripMarkdown } from '../stripMarkdown';
 import {
   type BotPlatformRuntimeContext,
@@ -139,6 +140,7 @@ class QQGatewayClient implements PlatformClient {
 
   private abort = new AbortController();
   private bot: ChatBot<any> | null = null;
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -201,10 +203,20 @@ class QQGatewayClient implements PlatformClient {
       const qqAdapter = (bot as any).adapters.get('qq') as QQAdapter;
       const waitUntil = options?.waitUntil ?? ((task: Promise<any>) => task.catch(() => {}));
 
-      const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/qq/${this.applicationId}`;
+      const webhookUrl = buildSelfWebhookUrl(this.id, this.applicationId, this.context.appUrl);
+
+      this.forwardMonitor?.dispose();
+      const forwardMonitor = new SelfWebhookForwardMonitor({
+        applicationId: this.applicationId,
+        platform: this.id,
+        redisClient: this.context.redisClient,
+        ttlMs: runtimeStatusTtlMs,
+        webhookUrl,
+      });
+      this.forwardMonitor = forwardMonitor;
 
       await qqAdapter.startGatewayListener(
-        { waitUntil },
+        { onForwardResult: forwardMonitor.record, waitUntil },
         durationMs,
         this.abort.signal,
         webhookUrl,
@@ -230,14 +242,8 @@ class QQGatewayClient implements PlatformClient {
         }, durationMs);
       }
 
-      await updateBotRuntimeStatus(
-        {
-          applicationId: this.applicationId,
-          platform: this.id,
-          status: BOT_RUNTIME_STATUSES.connected,
-        },
-        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
-      );
+      // Through the monitor: an event dropped while starting keeps the bot `failed`.
+      await forwardMonitor.markConnected();
 
       log('QQBot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
     } catch (error) {
@@ -262,6 +268,8 @@ class QQGatewayClient implements PlatformClient {
       this.refreshTimer = null;
     }
     this.abort.abort();
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
     if (this.bot) {
       await this.bot.shutdown().catch(() => {});
       this.bot = null;

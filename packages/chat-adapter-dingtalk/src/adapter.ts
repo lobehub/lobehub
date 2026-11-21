@@ -18,6 +18,7 @@ import mime from 'mime';
 import { DingTalkApiClient, DingTalkApiError, MAX_MSG_PARAM_TEXT_BYTES, truncateUtf8 } from './api';
 import { verifyCallbackSignature } from './crypto';
 import { DingTalkFormatConverter } from './format-converter';
+import type { GatewayForwardResult } from './gateway';
 import { DingTalkStreamConnection } from './gateway';
 import type {
   DingTalkAdapterConfig,
@@ -139,7 +140,10 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkRawMes
    * `handleWebhook()` pipeline.
    */
   async startGatewayListener(
-    options: { waitUntil: (task: Promise<any>) => void },
+    options: {
+      onForwardResult?: (result: GatewayForwardResult) => void;
+      waitUntil: (task: Promise<any>) => void;
+    },
     durationMs: number,
     abortSignal: AbortSignal,
     webhookUrl: string,
@@ -149,6 +153,7 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkRawMes
       clientSecret: this.clientSecret,
       durationMs,
       log: (msg: string, ...rest: any[]) => this.logger.info(msg, ...rest),
+      onForwardResult: options.onForwardResult,
       webhookUrl,
     });
 

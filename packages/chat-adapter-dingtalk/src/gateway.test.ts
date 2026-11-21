@@ -270,6 +270,30 @@ describe('DingTalkStreamConnection', () => {
       conn.close();
     });
 
+    it('reports each forward outcome, so a dropped message is not silent', async () => {
+      const refused = Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED' },
+      });
+      fetchMock
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }))
+        .mockResolvedValueOnce(new Response('Invalid signature', { status: 401 }))
+        .mockRejectedValueOnce(refused);
+      const onForwardResult = vi.fn();
+      const { ws, conn } = await connected({ onForwardResult });
+
+      for (const id of ['cb_1', 'cb_2', 'cb_3']) {
+        ws.simulateFrame(botFrame(id));
+        await vi.advanceTimersByTimeAsync(10);
+      }
+
+      expect(onForwardResult.mock.calls.map(([result]) => result)).toEqual([
+        { ok: true, status: 200 },
+        { ok: false, status: 401 },
+        { error: refused, ok: false },
+      ]);
+      conn.close();
+    });
+
     it('keeps the socket alive when forwarding fails', async () => {
       fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
       const { ws, conn } = await connected();
