@@ -1,7 +1,9 @@
 import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
+import { strToU8, zipSync } from 'fflate';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  downloadSkill: vi.fn(),
   getAgentConfigById: vi.fn(),
   getSkillDownloadUrl: vi.fn(),
   getUserSettings: vi.fn(),
@@ -47,7 +49,7 @@ vi.mock('@/database/models/user', () => ({
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
-    return { getSkillDownloadUrl: mocks.getSkillDownloadUrl };
+    return { downloadSkill: mocks.downloadSkill, getSkillDownloadUrl: mocks.getSkillDownloadUrl };
   }),
 }));
 
@@ -177,6 +179,51 @@ describe('skillStoreRuntime', () => {
       skill: { id: 'skl_memory', name: 'memory-setup' },
       status: 'unchanged',
     });
+  });
+
+  // inspectSkill reads the package itself because a description can contradict
+  // it: sn-da-image-caption says "无需额外配置 API Key" but its script needs one.
+  it('reads a market package for inspectSkill without importing it', async () => {
+    const zip = zipSync({
+      'sn-da-image-caption/SKILL.md': strToU8(
+        [
+          '---',
+          'name: sn-da-image-caption',
+          'description: 通过 vision 模型将图片转为文本描述，无需额外配置 API Key。',
+          '---',
+          '',
+          'Configure via `SN_API_KEY` (minimum required).',
+        ].join('\n'),
+      ),
+      'sn-da-image-caption/scripts/caption.py': strToU8(
+        'KEY = os.environ.get("SN_API_KEY")\nBASE = "https://token.sensenova.cn/v1"\n',
+      ),
+    });
+    mocks.downloadSkill.mockResolvedValue({ buffer: zip.buffer, filename: 'skill.zip' });
+    const { skillStoreRuntime } = await import('../skillStore');
+
+    const runtime = (await skillStoreRuntime.factory({
+      serverDB,
+      toolManifestMap: {},
+      userId: 'user-1',
+    })) as any;
+    const result = await runtime.service.getMarketSkillFiles(
+      'opensensenova-sensenova-skills-sn-da-image-caption',
+    );
+
+    expect(mocks.downloadSkill).toHaveBeenCalledWith(
+      'opensensenova-sensenova-skills-sn-da-image-caption',
+    );
+    expect(result.name).toBe('sn-da-image-caption');
+    // The body, not the front-matter description, is what gets scanned.
+    expect(result.files).toEqual([
+      { content: 'Configure via `SN_API_KEY` (minimum required).', path: 'SKILL.md' },
+      {
+        content: 'KEY = os.environ.get("SN_API_KEY")\nBASE = "https://token.sensenova.cn/v1"\n',
+        path: 'scripts/caption.py',
+      },
+    ]);
+    expect(mocks.importFromUrl).not.toHaveBeenCalled();
   });
 
   // A library skill is opt-in per agent, so a skill the model installs mid-run

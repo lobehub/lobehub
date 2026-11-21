@@ -9,6 +9,7 @@ import type { SkillStoreExecutionRuntime } from '../ExecutionRuntime';
 import {
   type ImportFromMarketParams,
   type ImportSkillParams,
+  type InspectSkillParams,
   type SearchSkillParams,
   SkillStoreApiName,
   SkillStoreIdentifier,
@@ -80,6 +81,35 @@ class SkillStoreExecutor extends BaseExecutor<typeof SkillStoreApiName> {
       }
 
       const result = await this.runtime.searchSkill(params);
+
+      if (result.success) {
+        return { content: result.content, state: result.state, success: true };
+      }
+
+      return {
+        content: result.content,
+        error: { message: result.content, type: 'PluginServerError' },
+        success: false,
+      };
+    } catch (e) {
+      const err = e as Error;
+      return {
+        error: { body: e, message: err.message, type: 'PluginServerError' },
+        success: false,
+      };
+    }
+  };
+
+  inspectSkill = async (
+    params: InspectSkillParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      if (ctx.signal?.aborted) {
+        return { stop: true, success: false };
+      }
+
+      const result = await this.runtime.inspectSkill(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
