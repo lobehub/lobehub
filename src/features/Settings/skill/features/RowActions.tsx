@@ -3,6 +3,7 @@
 import {
   ActionIcon,
   type ActionIconProps,
+  Button,
   type DropdownItem,
   DropdownMenu,
   Icon,
@@ -20,6 +21,7 @@ interface RowAddActionProps {
   label: string;
   loading?: boolean;
   onClick: () => void;
+  showLabel?: boolean;
 }
 
 /**
@@ -27,11 +29,25 @@ interface RowAddActionProps {
  * that connects or installs in place. Once added it becomes {@link RowMoreMenu}.
  */
 export const RowAddAction = memo<RowAddActionProps>(
-  ({ disabled, disabledReason, icon = Plus, label, loading, onClick }) => {
+  ({ disabled, disabledReason, icon = Plus, label, loading, onClick, showLabel }) => {
     const handleClick = (event: React.MouseEvent) => {
       event.stopPropagation();
       onClick();
     };
+
+    if (showLabel)
+      return (
+        <Button
+          disabled={disabled || loading}
+          icon={icon}
+          loading={loading}
+          size="small"
+          title={disabled ? disabledReason : undefined}
+          onClick={handleClick}
+        >
+          {label}
+        </Button>
+      );
 
     return (
       <ActionIcon

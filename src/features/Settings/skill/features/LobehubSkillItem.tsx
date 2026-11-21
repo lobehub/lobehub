@@ -35,16 +35,34 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillItemProps {
+  /** False where LobeHub connectors are off: the row only opens its page. Defaults to true. */
+  connectable?: boolean;
   hideConnectedStatus?: boolean;
   isSelected?: boolean;
   onDelete?: () => void;
   onSelect?: () => void;
+  /** The row opens `onSelect` before connecting too: it leads to a page, not an empty detail. */
+  openWhenDisconnected?: boolean;
   provider: LobehubSkillProviderType;
   server?: LobehubSkillServer;
+  showConnectLabel?: boolean;
+  /** Replaces the provider's generic description on the row. */
+  summary?: string;
 }
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
-  ({ hideConnectedStatus, provider, server, isSelected, onSelect, onDelete }) => {
+  ({
+    connectable = true,
+    hideConnectedStatus,
+    provider,
+    server,
+    isSelected,
+    onSelect,
+    onDelete,
+    openWhenDisconnected,
+    showConnectLabel,
+    summary,
+  }) => {
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
@@ -322,6 +340,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // button that opens the OAuth flow inline, so users can tell what is connected
     // and aren't left staring at a blank detail panel wondering if it's a bug.
     const renderPageExtra = () => {
+      if (!isConnected && !connectable) return null;
       const needsAuth = server?.status === LobehubSkillStatus.ERROR;
       if (isConnected)
         return (
@@ -346,6 +365,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           icon={needsAuth ? RotateCcw : undefined}
           label={t(needsAuth ? 'tools.composio.reauthorize' : 'connectorMarket.action.connect')}
           loading={isConnecting || isWaitingAuth}
+          showLabel={showConnectLabel}
           onClick={handleConnect}
         />
       );
@@ -353,6 +373,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
 
     const renderNavExtra = () => {
       if (isPage) return renderPageExtra();
+      if (!isConnected && !connectable) return null;
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }
@@ -397,10 +418,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           // Only connected connectors open the detail panel. When disconnected,
           // the row is inert and the only affordance is the inline Connect button —
           // otherwise clicking opens a blank detail panel that reads as a bug.
-          summary={t(`tools.lobehubSkill.providers.${provider.id}.description`, {
-            defaultValue: provider.description,
-          })}
-          onClick={isConnected ? onSelect : undefined}
+          // `openWhenDisconnected` is for a connector whose detail has content anyway.
+          summary={
+            summary ??
+            t(`tools.lobehubSkill.providers.${provider.id}.description`, {
+              defaultValue: provider.description,
+            })
+          }
+          onClick={isConnected || openWhenDisconnected ? onSelect : undefined}
         />
       );
     }

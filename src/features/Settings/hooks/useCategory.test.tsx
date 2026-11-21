@@ -83,11 +83,8 @@ describe('settings useCategory', () => {
       SettingsTabs.Stats,
     ]);
 
-    expect(groupKeys(SettingsGroupKey.Connection)).toEqual([
-      SettingsTabs.Messenger,
-      SettingsTabs.Integrations,
-    ]);
-    // Skills and connectors moved to the Marketplace.
+    expect(groupKeys(SettingsGroupKey.Connection)).toEqual([SettingsTabs.Messenger]);
+    // Skills, connectors and integrations moved to the Marketplace.
     expect(getItemKeys()).not.toContain(SettingsTabs.Skill);
     expect(getItemKeys()).not.toContain(SettingsTabs.Connector);
 
@@ -188,15 +185,14 @@ describe('settings useCategory automations', () => {
 
   // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
   it('hides Automations while MCP Events is off', () => {
-    expect(connectionKeys(false)).not.toContain(SettingsTabs.Automations);
+    expect(connectionKeys(false) ?? []).not.toContain(SettingsTabs.Automations);
   });
 
-  it('lists Automations right after Integrations now that connectors live in the Marketplace', () => {
+  it('keeps Automations and Webhooks now that connectors live in the Marketplace', () => {
     const keys = connectionKeys(true) ?? [];
 
     expect(keys).not.toContain(SettingsTabs.Connector);
-    expect(keys.indexOf(SettingsTabs.Automations)).toBe(
-      keys.indexOf(SettingsTabs.Integrations) + 1,
-    );
+    expect(keys).not.toContain('integrations');
+    expect(keys.indexOf(SettingsTabs.Webhooks)).toBe(keys.indexOf(SettingsTabs.Automations) + 1);
   });
 });

@@ -19,7 +19,11 @@ import {
   marketplaceInstalledSkillsRouteMeta,
 } from '@/features/Marketplace/routeMeta';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
-import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
+import {
+  LegacyCommunityRedirect,
+  LegacyIntegrationRedirect,
+  LegacyPathRedirect,
+} from '@/spa/router/legacyPathRedirect';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { dynamicElement, ErrorBoundary } from '@/utils/router';
@@ -320,18 +324,26 @@ export const legacyCommunityRoutes: RouteObject[] = [
 ];
 
 /**
- * `settings/skill` and `settings/connector` (plus their `/:sub` forms) moved to
+ * `settings/skill`, `settings/connector` and `settings/integrations` (plus their
+ * `/:sub` forms) moved to
  * the Marketplace. Mounted under both the personal `/settings` and the
  * workspace `/:workspaceSlug/settings` routes (desktop and mobile); the redirect
  * re-applies the slug and keeps `?open=` / `?skill=` deep links.
  */
 export const legacySettingsMarketplaceRedirects: RouteObject[] = [
-  ['skill', MARKETPLACE_INSTALLED_SKILLS_PATH],
-  ['skill/:sub', MARKETPLACE_INSTALLED_SKILLS_PATH],
-  ['connector', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
-  ['connector/:sub', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
-].map(([path, to]) => ({
-  element: <LegacyPathRedirect to={to} />,
-  handle: LEGACY_REDIRECT_HANDLE,
-  path,
-}));
+  ...[
+    ['skill', MARKETPLACE_INSTALLED_SKILLS_PATH],
+    ['skill/:sub', MARKETPLACE_INSTALLED_SKILLS_PATH],
+    ['connector', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
+    ['connector/:sub', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
+  ].map(([path, to]) => ({
+    element: <LegacyPathRedirect to={to} />,
+    handle: LEGACY_REDIRECT_HANDLE,
+    path,
+  })),
+  ...['integrations', 'integrations/:sub'].map((path) => ({
+    element: <LegacyIntegrationRedirect />,
+    handle: LEGACY_REDIRECT_HANDLE,
+    path,
+  })),
+];

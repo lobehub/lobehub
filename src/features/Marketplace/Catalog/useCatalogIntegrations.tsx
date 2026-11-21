@@ -4,6 +4,7 @@ import isEqual from 'fast-deep-equal';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { CONNECTOR_PAGE_IDS, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import ComposioSkillItem from '@/features/Settings/skill/features/ComposioSkillItem';
 import {
   buildIntegrationItems,
@@ -42,6 +43,7 @@ export const useCatalogIntegrations = (keyword?: string) => {
     connectorAvailability: { composio, lobehub },
     isComposioActive: (id) => composioById.get(id)?.status === ComposioServerStatus.ACTIVE,
     isLobehubConnected: (id) => lobehubById.get(id)?.status === LobehubSkillStatus.CONNECTED,
+    pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
   }).filter((item) => {
     if (!matchesIntegrationKeyword(item, keyword, t)) return false;
     if (item.type === 'lobehub')
@@ -61,7 +63,9 @@ export const useCatalogIntegrations = (keyword?: string) => {
       const id = item.provider.id;
       return (
         <LobehubSkillItem
+          connectable={lobehub}
           key={id}
+          openWhenDisconnected={hasConnectorPage(id)}
           provider={item.provider}
           server={lobehubById.get(id)}
           onSelect={() =>
