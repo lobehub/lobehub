@@ -3,7 +3,7 @@ import {
   AsyncTaskStatus,
   type BuiltinServerRuntimeOutput,
 } from '@lobechat/types';
-import type { RuntimeVideoGenParams } from 'model-bank';
+import type { RuntimeVideoGenParams, VideoModelParamsSchema } from 'model-bank';
 import { extractVideoDefaultValues } from 'model-bank';
 
 import type {
@@ -22,6 +22,7 @@ import type {
   VideoGenerationModelRef,
   VideoGenerationModelSummary,
 } from '../types';
+import { normalizeVideoParameters, parseVideoParameters } from './normalizeParameters';
 
 const DEFAULT_LIST_LIMIT = 20;
 const MAX_LIST_LIMIT = 50;
@@ -434,7 +435,11 @@ export class VideoGenerationExecutionRuntime {
         parameters: modelItem.parameters,
         provider,
         ...(modelItem.parameters && {
-          defaultValues: extractVideoDefaultValues(modelItem.parameters),
+          // Custom model cards may omit `prompt`, which the defaults schema requires.
+          defaultValues: extractVideoDefaultValues({
+            ...modelItem.parameters,
+            prompt: modelItem.parameters.prompt ?? { default: '' },
+          }),
         }),
       };
 
@@ -452,24 +457,31 @@ export class VideoGenerationExecutionRuntime {
   private async resolveVideoModel(
     provider?: string,
     model?: string,
-  ): Promise<{ model: string; provider: string }> {
+  ): Promise<{ model: string; parameters?: VideoModelParamsSchema; provider: string }> {
     const state = await this.service.listVideoModels({
       limit: MAX_PARAMETER_LOOKUP_LIMIT,
       provider,
     });
 
     if (model) {
-      const matchedProvider = state.providers.find(
-        (item) =>
-          (!provider || item.id === provider) &&
-          item.models.some((candidate) => candidate.id === model),
-      );
+      for (const providerItem of state.providers) {
+        if (provider && providerItem.id !== provider) continue;
 
-      if (matchedProvider) return { model, provider: matchedProvider.id };
+        const matchedModel = providerItem.models.find((candidate) => candidate.id === model);
+        if (matchedModel) {
+          return { model, parameters: matchedModel.parameters, provider: providerItem.id };
+        }
+      }
     } else {
       for (const providerItem of state.providers) {
         const firstModel = providerItem.models[0];
-        if (firstModel) return { model: firstModel.id, provider: providerItem.id };
+        if (firstModel) {
+          return {
+            model: firstModel.id,
+            parameters: firstModel.parameters,
+            provider: providerItem.id,
+          };
+        }
       }
     }
 
@@ -548,7 +560,15 @@ export class VideoGenerationExecutionRuntime {
       return errorOutput('InvalidToolArguments', '`prompt` is required.');
     }
 
-    const referenceUrls = normalizeReferenceUrls(args);
+    const parsedParameters = parseVideoParameters(args.parameters);
+    if (parsedParameters.error !== undefined) {
+      return errorOutput('InvalidToolArguments', parsedParameters.error);
+    }
+
+    const referenceUrls = normalizeReferenceUrls({
+      ...args,
+      parameters: parsedParameters.parameters,
+    });
     if (referenceUrls.endImageUrl && !referenceUrls.imageUrl) {
       return errorOutput(
         'InvalidToolArguments',
@@ -556,7 +576,7 @@ export class VideoGenerationExecutionRuntime {
       );
     }
 
-    let selection: { model: string; provider: string };
+    let selection: { model: string; parameters?: VideoModelParamsSchema; provider: string };
     try {
       selection = await this.resolveVideoModel(args.provider?.trim(), args.model?.trim());
     } catch (error) {
@@ -565,6 +585,19 @@ export class VideoGenerationExecutionRuntime {
     }
 
     const { model, provider } = selection;
+    const generationParameters = normalizeVideoParameters({
+      args,
+      parameters: parsedParameters.parameters,
+      schema: selection.parameters,
+    });
+    if (generationParameters.error !== undefined) {
+      return errorOutput(
+        'InvalidToolArguments',
+        `Invalid parameters for ${provider}/${model}: ${generationParameters.error}`,
+        { model, provider },
+      );
+    }
+
     const waitUntilComplete = args.waitUntilComplete !== false;
     const requestedEstimatedDurationMs = normalizeEstimatedDurationMs(args.estimatedDurationMs);
     const latencyMap = requestedEstimatedDurationMs
@@ -574,7 +607,7 @@ export class VideoGenerationExecutionRuntime {
       requestedEstimatedDurationMs ??
       normalizeEstimatedDurationMs(latencyMap?.get(getModelLatencyKey({ model, provider })));
     const params = {
-      ...args.parameters,
+      ...generationParameters.parameters,
       ...referenceUrls,
       prompt,
     } as RuntimeVideoGenParams & Record<string, unknown>;
