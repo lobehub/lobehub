@@ -1,5 +1,6 @@
 import type { TopicOpenedBy, WorkingDirConfig } from '@lobechat/types';
 import { normalizeDirectoryPath } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 
 import type { TopicModel } from '@/database/models/topic';
 
@@ -10,6 +11,8 @@ export interface NewTopicMetadataInput {
   appContext?: InternalExecAgentParams['appContext'];
   botContext?: InternalExecAgentParams['botContext'];
   cronJobId?: string;
+  /** Created by a device-denied run; see `ChatTopicMetadata.deviceAccessDenied`. */
+  deviceAccessDenied?: boolean;
   /** The bound device was chosen explicitly for this conversation, not auto-picked. */
   deviceBindingPinned?: boolean;
   editingAgentId?: string;
@@ -51,6 +54,7 @@ export const buildNewTopicMetadata = ({
   appContext,
   botContext,
   cronJobId,
+  deviceAccessDenied,
   deviceBindingPinned,
   editingAgentId,
   openedBy,
@@ -83,6 +87,7 @@ export const buildNewTopicMetadata = ({
   const { editingGroupId } = appContext ?? {};
   if (
     !cronJobId &&
+    !deviceAccessDenied &&
     !taskId &&
     !botContext &&
     !topicBoundDeviceId &&
@@ -98,6 +103,7 @@ export const buildNewTopicMetadata = ({
     bot: botContext,
     boundDeviceId: topicBoundDeviceId,
     cronJobId: cronJobId || undefined,
+    ...(deviceAccessDenied && { deviceAccessDenied: true }),
     ...(deviceBindingPinned && { deviceBindingPinned }),
     ...(editingAgentId && { editingAgentId }),
     ...(editingGroupId && { editingGroupId }),
@@ -125,13 +131,37 @@ export const buildNewTopicMetadata = ({
  * mistyped id (an env var a long-lived shell kept) records no link rather than
  * failing a run that is otherwise valid.
  */
+/**
+ * A group conversation keeps its own collaboration: a sub-topic linked to it
+ * would never report back (see `deliverSubTopicReceipt`), so refuse before
+ * anything starts rather than promise a reply that never comes.
+ */
+export const assertCanOpenSubTopicsFrom = (opener: { groupId?: string | null }) => {
+  if (!opener.groupId) return;
+  throw new TRPCError({
+    code: 'BAD_REQUEST',
+    message:
+      'A group conversation cannot open linked sub-topics: their replies are not reported back to it. Open it detached (--detach) or use the group tools.',
+  });
+};
+
 export const resolveTopicOpenedBy = async (
   topicModel: Pick<TopicModel, 'findById'>,
   openerTopicId: string | undefined,
+  options: {
+    /**
+     * A group parent: `refuse` an open that promises a reply (a sub-topic), or
+     * leave the new topic `unlinked` when it reports another way (a task run,
+     * through its task) and the link would only nest it in a sidebar.
+     */
+    groupParent?: 'refuse' | 'unlinked';
+  } = {},
 ): Promise<TopicOpenedBy | undefined> => {
   if (!openerTopicId) return;
   const opener = await topicModel.findById(openerTopicId).catch(() => undefined);
   if (!opener) return;
+  if (opener.groupId && options.groupParent === 'unlinked') return;
+  assertCanOpenSubTopicsFrom(opener);
 
   return {
     agentId: opener.agentId ?? undefined,

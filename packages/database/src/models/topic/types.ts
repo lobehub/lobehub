@@ -139,6 +139,12 @@ export interface QueryTopicParams {
   editingAgentId?: string | null;
   editingGroupId?: string | null;
   /**
+   * Leave out topics opened from a parent that is still there and that a
+   * list with these filters would show (they list under it); one whose parent is gone, or
+   * filtered out, shows again. See `openedFromLiveParentCondition`.
+   */
+  excludeOpenedTopics?: boolean;
+  /**
    * Exclude topics by status (e.g. ['completed'])
    */
   excludeStatuses?: string[];

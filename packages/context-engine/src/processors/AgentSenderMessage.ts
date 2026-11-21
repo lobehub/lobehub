@@ -1,4 +1,4 @@
-import type { AgentSenderMetadata } from '@lobechat/types';
+import type { AgentSenderMetadata, MessageSubTopicCallback } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -66,6 +66,32 @@ export const formatAgentSenderHeader = (
 };
 
 /**
+ * The header of a sub-topic's report: the conversation this one opened
+ * finished a turn. The model continues it by sending to the sub-topic, not
+ * by replying to a message.
+ */
+export const formatSubTopicResultHeader = (
+  callback: MessageSubTopicCallback,
+  { canRunLhCommand = false }: AgentSenderMessageConfig = {},
+) => {
+  const attributes = [
+    ['topic_id', callback.topicId],
+    ['agent_id', callback.agentId],
+    ['title', callback.title],
+    ['status', callback.reason],
+  ]
+    .filter((entry): entry is [string, string] => !!entry[1])
+    .map(([key, value]) => `${key}="${escapeAttribute(value)}"`)
+    .join(' ');
+
+  const instruction = canRunLhCommand
+    ? `A sub-topic you opened finished a turn; its reply follows. To continue it, run \`lh topic send ${callback.topicId} -c "<message>"\`; your response here is not delivered to it.`
+    : 'A sub-topic you opened finished a turn; its reply follows. You cannot run commands here, so you cannot continue it directly and your response stays in this conversation: if it needs more, tell the user so they can continue it.';
+
+  return `<sub_topic_result ${attributes}>${instruction}</sub_topic_result>`;
+};
+
+/**
  * Agent Sender Message Processor
  *
  * A user message another agent sent (`lh topic send`, `lh message reply`,
@@ -96,10 +122,11 @@ export class AgentSenderMessageProcessor extends BaseProcessor {
         continue;
       }
 
-      clonedContext.messages[i] = {
-        ...message,
-        content: `${formatAgentSenderHeader(message.id, sender, this.config)}\n\n${message.content}`,
-      };
+      const subTopic = message.metadata?.subTopicCallback as MessageSubTopicCallback | undefined;
+      const header = subTopic?.topicId
+        ? formatSubTopicResultHeader(subTopic, this.config)
+        : formatAgentSenderHeader(message.id, sender, this.config);
+      clonedContext.messages[i] = { ...message, content: `${header}\n\n${message.content}` };
       processedCount++;
     }
 

@@ -3,6 +3,7 @@ import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandb
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
+import { runDeniesDevices } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { FileService } from '@/server/services/file';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import {
@@ -49,6 +50,8 @@ const withLhPreprocessing = (
     workspaceIdHint: string | undefined;
     workspaceId: () => Promise<string | undefined>;
     isShareVisitor: boolean;
+    /** The run's sender may not use devices; see `preprocessLhCommand`. */
+    deviceAccessDenied: boolean;
   },
 ): ISandboxService => ({
   // Delegated explicitly rather than spread: `createSandboxService` returns a
@@ -90,6 +93,7 @@ const withLhPreprocessing = (
       workspaceId,
       resolve.isShareVisitor,
       resolve.operationId,
+      resolve.deviceAccessDenied,
     );
 
     if (result.error) {
@@ -181,6 +185,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
 
     const wrapPage = pageSandboxWrapper(context, workspaceId);
     const preprocessed = withLhPreprocessing(sandboxService, {
+      deviceAccessDenied: runDeniesDevices(context),
       isShareVisitor: Boolean(context.agentShareVisitor),
       operationId: context.operationId,
       userId: context.userId,

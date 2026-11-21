@@ -12,8 +12,18 @@ Manage conversation topics (chat sessions).
 - \`lh topic delete <ids...> [--yes]\` - Delete one or more topics
 - \`lh topic stop <id>\` - Stop the topic's running turn (the runs you started)
 - \`lh topic archive <id>\` / \`lh topic unarchive <id>\` - Archive a topic (it leaves the agent list; an auto-created worktree is cleaned up) or bring it back
-- \`lh topic send --new -c <text> [--parent-topic-id <id> | --detach]\` - Open a new topic; run inside a conversation it is linked to that conversation as its parent unless \`--detach\`
 - \`lh topic recent [-L <limit>]\` - List recently accessed topics
+- \`lh topic send <id> -c <message>\` - Send a message to a topic and have its agent act on it (queued behind a running turn)
+- \`lh topic send --new -c <message> [--agent-id <id>] [--where inherit|new-worktree|none] [--base-branch <branch>] [--parent-topic-id <id> | --detach]\` - Open a new topic; run from inside a conversation (or with \`--parent-topic-id\`) it is a sub-topic of it, and \`--detach\` makes it a plain, unlinked topic
+
+## Sub-topics and other ways to hand work off
+
+Pick by what you need back:
+
+- The result inside this turn → do it yourself, or with your own sub-agents.
+- An independent conversation running in parallel that you and the user can follow up on → a sub-topic (\`lh topic send --new -c <message>\` from inside a conversation, or with \`--parent-topic-id <id>\`; \`--detach\` opens a plain, unlinked topic instead). It stays on this device; \`--where\` picks the directory: \`inherit\` (default, shares uncommitted files), \`new-worktree\` (a fresh branch and worktree), \`none\`. Each finished turn reports back as a \`<sub_topic_result>\` message and wakes the parent — do not poll; continue it with \`lh topic send <id> -c <message>\`.
+- Work tracked on the task board, on a schedule or with verification → \`lh task\` (each run gets its own topic, on the device and directory configured on the task).
+- Group conversations and Channels keep their own collaboration.
 
 ## Threads
 

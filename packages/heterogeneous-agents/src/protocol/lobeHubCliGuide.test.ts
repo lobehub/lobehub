@@ -16,4 +16,18 @@ describe('lobeHubCliGuide', () => {
     expect(lobeHubCliGuide).toContain('`pnpm --package @lobehub/cli@latest dlx lh …`');
     expect(lobeHubCliGuide).toContain('`npx -y -p @lobehub/cli@latest lh …`');
   });
+
+  it('picks a hand-off path by what is needed back, and teaches sub-topics through lh topic', () => {
+    expect(lobeHubCliGuide).toContain('the result inside this turn');
+    expect(lobeHubCliGuide).toContain('lh topic send --new -c');
+    expect(lobeHubCliGuide).toContain('--where new-worktree');
+    expect(lobeHubCliGuide).toContain('do not poll');
+    expect(lobeHubCliGuide).toContain('<sub_topic_result>');
+    expect(lobeHubCliGuide).toContain('lh topic send <tpc_id>');
+    expect(lobeHubCliGuide).toContain('lh topic list --opened-by-me');
+    expect(lobeHubCliGuide).toContain('--parent-topic-id <tpc_id>');
+    expect(lobeHubCliGuide).toContain('`--detach`');
+    expect(lobeHubCliGuide).toContain('`lh task`');
+    expect(lobeHubCliGuide).not.toContain('lh session');
+  });
 });

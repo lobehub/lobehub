@@ -31,6 +31,10 @@ vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
   useHasActiveWorkspace: () => workspaceMock.hasActiveWorkspace,
 }));
 
+vi.mock('./useShowOpenedForMeFilterItem', () => ({
+  useShowOpenedForMeFilterItem: () => null,
+}));
+
 vi.mock('./TopicListScope', () => ({
   useTopicListScope: () => scopeMock.scope,
 }));

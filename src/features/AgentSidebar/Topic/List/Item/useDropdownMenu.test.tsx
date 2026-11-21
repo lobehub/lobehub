@@ -10,6 +10,11 @@ import { useTopicItemDropdownMenu } from './useDropdownMenu';
 const favoriteMenuItemMock = vi.hoisted(() =>
   vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
 );
+vi.mock('@/features/SubTopicRetire/useRetireTopic', () => ({
+  // Without sub-topics the flow is the ordinary archive / delete.
+  useRetireTopicWithSubTopics: () => (params: { proceed: () => unknown }) => params.proceed(),
+}));
+
 vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
 
 const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/topic/topic-1' }));

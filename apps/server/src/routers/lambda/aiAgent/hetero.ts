@@ -455,6 +455,14 @@ export const heteroRouter = router({
       });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         shareVisitor,
+        // A sub-topic's finished turn reports to the topic that opened it —
+        // not a share visitor's: its wake would run as an ungated creator turn.
+        onTopicRunSettled: shareVisitor
+          ? undefined
+          : (settled) =>
+              new AiAgentService(ctx.serverDB, ctx.userId, {
+                workspaceId: wsId,
+              }).onSubTopicTurnSettled(settled),
         // Follow-ups queued behind the run start as its next turn through the
         // composer pipeline, under the run owner and its workspace. Not for a
         // share visitor run: that start carries no share gate, so it would run

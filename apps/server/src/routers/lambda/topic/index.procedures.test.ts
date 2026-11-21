@@ -55,6 +55,7 @@ function expected(): Array<
     ['importTopic', 'mutation', 13],
     ['issueWorktreeReceipt', 'mutation', 13],
     ['keepOwnedWorktree', 'mutation', 14],
+    ['listChildTopics', 'query', 12],
     ['markTopicRead', 'mutation', 13],
     ['queryTopics', 'query', 12],
     ['rankTopics', 'query', 12],

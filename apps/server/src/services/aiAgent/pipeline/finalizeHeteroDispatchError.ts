@@ -10,7 +10,10 @@ import debug from 'debug';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
-import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import {
+  CompletionLifecycle,
+  type TopicRunSettledHandler,
+} from '@/server/services/agentRuntime/CompletionLifecycle';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 
 import type { DeviceDispatchRoute } from '../helpers/heteroErrors';
@@ -26,6 +29,12 @@ export interface HeteroDispatchErrorDeps {
    */
   includeShareVisitor?: boolean;
   messageModel: MessageModel;
+  /**
+   * A topic's own turn settled — a sub-topic's parent is told. A failed
+   * dispatch is the turn's end too: a sandbox that never starts must still
+   * report to the parent, or it waits for a reply that never comes.
+   */
+  onTopicRunSettled?: TopicRunSettledHandler;
   topicModel: TopicModel;
   userId: string;
   workspaceId?: string;
@@ -119,6 +128,8 @@ export const finalizeHeteroDispatchError = async (
   const terminalReported = hookDispatcher.canDeliver(operationId, 'onComplete');
   await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId, {
     includeShareVisitor: deps.includeShareVisitor,
+    // A share visitor's run reports nowhere (`hetero.ts` does the same).
+    onTopicRunSettled: deps.includeShareVisitor ? undefined : deps.onTopicRunSettled,
   }).completeOperation(
     {
       agentId,

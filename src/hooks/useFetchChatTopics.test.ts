@@ -57,7 +57,10 @@ vi.mock('@/store/global', () => ({
 }));
 
 vi.mock('@/store/global/selectors', () => ({
-  systemStatusSelectors: { topicPageSize: () => mocks.topicPageSize },
+  systemStatusSelectors: {
+    topicPageSize: () => mocks.topicPageSize,
+    topicShowOpenedForMe: () => () => false,
+  },
 }));
 
 vi.mock('@/store/user', () => ({
@@ -65,6 +68,7 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableBetterCodingExperience: () => false },
   preferenceSelectors: { topicIncludeCompleted: () => mocks.topicIncludeCompleted },
 }));
 
@@ -98,7 +102,9 @@ describe('chat topic list fetches', () => {
       pageSize: sidebarArgs.pageSize,
       sortBy: sidebarArgs.sortBy,
     });
+    // With Better Coding Experience off (as mocked) the list is the one it always was.
     expect(panelArgs.excludeTriggers).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS);
+    expect(panelArgs.excludeOpenedTopics).toBeUndefined();
   });
 
   it('forwards the per-agent only-mine filter from both the sidebar and the panel', () => {

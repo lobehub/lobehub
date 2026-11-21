@@ -146,6 +146,28 @@ describe('agentSteerQueueRouter.append', () => {
     expect(entry.request.streamFeatures).toBeUndefined();
   });
 
+  // Regression: a follow-up queued with a device-denied token became a
+  // first-party turn once drained, regaining the owner's devices.
+  it('keeps the device denial of the token that queued it, and refuses a named device', async () => {
+    const deniedCaller = agentSteerQueueRouter.createCaller({
+      oidcAuth: { device_access: 'denied', sub: 'user-1' },
+      serverDB,
+      userId: 'user-1',
+    } as any);
+
+    await deniedCaller.append(appendInput);
+    expect(mocks.append.mock.calls[0][1].request).toMatchObject({
+      delegatedDeviceAccessDenied: true,
+    });
+
+    await expect(
+      deniedCaller.append({
+        ...appendInput,
+        request: { ...appendInput.request, deviceId: 'dev-owner-mac' },
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('stores the sending agent, resolved while its run can still vouch for it', async () => {
     const sender = { agentId: 'agt-writer', hop: 2, topicId: 'tpc-writer' };
     mocks.resolveAgentSender.mockResolvedValue(sender);

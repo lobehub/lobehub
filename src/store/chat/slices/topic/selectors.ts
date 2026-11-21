@@ -486,10 +486,16 @@ const groupedTopicsForSidebar =
     localDeviceIds?: readonly string[],
     /** Project directories, so byDevice can place a topic by its directory's device. */
     directories?: ReadonlyArray<TopicDeviceDirectory>,
+    /** Rows drawn nested under another row (sub-topics), left out of the groups. */
+    nestedTopicIds?: ReadonlySet<string>,
   ) =>
   (s: ChatStoreState): GroupedTopic[] => {
-    const limitedTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
-    if (!limitedTopics) return [];
+    const pageTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
+    if (!pageTopics) return [];
+    const limitedTopics =
+      nestedTopicIds && nestedTopicIds.size > 0
+        ? pageTopics.filter((topic) => !nestedTopicIds.has(topic.id))
+        : pageTopics;
     // Topics actively streaming on this client surface under "running" even
     // though their persisted status says otherwise — that's the one client-only
     // overlay (see resolveStatusBucket). Unread is now a persisted status, so it

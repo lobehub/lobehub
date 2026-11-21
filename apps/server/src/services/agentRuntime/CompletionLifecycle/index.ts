@@ -501,7 +501,14 @@ export class CompletionLifecycle {
         !isAgentShareRun(state)
       ) {
         const onTopicRunSettled = this.onTopicRunSettled;
-        after(() => onTopicRunSettled({ operationId, topicId: settledTopicId }));
+        const settled = {
+          errorMessage: typeof event.errorMessage === 'string' ? event.errorMessage : undefined,
+          lastAssistantContent: event.lastAssistantContent,
+          operationId,
+          reason,
+          topicId: settledTopicId,
+        };
+        after(() => onTopicRunSettled(settled));
       }
 
       // Delivery checker: on a successful completion, run the confirmed verify

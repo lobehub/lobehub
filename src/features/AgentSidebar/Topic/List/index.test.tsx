@@ -2,6 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TopicList from './index';
@@ -27,6 +28,13 @@ const skeletonRenderCount = vi.hoisted(() => ({ value: 0 }));
 const userStoreStateMock = vi.hoisted(() => ({
   topicIncludeCompleted: false,
   topicSortBy: 'updatedAt',
+}));
+
+// The sub-topic hierarchy is covered by its own tests; here it is off.
+vi.mock('../SubTopic/context', () => ({
+  SubTopicTreeProvider: ({ children }: { children: ReactNode }) => children,
+  useNestedTopicIds: () => undefined,
+  useSubTopicTree: () => null,
 }));
 
 vi.mock('./TopicListSkeleton', () => ({

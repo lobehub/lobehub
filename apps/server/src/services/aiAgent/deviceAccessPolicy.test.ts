@@ -1,7 +1,7 @@
 import type { ChatTopicBotContext } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
+import { resolveDeviceAccessPolicy, runDeniesDevices } from './deviceAccessPolicy';
 
 const baseBotContext = (overrides: Partial<ChatTopicBotContext> = {}): ChatTopicBotContext => ({
   applicationId: 'app-123',
@@ -18,6 +18,20 @@ describe('resolveDeviceAccessPolicy', () => {
       canUseDevice: true,
       reason: 'first-party',
     });
+  });
+
+  it('keeps the denial of the run whose token started this one, whatever the request says', () => {
+    // A first-party-looking request (no botContext) from an external sender's sandbox.
+    expect(resolveDeviceAccessPolicy({ delegatedDeviceAccessDenied: true })).toEqual({
+      canUseDevice: false,
+      reason: 'delegated-from-denied-run',
+    });
+    expect(
+      resolveDeviceAccessPolicy({
+        botContext: baseBotContext({ isOwner: true }),
+        delegatedDeviceAccessDenied: true,
+      }).canUseDevice,
+    ).toBe(false);
   });
 
   it('grants device access when bot sender is the owner', () => {
@@ -209,5 +223,26 @@ describe('resolveDeviceAccessPolicy', () => {
         expect(result.reason).toBe('bot-external-sender');
       }
     });
+  });
+});
+
+describe('runDeniesDevices', () => {
+  // A run started through `lh` from a device-denied run has no bot sender of
+  // its own: only its recorded decision carries the denial to the next hop.
+  it("follows the run's own decision, with or without a bot sender", () => {
+    expect(runDeniesDevices({ deviceAccess: { canUseDevice: false } })).toBe(true);
+    expect(
+      runDeniesDevices({
+        botContext: baseBotContext({ isOwner: true }),
+        deviceAccess: { canUseDevice: false },
+      }),
+    ).toBe(true);
+    expect(runDeniesDevices({ deviceAccess: { canUseDevice: true } })).toBe(false);
+  });
+
+  it('falls back to the bot sender when the run recorded no decision', () => {
+    expect(runDeniesDevices({ botContext: baseBotContext() })).toBe(true);
+    expect(runDeniesDevices({ botContext: baseBotContext({ isOwner: true }) })).toBe(false);
+    expect(runDeniesDevices({})).toBe(false);
   });
 });

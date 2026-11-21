@@ -349,4 +349,39 @@ describe('TaskRunnerService.runTask explicit device', () => {
     expect(mocks.updateTopicMetadata).not.toHaveBeenCalled();
     expect(execParams().deviceId).toBeUndefined();
   });
+
+  describe('sub-topic link', () => {
+    const withOrigin = (taskModel: ReturnType<typeof setupTask>) => {
+      const task = {
+        assigneeAgentId: 'agt_codex',
+        config: { model: 'codex', provider: 'openai' },
+        context: { origin: { agentId: 'agt_creator', topicId: 'tpc-creator' } },
+        id: 'task-1',
+        identifier: 'T-1',
+        status: 'backlog',
+        totalTopics: 0,
+      };
+      taskModel.findById
+        .mockReset()
+        .mockResolvedValueOnce({ ...task })
+        .mockResolvedValue({ ...task, status: 'running' });
+    };
+
+    it('opens a fresh run topic from the conversation that created the task', async () => {
+      withOrigin(setupTask({ model: 'codex', provider: 'openai' }));
+
+      await run();
+
+      expect(execParams().openedByTopicId).toBe('tpc-creator');
+    });
+
+    it('leaves a continued topic as it is', async () => {
+      withOrigin(setupTask({ model: 'codex', provider: 'openai' }));
+      mocks.findTopicById.mockResolvedValue({ id: 'tpc-old', metadata: {} });
+
+      await run({ continueTopicId: 'tpc-old' });
+
+      expect(execParams().openedByTopicId).toBeUndefined();
+    });
+  });
 });

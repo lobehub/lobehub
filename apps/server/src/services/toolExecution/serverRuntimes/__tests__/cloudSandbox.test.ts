@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   // A class instance, like the real `createSandboxService` returns — a spread
@@ -54,6 +54,12 @@ const buildContext = (overrides: Record<string, unknown> = {}) =>
   }) as never;
 
 describe('cloudSandboxRuntime', () => {
+  // Every test imports the runtime; the first, cold import can outlast a
+  // test's 5s budget on a busy machine, so pay for it once here.
+  beforeAll(async () => {
+    await import('../cloudSandbox');
+  }, 60_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createSandboxService.mockReturnValue(mocks.sandboxService);
@@ -96,6 +102,8 @@ describe('cloudSandboxRuntime', () => {
       'ws-42',
       false,
       'op-x',
+      // The run may use devices: its token carries no denial.
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -170,6 +178,41 @@ describe('cloudSandboxRuntime', () => {
     expect(result.state).toMatchObject({ success: false });
   });
 
+  // An external bot sender may not use the owner's devices. The token its `lh`
+  // runs with says so, so `lh topic send --new` from here cannot start a
+  // first-party run on the parent's device.
+  it("stamps an external bot sender's lh token as device-denied", async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: false,
+          platform: 'discord',
+          platformThreadId: 'thread-1',
+          senderExternalUserId: 'stranger',
+        },
+      }),
+    );
+
+    await runtime.runCommand({ command: 'lh topic send --new -c hi', description: 'open' });
+
+    expect(mocks.preprocessLhCommand.mock.calls.at(-1)?.[5]).toBe(true);
+  });
+
+  // A second hop: a run started through `lh` from a device-denied run has no
+  // bot sender, only its recorded denial. Its own `lh` token must keep it.
+  it('stamps the lh token of a run whose own device decision is a denial', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({ deviceAccess: { canUseDevice: false, reason: 'delegated-from-denied-run' } }),
+    );
+
+    await runtime.runCommand({ command: 'lh agent run -c hi', description: 'delegate' });
+
+    expect(mocks.preprocessLhCommand.mock.calls.at(-1)?.[5]).toBe(true);
+  });
+
   // Regression: the refusal used the shim's permissive predicate, so a
   // visitor's harmless command that merely mentions `lh` was rejected outright.
   it('does not refuse a share-visitor command that only mentions lh', async () => {
@@ -187,6 +230,8 @@ describe('cloudSandboxRuntime', () => {
       undefined,
       true,
       undefined,
+      // The run may use devices: its token carries no denial.
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -213,6 +258,8 @@ describe('cloudSandboxRuntime', () => {
       undefined,
       true,
       undefined,
+      // The run may use devices: its token carries no denial.
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',

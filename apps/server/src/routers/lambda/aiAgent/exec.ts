@@ -27,6 +27,7 @@ import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
+import { ParentWorkspaceError } from '@/server/services/aiAgent/pipeline/parentWorkspace';
 import { createAgentConfigResolver } from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { wakeWorktreeTurn } from '@/server/services/aiAgent/pipeline/scheduledTopicDispatch';
 import { submitWorktreeTurn } from '@/server/services/aiAgent/pipeline/submitWorktreeTurn';
@@ -38,6 +39,10 @@ import {
 } from '@/server/services/aiAgent/topicStartReservation';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
+import {
+  assertNoDeviceForDeniedRun,
+  delegatedDeviceAccessDeniedOf,
+} from '../_helpers/delegatedDeviceAccess';
 import type { ExecAgentInput } from './execSchemas';
 import {
   ExecAgentSchema,
@@ -258,8 +263,10 @@ export const execRouter = router({
     } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
+    const delegatedDeviceAccessDenied = delegatedDeviceAccessDeniedOf(ctx);
 
     try {
+      assertNoDeviceForDeniedRun(delegatedDeviceAccessDenied, input.deviceId);
       await assertCanUseWorkspaceAgent({
         agentId,
         db: ctx.serverDB,
@@ -322,6 +329,7 @@ export const execRouter = router({
           acceptsArtboardWorks: acceptsArtboardWorksOf(input.streamFeatures),
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+          ...(delegatedDeviceAccessDenied && { delegatedDeviceAccessDenied }),
           // A non-superseding start waits on the surface like a server-started
           // follow-up, so a thread's live run is refused as well.
           ...(supersedeLiveRun ? {} : { queuedSuccessor: true }),
@@ -360,6 +368,12 @@ export const execRouter = router({
       // execution target; nothing was written.
       if (error instanceof RequestedDeviceIgnoredError) {
         throw new TRPCError({ cause: error, code: 'PRECONDITION_FAILED', message: error.message });
+      }
+
+      // The parent's workspace could not be set up (no repository on a device,
+      // a failed worktree); nothing was written.
+      if (error instanceof ParentWorkspaceError) {
+        throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
       }
 
       // An agent → agent send past the relay bound: the sending agent has to
@@ -513,6 +527,7 @@ export const execRouter = router({
    */
   execAgents: aiAgentWriteProcedure.input(ExecAgentsSchema).mutation(async ({ input, ctx }) => {
     const { tasks, parallel = true } = input;
+    const delegatedDeviceAccessDenied = delegatedDeviceAccessDeniedOf(ctx);
 
     log('execAgents: %d tasks, parallel=%s', tasks.length, parallel);
 
@@ -541,6 +556,7 @@ export const execRouter = router({
       } = task;
 
       try {
+        assertNoDeviceForDeniedRun(delegatedDeviceAccessDenied, deviceId);
         await assertCanUseWorkspaceAgent({
           agentId,
           db: ctx.serverDB,
@@ -571,6 +587,7 @@ export const execRouter = router({
           agentId,
           appContext,
           autoStart,
+          ...(delegatedDeviceAccessDenied && { delegatedDeviceAccessDenied }),
           deviceId,
           existingMessageIds,
           parentMessageId,

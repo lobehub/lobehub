@@ -24,6 +24,7 @@ export type ComposerRunRequest = Pick<
   | 'autoStart'
   | 'clientIds'
   | 'clientProtocol'
+  | 'delegatedDeviceAccessDenied'
   | 'deviceId'
   | 'existingMessageIds'
   | 'fileIds'
@@ -33,6 +34,8 @@ export type ComposerRunRequest = Pick<
   | 'mentionedAgents'
   | 'openedByTopicId'
   | 'parentMessageId'
+  | 'parentWorkspace'
+  | 'parentWorkspaceBaseBranch'
   | 'prompt'
   | 'queuedSuccessor'
   | 'replacesOperationId'
@@ -132,6 +135,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     // attribution. These are server-derived from the tRPC context and are
     // intentionally not part of the client-passable input schema.
     clientIp: ctx.clientIp,
+    delegatedDeviceAccessDenied: input.delegatedDeviceAccessDenied,
     deviceId: input.deviceId,
     requireDevice: input.requireDevice,
     localDeviceId: input.localDeviceId,
@@ -163,6 +167,9 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     mentionedAgents: input.mentionedAgents,
     openedByTopicId: input.openedByTopicId,
     parentMessageId,
+    // Where a new sub-topic works (`lh topic send --new --where`); see `prepareParentWorkspace`.
+    parentWorkspace: input.parentWorkspace,
+    parentWorkspaceBaseBranch: input.parentWorkspaceBaseBranch,
     prompt: input.prompt,
     queuedSuccessor: input.queuedSuccessor,
     replacesOperationId: input.replacesOperationId,

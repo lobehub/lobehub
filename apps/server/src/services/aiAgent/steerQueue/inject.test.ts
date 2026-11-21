@@ -64,6 +64,19 @@ describe('canJoinRunningTurn', () => {
     expect(canJoinRunningTurn(followUp('a', 1), state)).toBe(true);
   });
 
+  // A follow-up queued by a device-denied run must not be acted on by a turn
+  // that can use the owner's devices.
+  it('holds a device-denied follow-up back from a turn that may use devices', () => {
+    const denied = followUp('a', 1, { delegatedDeviceAccessDenied: true });
+    expect(canJoinRunningTurn(denied, state)).toBe(false);
+
+    const deniedRun = {
+      ...state,
+      principal: { policy: { deviceAccess: { canUseDevice: false } } },
+    } as unknown as AgentState;
+    expect(canJoinRunningTurn(denied, deniedRun)).toBe(true);
+  });
+
   it('does not join a turn that has a different artboard stream capability', () => {
     expect(canJoinRunningTurn(followUp('a', 1, { acceptsArtboardWorks: true }), state)).toBe(false);
   });

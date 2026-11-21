@@ -9,6 +9,7 @@ import {
 } from '../_helpers/assertWorkspaceRowManageable';
 import { assertCanUseConversationTargets } from '../_helpers/conversationResourceGuard';
 import { resolveContext } from '../_helpers/resolveContext';
+import { childTopicsModeSchema, retireChildTopics } from './childTopics';
 import { guardCtx, topicProcedure } from './procedures';
 
 const topicBulkDeleteScopeSchema = z.enum(['own', 'workspace']).default('own');
@@ -82,7 +83,14 @@ export const removeRouter = router({
    */
   removeTopic: topicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ id: z.string(), removeFiles: z.boolean().optional() }))
+    .input(
+      z.object({
+        /** `all` stops and deletes the topic's sub-topics too; `detach` moves them to the top level. */
+        childTopics: childTopicsModeSchema.optional(),
+        id: z.string(),
+        removeFiles: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       // `findOwnTopicById` (not `findById`): an agent-share visitor topic is
       // stored under the creator's `userId`, and `TopicModel.delete` refuses to
@@ -94,6 +102,15 @@ export const removeRouter = router({
 
       // No creator-visible topic behind this id: nothing to trash.
       if (!topic) return;
+
+      if (input.childTopics) {
+        await retireChildTopics(ctx, {
+          action: 'trash',
+          mode: input.childTopics,
+          removeFiles: input.removeFiles,
+          topicId: input.id,
+        });
+      }
 
       await ctx.trashService.trashTopics([input.id], { removeFiles: input.removeFiles });
     }),

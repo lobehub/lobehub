@@ -57,6 +57,7 @@ import {
   type CompleteDeferredShellOutcome,
   type CompleteDeferredShellParams,
 } from '@/server/services/agentRuntime/AgentRuntimeService/asyncShellResult';
+import type { TopicRunSettledHandler } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -66,6 +67,7 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { onSubTopicTurnSettled } from '@/server/services/subTopic/settle';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
@@ -84,6 +86,7 @@ import {
   resolveGroupMemberApprovalContinuation,
 } from './pipeline/groupMemberApproval';
 import { resolveNewThread } from './pipeline/newThread';
+import { prepareParentWorkspace } from './pipeline/parentWorkspace';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
 import { releaseUnstartedRunFee, type RunFeeClaim } from './pipeline/runFee';
 import { releaseUnstartedRunSlot, type RunSlotClaim } from './pipeline/runSlot';
@@ -201,6 +204,7 @@ export class AiAgentService {
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
         injectQueuedFollowUp: this.injectQueuedFollowUp,
+        onSubTopicTurnSettled: this.onSubTopicTurnSettled,
         runDeferredInit: this.runDeferredInit,
         startQueuedFollowUp: this.startQueuedFollowUp,
         verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
@@ -256,6 +260,7 @@ export class AiAgentService {
       db: this.db,
       getMarketService: (runFacts, options) => this.getMarketService(runFacts, options),
       messageModel: this.messageModel,
+      onTopicRunSettled: (settled) => this.onSubTopicTurnSettled(settled),
       pluginModel: this.pluginModel,
       resolveAgentConfigOrThrow: (id) => this.resolveAgentConfigOrThrow(id),
       resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
@@ -555,6 +560,32 @@ export class AiAgentService {
       };
     }
 
+    // A new topic opened from a parent: its device and directory, or a fresh
+    // worktree, before anything else reads them (see `prepareParentWorkspace`).
+    const prepared = await prepareParentWorkspace(
+      {
+        db: this.db,
+        resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      inputParams,
+    );
+    if (!prepared.rollback) return this.execPreparedAgent(prepared.params);
+    // A worktree was made for this run: if no topic ends up recording it,
+    // nothing would ever clean it up, so take it back.
+    let result: ExecAgentResult;
+    try {
+      result = await this.execPreparedAgent(prepared.params);
+    } catch (error) {
+      await prepared.rollback();
+      throw error;
+    }
+    if (!result.topicId) await prepared.rollback();
+    return result;
+  }
+
+  private async execPreparedAgent(inputParams: InternalExecAgentParams): Promise<ExecAgentResult> {
     // Creating the thread here (rather than inside the turn) means a run that
     // asked for one is already a thread run by the time the reservation check
     // below reads `appContext.threadId` — same isolation as a follow-up inside
@@ -900,6 +931,17 @@ export class AiAgentService {
         topicModel: this.topicModel,
       },
       params,
+    );
+
+  /**
+   * `AgentRuntimeDelegate.onSubTopicTurnSettled`: a topic's own turn settled.
+   * Also handed to heterogeneous completions (`heteroFinish`), whose lifecycle
+   * is not built by the runtime.
+   */
+  onSubTopicTurnSettled: TopicRunSettledHandler = (settled) =>
+    onSubTopicTurnSettled(
+      { ...settled, db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      { execAgent: (params) => this.execAgent(params) },
     );
 
   /**

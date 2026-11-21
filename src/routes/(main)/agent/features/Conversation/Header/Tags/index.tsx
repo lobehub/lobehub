@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
+import OpenedByLink from '@/features/SubTopic/OpenedByLink';
 import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -84,6 +85,7 @@ const TitleTags = memo(() => {
           {fallbackTopicTitle}
         </span>
       )}
+      {!threadId && <OpenedByLink topicId={topicId} />}
     </Flexbox>
   );
 });

@@ -551,6 +551,12 @@ export interface SystemStatus {
    */
   topicPageSize?: number;
   /**
+   * Agents whose topic list also shows the sub-topics other conversations
+   * opened for them (Better Coding Experience), which it hides by default.
+   * Device-local and per agent, like `topicOnlyMineByAgent`.
+   */
+  topicShowOpenedForMeByAgent?: Record<string, boolean>;
+  /**
    * Width of the Verify workspace left-side report-list panel.
    */
   verifyReportPanelWidth: number;
@@ -795,6 +801,10 @@ export const createInitialSystemStatus = (): SystemStatus => {
         ? persistedStatus.showRightPanel
         : INITIAL_STATUS.showRightPanel,
     topicOnlyMineByAgent: restoreTopicOnlyMineByAgent(persistedStatus.topicOnlyMineByAgent),
+    // Part of the sidebar list's query, so the route loader must see it before first paint.
+    topicShowOpenedForMeByAgent: restoreTopicOnlyMineByAgent(
+      persistedStatus.topicShowOpenedForMeByAgent,
+    ),
     showWorkingOverview:
       typeof persistedStatus.showWorkingOverview === 'boolean'
         ? persistedStatus.showWorkingOverview

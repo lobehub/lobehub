@@ -133,6 +133,12 @@ const topicOnlyMine =
   (s: GlobalState): boolean =>
     !!ownerId && !!s.status.topicOnlyMineByAgent?.[ownerId];
 
+/** Whether the agent's topic list also shows the sub-topics others opened for it. */
+const topicShowOpenedForMe =
+  (ownerId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    !!ownerId && !!s.status.topicShowOpenedForMeByAgent?.[ownerId];
+
 /** Upper bound of `topic.getTopics`'s `pageSize` input on the server. */
 export const MAX_TOPIC_PAGE_SIZE = 100;
 
@@ -727,6 +733,7 @@ export const systemStatusSelectors = {
   projectTopicSubGroupMode,
   topicOnlyMine,
   topicPageSize,
+  topicShowOpenedForMe,
   videoPanelWidth,
   musicTopicViewMode,
   videoTopicViewMode,

@@ -14,7 +14,13 @@ export type SignalEvent = { [key: string]: unknown; type: string };
  * after the response; the handler owns its errors.
  */
 export type TopicRunSettledHandler = (params: {
+  /** Set when the run failed. */
+  errorMessage?: string;
+  /** The run's final reply, when it produced one. */
+  lastAssistantContent?: string;
   operationId: string;
+  /** The terminal reason — never a stop or a park (see above). */
+  reason: string;
   topicId: string;
 }) => Promise<void>;
 
