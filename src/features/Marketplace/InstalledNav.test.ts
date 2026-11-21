@@ -1,6 +1,6 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { createElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 const { installedList, activeLocation } = vi.hoisted(() => ({
@@ -11,6 +11,10 @@ vi.mock('@/features/Settings/skill/features/SkillList', () => ({ default: instal
 vi.mock('@/hooks/useActiveLocation', () => ({ useActiveLocation: () => activeLocation }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => 'ws_1',
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => 'acme',
 }));
 
 const {
@@ -67,4 +71,31 @@ describe('installed connector sidebar selection', () => {
       undefined,
     );
   });
+});
+
+describe('installed connector collection link', () => {
+  it.each([
+    ['/acme/marketplace/connector', '', ''],
+    [
+      '/acme/marketplace/connector/installed',
+      '?open=mcp-connector%3Aexample&visibility=private',
+      '?visibility=private',
+    ],
+  ])(
+    'opens the collection from %s%s even without visible rows',
+    (pathname, search, expectedSearch) => {
+      Object.assign(activeLocation, { pathname, search });
+      const router = createMemoryRouter([{ path: '*', element: createElement(InstalledNav) }], {
+        initialEntries: [pathname + search],
+      });
+      const view = render(createElement(RouterProvider, { router }));
+      const link = view.getByRole('link', { name: /installed/i });
+      const expectedPath = '/acme/marketplace/connector/installed';
+      expect(link.getAttribute('href')).toBe(expectedPath + expectedSearch);
+      fireEvent.click(link);
+      expect(router.state.location.pathname + router.state.location.search).toBe(
+        expectedPath + expectedSearch,
+      );
+    },
+  );
 });

@@ -232,7 +232,7 @@ Source: user correction comparing the Marketplace desktop layout with Open Bot (
 
 ## LOBE-UX-032 — Show installed skill rows in the main pane
 
-Display installed skill rows in the Skills catalog's main pane and in its installed manager. Use the row menus for skill management and the “View all” link for the full list. Keep the installed connector list visible across Marketplace sections. Its sidebar header contains only the section title. The section label already identifies installed connectors, so omit the connected check mark from those rows.
+Display installed skill rows in the Skills catalog's main pane and in its installed manager. Use the row menus for skill management and the “View all” link for the full list. Keep the installed connector list visible across Marketplace sections. Make its section title a link to the installed connector manager so workspace users can reach their private connectors even when the shared list is empty. The section label already identifies installed connectors, so omit the connected check mark from those rows.
 
 Source: user correction comparing the Skills sidebar and main pane with Open Bot (2026-11-20).
 

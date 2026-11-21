@@ -2,6 +2,8 @@
 
 import type { ConnectorVisibility } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +18,7 @@ import {
   parseMobileSelection,
 } from '@/features/Settings/skill/mobileSelection';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 import {
@@ -23,6 +26,18 @@ import {
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
 } from './paths';
+
+const styles = stylex.create({
+  collectionLink: {
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+      ':focus-visible': cssVar.colorFillTertiary,
+    },
+    borderRadius: cssVar.borderRadiusSM,
+    display: 'flex',
+  },
+});
 
 export type InstalledKind = 'connector' | 'skill';
 
@@ -95,9 +110,19 @@ const InstalledNav = memo(() => {
 
   return (
     <Flexbox gap={2} paddingBlock={8} paddingInline={4}>
-      <Flexbox style={sectionTriggerStyle}>
+      <WorkspaceLink
+        aria-current={onInstalledPage && !selectedIdentifier ? 'page' : undefined}
+        className={stylex.props(styles.collectionLink).className}
+        style={sectionTriggerStyle}
+        title={t('catalog.manageInstalledConnectors')}
+        to={
+          visibility === 'private'
+            ? `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?visibility=private`
+            : MARKETPLACE_INSTALLED_CONNECTORS_PATH
+        }
+      >
         <SectionTitle>{t('catalog.installed')}</SectionTitle>
-      </Flexbox>
+      </WorkspaceLink>
       <SkillListVariantProvider value={'nav'}>
         <SkillList
           installedOnly
