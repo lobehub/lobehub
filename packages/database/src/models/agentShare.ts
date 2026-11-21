@@ -52,6 +52,7 @@ const normalizeAgentShareConfig = (
   deviceAccess: config?.deviceAccess ?? 'none',
   deviceAllowUserIds: config?.deviceAllowUserIds ?? [],
   featuredWorkIds: config?.featuredWorkIds ?? [],
+  listedInMarket: config?.listedInMarket,
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
   maxMessagesPerVisitor:
     config?.maxMessagesPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxMessagesPerVisitor,

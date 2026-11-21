@@ -78,6 +78,11 @@ export interface AgentShareConfig {
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
   /**
+   * The owner lists this share in the shared-Agent market, where anyone signed in can browse
+   * it. Only read while the share is `link`; a link alone never puts an Agent in the market.
+   */
+  listedInMarket?: boolean;
+  /**
    * Total bytes this share's visitor uploads may occupy in the Agent's owning
    * scope (settled files plus in-flight reservations). Mandatory like
    * `monthlySpendLimit` — normalized to a default, never cleared; `0` turns

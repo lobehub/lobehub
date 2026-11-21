@@ -162,6 +162,20 @@ describe('AgentShareModel coverage edges', () => {
     });
   });
 
+  describe('listedInMarket', () => {
+    it('reads back the owner’s market listing from the update and the share status', async () => {
+      const model = new AgentShareModel(serverDB, userId);
+      await model.create(agentId);
+
+      const listed = await model.updateConfig(agentId, { listedInMarket: true });
+      expect(listed?.shareConfig.listedInMarket).toBe(true);
+      expect((await model.getByAgentId(agentId))?.shareConfig.listedInMarket).toBe(true);
+
+      await model.updateConfig(agentId, { listedInMarket: false });
+      expect((await model.getByAgentId(agentId))?.shareConfig.listedInMarket).toBe(false);
+    });
+  });
+
   describe('updateSlug', () => {
     it('returns null when clearing the slug of an owned agent that has no share', async () => {
       const model = new AgentShareModel(serverDB, userId);
