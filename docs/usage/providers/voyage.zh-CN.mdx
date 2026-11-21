@@ -1,0 +1,72 @@
+---
+title: 在 LobeHub 中使用 Voyage AI API Key
+description: 在 LobeHub 中配置 Voyage AI API Key，使用 Voyage 文本嵌入与上下文感知嵌入模型进行记忆与知识库检索。
+tags:
+  - Voyage AI
+  - 向量嵌入
+  - API Key
+---
+
+# 在 LobeHub 中使用 Voyage AI
+
+[Voyage AI](https://www.voyageai.com) 提供面向检索的向量嵌入模型。在 LobeHub 中，Voyage AI 仅作为嵌入服务商：它没有对话模型，因此服务商页面不显示**检查**按钮。
+
+内置模型目录如下。没有默认模型：在任何使用 Voyage 的地方都需要显式选择一个模型。
+
+| 模型                                | 上下文（token）  | 输出维度                  | 每百万 token 价格 |
+| --------------------------------- | ----------- | --------------------- | ------------ |
+| `voyage-4-large`、`voyage-code-4`  | 32,000      | 256、512、1024（默认）、2048 | $0.12        |
+| `voyage-4`、`voyage-3.5`           | 32,000      | 256、512、1024（默认）、2048 | $0.06        |
+| `voyage-4-lite`、`voyage-3.5-lite` | 32,000      | 256、512、1024（默认）、2048 | $0.02        |
+| `voyage-3-large`、`voyage-code-3`  | 32,000      | 256、512、1024（默认）、2048 | $0.18        |
+| `voyage-finance-2`                | 32,000      | 1024                  | $0.12        |
+| `voyage-law-2`                    | 16,000      | 1024                  | $0.12        |
+| `voyage-context-4`                | 每个分块 32,000 | 256、512、1024（默认）、2048 | $0.12        |
+| `voyage-context-3`                | 每个分块 32,000 | 256、512、1024（默认）、2048 | $0.18        |
+
+<Steps>
+  ### 步骤一：获取 Voyage AI API Key
+
+  - 在 [Voyage AI 控制台](https://dashboard.voyageai.com)注册或登录。
+  - 打开 [API Keys](https://dashboard.voyageai.com/organization/api-keys) 页面并创建密钥。
+  - 复制密钥并妥善保存。
+
+  ### 步骤二：在 LobeHub 中配置 Voyage AI
+
+  - 打开**应用设置 → AI 服务商**，选择 **Voyage AI**。
+  - 将密钥粘贴到 **API Key**。修改会自动保存，密钥在存储前使用 AES-GCM 加密。
+  - 打开服务商名称旁的开关。
+  - 可选：在 **API 代理地址**中填写其他基础地址。留空则使用 `https://api.voyageai.com/v1`。
+
+  ### 步骤三：启用模型并选择
+
+  在服务商的**模型列表**中启用需要的 Voyage 模型。启用后，它们会出现在嵌入模型选择器中，例如**应用设置 → 服务模型 → 嵌入模型**。
+
+  <Callout type={'warning'}>
+    Voyage AI 按嵌入的 token 计费。大量嵌入文本之前，请先查看 [Voyage AI 定价](https://docs.voyageai.com/docs/pricing)。
+  </Callout>
+</Steps>
+
+## 输出维度
+
+LobeHub 以 1024 维的列存储向量，因此所有模型默认的 1024 维都适用。只有调用方指定维度时，运行时才会发送 `output_dimension`；模型不支持的维度会在发出请求前被拒绝。
+
+每次调用最多 1000 个输入，且不会替你拆分，因此请将批大小（例如 `EMBEDDING_BATCH_SIZE`）保持在 1000 以内。
+
+## 上下文感知嵌入
+
+`voyage-context-4` 和 `voyage-context-3` 将每个输入视为一份完整文档。文档会被自动切分（`enable_auto_chunking: true`、`chunk_size: 32000`），每个分块的向量都体现其所在文档的上下文。因此结果是每个分块一个向量，数量可能多于输入条数；Voyage 返回的分块文本不会被返回。
+
+适用于调用方需要整篇文档的分块向量的场景；不适用于每个输入必须恰好对应一个向量的场景，例如知识库索引。
+
+## 将 Voyage AI 用于知识库
+
+自托管部署中，知识库的嵌入模型由 `DEFAULT_FILES_CONFIG` 设置，例如 `embedding_model=voyage/voyage-4-lite`。参见[知识库](/zh/docs/self-hosting/advanced/knowledge-base)。本集成不改变知识库索引路径、检索重排序模型和向量存储设置。
+
+## 故障排查
+
+**“Voyage AI API Key 不正确或为空…”** — 未找到密钥，或 Voyage AI 拒绝了该密钥。请在**应用设置 → AI 服务商 → Voyage AI** 中填写有效密钥，或让管理员在服务端设置 `VOYAGE_API_KEY`。
+
+**速率限制和额度错误** — Voyage AI 会返回自己的错误信息，LobeHub 会原样传递。请在 Voyage AI 控制台查看用量和限制。
+
+自托管部署请参见[模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider#voyage-ai)中的 `VOYAGE_API_KEY`。
