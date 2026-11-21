@@ -110,6 +110,8 @@ describe('the direct Channel of a new Agent', () => {
     await expect(createDirect()).resolves.toEqual({ channel: { id: 'chn_1' } });
     expect(getAgent).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title });
+    // The creator's other devices list the new conversation without waiting for a poll.
+    expect(notify).toHaveBeenCalledWith({}, 'chn_1');
   });
 
   // A Channel binds no device by default: the Agent runs where its own settings say. Opening the
@@ -150,12 +152,14 @@ describe('the direct Channel of a new Agent', () => {
     });
     await expect(createDirect()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('opens nothing for an Agent the creator cannot reach', async () => {
     getAgent.mockResolvedValue(null);
     await expect(createDirect()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('opens a contact’s shared Agent in a personal conversation without a device', async () => {
@@ -168,6 +172,7 @@ describe('the direct Channel of a new Agent', () => {
       sharedAgent: true,
       title: 'Shared Helper',
     });
+    expect(notify).toHaveBeenCalledWith({}, 'chn_1');
   });
 
   it('opens a shared Agent added in a workspace in that workspace', async () => {
@@ -199,6 +204,7 @@ describe('opening the direct Channel of an existing Agent', () => {
     expect(findDirectAccess).toHaveBeenCalledWith('agt_old');
     expect(getAgent).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('leaves a conversation the person moved to the trash there', async () => {
@@ -311,6 +317,7 @@ describe('opening another person’s Agent from its share', () => {
       sharedAgent: true,
       title: 'Shared Helper',
     });
+    expect(notify).toHaveBeenCalledWith({}, 'chn_shared');
   });
 
   it('reopens the existing conversation', async () => {
@@ -319,6 +326,7 @@ describe('opening another person’s Agent from its share', () => {
       channel: { id: 'chn_old' },
     });
     expect(create).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it.each([
