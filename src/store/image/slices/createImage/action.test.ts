@@ -391,29 +391,35 @@ describe('CreateImageAction', () => {
       expect(useImageStore.getState().isCreating).toBe(false);
     });
 
-    it('does not resubmit the manual size from an older GIF batch', async () => {
-      const batch = useImageStore.getState().generationBatchesMap['active-topic-id'][0];
-      useImageStore.setState({
-        generationBatchesMap: {
-          'active-topic-id': [
-            {
-              ...batch,
-              model: 'gpt-image-2.6-sunburst',
-              config: { prompt: 'old GIF fixture', outputFormat: 'gif', size: '1024x1024' },
-            },
-          ],
-        },
-        removeGenerationBatch: vi.fn().mockResolvedValue(undefined),
-        refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
-      });
+    it.each(['gif', 'png'])(
+      'preserves the effective size when recreating a saved %s batch',
+      async (outputFormat) => {
+        const batch = useImageStore.getState().generationBatchesMap['active-topic-id'][0];
+        const historicalConfig = {
+          prompt: 'historical image fixture',
+          outputFormat,
+          size: '1024x1024',
+        };
+        useImageStore.setState({
+          generationBatchesMap: {
+            'active-topic-id': [
+              { ...batch, model: 'gpt-image-2.6-sunburst', config: historicalConfig },
+            ],
+          },
+          removeGenerationBatch: vi.fn().mockResolvedValue(undefined),
+          refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
+        });
 
-      await useImageStore.getState().recreateImage('batch-id');
+        await useImageStore.getState().recreateImage('batch-id');
 
-      expect(mockImageService.createImage.mock.lastCall?.[0].params).toEqual({
-        prompt: 'old GIF fixture',
-        outputFormat: 'gif',
-      });
-    });
+        expect(mockImageService.createImage.mock.lastCall?.[0].params).toEqual(
+          outputFormat === 'gif'
+            ? { prompt: historicalConfig.prompt, outputFormat }
+            : historicalConfig,
+        );
+        expect(historicalConfig.size).toBe('1024x1024');
+      },
+    );
 
     it('should recreate image successfully', async () => {
       const mockRefreshGenerationBatches = vi.fn().mockResolvedValue(undefined);
