@@ -5,6 +5,8 @@ import { MarketAuthError } from './errors';
 import {
   clearMarketAuthResult,
   getMarketAuthResultStorageKey,
+  type MarketAuthAccount,
+  type MarketAuthAccountPayload,
   type MarketAuthHandoffPayload,
   readMarketAuthResult,
   resolveMarketAuthHandoffPayload,
@@ -16,6 +18,11 @@ import { type OIDCConfig, type PKCEParams, type TokenResponse } from './types';
  */
 export class MarketOIDC {
   private config: OIDCConfig;
+
+  /** The web popup running the authorization, kept so the account can be posted back to it. */
+  private authPopup: Window | null = null;
+
+  private pendingAuthState: string | null = null;
 
   private static readonly DESKTOP_HANDOFF_CLIENT = 'desktop';
 
@@ -242,6 +249,9 @@ export class MarketOIDC {
       }
     }
 
+    this.authPopup = popup;
+    this.pendingAuthState = state;
+
     clearMarketAuthResult(state);
 
     return new Promise((resolve, reject) => {
@@ -390,6 +400,32 @@ export class MarketOIDC {
         }, MarketOIDC.WEB_POPUP_MONITOR_INTERVAL) as unknown as number;
       }
     });
+  }
+
+  /**
+   * Post the authorized account back into the callback popup.
+   *
+   * Call it after the code has been exchanged: only then does the opener know
+   * who said yes. A message sent while the popup is still on the Market origin
+   * is dropped by the browser, which is why this must run after the redirect
+   * back to our own origin.
+   */
+  deliverAuthorizedAccount(account: MarketAuthAccount): boolean {
+    const popup = this.authPopup;
+    const state = this.pendingAuthState;
+
+    if (typeof window === 'undefined' || !popup || popup.closed || !state) return false;
+
+    try {
+      popup.postMessage(
+        { account, state, type: 'MARKET_AUTH_ACCOUNT' } satisfies MarketAuthAccountPayload,
+        window.location.origin,
+      );
+      return true;
+    } catch (error) {
+      console.error('[MarketOIDC] Failed to post authorized account to popup:', error);
+      return false;
+    }
   }
 
   /**

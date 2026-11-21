@@ -4,6 +4,23 @@ interface MarketAuthSuccessHandoffPayload {
   type: 'MARKET_AUTH_SUCCESS';
 }
 
+export interface MarketAuthAccount {
+  avatarUrl?: string;
+  displayName: string;
+  userName?: string;
+}
+
+/**
+ * Posted from the opener window back into the callback popup once the code has
+ * been exchanged, so the success page can name the account it just connected —
+ * the callback URL itself only carries `code` + `state`.
+ */
+export interface MarketAuthAccountPayload {
+  account: MarketAuthAccount;
+  state?: string;
+  type: 'MARKET_AUTH_ACCOUNT';
+}
+
 interface MarketAuthErrorHandoffPayload {
   error: string;
   state?: string;
@@ -87,4 +104,29 @@ export const clearMarketAuthResult = (state: string): boolean => {
     console.error('[MarketAuthHandoff] Failed to clear auth result:', error);
     return false;
   }
+};
+
+export const resolveMarketAuthAccountPayload = (
+  value: unknown,
+): MarketAuthAccountPayload | null => {
+  if (!value || typeof value !== 'object') return null;
+
+  const payload = value as Partial<MarketAuthAccountPayload>;
+
+  if (payload.type !== 'MARKET_AUTH_ACCOUNT') return null;
+  if (!payload.account || typeof payload.account !== 'object') return null;
+
+  const { account } = payload;
+
+  if (typeof account.displayName !== 'string' || !account.displayName) return null;
+
+  return {
+    account: {
+      avatarUrl: typeof account.avatarUrl === 'string' ? account.avatarUrl : undefined,
+      displayName: account.displayName,
+      userName: typeof account.userName === 'string' ? account.userName : undefined,
+    },
+    state: typeof payload.state === 'string' ? payload.state : undefined,
+    type: payload.type,
+  };
 };

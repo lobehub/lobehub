@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { clearMarketAuthResult, persistMarketAuthResult, readMarketAuthResult } from './handoff';
+import {
+  clearMarketAuthResult,
+  persistMarketAuthResult,
+  readMarketAuthResult,
+  resolveMarketAuthAccountPayload,
+} from './handoff';
 
 describe('MarketAuth handoff storage helpers', () => {
   afterEach(() => {
@@ -47,5 +52,37 @@ describe('MarketAuth handoff storage helpers', () => {
 
     expect(removeItemSpy).toHaveBeenCalledOnce();
     expect(consoleErrorSpy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('resolveMarketAuthAccountPayload', () => {
+  it('should accept a payload carrying the connected account', () => {
+    expect(
+      resolveMarketAuthAccountPayload({
+        account: {
+          avatarUrl: 'https://example.com/a.png',
+          displayName: 'Innei',
+          userName: 'innei',
+        },
+        state: 'state_value',
+        type: 'MARKET_AUTH_ACCOUNT',
+      }),
+    ).toEqual({
+      account: {
+        avatarUrl: 'https://example.com/a.png',
+        displayName: 'Innei',
+        userName: 'innei',
+      },
+      state: 'state_value',
+      type: 'MARKET_AUTH_ACCOUNT',
+    });
+  });
+
+  it('should reject payloads without a usable account name', () => {
+    expect(
+      resolveMarketAuthAccountPayload({ account: {}, type: 'MARKET_AUTH_ACCOUNT' }),
+    ).toBeNull();
+    expect(resolveMarketAuthAccountPayload({ type: 'MARKET_AUTH_SUCCESS' })).toBeNull();
+    expect(resolveMarketAuthAccountPayload(null)).toBeNull();
   });
 });
