@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFile } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -184,6 +184,132 @@ describe('withPageSync', () => {
     expect(out).toContain('Nothing was written');
     expect(await markdownOf(room)).toBe('para one\n');
   });
+  // One `sh -c` argument of 128 KiB or more fails exec with E2BIG on Linux, so
+  // a page that large must not travel inside the command (T-13807).
+  describe('a page larger than one exec argument', { timeout: 30_000 }, () => {
+    const largeMarkdown = () =>
+      Array.from({ length: 150 }, (_, i) => `paragraph ${i} ${'lorem ipsum '.repeat(80)}`).join(
+        '\n\n',
+      ) + '\n';
+
+    it('still runs a minimal command', async () => {
+      const { exec } = await setup(largeMarkdown());
+
+      const out = await exec('echo ok');
+
+      expect(out).toMatch(/^ok$/m);
+    });
+
+    it('mounts the whole page and syncs an edit back', async () => {
+      const { exec, room } = await setup(largeMarkdown());
+
+      const xml = await exec(`cat ${pageDir}/doc.xml`);
+      const out = await exec(
+        `sed -i.bak 's/paragraph 149 /paragraph LAST /' ${pageDir}/doc.xml && rm ${pageDir}/doc.xml.bak`,
+      );
+
+      expect(Buffer.byteLength(xml)).toBeGreaterThan(128 * 1024);
+      expect(xml).toContain('paragraph 0 ');
+      expect(xml).toContain('paragraph 149 ');
+      expect(out).toContain('1 modified');
+      expect(await markdownOf(room)).toContain('paragraph LAST ');
+    });
+
+    it('sends no single command at or over the exec argument limit', async () => {
+      const room = await seedRoom(largeMarkdown());
+      const sizes: number[] = [];
+      const sandbox = withPageSync(
+        {
+          ...shellSandbox,
+          callTool: async (tool, params) => {
+            sizes.push(Buffer.byteLength(params.command));
+            return shellSandbox.callTool(tool, params);
+          },
+        },
+        { documentId: 'doc_1', pageDir, sessions: createCollab(room).sessions },
+      );
+
+      await sandbox.callTool('runCommand', { command: 'echo ok' });
+
+      expect(sizes.length).toBeGreaterThan(1);
+      expect(Math.max(...sizes)).toBeLessThan(128 * 1024);
+    });
+
+    const countingSandbox = (room: Y.Doc, failStage = false) => {
+      const commands: string[] = [];
+      const sandbox = withPageSync(
+        {
+          ...shellSandbox,
+          callTool: async (tool, params) => {
+            commands.push(params.command);
+            if (failStage && params.command.includes('.part')) {
+              return { result: { exitCode: 1, stderr: 'disk full', stdout: '' }, success: true };
+            }
+            return shellSandbox.callTool(tool, params);
+          },
+        },
+        { documentId: 'doc_1', pageDir, sessions: createCollab(room).sessions },
+      );
+      return { commands, sandbox };
+    };
+
+    it('reuses the staged page until it changes', async () => {
+      const room = await seedRoom(largeMarkdown());
+      const { commands, sandbox } = countingSandbox(room);
+
+      await sandbox.callTool('runCommand', { command: 'echo ok' });
+      const firstRun = commands.length;
+      commands.length = 0;
+      const again = await sandbox.callTool('runCommand', { command: 'echo again' });
+
+      expect(firstRun).toBeGreaterThan(2);
+      expect(commands).toHaveLength(1);
+      expect(String((again.result as any).stdout)).toMatch(/^again$/m);
+
+      await sandbox.callTool('runCommand', {
+        command: `sed -i.bak 's/paragraph 0 /paragraph FIRST /' ${pageDir}/doc.xml && rm ${pageDir}/doc.xml.bak`,
+      });
+      commands.length = 0;
+      const read = await sandbox.callTool('runCommand', {
+        command: `grep -c 'paragraph FIRST ' ${pageDir}/doc.xml`,
+      });
+
+      expect(commands.length).toBeGreaterThan(2);
+      expect(String((read.result as any).stdout)).toMatch(/^1$/m);
+    });
+
+    it('does not run the command when the page cannot be staged', async () => {
+      const room = await seedRoom(largeMarkdown());
+      const { sandbox } = countingSandbox(room, true);
+      const touched = path.join(path.dirname(pageDir), 'ran');
+
+      const res = await sandbox.callTool('runCommand', { command: `touch ${touched}` });
+
+      expect(res.success).toBe(false);
+      expect(res.error?.message).toContain('could not be written');
+      expect(existsSync(touched)).toBe(false);
+    });
+  });
+
+  it('keeps a small page inline in a single call', async () => {
+    const room = await seedRoom('para one\n');
+    let calls = 0;
+    const sandbox = withPageSync(
+      {
+        ...shellSandbox,
+        callTool: async (tool, params) => {
+          calls += 1;
+          return shellSandbox.callTool(tool, params);
+        },
+      },
+      { documentId: 'doc_1', pageDir, sessions: createCollab(room).sessions },
+    );
+
+    await sandbox.callTool('runCommand', { command: 'echo ok' });
+
+    expect(calls).toBe(1);
+  });
+
   it('runs a command on an HTML page without mounting it', async () => {
     const sandbox = withPageSync(shellSandbox, {
       documentId: 'doc_1',
