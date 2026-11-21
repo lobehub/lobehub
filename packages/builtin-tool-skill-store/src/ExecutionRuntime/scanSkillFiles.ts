@@ -53,6 +53,10 @@ const CONTENT_SIGNALS: [Exclude<SkillEgressContentType, 'unknown'>, RegExp][] = 
   ['video', /\bvideo_url\b|content-type['"`]?\s*:\s*['"`]video\//i],
 ];
 
+/** An HTTP client: data can leave even when the URL is built at run time. */
+const NETWORK_CLIENT =
+  /\b(?:requests|httpx|aiohttp|axios|urllib\.request|http\.client)\b|\bfetch\s*\(|\b(?:curl|wget)\s|\bnew\s+(?:OpenAI|Anthropic)\(|\b(?:OpenAI|Anthropic)\(|net\/http/;
+
 const MAX_DEFAULT_LENGTH = 200;
 
 /** A sample value in place of a key: the script still cannot authenticate with it. */
@@ -248,6 +252,7 @@ export const scanSkillFiles = (files: SkillPackageFile[]): SkillRequirements => 
   const egressFiles = new Set([
     ...endpoints.flatMap(({ files: usedIn }) => usedIn),
     ...destinationSettings.flatMap(({ files: usedIn }) => usedIn),
+    ...[...scriptCode].flatMap(([path, code]) => (NETWORK_CLIENT.test(code) ? [path] : [])),
   ]);
   const signals = [...egressFiles]
     .sort()

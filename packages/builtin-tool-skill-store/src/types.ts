@@ -146,7 +146,7 @@ export interface SkillDataEgress {
   configurableVia: string[];
   /** What is sent. `unknown` when data leaves but the kind cannot be told; empty when none leaves */
   contentTypes: SkillEgressContentType[];
-  /** True when a script names an external host or reads a destination setting */
+  /** True when a script names an external host, reads a destination setting or uses an HTTP client */
   occurs: boolean;
   signals: SkillEgressSignal[];
   /** External hosts written in the scripts */

@@ -351,11 +351,12 @@ export const parseEnvReads = (code: string, isShell: boolean): EnvFinding[] => {
   return isShell ? [...findings, ...parseShellReads(code)] : findings;
 };
 
+/** A read with no guaranteed default outranks a default used by another, independent read. */
 const RANK: Record<SkillEnvRequirement, number> = {
   one_of: 2,
-  optional: 1,
+  optional: 0,
   required: 3,
-  unknown: 0,
+  unknown: 1,
 };
 
 const sameNames = (a: string[], b: string[]) =>
@@ -373,7 +374,10 @@ export const mergeEnvFindings = (a: EnvFinding, b: EnvFinding): EnvFinding => {
     b.conflictingGroups ||
     (a.requirement === 'one_of' &&
       b.requirement === 'one_of' &&
-      !sameNames(a.alternatives, b.alternatives));
+      !sameNames(a.alternatives, b.alternatives)) ||
+    // `A or B` plus a lone read of A: B alone may leave that read unset.
+    (a.requirement === 'one_of' && b.requirement === 'unknown') ||
+    (a.requirement === 'unknown' && b.requirement === 'one_of');
 
   if (conflictingGroups && winner.requirement !== 'required') {
     return {
@@ -389,20 +393,27 @@ export const mergeEnvFindings = (a: EnvFinding, b: EnvFinding): EnvFinding => {
   return { ...winner, bare: a.bare && b.bare, conflictingGroups };
 };
 
-/** A group that includes a variable with conflicting groups no longer means "any one is enough". */
+/** A group with a member needed on its own no longer means "any one is enough". */
 export const settleFallbackGroups = (findings: Map<string, EnvFinding>) => {
   for (const [name, finding] of findings) {
     if (
       finding.requirement === 'one_of' &&
-      finding.alternatives.some((alternative) => findings.get(alternative)?.conflictingGroups)
+      finding.alternatives.some((alternative) => {
+        const other = findings.get(alternative);
+        return other?.conflictingGroups || other?.requirement === 'required';
+      })
     ) {
       findings.set(name, { ...finding, alternatives: [], requirement: 'unknown' });
     }
   }
 };
 
-export const strongerRequirement = (a: SkillEnvRequirement, b: SkillEnvRequirement) =>
-  RANK[b] > RANK[a] ? b : a;
+/** For docs: a sentence that says nothing about the need does not outweigh one that does. */
+export const strongerRequirement = (a: SkillEnvRequirement, b: SkillEnvRequirement) => {
+  if (a === 'unknown') return b;
+  if (b === 'unknown') return a;
+  return RANK[b] > RANK[a] ? b : a;
+};
 
 const DOC_NOT_NEEDED =
   /\boptional(?:ly)?\b|\b(?:no|not|don'?t|doesn'?t)\b.*\b(?:need(?:ed|s)?|required?|necessary)\b|无需|不需要|不用|可选/i;

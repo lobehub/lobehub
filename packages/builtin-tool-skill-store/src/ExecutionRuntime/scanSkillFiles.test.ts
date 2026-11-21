@@ -326,6 +326,40 @@ describe('scanSkillFiles', () => {
     });
   });
 
+  it('keeps a read with no default from being satisfied by another read', () => {
+    const { credentials, requiresApiKey, settings } = scanSkillFiles([
+      {
+        content:
+          'k = os.getenv("VENDOR_API_KEY", "preview-public-key")\nu = os.getenv("REGION", "eu")',
+        path: 'scripts/preview.py',
+      },
+      {
+        content: [
+          'k = os.getenv("VENDOR_API_KEY")',
+          'u = os.getenv("REGION", "us")',
+          'a = os.getenv("A_TOKEN") or os.getenv("B_TOKEN")',
+          'b = os.getenv("A_TOKEN")',
+          'c = os.getenv("C_TOKEN") or os.getenv("D_TOKEN")',
+          'd = os.environ["C_TOKEN"]',
+        ].join('\n'),
+        path: 'scripts/upload.py',
+      },
+    ]);
+    const need = Object.fromEntries(
+      [...credentials, ...settings].map((v) => [v.name, [v.requirement, v.hasDefault]]),
+    );
+
+    expect(requiresApiKey).toBe(true);
+    expect(need).toEqual({
+      A_TOKEN: ['unknown', false],
+      B_TOKEN: ['unknown', false],
+      C_TOKEN: ['required', false],
+      D_TOKEN: ['unknown', false],
+      REGION: ['optional', true],
+      VENDOR_API_KEY: ['unknown', false],
+    });
+  });
+
   it('keeps a strict read required when it comes first in a chain', () => {
     const { credentials, settings } = scanSkillFiles([
       {
@@ -411,6 +445,24 @@ describe('scanSkillFiles', () => {
       contentTypes: ['unknown'],
       occurs: true,
       signals: [],
+      targets: [],
+    });
+  });
+
+  it('counts an HTTP call to a URL built at run time as data leaving', () => {
+    const { dataEgress } = scanSkillFiles([
+      {
+        content: 'url = build_url()\nrequests.post(url, json={"prompt": text})',
+        path: 'scripts/send.py',
+      },
+      { content: 'print(open("notes.txt").read())', path: 'scripts/local.py' },
+    ]);
+
+    expect(dataEgress).toEqual({
+      configurableVia: [],
+      contentTypes: ['text'],
+      occurs: true,
+      signals: [{ contentType: 'text', file: 'scripts/send.py', signal: '"prompt":' }],
       targets: [],
     });
   });
