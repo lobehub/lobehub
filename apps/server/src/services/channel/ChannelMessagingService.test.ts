@@ -5,9 +5,12 @@ import { ChannelMessagingService } from './ChannelMessagingService';
 
 const {
   directory,
+  findDirectAccess,
+  findPeer,
   findUser,
   listPeople,
   notifyChannel,
+  notifyChannelAgentDirectMessage,
   openAgentPair,
   openDirect,
   openPeer,
@@ -15,12 +18,18 @@ const {
   relaySource,
   requirePeer,
   send,
+  priorMessages,
   serviceUsers,
 } = vi.hoisted(() => ({
   directory: vi.fn(),
+  findDirectAccess: vi.fn(),
+  findPeer: vi.fn(),
   findUser: vi.fn(),
   listPeople: vi.fn(),
   notifyChannel: vi.fn(),
+  notifyChannelAgentDirectMessage: vi.fn(),
+  /** Rows the prior-delivery lookup finds by request key. */
+  priorMessages: [] as { channelId: string; id: string }[],
   openAgentPair: vi.fn(),
   openDirect: vi.fn(),
   openPeer: vi.fn(),
@@ -42,6 +51,7 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     }
     userId: string;
     directory = directory;
+    findDirectAccess = findDirectAccess;
     openAgentPair = openAgentPair;
     postAgentMessage = (...args: unknown[]) => postAgentMessage(this.userId, ...args);
   },
@@ -59,11 +69,13 @@ vi.mock('@/database/models/workspace', () => ({
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com/' } }));
 vi.mock('@/database/repositories/channel/peer', () => ({
+  findPeer: (_tx: unknown, _workspaceId: unknown, _userId: unknown, peer: string) => findPeer(peer),
   requirePeerRelation: (_tx: unknown, _workspaceId: unknown, _userId: unknown, peer: string) =>
     requirePeer(peer),
 }));
 vi.mock('./featureGate', () => ({ assertChannelEnabled: vi.fn() }));
 vi.mock('./notify', () => ({ notifyChannel }));
+vi.mock('./directMessage', () => ({ notifyChannelAgentDirectMessage }));
 vi.mock('./ChannelService', () => ({
   ChannelService: class {
     constructor(_db: unknown, userId: string) {
@@ -112,7 +124,15 @@ const otherDirect = {
 };
 /** Answers the member environment lookup in `askAgent`. */
 const db = {
-  select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ config: null }] }) }) }),
+  // The member environment lookup in `askAgent`, and the prior-delivery lookup in `messagePerson`.
+  select: (columns: Record<string, unknown>) => ({
+    from: () => ({
+      where: () => ({
+        limit: async () =>
+          'requestKey' in columns || 'channelId' in columns ? priorMessages : [{ config: null }],
+      }),
+    }),
+  }),
   transaction: (fn: (tx: unknown) => unknown) => fn({}),
 };
 const current = {
@@ -124,6 +144,7 @@ describe('ChannelMessagingService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     serviceUsers.length = 0;
+    priorMessages.length = 0;
     relaySource.mockResolvedValue(run());
     directory.mockResolvedValue([current, lobehub]);
     send.mockResolvedValue({ id: 'message-sent' });
@@ -380,6 +401,12 @@ describe('ChannelMessagingService', () => {
         requestKey: 'agent-dm:op-current:call-1',
       });
       expect(notifyChannel).toHaveBeenCalledWith(db, 'channel-alice-agent');
+      expect(notifyChannelAgentDirectMessage).toHaveBeenCalledWith({
+        agentId: 'agent-self',
+        channelId: 'channel-alice-agent',
+        messageId: 'message-agent',
+        recipientUserId: 'user-alice',
+      });
       expect(openPeer).not.toHaveBeenCalled();
       expect(send).not.toHaveBeenCalled();
     });
@@ -403,6 +430,25 @@ describe('ChannelMessagingService', () => {
         },
         requestKey: 'agent-dm:op-current:call-1',
       });
+    });
+
+    it('answers a retry from wherever the first call posted, without choosing again', async () => {
+      findDirectAccess.mockResolvedValue({ channel: { id: 'channel-alice-agent' } });
+      findPeer.mockResolvedValue({ channel: { id: 'channel-peer' } });
+      priorMessages.push({ channelId: 'channel-alice-agent', id: 'message-agent' });
+      // The person trashed their conversation with the Agent since; the retry must not fall back.
+      expect(
+        await service().messagePerson({ content: 'Please test', userId: 'user-alice' }, 'call-1'),
+      ).toEqual({
+        channelId: 'channel-alice-agent',
+        conversation: 'agent',
+        messageId: 'message-agent',
+        person: { name: 'Alice', userId: 'user-alice', username: 'alice' },
+      });
+      expect(openDirect).not.toHaveBeenCalled();
+      expect(openPeer).not.toHaveBeenCalled();
+      expect(postAgentMessage).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
     });
 
     it('works from an owner bot run, which has no Channel of its own', async () => {

@@ -278,7 +278,9 @@ reaches that person (`ChannelMessagingService.messagePerson`) in one of two plac
 - **From the Agent, when the person can reach it.** The person's own direct conversation with the
   Agent, opened as the person (`ChannelService.openDirect`: a fellow member of the workspace the
   Agent lives in, its owner, or someone who added its share), gets the message as the Agent's own
-  (`postAgentMessage`, `metadata.source: 'agent-dm'`), and `notifyChannel` notifies them. The
+  (`postAgentMessage`, `metadata.source: 'agent-dm'`); `notifyChannel` refreshes their
+  Channels and `notifyChannelAgentDirectMessage` (business slot `notifyChannelAgentMessage`) pings
+  them. The
   requester's conversation with the person is untouched, so the requester never sees a message
   they did not write, and the person's reply there is their own request to the Agent.
 - **For the requester, otherwise.** A person who cannot reach the Agent (or trashed their
@@ -288,6 +290,8 @@ reaches that person (`ChannelMessagingService.messagePerson`) in one of two plac
   trashed is refused. No Agent is in that conversation and the `via` has no `origin`, so nothing
   comes back; unlike `sendMessage` there is no hop rule: a person does not wake anyone.
 - **Retries.** The request key is `agent-dm:<operationId>:<toolCallId>` (or `cli:<requestKey>`).
+  A retry first looks for that key in both possible conversations (`priorPersonMessage`) and
+  answers with what the first call posted, so losing access between calls cannot post it twice.
 - Shared-Agent runs do not get it: the share gate allows only history reads.
 
 ### Why history reads stay on `lobe-channel`
