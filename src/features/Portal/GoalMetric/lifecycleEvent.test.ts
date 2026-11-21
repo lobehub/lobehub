@@ -70,7 +70,11 @@ describe('presentLifecycleEvent', () => {
     ).toEqual({ action: 'paused' });
     expect(
       presentLifecycleEvent(
-        { entityType: 'goal', eventType: 'updated', reason: 'Goal or main Agent turn budget exhausted' },
+        {
+          entityType: 'goal',
+          eventType: 'updated',
+          reason: 'Goal or main Agent turn budget exhausted',
+        },
         ctx(),
       ),
     ).toEqual({ action: 'paused', note: { key: 'budgetExhausted' } });
@@ -92,8 +96,8 @@ describe('presentLifecycleEvent', () => {
   });
 
   it('keeps an unrecognised reason as written', () => {
-    expect(presentLifecycleEvent(node('Planner refined the description'), ctx())).toEqual({
-      note: { text: 'Planner refined the description' },
+    expect(presentLifecycleEvent(node('Narrowed the scope to paid users'), ctx())).toEqual({
+      note: { text: 'Narrowed the scope to paid users' },
     });
   });
 });
