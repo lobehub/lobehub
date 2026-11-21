@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { vector } from '@electric-sql/pglite/vector';
 import { sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
@@ -72,6 +74,47 @@ describe('pg_search migrations on a database without the extension', () => {
       await expect(
         assertPgSearchReady(query, { FTS_SEARCH_PROVIDER: provider }),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  /**
+   * Neon lists pg_search in pg_available_extensions but refuses CREATE EXTENSION with
+   * insufficient_privilege ("extension is deprecated and no longer allowed"), which used to
+   * abort the whole migration (issue #21507). PGlite cannot list pg_search, so this test
+   * replays the migration file's exact DO block with the extension name pointed at pg_trgm —
+   * listed by PGlite yet uninstallable for a restricted role, raising the same 42501 — and
+   * asserts the migration completes with a notice instead of throwing.
+   */
+  describe('refused pg_search install (Neon, issue #21507)', () => {
+    const refusedClient = new PGlite({ extensions: { pg_trgm } });
+
+    afterAll(async () => {
+      await refusedClient.close();
+    });
+
+    it('continues the migration when the install is refused with insufficient_privilege', async () => {
+      const migrationSql = readFileSync(
+        join(migrationsFolder, '0090_enable_pg_search.sql'),
+        'utf8',
+      ).replaceAll('pg_search', 'pg_trgm');
+
+      await refusedClient.exec('CREATE ROLE migration_tester NOSUPERUSER LOGIN');
+      await refusedClient.exec('GRANT CONNECT ON DATABASE postgres TO migration_tester');
+      await refusedClient.exec('GRANT USAGE, CREATE ON SCHEMA public TO migration_tester');
+      await refusedClient.exec('SET ROLE migration_tester');
+      try {
+        // Must not throw: the pre-fix migration aborted here with 42501.
+        await refusedClient.exec(migrationSql);
+        // The migration continues past the refused install.
+        await refusedClient.exec('SELECT 1');
+      } finally {
+        await refusedClient.exec('RESET ROLE');
+      }
+
+      const extension = await refusedClient.query(
+        `SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'`,
+      );
+      expect(extension.rows).toHaveLength(0);
     });
   });
 });
