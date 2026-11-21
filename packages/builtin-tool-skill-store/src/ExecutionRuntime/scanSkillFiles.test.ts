@@ -35,6 +35,15 @@ DEFAULT_API_BASE = (
     or _BUILTIN_BASE_URL
 )
 DEFAULT_MODEL = os.environ.get("SN_VISION_MODEL") or os.environ.get("SN_CHAT_MODEL") or _BUILTIN_MODEL
+
+def call(client, b64):
+    return client.chat.completions.create(
+        model=DEFAULT_MODEL,
+        messages=[{"role": "user", "content": [
+            {"type": "text", "text": "describe"},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+        ]}],
+    )
 CACHE_DIR = os.path.join(os.environ.get("HOME"), ".caption_cache")
 `;
 
@@ -45,21 +54,60 @@ describe('scanSkillFiles', () => {
       { content: captionPy, path: 'scripts/caption.py' },
     ]);
 
+    expect(result.requiresApiKey).toBe(true);
+    expect(result.apiKeyNames).toEqual(['SN_API_KEY', 'SN_CHAT_API_KEY', 'SN_VISION_API_KEY']);
     expect(result.credentials).toEqual([
-      { files: ['SKILL.md', 'scripts/caption.py'], name: 'SN_API_KEY' },
-      { files: ['scripts/caption.py'], name: 'SN_CHAT_API_KEY' },
-      { files: ['SKILL.md', 'scripts/caption.py'], name: 'SN_VISION_API_KEY' },
+      {
+        alternatives: ['SN_VISION_API_KEY', 'SN_CHAT_API_KEY'],
+        defaultValue: null,
+        files: ['SKILL.md', 'scripts/caption.py'],
+        hasDefault: false,
+        name: 'SN_API_KEY',
+        requirement: 'one_of',
+      },
+      {
+        alternatives: ['SN_VISION_API_KEY', 'SN_API_KEY'],
+        defaultValue: null,
+        files: ['scripts/caption.py'],
+        hasDefault: false,
+        name: 'SN_CHAT_API_KEY',
+        requirement: 'one_of',
+      },
+      {
+        alternatives: ['SN_CHAT_API_KEY', 'SN_API_KEY'],
+        defaultValue: null,
+        files: ['SKILL.md', 'scripts/caption.py'],
+        hasDefault: false,
+        name: 'SN_VISION_API_KEY',
+        requirement: 'one_of',
+      },
     ]);
-    expect(result.settings.map((s) => s.name)).toEqual([
-      'SN_BASE_URL',
-      'SN_CHAT_BASE_URL',
-      'SN_CHAT_MODEL',
-      'SN_VISION_BASE_URL',
-      'SN_VISION_MODEL',
+    expect(
+      result.settings.map(({ defaultValue, name, requirement }) => [
+        name,
+        requirement,
+        defaultValue,
+      ]),
+    ).toEqual([
+      ['SN_BASE_URL', 'optional', 'https://token.sensenova.cn/v1'],
+      ['SN_CHAT_BASE_URL', 'optional', 'https://token.sensenova.cn/v1'],
+      ['SN_CHAT_MODEL', 'optional', 'sensenova-6.8-flash-lite'],
+      ['SN_VISION_BASE_URL', 'optional', 'https://token.sensenova.cn/v1'],
+      ['SN_VISION_MODEL', 'optional', 'sensenova-6.8-flash-lite'],
     ]);
     expect(result.endpoints).toEqual([
       { files: ['scripts/caption.py'], host: 'token.sensenova.cn' },
     ]);
+    expect(result.dataEgress).toEqual({
+      configurableVia: ['SN_BASE_URL', 'SN_CHAT_BASE_URL', 'SN_VISION_BASE_URL'],
+      contentTypes: ['image', 'text'],
+      occurs: true,
+      signals: [
+        { contentType: 'image', file: 'scripts/caption.py', signal: 'image_url' },
+        { contentType: 'text', file: 'scripts/caption.py', signal: 'messages=' },
+      ],
+      targets: ['token.sensenova.cn'],
+    });
     expect(result.scripts).toEqual(['scripts/caption.py']);
   });
 
@@ -128,7 +176,127 @@ describe('scanSkillFiles', () => {
       { content: 'A template with `{{VERSION}}`.', path: 'references/template.md' },
     ]);
 
-    expect(result).toEqual({ credentials: [], endpoints: [], scripts: [], settings: [] });
+    expect(result).toEqual({
+      apiKeyNames: [],
+      credentials: [],
+      dataEgress: {
+        configurableVia: [],
+        contentTypes: [],
+        occurs: false,
+        signals: [],
+        targets: [],
+      },
+      endpoints: [],
+      requiresApiKey: false,
+      scripts: [],
+      settings: [],
+    });
+  });
+
+  it('tells required, optional and unknown reads apart across languages', () => {
+    const { credentials, settings } = scanSkillFiles([
+      {
+        content: [
+          'a = os.environ["STRICT_API_KEY"]',
+          'b = os.getenv("SOFT_API_KEY")',
+          'c = os.getenv("REGION", "us-east-1")',
+          'd = os.environ.get("EMPTY_DEFAULT", "")',
+          'os.environ["ONLY_WRITTEN"] = "1"',
+        ].join('\n'),
+        path: 'scripts/a.py',
+      },
+      {
+        content:
+          'const m = process.env.MODEL_NAME || "gpt-x";\nconst k = process.env.A_TOKEN ?? process.env.B_TOKEN;',
+        path: 'scripts/b.mjs',
+      },
+      {
+        content: 'x = ENV.fetch("RUBY_TOKEN")\ny = ENV.fetch("RUBY_MODE", "fast")',
+        path: 'bin/c.rb',
+      },
+      {
+        content: 'curl "${API_URL:-https://u:p@api.acme.io}" -H "x: ${SHELL_TOKEN:?unset}"',
+        path: 's/d.sh',
+      },
+    ]);
+    const need = Object.fromEntries(
+      [...credentials, ...settings].map((v) => [v.name, [v.requirement, v.defaultValue]]),
+    );
+
+    expect(need).toEqual({
+      API_URL: ['optional', 'https://[redacted]@api.acme.io'],
+      A_TOKEN: ['one_of', null],
+      B_TOKEN: ['one_of', null],
+      EMPTY_DEFAULT: ['unknown', null],
+      MODEL_NAME: ['optional', 'gpt-x'],
+      REGION: ['optional', 'us-east-1'],
+      RUBY_MODE: ['optional', 'fast'],
+      RUBY_TOKEN: ['required', null],
+      SHELL_TOKEN: ['required', null],
+      SOFT_API_KEY: ['unknown', null],
+      STRICT_API_KEY: ['required', null],
+    });
+  });
+
+  it('never passes on a credential default', () => {
+    const result = scanSkillFiles([
+      { content: 'KEY = os.getenv("VENDOR_API_KEY", "sk-live-abc123")', path: 'scripts/a.py' },
+    ]);
+
+    expect(result.credentials[0]).toMatchObject({
+      defaultValue: '[redacted]',
+      hasDefault: true,
+      requirement: 'optional',
+    });
+    expect(result.requiresApiKey).toBe(false);
+    expect(result.apiKeyNames).toEqual(['VENDOR_API_KEY']);
+    expect(JSON.stringify(result)).not.toContain('sk-live');
+  });
+
+  it('uses the docs only where the code leaves a credential open', () => {
+    const result = scanSkillFiles([
+      {
+        content:
+          'No `OPENAI_API_KEY` needed. `HF_TOKEN` is required.\nDo not commit your `GH_TOKEN`.',
+        path: 'NOTES.md',
+      },
+      { content: 'You do not need `ACME_API_KEY`.', path: 'SKILL.md' },
+      { content: 'k = os.environ["ACME_API_KEY"]', path: 'scripts/a.py' },
+    ]);
+    const need = Object.fromEntries(result.credentials.map((c) => [c.name, c.requirement]));
+
+    expect(need).toEqual({
+      ACME_API_KEY: 'required',
+      GH_TOKEN: 'unknown',
+      HF_TOKEN: 'required',
+      OPENAI_API_KEY: 'optional',
+    });
+    expect(result.requiresApiKey).toBe(true);
+  });
+
+  it('reports what a script sends, and unknown when it cannot tell', () => {
+    const upload = scanSkillFiles([
+      {
+        content: 'requests.post("https://api.acme.io/v1", files={"f": fh}, data=meta)',
+        path: 'scripts/up.py',
+      },
+    ]);
+    const opaque = scanSkillFiles([
+      { content: 'send(os.environ["SINK_ENDPOINT"], blob)', path: 'scripts/sink.py' },
+    ]);
+
+    expect(upload.dataEgress).toMatchObject({
+      contentTypes: ['file'],
+      occurs: true,
+      targets: ['api.acme.io'],
+    });
+    expect(opaque.dataEgress).toEqual({
+      configurableVia: ['SINK_ENDPOINT'],
+      contentTypes: ['unknown'],
+      occurs: true,
+      signals: [],
+      targets: [],
+    });
   });
 
   it('lists but does not read binary or oversized files', () => {

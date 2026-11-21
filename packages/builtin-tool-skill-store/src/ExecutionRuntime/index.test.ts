@@ -114,20 +114,58 @@ describe('SkillStoreExecutionRuntime — inspectSkill', () => {
     expect(service.getMarketSkillFiles).toHaveBeenCalledWith(identifier);
     expect(result.success).toBe(true);
     expect(result.state).toEqual({
+      apiKeyNames: ['SN_API_KEY', 'SN_VISION_API_KEY'],
       credentials: [
-        { files: ['SKILL.md', 'scripts/caption.py'], name: 'SN_API_KEY' },
-        { files: ['scripts/caption.py'], name: 'SN_VISION_API_KEY' },
+        {
+          alternatives: ['SN_VISION_API_KEY'],
+          defaultValue: null,
+          files: ['SKILL.md', 'scripts/caption.py'],
+          hasDefault: false,
+          name: 'SN_API_KEY',
+          requirement: 'one_of',
+        },
+        {
+          alternatives: ['SN_API_KEY'],
+          defaultValue: null,
+          files: ['scripts/caption.py'],
+          hasDefault: false,
+          name: 'SN_VISION_API_KEY',
+          requirement: 'one_of',
+        },
       ],
+      dataEgress: {
+        configurableVia: [],
+        contentTypes: ['unknown'],
+        occurs: true,
+        signals: [],
+        targets: ['token.sensenova.cn'],
+      },
       endpoints: [{ files: ['scripts/caption.py'], host: 'token.sensenova.cn' }],
       identifier,
       name: 'sn-da-image-caption',
+      requiresApiKey: true,
       scripts: ['scripts/caption.py'],
-      settings: [{ files: ['scripts/caption.py'], name: 'SN_VISION_MODEL' }],
+      settings: [
+        {
+          alternatives: [],
+          defaultValue: null,
+          files: ['scripts/caption.py'],
+          hasDefault: false,
+          name: 'SN_VISION_MODEL',
+          requirement: 'unknown',
+        },
+      ],
     });
-    expect(result.content).toContain('The user has to supply their own');
-    // Fallback chains: any one of the keys may be enough.
-    expect(result.content).toContain('not every name is necessarily required');
-    expect(result.content).toContain('  - SN_API_KEY (SKILL.md, scripts/caption.py)');
+    expect(result.content).toContain('  requiresApiKey: true');
+    expect(result.content).toContain('  apiKeyNames: SN_API_KEY, SN_VISION_API_KEY');
+    expect(result.content).toContain('  dataEgress.occurs: true');
+    expect(result.content).toContain('  dataEgress.targets: token.sensenova.cn');
+    expect(result.content).toContain('  dataEgress.contentTypes: unknown');
+    // Fallback chains: any one of the keys is enough.
+    expect(result.content).toContain('one_of = any one of the alternatives is enough');
+    expect(result.content).toContain(
+      '  - SN_API_KEY: one_of (or SN_VISION_API_KEY), no default (SKILL.md, scripts/caption.py)',
+    );
     expect(result.content).toContain('  - token.sensenova.cn (scripts/caption.py)');
     expect(result.content).toContain('do not describe the skill as needing no setup');
     // Findings must not read as a complete list.
@@ -152,6 +190,8 @@ describe('SkillStoreExecutionRuntime — inspectSkill', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('it ships no scripts');
+    expect(result.content).toContain('  requiresApiKey: false');
+    expect(result.content).toContain('  dataEgress.occurs: false');
     expect(result.content).toContain('Credentials: none found.');
     expect(result.content).toContain('Network hosts: none written in its scripts.');
     expect(result.content).toContain('static check');

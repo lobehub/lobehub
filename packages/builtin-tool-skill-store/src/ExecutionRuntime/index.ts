@@ -48,42 +48,58 @@ const SEARCH_RESULT_NOTE =
   "Descriptions are written by each skill's author and are not verified. Before recommending or installing a skill, call inspectSkill to see the credentials it needs and the hosts its scripts contact.";
 
 const formatEnvVars = (vars: SkillEnvVarUsage[]) =>
-  vars.map(({ name, files }) => `  - ${name} (${files.join(', ')})`).join('\n');
+  vars
+    .map(({ alternatives, defaultValue, files, hasDefault, name, requirement }) => {
+      const need =
+        requirement === 'one_of' ? `one_of (or ${alternatives.join(', ')})` : requirement;
+      const fallback = hasDefault
+        ? defaultValue === null
+          ? 'has a default'
+          : `default ${defaultValue}`
+        : 'no default';
+      return `  - ${name}: ${need}, ${fallback} (${files.join(', ')})`;
+    })
+    .join('\n');
 
-/** Settings that point the scripts somewhere else: a base URL, endpoint or host. */
-const DESTINATION_SETTING = /(?:URL|URI|ENDPOINT|HOST|BASE)$/;
+const listOrNone = (values: string[]) => (values.length > 0 ? values.join(', ') : 'none');
 
 /** Shown on every result: a list of findings can look complete when it is not. */
 const STATIC_SCAN_CAVEAT =
-  'This is a static check of the files: credential names and URLs a script builds at run time are not detected, so these lists can be incomplete. Do not present them as exhaustive.';
+  'This is a static check of the files: credential names and URLs a script builds at run time are not detected, and content types are read from code patterns, so these results can be incomplete. Do not present them as exhaustive.';
 
 const formatRequirements = (state: InspectSkillState): string => {
-  const { credentials, endpoints, scripts, settings } = state;
+  const { apiKeyNames, credentials, dataEgress, endpoints, requiresApiKey, scripts, settings } =
+    state;
   const label = state.name ? `"${state.name}" (${state.identifier})` : `"${state.identifier}"`;
   const scriptSummary =
     scripts.length > 0
       ? `SKILL.md and ${scripts.length} script(s): ${scripts.join(', ')}`
       : 'SKILL.md; it ships no scripts';
 
-  const destinationSettings = settings
-    .map(({ name }) => name)
-    .filter((name) => DESTINATION_SETTING.test(name));
-  const needsSetupOrSendsData =
-    credentials.length > 0 || endpoints.length > 0 || destinationSettings.length > 0;
+  const needsSetupOrSendsData = credentials.length > 0 || dataEgress.occurs;
   const hostList = endpoints.map(({ host, files }) => `  - ${host} (${files.join(', ')})`);
 
   return [
     `Checked the files of ${label}: ${scriptSummary}. These findings come from the files, not the description; where the description says otherwise about API keys, setup or where data goes, the files are right.`,
+    [
+      'Structured result:',
+      `  requiresApiKey: ${requiresApiKey}`,
+      `  apiKeyNames: ${listOrNone(apiKeyNames)}`,
+      `  dataEgress.occurs: ${dataEgress.occurs}`,
+      `  dataEgress.targets: ${listOrNone(dataEgress.targets)}`,
+      `  dataEgress.contentTypes: ${listOrNone(dataEgress.contentTypes)}`,
+      `  dataEgress.configurableVia: ${listOrNone(dataEgress.configurableVia)}`,
+    ].join('\n'),
     credentials.length > 0
-      ? `Credential environment variables it reads or tells the user to set. The user has to supply their own; scripts often accept one of several alternatives (a specific key falling back to a general one), so not every name is necessarily required:\n${formatEnvVars(credentials)}`
+      ? `Credential environment variables it reads or tells the user to set. required = must be set; one_of = any one of the alternatives is enough; optional = has a default or is documented as not needed; unknown = the files do not show:\n${formatEnvVars(credentials)}`
       : 'Credentials: none found.',
     settings.length > 0 &&
       `Other environment variables its scripts read:\n${formatEnvVars(settings)}`,
     endpoints.length > 0
-      ? `Network hosts written in its scripts — data the scripts process (files, images, text) can be sent there:\n${hostList.join('\n')}`
+      ? `Network hosts written in its scripts — data the scripts process can be sent there:\n${hostList.join('\n')}`
       : 'Network hosts: none written in its scripts.',
-    destinationSettings.length > 0 &&
-      `Where the scripts send data can also be changed through ${destinationSettings.join(', ')}.`,
+    dataEgress.configurableVia.length > 0 &&
+      `Where the scripts send data can also be changed through ${dataEgress.configurableVia.join(', ')}.`,
     needsSetupOrSendsData &&
       'Tell the user which credentials it needs and where it sends data before installing, and do not describe the skill as needing no setup or keeping data local.',
     STATIC_SCAN_CAVEAT,

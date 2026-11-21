@@ -1,15 +1,26 @@
 import type {
+  SkillDataEgress,
+  SkillEgressContentType,
+  SkillEgressSignal,
   SkillEndpointUsage,
+  SkillEnvRequirement,
   SkillEnvVarUsage,
   SkillPackageFile,
   SkillRequirements,
 } from '../types';
+import {
+  docRequirement,
+  type EnvFinding,
+  mergeEnvFindings,
+  parseEnvReads,
+  strongerRequirement,
+} from './parseEnvReads';
 
 /**
  * Static scan of a skill package for what it needs at run time: the
- * environment variables its scripts read (credentials vs. other settings), the
- * credentials its docs tell the user to set, and the network hosts its scripts
- * contact. It reads the files themselves because the description is free text
+ * environment variables its scripts read (credentials vs. other settings) with
+ * whether each is required and its default, the credentials its docs tell the
+ * user to set, and what data its scripts send where. It reads the files themselves because the description is free text
  * written by the author and can contradict them.
  *
  * It is a static check: names or URLs a script builds at run time are missed.
@@ -23,27 +34,28 @@ const ENV_FILE = /(?:^|\/)\.env(?:\.[\w-]+)?$/;
 /** Larger files are generated or vendored data, not something a skill author writes. */
 const MAX_FILE_LENGTH = 512 * 1024;
 
-const ENV_NAME = String.raw`[A-Za-z_][A-Za-z0-9_]*`;
-
-/** Explicit environment reads, one capture group: the variable name. */
-const ENV_READS: RegExp[] = [
-  // Python os.environ.get("X") / os.environ["X"] / os.getenv("X"); Go os.Getenv("X"); PHP getenv('X')
-  new RegExp(String.raw`\benviron(?:\.get)?\s*[[(]\s*['"](${ENV_NAME})['"]`, 'g'),
-  new RegExp(String.raw`\b[Gg]etenv\s*\(\s*['"](${ENV_NAME})['"]`, 'g'),
-  // Node process.env.X / process.env["X"], Bun.env.X, import.meta.env.X
-  new RegExp(String.raw`\b(?:process|Bun|import\.meta)\.env\.(${ENV_NAME})`, 'g'),
-  new RegExp(String.raw`\b(?:process|Bun|import\.meta)\.env\[\s*['"\`](${ENV_NAME})['"\`]`, 'g'),
-  // Deno.env.get("X")
-  new RegExp(String.raw`\bDeno\.env\.get\(\s*['"](${ENV_NAME})['"]`, 'g'),
-  // Ruby ENV["X"] / ENV.fetch("X")
-  new RegExp(String.raw`\bENV(?:\.fetch\s*\(|\[)\s*['"](${ENV_NAME})['"]`, 'g'),
-];
-
-/** `$NAME` / `${NAME}` in shell scripts; only credential-like names are kept (skips $HOME, $1…). */
-const SHELL_VAR = /\$\{?([A-Z][A-Z0-9_]*)/g;
-
 /** UPPER_SNAKE words in docs; only credential-like names are kept. */
 const DOC_VAR = /\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b/g;
+
+/** Settings that point the scripts somewhere else: a base URL, endpoint or host. */
+const DESTINATION_SETTING = /(?:URL|URI|ENDPOINT|HOST|BASE)$/;
+
+/** What in a script's code shows the kind of content it sends. */
+const CONTENT_SIGNALS: [Exclude<SkillEgressContentType, 'unknown'>, RegExp][] = [
+  ['audio', /\binput_audio\b|\baudio_url\b|content-type['"`]?\s*:\s*['"`]audio\//i],
+  ['file', /multipart\/form-data|\bFormData\b|\binput_file\b|\.post\([^)]*\bfiles\s*=/i],
+  [
+    'image',
+    /\bimage_url\b|\binput_image\b|\binline_data\b|data:image\/|content-type['"`]?\s*:\s*['"`]image\//i,
+  ],
+  ['text', /['"`]messages['"`]|\bmessages\s*=|['"`]prompt['"`]\s*:|['"`]text['"`]\s*:/],
+  ['video', /\bvideo_url\b|content-type['"`]?\s*:\s*['"`]video\//i],
+];
+
+const MAX_DEFAULT_LENGTH = 200;
+
+/** One doc sentence says one thing about the credentials it names. */
+const DOC_SENTENCE = /\n|(?<=[.!?;])\s+|(?<=[。！？；])/;
 
 /** `NAME=` lines of a dotenv file. */
 const ENV_FILE_LINE = /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=/gm;
@@ -119,11 +131,33 @@ class UsageMap {
 const matchAll = (content: string, pattern: RegExp) =>
   [...content.matchAll(pattern)].map((match) => match[1]);
 
+/** A default can be a real secret or a URL with one in it: never pass those on. */
+const safeDefault = (name: string, value: string | null) => {
+  if (value === null) return null;
+  if (isCredentialName(name)) return '[redacted]';
+  return value.replace(/\/\/[^/@\s]+@/, '//[redacted]@').slice(0, MAX_DEFAULT_LENGTH);
+};
+
+const findContentSignals = (code: string, file: string): SkillEgressSignal[] =>
+  CONTENT_SIGNALS.flatMap(([contentType, pattern]) => {
+    const signal = pattern.exec(code)?.[0];
+    return signal ? [{ contentType, file, signal }] : [];
+  });
+
 export const scanSkillFiles = (files: SkillPackageFile[]): SkillRequirements => {
   const envReads = new UsageMap();
   const documented = new UsageMap();
   const hosts = new UsageMap();
+  const findings = new Map<string, EnvFinding>();
+  const docRequirements = new Map<string, SkillEnvRequirement>();
+  const scriptCode = new Map<string, string>();
   const scripts: string[] = [];
+
+  const noteDoc = (name: string, path: string, requirement: SkillEnvRequirement) => {
+    documented.add(name, path);
+    const current = docRequirements.get(name);
+    docRequirements.set(name, current ? strongerRequirement(current, requirement) : requirement);
+  };
 
   for (const file of files) {
     const { path } = file;
@@ -132,40 +166,56 @@ export const scanSkillFiles = (files: SkillPackageFile[]): SkillRequirements => 
     if (!isScannable(file)) continue;
 
     if (isScript) {
-      for (const pattern of ENV_READS) {
-        for (const name of matchAll(file.content, pattern)) {
-          if (!isIgnoredEnv(name)) envReads.add(name, path);
-        }
-      }
-      if (SHELL_FILE.test(path)) {
-        for (const name of matchAll(file.content, SHELL_VAR)) {
-          if (isCredentialName(name)) envReads.add(name, path);
-        }
-      }
-      // A URL on a comment-only line is a reference link, not a call.
+      // A comment-only line is a note or a reference link, not a read or a call.
       const code = file.content
         .split('\n')
         .filter((line) => !COMMENT_LINE.test(line))
         .join('\n');
+      scriptCode.set(path, code);
+
+      for (const finding of parseEnvReads(code, SHELL_FILE.test(path))) {
+        const { name } = finding;
+        if (isIgnoredEnv(name) || (finding.bare && !isCredentialName(name))) continue;
+        envReads.add(name, path);
+        const current = findings.get(name);
+        findings.set(name, current ? mergeEnvFindings(current, finding) : finding);
+      }
       for (const host of matchAll(code, URL_HOST)) {
         const normalized = host.toLowerCase();
         if (!IGNORED_HOST.test(normalized)) hosts.add(normalized, path);
       }
     } else if (DOC_FILE.test(path)) {
-      for (const name of matchAll(file.content, DOC_VAR)) {
-        if (isCredentialName(name)) documented.add(name, path);
+      for (const sentence of file.content.split(DOC_SENTENCE)) {
+        for (const name of matchAll(sentence, DOC_VAR)) {
+          if (isCredentialName(name)) noteDoc(name, path, docRequirement(sentence));
+        }
       }
     } else if (ENV_FILE.test(path)) {
       for (const name of matchAll(file.content, ENV_FILE_LINE)) {
-        if (isCredentialName(name)) documented.add(name, path);
+        if (isCredentialName(name)) noteDoc(name, path, 'unknown');
       }
     }
   }
 
-  const toUsage = (name: string): SkillEnvVarUsage => ({
-    files: [...new Set([...envReads.files(name), ...documented.files(name)])].sort(),
-    name,
-  });
+  const toUsage = (name: string): SkillEnvVarUsage => {
+    const finding = findings.get(name);
+    const doc = docRequirements.get(name);
+    // The code is the better witness; docs only settle what the code leaves open.
+    const requirement =
+      !finding || finding.requirement === 'unknown'
+        ? (doc ?? finding?.requirement ?? 'unknown')
+        : finding.requirement;
+    const hasDefault = requirement === 'optional' && Boolean(finding?.hasDefault);
+
+    return {
+      alternatives: requirement === 'one_of' ? (finding?.alternatives ?? []) : [],
+      defaultValue: hasDefault ? safeDefault(name, finding?.defaultValue ?? null) : null,
+      files: [...new Set([...envReads.files(name), ...documented.files(name)])].sort(),
+      hasDefault,
+      name,
+      requirement,
+    };
+  };
 
   const credentialNames = new Set([
     ...envReads.keys().filter((name) => isCredentialName(name)),
@@ -175,13 +225,39 @@ export const scanSkillFiles = (files: SkillPackageFile[]): SkillRequirements => 
 
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
+  const credentials = [...credentialNames].map(toUsage).sort(byName);
+  const settings = settingNames.map(toUsage).sort(byName);
+  const endpoints = hosts
+    .keys()
+    .map((host): SkillEndpointUsage => ({ files: hosts.files(host), host }))
+    .sort((a, b) => a.host.localeCompare(b.host));
+
+  const destinationSettings = settings.filter(({ name }) => DESTINATION_SETTING.test(name));
+  const egressFiles = new Set([
+    ...endpoints.flatMap(({ files: usedIn }) => usedIn),
+    ...destinationSettings.flatMap(({ files: usedIn }) => usedIn),
+  ]);
+  const signals = [...egressFiles]
+    .sort()
+    .flatMap((path) => findContentSignals(scriptCode.get(path) ?? '', path));
+  const occurs = egressFiles.size > 0;
+  const contentTypes = [...new Set(signals.map(({ contentType }) => contentType))].sort();
+
+  const dataEgress: SkillDataEgress = {
+    configurableVia: destinationSettings.map(({ name }) => name),
+    contentTypes: occurs && contentTypes.length === 0 ? ['unknown'] : contentTypes,
+    occurs,
+    signals,
+    targets: endpoints.map(({ host }) => host),
+  };
+
   return {
-    credentials: [...credentialNames].map(toUsage).sort(byName),
-    endpoints: hosts
-      .keys()
-      .map((host): SkillEndpointUsage => ({ files: hosts.files(host), host }))
-      .sort((a, b) => a.host.localeCompare(b.host)),
+    apiKeyNames: credentials.map(({ name }) => name),
+    credentials,
+    dataEgress,
+    endpoints,
+    requiresApiKey: credentials.some(({ requirement }) => requirement !== 'optional'),
     scripts: scripts.sort(),
-    settings: settingNames.map(toUsage).sort(byName),
+    settings,
   };
 };

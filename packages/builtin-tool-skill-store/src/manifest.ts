@@ -54,7 +54,7 @@ export const SkillStoreManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Check what a LobeHub Market skill needs before installing it, read from the skill's own files instead of its author-written description: the credential environment variables (API keys, tokens) it reads or tells the user to set, other environment variables its scripts read, and the network hosts its scripts contact. Read-only; installs nothing. Call it before recommending a skill from search results and before importFromMarket.",
+        "Check what a LobeHub Market skill needs before installing it, read from the skill's own files instead of its author-written description: whether it requires an API key and which ones, each environment variable's requirement (required, one_of, optional, unknown) and default, and whether it sends data out, to which hosts and what content types. Read-only; installs nothing. Call it before recommending a skill from search results and before importFromMarket.",
       name: SkillStoreApiName.inspectSkill,
       parameters: {
         properties: {
