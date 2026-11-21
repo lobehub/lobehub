@@ -1193,6 +1193,7 @@ table agent_share_grants {
   share_id uuid [not null]
   user_id text [not null]
   source jsonb [not null]
+  revoked_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {

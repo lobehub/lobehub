@@ -6,7 +6,7 @@ import type {
 } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { createdAt, timestamps } from './_helpers';
+import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
 
@@ -184,7 +184,8 @@ export type AgentShareItem = typeof agentShares.$inferSelect;
 
 /**
  * The people a share admits besides its link: each added the Agent from a card its owner shared
- * into a Channel they are in. A `card` share admits only them; pausing the share pauses them too,
+ * into a Channel they are in, until the owner revokes them. A `card` share admits only them;
+ * pausing the share pauses them too,
  * and a replaced share (deleted, or its Agent recreated) starts with none.
  */
 export const agentShareGrants = pgTable(
@@ -201,6 +202,11 @@ export const agentShareGrants = pgTable(
       .notNull(),
 
     source: jsonb('source').$type<AgentShareGrantSource>().notNull(),
+    /**
+     * Set when the owner withdrew the grant. The row is kept so a card sent before the withdrawal
+     * cannot restore it; only a card the owner sends afterwards does.
+     */
+    revokedAt: timestamptz('revoked_at'),
 
     createdAt: createdAt(),
   },

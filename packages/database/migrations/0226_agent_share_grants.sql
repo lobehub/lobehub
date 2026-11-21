@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS "agent_share_grants" (
 	"share_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
 	"source" jsonb NOT NULL,
+	"revoked_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

@@ -829,10 +829,18 @@ export class ContactModel {
     messageId: string,
     addresseeId: string,
   ): Promise<ContactRequestSource | undefined> => {
+    const found = await this.findCardMessage(tx, messageId);
+    if (found?.card.type !== 'user' || found.card.userId !== addresseeId) return;
+    return { channelId: found.channelId, messageId, referrerId: found.senderId, type: 'card' };
+  };
+
+  /** A live card message in a Channel I am an active member of, with its card. */
+  private findCardMessage = async (tx: Pick<LobeChatDatabase, 'select'>, messageId: string) => {
     if (!isUuid(messageId)) return;
     const [row] = await tx
       .select({
         channelId: channelMessages.channelId,
+        createdAt: channelMessages.createdAt,
         metadata: channelMessages.metadata,
         senderId: channelMessages.userId,
       })
@@ -848,14 +856,8 @@ export class ContactModel {
       .where(eq(channelMessages.id, messageId))
       .limit(1);
     const card = contactCardOf(row?.metadata);
-    if (
-      !row ||
-      channelMessageDeletedAt(row.metadata) ||
-      card?.type !== 'user' ||
-      card.userId !== addresseeId
-    )
-      return;
-    return { channelId: row.channelId, messageId, referrerId: row.senderId, type: 'card' };
+    if (!row || !card || channelMessageDeletedAt(row.metadata)) return;
+    return { ...row, card };
   };
 
   /**
@@ -943,28 +945,9 @@ export class ContactModel {
     if ((await this.scopeRole()) === 'external')
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Only members add Agents here' });
     const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
-    if (!isUuid(messageId)) throw notFound();
-
-    const [message] = await this.db
-      .select({
-        channelId: channelMessages.channelId,
-        metadata: channelMessages.metadata,
-        senderId: channelMessages.userId,
-      })
-      .from(channelMessages)
-      .innerJoin(
-        channelMembers,
-        and(
-          eq(channelMembers.channelId, channelMessages.channelId),
-          eq(channelMembers.userId, this.userId),
-          eq(channelMembers.status, 'active'),
-        ),
-      )
-      .where(eq(channelMessages.id, messageId))
-      .limit(1);
-    const card = contactCardOf(message?.metadata);
-    if (!message || channelMessageDeletedAt(message.metadata) || card?.type !== 'agent')
-      throw notFound();
+    const message = await this.findCardMessage(this.db, messageId);
+    const card = message?.card;
+    if (!message || card?.type !== 'agent') throw notFound();
 
     const [share] = await this.db
       .select(agentProfileColumns)
@@ -987,12 +970,16 @@ export class ContactModel {
       throw notFound();
 
     await this.db.transaction(async (tx) => {
-      if (fromOwner)
-        await AgentShareModel.grant(tx, {
+      const granted =
+        fromOwner &&
+        (await AgentShareModel.grant(tx, {
+          issuedAt: message.createdAt,
           shareId: share.shareId,
           source: { channelId: message.channelId, messageId, type: 'card' },
           userId: this.userId,
-        });
+        }));
+      // The owner revoked me after sending this card: it no longer admits me to a `card` share.
+      if (share.visibility === 'card' && !granted) throw notFound();
       await tx
         .insert(userContacts)
         .values({

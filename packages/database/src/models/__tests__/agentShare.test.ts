@@ -771,6 +771,7 @@ describe('AgentShareModel', () => {
     it('hides a card share page from non-owners, grantees included', async () => {
       const created = await agentShareModel.create(agentId, 'card');
       await AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(),
         shareId: created!.id,
         source: { channelId: 'channel', messageId: 'message', type: 'card' },
         userId: otherUserId,

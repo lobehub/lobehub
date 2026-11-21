@@ -11,7 +11,7 @@ import type {
   AgentShareVisibility,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 
 import type {
   AgentShareConfig,
@@ -647,6 +647,7 @@ export class AgentShareModel {
         and(
           eq(agentShareGrants.shareId, share.shareId),
           eq(agentShareGrants.userId, visitorUserId),
+          isNull(agentShareGrants.revokedAt),
         ),
       )
       .limit(1);
@@ -654,14 +655,42 @@ export class AgentShareModel {
   };
 
   /**
-   * Admit a person to a share through the owner's card they added the Agent from. Idempotent:
-   * the first card a person added it from stays its source.
+   * Admit a person to a share through the owner's card they added the Agent from, sent at
+   * `issuedAt`. Idempotent: a live grant keeps its first source. A revoked grant is restored
+   * only by a card the owner sent after revoking it, so redeeming an older card again does not
+   * undo the withdrawal. Returns whether the person holds a live grant afterwards.
    */
   static grant = async (
     db: Pick<LobeChatDatabase, 'insert'>,
-    params: { shareId: string; source: AgentShareGrantSource; userId: string },
-  ): Promise<void> => {
-    await db.insert(agentShareGrants).values(params).onConflictDoNothing();
+    params: { issuedAt: Date; shareId: string; source: AgentShareGrantSource; userId: string },
+  ): Promise<boolean> => {
+    const { issuedAt, ...values } = params;
+    const [row] = await db
+      .insert(agentShareGrants)
+      .values(values)
+      .onConflictDoUpdate({
+        set: { createdAt: sql`now()`, revokedAt: null, source: values.source },
+        setWhere: and(
+          isNotNull(agentShareGrants.revokedAt),
+          lt(agentShareGrants.revokedAt, issuedAt),
+        ),
+        target: [agentShareGrants.shareId, agentShareGrants.userId],
+      })
+      .returning({ id: agentShareGrants.id });
+    if (row) return true;
+    // Neither inserted nor restored: the grant is either already live or revoked after this card.
+    const [live] = await (db as LobeChatDatabase)
+      .select({ id: agentShareGrants.id })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, values.shareId),
+          eq(agentShareGrants.userId, values.userId),
+          isNull(agentShareGrants.revokedAt),
+        ),
+      )
+      .limit(1);
+    return !!live;
   };
 
   /** The people this Agent's share admits by card, newest first, for its owner. */
@@ -680,13 +709,15 @@ export class AgentShareModel {
       })
       .from(agentShareGrants)
       .innerJoin(users, eq(users.id, agentShareGrants.userId))
-      .where(eq(agentShareGrants.shareId, share.id))
+      .where(and(eq(agentShareGrants.shareId, share.id), isNull(agentShareGrants.revokedAt)))
       .orderBy(desc(agentShareGrants.createdAt));
   };
 
   /**
-   * Withdraw a person's card grant. Under the same Agent row lock as every share mutation, so a
-   * run admitted before the revoke is stopped at its next step by `isRunStillAuthorized`.
+   * Withdraw a person's card grant. The row stays, marked revoked, so the cards they already hold
+   * cannot restore it; only a card the owner sends afterwards can. Under the same Agent row lock
+   * as every share mutation, so a run admitted before the revoke is stopped at its next step by
+   * `isRunStillAuthorized`.
    */
   revokeGrant = async (agentId: string, userId: string): Promise<boolean> =>
     !!(await this.withScopedAgentLock(agentId, async (tx) => {
@@ -697,8 +728,15 @@ export class AgentShareModel {
         .limit(1);
       if (!share) return false;
       const removed = await tx
-        .delete(agentShareGrants)
-        .where(and(eq(agentShareGrants.shareId, share.id), eq(agentShareGrants.userId, userId)))
+        .update(agentShareGrants)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(agentShareGrants.shareId, share.id),
+            eq(agentShareGrants.userId, userId),
+            isNull(agentShareGrants.revokedAt),
+          ),
+        )
         .returning({ id: agentShareGrants.id });
       return removed.length > 0;
     }));

@@ -815,6 +815,27 @@ describe('an Agent shared only by card', () => {
     expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
     expect(await shares.revokeGrant(bobAgent, alice)).toBe(false);
   });
+
+  it('keeps a revoke: an earlier card cannot restore it, a later one from the owner does', async () => {
+    const earlier = await postCard(bob, 1);
+    await aliceModel.addAgentFromCard(earlier);
+    const shares = new AgentShareModel(serverDB, bob);
+    await shares.revokeGrant(bobAgent, alice);
+
+    await expect(aliceModel.addAgentFromCard(earlier)).rejects.toThrow('Agent not found');
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+    expect(await shares.listGrants(bobAgent)).toEqual([]);
+
+    const later = await postCard(bob, 2);
+    await serverDB
+      .update(channelMessages)
+      .set({ createdAt: new Date(Date.now() + 60_000) })
+      .where(eq(channelMessages.id, later));
+    await aliceModel.addAgentFromCard(later);
+    expect(await aliceModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
+    const [grant] = await serverDB.select().from(agentShareGrants);
+    expect(grant).toMatchObject({ revokedAt: null, source: { messageId: later } });
+  });
 });
 
 describe('a contact request from a card', () => {
