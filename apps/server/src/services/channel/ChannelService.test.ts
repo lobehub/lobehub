@@ -3,20 +3,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelService } from './ChannelService';
 
-const { remove, removeThread, wake, notify, notifyMentions, notifyDirect, send, routing } =
-  vi.hoisted(() => ({
-    remove: vi.fn(),
-    send: vi.fn(),
-    routing: vi.fn(),
-    removeThread: vi.fn(),
-    wake: vi.fn(),
-    notify: vi.fn(),
-    notifyMentions: vi.fn(),
-    notifyDirect: vi.fn(),
-  }));
+const {
+  archiveThread,
+  onThreadArchived,
+  remove,
+  removeThread,
+  wake,
+  notify,
+  notifyMentions,
+  notifyDirect,
+  send,
+  routing,
+} = vi.hoisted(() => ({
+  archiveThread: vi.fn(),
+  onThreadArchived: vi.fn(),
+  remove: vi.fn(),
+  send: vi.fn(),
+  routing: vi.fn(),
+  removeThread: vi.fn(),
+  wake: vi.fn(),
+  notify: vi.fn(),
+  notifyMentions: vi.fn(),
+  notifyDirect: vi.fn(),
+}));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
+    archiveThread = archiveThread;
     remove = remove;
     send = send;
     removeThread = removeThread;
@@ -31,6 +44,44 @@ vi.mock('./directMessage', () => ({ notifyChannelDirectMessages: notifyDirect })
 vi.mock('./notify', () => ({ notifyChannel: notify }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: routing }));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
+vi.mock('@/business/server/channel/onThreadArchived', () => ({ onThreadArchived }));
+
+describe('Channel thread archive', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    archiveThread.mockResolvedValue([]);
+    wake.mockResolvedValue(undefined);
+    notify.mockResolvedValue(undefined);
+    onThreadArchived.mockResolvedValue(undefined);
+  });
+  const service = () => new ChannelService({} as never, 'owner', 'workspace');
+
+  it('hands the archived thread to the follow-up after the archive commits', async () => {
+    await service().archiveThread('channel', 'thread');
+    expect(onThreadArchived).toHaveBeenCalledWith({
+      channelId: 'channel',
+      threadId: 'thread',
+      userId: 'owner',
+      workspaceId: 'workspace',
+    });
+    expect(archiveThread.mock.invocationCallOrder[0]).toBeLessThan(
+      onThreadArchived.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('skips the follow-up when the archive is refused', async () => {
+    archiveThread.mockRejectedValueOnce(new Error('Forbidden'));
+    await expect(service().archiveThread('channel', 'thread')).rejects.toThrow('Forbidden');
+    expect(onThreadArchived).not.toHaveBeenCalled();
+  });
+
+  it('keeps the archive when the follow-up fails', async () => {
+    onThreadArchived.mockRejectedValueOnce(new Error('queue down'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(service().archiveThread('channel', 'thread')).resolves.toBeUndefined();
+    expect(wake).toHaveBeenCalledWith('channel');
+  });
+});
 
 describe('Channel deletion scheduling', () => {
   beforeEach(() => {
