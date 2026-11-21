@@ -53,12 +53,6 @@ const Nav = memo(() => {
           url: MARKETPLACE_APPS_PATH,
         },
         {
-          icon: Cable,
-          key: DiscoverTab.Mcp,
-          title: t('tab.mcp'),
-          url: showMarket ? MARKETPLACE_MCP_PATH : MARKETPLACE_INSTALLED_MCP_PATH,
-        },
-        {
           icon: SkillsIcon,
           key: DiscoverTab.Skills,
           title: t('tab.skill'),
@@ -71,6 +65,12 @@ const Nav = memo(() => {
           marketOnly: true,
           title: t('tab.assistant'),
           url: MARKETPLACE_AGENT_PATH,
+        },
+        {
+          icon: Cable,
+          key: DiscoverTab.Mcp,
+          title: t('tab.mcp'),
+          url: showMarket ? MARKETPLACE_MCP_PATH : MARKETPLACE_INSTALLED_MCP_PATH,
         },
       ].filter((item: Item) => showMarket || !item.marketOnly) as Item[],
     [showMarket, t],

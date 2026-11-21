@@ -33,11 +33,6 @@ export const useNav = () => {
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.apps')}</div>,
       },
       {
-        icon: <Icon icon={Cable} size={ICON_SIZE} />,
-        key: DiscoverTab.Mcp,
-        label: t('tab.mcp'),
-      },
-      {
         icon: <Icon icon={SkillsIcon} size={ICON_SIZE} />,
         key: DiscoverTab.Skills,
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.skill')}</div>,
@@ -46,6 +41,11 @@ export const useNav = () => {
         icon: <Icon icon={Bot} size={ICON_SIZE} />,
         key: DiscoverTab.Assistants,
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.assistant')}</div>,
+      },
+      {
+        icon: <Icon icon={Cable} size={ICON_SIZE} />,
+        key: DiscoverTab.Mcp,
+        label: t('tab.mcp'),
       },
     ],
     [t],

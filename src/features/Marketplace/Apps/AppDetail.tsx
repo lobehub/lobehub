@@ -22,7 +22,6 @@ import { connectorSelectors, isIntegrationInConnectorTab } from '@/store/tool/sl
 
 import { catalogStyles } from '../Catalog/styles';
 import { MARKETPLACE_APPS_PATH } from '../paths';
-import { AppIcon } from './AppIcon';
 import { useMarketplaceApps } from './useMarketplaceApps';
 
 export default function AppDetail() {
@@ -80,12 +79,6 @@ export default function AppDetail() {
       >
         {app && (
           <>
-            <Flexbox horizontal align={'center'} gap={12}>
-              <AppIcon app={app} />
-              <Text as={'h1'} fontSize={24} weight={600}>
-                {app.name}
-              </Text>
-            </Flexbox>
             {channel && tool && (
               <Segmented<'channel' | 'tools'>
                 value={selected}
@@ -155,6 +148,17 @@ export default function AppDetail() {
                     ) : (
                       <ComposioSkillItem server={composioServer} serverType={tool.serverType} />
                     )}
+                    <Text as={'p'}>
+                      {tool.type === 'lobehub'
+                        ? t(`tools.lobehubSkill.providers.${tool.provider.id}.readme`, {
+                            ns: 'setting',
+                            defaultValue: tool.provider.readme,
+                          })
+                        : t(`tools.composio.servers.${tool.serverType.identifier}.readme`, {
+                            ns: 'setting',
+                            defaultValue: tool.serverType.readme,
+                          })}
+                    </Text>
                   </AsyncBoundary>
                 )}
               </>

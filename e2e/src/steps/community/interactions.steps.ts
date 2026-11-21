@@ -44,7 +44,7 @@ When('I open the MCP catalog from the Marketplace sidebar', async function (this
       timeout: WAIT_TIMEOUT,
     },
   );
-  await this.page.getByRole('link', { exact: true, name: 'MCP' }).click();
+  await this.page.getByRole('link', { exact: true, name: 'MCP Servers' }).click();
 });
 
 When('I open the MCP category {string}', async function (this: CustomWorld, category: string) {

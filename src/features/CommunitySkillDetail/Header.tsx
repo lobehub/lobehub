@@ -24,7 +24,6 @@ import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
-import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { formatShortenNumber } from '@/utils/format';
 
 import { FIRST_COMMENTS_PAGE_QUERY } from './const';
@@ -138,29 +137,26 @@ const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier
   const {
     canCreate,
     install: handleInstall,
-    installed,
+    installedSkillId,
     installing,
   } = useMarketSkillInstall(identifier, name);
-  const installedSkill = useToolStore(
-    agentSkillsSelectors.getAgentSkillByIdentifier(identifier || ''),
-  );
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const handleUninstall = useCallback(() => {
-    if (!canEdit || !installedSkill) return;
+    if (!canEdit || !installedSkillId) return;
     confirmModal({
       cancelText: tc('cancel'),
       content: t('store.actions.confirmUninstall'),
       okButtonProps: { danger: true },
       okText: t('store.actions.uninstall'),
       onOk: async () => {
-        await deleteAgentSkill(installedSkill.id);
+        await deleteAgentSkill(installedSkillId);
       },
       title: t('store.actions.uninstall'),
     });
-  }, [canEdit, installedSkill, deleteAgentSkill, t, tc]);
+  }, [canEdit, installedSkillId, deleteAgentSkill, t, tc]);
 
-  if (installed)
+  if (installedSkillId)
     return (
       <DropdownMenu
         nativeButton={false}

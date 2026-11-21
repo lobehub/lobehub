@@ -17,7 +17,7 @@ export default {
   'navigation.dashboard': 'Dashboards',
   'navigation.marketplace': 'Marketplace',
   'navigation.marketplaceAgents': 'Marketplace · Agents',
-  'navigation.marketplaceMcp': 'Marketplace · MCP',
+  'navigation.marketplaceMcp': 'Marketplace · MCP Servers',
   'navigation.marketplaceModels': 'Marketplace · Models',
   'navigation.marketplaceProviders': 'Marketplace · Providers',
   'navigation.marketplaceSkills': 'Marketplace · Skills',

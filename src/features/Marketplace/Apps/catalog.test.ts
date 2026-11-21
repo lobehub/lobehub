@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { MessengerPlatformItem } from '@/store/messenger/projection';
 
-import { buildMarketplaceApps, hasAppConnection } from './catalog';
+import { buildMarketplaceApps, getInlineConnectTool, hasAppConnection } from './catalog';
 
 const slack: MessengerPlatformItem = {
   appId: 'slack-app',
@@ -56,6 +56,29 @@ describe('marketplace apps', () => {
     }).find((app) => app.id === id)!;
     expect(app.toolConnected).toBe(false);
     expect(hasAppConnection(app)).toBe(true);
+  });
+
+  it('chooses the connect action by capability and provider availability', () => {
+    const discord: MessengerPlatformItem = {
+      ...slack,
+      id: 'discord',
+      name: 'Discord',
+      platform: 'discord',
+    };
+    const apps = buildMarketplaceApps({ ...inputs, channels: [slack, discord] });
+    const byId = (id: string) => apps.find((app) => app.id === id)!;
+    expect(getInlineConnectTool(byId('google-docs'), true)?.type).toBe('composio');
+    expect(getInlineConnectTool(byId('posthog'), true)?.type).toBe('lobehub');
+    expect(getInlineConnectTool(byId('discord'), true)).toBeUndefined();
+    expect(getInlineConnectTool(byId('slack'), true)).toBeUndefined();
+    expect(getInlineConnectTool({ ...byId('slack'), channel: undefined }, true)?.type).toBe(
+      'composio',
+    );
+    expect(getInlineConnectTool(byId('whatsapp'), true)?.type).toBe('composio');
+    expect(getInlineConnectTool(byId('github'), false)).toBeUndefined();
+    expect(
+      getInlineConnectTool({ ...byId('google-docs'), toolConnected: true }, true),
+    ).toBeUndefined();
   });
 
   it('lists only the supported capabilities on each deployment', () => {
