@@ -20,6 +20,8 @@ interface EnvRead {
   end: number;
   fallback?: { value: string | null };
   name: string;
+  /** Where a read passed as this read's default starts: `getenv("A", getenv("B"))` */
+  nestedStart?: number;
   start: number;
   strict: boolean;
 }
@@ -28,7 +30,8 @@ const NAME = String.raw`[A-Za-z_][A-Za-z0-9_]*`;
 const QUOTE = `['"\`]`;
 const STRING = String.raw`"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\`(?:[^\`\\\n]|\\.)*\``;
 const VALUE = String.raw`${STRING}|[A-Za-z_][\w.]*`;
-const ARGUMENT = String.raw`(?:\s*,\s*(?<arg>${VALUE}))?`;
+/** A lookahead, so a read passed as the default is still matched on its own. */
+const ARGUMENT = String.raw`(?=(?:\s*,\s*(?<arg>${VALUE}))?)`;
 /** The module a read is called on (`os.`), so a chain's next read is found where it starts. */
 const MODULE = String.raw`(?:[A-Za-z_]\w*\.)?`;
 /** `os.environ["X"] = …` sets the variable, it does not need it. */
@@ -122,19 +125,27 @@ const isQuoted = (token: string) => /^["'`]/.test(token);
 const readConstants = (code: string) =>
   new Map([...code.matchAll(CONSTANT)].map((match) => [match[1], unquote(match[2])]));
 
-/** `undefined` means no usable fallback: an empty string or None still leaves the value unset. */
+/**
+ * `undefined` means no guaranteed fallback: an empty string or None leaves the
+ * value unset, and a function call may return nothing.
+ */
 const parseFallback = (
   token: string | undefined,
   constants: Map<string, string>,
+  after = '',
 ): { value: string | null } | undefined => {
   if (!token || NO_VALUE.has(token)) return undefined;
+  const next = after.trimStart()[0];
+  if (next === '(') return undefined;
+  // `"a" + b`, `"%s" % b`, `"{}".format(b)`: there is a value, but not this literal.
+  const isComputed = next === '+' || next === '%' || next === '.';
   if (isQuoted(token)) {
     const value = unquote(token);
     if (!value) return undefined;
-    return { value: token[0] === '`' && value.includes('${') ? null : value };
+    return { value: isComputed || (token[0] === '`' && value.includes('${')) ? null : value };
   }
   const constant = constants.get(token);
-  if (constant === undefined) return { value: null };
+  if (constant === undefined || isComputed) return { value: null };
   return constant ? { value: constant } : undefined;
 };
 
@@ -156,26 +167,71 @@ const endOfCall = (code: string, from: number) => {
 
 const collectReads = (code: string, constants: Map<string, string>) => {
   const reads = new Map<number, EnvRead>();
+  const argStarts = new Map<number, number>();
   for (const { call, pattern, strict } of READ_PATTERNS) {
     for (const match of code.matchAll(pattern)) {
       const start = match.index;
       const matchEnd = start + match[0].length;
       const arg = match.groups?.arg;
+      const argStart = arg
+        ? matchEnd + (/^\s*,\s*/.exec(code.slice(matchEnd))?.[0].length ?? 0)
+        : undefined;
+      if (argStart !== undefined) argStarts.set(start, argStart);
       reads.set(start, {
         end: call ? endOfCall(code, matchEnd) : matchEnd,
-        fallback: parseFallback(arg, constants),
+        fallback:
+          arg && argStart !== undefined
+            ? parseFallback(
+                arg,
+                constants,
+                code.slice(argStart + arg.length, argStart + arg.length + 20),
+              )
+            : undefined,
         name: match.groups!.name,
         start,
         strict: strict && !arg,
       });
     }
   }
+  for (const [start, argStart] of argStarts) {
+    if (!reads.has(argStart)) continue;
+    const read = reads.get(start)!;
+    read.fallback = undefined;
+    read.nestedStart = argStart;
+  }
   return reads;
 };
 
+/** Adds a read and any read passed as its default. */
+const addToChain = (chain: EnvRead[], read: EnvRead, reads: Map<number, EnvRead>) => {
+  chain.push(read);
+  let nested = read.nestedStart === undefined ? undefined : reads.get(read.nestedStart);
+  while (nested) {
+    // Arguments run first, so a strict default raises even when the outer variable is set.
+    if (nested.strict) chain.splice(chain.indexOf(read), 0, nested);
+    else chain.push(nested);
+    nested = nested.nestedStart === undefined ? undefined : reads.get(nested.nestedStart);
+  }
+};
+
 const toFinding = (read: EnvRead, chain: EnvRead[], terminal?: { value: string | null }) => {
-  const fallback = chain.find((item) => item.fallback)?.fallback ?? terminal;
-  const names = [...new Set(chain.map((item) => item.name))];
+  // A strict read raises when unset, so nothing after it can stand in for it.
+  const strictIndex = chain.findIndex((item) => item.strict);
+  const reachable = strictIndex === -1 ? chain : chain.slice(0, strictIndex + 1);
+  if (!reachable.includes(read)) {
+    return {
+      alternatives: [],
+      defaultValue: null,
+      hasDefault: false,
+      name: read.name,
+      requirement: 'unknown',
+    } satisfies EnvFinding;
+  }
+
+  const fallback =
+    reachable.find((item) => item.fallback)?.fallback ??
+    (strictIndex === -1 ? terminal : undefined);
+  const names = [...new Set(reachable.map((item) => item.name))];
   const requirement: SkillEnvRequirement = fallback
     ? 'optional'
     : names.length > 1
@@ -244,7 +300,8 @@ export const parseEnvReads = (code: string, isShell: boolean): EnvFinding[] => {
 
   for (const read of [...reads.values()].sort((a, b) => a.start - b.start)) {
     if (visited.has(read.start)) continue;
-    const chain = [read];
+    const chain: EnvRead[] = [];
+    addToChain(chain, read, reads);
     let terminal: { value: string | null } | undefined;
     let cursor = read.end;
 
@@ -254,11 +311,16 @@ export const parseEnvReads = (code: string, isShell: boolean): EnvFinding[] => {
       const next = cursor + operator[0].length;
       const nextRead = reads.get(next);
       if (nextRead) {
-        chain.push(nextRead);
+        addToChain(chain, nextRead, reads);
         cursor = nextRead.end;
         continue;
       }
-      terminal = parseFallback(CHAIN_VALUE.exec(code.slice(next, next + 500))?.[0], constants);
+      const value = CHAIN_VALUE.exec(code.slice(next, next + 500))?.[0];
+      terminal = parseFallback(
+        value,
+        constants,
+        code.slice(next + (value?.length ?? 0), next + 520),
+      );
       break;
     }
 

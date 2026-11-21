@@ -238,6 +238,63 @@ describe('scanSkillFiles', () => {
     });
   });
 
+  it('does not treat a read or a call passed as the default as a guaranteed value', () => {
+    const { credentials, requiresApiKey } = scanSkillFiles([
+      {
+        content: [
+          'a = os.getenv("A_API_KEY", os.getenv("B_API_KEY"))',
+          'c = os.getenv("C_API_KEY", load_key())',
+          'd = os.getenv("D_TOKEN", os.getenv("E_TOKEN", "fallback-token"))',
+          'f = os.getenv("F_TOKEN", os.environ["G_TOKEN"])',
+        ].join('\n'),
+        path: 'scripts/a.py',
+      },
+    ]);
+    const need = Object.fromEntries(
+      credentials.map((c) => [c.name, [c.requirement, c.alternatives, c.defaultValue]]),
+    );
+
+    expect(requiresApiKey).toBe(true);
+    expect(need).toEqual({
+      A_API_KEY: ['one_of', ['B_API_KEY'], null],
+      B_API_KEY: ['one_of', ['A_API_KEY'], null],
+      C_API_KEY: ['unknown', [], null],
+      D_TOKEN: ['optional', [], '[redacted]'],
+      E_TOKEN: ['optional', [], '[redacted]'],
+      // The argument runs first, so G_TOKEN raises even when F_TOKEN is set.
+      F_TOKEN: ['unknown', [], null],
+      G_TOKEN: ['required', [], null],
+    });
+  });
+
+  it('keeps a strict read required when it comes first in a chain', () => {
+    const { credentials, settings } = scanSkillFiles([
+      {
+        content: [
+          'a = os.environ["A_API_KEY"] or os.environ["B_API_KEY"]',
+          'c = os.getenv("C_API_KEY") or os.environ["D_API_KEY"] or os.getenv("E_API_KEY")',
+          'm = os.environ["STRICT_MODEL"] or "fallback-model"',
+        ].join('\n'),
+        path: 'scripts/a.py',
+      },
+    ]);
+    const need = Object.fromEntries(
+      [...credentials, ...settings].map((v) => [
+        v.name,
+        [v.requirement, v.alternatives, v.defaultValue],
+      ]),
+    );
+
+    expect(need).toEqual({
+      A_API_KEY: ['required', [], null],
+      B_API_KEY: ['unknown', [], null],
+      C_API_KEY: ['one_of', ['D_API_KEY'], null],
+      D_API_KEY: ['one_of', ['C_API_KEY'], null],
+      E_API_KEY: ['unknown', [], null],
+      STRICT_MODEL: ['required', [], null],
+    });
+  });
+
   it('never passes on a credential default', () => {
     const result = scanSkillFiles([
       { content: 'KEY = os.getenv("VENDOR_API_KEY", "sk-live-abc123")', path: 'scripts/a.py' },
