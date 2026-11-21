@@ -1,34 +1,17 @@
 'use client';
 
-import type { ConnectorVisibility } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
-import type { ToolDetailType } from '@/features/Settings/skill/features/SkillDetail';
-import SkillList from '@/features/Settings/skill/features/SkillList';
-import { SkillListVariantProvider } from '@/features/Settings/skill/features/SkillListRow';
-import {
-  encodeMobileSelection,
-  MOBILE_SELECTION_PARAM,
-  parseMobileSelection,
-} from '@/features/Settings/skill/mobileSelection';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 import ConnectedAppNav from './Apps/ConnectedAppNav';
-import {
-  getMarketplaceSubPath,
-  MARKETPLACE_CONNECTED_APPS_PATH,
-  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-  MARKETPLACE_INSTALLED_MCP_PATH,
-  MARKETPLACE_INSTALLED_SKILLS_PATH,
-} from './paths';
+import { getMarketplaceSubPath, MARKETPLACE_CONNECTED_APPS_PATH } from './paths';
 
 const styles = stylex.create({
   collectionLink: {
@@ -42,73 +25,13 @@ const styles = stylex.create({
   },
 });
 
-export type InstalledKind = 'connector' | 'mcp' | 'skill';
-
-const INSTALLED_PATHS: Record<InstalledKind, string> = {
-  connector: MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-  mcp: MARKETPLACE_INSTALLED_MCP_PATH,
-  skill: MARKETPLACE_INSTALLED_SKILLS_PATH,
-};
-
-/**
- * The workspace connector tab the sidebar lists, mirroring the installed page
- * (`ToolSettings`): the shared pool unless that page is on its Private tab.
- * A private and a shared connector may share an identifier, so the list and
- * the detail it opens must name the same tab. Outside a workspace (and for
- * skills) there are no tabs.
- */
-export const getInstalledVisibility = (
-  kind: InstalledKind | undefined,
-  workspaceId: string | null | undefined,
-  visibilityParam: string | null,
-): ConnectorVisibility | undefined => {
-  if (kind === 'skill' || !kind || !workspaceId) return undefined;
-  return visibilityParam === 'private' ? 'private' : 'public';
-};
-
-/**
- * The installed page that opens one item's detail (`?open=<type>:<identifier>`),
- * on the tab the row was listed under so the detail resolves that row.
- */
-export const buildInstalledDetailPath = (
-  kind: InstalledKind,
-  identifier: string,
-  type: ToolDetailType,
-  visibility?: ConnectorVisibility,
-): string => {
-  const params = new URLSearchParams({
-    [MOBILE_SELECTION_PARAM]: encodeMobileSelection({ identifier, type }),
-  });
-  if (visibility === 'private') params.set('visibility', visibility);
-  return `${INSTALLED_PATHS[kind]}?${params.toString()}`;
-};
-
-/**
- * Installed connectors stay in the Marketplace sidebar when the main section changes.
- */
 const InstalledNav = memo(() => {
   const { t } = useTranslation('discover');
   const { pathname, search } = useActiveLocation();
   const searchParams = new URLSearchParams(search);
-  const navigate = useWorkspaceAwareNavigate();
   const sectionTriggerStyle = useSectionTriggerStyle();
 
   const subPath = getMarketplaceSubPath(pathname);
-  const onInstalledPage = subPath === getMarketplaceSubPath(MARKETPLACE_INSTALLED_MCP_PATH);
-  const selectedIdentifier = onInstalledPage
-    ? parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM))?.identifier
-    : undefined;
-  const workspaceId = useActiveWorkspaceId();
-  const visibility = getInstalledVisibility(
-    'connector',
-    workspaceId,
-    onInstalledPage ? searchParams.get('visibility') : null,
-  );
-
-  const handleSelect = (identifier: string, type: ToolDetailType) => {
-    navigate(buildInstalledDetailPath('mcp', identifier, type, visibility));
-  };
-
   return (
     <Flexbox gap={2} paddingBlock={8} paddingInline={4}>
       <WorkspaceLink
@@ -122,28 +45,6 @@ const InstalledNav = memo(() => {
         <SectionTitle>{t('apps.connected')}</SectionTitle>
       </WorkspaceLink>
       <ConnectedAppNav selected={subPath?.startsWith('app/') ? subPath.slice(4) : undefined} />
-      <WorkspaceLink
-        aria-current={onInstalledPage && !selectedIdentifier ? 'page' : undefined}
-        className={stylex.props(styles.collectionLink).className}
-        style={sectionTriggerStyle}
-        title={t('apps.installedMcp')}
-        to={
-          visibility === 'private'
-            ? `${MARKETPLACE_INSTALLED_MCP_PATH}?visibility=private`
-            : MARKETPLACE_INSTALLED_MCP_PATH
-        }
-      >
-        <SectionTitle>{t('apps.installedMcp')}</SectionTitle>
-      </WorkspaceLink>
-      <SkillListVariantProvider value={'nav'}>
-        <SkillList
-          installedOnly
-          selectedIdentifier={selectedIdentifier}
-          viewMode={'mcp'}
-          visibility={visibility}
-          onSelect={handleSelect}
-        />
-      </SkillListVariantProvider>
     </Flexbox>
   );
 });

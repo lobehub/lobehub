@@ -31,8 +31,7 @@ import {
 } from '@/types/discover';
 
 import CatalogViewTabs from '../CatalogViewTabs';
-import { buildInstalledDetailPath } from '../InstalledNav';
-import { MARKETPLACE_SKILL_PATH } from '../paths';
+import { buildInstalledDetailPath, MARKETPLACE_SKILL_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
 import DiscoverCatalogHeader from './DiscoverCatalogHeader';

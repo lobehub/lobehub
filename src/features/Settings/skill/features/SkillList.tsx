@@ -106,11 +106,6 @@ export interface SkillListHeaderContext {
 export type SkillViewMode = 'connector' | 'mcp' | 'skill';
 
 interface SkillListProps {
-  /**
-   * Sidebar mode (the Marketplace `Installed` section): one flat list of what
-   * is already in the library, no group headers and nothing left to add.
-   */
-  installedOnly?: boolean;
   /** Page search: filters every group by name, identifier and description. */
   keyword?: string;
   onClearKeyword?: () => void;
@@ -130,7 +125,6 @@ interface SkillListProps {
 
 const SkillList = memo<SkillListProps>(
   ({
-    installedOnly,
     keyword,
     onClearKeyword,
     onSelect,
@@ -338,8 +332,6 @@ const SkillList = memo<SkillListProps>(
         </>
       );
     }
-    if (installedOnly && !hasAnySkills) return null;
-
     if (privateState === 'empty') {
       return (
         <>
@@ -425,7 +417,6 @@ const SkillList = memo<SkillListProps>(
         case 'lobehub': {
           return (
             <LobehubSkillItem
-              hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
               openWhenDisconnected={isGithubConnector(item.provider.id)}
@@ -441,7 +432,6 @@ const SkillList = memo<SkillListProps>(
         case 'composio': {
           return (
             <ComposioSkillItem
-              hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.serverType.identifier}
               key={item.serverType.identifier}
               server={getComposioServerByIdentifier(item.serverType.identifier)}
@@ -659,21 +649,6 @@ const SkillList = memo<SkillListProps>(
     }
 
     // ── Sidebar list (skills page, mobile) ───────────────────────────────────
-    if (installedOnly) {
-      const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
-      const items = isConnectorView
-        ? [
-            ...partitionByInstalled(communitySkillItems, isConnected).installed.map(
-              renderIntegration,
-            ),
-            ...renderCommunityMCPs(),
-            ...renderCustomConnectors(),
-          ]
-        : [...renderAgentSkills(marketAgentSkills), ...renderAgentSkills(userAgentSkills)];
-
-      return <div {...stylex.props(styles.container)}>{items}</div>;
-    }
-
     const renderSection = (key: string, label: string, children: React.ReactNode) => {
       const isCollapsed = collapsed.has(key);
       return (

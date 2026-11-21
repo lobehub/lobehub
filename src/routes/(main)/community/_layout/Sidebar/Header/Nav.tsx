@@ -17,10 +17,6 @@ import {
 } from '@/features/Marketplace/paths';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
-import {
-  MOBILE_SELECTION_PARAM,
-  parseMobileSelection,
-} from '@/features/Settings/skill/mobileSelection';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -40,20 +36,9 @@ interface Item {
   url?: string;
 }
 
-// Workspace-aware: `/:slug/marketplace/skill` resolves to `skill` as well.
-const useActiveTabKey = () => {
-  const { pathname, search } = useActiveLocation();
-  const subPath = getMarketplaceSubPath(pathname) ?? '';
-  if (
-    subPath === getMarketplaceSubPath(MARKETPLACE_INSTALLED_MCP_PATH) &&
-    parseMobileSelection(new URLSearchParams(search).get(MOBILE_SELECTION_PARAM))
-  )
-    return '';
-  return subPath;
-};
-
 const Nav = memo(() => {
-  const tab = useActiveTabKey();
+  const { pathname } = useActiveLocation();
+  const tab = getMarketplaceSubPath(pathname) ?? '';
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
   const { showMarket } = useServerConfigStore(featureFlagsSelectors);

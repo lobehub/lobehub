@@ -3,15 +3,16 @@
 import { Avatar, Icon } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import isEqual from 'fast-deep-equal';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import { matchesConnectorKeyword } from '@/features/Settings/skill/features/connectorSections';
 import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
-import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useCategory as useMcpCategory } from '@/hooks/useMCPCategory';
 import { usePermission } from '@/hooks/usePermission';
 import { useQuery } from '@/hooks/useQuery';
@@ -26,11 +27,11 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type DiscoverMcpItem, McpCategory, type McpQueryParams, McpSorts } from '@/types/discover';
 
 import CatalogViewTabs from '../CatalogViewTabs';
-import { buildInstalledDetailPath } from '../InstalledNav';
-import { MARKETPLACE_MCP_PATH } from '../paths';
+import { buildInstalledDetailPath, MARKETPLACE_MCP_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
 import DiscoverCatalogHeader from './DiscoverCatalogHeader';
+import { getInstalledMcpItems } from './installedMcps';
 import { openMcpConnectModal } from './McpConnectModal';
 import {
   buildCatalogListUrl,
@@ -156,7 +157,13 @@ const McpCatalogGroup = ({ category, count, eager, label, q }: McpGroup) => {
 
 const MCP_PSEUDO_CATEGORIES = [McpCategory.All, McpCategory.Discover];
 
-const McpCatalogGroups = ({ q }: { q?: string }) => {
+const McpCatalogGroups = ({
+  installedSection,
+  q,
+}: {
+  installedSection?: ReactNode;
+  q?: string;
+}) => {
   const categories = useMcpCategory();
   const useMcpCategories = useDiscoverStore((s) => s.useMcpCategories);
   const { error, isLoading, mutate, queryKey } = useMcpCategories({ q });
@@ -165,6 +172,7 @@ const McpCatalogGroups = ({ q }: { q?: string }) => {
 
   return (
     <div {...stylex.props(catalogStyles.sections)}>
+      {installedSection}
       <AsyncBoundary
         data={counts.length > 0 ? counts : undefined}
         error={error}
@@ -173,7 +181,7 @@ const McpCatalogGroups = ({ q }: { q?: string }) => {
         onRetry={() => void mutate()}
       >
         {groups.length === 0 ? (
-          <McpCatalogList query={{ q }} />
+          <McpCatalogList query={{ q }} showEmpty={!installedSection} />
         ) : (
           groups.map(({ count, key, label }, index) => (
             <McpCatalogGroup
@@ -193,8 +201,10 @@ const McpCatalogGroups = ({ q }: { q?: string }) => {
 
 const McpCatalogList = ({
   query: { category, connectionType, order, page, q, sort },
+  showEmpty = true,
 }: {
   query: McpQueryParams;
+  showEmpty?: boolean;
 }) => {
   const useMcpList = useDiscoverStore((s) => s.useFetchMcpList);
   const { error, isLoading, mutate, queryKey } = useMcpList({
@@ -211,7 +221,7 @@ const McpCatalogList = ({
 
   return (
     <CatalogListView
-      empty={<McpEmpty search={Boolean(q)} />}
+      empty={showEmpty && <McpEmpty search={Boolean(q)} />}
       error={error}
       hasData={!!data}
       isEmpty={items.length === 0}
@@ -236,27 +246,60 @@ const McpCatalogList = ({
   );
 };
 
-const PublicConnectorList = ({ group, query }: { group: boolean; query: McpQueryParams }) => {
-  useFetchInstalledPlugins();
-  return group ? <McpCatalogList query={query} /> : <McpCatalogGroups q={query.q} />;
-};
-
 const McpCatalog = () => {
   const { t } = useTranslation('discover');
-  const query = useQuery() as McpQueryParams;
+  const { group, ...query } = useQuery() as McpQueryParams & { group?: string };
+  const installedGroup = group === 'installed';
+  const openDetail = useCatalogDetailNavigate();
+  const { t: ts } = useTranslation('setting');
+  const connectors = useToolStore((s) => s.useFetchConnectors)(true);
+  const plugins = useToolStore((s) => s.useFetchInstalledPlugins)(true);
+  const initialized = useToolStore((s) => s.isConnectorsInit && s.isInstalledPluginsInit);
+  const installed = useToolStore(getInstalledMcpItems, isEqual);
   const { category, q, sort } = query;
   const categories = useMcpCategory();
   const isMarketGroup = isCatalogListView(query) || Boolean(query.connectionType);
-  const title =
-    categories.find((item) => item.key === category)?.label ??
-    (sort === McpSorts.CreatedAt ? t('catalog.new') : t('tab.mcp'));
+  const narrowed = installedGroup || isMarketGroup;
+  const matches = installed.filter((item) =>
+    matchesConnectorKeyword(q, [item.title, item.identifier, item.description]),
+  );
+  const label = t('apps.installedMcp');
+  const error = connectors.error ?? plugins.error;
+  const loading = !initialized && (connectors.isLoading || plugins.isValidating);
+  const retry = () => {
+    void connectors.mutate();
+    void plugins.revalidate();
+  };
+  const rows = (installedGroup ? matches : matches.slice(0, CATALOG_SECTION_SIZE)).map((item) => {
+    const open = () => openDetail(item.path);
+    return (
+      <SkillListRow
+        extra={<RowMoreMenu onOpenDetail={open} />}
+        key={item.key}
+        summary={item.private ? ts('skillView.connectorTabs.private') : item.description}
+        title={item.title}
+        icon={() =>
+          item.avatar && item.avatar !== 'MCP_AVATAR' ? (
+            <Avatar avatar={item.avatar} shape={'square'} size={24} />
+          ) : (
+            <Icon icon={McpIcon} size={20} />
+          )
+        }
+        onClick={open}
+      />
+    );
+  });
+  const title = installedGroup
+    ? label
+    : (categories.find((item) => item.key === category)?.label ??
+      (sort === McpSorts.CreatedAt ? t('catalog.new') : t('tab.mcp')));
 
   return (
-    <div {...stylex.props(catalogStyles.frame, isMarketGroup && catalogStyles.groupFrame)}>
+    <div {...stylex.props(catalogStyles.frame, narrowed && catalogStyles.groupFrame)}>
       <DiscoverCatalogHeader
         kind={'mcp'}
         group={
-          isMarketGroup
+          narrowed
             ? {
                 backTo: buildCatalogListUrl(MARKETPLACE_MCP_PATH, { q }),
                 title,
@@ -265,7 +308,38 @@ const McpCatalog = () => {
         }
       />
       <CatalogViewTabs active={'discover'} kind={'mcp'} />
-      <PublicConnectorList group={isMarketGroup} query={query} />
+      {installedGroup ? (
+        <CatalogListView
+          empty={<McpEmpty search={Boolean(q)} title={q ? undefined : t('apps.noInstalledMcp')} />}
+          error={error}
+          hasData={initialized || matches.length > 0}
+          isEmpty={matches.length === 0}
+          loading={loading}
+          onRetry={retry}
+        >
+          {rows}
+        </CatalogListView>
+      ) : isMarketGroup ? (
+        <McpCatalogList query={query} />
+      ) : (
+        <McpCatalogGroups
+          q={q}
+          installedSection={
+            matches.length || (!initialized && error) ? (
+              <CatalogSection
+                count={matches.length}
+                error={matches.length ? undefined : error}
+                label={label}
+                loading={false}
+                to={buildCatalogListUrl(MARKETPLACE_MCP_PATH, { group: 'installed', q })}
+                onRetry={retry}
+              >
+                {rows}
+              </CatalogSection>
+            ) : undefined
+          }
+        />
+      )}
     </div>
   );
 };

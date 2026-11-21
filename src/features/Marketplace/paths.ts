@@ -1,3 +1,11 @@
+import type { ConnectorVisibility } from '@lobechat/types';
+
+import type { ToolDetailType } from '@/features/Settings/skill/features/SkillDetail';
+import {
+  encodeMobileSelection,
+  MOBILE_SELECTION_PARAM,
+} from '@/features/Settings/skill/mobileSelection';
+
 /**
  * Marketplace (formerly Community) URL layout.
  *
@@ -35,6 +43,31 @@ export const MARKETPLACE_INSTALLED_CONNECTORS_PATH = `${MARKETPLACE_CONNECTOR_PA
 export const MARKETPLACE_MCP_PATH = `${MARKETPLACE_PATH}/mcp`;
 
 export const MARKETPLACE_INSTALLED_MCP_PATH = `${MARKETPLACE_MCP_PATH}/installed`;
+
+type InstalledKind = 'connector' | 'mcp' | 'skill';
+
+const INSTALLED_PATHS: Record<InstalledKind, string> = {
+  connector: MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  mcp: MARKETPLACE_INSTALLED_MCP_PATH,
+  skill: MARKETPLACE_INSTALLED_SKILLS_PATH,
+};
+
+/**
+ * The installed page that opens one item's detail (`?open=<type>:<identifier>`),
+ * on the tab the row was listed under so the detail resolves that row.
+ */
+export const buildInstalledDetailPath = (
+  kind: InstalledKind,
+  identifier: string,
+  type: ToolDetailType,
+  visibility?: ConnectorVisibility,
+): string => {
+  const params = new URLSearchParams({
+    [MOBILE_SELECTION_PARAM]: encodeMobileSelection({ identifier, type }),
+  });
+  if (visibility === 'private') params.set('visibility', visibility);
+  return `${INSTALLED_PATHS[kind]}?${params.toString()}`;
+};
 
 export const getLegacyConnectorCatalogPath = (params: URLSearchParams) => {
   const publicCatalog =
