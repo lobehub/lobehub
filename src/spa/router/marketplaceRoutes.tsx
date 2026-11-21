@@ -1,6 +1,7 @@
 'use client';
 
 import { Blocks, ShapesIcon } from 'lucide-react';
+import { lazy } from 'react';
 import { type RouteObject, useParams, useSearchParams } from 'react-router';
 
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
@@ -126,6 +127,7 @@ export const marketplaceAppAndMcpRoutes: RouteObject[] = [
     ),
     handle: {
       meta: routeMeta({
+        DynamicMeta: lazy(() => import('@/features/Marketplace/Apps/AppDynamicMeta')),
         icon: Blocks,
         Skeleton: createSurfaceSkeleton('detail'),
         titleKey: 'navigation.marketplaceApps',
