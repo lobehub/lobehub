@@ -19,7 +19,6 @@ import {
   KeyboardIcon,
   KeyIcon,
   Map,
-  MessageCircleIcon,
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
@@ -103,7 +102,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   return useMemo(
     () =>
       [
-        // Account-level settings (profile / appearance / hotkeys / messenger)
+        // Account-level settings (profile / appearance / hotkeys)
         // follow the user, not the workspace. They are mirrored here so members
         // can reach them without leaving the workspace; the pages are the
         // personal ones.
@@ -135,14 +134,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: MessagesSquareIcon,
               key: WorkspaceSettingsTabs.ChatPreference,
               label: t('tab.chatPreference'),
-            },
-            // The System Bot binding is a per-user identity (owned by userId,
-            // not the workspace); reaching a workspace's agents happens via the
-            // scope selector on the page itself.
-            {
-              icon: MessageCircleIcon,
-              key: WorkspaceSettingsTabs.Messenger,
-              label: t('tab.messenger'),
             },
           ],
           key: WorkspaceSettingsGroupKey.Account,
@@ -242,9 +233,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // Outside services the workspace's agents can reach. These bindings
-        // belong to the workspace; Messenger stays in Account because it is a
-        // per-user binding.
         {
           items: [
             // An installation connected here belongs to the workspace, so

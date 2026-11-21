@@ -25,9 +25,6 @@ export const componentMap = {
   [SettingsTabs.Memory]: dynamic(() => import('../memory'), {
     loading: loading('Settings > Memory'),
   }),
-  [SettingsTabs.Messenger]: dynamic(() => import('../messenger'), {
-    loading: loading('Settings > Messenger'),
-  }),
   [SettingsTabs.Integrations]: dynamic(() => import('../integrations'), {
     loading: loading('Settings > Integrations'),
   }),

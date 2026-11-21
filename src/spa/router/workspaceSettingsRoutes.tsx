@@ -457,33 +457,6 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-        'Desktop > Workspace > Settings > Messenger',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Messenger,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'messenger',
-    },
-    // Platform detail level — the page reads the platform from `sub`.
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-        'Desktop > Workspace > Settings > Messenger > Platform',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Messenger,
-          createSurfaceSkeleton('list'),
-        ),
-      },
-      path: 'messenger/:sub',
-    },
-    {
-      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
         'Desktop > Workspace > Settings > Integrations',
       ),

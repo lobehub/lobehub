@@ -320,7 +320,7 @@
   "apps.desktop.inUseDesc": "你已经在桌面应用里。",
   "apps.desktop.title": "桌面",
   "apps.messenger.desc": "在团队已经在用的聊天软件里和你的智能体对话——回复会同步回 LobeHub。",
-  "apps.messenger.setup": "去设置",
+  "apps.messenger.openApp": "打开应用",
   "apps.messenger.title": "Messenger",
   "apps.mobile.cta": "获取移动应用",
   "apps.mobile.desc": "从上次停下的地方继续——你的会话、智能体和文件都随身携带。",

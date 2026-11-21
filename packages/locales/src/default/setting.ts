@@ -1096,7 +1096,7 @@ export default {
   'apps.desktop.title': 'Desktop',
   'apps.messenger.desc':
     'Talk to your agents where your team already is — replies land back in LobeHub.',
-  'apps.messenger.setup': 'Set up',
+  'apps.messenger.openApp': 'Open app',
   'apps.messenger.title': 'Messenger',
   'apps.mobile.cta': 'Get mobile app',
   'apps.mobile.desc': 'Pick up where you left off — your chats, agents, and files travel with you.',

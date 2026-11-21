@@ -440,7 +440,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         loader: settingsTabLoader,
         path: ':tab',
       },
-      // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
+      // Tabs that need a sub-segment reuse
       // the same tab page; nested feature components read `:sub` via useParams.
       {
         element: dynamicElement(

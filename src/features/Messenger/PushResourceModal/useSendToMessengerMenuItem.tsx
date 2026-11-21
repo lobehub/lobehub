@@ -5,6 +5,7 @@ import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { SendIcon, Settings2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { MARKETPLACE_APPS_PATH, marketplaceAppPath } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -30,7 +31,7 @@ interface UseSendToMessengerMenuItemParams {
  * "Send to Messenger" entry for the resource row menu: a hover submenu with
  * one entry per available platform. A linked platform opens the push modal
  * (one entry per platform × Slack workspace); an unlinked one deep-links to
- * that platform's messenger settings page for setup.
+ * that platform's Marketplace app for setup.
  *
  * The messenger store dedupes the reads across every row that renders this
  * hook, so a long file list still issues a single request each, and a reload
@@ -108,7 +109,7 @@ export const useSendToMessengerMenuItem = ({
             ),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
-              navigate(`/settings/messenger/${platform}`);
+              navigate(marketplaceAppPath(platform));
             },
           },
         ];
@@ -146,7 +147,7 @@ export const useSendToMessengerMenuItem = ({
     });
 
     // Deployment has no messenger platform configured at all: fall back to a
-    // single entry pointing at the messenger settings overview.
+    // single entry pointing at Marketplace Apps.
     if (children.length === 0) {
       children = [
         {
@@ -155,21 +156,21 @@ export const useSendToMessengerMenuItem = ({
           label: t('FileManager.actions.sendToMessengerSetup'),
           onClick: ({ domEvent }) => {
             domEvent.stopPropagation();
-            navigate('/settings/messenger');
+            navigate(MARKETPLACE_APPS_PATH);
           },
         },
       ];
     } else {
-      // Trailing shortcut to the messenger settings overview.
+      // Trailing shortcut to Marketplace Apps.
       children.push(
         { type: 'divider' },
         {
           icon: <Icon icon={Settings2Icon} />,
           key: 'send-to-messenger-settings',
-          label: t('FileManager.actions.sendToMessengerSettings'),
+          label: t('FileManager.actions.manageChatApps'),
           onClick: ({ domEvent }) => {
             domEvent.stopPropagation();
-            navigate('/settings/messenger');
+            navigate(MARKETPLACE_APPS_PATH);
           },
         },
       );

@@ -10,6 +10,7 @@ import { useLocation, useParams, useSearchParams } from 'react-router';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import InstallResult from '@/features/Messenger/InstallResult';
 import IntegrationDetail from '@/features/Messenger/IntegrationDetail';
 import ComposioSkillItem from '@/features/Settings/skill/features/ComposioSkillItem';
 import LobehubSkillItem from '@/features/Settings/skill/features/LobehubSkillItem';
@@ -61,6 +62,7 @@ export default function AppDetail() {
   };
   return (
     <div {...stylex.props(catalogStyles.frame)}>
+      {(appId === 'slack' || appId === 'discord') && <InstallResult key={appId} platform={appId} />}
       <Flexbox align={'flex-start'}>
         <Button icon={ChevronLeft} size={'small'} type={'text'} onClick={onBack}>
           {t('tab.apps')}

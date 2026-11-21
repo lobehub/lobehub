@@ -1,7 +1,7 @@
 'use client';
 
 import { Blocks, ShapesIcon } from 'lucide-react';
-import { type RouteObject, useSearchParams } from 'react-router';
+import { type RouteObject, useParams, useSearchParams } from 'react-router';
 
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
@@ -10,14 +10,17 @@ import {
   getLegacyConnectorCatalogPath,
   getMarketplaceEntryPath,
   LEGACY_COMMUNITY_SEGMENT,
+  MARKETPLACE_APPS_PATH,
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
   MARKETPLACE_SEGMENT,
+  marketplaceAppPath,
 } from '@/features/Marketplace/paths';
 import {
   marketplaceConnectorsRouteMeta,
   marketplaceInstalledSkillsRouteMeta,
 } from '@/features/Marketplace/routeMeta';
+import { SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/platforms';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
 import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -367,13 +370,21 @@ export const legacyCommunityRoutes: RouteObject[] = [
   legacyCommunityRedirect(`${LEGACY_COMMUNITY_SEGMENT}/*`),
 ];
 
+const LegacyMessengerRedirect = () => {
+  const { sub } = useParams();
+  const platform = SUPPORTED_MESSENGER_PLATFORMS.find(({ id }) => id === sub);
+  return (
+    <LegacyPathRedirect to={platform ? marketplaceAppPath(platform.id) : MARKETPLACE_APPS_PATH} />
+  );
+};
+
 /**
  * `settings/skill` and `settings/connector` (plus their `/:sub` forms) moved to
  * the Marketplace. Mounted under both the personal `/settings` and the
  * workspace `/:workspaceSlug/settings` routes (desktop and mobile); the redirect
  * re-applies the slug and keeps `?open=` / `?skill=` deep links.
  */
-export const legacySettingsMarketplaceRedirects: RouteObject[] = [
+const legacySettingsLibraryRedirects: RouteObject[] = [
   ['skill', MARKETPLACE_INSTALLED_SKILLS_PATH],
   ['skill/:sub', MARKETPLACE_INSTALLED_SKILLS_PATH],
   ['connector', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
@@ -383,3 +394,8 @@ export const legacySettingsMarketplaceRedirects: RouteObject[] = [
   handle: LEGACY_REDIRECT_HANDLE,
   path,
 }));
+
+export const legacySettingsMarketplaceRedirects: RouteObject[] = [
+  ...legacySettingsLibraryRedirects,
+  { element: <LegacyMessengerRedirect />, handle: LEGACY_REDIRECT_HANDLE, path: 'messenger/:sub?' },
+];

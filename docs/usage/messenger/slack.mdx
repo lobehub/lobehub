@@ -14,7 +14,7 @@ tags:
 
 # Use LobeHub on Slack
 
-Slack works in two phases: a **workspace admin installs** the official LobeHub Slack app once, and then **each member links** their personal LobeHub account. Both phases happen from **Settings → Messenger → Slack**.
+Slack works in two phases: a **workspace admin installs** the official LobeHub Slack app once, and then **each member links** their personal LobeHub account. Both phases happen from **Marketplace → Apps → Slack**.
 
 ## Prerequisites
 
@@ -25,9 +25,9 @@ Slack works in two phases: a **workspace admin installs** the official LobeHub S
 ## Phase A — Install the LobeHub Slack app (admin, once per workspace)
 
 <Steps>
-  ### Open Settings → Messenger → Slack
+  ### Open Marketplace → Apps → Slack
 
-  In LobeHub, open **Settings → Messenger** and click the **Slack** card. Click **Connect** in the top-right.
+  In LobeHub, open **Marketplace → Apps** and click the **Slack** card. Click **Connect** in the top-right.
 
   {/* TODO: screenshot — Slack detail page with empty Connections list and the Connect button */}
 
@@ -77,7 +77,7 @@ Slack works in two phases: a **workspace admin installs** the official LobeHub S
 Two equivalent ways:
 
 - **On Slack** — DM the bot `/agents` and pick a different agent.
-- **In LobeHub** — open **Settings → Messenger → Slack** and use the agent picker on your link row.
+- **In LobeHub** — open **Marketplace → Apps → Slack** and use the agent picker on your link row.
 
 The change takes effect on the next message you send.
 
@@ -96,7 +96,7 @@ You can re-install (workspace) or re-link (personal) at any time by repeating th
 
 - **"Workspace already connected"** — Another LobeHub user already installed the app to this workspace. DM **@LobeHub** to link your personal account; you do not need to install again. To take over ownership, ask the original installer to disconnect first.
 - **Slack install failed (`<reason>`)** — Common reasons: authorisation cancelled, install session expired (re-open the modal and try again), Slack returned incomplete data (retry; if persistent, contact support).
-- **Bot does not reply to your DM** — The workspace install may have been disconnected. Check **Settings → Messenger → Slack** for a workspace row; if missing, ask an admin to re-install.
+- **Bot does not reply to your DM** — The workspace install may have been disconnected. Check **Marketplace → Apps → Slack** for a workspace row; if missing, ask an admin to re-install.
 - **"This link is already used"** — One-time confirmation links expire after one use. DM the bot again to get a new link.
 - **"This account is already linked"** — Your Slack account is bound to a different LobeHub account. Sign in to that LobeHub account to manage the link, or unlink there before retrying.
-- **"Another Slack account is already linked"** — Your LobeHub account already has a Slack link in this workspace. Disconnect it in **Settings → Messenger → Slack** before linking a new Slack account.
+- **"Another Slack account is already linked"** — Your LobeHub account already has a Slack link in this workspace. Disconnect it in **Marketplace → Apps → Slack** before linking a new Slack account.

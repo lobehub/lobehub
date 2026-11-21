@@ -37,7 +37,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'about',
   'advanced',
   'apikey',
-  // Account-level tabs (profile / appearance / hotkey / messenger) are
+  // Account-level tabs (profile / appearance / hotkey) are
   // mirrored under the workspace so members can reach them without leaving
   // the workspace.
   'appearance',
@@ -66,6 +66,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'labels',
   'labs',
   'members',
+  // Legacy settings bookmarks redirect to the app within the same workspace.
   'messenger',
   'notification',
   'oauth-apps',

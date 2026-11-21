@@ -95,9 +95,6 @@ describe('settings search index', () => {
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Provider]).toEqual(
       expect.arrayContaining(['api', 'model provider', 'language model', 'custom provider']),
     );
-    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Messenger]).toEqual(
-      expect.arrayContaining(['telegram', 'slack', 'discord', 'wechat']),
-    );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).toEqual(
       expect.arrayContaining(['search', 'model assignment']),
     );

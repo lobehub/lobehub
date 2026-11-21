@@ -626,7 +626,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       // ─── System Bot messenger management ─────────────────────────────────
       // Mirrors `messenger.*` TRPC procedures but exposed via the tool runtime
       // so LLM-driven flows can manage installs + links the same way the
-      // Settings → Messenger UI does. Each handler enforces user ownership;
+      // Marketplace → Apps UI does. Each handler enforces user ownership;
       // the underlying models are already user-scoped where applicable.
       listMessengers: async () => {
         if (!context.userId || !context.serverDB) {

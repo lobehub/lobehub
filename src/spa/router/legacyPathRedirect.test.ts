@@ -3,20 +3,13 @@ import { createElement } from 'react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
-import {
-  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-  MARKETPLACE_INSTALLED_SKILLS_PATH,
-} from '@/features/Marketplace/paths';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 
-import {
-  buildLegacyCommunityRedirectPath,
-  buildLegacyRedirectPath,
-  LegacyPathRedirect,
-} from './legacyPathRedirect';
+import { buildLegacyCommunityRedirectPath, buildLegacyRedirectPath } from './legacyPathRedirect';
 import {
   legacyCommunityRoutes,
   legacyConnectorCatalogRoute,
+  legacySettingsMarketplaceRedirects,
   marketplaceIndexRoute,
 } from './marketplaceRoutes';
 
@@ -27,17 +20,11 @@ const CurrentUrl = () => {
 
 const currentUrl = createElement(CurrentUrl);
 const agentPage = createElement('div', { 'data-testid': 'url' }, 'agent page');
-const redirectTo = (to: string) => createElement(LegacyPathRedirect, { to });
 
 /** A route table shaped like the real one: personal and `/:workspaceSlug` mirrors. */
 const renderAt = (url: string, serverConfigInit = true) => {
   const store = initServerConfigStore({ serverConfigInit });
-  const legacy = [
-    { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill' },
-    { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill/:sub' },
-    { element: redirectTo(MARKETPLACE_INSTALLED_CONNECTORS_PATH), path: 'connector' },
-    { element: redirectTo(MARKETPLACE_INSTALLED_CONNECTORS_PATH), path: 'connector/:sub' },
-  ];
+  const legacy = legacySettingsMarketplaceRedirects;
   // The real legacy table, beside a workspace agent route that competes for
   // `/community/agent/:id` (a lone `community/*` splat lost to it).
   const shared = [
@@ -134,6 +121,10 @@ describe('legacy URL redirects', () => {
       '/marketplace/connector/installed?open=agent-connector%3Arow-own',
     ],
     ['/settings/connector/legacy#section', '/marketplace/connector/installed#section'],
+    ['/settings/messenger', '/marketplace/app'],
+    ['/settings/messenger/unknown', '/marketplace/app'],
+    ['/settings/messenger/slack?installed=ok#link', '/marketplace/app/slack?installed=ok#link'],
+    ['/acme/settings/messenger/telegram', '/acme/marketplace/app/telegram'],
     // Workspace scope keeps its slug.
     ['/acme/settings/skill', '/acme/marketplace/skill/installed'],
     [
