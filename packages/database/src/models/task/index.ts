@@ -405,8 +405,14 @@ export class TaskModel {
     const updated = await rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
     if (updated.length > 0 && hasDatabaseEventListener()) {
       const previous = new Map(expected.map((entry) => [entry.id, entry.status]));
-      for (const task of await this.findByIds(updated))
-        this.announceStatusChange(task, previous.get(task.id) ?? null);
+      // Announce the transition this call committed, not whatever the row reads as later:
+      // a concurrent writer can move a task again between the CAS and this reload, and a
+      // reload that already shows the newer status would swallow the real change (or, for
+      // a same-status pair, announce a transition that never happened here).
+      const moved = updated.filter((id) => previous.get(id) !== status);
+      if (moved.length > 0)
+        for (const task of await this.findByIds(moved))
+          this.announceStatusChange({ ...task, status }, previous.get(task.id) ?? null);
     }
     return updated;
   }

@@ -482,6 +482,35 @@ describe('domain events announced by models', () => {
     expect(transitions().at(-1)).toEqual([a.id, 'running', 'completed']);
   });
 
+  it('task.status_changed from a CAS batch announces the status it wrote, not a later one', async () => {
+    const tasks = new TaskModel(serverDB, userId, workspaceId);
+    const task = await tasks.create({ instruction: 'Bulk pause' });
+    const listener = capture();
+
+    // A concurrent writer moves the task on between the conditional update and the reload:
+    // the event must still describe the transition this call committed.
+    vi.spyOn(tasks, 'findByIds').mockResolvedValue([{ ...task, status: 'running' }] as never);
+
+    const updated = await tasks.updateStatusIfCurrentForIds(
+      [{ id: task.id, status: task.status }],
+      'paused',
+    );
+
+    expect(updated).toEqual([task.id]);
+    expect(listener.mock.calls.map(([, , type, data]) => [type, data])).toEqual([
+      [
+        'task.status_changed',
+        {
+          identifier: task.identifier,
+          previousStatus: task.status,
+          status: 'paused',
+          taskId: task.id,
+        },
+      ],
+    ]);
+    expect((await tasks.findById(task.id))?.status).toBe('paused');
+  });
+
   it('holds events raised in a transaction until it commits, and drops them on rollback', async () => {
     const db = instrumentDatabaseEvents(serverDB);
     const listener = capture();
