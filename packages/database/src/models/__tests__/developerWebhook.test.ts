@@ -203,6 +203,68 @@ describe('WebhookEndpointModel', () => {
   });
 });
 
+describe('WebhookDeliveryWorkerModel', () => {
+  const seedDelivery = async () => {
+    const endpointModel = new WebhookEndpointModel(serverDB, userId);
+    const endpoint = await endpointModel.create(endpointInput());
+    const delivery = await endpointModel.createDelivery(endpoint, {
+      createdAt: new Date().toISOString(),
+      data: { message: 'hi', webhookId: endpoint.id },
+      id: 'evt_worker',
+      type: 'webhook.test',
+      workspaceId: null,
+    } as const);
+    return { delivery, worker: new WebhookDeliveryWorkerModel(serverDB) };
+  };
+
+  const reload = async (deliveryId: string) => {
+    const [row] = await serverDB
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.id, deliveryId));
+    return row;
+  };
+
+  it('refuses a duplicate callback that re-reads the attempt the first worker claimed', async () => {
+    const { delivery, worker } = await seedDelivery();
+
+    expect(await worker.claimAttempt(delivery.id, 0)).toBe(1);
+    const claimed = await reload(delivery.id);
+    expect(claimed).toMatchObject({ attempts: 1, status: 'pending' });
+    // The claim parks the delivery for one lease, so a duplicate queue message that
+    // loaded the bumped counter cannot start a second POST for the same attempt.
+    expect(claimed.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now() + 20_000);
+    expect(await worker.claimAttempt(delivery.id, claimed.attempts)).toBeNull();
+  });
+
+  it('settles the claimed attempt only, so a stale worker cannot overwrite the outcome', async () => {
+    const { delivery, worker } = await seedDelivery();
+
+    expect(await worker.claimAttempt(delivery.id, 0)).toBe(1);
+    await worker.recordAttempt(delivery.id, {
+      attempts: 1,
+      durationMs: 12,
+      error: null,
+      nextAttemptAt: null,
+      responseBody: 'ok',
+      responseStatus: 200,
+      status: 'succeeded',
+    });
+
+    await worker.recordAttempt(delivery.id, {
+      attempts: 0,
+      durationMs: 12,
+      error: 'Delivery failed before sending: boom',
+      nextAttemptAt: null,
+      responseBody: null,
+      responseStatus: null,
+      status: 'failed',
+    });
+
+    expect(await reload(delivery.id)).toMatchObject({ attempts: 1, status: 'succeeded' });
+  });
+});
+
 describe('domain events announced by models', () => {
   const capture = () => {
     const listener = vi.fn<DatabaseEventListener>();

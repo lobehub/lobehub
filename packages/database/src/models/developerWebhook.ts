@@ -1,11 +1,12 @@
-import type {
-  WebhookDeliveryEventType,
-  WebhookDeliveryStatus,
-  WebhookDisabledReason,
-  WebhookEventEnvelope,
-  WebhookEventType,
+import {
+  WEBHOOK_DELIVERY_POLICY,
+  type WebhookDeliveryEventType,
+  type WebhookDeliveryStatus,
+  type WebhookDisabledReason,
+  type WebhookEventEnvelope,
+  type WebhookEventType,
 } from '@lobechat/types';
-import { and, count, desc, eq, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
 import type { NewWebhookDeliveryRow, WebhookDeliveryRow, WebhookEndpointRow } from '../schemas';
 import { webhookDeliveries, webhookEndpoints } from '../schemas';
@@ -13,6 +14,13 @@ import type { LobeChatDatabase } from '../type';
 
 /** An endpoint as callers see it: the encrypted secret never leaves the model. */
 export type WebhookEndpointView = Omit<WebhookEndpointRow, 'secret'>;
+
+/**
+ * How long a claimed attempt holds its delivery: one request timeout plus slack for
+ * the record write. A duplicate queue message inside this window cannot start a
+ * second POST; a worker that died leaves the delivery claimable once it expires.
+ */
+const CLAIM_LEASE_MS = WEBHOOK_DELIVERY_POLICY.timeoutMs + 30_000;
 
 export interface CreateWebhookEndpointParams {
   description?: string | null;
@@ -289,19 +297,27 @@ export class WebhookDeliveryWorkerModel {
   };
 
   /**
-   * Take the next attempt of an unsettled delivery: bumps `attempts` only if nobody
-   * else did since it was read. Answers the new attempt number, or `null` when
-   * another worker (a duplicate queue message) got there first.
+   * Take the next attempt of a due delivery: bumps `attempts` only if nobody else did
+   * since it was read, and parks `nextAttemptAt` one lease ahead so a duplicate queue
+   * message that re-reads the bumped counter still cannot claim the same attempt
+   * (its `nextAttemptAt` is in the future). Answers the new attempt number, or `null`
+   * when another worker holds the attempt or it is not due yet.
    */
   claimAttempt = async (deliveryId: string, readAttempts: number): Promise<number | null> => {
+    const now = new Date();
     const [row] = await this.db
       .update(webhookDeliveries)
-      .set({ attempts: sql`${webhookDeliveries.attempts} + 1`, updatedAt: new Date() })
+      .set({
+        attempts: sql`${webhookDeliveries.attempts} + 1`,
+        nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS),
+        updatedAt: now,
+      })
       .where(
         and(
           eq(webhookDeliveries.id, deliveryId),
           eq(webhookDeliveries.attempts, readAttempts),
           inArray(webhookDeliveries.status, ['pending', 'retrying']),
+          or(isNull(webhookDeliveries.nextAttemptAt), lte(webhookDeliveries.nextAttemptAt, now)),
         ),
       )
       .returning({ attempts: webhookDeliveries.attempts });
@@ -325,7 +341,11 @@ export class WebhookDeliveryWorkerModel {
         deliveredAt: result.status === 'succeeded' ? now : null,
         updatedAt: now,
       })
-      .where(eq(webhookDeliveries.id, deliveryId));
+      // Settle the attempt this worker claimed, not whatever the row says now: a stale
+      // attempt must not overwrite the outcome a newer one already wrote.
+      .where(
+        and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.attempts, result.attempts)),
+      );
   };
 
   /** A delivery got through: the endpoint's failure streak ends. */
