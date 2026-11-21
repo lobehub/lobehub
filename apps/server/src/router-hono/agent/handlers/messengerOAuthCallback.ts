@@ -16,8 +16,9 @@ const MARKETPLACE_APPS_PATH = '/marketplace/app';
 // All OAuth callbacks land on the per-platform detail page so the user sees the
 // freshly-installed workspace/server without an extra click. The detail page
 // reads `installed=ok` / `error=...` / `workspace=...` from the URL.
-const redirectToPlatform = (origin: string, platform: string, query?: string): Response => {
-  const target = new URL(`${MARKETPLACE_APPS_PATH}/${platform}${query ? `?${query}` : ''}`, origin);
+const redirectToPlatform = (origin: string, platform: string, query: string): Response => {
+  const target = new URL(`${MARKETPLACE_APPS_PATH}/${platform}`, origin);
+  target.search = query;
   return Response.redirect(target, 302);
 };
 
