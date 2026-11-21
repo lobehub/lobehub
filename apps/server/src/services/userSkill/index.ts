@@ -16,6 +16,7 @@ import {
   type UserSkillVersion,
 } from '@/database/models/userSkill';
 
+import { mergePackageFiles, packageSizeProblem } from '../skill/packageFiles';
 import { renderSkillIndexContent, validateSkillName } from '../skillManagement/frontmatter';
 import { packSkillArchive, unpackSkillArchive } from './archive';
 import { skillStorage } from './storage';
@@ -85,15 +86,6 @@ const MAX_NAME_ATTEMPTS = 50;
 
 /** Writes that lose the race to another publish rebuild their archive this many times. */
 const MAX_PUBLISH_ATTEMPTS = 3;
-
-/** The package after `edits`: removed paths dropped, upserted ones replaced or added. */
-const applyEdits = (files: UserSkillFile[], edits?: UserSkillFileEdits): UserSkillFile[] => {
-  if (!edits) return files;
-  const byPath = new Map(files.map((file) => [file.path, file]));
-  for (const path of edits.remove ?? []) byPath.delete(path);
-  for (const file of edits.upsert ?? []) byPath.set(file.path, file);
-  return [...byPath.values()];
-};
 
 const toResources = (all: UserSkillFile[]): Record<string, SkillResourceMeta> | undefined => {
   // Resources are served inline as text. A binary file's bytes sit in its
@@ -236,8 +228,14 @@ export class UserSkillService {
       });
       // The archive is the package as it reads after this write, so it is built
       // from the version read here; a publish landing in between makes it stale.
+      // The edit is checked against the merged package it lands in, not on its
+      // own: files it does not name stay, and they count towards the limits too.
+      const files = mergePackageFiles(skill.files, params.files);
+      const problem = packageSizeProblem(files);
+      if (problem) throw new Error(problem);
+
       const result = await this.model.revise(id, {
-        archive: await this.publish(content, applyEdits(skill.files, params.files)),
+        archive: await this.publish(content, files),
         baseVersion: skill.version,
         content,
         files: params.files,
