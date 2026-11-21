@@ -227,23 +227,35 @@ describe('VerifyRunModel.appendGroupFeedback', () => {
 
 describe('VerifyRunModel.claimTaskDrive', () => {
   it('claims the drive exactly once and preserves other metadata', async () => {
-    const run = await model().create({ source: 'agent' });
+    const run = await model().create({ source: 'agent', status: 'passed' });
     await model().setMetadata(run.id, { maxRepairRounds: 2 });
 
-    await expect(model().claimTaskDrive(run.id)).resolves.toBe(true);
-    await expect(model().claimTaskDrive(run.id)).resolves.toBe(false);
+    await expect(model().claimTaskDrive(run.id, 'owner')).resolves.toBe(true);
+    await expect(model().claimTaskDrive(run.id, 'owner')).resolves.toBe(false);
 
     const reloaded = await serverDB.query.verifyRuns.findFirst({
       where: (t, { eq }) => eq(t.id, run.id),
     });
     expect(reloaded?.metadata).toMatchObject({ maxRepairRounds: 2 });
-    expect(reloaded?.metadata?.taskDrivenAt).toEqual(expect.any(String));
+    expect(reloaded?.metadata?.taskDriveClaimedAt).toEqual(expect.any(String));
+    expect(reloaded?.metadata?.taskDrivenAt).toBeUndefined();
+    await model().finishTaskDrive(run.id, 'other');
+    await expect(model().claimTaskDrive(run.id, 'other')).resolves.toBe(false);
+    await model().finishTaskDrive(run.id, 'owner');
+    await expect(model().claimTaskDrive(run.id, 'owner')).resolves.toBe(true);
+    await model().updateStatus(run.id, 'repairing');
+    await model().finishTaskDrive(run.id, 'owner');
+    await expect(model().claimTaskDrive(run.id, 'other')).resolves.toBe(false);
+    await model().updateStatus(run.id, 'passed');
+    await expect(model().claimTaskDrive(run.id, 'owner')).resolves.toBe(true);
+    await model().finishTaskDrive(run.id, 'owner', true);
+    await expect(model().claimTaskDrive(run.id, 'owner')).resolves.toBe(false);
   });
 
   it("never claims another owner's round", async () => {
-    const theirs = await model(otherUserId).create({ source: 'agent' });
+    const theirs = await model(otherUserId).create({ source: 'agent', status: 'passed' });
 
-    await expect(model().claimTaskDrive(theirs.id)).resolves.toBe(false);
+    await expect(model().claimTaskDrive(theirs.id, 'owner')).resolves.toBe(false);
   });
 });
 

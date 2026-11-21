@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
   VERIFICATION_ERRORED_ERROR,
@@ -143,9 +145,11 @@ export const driveTaskFromVerify = async (
   operationId: string,
   workspaceId?: string,
 ): Promise<void> => {
+  const runModel = new VerifyRunModel(db, userId, workspaceId);
+  const claimId = randomUUID();
+  let claimedRunId: string | undefined;
   try {
-    const runModel = new VerifyRunModel(db, userId, workspaceId);
-    const run = await runModel.findByOperation(operationId);
+    let run = await runModel.findByOperation(operationId);
     // Only act on a terminally settled run (skip pending / verifying / repairing).
     if (run?.status !== 'passed' && run?.status !== 'failed' && run?.status !== 'errored') return;
     if ((run.metadata as { taskDrivenAt?: string } | null)?.taskDrivenAt) return; // already drove
@@ -176,7 +180,9 @@ export const driveTaskFromVerify = async (
     // Cheap read above, authoritative claim here: concurrent verifier
     // callbacks would otherwise both pass the read and both act — spawning two
     // rounds, or one spawning while the other pauses the task it just started.
-    if (!(await runModel.claimTaskDrive(run.id))) return;
+    if (!(await runModel.claimTaskDrive(run.id, claimId))) return;
+    claimedRunId = run.id;
+    run = (await runModel.findByOperation(operationId))!;
 
     if (!op || !taskOperation?.taskId) return; // not a task-bound run — nothing to drive
 
@@ -200,7 +206,8 @@ export const driveTaskFromVerify = async (
     // attempt would only re-deliver into the same broken review.
     const goalReview =
       run.status === 'passed'
-        ? await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)
+        ? (run.metadata?.goalReview ??
+          (await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)))
         : undefined;
 
     // A rejected check that can be repaired is fixed inside this round, by the
@@ -223,6 +230,7 @@ export const driveTaskFromVerify = async (
         return null;
       });
       if (repair) {
+        await runModel.finishTaskDrive(run.id, claimId, true);
         log(
           'acceptance review rejected → repairing op %s in round (%s)',
           operationId,
@@ -347,6 +355,9 @@ export const driveTaskFromVerify = async (
       }
     }
 
+    // Review/repair and the task transition are core. Notifications below remain best-effort.
+    await runModel.finishTaskDrive(run.id, claimId, true);
+
     // Deferred creator callback: verify-bound runs defer
     // the taskCallback from `onTopicComplete` to HERE so the creator only sees the
     // result once verify has accepted (passed) or rejected (failed) the delivery —
@@ -402,10 +413,14 @@ export const driveTaskFromVerify = async (
     } catch (error) {
       log('verify-settle goal advance dispatch failed (non-fatal): %O', error);
     }
-
-    // The drive marker was stamped by the claim at the top of this function.
   } catch (error) {
     log('driveTaskFromVerify failed for op %s (non-fatal): %O', operationId, error);
+  } finally {
+    // No clock-based takeover: a slow review must not overlap another drive.
+    if (claimedRunId)
+      await runModel.finishTaskDrive(claimedRunId, claimId).catch((error) => {
+        log('task-drive lease release failed for op %s: %O', operationId, error);
+      });
   }
 };
 

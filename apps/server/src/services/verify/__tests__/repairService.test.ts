@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { carriedRunPolicy, VerifyRepairService } from '../repairService';
 
+vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
+  CompletionLifecycle: vi.fn(),
+}));
+vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: vi.fn() }));
+vi.mock('../acceptanceService', () => ({ AcceptanceService: vi.fn() }));
+
 const m = vi.hoisted(() => ({
   findVerifyMessage: vi.fn(),
   listResults: vi.fn(),
@@ -309,6 +315,8 @@ describe('carriedRunPolicy', () => {
         goalReview: { feedback: 'x', predictionIds: [], status: 'rejected' },
         maxRepairRounds: 2,
         taskDrivenAt: '2026-10-28T08:43:00.000Z',
+        taskDriveClaimedAt: '2026-10-28T08:42:00.000Z',
+        taskDriveClaimId: 'parent-owner',
       }),
     ).toEqual({ maxRepairRounds: 2 });
   });

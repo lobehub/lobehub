@@ -40,6 +40,7 @@ const {
   goalFindByTask,
   runFindByOperation,
   runClaimTaskDrive,
+  runFinishTaskDrive,
   runSetMetadata,
   opFindById,
   taskFindById,
@@ -57,6 +58,7 @@ const {
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
   runClaimTaskDrive: vi.fn().mockResolvedValue(true),
+  runFinishTaskDrive: vi.fn(),
   runSetMetadata: vi.fn(),
   serviceUpdateStatus: vi.fn(),
   statusRecompute: vi.fn(),
@@ -74,6 +76,7 @@ vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
     return {
       claimTaskDrive: runClaimTaskDrive,
+      finishTaskDrive: runFinishTaskDrive,
       findByOperation: runFindByOperation,
       setMetadata: runSetMetadata,
     };
@@ -119,6 +122,46 @@ vi.mock('@/server/services/taskResultBridge', () => ({
 const db = {} as any;
 
 describe('driveTaskFromVerify', () => {
+  it('retries a claimed drive after updateStatus fails instead of permanently skipping it', async () => {
+    const run = { id: 'run-1', metadata: {} as Record<string, unknown>, status: 'passed' };
+    runFindByOperation.mockImplementation(async () => ({ ...run, metadata: { ...run.metadata } }));
+    runClaimTaskDrive.mockImplementation(async (_id, claimedAt?: string) => {
+      run.metadata[claimedAt ? 'taskDriveClaimedAt' : 'taskDrivenAt'] = claimedAt ?? '2026-01-01';
+      return true;
+    });
+    runFinishTaskDrive.mockImplementation(async (_id, _claimId, completed) => {
+      delete run.metadata.taskDriveClaimedAt;
+      if (completed) run.metadata.taskDrivenAt = '2026-01-01';
+    });
+    serviceUpdateStatus.mockRejectedValueOnce(new Error('transient status failure'));
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).toHaveBeenCalledTimes(1);
+    expect(runFinishTaskDrive).not.toHaveBeenCalledWith('run-1', expect.any(String), true);
+    expect(deliverMock).not.toHaveBeenCalled();
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).toHaveBeenCalledTimes(2);
+    expect(deliverMock).toHaveBeenCalledTimes(1);
+    expect(run.metadata.taskDrivenAt).toBeDefined();
+  });
+
+  it('reuses the persisted review on retry and commits before best-effort delivery', async () => {
+    const goalReview = { status: 'passed', feedback: '', predictionIds: [] };
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      status: 'passed',
+      metadata: { goalReview },
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(reviewGoalDelivery).not.toHaveBeenCalled();
+    expect(runFinishTaskDrive).toHaveBeenCalledWith('run-1', expect.any(String), true);
+    expect(runFinishTaskDrive.mock.invocationCallOrder[0]).toBeGreaterThan(
+      serviceUpdateStatus.mock.invocationCallOrder[0],
+    );
+    expect(runFinishTaskDrive.mock.invocationCallOrder[0]).toBeLessThan(
+      deliverMock.mock.invocationCallOrder[0],
+    );
+  });
+
   it('does not overwrite a fast-failed repair when the parent finalizer resumes', async () => {
     runFindByOperation.mockImplementation(async (id: string) => ({
       id: id === 'repair-op' ? 'repair-run' : 'parent-run',
@@ -134,8 +177,8 @@ describe('driveTaskFromVerify', () => {
       error: VERIFICATION_ERRORED_ERROR,
     });
     expect(deliverMock).toHaveBeenCalledTimes(1);
-    expect(runClaimTaskDrive).toHaveBeenCalledWith('repair-run');
-    expect(runClaimTaskDrive).not.toHaveBeenCalledWith('parent-run');
+    expect(runClaimTaskDrive).toHaveBeenCalledWith('repair-run', expect.any(String));
+    expect(runClaimTaskDrive).not.toHaveBeenCalledWith('parent-run', expect.any(String));
   });
 
   it('automatically sends a Goal delivery back when Acceptance review rejects a Verify pass', async () => {
@@ -508,6 +551,7 @@ describe('driveTaskFromVerify', () => {
     completeTaskForDelivery.mockReset().mockResolvedValue('completed');
     [
       runClaimTaskDrive,
+      runFinishTaskDrive,
       runFindByOperation,
       runSetMetadata,
       opFindById,
@@ -522,6 +566,7 @@ describe('driveTaskFromVerify', () => {
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
     runClaimTaskDrive.mockResolvedValue(true);
+    runFinishTaskDrive.mockResolvedValue(undefined);
     briefModelConstruct.mockImplementation(function () {
       return { create: briefCreate };
     });
@@ -548,7 +593,7 @@ describe('driveTaskFromVerify', () => {
       taskIdentifier: 'T-1',
       topicId: 'topic-done',
     });
-    expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
+    expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1', expect.any(String));
   });
 
   it('passed → keeps a recurring task scheduled', async () => {
@@ -568,7 +613,7 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'done', taskId: 'task-1' }),
     );
-    expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
+    expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1', expect.any(String));
   });
 
   it('settles the owning task when the passing verify run belongs to a repair child', async () => {
