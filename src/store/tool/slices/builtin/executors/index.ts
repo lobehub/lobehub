@@ -131,6 +131,22 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
   if (dashboardExecutor) executorRegistry.set(LegacyDashboardIdentifier, dashboardExecutor);
 };
 
+/**
+ * A failed catalog import usually cannot be retried in place: Chromium (and so
+ * Electron 44) caches a module that failed to fetch, link or evaluate for the
+ * document's lifetime, so every later `import('./catalog')` rejects instantly
+ * with the same error until the window reloads. Name the remedy so the agent
+ * and the user see an action instead of a bare module URL.
+ */
+const toCatalogLoadError = (error: unknown): Error => {
+  const reason = error instanceof Error ? error.message : String(error);
+
+  return new Error(
+    `Builtin tools failed to load (${reason}). The window keeps this failure until it reloads: reload the app window or page, then retry the tool call.`,
+    { cause: error },
+  );
+};
+
 export const registerBuiltinToolExecutors = async (): Promise<void> => {
   if (executorsRegistered) return;
 
@@ -142,7 +158,9 @@ export const registerBuiltinToolExecutors = async (): Promise<void> => {
   try {
     await registrationPromise;
   } catch (error) {
+    // Still allow a later call to retry: browsers that re-fetch failed modules
+    // (Chromium 156+) recover without a reload.
     registrationPromise = undefined;
-    throw error;
+    throw toCatalogLoadError(error);
   }
 };
