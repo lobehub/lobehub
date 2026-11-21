@@ -187,6 +187,13 @@ describe('WorkModel · artboard publish', () => {
     expect((await new WorkModel(serverDB, userId).findArtboardWork(artboardId))?.url).toBeNull();
   });
 
+  it('returns null when the board Work is missing', async () => {
+    const model = new WorkModel(serverDB, userId);
+
+    expect(await model.findArtboardWork('art-missing')).toBeNull();
+    expect(await model.clearArtboardPublish('art-missing')).toBeNull();
+  });
+
   it('maps deployments back to their boards', async () => {
     const model = new WorkModel(serverDB, userId);
     await model.registerArtboard(params());

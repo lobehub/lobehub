@@ -85,6 +85,30 @@ describe('parseArtboardShellChange', () => {
     ).toEqual({ artboardId: 'art_3', changeType: 'updated' });
   });
 
+  it('falls back from output it cannot parse instead of guessing an id', () => {
+    expect(
+      parseArtboardShellChange({
+        command: 'lh artboard create --title x',
+        exitCode: 0,
+        output: 'command failed: not json at all',
+      }),
+    ).toBeNull();
+    expect(
+      parseArtboardShellChange({
+        command: 'lh artboard create --json',
+        exitCode: 0,
+        output: JSON.stringify({ changedIds: [] }),
+      }),
+    ).toBeNull();
+    expect(
+      parseArtboardShellChange({
+        command: 'lh artboard create --json',
+        exitCode: 0,
+        output: JSON.stringify('art_9'),
+      }),
+    ).toBeNull();
+  });
+
   it('ignores failed runs, reads and other programs', () => {
     const output = 'artboard art_3 · revision 2 · 1 groups · 1 boards';
     expect(
@@ -136,6 +160,31 @@ describe('WorkModel.registerShellArtboardResult', () => {
         },
         toolIdentifier: 'codex',
         toolName: 'command_execution',
+      }),
+    ).toBeNull();
+  });
+
+  it('ignores data that is not a shell record', async () => {
+    const model = new WorkModel(serverDB, userId);
+    const base = { toolIdentifier: 'codex', toolName: 'command_execution', topicId };
+
+    expect(await model.registerShellArtboardResult({ ...base, data: null })).toBeNull();
+    expect(
+      await model.registerShellArtboardResult({ ...base, data: 'lh artboard create' }),
+    ).toBeNull();
+    expect(
+      await model.registerShellArtboardResult({ ...base, data: { command: 42, output: line() } }),
+    ).toBeNull();
+    expect(
+      await model.registerShellArtboardResult({
+        ...base,
+        data: { command: 'lh artboard create --title x', exitCode: '0', output: '' },
+      }),
+    ).toBeNull();
+    expect(
+      await model.registerShellArtboardResult({
+        ...base,
+        data: { command: 'lh artboard create --title x', exitCode: 0, output: 42 },
       }),
     ).toBeNull();
   });

@@ -71,6 +71,96 @@ describe('AgentShareProfileModel coverage edges', () => {
     expect(items[0]).toMatchObject({ id: workId, totalCost: null, type: 'file', url: null });
   });
 
+  it('exposes a featured collection without inventing a cover or a mime type', async () => {
+    const collectionWorkId = 'aspcov-collection';
+    const emptyCollectionWorkId = 'aspcov-empty-collection';
+
+    await serverDB.insert(works).values([
+      {
+        id: collectionWorkId,
+        originAgentId: agentId,
+        originTopicId: topicId,
+        resourceType: 'collection',
+        title: 'aspcov collection',
+        toolIdentifier: 'files',
+        toolName: 'createCollection',
+        type: 'collection',
+        url: 'https://example.com/cover.png',
+        userId,
+        visibility: 'private',
+      },
+      {
+        id: emptyCollectionWorkId,
+        originAgentId: agentId,
+        originTopicId: topicId,
+        resourceType: 'collection',
+        title: 'aspcov collection without images',
+        toolIdentifier: 'files',
+        toolName: 'createCollection',
+        type: 'collection',
+        url: null,
+        userId,
+        visibility: 'private',
+      },
+    ]);
+    const versions = await serverDB
+      .insert(workVersions)
+      .values([
+        {
+          agentId,
+          changeType: 'created',
+          metadata: {
+            collection: {
+              items: [
+                { fileId: 'file-a', mimeType: 'image/png', url: 'https://example.com/a.png' },
+                { fileId: 'file-b', url: 'https://example.com/b.png' },
+                { caption: 'unsafe', fileId: 'file-c', url: 'javascript:alert(1)' },
+              ],
+            },
+          },
+          toolIdentifier: 'files',
+          toolName: 'createCollection',
+          topicId,
+          version: 1,
+          workId: collectionWorkId,
+        },
+        {
+          agentId,
+          changeType: 'created',
+          metadata: null,
+          toolIdentifier: 'files',
+          toolName: 'createCollection',
+          topicId,
+          version: 1,
+          workId: emptyCollectionWorkId,
+        },
+      ])
+      .returning();
+    await serverDB
+      .update(works)
+      .set({ currentVersionId: versions[0].id })
+      .where(eq(works.id, collectionWorkId));
+    await serverDB
+      .update(works)
+      .set({ currentVersionId: versions[1].id })
+      .where(eq(works.id, emptyCollectionWorkId));
+
+    const model = new AgentShareProfileModel(serverDB, userId);
+    const featured = await model.listFeaturedWorks(agentId, [
+      collectionWorkId,
+      emptyCollectionWorkId,
+    ]);
+
+    expect(featured[0].collection).toEqual({
+      items: [
+        { fileId: 'file-a', mimeType: 'image/png', url: 'https://example.com/a.png' },
+        { fileId: 'file-b', url: 'https://example.com/b.png' },
+      ],
+    });
+    // No collection metadata at all: the Work is still featured, just without images.
+    expect(featured[1].collection).toBeUndefined();
+  });
+
   it('getStats falls back to zero Works when the aggregate returns no row', async () => {
     // An aggregate without GROUP BY always yields one row on Postgres; the driver
     // seam drops it to exercise the empty-result fallback of the Work stats read.
