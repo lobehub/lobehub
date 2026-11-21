@@ -114,6 +114,8 @@ describe('spawnAgent — Antigravity', () => {
       '--output-format',
       'stream-json',
       '--dangerously-skip-permissions',
+      '--settings',
+      '{"agentMode":"","allowNonWorkspaceAccess":true,"enableTerminalSandbox":false}',
       '--conversation',
       'agy-session',
     ]);
@@ -126,5 +128,98 @@ describe('spawnAgent — Antigravity', () => {
       events.filter((event) => event.type === 'stream_chunk' && event.data.chunkType === 'text'),
     ).toHaveLength(1);
     expect(events.some((event) => event.type === 'error')).toBe(false);
+  });
+
+  it('keeps stdin open in liveInput mode and steers follow-up messages into the session', async () => {
+    const fake = createFakeProc({
+      stdoutChunks: [
+        JSON.stringify({ event: 'init', conversation_id: 'agy-live', init: {} }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 0,
+            step_type: 'user_input',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 1,
+            step_type: 'agent_response',
+            text_delta: 'first',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'result',
+          result: { conversation_id: 'agy-live', num_turns: 1, response: 'first', status: 'SUCCESS' },
+        }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 2,
+            step_type: 'user_input',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 3,
+            step_type: 'agent_response',
+            text_delta: 'steered',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'result',
+          result: {
+            conversation_id: 'agy-live',
+            num_turns: 2,
+            response: 'steered',
+            status: 'SUCCESS',
+          },
+        }) + '\n',
+      ],
+    });
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'antigravity',
+      liveInput: true,
+      operationId: 'op-agy-live',
+      prompt: 'initial',
+    });
+
+    expect(handle.sendUserMessage).toBeDefined();
+    expect(handle.supportsSteerImages).toBe(false);
+    expect(fake.proc.stdin.end).not.toHaveBeenCalled();
+
+    await expect(handle.sendUserMessage!('follow up', { uuid: 'steer-1' })).resolves.toBe(true);
+    expect(JSON.parse(fake.stdinWrites[1])).toEqual({
+      event: 'user',
+      message: { content: 'follow up' },
+    });
+
+    fake.start();
+    const events = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'step_complete' &&
+          event.data.phase === 'user_message' &&
+          event.data.uuid === 'steer-1',
+      ),
+    ).toBe(true);
+    expect(events.some((event) => event.type === 'agent_runtime_end')).toBe(true);
+    expect(fake.proc.stdin.end).toHaveBeenCalled();
   });
 });

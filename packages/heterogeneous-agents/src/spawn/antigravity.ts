@@ -7,6 +7,14 @@ export const ANTIGRAVITY_BASE_ARGS = [
   '--dangerously-skip-permissions',
 ] as const;
 
+// agy 1.5.7+ defaults to Auto on supported systems. Use per-run settings
+// so Full access does not depend on the CLI's saved sandbox or startup mode.
+const FULL_ACCESS_SETTINGS = JSON.stringify({
+  agentMode: '',
+  allowNonWorkspaceAccess: true,
+  enableTerminalSandbox: false,
+});
+
 interface AntigravitySpawnArgsOptions {
   extraArgs?: string[];
   resumeSessionId?: string;
@@ -38,8 +46,13 @@ export const buildAntigravityArgs = ({
     );
   }
 
+  const hasCustomPermissionSettings = extraArgs.some((arg) =>
+    ['--mode', '--sandbox', '--settings'].includes(arg.split('=')[0]),
+  );
+
   return [
     ...ANTIGRAVITY_BASE_ARGS,
+    ...(hasCustomPermissionSettings ? [] : ['--settings', FULL_ACCESS_SETTINGS]),
     ...(resumeSessionId ? ['--conversation', resumeSessionId] : []),
     ...extraArgs,
   ];

@@ -1419,7 +1419,7 @@
   "groupWizard.searchTemplates": "搜索模板…",
   "groupWizard.title": "创建群组",
   "groupWizard.useTemplate": "使用模板",
-  "heteroAgent.antigravityQuota.authRequired": "请在终端运行 agy 并登录，然后刷新。",
+  "heteroAgent.antigravityQuota.authRequired": "请在执行设备上运行 agy 并登录，然后重试。",
   "heteroAgent.antigravityQuota.cliNotFound": "此设备上未找到 Antigravity CLI，请安装 agy 后刷新。",
   "heteroAgent.antigravityQuota.disabled": "不可用",
   "heteroAgent.antigravityQuota.error": "无法查询 Antigravity 配额，请检查设备后重试。",

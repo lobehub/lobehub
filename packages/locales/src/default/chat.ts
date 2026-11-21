@@ -14,7 +14,8 @@ export default {
   'heteroAgent.antigravityQuota.resetUnconfirmed':
     'Reset time reached. Refresh to check the latest quota.',
   'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
-  'heteroAgent.antigravityQuota.authRequired': 'Run agy in a terminal to sign in, then refresh.',
+  'heteroAgent.antigravityQuota.authRequired':
+    'Sign in with agy on the execution device, then try again.',
   'heteroAgent.antigravityQuota.cliNotFound':
     'Antigravity CLI was not found on this device. Install agy, then refresh.',
   'heteroAgent.antigravityQuota.unsupported':
