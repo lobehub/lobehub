@@ -349,14 +349,46 @@ export class GoalModel {
      */
     options: { archivedKeepsStatus?: GoalStatus } = {},
   ) => {
+    // Every status written through here (`updateStatus` included) is announced once,
+    // against the status the row had before the write. That read has to happen under
+    // the same row lock as the write: an unlocked read lets two concurrent pauses on a
+    // running goal both observe `running` and each announce a `running → paused`
+    // transition, and it lets a stale read suppress a real transition when it already
+    // equals the requested status. Read and write inside one transaction, announce only
+    // after it commits, so listeners never observe a row the transaction has not
+    // published.
+    if (value.status === undefined || !hasDatabaseEventListener()) {
+      return this.writeUpdate(id, value, options);
+    }
+
+    const settled = await this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({ status: goals.status })
+        .from(goals)
+        .where(and(eq(goals.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!before) return undefined;
+
+      const row = await this.writeUpdate(id, value, options, runner);
+      return row ? { previousStatus: before.status, row } : undefined;
+    });
+    if (!settled) return undefined;
+
+    this.announceStatusChange(id, settled.previousStatus, settled.row.status);
+    return settled.row;
+  };
+
+  private writeUpdate = async (
+    id: string,
+    value: Partial<Omit<GoalItem, 'id' | 'userId'>>,
+    options: { archivedKeepsStatus?: GoalStatus },
+    db: LobeChatDatabase = this.db,
+  ) => {
     // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
     // ownership always comes from the current row, never that snapshot, and
     // policy edits cannot replace the concurrently written incident ledger.
-    // Every status written through here (`updateStatus` included) is announced once.
-    const before =
-      value.status !== undefined && hasDatabaseEventListener()
-        ? await this.findById(id)
-        : undefined;
     const merged = sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'rolloutState')
       || jsonb_strip_nulls(jsonb_build_object(
         'planningCheckpoint', ${goals.config}->'planningCheckpoint',
@@ -367,7 +399,7 @@ export class GoalModel {
         'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt',
         'rolloutState', ${goals.config}->'rolloutState'
       ))`;
-    const [row] = await this.db
+    const [row] = await db
       .update(goals)
       .set({
         ...value,
@@ -398,7 +430,6 @@ export class GoalModel {
         ),
       )
       .returning();
-    if (row && before) this.announceStatusChange(id, before.status, row.status);
     return row as GoalItem | undefined;
   };
 

@@ -720,3 +720,91 @@ describe.skipIf(!process.env.DATABASE_TEST_URL)(
     });
   },
 );
+
+// The goal writer takes the same shape: two overlapping `goal.pause` calls used to read
+// the prior status outside the write's lock, so both observed `running` and each announced
+// `running → paused`. Same two real sessions, same deterministic handshake.
+describe.skipIf(!process.env.DATABASE_TEST_URL)(
+  'goal.status_changed with an overlapping writer',
+  () => {
+    const capture = () => {
+      const listener = vi.fn<DatabaseEventListener>();
+      setDatabaseEventListener(listener);
+      return listener;
+    };
+
+    /** Hold an uncommitted status write on its own session, so the row lock is real. */
+    const holdStatus = async (client: Client, goalId: string, status: string) => {
+      await client.query('BEGIN');
+      await client.query('UPDATE goals SET status = $1 WHERE id = $2', [status, goalId]);
+    };
+
+    /** Wait until the model's transaction is queued on the lock the competitor holds. */
+    const waitForRowLock = () =>
+      vi.waitFor(
+        async () => {
+          const { rows } = await serverDB.execute(
+            sql`SELECT count(*)::int AS waiting
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND wait_event_type = 'Lock'
+                  AND query ILIKE '%from "goals"%'`,
+          );
+          expect((rows[0] as { waiting: number }).waiting).toBeGreaterThan(0);
+        },
+        { interval: 50, timeout: 5000 },
+      );
+
+    const withCompetitor = async (
+      goalId: string,
+      status: string,
+      racing: () => Promise<unknown>,
+    ) => {
+      const client = new Client({ connectionString: process.env.DATABASE_TEST_URL });
+      await client.connect();
+      try {
+        await holdStatus(client, goalId, status);
+        const racer = racing();
+        await waitForRowLock();
+        // Release the competitor first: the racer may only read the committed value.
+        await client.query('COMMIT');
+        return await racer;
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        await client.end();
+      }
+    };
+
+    it('announces nothing when the competitor already moved the goal to the requested status', async () => {
+      const goals = new GoalModel(serverDB, userId);
+      const goal = await goals.create({ status: 'running', title: 'Racing pause' } as never);
+      const listener = capture();
+
+      await expect(
+        withCompetitor(goal.id, 'paused', () => goals.update(goal.id, { status: 'paused' })),
+      ).resolves.toMatchObject({ status: 'paused' });
+
+      // Two paused requests that both saw `running` before the lock must not each announce.
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('announces the transition the competitor left behind instead of swallowing it', async () => {
+      const goals = new GoalModel(serverDB, userId);
+      const goal = await goals.create({ status: 'paused', title: 'Racing resume' } as never);
+      const listener = capture();
+
+      // The row leaves `paused` under the competitor; a read taken before the lock would
+      // see the stale `paused` and discard the real `running → paused` we write next.
+      await expect(
+        withCompetitor(goal.id, 'running', () => goals.update(goal.id, { status: 'paused' })),
+      ).resolves.toMatchObject({ status: 'paused' });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][3]).toMatchObject({
+        goalId: goal.id,
+        previousStatus: 'running',
+        status: 'paused',
+      });
+    });
+  },
+);
