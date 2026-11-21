@@ -12,6 +12,7 @@
     "e2e/**",
     "knip.ts",
     "packages/alint/fixtures/**",
+    "packages/alint/server/fixtures/**",
     "packages/*/alint/fixtures/**",
     "**/*.test.ts",
     "**/*.test.tsx",
