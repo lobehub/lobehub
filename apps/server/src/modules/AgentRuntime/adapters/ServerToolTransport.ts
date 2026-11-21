@@ -288,6 +288,9 @@ export class ServerToolTransport implements ToolTransport {
               deviceCapable: context.state.plan?.execution
                 ? isDeviceCapablePlan(context.state.plan?.execution)
                 : undefined,
+              deviceSelectionFixed:
+                context.state.world?.agent?.agencyConfig?.executionTargetSelectionPolicy ===
+                'fixed',
               documentId: context.state.origin?.documentId,
               editingAgentId: context.state.origin?.editingAgentId,
               editingGroupId: context.state.origin?.editingGroupId,
