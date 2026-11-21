@@ -1,4 +1,4 @@
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { AgentOperationStatus, VerifyCheckItem } from '@lobechat/types';
 import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
@@ -154,22 +154,23 @@ const recoverRun = async (
   // recomputed rollup + finalizer re-drive repair for the same failures.
   if (run.status === 'repairing') {
     const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
+    const runModel = new VerifyRunModel(db, run.userId, workspaceId);
     const children = await operationModel.listOperationTree(operationId);
-    // Only a still-live repair child keeps the claim: its spawner died, but the
-    // child it already spawned may be working, and that child owns the parent's
-    // settlement (it recomputes the parent through `recomputeRepairAncestors`).
-    // A terminal child means the whole chain is dead — safe to reclaim.
-    const liveRepairChild = children.find(
-      (child) =>
-        child.id !== operationId &&
-        child.parentOperationId === operationId &&
-        isAgentOperationInFlight(child.status),
+    // A repair child that is still working — or whose own round is still being
+    // judged — keeps the claim: its spawner died, but that child owns the
+    // parent's settlement (its finalizer recomputes the parent through
+    // `recomputeRepairAncestors`). Only a chain that is dead end to end is safe
+    // to reclaim; reclaiming earlier would spawn a duplicate repair against the
+    // same failures while the first one is still being verified.
+    const repairChildren = children.filter(
+      (child) => child.id !== operationId && child.parentOperationId === operationId,
     );
-    if (liveRepairChild) return 'skipped';
+    for (const child of repairChildren) {
+      if (await isRepairChainLive(child, operationModel, runModel, now)) return 'skipped';
+    }
 
     // Stale claim, no live child: retake it via CAS. Losing it means a
     // concurrent delivery got here first.
-    const runModel = new VerifyRunModel(db, run.userId, workspaceId);
     if (!(await runModel.reclaimRepairing(run.id))) return 'skipped';
 
     // Recompute re-derives the verdict from the on-disk results — the failed
@@ -182,6 +183,13 @@ const recoverRun = async (
     await new VerifyStatusService(db, run.userId, workspaceId).recompute(operationId);
     if (await isLatestRound(db, run)) {
       await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
+    } else {
+      // Skipping the finalizer also skips `triggerAutoRepair`'s superseded
+      // branch, which is what marks a failed round's repair as declined. Without
+      // that outcome the card keeps reading the failure as awaiting repair, so
+      // record it here — the repair it was waiting on is never coming.
+      const recomputed = await runModel.findByOperation(operationId);
+      if (recomputed?.status === 'failed') await runModel.recordAutoRepair(run.id, 'declined');
     }
     log('reclaimed abandoned repair claim on run %s (op %s)', run.id, operationId);
     return 'settled';
@@ -290,6 +298,45 @@ const recoverRun = async (
   const action = outstanding.length > 0 ? 'abandoned' : 'settled';
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;
+};
+
+/** Verify-run states in which a round's judging is still underway. */
+const JUDGING_RUN_STATUSES = new Set(['repairing', 'verifying']);
+/**
+ * States a finished repair child passes through on its way to judging. They are
+ * not swept for a child round, so they only count as live while recent —
+ * otherwise a completion hook that never fired would pin the parent forever.
+ */
+const PRE_JUDGING_RUN_STATUSES = new Set(['collecting_evidence', 'planned']);
+
+/**
+ * Whether a repair child still owns its parent's settlement: the repair agent
+ * itself is running, its round is still being judged, or one of its verifiers
+ * is still working. A `verifying` / `repairing` child round counts however old
+ * it is — the sweep recovers that round on its own, and its finalizer collapses
+ * this parent.
+ */
+const isRepairChainLive = async (
+  child: { id: string; status: AgentOperationStatus },
+  operationModel: AgentOperationModel,
+  runModel: VerifyRunModel,
+  now: Date,
+): Promise<boolean> => {
+  if (isAgentOperationInFlight(child.status)) return true;
+
+  const childRun = await runModel.findByOperation(child.id);
+  if (childRun?.status && JUDGING_RUN_STATUSES.has(childRun.status)) return true;
+  if (
+    childRun?.status &&
+    PRE_JUDGING_RUN_STATUSES.has(childRun.status) &&
+    now.getTime() - childRun.updatedAt.getTime() < VERIFY_ABANDONED_MS
+  )
+    return true;
+
+  const verifiers = await operationModel.listOperationTree(child.id);
+  return verifiers.some(
+    (verifier) => verifier.id !== child.id && isAgentOperationInFlight(verifier.status),
+  );
 };
 
 /** Whether no later round of the same acceptance superseded this one. */
