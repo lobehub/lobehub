@@ -1,6 +1,7 @@
 import type {
   ChannelAgentExchange,
   ChannelConnectorRequest,
+  ChannelAskInput,
   ChannelContextMessage,
   ChannelExecutionConfig,
   ChannelHistoryMessage,
@@ -25,6 +26,7 @@ import {
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { isEqual } from 'es-toolkit';
 
 import {
   agentOperations,
@@ -276,6 +278,41 @@ export class ChannelHistoryRepository {
       const asked = await message(request.replyToId);
       const exchange = channelAgentExchange(asked?.metadata);
       return { channelId, ...(exchange && { exchange }), manifest };
+    });
+
+  /**
+   * Holds the questions a run asks its requester (`lobe-channel.askUser`) on its job; publishing
+   * the reply posts them with it as an `ask` message. One ask per run: a retried call with the
+   * same questions is a no-op, different ones are refused. Only a person's own request can be
+   * asked back: an Agent's request has nobody to answer the card.
+   */
+  ask = async (operationId: string, input: ChannelAskInput): Promise<void> =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [request] = await tx
+        .select({ agentId: channelMessages.agentId, metadata: channelMessages.metadata })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, manifest.requestMessageId),
+          ),
+        )
+        .limit(1);
+      if (!request || request.agentId || channelMessageVia(request.metadata))
+        throw new ChannelError(
+          'FORBIDDEN',
+          'Only a request a person wrote can be asked back; answer this one instead',
+        );
+      const [job] = await tx
+        .select({ ask: channelJobs.ask, id: channelJobs.id })
+        .from(channelJobs)
+        .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.channelId, channelId)))
+        .limit(1);
+      if (job.ask) {
+        if (isEqual(job.ask, input)) return;
+        throw new ChannelError('CONFLICT', 'This reply already asks its questions');
+      }
+      await tx.update(channelJobs).set({ ask: input }).where(eq(channelJobs.id, job.id));
     });
 
   /**

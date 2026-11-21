@@ -29,6 +29,8 @@ import {
   projectDefaultChannelMetadata,
   withDisplayTitle,
 } from '@/database/repositories/channel/displayTitle';
+import type { ChannelAskAnswerInput } from '@/database/repositories/channel/ask';
+import { answerAsk } from '@/database/repositories/channel/ask';
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
@@ -692,6 +694,15 @@ export class ChannelService {
     // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return message;
+  };
+
+  /** Answers an Agent's question as the person it asked; the answer wakes that Agent. */
+  answerAsk = async (channelId: string, input: ChannelAskAnswerInput) => {
+    const message = await this.repository.write(channelId, (tx, access) =>
+      answerAsk(tx, access, input),
+    );
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
   };
 

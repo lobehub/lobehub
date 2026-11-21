@@ -109,6 +109,7 @@ export const announceDeviceGrants = async (db: LobeChatDatabase, channelId: stri
         await new ChannelRepository(db, deviceOwnerId, scope).postAgentMessage(direct.channel.id, {
           agentId,
           content: deviceGrantRequestText(card),
+          kind: 'deviceGrant',
           metadata: { deviceGrant: card },
           requestKey: deviceGrantCardKey(request.grantId),
         });

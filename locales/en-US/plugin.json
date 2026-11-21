@@ -283,6 +283,7 @@
   "builtins.lobe-canvas.apiName.readCanvasGuide": "Read canvas guide",
   "builtins.lobe-canvas.apiName.updateCanvas": "Update canvas",
   "builtins.lobe-canvas.title": "Canvas",
+  "builtins.lobe-channel.apiName.askUser": "Ask with options",
   "builtins.lobe-channel.apiName.createThread": "Open Thread",
   "builtins.lobe-channel.apiName.listChannels": "List Channels",
   "builtins.lobe-channel.apiName.listPeople": "List people",

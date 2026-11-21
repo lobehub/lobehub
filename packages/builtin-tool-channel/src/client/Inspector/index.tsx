@@ -2,6 +2,7 @@
 
 import type {
   BuiltinInspectorProps,
+  ChannelAskUserParams,
   ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
@@ -112,6 +113,22 @@ const MessagePersonInspector = memo<
 });
 MessagePersonInspector.displayName = 'ChannelMessagePersonInspector';
 
+/** The question being asked, so the step reads as what the Agent wants to know. */
+const AskUserInspector = memo<BuiltinInspectorProps<ChannelAskUserParams, unknown>>(
+  ({ args, isArgumentsStreaming, isLoading }) => {
+    const { t } = useTranslation('plugin');
+    const loading = isArgumentsStreaming || isLoading;
+    const question = args?.questions?.[0]?.question;
+    return (
+      <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+        <span>{t('builtins.lobe-channel.apiName.askUser')}</span>
+        {question && <span>{question}</span>}
+      </div>
+    );
+  },
+);
+AskUserInspector.displayName = 'ChannelAskUserInspector';
+
 const THREAD_API_NAMES = [
   ChannelApiName.createThread,
   ChannelApiName.listThreads,
@@ -146,6 +163,7 @@ ThreadInspector.displayName = 'ChannelThreadInspector';
 
 export const ChannelInspectors = {
   ...Object.fromEntries(THREAD_API_NAMES.map((name) => [name, ThreadInspector])),
+  [ChannelApiName.askUser]: AskUserInspector,
   [ChannelApiName.listChannels]: ListChannelsInspector,
   [ChannelApiName.listPeople]: ListPeopleInspector,
   [ChannelApiName.messagePerson]: MessagePersonInspector,

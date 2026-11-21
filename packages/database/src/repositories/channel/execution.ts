@@ -1,10 +1,11 @@
 import type {
   AgentOperationStatus,
+  ChannelAsk,
   ChannelContextMessage,
   ChannelJobStatus,
   ChannelReplyError,
 } from '@lobechat/types';
-import { channelMessageReplyError } from '@lobechat/types';
+import { channelAskFallbackText, channelMessageReplyError } from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
@@ -541,13 +542,29 @@ export class ChannelExecutionRepository {
         .for('share');
       if (!sender) throw new ChannelError('CONFLICT', 'The replying Agent was deleted');
 
+      // Questions the run asked go out with its reply, as a card only its requester answers.
+      const body = job.draft.trim();
+      const ask: ChannelAsk | undefined = job.ask
+        ? {
+            ...job.ask,
+            bodyLength: body.length,
+            requesterMemberId: job.requesterMemberId,
+            status: 'pending',
+          }
+        : undefined;
+      const published = {
+        content: ask ? [body, channelAskFallbackText(ask)].filter(Boolean).join('
+
+') : job.draft,
+        ...(ask && { kind: 'ask' as const, metadata: { ask } }),
+      };
       // A card from an earlier failure of this job is replaced by the reply, in the same slot.
       const reply =
-        (await replaceReplyError(tx, job, job.draft)) ??
+        (await replaceReplyError(tx, job, published)) ??
         (await appendMessage(tx, {
+          ...published,
           agentId: sender.id,
           channelId,
-          content: job.draft,
           replyToId: job.messageId,
           requestKey: replyRequestKey(job.id),
           routingStatus: 'reply',
