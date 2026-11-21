@@ -6,7 +6,7 @@ import type { PartialDeep } from 'type-fest';
 import { merge } from '@/utils/merge';
 
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
-import { agents, agentsToSessions, sessionGroups, sessions } from '../schemas';
+import { agents, agentsToSessions, messages, sessionGroups, sessions, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { idGenerator } from '../utils/idGenerator';
 import { isTrashed, notTrashed } from '../utils/softDelete';
@@ -451,10 +451,30 @@ export class SessionModel {
    * Drop the legacy session shells of an agent being purged from the recycle
    * bin. Their links are already gone by then, so the trashed-agent gate no
    * longer applies; the trash handler composes this with the agent purge.
+   *
+   * A shell that still holds topics or messages stays: those rows carry only
+   * `session_id`, sit outside the agent's delete cascade, and the FK would
+   * destroy them with the shell although nobody was told they would go.
    */
-  deleteShellsByIds = async (ids: string[]) => {
+  deleteEmptyShellsByIds = async (ids: string[]) => {
     if (ids.length === 0) return;
-    await this.db.delete(sessions).where(and(inArray(sessions.id, ids), this.scope()));
+    await this.db
+      .delete(sessions)
+      .where(
+        and(
+          inArray(sessions.id, ids),
+          this.scope(),
+          notExists(
+            this.db.select({ id: topics.id }).from(topics).where(eq(topics.sessionId, sessions.id)),
+          ),
+          notExists(
+            this.db
+              .select({ id: messages.id })
+              .from(messages)
+              .where(eq(messages.sessionId, sessions.id)),
+          ),
+        ),
+      );
   };
 
   // **************** Update *************** //

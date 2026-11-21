@@ -173,15 +173,15 @@ export const findPendingOwnedWorktreeTopics = async (
 };
 
 /**
- * Topics under these agents / legacy sessions whose worktree cleanup is still
+ * Topics under these agents, or listed by id, whose worktree cleanup is still
  * waiting (`pending` / `running`), trashed ones included: purging the parent
- * would cascade them away with the only record of the folder to delete.
+ * would take them with the only record of the folder to delete.
  */
 export const findWaitingCleanupTopicsUnder = async (
   ctx: TopicModelContext,
-  { agentIds, sessionIds }: { agentIds: string[]; sessionIds: string[] },
+  { agentIds, topicIds }: { agentIds: string[]; topicIds: string[] },
 ): Promise<OwnedWorktreeTopicRow[]> => {
-  if (agentIds.length === 0 && sessionIds.length === 0) return [];
+  if (agentIds.length === 0 && topicIds.length === 0) return [];
   return ctx.db
     .select(rowColumns)
     .from(topics)
@@ -190,7 +190,7 @@ export const findWaitingCleanupTopicsUnder = async (
         ctx.trashScope(),
         or(
           agentIds.length > 0 ? inArray(topics.agentId, agentIds) : undefined,
-          sessionIds.length > 0 ? inArray(topics.sessionId, sessionIds) : undefined,
+          topicIds.length > 0 ? inArray(topics.id, topicIds) : undefined,
         ),
         or(
           containsEntry({ cleanup: { state: 'pending' } }),
