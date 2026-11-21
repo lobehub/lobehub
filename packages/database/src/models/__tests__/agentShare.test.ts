@@ -834,9 +834,19 @@ describe('AgentShareModel', () => {
   });
 
   describe('lockUploadAdmission', () => {
+    const uploadLockKey = 'agent_share_upload:share-lock-test';
+    /**
+     * Count only the lock this test takes: the database suite shares one database, so other
+     * files' advisory locks (`favorites`, `project-order`, …) are held here at the same time.
+     * A bigint advisory lock stores its high 32 bits in `classid` and its low 32 in `objid`.
+     */
     const heldAdvisoryLocks = async (db: LobeChatDatabase) => {
       const { rows } = await db.execute(
-        sql`SELECT count(*)::int AS held FROM pg_locks WHERE locktype = 'advisory'`,
+        sql`SELECT count(*)::int AS held
+            FROM pg_locks
+            WHERE locktype = 'advisory'
+              AND classid = ((hashtext(${uploadLockKey})::bigint >> 32) & 4294967295)::oid
+              AND objid = (hashtext(${uploadLockKey})::bigint & 4294967295)::oid`,
       );
       return (rows[0] as { held: number }).held;
     };
