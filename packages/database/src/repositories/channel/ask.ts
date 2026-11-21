@@ -1,4 +1,4 @@
-import type { ChannelAskAnswerItem } from '@lobechat/types';
+import type { ChannelAskAnswerItem, ChannelMessage } from '@lobechat/types';
 import {
   channelAskAnswerText,
   channelMessageAsk,
@@ -7,7 +7,6 @@ import {
 } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import type { ChannelMessageItem } from '../../schemas';
 import { channelMessages } from '../../schemas';
 import type { Transaction } from '../../type';
 import { ChannelError } from './error';
@@ -32,7 +31,7 @@ export const answerAsk = async (
   tx: Transaction,
   access: ChannelAccess,
   input: ChannelAskAnswerInput,
-): Promise<ChannelMessageItem> => {
+): Promise<ChannelMessage> => {
   const { channel, member } = access;
   const [message] = await tx
     .select()
