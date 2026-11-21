@@ -88,10 +88,16 @@ const decide = async (
             name: agentDisplayName(agent) || undefined,
             title: agent.title ?? undefined,
           })),
+          ...(candidate.request.fileIds?.length && {
+            attachmentCount: candidate.request.fileIds.length,
+          }),
           message: candidate.request.content,
           // Woken by its own rules, not asked: it acknowledges only a clear request for work.
           ...(!candidate.addressed && { notAddressed: true }),
           recentMessages: candidate.recent.map((message) => describe(message, candidate.agent.id)),
+          ...(candidate.quoted && {
+            quoted: excerpt(describe(candidate.quoted, candidate.agent.id)),
+          }),
           threads: candidate.threads.map((thread, index) => ({
             label: threadLabel(index),
             lastMessage: excerpt(thread.lastMessage),

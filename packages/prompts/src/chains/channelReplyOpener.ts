@@ -1,6 +1,6 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 
-export const CHANNEL_REPLY_OPENER_PROMPT_VERSION = 'v1';
+export const CHANNEL_REPLY_OPENER_PROMPT_VERSION = 'v2';
 
 /**
  * Where a Channel reply continues: in place, in a new Thread under it, or in one of the Threads
@@ -38,9 +38,10 @@ Fields:
 - "ack": when "acknowledge" is true, one short sentence posted right away, in the language of the message and in your own voice. Never the answer itself, no time estimates, no greeting, no emoji. Empty string when "acknowledge" is false.
 - "placement": where the conversation continues.
   - "channel": a reply that fits in a message or two and needs no back-and-forth. Prefer it whenever the answer is short, even when the subject has a thread.
-  - "existing_thread": the message continues the subject of one of the open threads listed below (a follow-up, a correction, more detail on the same problem), and the reply is longer than a message or two. Pick it only when the subject is clearly the same, not merely the same broad area.
-  - "thread": a new subject whose reply is long, has several steps, or will likely need follow-up questions.
+  - "thread": a new task whose reply is long, has several steps, or will likely need follow-up questions. A new feature, a new change, a new bug or a new thing to analyze is a new task, even when it touches the same product area, files or feature as an open thread.
+  - "existing_thread": only when the message cannot be understood without one of the open threads listed below: it reacts to that thread's last result ("still broken", "try again", "that's not it", "also do it there"), corrects it, or names that thread. The reply must also be longer than a message or two. Sharing words or a product area with a thread is not enough; when unsure, choose "thread".
   When the message says where to answer, follow it.
+  When the message quotes another message, "this" and "that" refer to the quoted message, not to an open thread. When it has attachments you cannot see, "this" refers to them.
 - "title": when "placement" is "thread", a short title for the new thread in the language of the message, naming the subject (not "Request" or "Question"). Empty string otherwise.
 - "thread": when "placement" is "existing_thread", the label of the chosen thread exactly as listed (for example "T2"). Empty string otherwise.
 
@@ -92,6 +93,8 @@ export interface ChannelReplyOpenerThread {
 export interface ChannelReplyOpenerInput {
   /** The agent behind the assistant: what it is named and its title (identity or role). */
   agent?: { name?: string; title?: string };
+  /** Images or files sent with the message, which the opener cannot see. */
+  attachmentCount?: number;
   /** Names people call the assistant by in this Channel. */
   botNames?: string[];
   /** Whether the reply can move into a Thread; false when the request is already in one. */
@@ -101,6 +104,8 @@ export interface ChannelReplyOpenerInput {
   message: string;
   /** Acknowledge only a clear request for work: woken without being addressed. */
   notAddressed?: boolean;
+  /** The message this one replies to, as "Author: text". */
+  quoted?: string;
   /** Short transcript of the messages just before this one, oldest first. */
   recentMessages?: string[];
   /** Open Threads started before the request, nearest first. */
@@ -145,9 +150,15 @@ const buildState = (input: ChannelReplyOpenerInput): string => {
   if (input.recentMessages?.length) {
     sections.push(`Earlier messages (oldest first):\n${input.recentMessages.join('\n')}`);
   }
+  if (input.quoted) sections.push(`The message quotes:\n"""\n${input.quoted.trim()}\n"""`);
   sections.push(
     `${input.notAddressed ? 'Message' : 'Message to you'}:\n"""\n${input.message.trim()}\n"""`,
   );
+  if (input.attachmentCount) {
+    sections.push(
+      `The message comes with ${input.attachmentCount} attachment(s), such as screenshots, that you cannot see.`,
+    );
+  }
 
   return sections.join('\n\n');
 };
