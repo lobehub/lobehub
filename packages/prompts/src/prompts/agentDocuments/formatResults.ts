@@ -82,12 +82,66 @@ export const formatCopyDocumentResult = ({
     url,
   });
 
+export interface FormatUpdateLoadRuleResultParams extends AgentDocumentWriteResultParams {
+  /** Stored token cap after the update. */
+  maxTokens?: number | null;
+  /** Stored load mode after the update — what the next context build will do. */
+  policyLoad?: 'always' | 'disabled' | 'progressive';
+  /** Stored priority after the update. */
+  priority?: number | null;
+}
+
+/**
+ * State the load mode in effect after the update. maxTokens and priority only
+ * shape "always" documents, so a call that sets them on a progressive document
+ * changes nothing the model will see; saying so keeps the agent from promising
+ * the user automatic loading that will not happen.
+ */
+const describeLoadEffect = ({
+  maxTokens,
+  policyLoad,
+  priority,
+}: Pick<FormatUpdateLoadRuleResultParams, 'maxTokens' | 'policyLoad' | 'priority'>): string => {
+  switch (policyLoad) {
+    case 'always': {
+      const cap =
+        maxTokens && maxTokens > 0
+          ? `truncated to about ${maxTokens} tokens`
+          : 'with no token cap (set maxTokens to limit it)';
+      const order = priority == null ? '' : `, priority ${priority} (lower loads first)`;
+      return `Load mode is now "always": its full content is injected into this agent's context on every later model call, ${cap}${order}.`;
+    }
+    case 'progressive': {
+      const inert =
+        maxTokens != null || priority != null
+          ? ' maxTokens and priority take effect only after setting rule.mode to "always".'
+          : '';
+      return `Load mode is "progressive": only its title is listed in agent_documents_index and its content is not injected automatically; read it with readDocument when needed.${inert}`;
+    }
+    case 'disabled': {
+      return 'Load mode is "disabled": it is not loaded into context.';
+    }
+    default: {
+      return '';
+    }
+  }
+};
+
 export const formatUpdateLoadRuleResult = ({
   id,
+  maxTokens,
+  policyLoad,
+  priority,
   title,
   url,
-}: AgentDocumentWriteResultParams): string =>
-  formatWriteResult(`Updated load rule for document ${titleLabel(title)}`, { id, url });
+}: FormatUpdateLoadRuleResultParams): string => {
+  const result = formatWriteResult(`Updated load rule for document ${titleLabel(title)}`, {
+    id,
+    url,
+  });
+  const effect = describeLoadEffect({ maxTokens, policyLoad, priority });
+  return effect ? `${result} ${effect}` : result;
+};
 
 /** A removed document has no live url to share, so only the id is reported. */
 export const formatRemoveDocumentResult = ({ id }: { id: string }): string =>

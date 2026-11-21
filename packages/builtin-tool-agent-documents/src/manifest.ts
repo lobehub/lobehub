@@ -2,6 +2,7 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import {
+  AGENT_DOCUMENT_TOOL_LOAD_MODES,
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
   LIST_DOCUMENTS_DEFAULT_LIMIT,
@@ -336,7 +337,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Update agent-document load rules. Use this to control how documents are loaded into runtime context.',
+        'Choose whether a document is injected into the context of later model calls. Documents start in "progressive" mode (title listed in agent_documents_index, content read with readDocument); set mode="always" to inject the full content every time. The result reports the mode now in effect.',
       name: AgentDocumentsApiName.updateLoadRule,
       parameters: {
         properties: {
@@ -345,17 +346,25 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             type: 'string',
           },
           rule: {
-            description: 'New load rule settings.',
+            description: 'Load settings to change; omitted fields keep their current value.',
             properties: {
               maxTokens: {
-                description: 'Maximum token budget for this document when injected.',
+                description:
+                  'Truncate the injected content to about this many tokens. Applies only in "always" mode; set it for long documents.',
                 minimum: 0,
-                type: 'number',
+                type: 'integer',
+              },
+              mode: {
+                description:
+                  '"always": inject the full content into every later model call. "progressive": only list the title in agent_documents_index; the content is read on demand with readDocument. Skill documents and folders cannot change mode.',
+                enum: [...AGENT_DOCUMENT_TOOL_LOAD_MODES],
+                type: 'string',
               },
               priority: {
-                description: 'Lower value means higher load priority.',
+                description:
+                  'Order among "always" documents: lower values are injected first. Has no effect in "progressive" mode.',
                 minimum: 0,
-                type: 'number',
+                type: 'integer',
               },
             },
             type: 'object',
