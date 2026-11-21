@@ -1,4 +1,5 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { formatToolRejectionContent } from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessageModel } from '@/database/models/message';
@@ -130,9 +131,7 @@ export class HumanInterventionHandler {
       return { newState: state, nextContext: undefined };
     }
 
-    const rejectionContent = rejectionReason
-      ? `User reject this tool calling with reason: ${rejectionReason}`
-      : 'User reject this tool calling without reason';
+    const rejectionContent = formatToolRejectionContent(rejectionReason);
 
     await this.messageModel.updateToolMessage(toolMessageId, { content: rejectionContent });
     await this.messageModel.updateMessagePlugin(toolMessageId, {

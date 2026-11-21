@@ -1,3 +1,4 @@
+import { normalizeToolRejectionReason } from '@lobechat/types';
 import { z } from 'zod';
 
 export const AgentInterventionReviewTokenSchema = z
@@ -75,10 +76,18 @@ const ApproveToolSchema = z
     }
   });
 
+/** Older clients and one-tap notification actions send no reason; store a default instead. */
+const RejectionReasonSchema = z
+  .string()
+  .trim()
+  .max(2000)
+  .optional()
+  .transform(normalizeToolRejectionReason);
+
 const RejectContinueSchema = z
   .object({
     itemIds: UniqueItemIdsSchema,
-    reason: z.string().trim().max(2000).optional(),
+    reason: RejectionReasonSchema,
     type: z.literal('reject_continue'),
   })
   .strict();
@@ -209,7 +218,7 @@ const AgentInterventionSourceActionSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
-      reason: z.string().trim().max(2000).optional(),
+      reason: RejectionReasonSchema,
       type: z.literal('reject_continue'),
     })
     .strict(),
