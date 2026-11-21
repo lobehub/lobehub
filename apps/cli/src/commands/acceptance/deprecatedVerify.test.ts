@@ -67,8 +67,8 @@ describe('`lh verify` moved under `lh acceptance`', () => {
     await parse('acceptance', 'plan', 'state', 'op_2');
 
     expect(mockTrpcClient.verify.getVerifyState.query.mock.calls).toEqual([
-      [{ operationId: 'op_1' }],
-      [{ operationId: 'op_2' }],
+      [{ inherit: true, operationId: 'op_1' }],
+      [{ inherit: true, operationId: 'op_2' }],
     ]);
   });
 

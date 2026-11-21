@@ -5,6 +5,7 @@ import {
   type VerifyAgentPlanConfig,
   type VerifyCheckItem,
   type VerifyRunMetadata,
+  type VerifyRunStatus,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -499,6 +500,21 @@ export class VerifyRepairService {
     spawner?: RepairSpawner,
     reviewRejections?: ReviewRejection[],
   ): Promise<{ repairOperationId: string } | null> {
+    // Settlement may re-enter this path (finalizeVerifyRun is idempotent and
+    // duplicate verifier submissions re-run settlement), so a run whose repair
+    // round is already in flight must not spawn a second one against the same
+    // failures. The read below is only a fast-path skip — the atomic claim is
+    // the actual race protection.
+    const runForGuard = await this.runModel.findByOperation(operationId);
+    if (!runForGuard) {
+      log('op %s has no verify run, not repairing', operationId);
+      return null;
+    }
+    if (runForGuard.status === 'repairing') {
+      log('op %s already has a repair round in flight, not repairing again', operationId);
+      return null;
+    }
+
     const failures = await this.collectRepairable(operationId, reviewRejections);
     if (failures.length === 0) return null;
     if (await this.isSuperseded(operationId)) {
@@ -510,45 +526,107 @@ export class VerifyRepairService {
       return this.declineRepair(operationId);
     }
 
-    const failedItemIds = failures.map((f) => f.item.id);
-    const instruction = buildInstruction(failures);
-
-    // Persist the failure feedback onto this round's verify card so it (a) renders
-    // and (b) is surfaced into the repair run's context by VerifyMessageProcessor
-    // — the durable home of the round's repair prompt (structured backing data
-    // still lives per-check on verify_check_results.suggestion / toulmin).
-    const verifyMessage = await this.messageModel.findVerifyMessageByOperationId(operationId);
-    if (verifyMessage) {
-      await this.messageModel.update(verifyMessage.id, { content: instruction });
-    } else {
-      log('no verify message found for op %s — repair feedback not persisted to card', operationId);
+    // Claim the repair round BEFORE spawning: `claimRepairing` is a CAS on the
+    // just-read row version (status + `updatedAt`), so of two concurrent
+    // settlement calls (both past the read above) exactly one flips the run to
+    // `repairing` and spawns; the loser's CAS misses and drops out instead of
+    // launching a duplicate repair agent against the same failures — including
+    // when a whole repair round ran and recomputed the run back to `failed`
+    // while the loser was between its read and its claim.
+    const fromStatus = runForGuard.status;
+    const claimed = await this.runModel.claimRepairing(runForGuard.id, runForGuard);
+    if (!claimed) {
+      log('op %s lost the repair-round claim to a concurrent caller', operationId);
+      return null;
     }
 
-    const spawned = await spawner({
-      failedItemIds,
-      instruction,
-      operationId,
-      verifyMessageId: verifyMessage?.id,
-    });
-    // Cap reached, or the spawn failed: the failure stands as this round's verdict.
-    if (!spawned) return this.declineRepair(operationId);
+    try {
+      const failedItemIds = failures.map((f) => f.item.id);
+      const instruction = buildInstruction(failures);
 
-    // Link the repair operation onto each failed result and flip the rollup.
-    const run = await this.runModel.findByOperation(operationId);
-    if (run) {
-      await this.runModel.recordAutoRepair(run.id, 'spawned');
-      for (const { item } of failures) {
-        await this.resultModel.updateByCheckItem(run.id, item.id, {
-          repairOperationId: spawned.repairOperationId,
-        });
+      // Persist the failure feedback onto this round's verify card so it (a) renders
+      // and (b) is surfaced into the repair run's context by VerifyMessageProcessor
+      // — the durable home of the round's repair prompt (structured backing data
+      // still lives per-check on verify_check_results.suggestion / toulmin).
+      const verifyMessage = await this.messageModel.findVerifyMessageByOperationId(operationId);
+      if (verifyMessage) {
+        await this.messageModel.update(verifyMessage.id, { content: instruction });
+      } else {
+        log(
+          'no verify message found for op %s — repair feedback not persisted to card',
+          operationId,
+        );
       }
-    }
-    await this.statusService.markRepairing(operationId);
-    // A fast startup failure can precede the plan/parent writes above. Reconcile
-    // after both exist as well as from the completion hook.
-    await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
-    log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
 
-    return spawned;
+      const spawned = await spawner({
+        failedItemIds,
+        instruction,
+        operationId,
+        verifyMessageId: verifyMessage?.id,
+      });
+      // Cap reached, or the spawn failed: no child owns the claim, so hand the
+      // status back, and the failure stands as this round's verdict.
+      if (!spawned) {
+        await this.releaseRepairClaim(runForGuard.id, fromStatus);
+        return this.declineRepair(operationId);
+      }
+
+      // Everything below the spawn is reconciliation for an already-active
+      // child. The claim now belongs to that child's settlement (it recomputes
+      // the parent through `recomputeRepairAncestors`), so a failure here must
+      // NOT release the claim back to the old status — a released claim lets a
+      // settlement retry claim the parent again and spawn a duplicate repair
+      // for the same failures while the first child is still working. Log and
+      // keep the claim; the child or the sweep drives the parent from here.
+      try {
+        // Link the repair operation onto each failed result and flip the rollup.
+        const run = await this.runModel.findByOperation(operationId);
+        if (run) {
+          await this.runModel.recordAutoRepair(run.id, 'spawned');
+          for (const { item } of failures) {
+            await this.resultModel.updateByCheckItem(run.id, item.id, {
+              repairOperationId: spawned.repairOperationId,
+            });
+          }
+        }
+        // Already stamped `repairing` by the claim; this recomputes the linked
+        // acceptance.
+        await this.statusService.markRepairing(operationId);
+        // A fast startup failure can precede the plan/parent writes above. Reconcile
+        // after both exist as well as from the completion hook.
+        await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
+        log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
+      } catch (error) {
+        log(
+          'post-spawn reconciliation for op %s (repair child %s) failed — repair claim kept: %O',
+          operationId,
+          spawned.repairOperationId,
+          error,
+        );
+      }
+
+      return spawned;
+    } catch (error) {
+      // Pre-spawn failures (verify-card write, spawner itself) must not leave the
+      // run stuck in `repairing` — no repair child exists to own the claim, so
+      // no later attempt could re-enter. Roll the claim back so the next caller
+      // (a settlement retry or the sweep) can try again.
+      await this.releaseRepairClaim(runForGuard.id, fromStatus);
+      throw error;
+    }
+  }
+
+  /** Roll back a repair-round claim after a failed spawn. Best-effort: a
+   * release failure is logged, not thrown, so it never masks the original
+   * spawn error. */
+  private async releaseRepairClaim(
+    runId: string,
+    previousStatus: VerifyRunStatus | null,
+  ): Promise<void> {
+    try {
+      await this.runModel.updateStatus(runId, previousStatus);
+    } catch (releaseError) {
+      log('failed to release repair claim on run %s: %O', runId, releaseError);
+    }
   }
 }

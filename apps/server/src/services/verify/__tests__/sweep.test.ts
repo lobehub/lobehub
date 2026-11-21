@@ -12,13 +12,20 @@ const {
   listByAcceptance,
   messageFindById,
   operationFindById,
+  operationListTree,
+  reclaimRepairing,
   recompute,
   recordVerifierRedrive,
   redriveClaimedVerification,
   resultListByRun,
+  runVerifyAfterEvidenceSubmission,
+  runVerifyOnCompletion,
   upsertByCheckItem,
   finalizeVerifyRun,
   findVerifyMessageByOperationId,
+  findLatestAssistantByOperationId,
+  runFindByOperation,
+  recordAutoRepair,
 } = vi.hoisted(() => ({
   releaseUndeliveredRound: vi.fn(),
   settleFailedRepair: vi.fn(),
@@ -26,20 +33,33 @@ const {
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
   findVerifyMessageByOperationId: vi.fn(),
+  findLatestAssistantByOperationId: vi.fn(),
   listByAcceptance: vi.fn(),
   messageFindById: vi.fn(),
   operationFindById: vi.fn(),
+  operationListTree: vi.fn(),
+  reclaimRepairing: vi.fn(),
   recompute: vi.fn(),
   recordVerifierRedrive: vi.fn(),
   redriveClaimedVerification: vi.fn(),
   resultListByRun: vi.fn(),
+  runVerifyAfterEvidenceSubmission: vi.fn(),
+  runVerifyOnCompletion: vi.fn(),
   upsertByCheckItem: vi.fn(),
+  runFindByOperation: vi.fn(),
+  recordAutoRepair: vi.fn(),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: Object.assign(
     vi.fn(function () {
-      return { listByAcceptance, recordVerifierRedrive };
+      return {
+        findByOperation: runFindByOperation,
+        listByAcceptance,
+        reclaimRepairing,
+        recordAutoRepair,
+        recordVerifierRedrive,
+      };
     }),
     { findStuckVerifying },
   ),
@@ -51,7 +71,7 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 }));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
-    return { findById: operationFindById };
+    return { findById: operationFindById, listOperationTree: operationListTree };
   }),
 }));
 vi.mock('../statusService', () => ({
@@ -61,16 +81,26 @@ vi.mock('../statusService', () => ({
 }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(function () {
-    return { findById: messageFindById, findVerifyMessageByOperationId };
+    return {
+      findById: messageFindById,
+      findLatestAssistantByOperationId,
+      findVerifyMessageByOperationId,
+    };
   }),
 }));
-vi.mock('../lifecycle', () => ({ redriveClaimedVerification }));
+vi.mock('../lifecycle', () => ({
+  redriveClaimedVerification,
+  runVerifyAfterEvidenceSubmission,
+  runVerifyOnCompletion,
+}));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
 vi.mock('../undeliveredRound', () => ({ releaseUndeliveredRound }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
 
 const db = {} as any;
 const NOW = new Date('2026-08-10T00:00:00Z');
+
+const STUCK_UPDATED_AT = new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000);
 
 const stuckRun = (overrides?: Partial<Record<string, unknown>>) => ({
   id: 'run-1',
@@ -79,7 +109,7 @@ const stuckRun = (overrides?: Partial<Record<string, unknown>>) => ({
     { id: 'c1', required: true },
     { id: 'c2', required: true },
   ],
-  updatedAt: new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000),
+  updatedAt: STUCK_UPDATED_AT,
   userId: 'u1',
   workspaceId: null,
   ...overrides,
@@ -99,18 +129,26 @@ describe('sweepStuckVerifyRuns', () => {
       finalizeVerifyRun,
       findStuckVerifying,
       findVerifyMessageByOperationId,
+      findLatestAssistantByOperationId,
       listByAcceptance,
       messageFindById,
       operationFindById,
+      operationListTree,
+      reclaimRepairing,
       recompute,
       recordVerifierRedrive,
       redriveClaimedVerification,
       resultListByRun,
+      runVerifyAfterEvidenceSubmission,
+      runVerifyOnCompletion,
       upsertByCheckItem,
+      runFindByOperation,
+      recordAutoRepair,
     ].forEach((m) => m.mockReset());
     findStuckVerifying.mockResolvedValue([]);
     resultListByRun.mockResolvedValue([]);
     claimVerifying.mockResolvedValue(true);
+    reclaimRepairing.mockResolvedValue(true);
   });
 
   it('recomputes a run whose checks all landed but whose rollup was lost', async () => {
@@ -419,5 +457,444 @@ describe('sweepStuckVerifyRuns', () => {
     settleFailedRepair.mockResolvedValue(false);
     releaseUndeliveredRound.mockResolvedValue(false);
     expect((await sweepStuckVerifyRuns(db, { now: NOW })).skipped).toBe(1);
+  });
+
+  it('reclaims a stale repairing claim with no repair child and re-drives repair', async () => {
+    // The shape a worker killed between `claimRepairing` and the spawn leaves
+    // behind: the run is parked in `repairing` forever — both repair paths
+    // skip that status — unless the sweep reclaims it.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockResolvedValue([{ id: 'op-1', parentOperationId: null }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    // The rollup is recomputed (releasing the stale claim back to the derived
+    // verdict) and the finalizer re-enters `maybeAutoRepair`.
+    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it('leaves a stale repairing claim alone while its repair child is still in flight', async () => {
+    // The spawner died, but the repair child it already spawned is running —
+    // that child owns the parent's settlement, so reclaiming here would race
+    // it and spawn a duplicate round.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null },
+      { id: 'op-repair', parentOperationId: 'op-1', status: 'running' },
+    ]);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair' ? { id: 'run-repair', status: 'planned', updatedAt: NOW } : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(recompute).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  /** Regression (Codex r4652054496): a verifier parked on an async tool pinned a dead claim forever. */
+  it('does not count an in-flight verifier of the parent as a repair in flight', async () => {
+    // `agentVerifier` parents its sub-agent under the verified operation, and
+    // a verifier owns no round. The repair it led to was never spawned, so the
+    // claim is reclaimed rather than skipped every tick.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null },
+      { id: 'op-verifier', parentOperationId: 'op-1', status: 'running' },
+    ]);
+    runFindByOperation.mockResolvedValue(undefined);
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it('does not count an in-flight child with a round of another acceptance', async () => {
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null },
+      { id: 'op-other', parentOperationId: 'op-1', status: 'running' },
+    ]);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-other'
+        ? { acceptanceId: 'acc-other', id: 'run-other', status: 'verifying', updatedAt: NOW }
+        : undefined,
+    );
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
+    expect(outcome.settled).toEqual(['run-1']);
+  });
+
+  it('reclaims a stale repairing claim whose repair child already finished', async () => {
+    // A terminal child stays terminal — the whole chain is dead, so the claim
+    // is abandoned even though a child operation exists.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null },
+      { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+    ]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it('keeps a stale repairing claim while its finished repair child is still being verified', async () => {
+    // The repair agent is done, but its completion-triggered round is still in
+    // judging: that round's finalizer will collapse this parent, so reclaiming
+    // now would spawn a duplicate repair against the same failures.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockImplementation(async (id: string) =>
+      id === 'op-1'
+        ? [
+            { id: 'op-1', parentOperationId: null },
+            { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+          ]
+        : [{ id: 'op-repair', parentOperationId: 'op-1', status: 'done' }],
+    );
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair' ? { id: 'run-repair', status: 'verifying', updatedAt: NOW } : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(reclaimRepairing).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('keeps a stale repairing claim while a verifier of its finished repair child is live', async () => {
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockImplementation(async (id: string) =>
+      id === 'op-1'
+        ? [
+            { id: 'op-1', parentOperationId: null },
+            { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+          ]
+        : [
+            { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+            { id: 'op-verifier', parentOperationId: 'op-repair', status: 'running' },
+          ],
+    );
+    // The repair's own round is stale and pre-judging; only its live verifier
+    // keeps the chain alive.
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? {
+            id: 'run-repair',
+            status: 'planned',
+            updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+          }
+        : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(reclaimRepairing).not.toHaveBeenCalled();
+  });
+
+  it('reclaims a stale repairing claim whose finished repair child never reached judging', async () => {
+    // A child round stuck in `planned` past the abandoned bound is a lost
+    // completion, not a live verification — it must not pin the parent forever.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockImplementation(async (id: string) =>
+      id === 'op-1'
+        ? [
+            { id: 'op-1', parentOperationId: null },
+            { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+          ]
+        : [{ id: 'op-repair', parentOperationId: 'op-1', status: 'done' }],
+    );
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? {
+            id: 'run-repair',
+            status: 'planned',
+            updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+          }
+        : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  const settledChildTree = async (id: string) =>
+    id === 'op-1'
+      ? [
+          { id: 'op-1', parentOperationId: null },
+          { id: 'op-repair', parentOperationId: 'op-1', status: 'done' },
+        ]
+      : [{ id: 'op-repair', parentOperationId: 'op-1', status: 'done' }];
+
+  it('keeps a stale repairing claim while its just-settled repair child is still finalizing', async () => {
+    // The repair round outlived the parent's grace, then recomputed itself to
+    // `failed`; its finalizer has not yet collapsed this parent. Reclaiming
+    // now would finalize the original round and spawn a second repair.
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockImplementation(settledChildTree);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? { id: 'run-repair', status: 'failed', updatedAt: new Date(NOW.getTime() - 1000) }
+        : undefined,
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(reclaimRepairing).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  const strandedChild = (status: string, overrides?: Record<string, unknown>) => ({
+    id: 'run-repair',
+    status,
+    updatedAt: new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000),
+    ...overrides,
+  });
+
+  it.each(['passed', 'failed', 'errored'])(
+    'finishes a %s repair child whose finalizer died instead of reclaiming its parent',
+    async (status) => {
+      // The child settled long ago, yet the parent is still `repairing`: the
+      // child's finalizer died before collapsing it. The child is already the
+      // acceptance's latest round, so reclaiming the parent would only reach a
+      // suppressed finalizer and leave the task hanging — run the child's.
+      singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+      operationListTree.mockImplementation(settledChildTree);
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair'
+          ? strandedChild(status, { acceptanceId: 'acc-1', roundIndex: 2 })
+          : undefined,
+      );
+      listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }]);
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.settled).toEqual(['run-1']);
+      expect(finalizeVerifyRun).toHaveBeenCalledTimes(1);
+      expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-repair', {}, undefined);
+      // The child's finalizer collapses this parent; the parent's claim stays
+      // put so a child that repairs again keeps owning the chain.
+      expect(reclaimRepairing).not.toHaveBeenCalled();
+      expect(recompute).not.toHaveBeenCalled();
+      expect(recordAutoRepair).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reclaims the parent when its settled repair child was itself superseded', async () => {
+    // A later round already took over the acceptance: finalizing the child
+    // would decline a repair that already happened, so only the parent's own
+    // rollup is restored.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockImplementation(settledChildTree);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair'
+        ? strandedChild('failed', { acceptanceId: 'acc-1', roundIndex: 2 })
+        : { id: 'run-1', status: 'failed' },
+    );
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }, { roundIndex: 3 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
+    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a settled child of another acceptance as the repair round', async () => {
+    // Evidence/verifier children hang off the same operation; their own runs
+    // are not this acceptance's rounds, so the claim is reclaimed as before.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockImplementation(settledChildTree);
+    runFindByOperation.mockImplementation(async (id: string) =>
+      id === 'op-repair' ? strandedChild('passed', { acceptanceId: 'acc-other' }) : undefined,
+    );
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  describe('a finished repair whose round never reached judging', () => {
+    /** A repair round of the same acceptance, confirmed, stale past the abandoned bound. */
+    const preJudgingChild = (status: string, overrides?: Record<string, unknown>) => ({
+      acceptanceId: 'acc-1',
+      goal: 'Ship the fix',
+      id: 'run-repair',
+      plan: [{ id: 'c1', required: true }],
+      planConfirmedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 5000),
+      roundIndex: 2,
+      status,
+      updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+      operationListTree.mockImplementation(settledChildTree);
+      operationFindById.mockResolvedValue({ id: 'op-repair', topicId: 'tpc-1' });
+      findVerifyMessageByOperationId.mockResolvedValue({ parentId: 'msg-reply' });
+      messageFindById.mockResolvedValue({ content: 'Fixed the failing check.' });
+      listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }]);
+    });
+
+    /**
+     * Regression (Codex #4651522050): the repair op is `done` but its completion
+     * hook died with the child round still `planned`. Reclaiming the parent only
+     * reached a suppressed finalizer, and nothing sweeps that child — the
+     * acceptance and task hung for good.
+     */
+    it('re-runs the completion gate of a planned child instead of reclaiming its parent', async () => {
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair' ? preJudgingChild('planned') : undefined,
+      );
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.redriven).toEqual(['run-1']);
+      expect(runVerifyOnCompletion).toHaveBeenCalledWith(
+        db,
+        'u1',
+        {
+          deliverable: 'Fixed the failing check.',
+          goal: 'Ship the fix',
+          operationId: 'op-repair',
+        },
+        undefined,
+      );
+      expect(findVerifyMessageByOperationId).toHaveBeenCalledWith('op-repair', 'tpc-1');
+      expect(runVerifyAfterEvidenceSubmission).not.toHaveBeenCalled();
+      expect(reclaimRepairing).not.toHaveBeenCalled();
+      expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Regression (Codex r4652081198): completion marked the repair `done` and
+     * died before writing the verify card, so the child was judged on an empty
+     * delivery.
+     */
+    it("judges the run's own final reply when completion died before the verify card", async () => {
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair' ? preJudgingChild('planned') : undefined,
+      );
+      findVerifyMessageByOperationId.mockResolvedValue(undefined);
+      findLatestAssistantByOperationId.mockResolvedValue({
+        content: 'Fixed it without a card.',
+        id: 'msg-own',
+        role: 'assistant',
+      });
+
+      await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(findLatestAssistantByOperationId).toHaveBeenCalledWith({
+        operationId: 'op-repair',
+        topicId: 'tpc-1',
+      });
+      expect(runVerifyOnCompletion).toHaveBeenCalledWith(
+        db,
+        'u1',
+        expect.objectContaining({ deliverable: 'Fixed it without a card.' }),
+        undefined,
+      );
+    });
+
+    it('judges a child whose evidence turn died in collecting_evidence', async () => {
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair' ? preJudgingChild('collecting_evidence') : undefined,
+      );
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.redriven).toEqual(['run-1']);
+      expect(runVerifyAfterEvidenceSubmission).toHaveBeenCalledWith(
+        db,
+        'u1',
+        expect.objectContaining({ operationId: 'op-repair' }),
+        undefined,
+      );
+      expect(runVerifyOnCompletion).not.toHaveBeenCalled();
+      expect(reclaimRepairing).not.toHaveBeenCalled();
+    });
+
+    it('reclaims the parent when the planned child was superseded', async () => {
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair' ? preJudgingChild('planned') : { id: 'run-1', status: 'failed' },
+      );
+      listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }, { roundIndex: 3 }]);
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.settled).toEqual(['run-1']);
+      expect(runVerifyOnCompletion).not.toHaveBeenCalled();
+      expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
+    });
+
+    it('leaves a planned child of a repair that did not finish to its own sweep path', async () => {
+      operationListTree.mockImplementation(async (id: string) =>
+        id === 'op-1'
+          ? [
+              { id: 'op-1', parentOperationId: null },
+              { id: 'op-repair', parentOperationId: 'op-1', status: 'error' },
+            ]
+          : [{ id: 'op-repair', parentOperationId: 'op-1', status: 'error' }],
+      );
+      runFindByOperation.mockImplementation(async (id: string) =>
+        id === 'op-repair' ? preJudgingChild('planned') : { id: 'run-1', status: 'failed' },
+      );
+
+      await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(runVerifyOnCompletion).not.toHaveBeenCalled();
+      expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
+    });
+  });
+
+  it('reclaims a superseded stale repairing claim without driving its task', async () => {
+    // A later round of the same acceptance now owns the task: the reclaimed
+    // round only gets its rollup, like every other sweep path.
+    singlePage([stuckRun({ acceptanceId: 'acc-1', roundIndex: 1, status: 'repairing' })]);
+    operationListTree.mockResolvedValue([{ id: 'op-1', parentOperationId: null }]);
+    listByAcceptance.mockResolvedValue([{ roundIndex: 1 }, { roundIndex: 2 }]);
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.settled).toEqual(['run-1']);
+    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    // The finalizer's superseded branch is skipped, so the sweep records the
+    // declined outcome itself — otherwise the card reads it as awaiting repair.
+    expect(recordAutoRepair).toHaveBeenCalledWith('run-1', 'declined');
+  });
+
+  it('drops a stale repairing claim another delivery already reclaimed', async () => {
+    singlePage([stuckRun({ status: 'repairing' })]);
+    operationListTree.mockResolvedValue([{ id: 'op-1', parentOperationId: null }]);
+    reclaimRepairing.mockResolvedValue(false);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(recompute).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ const modelMocks = vi.hoisted(() => ({
   findFileById: vi.fn(),
   findResultById: vi.fn(),
   findRunById: vi.fn(),
+  findRoundForOperation: vi.fn(),
   findRunByOperation: vi.fn(),
   getStateByOperation: vi.fn(),
   listResultsByRun: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@/database/models/verifyRun', () => ({
     return {
       findByOperation: modelMocks.findRunByOperation,
       findById: modelMocks.findRunById,
+      findRoundForOperation: modelMocks.findRoundForOperation,
       getStateByOperation: modelMocks.getStateByOperation,
     };
   }),
@@ -74,6 +76,11 @@ describe("verifyRouter with a run's operation token", () => {
     vi.clearAllMocks();
     modelMocks.listResultsByRun.mockResolvedValue([]);
     modelMocks.findFileById.mockResolvedValue(undefined);
+    // An operation with a round of its own resolves to it; the topic fallback
+    // is exercised by the later-run cases below.
+    modelMocks.findRoundForOperation.mockImplementation((operationId: string) =>
+      modelMocks.findRunByOperation(operationId),
+    );
   });
 
   it('files evidence into its own round by operation id', async () => {
@@ -244,6 +251,98 @@ describe("verifyRouter with a run's operation token", () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
     expect(modelMocks.getStateByOperation).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a later run in the same topic, with no round of its own', () => {
+    const FOLLOW_UP = 'op_follow_up';
+    // The round the topic's first run started; the follow-up run (resumed with
+    // the user's feedback) inherits it.
+    const topicRun = { id: 'run-topic', operationId: 'op_first', plan: [], userId: USER_ID };
+    const createFollowUpCaller = () =>
+      verifyRouter.createCaller({ heteroOperationScope: FOLLOW_UP, userId: USER_ID } as any);
+
+    beforeEach(() => {
+      modelMocks.findRoundForOperation.mockImplementation(async (operationId: string) =>
+        operationId === FOLLOW_UP ? topicRun : undefined,
+      );
+    });
+
+    /** Regression (T-730): `result submit --operation <follow-up>` failed with "No verification run for this operation". */
+    it('files evidence into the inherited topic round', async () => {
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({
+        id: 'result-1',
+        verifyRunId: 'run-topic',
+      });
+
+      await createFollowUpCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        operationId: FOLLOW_UP,
+        toulmin: { evidence: 'Fixed after feedback.' },
+      });
+
+      expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
+        expect.objectContaining({ checkItemId: 'item-1', verifyRunId: 'run-topic' }),
+      );
+    });
+
+    it('disputes a check of the inherited topic round', async () => {
+      await createFollowUpCaller()
+        .disputeCheck({
+          checkItemId: 'item-1',
+          kind: 'invalid_criterion',
+          operationId: FOLLOW_UP,
+          reason: 'Out of scope',
+        })
+        .catch((error) => expect(error).not.toMatchObject({ code: 'FORBIDDEN' }));
+      expect(modelMocks.findRoundForOperation).toHaveBeenCalledWith(FOLLOW_UP);
+    });
+
+    /** Regression (T-730): `plan state <follow-up>` returned null, so the run never saw its checkItemIds. */
+    it('reads the inherited round state and results by default', async () => {
+      modelMocks.getStateByOperation.mockResolvedValueOnce({ verifyRunId: 'run-topic' });
+      await expect(
+        createFollowUpCaller().getVerifyState({ operationId: FOLLOW_UP }),
+      ).resolves.toEqual({ verifyRunId: 'run-topic' });
+      expect(modelMocks.getStateByOperation).toHaveBeenCalledWith(FOLLOW_UP, { inherit: true });
+
+      modelMocks.listResultsByRun.mockResolvedValueOnce([{ checkItemId: 'item-1' }]);
+      await expect(createFollowUpCaller().listResults({ operationId: FOLLOW_UP })).resolves.toEqual(
+        [{ checkItemId: 'item-1' }],
+      );
+      expect(modelMocks.listResultsByRun).toHaveBeenCalledWith('run-topic');
+    });
+
+    it('reaches the inherited round by id, and no other', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce(topicRun);
+      await expect(
+        createFollowUpCaller().getRun({ verifyRunId: '00000000-0000-4000-8000-000000000002' }),
+      ).resolves.toEqual(topicRun);
+
+      modelMocks.findRunById.mockResolvedValueOnce(otherRun);
+      await expect(
+        createFollowUpCaller().getRun({ verifyRunId: '00000000-0000-4000-8000-000000000001' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      modelMocks.findRunById.mockResolvedValueOnce(otherRun);
+      await expect(
+        createFollowUpCaller().submitCheckEvidence({
+          checkItemId: 'item-1',
+          verifyRunId: 'run-other',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    });
+  });
+
+  it("keeps a user session on the operation's own round unless it asks to inherit", async () => {
+    modelMocks.getStateByOperation.mockResolvedValue(null);
+    const caller = verifyRouter.createCaller({ userId: USER_ID } as any);
+
+    await caller.getVerifyState({ operationId: 'op_any' });
+    expect(modelMocks.getStateByOperation).toHaveBeenLastCalledWith('op_any', { inherit: false });
+
+    await caller.getVerifyState({ inherit: true, operationId: 'op_any' });
+    expect(modelMocks.getStateByOperation).toHaveBeenLastCalledWith('op_any', { inherit: true });
   });
 
   it('leaves a user session unbound', async () => {

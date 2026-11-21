@@ -11,7 +11,7 @@ import { fileCheckDispute, MAX_DISPUTE_REASON_CHARS } from '@/server/services/ve
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
   assertEvidenceOnlySubmission,
-  assertOperationInScope,
+  assertRunInScope,
   resolveCheckResult,
   resolveVerifyRun,
   verifyProcedure,
@@ -80,9 +80,11 @@ const uploadEvidenceInputSchema = z
   });
 
 /** Resolve a run from an Agent Run operation id — the handle a builder has in
- * the run-start gap, before any result rows (and thus checkResultIds) exist. */
+ * the run-start gap, before any result rows (and thus checkResultIds) exist.
+ * A later run in the same conversation (resumed with feedback, retried) has no
+ * round of its own and answers to its topic's round. */
 const resolveRunByOperation = async (ctx: { runModel: VerifyRunModel }, operationId: string) => {
-  const run = await ctx.runModel.findByOperation(operationId);
+  const run = await ctx.runModel.findRoundForOperation(operationId);
 
   if (!run) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'No verification run for this operation' });
@@ -169,7 +171,7 @@ export const ingestRouter = router({
         const run = result.verifyRunId
           ? await ctx.runModel.findById(result.verifyRunId)
           : undefined;
-        assertOperationInScope(ctx, run?.operationId);
+        await assertRunInScope(ctx, run);
       }
 
       const [row] = await prepareEvidenceRows(ctx.fileModel, [input]);
@@ -228,9 +230,9 @@ export const ingestRouter = router({
         : await resolveRunByOperation(ctx, input.operationId!);
       // The idempotent upsert overwrites the run's existing result rows.
       assertWorkspaceRowManageable(ctx, namedRun.userId, 'verify run');
-      // A run's token names its own round; the repair redirect below is the
-      // server's choice, not the caller's.
-      assertOperationInScope(ctx, namedRun.operationId);
+      // A run's token names its own round (or the topic round it inherits);
+      // the repair redirect below is the server's choice, not the caller's.
+      await assertRunInScope(ctx, namedRun);
       // A round whose failure already spawned a repair is never judged again;
       // land the submission on the round the repair will be judged in.
       const run = await resolveLiveRoundForItem(ctx, namedRun, input.checkItemId);
@@ -304,8 +306,9 @@ export const ingestRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const namedRun = await resolveRunByOperation(ctx, input.operationId);
-      // An operation-scoped builder token may dispute only its own run.
-      assertOperationInScope(ctx, namedRun.operationId);
+      // An operation-scoped builder token may dispute only its own run (or the
+      // topic round it inherits).
+      await assertRunInScope(ctx, namedRun);
       assertWorkspaceRowManageable(ctx, namedRun.userId, 'verify run');
       const run = await resolveLiveRoundForItem(ctx, namedRun, input.checkItemId);
       if (run.id !== namedRun.id) assertWorkspaceRowManageable(ctx, run.userId, 'verify run');

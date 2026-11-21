@@ -1,10 +1,17 @@
 import { DISPUTE_SETTLED_RUN_STATUSES } from '@lobechat/const/verify';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 
 import type { NewVerifyCheckResult, VerifyCheckResultItem } from '../schemas/verify';
 import { acceptances, verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Result statuses that carry a landed outcome — re-writing them is a no-op.
+ * Mirrors the runtime-side terminal set (verifyResult.ts): `pending` / `running`
+ * are the only non-terminal lifecycle states of a check result.
+ */
+const TERMINAL_RESULT_STATUSES = ['passed', 'failed', 'errored', 'skipped'] as const;
 
 export class VerifyCheckResultModel {
   private readonly db: LobeChatDatabase;
@@ -258,6 +265,35 @@ export class VerifyCheckResultModel {
           this.ownership(),
         ),
       );
+  };
+
+  /**
+   * Atomic variant of `updateByCheckItem` for verdict writes: the update only
+   * lands when the row is not yet terminal, and returns the surviving row via
+   * `returning()` — an empty result means a concurrent writer recorded a
+   * terminal verdict first. This closes the check-then-write race window
+   * between `listByRun()` and `updateByCheckItem()` where duplicate
+   * `submitVerifyResult` calls could both pass the read and overwrite each
+   * other's verdict/evidence.
+   */
+  updateByCheckItemIfPending = async (
+    verifyRunId: string,
+    checkItemId: string,
+    value: Partial<Omit<VerifyCheckResultItem, 'id' | 'userId'>>,
+  ): Promise<VerifyCheckResultItem[]> => {
+    return this.db
+      .update(verifyCheckResults)
+      .set(value)
+      .where(
+        and(
+          eq(verifyCheckResults.verifyRunId, verifyRunId),
+          eq(verifyCheckResults.checkItemId, checkItemId),
+          // Terminal guard, evaluated atomically with the write:
+          notInArray(verifyCheckResults.status, [...TERMINAL_RESULT_STATUSES]),
+          this.ownership(),
+        ),
+      )
+      .returning();
   };
 
   /**

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { carriedRunPolicy, VerifyRepairService } from '../repairService';
 
 const m = vi.hoisted(() => ({
+  claimRepairing: vi.fn(),
   findVerifyMessage: vi.fn(),
   listResults: vi.fn(),
   markRepairing: vi.fn(),
@@ -13,6 +14,7 @@ const m = vi.hoisted(() => ({
   settleFailedRepair: vi.fn(),
   updateMessage: vi.fn(),
   updateResult: vi.fn(),
+  updateStatus: vi.fn(),
 }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(function () {
@@ -22,9 +24,11 @@ vi.mock('@/database/models/message', () => ({
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
     return {
+      claimRepairing: m.claimRepairing,
       findByOperation: m.run,
       listByAcceptance: m.rounds,
       recordAutoRepair: m.recordAutoRepair,
+      updateStatus: m.updateStatus,
     };
   }),
 }));
@@ -68,6 +72,7 @@ const gateFailure = (checkItemId: string) => ({
 describe('VerifyRepairService.triggerAutoRepair', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    m.claimRepairing.mockResolvedValue(true);
     m.run.mockResolvedValue(round);
     m.rounds.mockResolvedValue([round]);
     m.findVerifyMessage.mockResolvedValue(undefined);

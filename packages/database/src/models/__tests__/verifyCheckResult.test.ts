@@ -304,6 +304,41 @@ describe('VerifyCheckResultModel', () => {
     expect(row).toMatchObject({ confidence: 0.9, status: 'passed', verdict: 'passed' });
     expect(row.toulmin).toEqual({ evidence: 'tests passed', reasoning: 'covers the goal' });
   });
+
+  it('updateByCheckItemIfPending lands on a pending row and returns it', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+    await model.create({ checkItemId: 'a', checkItemIndex: 0, verifierType: 'llm', verifyRunId });
+
+    const [updated] = await model.updateByCheckItemIfPending(verifyRunId, 'a', {
+      status: 'passed',
+      verdict: 'passed',
+    });
+
+    expect(updated).toMatchObject({ status: 'passed', verdict: 'passed' });
+  });
+
+  it('updateByCheckItemIfPending is a no-op on a terminal row — the concurrent-writer guard', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+    await model.create({ checkItemId: 'a', checkItemIndex: 0, verifierType: 'llm', verifyRunId });
+    // A concurrent submission landed first: the row is already terminal.
+    await model.updateByCheckItem(verifyRunId, 'a', {
+      status: 'failed',
+      toulmin: { evidence: 'first writer', reasoning: 'first writer' },
+      verdict: 'uncertain',
+    });
+
+    const updated = await model.updateByCheckItemIfPending(verifyRunId, 'a', {
+      status: 'passed',
+      toulmin: { evidence: 'second writer', reasoning: 'second writer' },
+      verdict: 'passed',
+    });
+
+    // The guard rejected the late write — no rows updated, original verdict intact.
+    expect(updated).toEqual([]);
+    const [row] = await model.listByRun(verifyRunId);
+    expect(row).toMatchObject({ status: 'failed', verdict: 'uncertain' });
+    expect(row.toulmin).toEqual({ evidence: 'first writer', reasoning: 'first writer' });
+  });
 });
 
 describe('VerifyRunModel plan', () => {
