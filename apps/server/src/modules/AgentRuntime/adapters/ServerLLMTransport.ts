@@ -713,6 +713,7 @@ export class ServerLLMTransport implements LLMTransport {
       attempt: input.attempt,
       blobStore: this.blobStore,
       chatPayload,
+      getToolActivationContext: input.context.getToolActivationContext,
       ctx,
       events: input.events,
       maxAttempts: input.maxAttempts,

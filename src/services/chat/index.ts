@@ -77,6 +77,7 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
    * budget is spent (planned by `shouldCompress`).
    */
   attachmentPreviewFileIds?: string[];
+  discoveryExcludedToolIds?: string[];
   discoveryManifests?: Record<string, LobeToolManifest>;
   groupId?: string;
   messages: UIChatMessage[];
@@ -159,6 +160,7 @@ class ChatService {
       groupId,
       additionalContexts,
       attachmentPreviewFileIds,
+      discoveryExcludedToolIds,
       discoveryManifests,
       topicId,
       resolvedAgentConfig,
@@ -268,6 +270,7 @@ class ChatService {
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
+      discoveryExcludedToolIds,
       discoveryManifests,
       manifests: enabledManifests,
       messages: messagesForContext,

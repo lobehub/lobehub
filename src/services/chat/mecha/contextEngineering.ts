@@ -85,6 +85,13 @@ interface ContextEngineeringContext {
    * `<available_skills>` nor resolvable by name via `activateSkill`.
    */
   disabledPluginIds?: string[];
+  /**
+   * Tool IDs excluded from `<available_tools>` discovery (typically the tools
+   * already enabled when the operation started). Keeping this anchored across
+   * mid-operation tool activations prevents mutating the before-first-user
+   * prefix message. Defaults to `tools`.
+   */
+  discoveryExcludedToolIds?: string[];
   discoveryManifests?: Record<string, LobeToolManifest>;
   /**
    * Runtime-resolved agent mode. Callers may force chat mode for models without
@@ -148,6 +155,7 @@ export const contextEngineering = async ({
   agentId,
   autoSkillIds,
   disabledPluginIds,
+  discoveryExcludedToolIds,
   discoveryManifests,
   enableAgentMode,
   groupId,
@@ -254,12 +262,13 @@ export const contextEngineering = async ({
     // engine dropped their manifests, so listing them would only invite an
     // activation that cannot succeed.
     const disabledIdSet = new Set(disabledPluginIds ?? []);
+    const discoveryExcludedSet = new Set(discoveryExcludedToolIds ?? tools ?? []);
     // The run's discovery pool is scoped to the conversation already; a
     // connector row's tool set is disabled with its connector
     const availableTools = Object.values(discoveryManifests ?? {})
       .filter(
         (manifest) =>
-          !enabledToolSet.has(manifest.identifier) &&
+          !discoveryExcludedSet.has(manifest.identifier) &&
           !disabledIdSet.has(manifest.identifier) &&
           !disabledIdSet.has(manifestBaseIdentifier(manifest)),
       )
