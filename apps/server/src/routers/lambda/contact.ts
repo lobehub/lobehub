@@ -192,23 +192,33 @@ export const contactRouter = router({
     )
     .query(async ({ ctx, input }) => ctx.contactModel.listMarketAgents(input)),
 
-  // Changing a workspace's address book takes a member; a viewer only reads it.
+  // Changing a workspace's address book takes a member; a viewer only reads it. The caller's
+  // other devices refresh their address book right away.
   addAgent: contactProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
     .input(z.object({ share: handle }))
-    .mutation(async ({ ctx, input }) => ctx.contactModel.addAgent(input.share)),
+    .mutation(async ({ ctx, input }) => {
+      const agent = await ctx.contactModel.addAgent(input.share);
+      notifyContactsChangedAfterResponse([ctx.userId]);
+      return agent;
+    }),
 
   /** Add an Agent from its card message; the owner's card admits the caller to a `card` share. */
   addAgentFromCard: contactProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
     .input(z.object({ messageId: z.uuid() }))
-    .mutation(async ({ ctx, input }) => ctx.contactModel.addAgentFromCard(input.messageId)),
+    .mutation(async ({ ctx, input }) => {
+      const agent = await ctx.contactModel.addAgentFromCard(input.messageId);
+      notifyContactsChangedAfterResponse([ctx.userId]);
+      return agent;
+    }),
 
   removeAgent: contactProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
     .input(z.object({ agentId: z.string().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
       await ctx.contactModel.removeAgent(input.agentId);
+      notifyContactsChangedAfterResponse([ctx.userId]);
       return { success: true };
     }),
 });

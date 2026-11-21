@@ -48,15 +48,22 @@ describe('creating a Channel with people', () => {
     expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
   });
 
-  it('keeps an Agent-only group quiet beyond its creator', async () => {
+  it("tells the creator's other devices about an Agent-only group", async () => {
     await service().create({ agents: [{ agentId: 'agt_1' }], title: 'Team' });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ userIds: [] }));
-    expect(notifyChannel).not.toHaveBeenCalled();
+    expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
   });
 
-  it('starts a group with only its creator, without notifying the creator as an invitee', async () => {
+  it('starts a group with only its creator, without inviting the creator', async () => {
     await service().create({ agents: [], title: 'Me', userIds: ['owner'] });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ agents: [], userIds: [] }));
+    expect(notifyChannel).toHaveBeenCalledTimes(1);
+    expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'chn_1');
+  });
+
+  it('notifies nobody when the Channel is not created', async () => {
+    create.mockRejectedValue(new Error('CONFLICT'));
+    await expect(service().create({ agents: [], title: 'Team' })).rejects.toThrow('CONFLICT');
     expect(notifyChannel).not.toHaveBeenCalled();
   });
 });

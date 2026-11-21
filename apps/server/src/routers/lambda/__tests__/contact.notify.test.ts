@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const model = vi.hoisted(() => ({
   acceptRequest: vi.fn(),
+  addAgent: vi.fn(),
+  addAgentFromCard: vi.fn(),
   cancelRequest: vi.fn(),
   declineRequest: vi.fn(),
   openTo: vi.fn(),
+  removeAgent: vi.fn(),
   removeExternal: vi.fn(),
   removeUser: vi.fn(),
   sendRequest: vi.fn(),
@@ -156,6 +159,33 @@ describe('contactRouter notifications', () => {
     it('not when the change fails', async () => {
       model.declineRequest.mockRejectedValue(new Error('Request not found'));
       await expect(caller().declineRequest({ requestId: REQUEST_ID })).rejects.toThrow();
+      expect(contactsChanged).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("refreshes the caller's own address book on their other devices", () => {
+    it('on adding an Agent from its share', async () => {
+      model.addAgent.mockResolvedValue({ id: 'agt_1' });
+      await expect(caller().addAgent({ share: 'agt_1' })).resolves.toEqual({ id: 'agt_1' });
+      expect(contactsChanged).toHaveBeenCalledWith(['me']);
+    });
+
+    it('on adding an Agent from its card', async () => {
+      model.addAgentFromCard.mockResolvedValue({ id: 'agt_1' });
+      await expect(caller().addAgentFromCard({ messageId: REQUEST_ID })).resolves.toEqual({
+        id: 'agt_1',
+      });
+      expect(contactsChanged).toHaveBeenCalledWith(['me']);
+    });
+
+    it('on removing an Agent', async () => {
+      await expect(caller().removeAgent({ agentId: 'agt_1' })).resolves.toEqual({ success: true });
+      expect(contactsChanged).toHaveBeenCalledWith(['me']);
+    });
+
+    it('not when adding the Agent fails', async () => {
+      model.addAgent.mockRejectedValue(new Error('Agent not found'));
+      await expect(caller().addAgent({ share: 'agt_1' })).rejects.toThrow();
       expect(contactsChanged).not.toHaveBeenCalled();
     });
   });

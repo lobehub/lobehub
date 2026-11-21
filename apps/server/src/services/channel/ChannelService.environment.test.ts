@@ -62,6 +62,7 @@ describe('changing an Agent member’s channel environment', () => {
     findDevice.mockResolvedValue({ deviceId: 'mac', platform: 'darwin', userId: 'owner' });
     statPath.mockResolvedValue({ canonicalPath: '/real/b', isDirectory: true });
     update.mockResolvedValue({ id: 'member-1' });
+    create.mockResolvedValue({ channel: { id: 'chn_1' } });
   });
   const service = () => new ChannelService({} as never, 'owner');
 

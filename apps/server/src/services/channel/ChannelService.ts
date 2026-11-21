@@ -186,7 +186,7 @@ export class ChannelService {
     title: string;
     userIds?: string[];
   }) => {
-    // The creator joins as owner anyway; naming them is not an invitation to notify about.
+    // The creator joins as owner anyway; naming them is not an invitation.
     const userIds = (input.userIds ?? []).filter((id) => id !== this.userId);
     // The project must be readable in this scope, the same visibility as the project list.
     if (input.projectId && !(await this.projectModel.findById(input.projectId)))
@@ -201,15 +201,13 @@ export class ChannelService {
         agents.map(({ agentId }) => agentId),
         input.joinProject,
       );
-    const access = await this.repository.create({
+    // Invited people, and the creator's other devices, see the new Channel.
+    return this.createAndNotify({
       agents,
       projectId: input.projectId,
       title: input.title,
       userIds,
     });
-    // Invited people see the new Channel without waiting for their next poll.
-    if (userIds.length) await this.changed(access.channel.id);
-    return access;
   };
 
   /**
@@ -218,11 +216,21 @@ export class ChannelService {
    */
   createDefault = async (input: { agentId: string; projectId?: string; title: string }) => {
     const agentId = await this.defaultChannelAgent(input.agentId);
-    return this.repository.create({
+    return this.createAndNotify({
       agents: [{ agentId }],
       projectId: input.projectId,
       title: input.title,
     });
+  };
+
+  /**
+   * Creates a Channel and tells its members, the creator's other devices included, so their lists
+   * show it without waiting for their next poll.
+   */
+  private createAndNotify = async (params: Parameters<ChannelRepository['create']>[0]) => {
+    const access = await this.repository.create(params);
+    await this.changed(access.channel.id);
+    return access;
   };
 
   /**
@@ -258,7 +266,7 @@ export class ChannelService {
     const agent = await this.agentService.getAgentConfigById(agentId);
     if (!agent) return this.createSharedDirect(agentId);
     if (!isChannelRuntime(agentRuntime(agent))) return;
-    return this.repository.create({
+    return this.createAndNotify({
       agentConfig: {},
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
@@ -275,7 +283,7 @@ export class ChannelService {
       agentId,
     );
     if (!shared) return;
-    return this.repository.create({
+    return this.createAndNotify({
       agentConfig: {},
       agentId,
       sharedAgent: true,
@@ -297,7 +305,7 @@ export class ChannelService {
 
     const existing = await this.repository.findDirectAccess(found.agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
-    return this.repository.create({
+    return this.createAndNotify({
       agentConfig: {},
       agentId: found.agentId,
       sharedAgent: true,
