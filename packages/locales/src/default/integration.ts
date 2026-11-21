@@ -61,7 +61,6 @@ export default {
   'github.repositoryAccess.description':
     'Install the LobeHub app to sync pull request activity and use repositories in projects and environments.',
   'github.repositoryAccess.title': 'Repository access',
-  'github.tagline': 'Sync pull requests, CI results and reviews with your agents',
   'linear.connections.connect': 'Connect workspace',
   'linear.connections.connectedAs': 'Connected as {{name}} · {{date}}',
   'linear.connections.empty': 'No Linear workspace connected yet.',
@@ -78,6 +77,8 @@ export default {
   'linear.disconnect.success': 'Linear disconnected',
   'linear.disconnect.title': 'Disconnect Linear',
   'linear.docsLink': 'Read the guide',
+  'linear.connectorPage.description':
+    'Connect your account to give agents Linear tools. Connect a workspace to import its issues into projects.',
   'linear.installResult.error.access_denied': 'Authorization was cancelled on Linear.',
   'linear.installResult.error.exchange_failed':
     'Linear did not accept the authorization. Please try connecting again.',
@@ -216,15 +217,6 @@ export default {
   'linear.sync.viewerDisabled': 'Viewers cannot import issues into tasks',
   'linear.sync.wizard.back': 'Back',
   'linear.sync.wizard.next': 'Next',
-  'linear.tagline': 'Connect your Linear workspace to LobeHub',
-  'overview.all': 'All integrations',
-  'overview.comingSoon': 'Coming soon',
-  'overview.description': 'Connect the platforms you already use',
-  'overview.enabled': 'Enabled',
-  'overview.status.comingSoon': 'Coming soon',
-  'overview.status.enabled': 'Enabled',
-  'overview.status.notConnected': 'Not connected',
-  'overview.title': 'Integrations',
   'scmEvent.details': 'Details',
   'scmEvent.failedChecks': '{{count}} checks failed',
   'scmEvent.hideLog': 'Hide log',
@@ -250,8 +242,4 @@ export default {
   'webhookEvent.defaultName': 'Webhook',
   'webhookEvent.senderCaption': 'Webhook',
   'webhookEvent.test': 'Test',
-  'upcoming.cloudflare.tagline': 'Notify the agent when a Workers or Pages build fails',
-  'upcoming.notion.tagline': 'Sync Notion documents automatically',
-  'upcoming.railway.tagline': 'Notify the agent when a deploy fails or a service crashes',
-  'upcoming.vercel.tagline': 'Wake the agent with the build log when a deployment fails',
 };

@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
-import { isGithubConnector } from '@/features/Integrations/Github/home';
+import { CONNECTOR_PAGE_IDS, hasConnectorPage } from '@/features/Integrations/connectorPage';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import {
   featureFlagsSelectors,
@@ -237,6 +237,7 @@ const SkillList = memo<SkillListProps>(
     const allIntegrations = buildIntegrationItems({
       ...connectionState,
       connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
+      pageOnlyProviderIds: CONNECTOR_PAGE_IDS,
     });
 
     // Each workspace tab lists its own pool. Built-in tools, plugins and agent
@@ -406,10 +407,11 @@ const SkillList = memo<SkillListProps>(
         case 'lobehub': {
           return (
             <LobehubSkillItem
+              connectable={isLobehubSkillEnabled}
               hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
-              openWhenDisconnected={isGithubConnector(item.provider.id)}
+              openWhenDisconnected={hasConnectorPage(item.provider.id)}
               provider={item.provider}
               server={getLobehubSkillServerByProvider(item.provider.id)}
               onDelete={onDeleteSelected}

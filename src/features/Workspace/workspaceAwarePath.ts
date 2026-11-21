@@ -61,7 +61,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'environments',
   'general',
   'hotkey',
-  // Third-party integrations bind to the workspace that connected them.
+  // Legacy alias: integrations moved to `/marketplace/connector`; the routers
+  // keep a redirect, and the install callbacks still return here.
   'integrations',
   'labels',
   'labs',

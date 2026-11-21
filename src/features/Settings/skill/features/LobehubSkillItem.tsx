@@ -35,6 +35,8 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillItemProps {
+  /** False where LobeHub connectors are off: the row only opens its page. Defaults to true. */
+  connectable?: boolean;
   hideConnectedStatus?: boolean;
   isSelected?: boolean;
   onDelete?: () => void;
@@ -50,6 +52,7 @@ interface LobehubSkillItemProps {
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
   ({
+    connectable = true,
     hideConnectedStatus,
     provider,
     server,
@@ -337,6 +340,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // button that opens the OAuth flow inline, so users can tell what is connected
     // and aren't left staring at a blank detail panel wondering if it's a bug.
     const renderPageExtra = () => {
+      if (!isConnected && !connectable) return null;
       const needsAuth = server?.status === LobehubSkillStatus.ERROR;
       if (isConnected)
         return (
@@ -369,6 +373,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
 
     const renderNavExtra = () => {
       if (isPage) return renderPageExtra();
+      if (!isConnected && !connectable) return null;
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }

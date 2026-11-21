@@ -1,5 +1,10 @@
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
-import { getConnectorCatalog, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
+import {
+  getConnectorCatalog,
+  getLobehubSkillProviderById,
+  RECOMMENDED_SKILLS,
+  RecommendedSkillType,
+} from '@lobechat/const';
 import type { TFunction } from 'i18next';
 
 export type IntegrationItem =
@@ -20,6 +25,11 @@ export interface BuildIntegrationItemsParams {
   connectorAvailability: { composio: boolean; lobehub: boolean };
   isComposioActive: (identifier: string) => boolean;
   isLobehubConnected: (providerId: string) => boolean;
+  /**
+   * Providers listed even where LobeHub connectors are off, because their page
+   * also manages an integration the deployment may have configured on its own.
+   */
+  pageOnlyProviderIds?: readonly string[];
   /** Defaults to the app's `RECOMMENDED_SKILLS`; injectable for tests. */
   recommendedSkills?: typeof RECOMMENDED_SKILLS;
 }
@@ -43,6 +53,7 @@ export const buildIntegrationItems = (params: BuildIntegrationItemsParams): Inte
   const {
     connectorAvailability,
     isComposioActive,
+    pageOnlyProviderIds = [],
     recommendedSkills = RECOMMENDED_SKILLS,
   } = params;
   const recommended = recommendedSkills
@@ -53,7 +64,13 @@ export const buildIntegrationItems = (params: BuildIntegrationItemsParams): Inte
     const index = recommended.indexOf(id);
     return index < 0 ? recommended.length : index;
   };
-  return getConnectorCatalog(connectorAvailability)
+  const pageOnlyItems: IntegrationItem[] = connectorAvailability.lobehub
+    ? []
+    : pageOnlyProviderIds.flatMap((id) => {
+        const provider = getLobehubSkillProviderById(id);
+        return provider ? [{ provider, type: 'lobehub' as const }] : [];
+      });
+  return [...getConnectorCatalog(connectorAvailability), ...pageOnlyItems]
     .filter(
       (item) =>
         recommendedSkills.length > 0 ||
