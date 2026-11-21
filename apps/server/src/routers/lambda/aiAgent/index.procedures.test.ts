@@ -24,6 +24,7 @@ function expected(): Array<[name: string, type: 'mutation' | 'query']> {
     ['beginServerDefaultHeterogeneousOperation', 'mutation'],
     ['cancelServerDefaultHeterogeneousOperation', 'mutation'],
     ['cancelWorktreeTurn', 'mutation'],
+    ['controlClientSubAgentToolResult', 'mutation'],
     ['createClientGroupAgentTaskThread', 'mutation'],
     ['createClientTaskThread', 'mutation'],
     ['describeServerDefaultHeterogeneousModel', 'mutation'],
