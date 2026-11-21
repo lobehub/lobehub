@@ -431,6 +431,8 @@ export interface ExecGroupMemberParams {
   timeout?: number;
   /** Group topic id. */
   topicId: string;
+  /** User agent of the request that started the supervisor run, for model-call admission. */
+  userAgent?: string;
   /**
    * The supervisor run's approval policy. Members answer to the same mode the
    * user picked for the turn, so a `humanIntervention: 'required'` tool still
