@@ -153,6 +153,21 @@ describe('onboarding actions', () => {
       });
     });
 
+    it('records a builtin override when enabling a legacy builtin skill', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.toggleInboxAgentDefaultPlugin('lobe-artifacts', true);
+      });
+
+      expect(updateAgentConfigById).toHaveBeenCalledWith('inbox-agent-id', {
+        plugins: [
+          'plugin-1',
+          { builtinOverride: true, identifier: 'lobe-artifacts', mode: 'auto' },
+        ],
+      });
+    });
+
     it('setting open=false writes an explicit disabled entry', async () => {
       const { result } = renderHook(() => useUserStore());
 

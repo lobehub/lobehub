@@ -88,6 +88,37 @@ describe('PluginSlice Actions', () => {
       );
     });
 
+    it('keeps the toggle on its Agent when the user switches while it loads', async () => {
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: { plugins: [{ identifier: 'plugin-1', mode: 'auto' }] } as any,
+        success: true,
+      });
+
+      useAgentStore.setState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': { plugins: [] } as any,
+          'agent-2': { plugins: [] } as any,
+        },
+      });
+
+      await act(async () => {
+        const toggle = useAgentStore.getState().togglePlugin('plugin-1', true);
+        useAgentStore.setState({ activeAgentId: 'agent-2' });
+        await toggle;
+      });
+
+      expect(agentService.updateAgentConfig).toHaveBeenCalledTimes(1);
+      expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
+        'agent-1',
+        expect.objectContaining({
+          plugins: [{ identifier: 'plugin-1', mode: 'auto' }],
+        }),
+        expect.any(AbortSignal),
+        undefined,
+      );
+    });
+
     it('should enable plugin as mode auto when open=true explicitly', async () => {
       const { result } = renderHook(() => useAgentStore());
 

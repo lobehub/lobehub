@@ -1,6 +1,4 @@
-import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { legacyBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import {
   CLASSIC_ONBOARDING_MAX_STEP,
   parsePluginEntry,
@@ -103,8 +101,17 @@ export class OnboardingActionImpl {
   };
 
   toggleInboxAgentDefaultPlugin = async (id: string, open?: boolean): Promise<void> => {
-    /** Break the user → agent → cache-scope → user initialization cycle. */
-    const { getAgentStoreState } = await import('@/store/agent');
+    /**
+     * The agent store breaks the user → agent → cache-scope → user initialization
+     * cycle; the builtin-tools entry carries every tool manifest and stays off the
+     * first screen.
+     */
+    const [{ getAgentStoreState }, { isOnDemandBuiltinTool }, { legacyBuiltinSkillIds }] =
+      await Promise.all([
+        import('@/store/agent'),
+        import('@lobechat/builtin-tools'),
+        import('@lobechat/mecha/builtinSkillGate'),
+      ]);
     const currentSettings = settingsSelectors.currentSettings(this.#get());
     const defaultEntry = currentSettings.defaultAgent?.config?.plugins?.find(
       (entry) => parsePluginEntry(entry).identifier === id,

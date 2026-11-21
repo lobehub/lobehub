@@ -1,5 +1,3 @@
-import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
-import { legacyBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import {
   type AgentPluginMode,
   parsePluginEntry,
@@ -43,7 +41,17 @@ export class PluginSliceActionImpl {
    * per-agent choice overrides any legacy library-wide uninstall.
    */
   togglePlugin = async (id: string, open?: boolean): Promise<void> => {
-    const originConfig = agentSelectors.currentAgentConfig(this.#get());
+    // Pin the Agent first: the user may switch Agents while the chunks load.
+    const agentId = this.#get().activeAgentId;
+    if (!agentId) return;
+
+    // This store is on the first screen; the builtin-tools entry carries every tool manifest.
+    const [{ isOnDemandBuiltinTool }, { legacyBuiltinSkillIds }] = await Promise.all([
+      import('@lobechat/builtin-tools'),
+      import('@lobechat/mecha/builtinSkillGate'),
+    ]);
+
+    const originConfig = agentSelectors.getAgentConfigById(agentId)(this.#get());
     if (!originConfig) return;
 
     const existing = originConfig.plugins?.find(
@@ -58,7 +66,7 @@ export class PluginSliceActionImpl {
         : upsertConnectorEnabled(draft.plugins, id, shouldOpen)) as unknown as string[];
     });
 
-    await this.#get().updateAgentConfig(config);
+    await this.#get().updateAgentConfigById(agentId, config);
   };
 
   /**
