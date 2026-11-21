@@ -26,6 +26,7 @@ import { default as elevenlabs } from './elevenlabs';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
 import { default as fishaudio } from './fishaudio';
+import { default as flexai } from './flexai';
 import { default as giteeai } from './giteeai';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
@@ -143,6 +144,7 @@ const staticModelMap: ModelsMap = {
   fal,
   fireworksai,
   fishaudio,
+  flexai,
   giteeai,
   github,
   githubcopilot,
@@ -266,6 +268,7 @@ export { default as elevenlabs } from './elevenlabs';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';
 export { default as fishaudio } from './fishaudio';
+export { default as flexai } from './flexai';
 export { default as giteeai } from './giteeai';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';
