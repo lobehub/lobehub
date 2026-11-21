@@ -1,5 +1,5 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
-import { and, asc, count, eq, inArray, isNull, like, notInArray, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, like, notExists, notInArray, or } from 'drizzle-orm';
 
 import { type AgentModelContext, createAgentModelContext } from '../../models/agent/context';
 import { AGENT_SHARED_TRANSFER_BLOCKED, AgentOwnedByGroupError } from '../../models/agent/errors';
@@ -372,11 +372,28 @@ const transferAgents = async (
       });
     }
 
-    // 8. Update threads (linked via agentId)
+    // 8. Update threads (linked via agentId). A thread inside a topic that stays
+    // behind stays with it, or neither scope could load the whole conversation.
     await trx
       .update(threads)
       .set({ ...ownershipUpdate, updatedAt: threads.updatedAt })
-      .where(inArray(threads.agentId, agentIds));
+      .where(
+        and(
+          inArray(threads.agentId, agentIds),
+          notExists(
+            trx
+              .select({ id: topics.id })
+              .from(topics)
+              .where(
+                and(
+                  eq(topics.id, threads.topicId),
+                  or(isNull(topics.agentId), notInArray(topics.agentId, agentIds)),
+                  isNull(topics.groupId),
+                ),
+              ),
+          ),
+        ),
+      );
 
     // 9. Update agent files associations
     await trx

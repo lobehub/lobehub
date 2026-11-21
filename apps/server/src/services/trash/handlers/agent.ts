@@ -122,9 +122,11 @@ export const agentHandler: TrashHandler = {
       // Topics / messages trashed on their own before this agent keep separate
       // roots; the deletes below remove them, so drop those rows first.
       await trashModel.removeRootsUnderAgents({ agentIds, topicIds: stranded.topicIds });
+      await topicModel.purge(stranded.topicIds);
+      // Topics outside the cascade keep their messages and threads.
+      await agentModel.detachFromSurvivingTopics(agentIds);
       // FK cascades take the topics / messages / threads carrying the agent.
       await agentModel.purge(agentIds);
-      await topicModel.purge(stranded.topicIds);
       const messageModel = new MessageModel(db, ctx.userId, ctx.workspaceId);
       for (const ids of chunk(stranded.messageIds, PURGE_CHUNK_SIZE)) {
         await messageModel.purgeMessages(ids);

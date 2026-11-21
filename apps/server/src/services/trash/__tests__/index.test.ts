@@ -18,6 +18,7 @@ import {
   dashboards,
   messages,
   sessions,
+  threads,
   topics,
   trashItems,
   users,
@@ -384,6 +385,37 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(sessions).where(eq(sessions.id, sessionId))).toHaveLength(
         1,
       );
+    });
+
+    it('keeps messages and threads carrying the agent inside a surviving legacy topic', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const legacy = await topicModel.create({ sessionId: session.id, title: 'old chat' });
+      const tagged = await messageModel.create({
+        agentId: agent.id,
+        content: 'continued later',
+        role: 'user',
+        topicId: legacy.id,
+      });
+      await serverDB.insert(threads).values({
+        agentId: agent.id,
+        id: 'trash-legacy-thread',
+        topicId: legacy.id,
+        type: 'standalone',
+        userId,
+      });
+
+      const root = await service.trashAgent(agent.id);
+      await service.purge([root!.id]);
+
+      const [message] = await serverDB.select().from(messages).where(eq(messages.id, tagged.id));
+      const [thread] = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.id, 'trash-legacy-thread'));
+      expect(message.agentId).toBeNull();
+      expect(thread.agentId).toBeNull();
+      expect(await serverDB.select().from(topics).where(eq(topics.id, legacy.id))).toHaveLength(1);
     });
 
     it('purges session-only children an earlier cascade already put in the bin', async () => {

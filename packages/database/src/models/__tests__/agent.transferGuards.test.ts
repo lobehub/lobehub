@@ -421,6 +421,47 @@ describe('AgentModel.transferAgent with legacy session-only rows', () => {
     ).toEqual([]);
   });
 
+  it('keeps a held topic whole, and a later delete of the moved agent does not empty it', async () => {
+    await linkSession('agtg-legacy-session', ownerId);
+    await serverDB.insert(topics).values({
+      id: 'agtg-legacy-topic',
+      sessionId: 'agtg-legacy-session',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(messages).values({
+      agentId,
+      id: 'agtg-tagged-message',
+      role: 'user',
+      topicId: 'agtg-legacy-topic',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(threads).values({
+      agentId,
+      id: 'agtg-tagged-thread',
+      topicId: 'agtg-legacy-topic',
+      type: 'standalone',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+
+    await ownerModel.transferAgent(agentId, targetWs, ownerId, 'public');
+
+    const threadRow = async () =>
+      (await serverDB.select().from(threads).where(eq(threads.id, 'agtg-tagged-thread')))[0];
+    const messageRow = async () =>
+      (await serverDB.select().from(messages).where(eq(messages.id, 'agtg-tagged-message')))[0];
+    expect((await threadRow()).workspaceId).toBe(wsId);
+    expect((await messageRow()).workspaceId).toBe(wsId);
+
+    await new AgentModel(serverDB, ownerId, targetWs).delete(agentId);
+
+    expect(await serverDB.select().from(agents).where(eq(agents.id, agentId))).toEqual([]);
+    expect((await threadRow()).agentId).toBeNull();
+    expect((await messageRow()).agentId).toBeNull();
+  });
+
   it('still moves a linked shell that holds nothing outside the agent', async () => {
     await linkSession('agtg-clean-session', ownerId);
     await serverDB.insert(topics).values({
