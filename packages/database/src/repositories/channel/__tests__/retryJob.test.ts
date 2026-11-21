@@ -14,10 +14,17 @@ afterEach(fixture.cleanup);
 
 const execution = new ChannelExecutionRepository(db);
 
-/** A reply claimed and failed with `error`; `released` settles its writer as a stop would. */
+/**
+ * A reply claimed and failed with `error`; `released` settles its writer as a stop would, and
+ * `draft` makes the run accept its input and save a final answer before it fails.
+ */
 const failedReply = async (
   error: Record<string, unknown>,
-  { released = true, sender = 'owner' }: { released?: boolean; sender?: 'member' | 'owner' } = {},
+  {
+    draft,
+    released = true,
+    sender = 'owner',
+  }: { draft?: string; released?: boolean; sender?: 'member' | 'owner' } = {},
 ) => {
   const team = await fixture.createTeamChannel();
   await fixture.addAgent(team.channel.id, 'Device Agent');
@@ -28,6 +35,10 @@ const failedReply = async (
   });
   const [job] = await jobsOf(db, message.id);
   await execution.claim(team.channel.id, job.id, lease);
+  if (draft !== undefined) {
+    await execution.accepted(team.channel.id, job.id);
+    await execution.saveDraft(team.channel.id, job.id, draft);
+  }
   const [claimed] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
   await db
     .update(agentOperations)
@@ -44,7 +55,9 @@ const deviceUnreachable = {
   type: 'DeviceGatewayNotConfigured',
 };
 
-describe('Retrying a reply that could not reach its device', () => {
+const modelError = { message: 'Unsupported model', type: 'ProviderBizError' };
+
+describe('Retrying a failed reply', () => {
   it('queues the same delivery again, and a new claim runs it on a fresh operation', async () => {
     const { asOwner, channel, failed } = await failedReply(deviceUnreachable);
 
@@ -80,12 +93,70 @@ describe('Retrying a reply that could not reach its device', () => {
     });
   });
 
-  it('refuses a reply that failed for another reason, since it may have run', async () => {
-    const { asOwner, channel, failed } = await failedReply({
-      message: 'Unsupported model',
-      type: 'ProviderBizError',
+  it.each([
+    ['a model error', modelError],
+    ['an exhausted quota', { message: 'Quota exceeded', type: 'InsufficientQuota' }],
+    ['a timeout', { message: 'The run timed out', type: 'AgentRuntimeError' }],
+  ])('queues a reply that failed with %s, and runs it on a fresh operation', async (_, error) => {
+    const { asOwner, channel, failed } = await failedReply(error);
+
+    await expect(asOwner.retryJob(channel.id, failed.id)).resolves.toMatchObject({
+      id: failed.id,
+      operationId: null,
+      status: 'queued',
     });
+
+    const claim = await execution.claim(channel.id, failed.id, lease);
+    expect(claim?.job.status).toBe('running');
+    expect(claim?.job.operationId).not.toBe(failed.operationId);
+  });
+
+  it('discards the unpublished draft of a run that got further, so the new run answers afresh', async () => {
+    const { asOwner, channel, failed } = await failedReply(modelError, { draft: 'half an answer' });
+
+    const retried = await asOwner.retryJob(channel.id, failed.id);
+    expect(retried).toMatchObject({
+      acceptedAt: null,
+      draft: null,
+      publicationRevoked: false,
+      status: 'queued',
+    });
+
+    await execution.claim(channel.id, failed.id, lease);
+    await execution.accepted(channel.id, failed.id);
+    await execution.saveDraft(channel.id, failed.id, 'the full answer');
+    const replyId = await execution.publish(channel.id, failed.id);
+
+    const { messages } = await asOwner.detail(channel.id);
+    const replies = messages.filter((m) => m.replyToId === retried.messageId);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({ content: 'the full answer', id: replyId });
+  });
+
+  it('refuses a second retry of the same reply, so it is never queued twice', async () => {
+    const { asOwner, channel, failed } = await failedReply(modelError);
+
+    await asOwner.retryJob(channel.id, failed.id);
     await expect(asOwner.retryJob(channel.id, failed.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('refuses a reply that was published', async () => {
+    const team = await fixture.createTeamChannel();
+    await fixture.addAgent(team.channel.id, 'Device Agent');
+    const message = await team.asOwner.send(team.channel.id, {
+      content: 'hi',
+      requestKey: 'retry-published',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    await execution.claim(team.channel.id, job.id, lease);
+    await execution.accepted(team.channel.id, job.id);
+    await execution.saveDraft(team.channel.id, job.id, 'done');
+    await execution.publish(team.channel.id, job.id);
+
+    await expect(team.asOwner.retryJob(team.channel.id, job.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
   });

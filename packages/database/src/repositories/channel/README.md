@@ -242,10 +242,10 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
 - Job status describes the Channel delivery; execution status/errors/usage live on its operation.
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
-  Isolation frees the member's branch but keeps the device/directory lock. Never retry an unknown delivery.
-  `retryJob` re-queues only a failed job whose device could not be reached
-  (`DeviceGatewayNotConfigured`), with its writer released and nothing accepted or published;
-  the next claim opens a fresh operation.
+  Isolation frees the member's branch but keeps the device/directory lock. The system never retries an unknown delivery.
+  `retryJob` is the explicit, person-initiated path: it re-queues any failed job (unreachable device, model/quota error, timeout, unknown execution)
+  whose writer is released and that published nothing, discarding an unpublished draft; the next
+  claim opens a fresh operation, so late callbacks of the failed one cannot publish.
 - A job blocked only by another writer in its member's directory moves its conversation branch
   (a Thread, or the main timeline) into a git worktree instead of waiting: the coordinator asks
   the device to cut `lobe-channel/<member>-<branch>` from that directory's HEAD under
