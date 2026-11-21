@@ -164,6 +164,144 @@ describe('VideoGenerationExecutionRuntime', () => {
     expect(result.content).toContain('Use getVideoGenerationStatus');
   });
 
+  describe('generation parameters', () => {
+    const seedanceParameters = {
+      aspectRatio: { default: 'adaptive', enum: ['adaptive', '16:9', '9:16'] },
+      duration: { default: 5, max: 12, min: 4 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
+    };
+
+    const createSeedanceService = (parameters: unknown = seedanceParameters) =>
+      createService({
+        listVideoModels: vi.fn().mockResolvedValue({
+          providers: [
+            {
+              id: 'lobehub',
+              models: [{ id: 'seedance-1-5-pro-251215', parameters }],
+              name: 'LobeHub',
+            },
+          ],
+          totalModels: 1,
+        }),
+      });
+
+    const generate = (service: VideoGenerationRuntimeService, args: Record<string, unknown>) =>
+      new VideoGenerationExecutionRuntime(service).generateVideo({
+        model: 'seedance-1-5-pro-251215',
+        prompt: 'A paper airplane',
+        provider: 'lobehub',
+        waitUntilComplete: false,
+        ...args,
+      });
+
+    const requested = {
+      aspectRatio: '16:9',
+      duration: 7,
+      generateAudio: false,
+      resolution: '1080p',
+    };
+
+    it('forwards values sent next to prompt instead of dropping them', async () => {
+      const service = createSeedanceService();
+
+      const result = await generate(service, requested);
+
+      expect(result.success).toBe(true);
+      expect(service.createVideo).toHaveBeenCalledWith(
+        expect.objectContaining({ params: { ...requested, prompt: 'A paper airplane' } }),
+      );
+    });
+
+    it('decodes parameters sent as a JSON string', async () => {
+      const service = createSeedanceService();
+
+      await generate(service, { parameters: JSON.stringify(requested) });
+
+      expect(service.createVideo).toHaveBeenCalledWith(
+        expect.objectContaining({ params: { ...requested, prompt: 'A paper airplane' } }),
+      );
+    });
+
+    it('coerces numeric and boolean strings to the schema types', async () => {
+      const service = createSeedanceService();
+
+      await generate(service, { parameters: { duration: '6', generateAudio: 'false' } });
+
+      expect(service.createVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: { duration: 6, generateAudio: false, prompt: 'A paper airplane' },
+        }),
+      );
+    });
+
+    it.each([
+      ['an out-of-range duration', { duration: 20 }, '`duration` must be at most 12'],
+      ['a fractional duration', { duration: 7.5 }, '`duration` must move in steps of 1'],
+      ['an unsupported resolution', { resolution: '4k' }, '`resolution` must be one of'],
+      ['a key the model does not declare', { seed: 1 }, 'does not support `seed`'],
+      ['a non-standard key', { mode: 't2v' }, 'Unsupported video parameters: `mode`'],
+      ['a non-numeric duration', { duration: 'long' }, '`duration` must be a number'],
+    ])('rejects %s before creating anything', async (_name, parameters, message) => {
+      const service = createSeedanceService();
+
+      const result = await generate(service, { parameters });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ type: 'InvalidToolArguments' });
+      expect(result.content).toContain(message);
+      expect(service.createGenerationTopic).not.toHaveBeenCalled();
+      expect(service.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('treats null optional values as unset', async () => {
+      const service = createSeedanceService();
+
+      const result = await generate(service, {
+        parameters: { duration: 7, mode: null, resolution: null },
+      });
+
+      expect(result.success).toBe(true);
+      expect(service.createVideo).toHaveBeenCalledWith(
+        expect.objectContaining({ params: { duration: 7, prompt: 'A paper airplane' } }),
+      );
+    });
+
+    it('rejects a value passed twice with different values', async () => {
+      const service = createSeedanceService();
+
+      const result = await generate(service, { duration: 7, parameters: { duration: 6 } });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('`duration` was passed twice');
+      expect(service.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-standard key for a model without a parameter schema', async () => {
+      const service = createSeedanceService(undefined);
+
+      const result = await generate(service, { parameters: { mode: 't2v' } });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Unsupported video parameters: `mode`');
+      expect(service.createVideo).not.toHaveBeenCalled();
+    });
+
+    it('returns parameters for a model card without a prompt entry', async () => {
+      const parameters = { duration: { default: 5, max: 10, min: 5 } };
+      const runtime = new VideoGenerationExecutionRuntime(createSeedanceService(parameters));
+
+      const result = await runtime.getVideoModelParameters({
+        model: 'seedance-1-5-pro-251215',
+        provider: 'lobehub',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ defaultValues: { duration: 5 }, parameters });
+    });
+  });
+
   it('reports a rejected pre-charge instead of a started task in no-wait mode', async () => {
     const service = createService({
       getGenerationStatus: vi.fn().mockResolvedValue({

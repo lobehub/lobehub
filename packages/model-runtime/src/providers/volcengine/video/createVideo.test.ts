@@ -43,6 +43,36 @@ describe('createVolcengineVideo', () => {
       expect(result).toEqual({ inferenceId: 'task-abc-123' });
     });
 
+    it('should map non-default Seedance params to the request body', async () => {
+      mockFetch.mockResolvedValue({
+        json: () => Promise.resolve({ id: 'task-1' }),
+        ok: true,
+      });
+
+      await createVolcengineVideo(
+        {
+          ...payload,
+          params: {
+            aspectRatio: '16:9',
+            duration: 7,
+            generateAudio: false,
+            prompt: payload.params.prompt,
+            resolution: '1080p',
+          },
+        },
+        options,
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+
+      expect(body).toMatchObject({
+        duration: 7,
+        generate_audio: false,
+        ratio: '16:9',
+        resolution: '1080p',
+      });
+    });
+
     it('should send minimal body with only prompt', async () => {
       mockFetch.mockResolvedValue({
         json: () => Promise.resolve({ id: 'task-1' }),

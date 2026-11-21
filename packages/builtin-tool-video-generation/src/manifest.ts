@@ -87,7 +87,7 @@ export const VideoGenerationManifest: BuiltinToolManifest = {
           parameters: {
             additionalProperties: true,
             description:
-              'Model-specific generation parameters. Call getVideoModelParameters first and only pass supported keys such as aspectRatio, resolution, size, duration, cameraFixed, generateAudio, promptExtend, watermark, webSearch, or seed.',
+              'Model-specific generation parameters. Put them inside this object, not next to prompt. Call getVideoModelParameters first and only pass supported keys such as aspectRatio, resolution, size, duration, cameraFixed, generateAudio, promptExtend, watermark, webSearch, or seed. An unsupported key or out-of-range value fails the call instead of falling back to a default.',
             type: 'object',
           },
           prompt: {

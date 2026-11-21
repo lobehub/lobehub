@@ -350,7 +350,13 @@ export class ImageGenerationExecutionRuntime {
         model,
         parameters: modelItem.parameters,
         provider,
-        ...(modelItem.parameters && { defaultValues: extractDefaultValues(modelItem.parameters) }),
+        ...(modelItem.parameters && {
+          // Custom model cards may omit `prompt`, which the defaults schema requires.
+          defaultValues: extractDefaultValues({
+            ...modelItem.parameters,
+            prompt: modelItem.parameters.prompt ?? { default: '' },
+          }),
+        }),
       };
 
       return {
