@@ -232,6 +232,11 @@ class ChatService {
       ? messages
       : stripAssistantReasoningForReplay(messages);
 
+    const knowledgeFileErrors = await getAgentStoreState().ensureAgentFileContents(
+      targetAgentId,
+      options?.signal,
+    );
+
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
@@ -269,6 +274,7 @@ class ChatService {
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
       discoveryManifests,
+      knowledgeFileErrors,
       manifests: enabledManifests,
       messages: messagesForContext,
       model: payload.model,
