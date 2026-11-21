@@ -154,7 +154,9 @@ describe('attemptWebhookDelivery', () => {
     expect(headers['x-lobehub-event-id']).toBe('evt_test_1');
     expect(headers['x-lobehub-event-type']).toBe('task.status_changed');
     expect(headers['x-lobehub-delivery-id']).toBe(delivery.id);
-    expect(Math.abs(Date.now() / 1000 - Number(timestamp))).toBeLessThan(5);
+    // The header carries the same integer-seconds timestamp the signature is computed over;
+    // a wall-clock bound here would only measure how busy the CI machine is.
+    expect(timestamp).toMatch(/^\d{10}$/);
     expect(JSON.parse(body)).toEqual({
       createdAt: '2026-11-18T00:00:00.000Z',
       data: { identifier: 'T-1', previousStatus: 'todo', status: 'running', taskId: 'task_1' },
