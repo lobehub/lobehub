@@ -50,12 +50,12 @@ export function calculateThumbnailDimensions(
   const thumbnailWidth =
     originalWidth > originalHeight
       ? maxSize
-      : Math.round((originalWidth * maxSize) / originalHeight);
+      : Math.max(1, Math.round((originalWidth * maxSize) / originalHeight));
 
   const thumbnailHeight =
     originalHeight > originalWidth
       ? maxSize
-      : Math.round((originalHeight * maxSize) / originalWidth);
+      : Math.max(1, Math.round((originalHeight * maxSize) / originalWidth));
 
   return {
     shouldResize: true,
