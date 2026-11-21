@@ -972,6 +972,8 @@
   "goalProcess.gate.reason.setupCredentials": "服务商拒绝了这次运行（{{error}}）。请在 Agent 设置里更新凭证、套餐或模型。",
   "goalProcess.gate.reason.setupDevice": "设备不可用（{{error}}）。请重新连接设备，或把 Agent 绑定到另一台在线设备。",
   "goalProcess.gate.reason.setupGateway": "设备网关没有配置（{{error}}）。请在服务端配置网关，或把 Agent 切到已连接的本地设备。",
+  "goalProcess.gate.reason.setupVerifier": "验收模型 {{model}} 无法运行（{{code}}），这次交付还没被评判。请在「设置 > 服务模型 > 任务验收」里换一个可用的模型，或修正指定验收 Agent 的模型，然后重试。",
+  "goalProcess.gate.reason.setupVerifierUnnamed": "验收模型无法运行（{{code}}），这次交付还没被评判。请在「设置 > 服务模型 > 任务验收」里换一个可用的模型，或修正指定验收 Agent 的模型，然后重试。",
   "goalProcess.gate.reason.setupWorkingDirectory": "工作目录 {{path}} 在 Agent 所在的设备上不存在。请在那台设备上创建它，或把 Agent 的工作目录改成一个存在的路径。",
   "goalProcess.gate.reason.transientRetriesSpent": "运行在 {{duration}} 内以同样的方式失败了 {{count}} 次（{{error}}）。请检查设备、网络和 Agent 网关。",
   "goalProcess.gate.reason.verifyFailed": "任务 {{id}} 未通过验证",

@@ -1,4 +1,8 @@
-import { QUOTA_LIMITED_RUN_STATUS, TRANSIENT_FAILED_RUN_STATUS } from '@lobechat/const/goal';
+import {
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+  verificationModelUnusableError,
+} from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import { lastAnsweredGateAt, lastGateAnsweredToWait, planMachineRecovery } from './machineRecovery';
@@ -185,6 +189,20 @@ describe('planMachineRecovery', () => {
       action: 'gate',
       reason:
         'Setup problem: Working directory does not exist: /Users/user/CodeProjects/LobeHub/lobehub. Create /Users/user/CodeProjects/LobeHub/lobehub on the device the agent runs on, or point the agent at a working directory that exists there',
+    });
+  });
+
+  it('gates a verifier whose model cannot run on the verify model, not the agent', () => {
+    const plan = planMachineRecovery({
+      error: verificationModelUnusableError('ModelNotFound', 'chinese-360/glm-5.3-flash'),
+      now: FAILED_AT,
+      runs: [run('completed', FAILED_AT)],
+      taskUpdatedAt: FAILED_AT,
+    });
+    expect(plan).toEqual({
+      action: 'gate',
+      reason:
+        'Setup problem: Verification could not run: the verifier model chinese-360/glm-5.3-flash is not usable (ModelNotFound); the delivery was not evaluated. Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry',
     });
   });
 

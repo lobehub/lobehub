@@ -11,6 +11,19 @@ export const isOutOfCreditsFailure = (text?: string | null): boolean =>
   !!text && OUT_OF_CREDITS_PATTERN.test(text);
 
 /**
+ * Codes for a verifier model that cannot run as configured: the provider does not
+ * serve the model, rejects the key, has no channel for it, or the model cannot
+ * call the verdict tool. Like a credit refusal, a retry fails the same way until
+ * someone changes the verify model.
+ */
+const SETUP_FAILURE_PATTERN =
+  /\b(ModelNotFound|InvalidProviderAPIKey|NoAvailableProvider|NoAvailableChannel|AccountDeactivated|PermissionDenied|UserConfigError|CapabilityNotSupported)\b/;
+
+/** The setup code an errored check's recorded cause names, if it is one no retry clears. */
+export const verifierSetupFailureCode = (text?: string | null): string | undefined =>
+  (text && SETUP_FAILURE_PATTERN.exec(text)?.[1]) || undefined;
+
+/**
  * Error text with its stable code appended, so the recorded limitation can be
  * classified later without guessing from free-form prose ("Budget exceeded").
  */
