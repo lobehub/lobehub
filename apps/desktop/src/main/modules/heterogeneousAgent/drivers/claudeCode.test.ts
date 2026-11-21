@@ -28,6 +28,21 @@ describe('claudeCodeDriver', () => {
     expect(plan.liveInput).toBe(true);
   });
 
+  it('passes the prompt suggestions flag only to a CLI that supports it', async () => {
+    const args = ['--prompt-suggestions=true'];
+    const supported = await claudeCodeDriver.buildSpawnPlan(
+      buildParams({ args, cliVersion: '2.1.48' }),
+    );
+    const tooOld = await claudeCodeDriver.buildSpawnPlan(
+      buildParams({ args, cliVersion: '2.1.47' }),
+    );
+    const unknown = await claudeCodeDriver.buildSpawnPlan(buildParams({ args }));
+
+    expect(supported.args).toContain('--prompt-suggestions=true');
+    expect(tooOld.args).not.toContain('--prompt-suggestions=true');
+    expect(unknown.args).not.toContain('--prompt-suggestions=true');
+  });
+
   it('allows every action without a mode, as before the lab', async () => {
     const { args } = await claudeCodeDriver.buildSpawnPlan(buildParams());
     expect(args[args.indexOf('--permission-mode') + 1]).toBe('bypassPermissions');

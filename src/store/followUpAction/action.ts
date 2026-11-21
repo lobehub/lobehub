@@ -12,6 +12,7 @@ import { type FollowUpActionStore } from './store';
 // LLM `generateObject` for chip extraction routinely takes 8-12s end-to-end.
 // Anything below ~20s aborts before the model can respond.
 const TIMEOUT_MS = 20_000;
+const CHIP_LABEL_MAX_LENGTH = 40;
 
 const IDLE_SLOT: FollowUpActionSlot = { chips: [], status: 'idle' };
 
@@ -142,6 +143,31 @@ export class FollowUpActionImpl {
       messageId: result.messageId,
       status: 'ready',
       tracingId: result.tracingId,
+    });
+  };
+
+  /**
+   * Show a suggestion the agent's own CLI produced (Claude Code), replacing the
+   * slot. No extraction ran, so it carries no tracing id to report feedback on.
+   */
+  setNativeSuggestion = (
+    conversationKey: string,
+    { messageId, suggestion }: { messageId: string; suggestion: string },
+  ): void => {
+    this.#ensureActiveScope();
+    const existing = this.#get().slots[conversationKey];
+    this.#maybeRecordDismissal(existing);
+    existing?.abortController?.abort();
+
+    const characters = [...suggestion];
+    const label =
+      characters.length > CHIP_LABEL_MAX_LENGTH
+        ? `${characters.slice(0, CHIP_LABEL_MAX_LENGTH - 1).join('')}…`
+        : suggestion;
+    this.#writeSlot(conversationKey, {
+      chips: [{ label, message: suggestion }],
+      messageId,
+      status: 'ready',
     });
   };
 

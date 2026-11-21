@@ -198,6 +198,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
     const chatFollowUpHooks = useChatFollowUp({
       agentChatConfig,
+      agentId,
       conversationKey: chatKey,
       topicId,
     });

@@ -231,6 +231,7 @@ const ThreadChat = memo(() => {
   );
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
+    agentId: threadAgentId,
     conversationKey: chatKey,
     threadId: portalThreadId ?? undefined,
     topicId: activeTopicId ?? undefined,
