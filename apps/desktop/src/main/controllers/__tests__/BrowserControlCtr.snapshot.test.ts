@@ -75,3 +75,52 @@ describe('SNAPSHOT_SCRIPT visibility', () => {
     expect(snapshot).toContain('button "Verify and continue"');
   });
 });
+
+describe('SNAPSHOT_SCRIPT file inputs', () => {
+  const box = (width: number, height: number) =>
+    ({ bottom: height, height, left: 0, right: width, top: 0, width, x: 0, y: 0 }) as DOMRect;
+
+  beforeEach(() => {
+    // happy-dom does no layout: a display:none input gets no box, the rest do.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return (this as HTMLElement).style?.display === 'none' || this.hasAttribute('hidden')
+        ? box(0, 0)
+        : box(100, 30);
+    });
+  });
+
+  // A typical upload widget: the input is display:none behind a styled button,
+  // so the snapshot showed the button only and the agent had nothing to upload to.
+  it('lists a hidden file input with what it accepts, named by its widget', () => {
+    const snapshot = snapshotOf(`
+      <span class="ant-upload"><input type="file" accept=".zip" style="display: none" /><button>Click to upload ZIP</button></span>
+      <div><input type="file" multiple hidden aria-label="Add images" /></div>
+    `);
+
+    expect(snapshot.split('\n')).toEqual([
+      '- file-input "Click to upload ZIP" [ref=e1] [accept=".zip"] [hidden]',
+      '- button "Click to upload ZIP" [ref=e2]',
+      '- file-input "Add images" [ref=e3] [multiple] [hidden]',
+    ]);
+  });
+
+  it('leaves out a file input inside a closed dialog', () => {
+    const snapshot = snapshotOf(`
+      <div style="opacity: 0"><input type="file" aria-label="Old upload" /></div>
+      <div aria-hidden="true"><input type="file" aria-label="Hidden upload" /></div>
+    `);
+
+    expect(snapshot).toBe('');
+  });
+
+  it('still lists file inputs past the element cap', () => {
+    const buttons = Array.from({ length: 260 }, (_, i) => `<button>b${i}</button>`).join('');
+    const snapshot = snapshotOf(`${buttons}<input type="file" aria-label="Late upload" />`);
+    const lines = snapshot.split('\n');
+
+    expect(lines).toHaveLength(251);
+    expect(lines.at(-1)).toBe('- file-input "Late upload" [ref=e251]');
+  });
+});

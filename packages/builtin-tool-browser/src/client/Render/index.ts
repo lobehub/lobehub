@@ -16,6 +16,7 @@ export const BrowserRenders = {
   [BrowserApiName.scroll]: PageAction,
   [BrowserApiName.setViewport]: PageAction,
   [BrowserApiName.snapshot]: PageDump,
+  [BrowserApiName.uploadFile]: PageAction,
 };
 
 export { PageAction, PageDump, Screenshot };

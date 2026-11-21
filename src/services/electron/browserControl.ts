@@ -11,6 +11,8 @@ import type {
   BrowserControlSetViewportParams,
   BrowserControlSetViewportResult,
   BrowserControlSnapshotResult,
+  BrowserControlUploadFileParams,
+  BrowserControlUploadFileResult,
   BrowserControlWaitForParams,
   BrowserGatewayToolResultParams,
 } from '@lobechat/electron-client-ipc';
@@ -66,6 +68,11 @@ class ElectronBrowserControlService {
   snapshot(params: BrowserControlParams): Promise<BrowserControlSnapshotResult> {
     browserWebviewRegistry.touch(params.sessionId);
     return this.ipc.browserControl.snapshot(params);
+  }
+
+  uploadFile(params: BrowserControlUploadFileParams): Promise<BrowserControlUploadFileResult> {
+    browserWebviewRegistry.touch(params.sessionId);
+    return this.ipc.browserControl.uploadFile(params);
   }
 
   waitFor(params: BrowserControlWaitForParams): Promise<BrowserControlResult> {

@@ -72,6 +72,38 @@ export interface BrowserControlReadPageResult extends BrowserControlResult, Brow
   selectedText?: string;
 }
 
+export interface BrowserControlUploadFileParams extends BrowserControlParams {
+  /** Absolute paths of files on this device; a leading `~` is the home folder. */
+  paths: string[];
+  /**
+   * Snapshot ref of a file input, or of the button / drop zone that opens the
+   * page's file chooser. Without a ref or selector, the page's only file input.
+   */
+  ref?: string;
+  /** CSS selector of the file input, instead of a ref. */
+  selector?: string;
+}
+
+export interface BrowserUploadedFile {
+  name: string;
+  size: number;
+}
+
+export interface BrowserControlUploadFileResult
+  extends BrowserControlResult, BrowserControlPageInfo {
+  /** `accept` of the input that took the files. */
+  accept?: string;
+  /** The files the page's input holds afterwards, read back from the page. */
+  files?: BrowserUploadedFile[];
+  /**
+   * No automated path reaches this page's file picker. The user has to choose
+   * the file themselves; retrying the upload will not help.
+   */
+  manualSelectionRequired?: boolean;
+  /** `input`: set on the file input itself; `fileChooser`: through the chooser a click opened. */
+  via?: 'fileChooser' | 'input';
+}
+
 export interface BrowserControlWaitForParams extends BrowserControlParams {
   /** Milliseconds to wait (capped). */
   ms?: number;

@@ -10,6 +10,7 @@ export const BrowserApiName = {
   scroll: 'scroll',
   setViewport: 'setViewport',
   snapshot: 'snapshot',
+  uploadFile: 'uploadFile',
 } as const;
 
 export type BrowserApiNameType = (typeof BrowserApiName)[keyof typeof BrowserApiName];
@@ -46,6 +47,28 @@ export interface BrowserReadPageState extends BrowserPageState {
   content: string;
 }
 
+export interface BrowserUploadedFile {
+  name: string;
+  size: number;
+}
+
+export interface BrowserUploadFileState extends BrowserPageState {
+  /** `accept` of the input that took the files. */
+  accept?: string;
+  /** What the page's input holds afterwards, read back from the page. */
+  files?: BrowserUploadedFile[];
+  /**
+   * Set on the failure result when no automated path reaches the page's file
+   * picker: the user has to choose the file; retrying will not help.
+   */
+  manualSelectionRequired?: boolean;
+  /** The paths the call asked for. */
+  paths?: string[];
+  /** Why the upload has to be done by hand. */
+  reason?: string;
+  via?: 'fileChooser' | 'input';
+}
+
 export interface BrowserNavigateArgs {
   url: string;
 }
@@ -74,4 +97,10 @@ export interface BrowserScrollArgs {
 export interface BrowserSetViewportArgs {
   height?: number;
   width?: number;
+}
+
+export interface BrowserUploadFileArgs {
+  paths: string[];
+  ref?: string;
+  selector?: string;
 }

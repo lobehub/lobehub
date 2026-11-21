@@ -22,7 +22,7 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Capture an accessibility snapshot of the current page: interactive elements (links, buttons, inputs, headings) with stable refs like [ref=e12] for use in click/fill. Always snapshot before acting, and re-snapshot after the page changes.',
+        'Capture an accessibility snapshot of the current page: interactive elements (links, buttons, inputs, headings) and file upload inputs, hidden ones included, with stable refs like [ref=e12] for use in click/fill/uploadFile. Always snapshot before acting, and re-snapshot after the page changes.',
       name: BrowserApiName.snapshot,
       parameters: {
         properties: {},
@@ -132,6 +132,34 @@ export const BrowserManifest: BuiltinToolManifest = {
       name: BrowserApiName.screenshot,
       parameters: {
         properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Attach files from the user's device to a file upload field on the page, as choosing them in the file picker would. Target the `file-input` ref from the latest snapshot (listed even when the input is hidden behind a styled button), the ref of the upload button or drop zone, or a CSS selector; with none of them, the page's only file input is used. Returns the attached file names and sizes. When no file input can be reached, it answers that the user must choose the file manually; ask the user then instead of retrying.",
+      humanIntervention: 'required',
+      name: BrowserApiName.uploadFile,
+      parameters: {
+        properties: {
+          paths: {
+            description:
+              "Absolute paths of files on the user's device, e.g. /Users/me/Downloads/site.zip (a leading ~ is the home folder).",
+            items: { type: 'string' },
+            type: 'array',
+          },
+          ref: {
+            description:
+              'Ref of the file input, or of the button / drop zone that opens the file picker, from the latest snapshot.',
+            type: 'string',
+          },
+          selector: {
+            description:
+              'CSS selector of the file input when it has no ref, e.g. input[type=file][accept=".zip"].',
+            type: 'string',
+          },
+        },
+        required: ['paths'],
         type: 'object',
       },
     },
