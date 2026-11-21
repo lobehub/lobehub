@@ -18,6 +18,16 @@ describe('AI model mutation schemas', () => {
 
     expect(UpdateAiModelSchema.parse({ agentCompatibility })).toEqual({});
   });
+
+  it('accepts a null config so re-saving a model without config does not fail', () => {
+    // The model-config modal submits the whole model card; models whose `config`
+    // column is NULL read back as `null` and were rejected as an invalid object.
+    expect(UpdateAiModelSchema.parse({ config: null })).toEqual({ config: null });
+    expect(UpdateAiModelSchema.safeParse({ config: { deploymentName: 'deploy' } }).success).toBe(
+      true,
+    );
+    expect(UpdateAiModelSchema.safeParse({ config: 'not-an-object' }).success).toBe(false);
+  });
 });
 
 describe('Gemini reasoning config persistence', () => {
