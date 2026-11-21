@@ -418,6 +418,26 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(topics).where(eq(topics.id, legacy.id))).toHaveLength(1);
     });
 
+    it('keeps the bin entry of a message trashed on its own inside a surviving topic', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const legacy = await topicModel.create({ sessionId: session.id, title: 'old chat' });
+      const tagged = await messageModel.create({
+        agentId: agent.id,
+        content: 'trashed alone',
+        role: 'user',
+        topicId: legacy.id,
+      });
+      const [messageRoot] = await service.trashMessages([tagged.id]);
+
+      const root = await service.trashAgent(agent.id);
+      await service.purge([root!.id]);
+
+      expect((await service.list()).items.map((item) => item.id)).toEqual([messageRoot.id]);
+      expect((await service.restore([messageRoot.id])).failed).toEqual([]);
+      expect(await messageModel.findById(tagged.id)).toBeTruthy();
+    });
+
     it('purges session-only children an earlier cascade already put in the bin', async () => {
       const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
       const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;

@@ -119,12 +119,13 @@ export const agentHandler: TrashHandler = {
       if (hasWaitingWorktreeCleanup(waiting))
         throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
 
+      // Topics outside the cascade keep their messages and threads. Runs before
+      // the root cleanup so a message trashed on its own there keeps its entry.
+      await agentModel.detachFromSurvivingTopics(agentIds);
       // Topics / messages trashed on their own before this agent keep separate
       // roots; the deletes below remove them, so drop those rows first.
       await trashModel.removeRootsUnderAgents({ agentIds, topicIds: stranded.topicIds });
       await topicModel.purge(stranded.topicIds);
-      // Topics outside the cascade keep their messages and threads.
-      await agentModel.detachFromSurvivingTopics(agentIds);
       // FK cascades take the topics / messages / threads carrying the agent.
       await agentModel.purge(agentIds);
       const messageModel = new MessageModel(db, ctx.userId, ctx.workspaceId);
