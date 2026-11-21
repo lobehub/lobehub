@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { HTTPStatusError, ProviderFetchError } from '../errorType';
 import { createHTTPStatusError, parseJSONResponse, ResponseBodyParseError } from '../response';
 
 const createMockResponse = (
@@ -66,16 +67,35 @@ describe('parseJSONResponse', () => {
 
 describe('createHTTPStatusError', () => {
   it('should create error with status and body snippet', async () => {
-    const response = createMockResponse('Not Found', {
+    const response = createMockResponse('Upstream down', {
+      ok: false,
+      status: 502,
+      statusText: 'Bad Gateway',
+    });
+
+    const error = await createHTTPStatusError(response, 'Exa');
+
+    expect(error).toBeInstanceOf(HTTPStatusError);
+    expect(error).not.toBeInstanceOf(ProviderFetchError);
+    expect(error.message).toBe(
+      'Exa request failed with status 502: Bad Gateway. Response: Upstream down',
+    );
+  });
+
+  it('should turn a provider 404 into a ProviderFetchError naming the provider', async () => {
+    const response = createMockResponse('failed to fetch URL', {
       ok: false,
       status: 404,
       statusText: 'Not Found',
     });
 
-    const error = await createHTTPStatusError(response, 'Exa');
+    const error = await createHTTPStatusError(response, 'DeepSeek');
 
-    expect(error.message).toContain('Exa request failed with status 404: Not Found');
-    expect(error.message).toContain('Not Found');
+    expect(error).toBeInstanceOf(ProviderFetchError);
+    expect(error).toMatchObject({ provider: 'DeepSeek', status: 404 });
+    expect(error.message).toBe(
+      'DeepSeek could not fetch this page (provider response status 404). Response: failed to fetch URL',
+    );
   });
 
   it('should create error without body when response text fails', async () => {

@@ -7,6 +7,7 @@ export {
   isRetryableCrawlError,
   NetworkConnectionError,
   PageNotFoundError,
+  ProviderFetchError,
   TimeoutError,
   UnsupportedContentError,
 } from './utils/errorType';

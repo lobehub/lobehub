@@ -1,4 +1,4 @@
-import { HTTPStatusError } from './errorType';
+import { HTTPStatusError, ProviderFetchError } from './errorType';
 
 const ERROR_BODY_SNIPPET_LIMIT = 200;
 
@@ -42,11 +42,18 @@ export const createHTTPStatusError = async (
   provider: string,
 ): Promise<HTTPStatusError> => {
   const bodySnippet = await getBodySnippet(response);
+  const detail = bodySnippet ? `. Response: ${bodySnippet}` : '';
+
+  if (response.status === 404) {
+    return new ProviderFetchError(
+      `${provider} could not fetch this page (provider response status 404)${detail}`,
+      response.status,
+      provider,
+    );
+  }
 
   return new HTTPStatusError(
-    bodySnippet
-      ? `${provider} request failed with status ${response.status}: ${response.statusText}. Response: ${bodySnippet}`
-      : `${provider} request failed with status ${response.status}: ${response.statusText}`,
+    `${provider} request failed with status ${response.status}: ${response.statusText}${detail}`,
     response.status,
   );
 };

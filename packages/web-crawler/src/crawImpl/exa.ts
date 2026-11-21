@@ -1,5 +1,5 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { PageNotFoundError, toFetchError } from '../utils/errorType';
+import { toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
@@ -49,10 +49,6 @@ export const exa: CrawlImpl = async (url) => {
   }
 
   if (!res.ok) {
-    if (res.status === 404) {
-      throw new PageNotFoundError(res.statusText);
-    }
-
     throw await createHTTPStatusError(res, 'Exa');
   }
 
