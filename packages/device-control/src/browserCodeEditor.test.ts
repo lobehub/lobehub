@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CodeEditorIO } from './browserCodeEditor';
-import { applyCodeEdit, fillCodeEditor, formatCodeEditors } from './browserCodeEditor';
+import {
+  applyCodeEdit,
+  countCodeEditors,
+  fillCodeEditor,
+  formatCodeEditors,
+  readCodeEditorsScript,
+} from './browserCodeEditor';
 
 const TARGET = 'document.activeElement';
 
@@ -18,25 +24,41 @@ const apiEditor = (initial: string, probe: Record<string, unknown> = {}) => {
     if (script.includes('text: bound ?')) return JSON.stringify({ text: page.doc });
     return JSON.stringify({ hasApi: true, isEditor: true, readOnly: false, ...probe });
   });
-  const io: CodeEditorIO = { evaluate, selectAll: vi.fn(), sleep: async () => {} };
+  const io: CodeEditorIO = {
+    collapseSelection: vi.fn(),
+    evaluate,
+    selectAll: vi.fn(),
+    sleep: async () => {},
+  };
   return { io, page };
 };
 
 /** An editor that hides its API, so it is read and written with clipboard events. */
 const keyboardEditor = (initial: string, { garblesPaste = false, selects = true } = {}) => {
-  const page = { doc: initial, pastes: 0 };
+  const page = { doc: initial, pastes: 0, selected: false };
   const evaluate = vi.fn(async (script: string) => {
     if (script.includes("ClipboardEvent('copy'")) {
-      return JSON.stringify({ empty: page.doc === '', selected: selects, text: page.doc });
+      return JSON.stringify({ empty: page.doc === '', selected: page.selected, text: page.doc });
     }
     if (script.includes("ClipboardEvent('paste'")) {
       page.doc = garblesPaste ? 'garbled' : JSON.parse(script.match(/\}\)\((".*")\)$/s)![1]);
       page.pastes += 1;
+      page.selected = false;
       return true;
     }
+    if (script.includes("querySelector('.selected-text');")) return page.selected;
     return JSON.stringify({ hasApi: false, isEditor: true, readOnly: false });
   });
-  const io: CodeEditorIO = { evaluate, selectAll: vi.fn(), sleep: async () => {} };
+  const io: CodeEditorIO = {
+    collapseSelection: vi.fn(async () => {
+      page.selected = false;
+    }),
+    evaluate,
+    selectAll: vi.fn(async () => {
+      page.selected = selects;
+    }),
+    sleep: async () => {},
+  };
   return { io, page };
 };
 
@@ -67,6 +89,7 @@ describe('applyCodeEdit', () => {
 describe('fillCodeEditor', () => {
   it('leaves an ordinary field to the caller', async () => {
     const io: CodeEditorIO = {
+      collapseSelection: vi.fn(),
       evaluate: vi.fn().mockResolvedValue(JSON.stringify({ isEditor: false })),
       selectAll: vi.fn(),
     };
@@ -121,6 +144,41 @@ describe('fillCodeEditor', () => {
     expect(page.pastes).toBe(0);
   });
 
+  // The read leaves the document selected, and the next key typed in the panel
+  // would replace all of it.
+  it.each([
+    ['a finished edit', { oldText: 'false', text: 'true' }],
+    ['a refused edit', { oldText: 'missing', text: 'x' }],
+    ['an edit that changes nothing', { text: 'raw=false;' }],
+  ])('leaves no selection after %s', async (_name, edit) => {
+    const { io, page } = keyboardEditor('raw=false;');
+
+    await fillCodeEditor(io, TARGET, edit);
+
+    expect(io.collapseSelection).toHaveBeenCalled();
+    expect(page.selected).toBe(false);
+  });
+
+  it('does not move the caret when nothing was selected', async () => {
+    const { io } = keyboardEditor('raw=false;', { selects: false });
+
+    await fillCodeEditor(io, TARGET, { text: 'x' });
+
+    expect(io.collapseSelection).not.toHaveBeenCalled();
+  });
+
+  it('replaces a whole emoji, never half of its surrogate pair', async () => {
+    const { io, page } = apiEditor('a😀b');
+
+    await expect(fillCodeEditor(io, TARGET, { text: 'a😁b' })).resolves.toEqual({ handled: true });
+
+    expect(page.doc).toBe('a😁b');
+    const written = (io.evaluate as ReturnType<typeof vi.fn>).mock.calls
+      .map(([script]) => script as string)
+      .find((script) => script.includes('executeEdits'));
+    expect(written).toContain('})(1, 3, "😁")');
+  });
+
   it('reports an edit that does not read back', async () => {
     const { io } = keyboardEditor('a', { garblesPaste: true });
 
@@ -133,15 +191,76 @@ describe('fillCodeEditor', () => {
 describe('formatCodeEditors', () => {
   it('labels partial and truncated text', () => {
     const block = formatCodeEditors(
-      JSON.stringify([{ complete: false, lines: 2, text: 'ab', totalChars: 10 }]),
+      JSON.stringify({
+        editors: [{ complete: false, lines: 2, text: 'ab', totalChars: 10 }],
+        omitted: 3,
+      }),
     );
 
     expect(block).toContain('visible lines only');
     expect(block).toContain('first 2 of 10 chars');
+    expect(block).toContain('3 more code editor(s) not shown');
   });
 
   it('adds nothing for a page without editors or with bad data', () => {
-    expect(formatCodeEditors('[]')).toBe('');
+    expect(formatCodeEditors(JSON.stringify({ editors: [], omitted: 0 }))).toBe('');
     expect(formatCodeEditors(undefined)).toBe('');
+  });
+});
+
+describe('readCodeEditorsScript', () => {
+  const pageWith = (texts: string[]) => {
+    const roots = texts.map((text) => {
+      const input = {};
+      const root = {
+        getBoundingClientRect: () => ({ height: 100, width: 100 }),
+        querySelector: () => input,
+        text,
+      };
+      Object.assign(input, { closest: () => root });
+      return root;
+    });
+    const editors = roots.map((root) => ({
+      getDomNode: () => ({ contains: () => false }),
+      getModel: () => ({ getLanguageId: () => 'ts', getValue: () => root.text }),
+      getOption: () => false,
+      root,
+    }));
+    for (const editor of editors) {
+      const node = editor.root as any;
+      node.contains = () => false;
+      editor.getDomNode = () => node;
+    }
+    vi.stubGlobal('document', { querySelectorAll: () => roots });
+    vi.stubGlobal('window', {
+      monaco: { editor: { EditorOption: { readOnly: 1 }, getEditors: () => editors } },
+    });
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shares one budget across editors and counts the ones left out', () => {
+    pageWith(['a'.repeat(8), 'b'.repeat(8), 'c'.repeat(8)]);
+
+    const raw = (0, eval)(readCodeEditorsScript(10));
+    const { editors, omitted } = JSON.parse(raw);
+
+    expect(editors.map((editor: { text: string }) => editor.text)).toEqual([
+      'a'.repeat(8),
+      'b'.repeat(2),
+    ]);
+    expect(omitted).toBe(1);
+    expect(countCodeEditors(raw)).toBe(3);
+  });
+
+  it('limits how many editors are listed, even empty ones', () => {
+    pageWith(Array.from({ length: 20 }, () => ''));
+
+    const { editors, omitted } = JSON.parse((0, eval)(readCodeEditorsScript(10)));
+
+    expect(editors).toHaveLength(8);
+    expect(omitted).toBe(12);
   });
 });

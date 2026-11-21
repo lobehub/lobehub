@@ -15,6 +15,7 @@
 import {
   CODE_EDITOR_FOCUSED_SCRIPT,
   codeEditorTypingError,
+  countCodeEditors,
   fillCodeEditor,
   formatCodeEditors,
   readCodeEditorsScript,
@@ -254,6 +255,9 @@ const fillAgentBrowserCodeEditor = async (
 
   return fillCodeEditor(
     {
+      collapseSelection: async () => {
+        await exec(session, [['press', 'ArrowLeft']]);
+      },
       evaluate: (script) => evaluateStep(exec, session, script),
       selectAll: async () => {
         await exec(session, [['press', parseBrowserKey('ControlOrMeta+a', platform).combo]]);
@@ -266,15 +270,6 @@ const fillAgentBrowserCodeEditor = async (
       text: String(args.text),
     },
   );
-};
-
-const codeEditorCount = (raw: unknown): number => {
-  try {
-    const editors = JSON.parse(String(raw));
-    return Array.isArray(editors) ? editors.length : 0;
-  } catch {
-    return 0;
-  }
 };
 
 const pageLabel = (title?: string, url?: string) => `Page: ${title ?? ''} (${url ?? ''})`;
@@ -351,7 +346,7 @@ export const runAgentBrowserCall = async (
       case 'snapshot': {
         const snapshot = str(result(0).snapshot) ?? '';
         const header = pageLabel(title, url);
-        const codeEditors = codeEditorCount(result(1).result);
+        const codeEditors = countCodeEditors(result(1).result);
         const codeHint = codeEditors
           ? `\n[code-editor=monaco] ${codeEditors} code editor(s) on this page: read them with readPage and change them only with fill on their textbox ref.`
           : '';

@@ -138,7 +138,7 @@ describe('runAgentBrowserCall', () => {
   it('returns the snapshot with the page header', async () => {
     const { promise } = run('snapshot', {}, [
       step(['snapshot'], { snapshot: '- link "Learn more" [ref=e1]' }),
-      step(['eval'], { result: '[]' }),
+      step(['eval'], { result: JSON.stringify({ editors: [], omitted: 0 }) }),
       step(['get', 'title'], { title: 'Example' }),
       step(['get', 'url'], { url: 'https://example.com/' }),
     ]);
@@ -153,7 +153,7 @@ describe('runAgentBrowserCall', () => {
   it('caps readPage like the desktop', async () => {
     const { promise } = run('readPage', {}, [
       step(['read'], { content: 'a'.repeat(READ_PAGE_MAX_CHARS + 10) }),
-      step(['eval'], { result: '[]' }),
+      step(['eval'], { result: JSON.stringify({ editors: [], omitted: 0 }) }),
       step(['get', 'title'], { title: 'T' }),
       step(['get', 'url'], { url: 'https://u/' }),
     ]);
@@ -319,7 +319,7 @@ describe('runAgentBrowserCall', () => {
       const editors = [{ complete: true, language: 'ts', lines: 1, text: 'const a = 1;' }];
       const { promise } = run('readPage', {}, [
         step(['read'], { content: 'Page text' }),
-        step(['eval'], { result: JSON.stringify(editors) }),
+        step(['eval'], { result: JSON.stringify({ editors, omitted: 0 }) }),
         step(['get', 'title'], { title: 'T' }),
         step(['get', 'url'], { url: 'https://u/' }),
       ]);

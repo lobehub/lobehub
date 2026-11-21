@@ -459,6 +459,7 @@ export default class BrowserControlCtr extends ControllerModule {
       const target = `(window.__lobeBrowserRefs || {})[${JSON.stringify(params.ref)}]`;
       const edit = await fillCodeEditor(
         {
+          collapseSelection: () => this.sendKey(guest, parseBrowserKey('ArrowLeft')),
           evaluate: (script) => evaluate(guest, script),
           selectAll: () => this.sendKey(guest, parseBrowserKey('ControlOrMeta+a')),
         },

@@ -26,6 +26,8 @@ export interface CodeEditorEdit {
 }
 
 export interface CodeEditorIO {
+  /** Sends a real key press that collapses the selection without changing text. */
+  collapseSelection: () => Promise<void>;
   /** Runs a script in the page and resolves its return value. */
   evaluate: (script: string) => Promise<unknown>;
   /** Sends a real select-all key press to the focused editor. */
@@ -35,7 +37,9 @@ export interface CodeEditorIO {
 
 export type CodeEditorFillOutcome = { error?: string; handled: true } | { handled: false };
 
+/** Shared by every editor on the page, so `readPage` stays bounded however many it has. */
 export const CODE_EDITOR_READ_MAX_CHARS = 12_000;
+const CODE_EDITOR_READ_MAX_EDITORS = 8;
 
 /** Lets Monaco render a selection or an applied edit before it is inspected. */
 const EDITOR_SETTLE_MS = 120;
@@ -67,29 +71,37 @@ export const CODE_EDITOR_PAGE_HELPERS = `
       .join('\\n');
 `;
 
-/** The visible Monaco editors, with at most `maxChars` of each one's text. */
+/** The visible Monaco editors, sharing a budget of `maxChars`; the rest are only counted. */
 export const readCodeEditorsScript = (maxChars: number = CODE_EDITOR_READ_MAX_CHARS) => `(() => {
   try {
     ${CODE_EDITOR_PAGE_HELPERS}
     const editors = [];
+    let left = ${maxChars};
+    let omitted = 0;
     for (const root of document.querySelectorAll('.monaco-editor')) {
       const input = root.querySelector(CODE_INPUT);
       const box = root.getBoundingClientRect();
       if (!input || codeRootOf(input) !== root || box.width < 2 || box.height < 2) continue;
+      if (left <= 0 || editors.length >= ${CODE_EDITOR_READ_MAX_EDITORS}) {
+        omitted += 1;
+        continue;
+      }
       const bound = codeApiOf(root);
       const text = bound ? toLf(bound.model.getValue()) : renderedCode(root);
+      const kept = text.slice(0, left);
+      left -= kept.length;
       editors.push({
         complete: !!bound,
         language: bound ? bound.model.getLanguageId() : undefined,
         lines: text.split('\\n').length,
         readOnly: bound ? codeReadOnly(bound) : undefined,
-        text: text.slice(0, ${maxChars}),
+        text: kept,
         totalChars: text.length,
       });
     }
-    return JSON.stringify(editors);
+    return JSON.stringify({ editors, omitted });
   } catch {
-    return '[]';
+    return JSON.stringify({ editors: [], omitted: 0 });
   }
 })()`;
 
@@ -166,6 +178,12 @@ const captureScript = (target: string) => `(() => {
   });
 })()`;
 
+const hasSelectionScript = (target: string) => `(() => {
+  ${CODE_EDITOR_PAGE_HELPERS}
+  const root = codeRootOf(${target});
+  return !!root && !!root.querySelector('.selected-text');
+})()`;
+
 const pasteScript = (target: string, text: string) => `((text) => {
   const el = ${target};
   el.focus();
@@ -195,11 +213,19 @@ export const applyCodeEdit = (
   return { next: current.slice(0, first) + replacement + current.slice(first + wanted.length) };
 };
 
-/** The smallest `[start, end)` of `current` to replace to get `next`. */
+const isHighSurrogate = (code: number) => code >= 0xd8_00 && code <= 0xdb_ff;
+const isLowSurrogate = (code: number) => code >= 0xdc_00 && code <= 0xdf_ff;
+
+/**
+ * The smallest `[start, end)` of `current` to replace to get `next`. It never
+ * ends inside a surrogate pair, because Monaco moves such a position to the
+ * pair's edge and the edit would then land one character off.
+ */
 const changedRange = (current: string, next: string) => {
   const limit = Math.min(current.length, next.length);
   let start = 0;
   while (start < limit && current[start] === next[start]) start += 1;
+  if (start > 0 && isHighSurrogate(current.charCodeAt(start - 1))) start -= 1;
   let tail = 0;
   while (
     tail < limit - start &&
@@ -207,6 +233,7 @@ const changedRange = (current: string, next: string) => {
   ) {
     tail += 1;
   }
+  if (tail > 0 && isLowSurrogate(current.charCodeAt(current.length - tail))) tail -= 1;
   return { end: current.length - tail, start, text: next.slice(start, next.length - tail) };
 };
 
@@ -253,49 +280,72 @@ export const fillCodeEditor = async (
     return captured.selected ? captured.text : undefined;
   };
 
-  const current = await read();
-  if (current === undefined) {
+  const apply = async (): Promise<CodeEditorFillOutcome> => {
+    const current = await read();
+    if (current === undefined) {
+      return fail(
+        'Could not read this code editor: the page hides its API and select-all did not reach it (the browser window may not be focused). Nothing changed',
+      );
+    }
+
+    const applied = applyCodeEdit(current, edit);
+    if ('error' in applied) return fail(applied.error);
+    if (applied.next === current) return { handled: true };
+
+    if (probe.hasApi) {
+      const { end, start, text } = changedRange(current, applied.next);
+      const written = parse<{ ok: boolean }>(
+        await io.evaluate(apiWriteScript(target, start, end, text)),
+      );
+      if (!written.ok) return fail('The code editor refused the edit. Nothing changed');
+    } else {
+      // `read` left the whole document selected, so the paste replaces all of it.
+      await io.evaluate(pasteScript(target, applied.next));
+    }
+
+    await settle();
+    const after = await read();
+    if (after === applied.next) return { handled: true };
     return fail(
-      'Could not read this code editor: the page hides its API and select-all did not reach it (the browser window may not be focused). Nothing changed',
+      after === current
+        ? 'The code editor ignored the edit (it may be read-only). Nothing changed'
+        : 'The code editor text does not match what was written. Check it with readPage or a screenshot before saving, and undo with ControlOrMeta+z if needed',
     );
+  };
+
+  try {
+    return await apply();
+  } finally {
+    // Reading without the API leaves the whole document selected, and the next
+    // key the user types in the panel would replace all of it.
+    if (!probe.hasApi) {
+      await settle();
+      if ((await io.evaluate(hasSelectionScript(target)).catch(() => false)) === true) {
+        await io.collapseSelection().catch(() => {});
+      }
+    }
   }
+};
 
-  const applied = applyCodeEdit(current, edit);
-  if ('error' in applied) return fail(applied.error);
-  if (applied.next === current) return { handled: true };
-
-  if (probe.hasApi) {
-    const { end, start, text } = changedRange(current, applied.next);
-    const written = parse<{ ok: boolean }>(
-      await io.evaluate(apiWriteScript(target, start, end, text)),
-    );
-    if (!written.ok) return fail('The code editor refused the edit. Nothing changed');
-  } else {
-    // `read` left the whole document selected, so the paste replaces all of it.
-    await io.evaluate(pasteScript(target, applied.next));
+const parseCodeEditors = (
+  raw: unknown,
+): { editors: (CodeEditorInfo & { totalChars?: number })[]; omitted: number } => {
+  try {
+    const parsed = JSON.parse(String(raw));
+    return {
+      editors: Array.isArray(parsed?.editors) ? parsed.editors : [],
+      omitted: Number(parsed?.omitted) || 0,
+    };
+  } catch {
+    return { editors: [], omitted: 0 };
   }
-
-  await settle();
-  const after = await read();
-  if (after === applied.next) return { handled: true };
-  return fail(
-    after === current
-      ? 'The code editor ignored the edit (it may be read-only). Nothing changed'
-      : 'The code editor text does not match what was written. Check it with readPage or a screenshot before saving, and undo with ControlOrMeta+z if needed',
-  );
 };
 
 /** The block `readPage` appends so the model gets the code, not just the rendered lines. */
 export const formatCodeEditors = (raw: unknown): string => {
-  let editors: (CodeEditorInfo & { totalChars?: number })[];
-  try {
-    editors = JSON.parse(String(raw));
-  } catch {
-    return '';
-  }
-  if (!Array.isArray(editors)) return '';
+  const { editors, omitted } = parseCodeEditors(raw);
 
-  return editors
+  const blocks = editors
     .map(({ complete, language, lines, readOnly, text, totalChars }, index) => {
       const notes = [
         'monaco',
@@ -311,4 +361,13 @@ export const formatCodeEditors = (raw: unknown): string => {
       return `\n\n--- ${name} (${notes.join(', ')}) ---\n${text}\n--- end of ${name} ---`;
     })
     .join('');
+  return omitted
+    ? `${blocks}\n\n--- ${omitted} more code editor(s) not shown: the read budget is used up ---`
+    : blocks;
+};
+
+/** How many Monaco editors the page has, read or not. */
+export const countCodeEditors = (raw: unknown): number => {
+  const { editors, omitted } = parseCodeEditors(raw);
+  return editors.length + omitted;
 };

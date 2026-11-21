@@ -92,7 +92,7 @@ describe('BrowserControlCtr input', () => {
 
   describe('with focus in a code editor', () => {
     beforeEach(() => {
-      guest.mainFrame.executeJavaScript.mockImplementation(async (code: string) =>
+      guest.mainFrame.executeJavaScript.mockImplementation(async (code: string): Promise<any> =>
         code.includes('isCodeInput(document.activeElement)') ? true : undefined,
       );
     });
