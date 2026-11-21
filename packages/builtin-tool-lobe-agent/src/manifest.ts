@@ -34,7 +34,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'array',
           },
           urls: {
-            description: `Direct provider-readable HTTP(S) or data URLs (at most ${MAX_MEDIA_URLS} per call; split larger batches across parallel calls). Local filesystem paths and file:// URLs are unsupported — use a local file-reading tool first and pass its stable ref via refs.`,
+            description: `Direct provider-readable HTTP(S) or data URLs (at most ${MAX_MEDIA_URLS} per call). Local filesystem paths and file:// URLs are unsupported — use a local file-reading tool first and pass its stable ref via refs.`,
             items: {
               type: 'string',
             },

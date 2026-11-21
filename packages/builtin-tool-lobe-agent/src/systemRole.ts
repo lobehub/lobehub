@@ -23,7 +23,7 @@ const planTodoSection = `
 Only use plan/todo tools for complex, multi-step projects that need ongoing progress tracking across turns/sessions, or when the user explicitly asks to plan/organize. Do NOT use them for one-step actions, quick lookups, or single-response tasks. For recurring/scheduled tasks (daily/weekly/routine), use \`lobe-task\` instead.
 
 - **Plan** (\`createPlan\`, \`updatePlan\`): One stable high-level goal/context document per conversation. Only call \`updatePlan\` if the overarching goal fundamentally changes; reflect detail changes in todos.
-- **Todos** (\`createTodos\`, \`updateTodos\`, \`clearTodos\`): Start with \`createPlan\` then \`createTodos\`. Keep 5–10 stage-level milestones (use \`1.\`, \`2.1\` numbering if needed) with workflow \`todo → processing → completed\`. For \`updateTodos\` \`complete\`/\`processing\`/\`remove\`, pass only \`type\` and \`index\`.
+- **Todos** (\`createTodos\`, \`updateTodos\`, \`clearTodos\`): Start with \`createPlan\` then \`createTodos\`, unless the user explicitly asks otherwise (e.g. only wants a checklist). Keep 5–10 stage-level milestones (use \`1.\`, \`2.1\` numbering if needed) with workflow \`todo → processing → completed\`. For \`updateTodos\` \`complete\`/\`processing\`/\`remove\`, pass only \`type\` and \`index\`.
 - **Response**: Confirm concisely; **never repeat the todo list in your text response** (users already see it in the UI).
 </plan_and_todos>
 `;
@@ -31,7 +31,6 @@ Only use plan/todo tools for complex, multi-step projects that need ongoing prog
 const multimodalAnalysisSection = `
 <multimodal_analysis>
 \`analyzeMedia\` is only a fallback when the active model cannot inspect the media natively (because the active model lacks the needed audio/image/video capability, or the media only appears as remote URLs in webpage/tool text rather than attached media blocks). If the media is already visible in the current multimodal context, answer directly without this tool.
-- Pass at most 8 URLs per call; split larger sets across parallel calls.
 - For local filesystem media: Never pass local filesystem paths or \`file://\` URLs to \`analyzeMedia.urls\`, and never copy media as base64/data URI text. Upload it via an available local file-reading tool first, then pass the resulting stable ref from \`<files_info>\` (or explain it cannot be accessed instead of inventing a URL if no local reader is available).
 </multimodal_analysis>
 `;

@@ -36,6 +36,21 @@ describe('LobeAgentManifest', () => {
     expect(LobeAgentManifest.systemRole).toContain(
       'active model lacks the needed audio/image/video capability',
     );
+    expect(LobeAgentManifest.systemRole).toContain('media only appears as remote URLs');
+  });
+
+  it('should state the media URL cap once, from the runtime constant', () => {
+    const { urls } = LobeAgentManifest.api[0].parameters.properties;
+
+    expect(urls.maxItems).toBe(MAX_MEDIA_URLS);
+    expect(urls.description).toContain(`at most ${MAX_MEDIA_URLS} per call`);
+    // The cap is a limit, not a batching recipe: no guidance to fan out over it.
+    expect(urls.description).not.toContain('parallel');
+    expect(LobeAgentManifest.systemRole).not.toMatch(/at most \d+ URLs/i);
+  });
+
+  it('should allow todos without a plan when the user asks for that', () => {
+    expect(LobeAgentManifest.systemRole).toContain('unless the user explicitly asks otherwise');
   });
 
   it('should route local media through file refs instead of local URLs or base64 text', () => {
@@ -58,8 +73,6 @@ describe('LobeAgentManifest', () => {
     expect(parameters).not.toHaveProperty('oneOf');
     expect(parameters).not.toHaveProperty('allOf');
     expect(parameters).not.toHaveProperty('anyOf');
-    expect(parameters.properties.urls.maxItems).toBe(MAX_MEDIA_URLS);
-    expect(LobeAgentManifest.systemRole).toContain('remote URLs');
   });
 
   it('should expose a restrained vent API for reporting platform friction', () => {
