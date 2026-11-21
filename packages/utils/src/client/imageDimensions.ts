@@ -1,59 +1,71 @@
+const IMAGE_METADATA_TIMEOUT_MS = 5000;
+
 /**
- * Helper function to extract image dimensions from File objects or base64 data URIs
- * @param source The image source - either a File object or base64 data URI string
- * @returns Promise resolving to dimensions (incl. aspect ratio) or undefined if not an image or error occurs
+ * Extract intrinsic dimensions from an image File or base64 data URI.
+ * Unsupported browser APIs, decoding failures and metadata timeouts return
+ * undefined so optional dimension discovery cannot stall an upload.
  */
 export const getImageDimensions = async (
   source: File | string,
 ): Promise<{ height: number; ratio: number; width: number } | undefined> => {
-  // Type guard and validation
   if (typeof source === 'string') {
-    // Handle base64 data URI
     if (!source.startsWith('data:image/')) return undefined;
-  } else {
-    // Handle File object
-    if (!source.type.startsWith('image/')) return undefined;
+  } else if (!source.type.startsWith('image/')) {
+    return undefined;
+  }
+
+  if (typeof Image === 'undefined') return undefined;
+
+  let img: HTMLImageElement;
+  let objectUrl: string | undefined;
+  try {
+    img = new Image();
+    if (typeof source !== 'string') objectUrl = URL.createObjectURL(source);
+  } catch {
+    return undefined;
   }
 
   return new Promise((resolve) => {
-    const img = new Image();
-    let objectUrl: string | null = null;
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    const settle = (dimensions?: { height: number; ratio: number; width: number }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try {
+        img.removeEventListener('load', handleLoad);
+        img.removeEventListener('error', handleError);
+        img.removeAttribute('src');
+      } catch {
+        // Cleanup failures must not leave optional metadata requests pending.
+      }
+      try {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      } catch {
+        // Revocation is best-effort when a browser API is unavailable.
+      }
+      resolve(dimensions);
+    };
 
     const handleLoad = () => {
       const height = img.naturalHeight;
       const width = img.naturalWidth;
-      resolve({
+      settle({
         height,
-        // intrinsic aspect ratio (width / height), rounded to avoid float noise;
-        // 0 when height is missing to avoid Infinity/NaN
         ratio: height > 0 ? Math.round((width / height) * 10_000) / 10_000 : 0,
         width,
       });
-      // Clean up object URL if created
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
     };
+    const handleError = () => settle();
 
-    const handleError = () => {
-      // Clean up object URL if created
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-      resolve(undefined);
-    };
-
-    img.addEventListener('load', handleLoad);
-    img.addEventListener('error', handleError);
-
-    // Set source based on input type
-    if (typeof source === 'string') {
-      // Base64 data URI - use directly
-      img.src = source;
-    } else {
-      // File object - create object URL
-      objectUrl = URL.createObjectURL(source);
-      img.src = objectUrl;
+    try {
+      img.addEventListener('load', handleLoad);
+      img.addEventListener('error', handleError);
+      timeout = setTimeout(() => settle(), IMAGE_METADATA_TIMEOUT_MS);
+      img.src = typeof source === 'string' ? source : objectUrl!;
+    } catch {
+      settle();
     }
   });
 };
