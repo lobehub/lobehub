@@ -774,22 +774,40 @@ export class VerifyRunModel {
   };
 
   /**
+   * Optimistic-concurrency guard for the repair claims: the row must still be
+   * the exact version the caller read. Status alone is ABA-prone — a run can
+   * leave `failed`, go through a whole repair round, and be recomputed back to
+   * `failed` between a caller's read and its write — but every write to the row
+   * re-stamps `updated_at` (`$onUpdate`), so a matching timestamp means nothing
+   * happened in between.
+   *
+   * Compared at millisecond precision: the expectation was read back through a
+   * JS `Date`, while the column holds microseconds (see {@link findStuckVerifying}).
+   */
+  private isUnchangedSince = (updatedAt: Date) =>
+    eq(sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`, updatedAt);
+
+  /**
    * Atomically claim the repair round: flip the run to `repairing` in one
-   * conditional UPDATE that only fires while the status still equals the
-   * caller's freshly-read expectation, so exactly one of two overlapping
-   * settlement calls can spawn a repair against the same failures.
+   * conditional UPDATE that only fires while the row is still the version the
+   * caller freshly read, so exactly one of two overlapping settlement calls can
+   * spawn a repair against the same failures.
    *
    * PostgreSQL's UPDATE ... RETURNING hands back the NEW row, so the
    * pre-claim status can't be read out of the claim itself — the caller
-   * passes the status it just read (`fromStatus`) as the CAS expectation and
-   * keeps it for the release path. If the status moved since the read
-   * (another claimer won, a rollup recompute landed, a repair round finished),
-   * the UPDATE matches nothing and the caller drops out; the next settlement
-   * retry or sweep re-enters with a fresh read.
+   * passes the status and `updatedAt` it just read as the CAS expectation and
+   * keeps the status for the release path. If the row moved since the read
+   * (another claimer won, a rollup recompute landed, a repair round finished —
+   * even one that recomputed the run back to the same status), the UPDATE
+   * matches nothing and the caller drops out; the next settlement retry or
+   * sweep re-enters with a fresh read.
    *
    * @returns true when this caller owns the repair round, false otherwise.
    */
-  claimRepairing = async (runId: string, fromStatus: VerifyRunStatus | null): Promise<boolean> => {
+  claimRepairing = async (
+    runId: string,
+    expected: Pick<VerifyRunItem, 'status' | 'updatedAt'>,
+  ): Promise<boolean> => {
     const claimed = await this.db
       .update(verifyRuns)
       .set({ status: 'repairing' })
@@ -798,7 +816,10 @@ export class VerifyRunModel {
           eq(verifyRuns.id, runId),
           // SQL's `= / <>` never match NULL rows, so a run with no status yet
           // needs an explicit IS NULL branch to stay claimable.
-          fromStatus === null ? isNull(verifyRuns.status) : eq(verifyRuns.status, fromStatus),
+          expected.status === null
+            ? isNull(verifyRuns.status)
+            : eq(verifyRuns.status, expected.status),
+          this.isUnchangedSince(expected.updatedAt),
           this.ownership(),
         ),
       )
@@ -809,17 +830,26 @@ export class VerifyRunModel {
 
   /**
    * Atomically retake an abandoned repair claim: flip `repairing` →
-   * `verifying`, exactly once, only while the run is still `repairing`. The
-   * sweep's recovery path uses this so a concurrent delivery that got here
-   * first (or a spawner that came back to life) makes the loser drop out.
+   * `verifying`, exactly once, only while the run is still the stale
+   * `repairing` row the sweep read (`expectedUpdatedAt`). A concurrent delivery
+   * that got here first, a spawner that came back to life, or a newer claim
+   * that replaced the abandoned one all re-stamp the row, so a sweep holding
+   * the old read drops out.
    *
    * @returns true when this caller now owns the re-driven verification.
    */
-  reclaimRepairing = async (runId: string): Promise<boolean> => {
+  reclaimRepairing = async (runId: string, expectedUpdatedAt: Date): Promise<boolean> => {
     const claimed = await this.db
       .update(verifyRuns)
       .set({ status: 'verifying' })
-      .where(and(eq(verifyRuns.id, runId), eq(verifyRuns.status, 'repairing'), this.ownership()))
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          eq(verifyRuns.status, 'repairing'),
+          this.isUnchangedSince(expectedUpdatedAt),
+          this.ownership(),
+        ),
+      )
       .returning({ id: verifyRuns.id });
 
     return claimed.length > 0;

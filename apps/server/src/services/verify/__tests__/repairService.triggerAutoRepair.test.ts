@@ -103,9 +103,12 @@ vi.mock('./taskAcceptance', () => ({
 
 const db = {} as any;
 
+const FAILED_AT = new Date('2026-08-10T00:00:00Z');
+
 const failedRun = {
   id: 'run-1',
   status: 'failed',
+  updatedAt: FAILED_AT,
   plan: [{ id: 'check-1', required: true, onFail: 'auto_repair' }],
 };
 
@@ -131,8 +134,12 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
 
     expect(result).toEqual({ repairOperationId: 'op-repair' });
     expect(spawner).toHaveBeenCalledOnce();
-    // The claim lands BEFORE the spawn and covers the same run.
-    expect(m.claimRepairing).toHaveBeenCalledWith('run-1', 'failed');
+    // The claim lands BEFORE the spawn and covers the same run, pinned to the
+    // exact row version read — not just its status.
+    expect(m.claimRepairing).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ status: 'failed', updatedAt: FAILED_AT }),
+    );
     expect(m.recordAutoRepair).toHaveBeenCalledWith('run-1', 'spawned');
     expect(m.markRepairing).toHaveBeenCalledWith('op-1');
     expect(m.updateStatus).not.toHaveBeenCalled();

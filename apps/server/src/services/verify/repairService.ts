@@ -527,12 +527,14 @@ export class VerifyRepairService {
     }
 
     // Claim the repair round BEFORE spawning: `claimRepairing` is a CAS on the
-    // just-read status, so of two concurrent settlement calls (both past the
-    // read above) exactly one flips the run to `repairing` and spawns; the
-    // loser's CAS misses and drops out instead of launching a duplicate repair
-    // agent against the same failures.
+    // just-read row version (status + `updatedAt`), so of two concurrent
+    // settlement calls (both past the read above) exactly one flips the run to
+    // `repairing` and spawns; the loser's CAS misses and drops out instead of
+    // launching a duplicate repair agent against the same failures — including
+    // when a whole repair round ran and recomputed the run back to `failed`
+    // while the loser was between its read and its claim.
     const fromStatus = runForGuard.status;
-    const claimed = await this.runModel.claimRepairing(runForGuard.id, fromStatus);
+    const claimed = await this.runModel.claimRepairing(runForGuard.id, runForGuard);
     if (!claimed) {
       log('op %s lost the repair-round claim to a concurrent caller', operationId);
       return null;

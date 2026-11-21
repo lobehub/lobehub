@@ -100,6 +100,8 @@ vi.mock('../settle', () => ({ finalizeVerifyRun }));
 const db = {} as any;
 const NOW = new Date('2026-08-10T00:00:00Z');
 
+const STUCK_UPDATED_AT = new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000);
+
 const stuckRun = (overrides?: Partial<Record<string, unknown>>) => ({
   id: 'run-1',
   operationId: 'op-1',
@@ -107,7 +109,7 @@ const stuckRun = (overrides?: Partial<Record<string, unknown>>) => ({
     { id: 'c1', required: true },
     { id: 'c2', required: true },
   ],
-  updatedAt: new Date(NOW.getTime() - VERIFY_ROLLUP_GRACE_MS - 1000),
+  updatedAt: STUCK_UPDATED_AT,
   userId: 'u1',
   workspaceId: null,
   ...overrides,
@@ -509,7 +511,7 @@ describe('sweepStuckVerifyRuns', () => {
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(outcome.settled).toEqual(['run-1']);
-    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
   });
 
@@ -528,7 +530,7 @@ describe('sweepStuckVerifyRuns', () => {
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
-    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
     expect(outcome.settled).toEqual(['run-1']);
   });
 
@@ -710,7 +712,7 @@ describe('sweepStuckVerifyRuns', () => {
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(outcome.settled).toEqual(['run-1']);
-    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
     expect(recompute).toHaveBeenCalledWith('op-1');
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
   });
@@ -728,7 +730,7 @@ describe('sweepStuckVerifyRuns', () => {
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(outcome.settled).toEqual(['run-1']);
-    expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+    expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
   });
 
@@ -843,7 +845,7 @@ describe('sweepStuckVerifyRuns', () => {
 
       expect(outcome.settled).toEqual(['run-1']);
       expect(runVerifyOnCompletion).not.toHaveBeenCalled();
-      expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+      expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
     });
 
     it('leaves a planned child of a repair that did not finish to its own sweep path', async () => {
@@ -862,7 +864,7 @@ describe('sweepStuckVerifyRuns', () => {
       await sweepStuckVerifyRuns(db, { now: NOW });
 
       expect(runVerifyOnCompletion).not.toHaveBeenCalled();
-      expect(reclaimRepairing).toHaveBeenCalledWith('run-1');
+      expect(reclaimRepairing).toHaveBeenCalledWith('run-1', STUCK_UPDATED_AT);
     });
   });
 

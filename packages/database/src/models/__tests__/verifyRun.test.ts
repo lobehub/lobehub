@@ -66,6 +66,15 @@ const statusOf = async (runId: string) => {
   return row?.status ?? null;
 };
 
+/** The row version a caller reads before a repair claim's CAS. */
+const snapshotOf = async (runId: string) => {
+  const [row] = await serverDB
+    .select({ status: verifyRuns.status, updatedAt: verifyRuns.updatedAt })
+    .from(verifyRuns)
+    .where(eq(verifyRuns.id, runId));
+  return row!;
+};
+
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -148,7 +157,7 @@ describe('VerifyRunModel.claimRepairing', () => {
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
 
     await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed'),
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId)),
     ).resolves.toBe(true);
     expect(await statusOf(runId)).toBe('repairing');
   });
@@ -156,13 +165,14 @@ describe('VerifyRunModel.claimRepairing', () => {
   it('refuses a second claim while a repair round is in flight', async () => {
     const runId = await buildRun('op-claim-repair-2');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    const settled = await snapshotOf(runId);
 
-    await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed'),
-    ).resolves.toBe(true);
-    await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed'),
-    ).resolves.toBe(false);
+    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, settled)).resolves.toBe(
+      true,
+    );
+    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, settled)).resolves.toBe(
+      false,
+    );
     expect(await statusOf(runId)).toBe('repairing');
   });
 
@@ -170,9 +180,9 @@ describe('VerifyRunModel.claimRepairing', () => {
     const runId = await buildRun('op-claim-repair-3');
     await serverDB.update(verifyRuns).set({ status: null }).where(eq(verifyRuns.id, runId));
 
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, null)).resolves.toBe(
-      true,
-    );
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId)),
+    ).resolves.toBe(true);
     expect(await statusOf(runId)).toBe('repairing');
   });
 
@@ -181,22 +191,50 @@ describe('VerifyRunModel.claimRepairing', () => {
     // flips it, so the second caller's identical CAS matches nothing.
     const runId = await buildRun('op-claim-repair-4');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    const read = await snapshotOf(runId);
 
-    await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed'),
-    ).resolves.toBe(true);
-    await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed'),
-    ).resolves.toBe(false);
+    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, read)).resolves.toBe(
+      true,
+    );
+    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, read)).resolves.toBe(
+      false,
+    );
   });
 
   it('misses the CAS when the expected status differs from the row', async () => {
     const runId = await buildRun('op-claim-repair-5');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    const read = await snapshotOf(runId);
 
     await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'passed'),
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, { ...read, status: 'passed' }),
     ).resolves.toBe(false);
+    expect(await statusOf(runId)).toBe('failed');
+  });
+
+  it('rejects an ABA: a stale read misses after a repair round recomputed the run back to failed', async () => {
+    // Caller A reads `failed` and stalls. Caller B claims, its repair child
+    // settles and recomputes the parent back to `failed`. The status matches
+    // A's read again, but the row is a newer version — A must not spawn a
+    // second, stale repair against failures a later round already handled.
+    const runId = await buildRun('op-claim-repair-aba');
+    await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    // Sub-millisecond remainder on the column, so the claim below also proves
+    // the CAS matches a `Date` read back at millisecond precision.
+    await backdate(runId, 60 * 1000);
+    const readByA = await snapshotOf(runId);
+
+    const readByB = await snapshotOf(runId);
+    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, readByB)).resolves.toBe(
+      true,
+    );
+    // The repair child's finalizer collapses the parent back to the same status.
+    await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    expect(await statusOf(runId)).toBe('failed');
+
+    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, readByA)).resolves.toBe(
+      false,
+    );
     expect(await statusOf(runId)).toBe('failed');
   });
 
@@ -204,7 +242,7 @@ describe('VerifyRunModel.claimRepairing', () => {
     const runId = await buildRun('op-claim-repair-6', otherUserId);
 
     await expect(
-      new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'planned'),
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId)),
     ).resolves.toBe(false);
     expect(await statusOf(runId)).toBe('planned');
   });
@@ -214,17 +252,26 @@ describe('VerifyRunModel.reclaimRepairing', () => {
   it('retakes an abandoned repairing claim and flips it back to verifying', async () => {
     const runId = await buildRun('op-reclaim-1');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'repairing');
+    await backdate(runId, 10 * 60 * 1000);
+    const { updatedAt } = await snapshotOf(runId);
 
-    await expect(new VerifyRunModel(serverDB, userId).reclaimRepairing(runId)).resolves.toBe(true);
+    await expect(
+      new VerifyRunModel(serverDB, userId).reclaimRepairing(runId, updatedAt),
+    ).resolves.toBe(true);
     expect(await statusOf(runId)).toBe('verifying');
   });
 
   it('refuses a second reclaim once the first has flipped the status', async () => {
     const runId = await buildRun('op-reclaim-2');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'repairing');
+    const { updatedAt } = await snapshotOf(runId);
 
-    await expect(new VerifyRunModel(serverDB, userId).reclaimRepairing(runId)).resolves.toBe(true);
-    await expect(new VerifyRunModel(serverDB, userId).reclaimRepairing(runId)).resolves.toBe(false);
+    await expect(
+      new VerifyRunModel(serverDB, userId).reclaimRepairing(runId, updatedAt),
+    ).resolves.toBe(true);
+    await expect(
+      new VerifyRunModel(serverDB, userId).reclaimRepairing(runId, updatedAt),
+    ).resolves.toBe(false);
     expect(await statusOf(runId)).toBe('verifying');
   });
 
@@ -233,16 +280,43 @@ describe('VerifyRunModel.reclaimRepairing', () => {
     // reclaim — the CAS must not touch it.
     const runId = await buildRun('op-reclaim-3');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
+    const { updatedAt } = await snapshotOf(runId);
 
-    await expect(new VerifyRunModel(serverDB, userId).reclaimRepairing(runId)).resolves.toBe(false);
+    await expect(
+      new VerifyRunModel(serverDB, userId).reclaimRepairing(runId, updatedAt),
+    ).resolves.toBe(false);
     expect(await statusOf(runId)).toBe('failed');
+  });
+
+  it('rejects an ABA: a sweep holding a stale row misses a newer repairing claim', async () => {
+    // Sweep S reads the abandoned `repairing` row and stalls. Meanwhile another
+    // delivery reclaims it and its finalizer claims a fresh repair round, so
+    // the run is `repairing` again — a live claim. S's reclaim must not take it.
+    const runId = await buildRun('op-reclaim-aba');
+    await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'repairing');
+    await backdate(runId, 10 * 60 * 1000);
+    const readBySweep = await snapshotOf(runId);
+
+    const model = new VerifyRunModel(serverDB, userId);
+    await expect(model.reclaimRepairing(runId, (await snapshotOf(runId)).updatedAt)).resolves.toBe(
+      true,
+    );
+    await model.updateStatus(runId, 'failed');
+    await expect(model.claimRepairing(runId, await snapshotOf(runId))).resolves.toBe(true);
+    expect(await statusOf(runId)).toBe('repairing');
+
+    await expect(model.reclaimRepairing(runId, readBySweep.updatedAt)).resolves.toBe(false);
+    expect(await statusOf(runId)).toBe('repairing');
   });
 
   it('never reclaims another owner’s run', async () => {
     const runId = await buildRun('op-reclaim-4', otherUserId);
     await new VerifyRunModel(serverDB, otherUserId).updateStatus(runId, 'repairing');
+    const { updatedAt } = await snapshotOf(runId);
 
-    await expect(new VerifyRunModel(serverDB, userId).reclaimRepairing(runId)).resolves.toBe(false);
+    await expect(
+      new VerifyRunModel(serverDB, userId).reclaimRepairing(runId, updatedAt),
+    ).resolves.toBe(false);
     expect(await statusOf(runId)).toBe('repairing');
   });
 });
@@ -262,7 +336,7 @@ describe('VerifyRunModel.updateStatusUnlessRepairing', () => {
     // Another finalizer claimed the run after this caller read it as `failed`.
     const runId = await buildRun('op-unless-repairing-2');
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
-    await new VerifyRunModel(serverDB, userId).claimRepairing(runId, 'failed');
+    await new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId));
 
     await expect(
       new VerifyRunModel(serverDB, userId).updateStatusUnlessRepairing(runId, 'failed'),

@@ -241,9 +241,10 @@ const recoverRun = async (
       return 'redriven';
     }
 
-    // Stale claim, no live child: retake it via CAS. Losing it means a
-    // concurrent delivery got here first.
-    if (!(await runModel.reclaimRepairing(run.id))) return 'skipped';
+    // Stale claim, no live child: retake it via CAS on the row version this
+    // sweep read. Losing it means the row moved since — a concurrent delivery
+    // got here first, or a newer repair claim replaced the abandoned one.
+    if (!(await runModel.reclaimRepairing(run.id, run.updatedAt))) return 'skipped';
 
     // Recompute re-derives the verdict from the on-disk results — the failed
     // checks are all terminal (that is what made this run repair-eligible) —
