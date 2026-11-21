@@ -53,7 +53,12 @@ export const ensureNodeResponse = async (
     headers.set('cache-control', options.cacheControl);
   }
 
-  const body = !options.forceBuffering && source.body ? source.body : await source.arrayBuffer();
+  const body =
+    source.body === null || [204, 205, 304].includes(source.status)
+      ? null
+      : !options.forceBuffering && source.body
+        ? source.body
+        : await source.arrayBuffer();
 
   return new Response(body, {
     headers,
