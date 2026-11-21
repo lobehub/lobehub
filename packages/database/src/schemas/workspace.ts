@@ -67,6 +67,8 @@ export const workspaceMembers = pgTable(
     role: text('role').notNull().default('member'),
     // Workspace-scoped profile: the same person can hold a different title and
     // duties in each workspace. Lengths are enforced by the API, not the column.
+    /** The name the member goes by in this workspace; `null` falls back to their account name. */
+    nickname: text('nickname'),
     title: text('title'),
     responsibilities: text('responsibilities'),
     /** Per-member display settings; see {@link WorkspaceMemberConfig}. */
