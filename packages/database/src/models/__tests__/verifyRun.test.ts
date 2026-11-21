@@ -5,7 +5,14 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, agentOperations, users, verifyCheckResults, verifyRuns } from '../../schemas';
+import {
+  acceptances,
+  agentOperations,
+  topics,
+  users,
+  verifyCheckResults,
+  verifyRuns,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyRunModel } from '../verifyRun';
@@ -722,5 +729,91 @@ describe('VerifyRunModel.detachUndeliveredRound', () => {
     expect(await new VerifyRunModel(serverDB, otherUserId).detachUndeliveredRound(runId)).toBe(
       false,
     );
+  });
+});
+
+describe('VerifyRunModel.findRoundForOperation', () => {
+  const topicId = 'verify-run-topic';
+  const model = () => new VerifyRunModel(serverDB, userId);
+  const startOp = (operationId: string, topic: string | null = topicId, owner = userId) =>
+    new AgentOperationModel(serverDB, owner).recordStart({ operationId, topicId: topic });
+  const confirmedRound = async (operationId: string, topic: string | null = topicId) => {
+    await startOp(operationId, topic);
+    const run = await model().ensureForOperation(operationId);
+    await model().setPlan(run.id, [
+      {
+        id: 'item-1',
+        index: 0,
+        onFail: 'manual',
+        required: true,
+        title: 'goal met',
+        verifierConfig: {},
+        verifierType: 'llm',
+      },
+    ]);
+    await model().confirmPlan(run.id);
+    return run.id;
+  };
+
+  beforeEach(async () => {
+    await serverDB.insert(topics).values([
+      { id: topicId, userId },
+      { id: 'verify-run-other-topic', userId },
+    ]);
+  });
+
+  it('returns the operation’s own round', async () => {
+    const runId = await confirmedRound('op-own-round');
+    expect((await model().findRoundForOperation('op-own-round'))?.id).toBe(runId);
+  });
+
+  /**
+   * Regression (T-730, op_…_93VewlKu): the round was bound to the topic's first
+   * operation, so the builder resumed with the user's feedback had no round —
+   * `plan state` read null and `result submit --operation` hit NOT_FOUND.
+   */
+  it('inherits the latest confirmed round of an earlier run in the same topic', async () => {
+    await confirmedRound('op-first');
+    const latest = await confirmedRound('op-repair');
+    await serverDB
+      .update(verifyRuns)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(eq(verifyRuns.operationId, 'op-first'));
+    await startOp('op-feedback');
+
+    expect(await model().findByOperation('op-feedback')).toBeUndefined();
+    expect((await model().findRoundForOperation('op-feedback'))?.id).toBe(latest);
+
+    const state = await model().getStateByOperation('op-feedback', { inherit: true });
+    expect(state).toMatchObject({ verifyOperationId: 'op-repair', verifyRunId: latest });
+    expect(state?.verifyPlan?.map((item) => item.id)).toEqual(['item-1']);
+    // Without `inherit` the operation still has no round of its own.
+    expect(await model().getStateByOperation('op-feedback')).toBeNull();
+    // Read-only: no row is created for the later operation.
+    expect(await model().findByOperation('op-feedback')).toBeUndefined();
+  });
+
+  it('does not inherit an authored round with no confirmed plan', async () => {
+    await startOp('op-authored');
+    const authored = await model().ensureForOperation('op-authored');
+    await model().setPlan(authored.id, []);
+    await startOp('op-later');
+
+    expect(await model().findRoundForOperation('op-later')).toBeUndefined();
+  });
+
+  it('does not reach across topics, topic-less runs or owners', async () => {
+    await confirmedRound('op-elsewhere', 'verify-run-other-topic');
+    await startOp('op-here');
+    await startOp('op-no-topic', null);
+
+    expect(await model().findRoundForOperation('op-here')).toBeUndefined();
+    expect(await model().findRoundForOperation('op-no-topic')).toBeUndefined();
+
+    await confirmedRound('op-mine');
+    await startOp('op-theirs', topicId, otherUserId);
+    expect(
+      await new VerifyRunModel(serverDB, otherUserId).findRoundForOperation('op-theirs'),
+    ).toBeUndefined();
   });
 });

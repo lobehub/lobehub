@@ -70,12 +70,17 @@ export function attachPlanCommands(parent: Command): Command {
     .option('--json [fields]', 'Output JSON')
     .action(async (operationId: string, options: { json?: boolean | string }) => {
       const client = await getTrpcClient();
-      const state = await client.verify.getVerifyState.query({ operationId });
+      // A later run in the conversation answers to its topic's round.
+      const state = await client.verify.getVerifyState.query({ inherit: true, operationId });
       if (options.json !== undefined) {
         outputJson(state, typeof options.json === 'string' ? options.json : undefined);
         return;
       }
       if (!state) return void console.log('No verify state for this run.');
+      if (state.verifyOperationId && state.verifyOperationId !== operationId)
+        console.log(
+          `${pc.bold('round')}: ${state.verifyRunId} ${pc.dim(`(inherited from ${state.verifyOperationId} in the same topic)`)}`,
+        );
       console.log(`${pc.bold('status')}: ${state.verifyStatus ?? pc.dim('(none)')}`);
       console.log(
         `${pc.bold('confirmed')}: ${state.verifyPlanConfirmedAt ? timeAgo(state.verifyPlanConfirmedAt) : pc.dim('no')}`,
@@ -86,11 +91,12 @@ export function attachPlanCommands(parent: Command): Command {
         printTable(
           items.map((i) => [
             String(i.index),
+            i.id,
             truncate(i.title, 60),
             i.verifierType,
             i.required ? 'gate' : 'soft',
           ]),
-          ['#', 'TITLE', 'TYPE', 'BLOCK'],
+          ['#', 'CHECK ITEM ID', 'TITLE', 'TYPE', 'BLOCK'],
         );
     });
 

@@ -70,7 +70,7 @@ export async function resultListAction(options: {
   const client = await getTrpcClient();
   const results = options.run
     ? await client.verify.listResultsByRun.query({ verifyRunId: options.run })
-    : await client.verify.listResults.query({ operationId: options.operation! });
+    : await client.verify.listResults.query({ inherit: true, operationId: options.operation! });
   if (options.json !== undefined) {
     outputJson(results, typeof options.json === 'string' ? options.json : undefined);
     return;

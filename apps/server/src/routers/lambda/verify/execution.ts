@@ -11,6 +11,7 @@ import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowMana
 import {
   assertOperationInScope,
   resolveCheckResult,
+  shouldInheritRound,
   verifyProcedure,
   verifyWriteProcedure,
 } from './procedures';
@@ -200,10 +201,12 @@ export const executionRouter = router({
       return fetchAcceptanceSkillBundle(input.version);
     }),
   getVerifyState: verifyProcedure
-    .input(z.object({ operationId: z.string() }))
+    .input(z.object({ inherit: z.boolean().optional(), operationId: z.string() }))
     .query(async ({ ctx, input }) => {
       assertOperationInScope(ctx, input.operationId);
-      return ctx.runModel.getStateByOperation(input.operationId);
+      return ctx.runModel.getStateByOperation(input.operationId, {
+        inherit: shouldInheritRound(ctx, input.inherit),
+      });
     }),
   skipPlan: verifyWriteProcedure
     .input(z.object({ operationId: z.string() }))
@@ -260,10 +263,12 @@ export const executionRouter = router({
       return run ? ctx.resultModel.listByRun(run.id) : [];
     }),
   listResults: verifyProcedure
-    .input(z.object({ operationId: z.string() }))
+    .input(z.object({ inherit: z.boolean().optional(), operationId: z.string() }))
     .query(async ({ ctx, input }) => {
       assertOperationInScope(ctx, input.operationId);
-      const run = await ctx.runModel.findByOperation(input.operationId);
+      const run = shouldInheritRound(ctx, input.inherit)
+        ? await ctx.runModel.findRoundForOperation(input.operationId)
+        : await ctx.runModel.findByOperation(input.operationId);
       return run ? ctx.resultModel.listByRun(run.id) : [];
     }),
   // ---- feedback (data flywheel) ----

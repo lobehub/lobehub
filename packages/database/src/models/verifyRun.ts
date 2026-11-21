@@ -44,6 +44,12 @@ export type VerifyAutoRepairOutcome = 'declined' | 'spawned';
 export interface VerifyRunState {
   /** `declined` makes a failed round with `auto_repair` checks final. */
   verifyAutoRepair: VerifyAutoRepairOutcome | null;
+  /**
+   * The Agent Run the round is bound to. Differs from the operation asked about
+   * when that operation has no round of its own and inherits its topic's round
+   * (see {@link VerifyRunModel.findRoundForOperation}).
+   */
+  verifyOperationId: string | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   /** The session id — exposed so a builder holding only its operationId can
@@ -75,6 +81,7 @@ const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =
         verifyAutoRepair:
           (run.metadata as { autoRepair?: VerifyAutoRepairOutcome } | null)?.autoRepair ?? null,
         verifyPlan: (run.plan ?? null) as VerifyCheckItem[] | null,
+        verifyOperationId: run.operationId ?? null,
         verifyPlanConfirmedAt: run.planConfirmedAt ?? null,
         verifyRunId: run.id,
         verifyStatus: (run.status ?? null) as VerifyRunStatus | null,
@@ -524,6 +531,54 @@ export class VerifyRunModel {
   };
 
   /**
+   * The round an Agent Run answers to: its own session, else the latest round
+   * with a confirmed plan bound to an earlier run in the same topic.
+   *
+   * A verification session is bound to the operation that started it. A later
+   * operation in the same conversation — the builder resumed with the user's
+   * feedback, an intervention, a retry — has no row of its own, yet it is the
+   * run asked to hand in evidence for that round's checks. Read-only: it never
+   * creates a row or reserves the later operation's id, and the verify
+   * lifecycle keeps addressing the round by its own operation. Only a confirmed
+   * plan round is inherited; an authored round is an immutable snapshot, and a
+   * later run publishes its own.
+   */
+  findRoundForOperation = async (operationId: string): Promise<VerifyRunItem | undefined> => {
+    const own = await this.findByOperation(operationId);
+    if (own) return own;
+
+    const [op] = await this.db
+      .select({ topicId: agentOperations.topicId })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            agentOperations,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!op?.topicId) return undefined;
+
+    const [row] = await this.db
+      .select({ run: verifyRuns })
+      .from(verifyRuns)
+      .innerJoin(agentOperations, eq(agentOperations.id, verifyRuns.operationId))
+      .where(
+        and(
+          eq(agentOperations.topicId, op.topicId),
+          isNotNull(verifyRuns.planConfirmedAt),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(verifyRuns.createdAt), desc(verifyRuns.id))
+      .limit(1);
+    return row?.run;
+  };
+
+  /**
    * Get (or lazily create) the verification session for an Agent Run. Upserts on
    * the `operation_id` unique index so concurrent callers converge on one row.
    */
@@ -917,9 +972,17 @@ export class VerifyRunModel {
     return toState(run);
   };
 
-  /** Same as {@link getState} but addressed by the bound Agent Run. */
-  getStateByOperation = async (operationId: string): Promise<VerifyRunState | null> => {
-    const run = await this.findByOperation(operationId);
+  /**
+   * Same as {@link getState} but addressed by the bound Agent Run. `inherit`
+   * falls back to the topic's round for a run that has none of its own.
+   */
+  getStateByOperation = async (
+    operationId: string,
+    options?: { inherit?: boolean },
+  ): Promise<VerifyRunState | null> => {
+    const run = options?.inherit
+      ? await this.findRoundForOperation(operationId)
+      : await this.findByOperation(operationId);
     return toState(run);
   };
 

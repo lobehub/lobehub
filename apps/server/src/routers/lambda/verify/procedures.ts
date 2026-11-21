@@ -96,6 +96,36 @@ export const assertOperationInScope = (
 };
 
 /**
+ * Whether a lookup by operation falls back to the topic's round
+ * ({@link VerifyRunModel.findRoundForOperation}). A run's operation token is a
+ * builder asking for the round it answers to, so it inherits by default — a
+ * later run in the conversation (resumed with feedback, retried) has no round
+ * of its own. The UI reads one Agent Run's own round per message and must not
+ * see it repeated on every later message, so a user session opts in.
+ */
+export const shouldInheritRound = (
+  ctx: { heteroOperationScope?: string },
+  inherit: boolean | undefined,
+) => inherit ?? Boolean(ctx.heteroOperationScope);
+
+/**
+ * {@link assertOperationInScope} for a round fetched by id: a run's operation
+ * token reaches its own round, or the topic round its operation inherits when
+ * it has none (the round `getVerifyState` showed it). A user session passes
+ * through.
+ */
+export const assertRunInScope = async (
+  ctx: { heteroOperationScope?: string; runModel: VerifyRunModel },
+  run: { id: string; operationId: string | null } | null | undefined,
+) => {
+  const scope = ctx.heteroOperationScope;
+  if (!scope || run?.operationId === scope) return;
+  const inherited = run ? await ctx.runModel.findRoundForOperation(scope) : undefined;
+  if (inherited && inherited.id === run?.id) return;
+  assertOperationInScope(ctx, run?.operationId);
+};
+
+/**
  * Fields a builder may send under its run's operation token: which check the
  * evidence answers, the evidence itself, and the observation it shows. The
  * verdict, status, confidence, required-ness, verifier, title, index,

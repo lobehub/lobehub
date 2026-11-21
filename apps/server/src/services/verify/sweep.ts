@@ -9,7 +9,11 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { redriveClaimedVerification } from './lifecycle';
+import {
+  redriveClaimedVerification,
+  runVerifyAfterEvidenceSubmission,
+  runVerifyOnCompletion,
+} from './lifecycle';
 import { settleFailedRepair } from './repairTerminal';
 import { planItemToPendingResult } from './resultSnapshot';
 import { finalizeVerifyRun } from './settle';
@@ -180,15 +184,49 @@ const recoverRun = async (
     // Overlapping sweeps are safe here — the repair claim and the task drive
     // inside the finalizer are both CAS-guarded.
     const strandedRound = await findStrandedRepairRound(db, run, repairChildren, runModel);
-    if (strandedRound) {
-      await finalizeVerifyRun(db, run.userId, strandedRound, {}, workspaceId);
+    if (strandedRound?.stage === 'settled') {
+      await finalizeVerifyRun(db, run.userId, strandedRound.operationId, {}, workspaceId);
       log(
         'finalized stranded repair round %s of run %s (op %s)',
-        strandedRound,
+        strandedRound.operationId,
         run.id,
         operationId,
       );
       return 'settled';
+    }
+    // A repair that finished its work but whose round never reached judging:
+    // its completion hook (or the evidence turn's) died before the round left
+    // `planned` / `collecting_evidence`. The round is not swept on its own —
+    // only a failed repair's `planned` round is — and reclaiming this parent
+    // ends in a suppressed finalizer, since the child is already the
+    // acceptance's latest round. Run the gate that died, so the child is
+    // judged and its finalizer collapses this parent. The evidence and
+    // `verifying` claims inside the gate are CAS-guarded against overlapping
+    // sweeps; the parent keeps its claim until then.
+    if (strandedRound?.stage === 'pre-judging') {
+      const child = await operationModel.findById(strandedRound.operationId);
+      const deliverable = await resolveFinalDeliverable(
+        db,
+        run.userId,
+        { operationId: strandedRound.operationId, topicId: child?.topicId ?? undefined },
+        workspaceId,
+      );
+      const params = {
+        deliverable,
+        goal: strandedRound.goal,
+        operationId: strandedRound.operationId,
+      };
+      await (strandedRound.status === 'collecting_evidence'
+        ? runVerifyAfterEvidenceSubmission(db, run.userId, params, workspaceId)
+        : runVerifyOnCompletion(db, run.userId, params, workspaceId));
+      log(
+        're-drove %s repair round %s of run %s (op %s)',
+        strandedRound.status,
+        strandedRound.operationId,
+        run.id,
+        operationId,
+      );
+      return 'redriven';
     }
 
     // Stale claim, no live child: retake it via CAS. Losing it means a
@@ -369,25 +407,53 @@ const isRepairChainLive = async (
   );
 };
 
+interface StrandedRepairRound {
+  goal: string;
+  operationId: string;
+  /**
+   * `settled`: the round has its rollup but its finalizer died.
+   * `pre-judging`: the repair finished (`done`) but its round never reached
+   * judging — a completion or evidence hook died.
+   */
+  stage: 'pre-judging' | 'settled';
+  status: string;
+}
+
 /**
- * The operation of a repair round of this run that already settled — but past
- * {@link VERIFY_ROLLUP_GRACE_MS}, so its finalizer is gone — and is still the
- * acceptance's latest round. A round a later round superseded is left to the
- * reclaim path: finalizing it would decline a repair that already happened.
+ * A repair round of this run whose own settlement died, and that is still the
+ * acceptance's latest round. Called once {@link isRepairChainLive} cleared
+ * every child, so a round here is past its grace: a settled one past
+ * {@link VERIFY_ROLLUP_GRACE_MS}, a pre-judging one past
+ * {@link VERIFY_ABANDONED_MS}. A pre-judging round counts only when the repair
+ * operation finished successfully and the round has a confirmed plan to judge;
+ * a failed repair's round is swept on its own (`settleFailedRepair`). A round a
+ * later round superseded is left to the reclaim path: finishing it would
+ * decline a repair that already happened.
  */
 const findStrandedRepairRound = async (
   db: LobeChatDatabase,
   run: VerifyRunItem,
-  repairChildren: { id: string }[],
+  repairChildren: { id: string; status: AgentOperationStatus }[],
   runModel: VerifyRunModel,
-): Promise<string | undefined> => {
+): Promise<StrandedRepairRound | undefined> => {
   for (const child of repairChildren) {
     const childRun = await runModel.findByOperation(child.id);
-    if (!childRun?.status || !SETTLED_RUN_STATUSES.has(childRun.status)) continue;
+    if (!childRun?.status) continue;
+    let stage: StrandedRepairRound['stage'];
+    if (SETTLED_RUN_STATUSES.has(childRun.status)) stage = 'settled';
+    else if (
+      PRE_JUDGING_RUN_STATUSES.has(childRun.status) &&
+      child.status === 'done' &&
+      childRun.planConfirmedAt &&
+      childRun.plan?.length
+    )
+      stage = 'pre-judging';
+    else continue;
     // Evidence/verifier children also hang off this operation; only a round of
     // the same acceptance is a repair (the check `settleFailedRepair` applies).
     if ((childRun.acceptanceId ?? null) !== (run.acceptanceId ?? null)) continue;
-    if (await isLatestRound(db, childRun)) return child.id;
+    if (await isLatestRound(db, childRun))
+      return { goal: childRun.goal ?? '', operationId: child.id, stage, status: childRun.status };
   }
 };
 

@@ -9,7 +9,7 @@ import { purgeVerifyRun } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
-  assertOperationInScope,
+  assertRunInScope,
   resolveVerifyRun,
   verifyProcedure,
   verifyWriteProcedure,
@@ -182,7 +182,7 @@ export const runsRouter = router({
     ),
   getRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
     const run = await ctx.runModel.findById(input.verifyRunId);
-    if (run) assertOperationInScope(ctx, run.operationId);
+    if (run) await assertRunInScope(ctx, run);
     return run;
   }),
   // Delete a whole verification session: the run row cascades to its check
