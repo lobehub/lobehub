@@ -12,7 +12,7 @@ import type {
   ContactUserProfile,
   ContactWorkspace,
 } from '@lobechat/types';
-import { agentDisplayName, channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
+import { channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, not, or, sql } from 'drizzle-orm';
@@ -35,7 +35,12 @@ import { ilikeContains } from '../utils/like';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 import { AgentShareModel } from './agentShare';
-import { agentProfileColumns, owners, toAgentProfile } from './contactAgentProfile';
+import {
+  agentProfileColumns,
+  owners,
+  resolveAgentCard,
+  toAgentProfile,
+} from './contactAgentProfile';
 
 const userProfileColumns = {
   avatar: users.avatar,
@@ -803,6 +808,7 @@ export class ContactModel {
       .select({
         channelId: channelMessages.channelId,
         createdAt: channelMessages.createdAt,
+        memberSince: channelMembers.createdAt,
         metadata: channelMessages.metadata,
         senderId: channelMessages.userId,
       })
@@ -824,11 +830,7 @@ export class ContactModel {
 
   /**
    * A contact the caller may share as a card, with its snapshot. A person: the caller, one of
-   * their contacts, or a fellow member of the workspace. An Agent: its owner may share it while
-   * its share is `card` or `link`, and anyone may pass on a `link` share, since anyone signed in
-   * can add it anyway. Only the owner's card admits people to a `card` share. An owner whose
-   * share is off is told to turn card sharing on (`agentShare.enableCardShare`), never refused
-   * outright, so a client can do that and send in one step.
+   * their contacts, or a fellow member of the workspace. An Agent: see `resolveAgentCard`.
    */
   resolveCard = async (input: ContactCardInput): Promise<ContactCard> => {
     if ((await this.scopeRole()) === 'external')
@@ -849,32 +851,10 @@ export class ContactModel {
       };
     }
 
-    const [row] = await this.db
-      .select(agentProfileColumns)
-      .from(agents)
-      .leftJoin(agentShares, eq(agentShares.agentId, agents.id))
-      .leftJoin(owners, eq(owners.id, agents.userId))
-      .where(and(eq(agents.id, input.agentId), notTrashed(agents.isDeleted)))
-      .limit(1);
-    const isOwner = !!row && row.ownerId === this.userId;
-    const shareable =
-      row?.shareId && (row.visibility === 'link' || (row.visibility === 'card' && isOwner));
-    if (!shareable) {
-      if (isOwner)
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Turn on sharing first' });
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
-    }
-    const profile = toAgentProfile({ ...row, shareId: row.shareId! });
-    return {
-      agentId: profile.agentId,
-      avatar: profile.avatar,
-      backgroundColor: profile.backgroundColor,
-      // The name every list shows: the personal name, else the role title.
-      name: agentDisplayName(profile) ?? null,
-      ownerName: profile.owner.fullName || profile.owner.username,
-      shareId: profile.shareId,
-      type: 'agent',
-    };
+    return resolveAgentCard(this.db, input.agentId, {
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
   };
 
   // ── Agents ────────────────────────────────────────────────────────────
@@ -910,7 +890,8 @@ export class ContactModel {
     const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
     const message = await this.findCardMessage(this.db, messageId);
     const card = message?.card;
-    if (!message || card?.type !== 'agent') throw notFound();
+    // A workspace card has nothing to add: its members reach the Agent in the workspace already.
+    if (!message || card?.type !== 'agent' || !card.shareId) throw notFound();
 
     const [share] = await this.db
       .select(agentProfileColumns)
@@ -928,7 +909,10 @@ export class ContactModel {
     if (!share?.ownerId) throw notFound();
     if (share.ownerId === this.userId)
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'This Agent is already yours' });
-    const fromOwner = message.senderId === share.ownerId;
+    // Only people already in the conversation when the owner sent the card are who it was sent
+    // to. Someone added later, by anyone, is not: otherwise inviting a person would pass it on.
+    const fromOwner =
+      message.senderId === share.ownerId && message.memberSince <= message.createdAt;
     if (!(share.visibility === 'link' || (share.visibility === 'card' && fromOwner)))
       throw notFound();
 

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { contactCardOf } from '@lobechat/types';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -868,6 +869,31 @@ describe('an Agent shared only by card', () => {
     expect(await serverDB.select().from(agentShareGrants)).toEqual([]);
   });
 
+  it('admits only people already in the conversation when the owner sent the card', async () => {
+    const sent = await postCard(bob, 1);
+    // Carol is invited after the card was sent, so it was not sent to her.
+    await serverDB.insert(channelMembers).values({
+      actorType: 'user',
+      channelId,
+      createdAt: new Date(Date.now() + 60_000),
+      role: 'member',
+      userId: carol,
+    });
+
+    await expect(carolModel.addAgentFromCard(sent)).rejects.toThrow('Agent not found');
+    expect(await carolModel.findAgentAccess(bobAgent)).toBeUndefined();
+    expect(await serverDB.select().from(agentShareGrants)).toEqual([]);
+
+    // A card the owner sends once she is there does reach her.
+    const resent = await postCard(bob, 2);
+    await serverDB
+      .update(channelMessages)
+      .set({ createdAt: new Date(Date.now() + 120_000) })
+      .where(eq(channelMessages.id, resent));
+    await carolModel.addAgentFromCard(resent);
+    expect(await carolModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
+  });
+
   it('adds a link share from anyone’s card without granting it', async () => {
     await serverDB
       .update(agentShares)
@@ -916,6 +942,78 @@ describe('an Agent shared only by card', () => {
     expect(await aliceModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
     const [grant] = await serverDB.select().from(agentShareGrants);
     expect(grant).toMatchObject({ revokedAt: null, source: { messageId: later } });
+  });
+});
+
+describe('a workspace card', () => {
+  const teamAgent = 'agt_contact_team';
+
+  beforeEach(async () => {
+    // Alice's Agents in the team, neither with a share: one public to its members, one private.
+    await serverDB.insert(agents).values([
+      {
+        id: teamAgent,
+        title: 'Team Helper',
+        userId: alice,
+        visibility: 'public',
+        workspaceId: teamId,
+      },
+      {
+        id: `${teamAgent}_private`,
+        title: 'Private Helper',
+        userId: alice,
+        visibility: 'private',
+        workspaceId: teamId,
+      },
+    ]);
+  });
+
+  it("lets any member share the workspace's public Agent inside it, with no share", async () => {
+    expect(await carolInTeam.resolveCard({ agentId: teamAgent, type: 'agent' })).toMatchObject({
+      agentId: teamAgent,
+      name: 'Team Helper',
+      shareId: null,
+      type: 'agent',
+      workspaceId: teamId,
+    });
+  });
+
+  it('keeps a private Agent, or a public one shared outside its workspace, behind a share', async () => {
+    await expect(
+      carolInTeam.resolveCard({ agentId: `${teamAgent}_private`, type: 'agent' }),
+    ).rejects.toThrow('Agent not found');
+    // Alice owns it: outside the team she is asked to turn sharing on instead.
+    await expect(aliceModel.resolveCard({ agentId: teamAgent, type: 'agent' })).rejects.toThrow(
+      'Turn on sharing first',
+    );
+  });
+
+  it('reads back as a card, and has nothing to add', async () => {
+    const card = await carolInTeam.resolveCard({ agentId: teamAgent, type: 'agent' });
+    expect(contactCardOf({ card })).toEqual(card);
+
+    const [channel] = await serverDB
+      .insert(channels)
+      .values({ title: 'Team', userId: carol, workspaceId: teamId })
+      .returning();
+    await serverDB.insert(channelMembers).values([
+      { actorType: 'user', channelId: channel.id, role: 'owner', userId: carol },
+      { actorType: 'user', channelId: channel.id, role: 'member', userId: alice },
+    ]);
+    const [message] = await serverDB
+      .insert(channelMessages)
+      .values({
+        channelId: channel.id,
+        content: '[Agent card] Team Helper',
+        metadata: { card },
+        requestKey: 'team-card',
+        routingStatus: 'skipped',
+        sequence: 1,
+        userId: carol,
+      })
+      .returning();
+    await expect(aliceInTeam.addAgentFromCard(message.id)).rejects.toThrow('Agent not found');
+    await serverDB.delete(channels);
   });
 });
 
