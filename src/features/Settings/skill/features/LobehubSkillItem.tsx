@@ -426,46 +426,49 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     }
 
     return (
-      <Flexbox
-        horizontal
-        align="center"
-        className={stylex.props(styles.container).className}
-        gap={8}
-        justify="space-between"
-        style={{
-          ...(isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : {}),
-          ...(onSelect ? { cursor: 'pointer' } : {}),
-        }}
-        onClick={onSelect}
-      >
-        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
-          <Flexbox
-            horizontal
-            align="center"
-            gap={8}
-            style={{ cursor: onSelect ? undefined : 'pointer' }}
-            onClick={
-              onSelect
-                ? undefined
-                : () => createLobehubSkillDetailModal({ identifier: provider.id })
-            }
-          >
-            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
-              {renderIcon()}
-            </div>
-            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
-              {provider.label}
-            </span>
+      <>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.container).className}
+          gap={8}
+          justify="space-between"
+          style={{
+            ...(isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : {}),
+            ...(onSelect ? { cursor: 'pointer' } : {}),
+          }}
+          onClick={onSelect}
+        >
+          <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
+            <Flexbox
+              horizontal
+              align="center"
+              gap={8}
+              style={{ cursor: onSelect ? undefined : 'pointer' }}
+              onClick={
+                onSelect
+                  ? undefined
+                  : () => createLobehubSkillDetailModal({ identifier: provider.id })
+              }
+            >
+              <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
+                {renderIcon()}
+              </div>
+              <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
+                {provider.label}
+              </span>
+            </Flexbox>
+            {!isConnected && renderStatus()}
           </Flexbox>
-          {!isConnected && renderStatus()}
+          {!onSelect && (
+            <Flexbox horizontal align="center" gap={8}>
+              {isConnected && renderStatus()}
+              {renderAction()}
+            </Flexbox>
+          )}
         </Flexbox>
-        {!onSelect && (
-          <Flexbox horizontal align="center" gap={8}>
-            {isConnected && renderStatus()}
-            {renderAction()}
-          </Flexbox>
-        )}
-      </Flexbox>
+        {actionError && renderConnectorRowDescription({ error: actionError, name: provider.label })}
+      </>
     );
   },
 );

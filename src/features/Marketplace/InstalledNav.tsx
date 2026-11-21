@@ -4,7 +4,7 @@ import type { ConnectorVisibility } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -21,9 +21,12 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
+import ConnectedAppNav from './Apps/ConnectedAppNav';
 import {
   getMarketplaceSubPath,
+  MARKETPLACE_CONNECTED_APPS_PATH,
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  MARKETPLACE_INSTALLED_MCP_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
 } from './paths';
 
@@ -39,10 +42,11 @@ const styles = stylex.create({
   },
 });
 
-export type InstalledKind = 'connector' | 'skill';
+export type InstalledKind = 'connector' | 'mcp' | 'skill';
 
 const INSTALLED_PATHS: Record<InstalledKind, string> = {
   connector: MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  mcp: MARKETPLACE_INSTALLED_MCP_PATH,
   skill: MARKETPLACE_INSTALLED_SKILLS_PATH,
 };
 
@@ -58,7 +62,7 @@ export const getInstalledVisibility = (
   workspaceId: string | null | undefined,
   visibilityParam: string | null,
 ): ConnectorVisibility | undefined => {
-  if (kind !== 'connector' || !workspaceId) return undefined;
+  if (kind === 'skill' || !kind || !workspaceId) return undefined;
   return visibilityParam === 'private' ? 'private' : 'public';
 };
 
@@ -90,7 +94,7 @@ const InstalledNav = memo(() => {
   const sectionTriggerStyle = useSectionTriggerStyle();
 
   const subPath = getMarketplaceSubPath(pathname);
-  const onInstalledPage = subPath === getMarketplaceSubPath(MARKETPLACE_INSTALLED_CONNECTORS_PATH);
+  const onInstalledPage = subPath === getMarketplaceSubPath(MARKETPLACE_INSTALLED_MCP_PATH);
   const selectedIdentifier = onInstalledPage
     ? parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM))?.identifier
     : undefined;
@@ -101,33 +105,41 @@ const InstalledNav = memo(() => {
     onInstalledPage ? searchParams.get('visibility') : null,
   );
 
-  const handleSelect = useCallback(
-    (identifier: string, type: ToolDetailType) => {
-      navigate(buildInstalledDetailPath('connector', identifier, type, visibility));
-    },
-    [navigate, visibility],
-  );
+  const handleSelect = (identifier: string, type: ToolDetailType) => {
+    navigate(buildInstalledDetailPath('mcp', identifier, type, visibility));
+  };
 
   return (
     <Flexbox gap={2} paddingBlock={8} paddingInline={4}>
       <WorkspaceLink
+        className={stylex.props(styles.collectionLink).className}
+        style={sectionTriggerStyle}
+        to={MARKETPLACE_CONNECTED_APPS_PATH}
+        aria-current={
+          subPath === 'app' && searchParams.get('view') === 'connected' ? 'page' : undefined
+        }
+      >
+        <SectionTitle>{t('apps.connected')}</SectionTitle>
+      </WorkspaceLink>
+      <ConnectedAppNav selected={subPath?.startsWith('app/') ? subPath.slice(4) : undefined} />
+      <WorkspaceLink
         aria-current={onInstalledPage && !selectedIdentifier ? 'page' : undefined}
         className={stylex.props(styles.collectionLink).className}
         style={sectionTriggerStyle}
-        title={t('catalog.manageInstalledConnectors')}
+        title={t('apps.installedMcp')}
         to={
           visibility === 'private'
-            ? `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?visibility=private`
-            : MARKETPLACE_INSTALLED_CONNECTORS_PATH
+            ? `${MARKETPLACE_INSTALLED_MCP_PATH}?visibility=private`
+            : MARKETPLACE_INSTALLED_MCP_PATH
         }
       >
-        <SectionTitle>{t('catalog.installed')}</SectionTitle>
+        <SectionTitle>{t('apps.installedMcp')}</SectionTitle>
       </WorkspaceLink>
       <SkillListVariantProvider value={'nav'}>
         <SkillList
           installedOnly
           selectedIdentifier={selectedIdentifier}
-          viewMode={'connector'}
+          viewMode={'mcp'}
           visibility={visibility}
           onSelect={handleSelect}
         />

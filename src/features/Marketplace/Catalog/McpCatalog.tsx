@@ -1,12 +1,10 @@
 'use client';
 
-import { Avatar, Icon, Segmented } from '@lobehub/ui';
+import { Avatar, Icon } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import * as stylex from '@stylexjs/stylex';
-import { ShieldCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -29,7 +27,7 @@ import { type DiscoverMcpItem, McpCategory, type McpQueryParams, McpSorts } from
 
 import CatalogViewTabs from '../CatalogViewTabs';
 import { buildInstalledDetailPath } from '../InstalledNav';
-import { MARKETPLACE_CONNECTOR_PATH, MARKETPLACE_MCP_PATH } from '../paths';
+import { MARKETPLACE_MCP_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
 import DiscoverCatalogHeader from './DiscoverCatalogHeader';
@@ -43,7 +41,6 @@ import {
 } from './sections';
 import { catalogStyles } from './styles';
 import { useCatalogDetailNavigate } from './useCatalogDetailNavigate';
-import { useCatalogIntegrations } from './useCatalogIntegrations';
 
 const McpCatalogRow = memo<{ item: DiscoverMcpItem }>(({ item }) => {
   const { description, icon, identifier, name } = item;
@@ -70,7 +67,7 @@ const McpCatalogRow = memo<{ item: DiscoverMcpItem }>(({ item }) => {
       if (legacy) {
         navigate(
           buildInstalledDetailPath(
-            'connector',
+            'mcp',
             identifier,
             legacy.type === 'customPlugin' ? 'mcp-connector' : 'plugin',
           ),
@@ -83,7 +80,7 @@ const McpCatalogRow = memo<{ item: DiscoverMcpItem }>(({ item }) => {
       const connector = installs.find((item) => item.visibility !== 'private') ?? installs[0];
       if (connector) {
         navigate(
-          buildInstalledDetailPath('connector', identifier, 'mcp-connector', connector.visibility),
+          buildInstalledDetailPath('mcp', identifier, 'mcp-connector', connector.visibility),
         );
         return;
       }
@@ -147,7 +144,7 @@ const McpCatalogGroup = ({ category, count, eager, label, q }: McpGroup) => {
       label={label}
       loading={!data}
       sectionRef={sectionRef}
-      to={buildCatalogListUrl(MARKETPLACE_CONNECTOR_PATH, { category, q, source: 'public' })}
+      to={buildCatalogListUrl(MARKETPLACE_MCP_PATH, { category, q })}
       onRetry={() => void mutate()}
     >
       {data?.items.slice(0, CATALOG_SECTION_SIZE).map((item) => (
@@ -225,7 +222,7 @@ const McpCatalogList = ({
           <Pagination
             currentPage={data.currentPage}
             pageSize={data.pageSize}
-            path={MARKETPLACE_CONNECTOR_PATH}
+            path={MARKETPLACE_MCP_PATH}
             total={data.totalCount}
           />
         )
@@ -239,100 +236,38 @@ const McpCatalogList = ({
   );
 };
 
-const VerifiedConnectorList = ({ q }: { q?: string }) => {
-  const { t } = useTranslation('discover');
-  const { t: ts } = useTranslation('setting');
-  const rows = useCatalogIntegrations(q);
-  const [useFetchConnectors, initialized] = useToolStore((s) => [
-    s.useFetchConnectors,
-    s.isConnectorsInit,
-  ]);
-  const connections = useFetchConnectors(true);
-
-  return (
-    <CatalogListView
-      error={connections.error}
-      hasData={initialized || rows.length > 0}
-      isEmpty={rows.length === 0}
-      loading={connections.isLoading}
-      empty={
-        <McpEmpty
-          description={q ? ts('connectorMarket.empty.search', { keyword: q }) : undefined}
-          search={Boolean(q)}
-          title={q ? undefined : t('catalog.noVerifiedConnectors')}
-        />
-      }
-      onRetry={() => void connections.mutate()}
-    >
-      {rows}
-    </CatalogListView>
-  );
-};
-
 const PublicConnectorList = ({ group, query }: { group: boolean; query: McpQueryParams }) => {
   useFetchInstalledPlugins();
   return group ? <McpCatalogList query={query} /> : <McpCatalogGroups q={query.q} />;
 };
 
-const ConnectorCatalog = () => {
+const McpCatalog = () => {
   const { t } = useTranslation('discover');
-  const { group, source, ...query } = useQuery() as McpQueryParams & {
-    group?: string;
-    source?: string;
-  };
-  const [, setParams] = useSearchParams();
+  const query = useQuery() as McpQueryParams;
   const { category, q, sort } = query;
   const categories = useMcpCategory();
-  // Existing category, sort and pagination links predate the source filter.
-  const isMarketGroup =
-    group !== 'integrations' && (isCatalogListView(query) || Boolean(query.connectionType));
-  const isPublic = isMarketGroup || source === 'public';
+  const isMarketGroup = isCatalogListView(query) || Boolean(query.connectionType);
   const title =
     categories.find((item) => item.key === category)?.label ??
-    (sort === McpSorts.CreatedAt ? t('catalog.new') : t('catalog.allConnectors'));
+    (sort === McpSorts.CreatedAt ? t('catalog.new') : t('tab.mcp'));
 
   return (
     <div {...stylex.props(catalogStyles.frame, isMarketGroup && catalogStyles.groupFrame)}>
       <DiscoverCatalogHeader
-        kind={'connector'}
+        kind={'mcp'}
         group={
           isMarketGroup
             ? {
-                backTo: buildCatalogListUrl(MARKETPLACE_CONNECTOR_PATH, { q, source: 'public' }),
+                backTo: buildCatalogListUrl(MARKETPLACE_MCP_PATH, { q }),
                 title,
               }
             : undefined
         }
-        titleExtra={
-          !isMarketGroup && (
-            <Segmented<'verified' | 'public'>
-              value={isPublic ? 'public' : 'verified'}
-              options={[
-                {
-                  icon: <Icon icon={ShieldCheck} size={16} />,
-                  label: t('catalog.verified'),
-                  value: 'verified',
-                },
-                { label: t('catalog.public'), value: 'public' },
-              ]}
-              onChange={(next) => {
-                const params = new URLSearchParams();
-                if (q) params.set('q', q);
-                if (next === 'public') params.set('source', 'public');
-                setParams(params);
-              }}
-            />
-          )
-        }
       />
-      <CatalogViewTabs active={'discover'} kind={'connector'} />
-      {isPublic ? (
-        <PublicConnectorList group={isMarketGroup} query={query} />
-      ) : (
-        <VerifiedConnectorList q={q} />
-      )}
+      <CatalogViewTabs active={'discover'} kind={'mcp'} />
+      <PublicConnectorList group={isMarketGroup} query={query} />
     </div>
   );
 };
 
-export default ConnectorCatalog;
+export default McpCatalog;

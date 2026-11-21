@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Blocks, Bot } from 'lucide-react';
+import { Blocks, Bot, Cable } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,8 +21,7 @@ export const useNav = () => {
   const activeKey = useMemo(() => {
     const section = getMarketplaceSubPath(location.pathname)?.split('/')[0];
     // MCP and legacy plugin details belong to Connectors.
-    if (section === DiscoverTab.Mcp || section === DiscoverTab.Plugins)
-      return MARKETPLACE_CONNECTOR_TAB;
+    if (section === DiscoverTab.Plugins) return DiscoverTab.Mcp;
     return section;
   }, [location.pathname]);
 
@@ -30,8 +29,13 @@ export const useNav = () => {
     () => [
       {
         icon: <Icon icon={Blocks} size={ICON_SIZE} />,
-        key: MARKETPLACE_CONNECTOR_TAB,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.connector')}</div>,
+        key: 'app',
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.apps')}</div>,
+      },
+      {
+        icon: <Icon icon={Cable} size={ICON_SIZE} />,
+        key: DiscoverTab.Mcp,
+        label: t('tab.mcp'),
       },
       {
         icon: <Icon icon={SkillsIcon} size={ICON_SIZE} />,

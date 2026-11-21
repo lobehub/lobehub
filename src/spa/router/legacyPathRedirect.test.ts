@@ -14,7 +14,11 @@ import {
   buildLegacyRedirectPath,
   LegacyPathRedirect,
 } from './legacyPathRedirect';
-import { legacyCommunityRoutes, marketplaceIndexRoute } from './marketplaceRoutes';
+import {
+  legacyCommunityRoutes,
+  legacyConnectorCatalogRoute,
+  marketplaceIndexRoute,
+} from './marketplaceRoutes';
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -39,9 +43,9 @@ const renderAt = (url: string, serverConfigInit = true) => {
   const shared = [
     ...legacyCommunityRoutes,
     // The real tree has static `marketplace/<section>` routes that outrank the workspace ones.
-    { children: [marketplaceIndexRoute], path: 'marketplace' },
+    { children: [marketplaceIndexRoute, legacyConnectorCatalogRoute], path: 'marketplace' },
     { element: currentUrl, path: 'marketplace/*' },
-    { element: currentUrl, path: 'marketplace/connector' },
+    { element: currentUrl, path: 'marketplace/app' },
     { element: currentUrl, path: 'marketplace/agent' },
     { element: currentUrl, path: 'marketplace/agent/:slug' },
     {
@@ -102,7 +106,7 @@ describe('buildLegacyRedirectPath', () => {
 
 describe('legacy URL redirects', () => {
   it.each([
-    [true, '/acme/marketplace/connector?q=developer#results'],
+    [true, '/acme/marketplace/app?q=developer#results'],
     [false, '/acme/marketplace/connector/installed?q=developer#results'],
   ] as const)(
     'opens the original bookmark directly after loading showMarket=%s',
@@ -136,13 +140,19 @@ describe('legacy URL redirects', () => {
       '/acme/settings/connector?open=mcp-connector%3Amwe',
       '/acme/marketplace/connector/installed?open=mcp-connector%3Amwe',
     ],
+    ['/marketplace/connector?q=slack', '/marketplace/app?q=slack'],
+    [
+      '/acme/marketplace/connector?source=public&q=git#list',
+      '/acme/marketplace/mcp?source=public&q=git#list',
+    ],
+    ['/marketplace/connector?category=search', '/marketplace/mcp?category=search'],
     // `/community` became `/marketplace`.
-    ['/marketplace', '/marketplace/connector'],
-    ['/community', '/marketplace/connector'],
+    ['/marketplace', '/marketplace/app'],
+    ['/community', '/marketplace/app'],
     ['/community/skill?category=dev&page=2', '/marketplace/skill?category=dev&page=2'],
     ['/community/mcp/notion', '/marketplace/mcp/notion'],
-    ['/acme/community', '/acme/marketplace/connector'],
-    ['/acme/marketplace?q=developer#results', '/acme/marketplace/connector?q=developer#results'],
+    ['/acme/community', '/acme/marketplace/app'],
+    ['/acme/marketplace?q=developer#results', '/acme/marketplace/app?q=developer#results'],
     ['/acme/community/agent/some-agent#top', '/acme/marketplace/agent/some-agent#top'],
     ['/community/agent', '/marketplace/agent'],
     ['/community/agent/some-agent', '/marketplace/agent/some-agent'],

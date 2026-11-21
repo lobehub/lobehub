@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMobileSelection } from '@/features/Settings/skill/mobileSelection';
-
 import { buildGithubConnectorPath, isGithubConnector } from './home';
 
 const query = (path: string) => new URLSearchParams(path.split('?')[1]);
@@ -10,11 +8,7 @@ describe('buildGithubConnectorPath', () => {
   it('opens the GitHub connector in the Marketplace', () => {
     const path = buildGithubConnectorPath();
 
-    expect(path.startsWith('/marketplace/connector/installed?')).toBe(true);
-    expect(parseMobileSelection(query(path).get('open'))).toEqual({
-      identifier: 'github',
-      type: 'lobehub-connector',
-    });
+    expect(path).toBe('/marketplace/app/github');
   });
 
   it('carries the install result over from the old page', () => {
@@ -27,9 +21,7 @@ describe('buildGithubConnectorPath', () => {
 
   it('drops anything else in the old query', () => {
     expect(query(buildGithubConnectorPath('?open=plugin:evil&foo=1')).get('foo')).toBeNull();
-    expect(query(buildGithubConnectorPath('?open=plugin:evil')).get('open')).toBe(
-      'lobehub-connector:github',
-    );
+    expect(query(buildGithubConnectorPath('?open=plugin:evil')).get('open')).toBeNull();
   });
 });
 

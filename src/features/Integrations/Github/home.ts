@@ -1,8 +1,4 @@
-import { MARKETPLACE_INSTALLED_CONNECTORS_PATH } from '@/features/Marketplace/paths';
-import {
-  encodeMobileSelection,
-  MOBILE_SELECTION_PARAM,
-} from '@/features/Settings/skill/mobileSelection';
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
 
 const GITHUB_CONNECTOR_ID = 'github';
 
@@ -18,15 +14,11 @@ export const isGithubConnector = (identifier: string) => identifier === GITHUB_C
  */
 export const buildGithubConnectorPath = (search = ''): string => {
   const source = new URLSearchParams(search);
-  const params = new URLSearchParams({
-    [MOBILE_SELECTION_PARAM]: encodeMobileSelection({
-      identifier: GITHUB_CONNECTOR_ID,
-      type: 'lobehub-connector',
-    }),
-  });
+  const params = new URLSearchParams();
   for (const key of GITHUB_INSTALL_RESULT_PARAMS) {
     const value = source.get(key);
     if (value) params.set(key, value);
   }
-  return `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?${params}`;
+  const path = marketplaceAppPath(GITHUB_CONNECTOR_ID);
+  return params.size ? `${path}?${params}` : path;
 };

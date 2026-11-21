@@ -4,10 +4,11 @@ import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 const { installedList, activeLocation } = vi.hoisted(() => ({
-  activeLocation: { pathname: '/acme/marketplace/connector/installed', search: '' },
+  activeLocation: { pathname: '/acme/marketplace/mcp/installed', search: '' },
   installedList: vi.fn(() => null),
 }));
 vi.mock('@/features/Settings/skill/features/SkillList', () => ({ default: installedList }));
+vi.mock('./Apps/ConnectedAppNav', () => ({ default: () => null }));
 vi.mock('@/hooks/useActiveLocation', () => ({ useActiveLocation: () => activeLocation }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => 'ws_1',
@@ -77,7 +78,7 @@ describe('installed connector collection link', () => {
   it.each([
     ['/acme/marketplace/connector', '', ''],
     [
-      '/acme/marketplace/connector/installed',
+      '/acme/marketplace/mcp/installed',
       '?open=mcp-connector%3Aexample&visibility=private',
       '?visibility=private',
     ],
@@ -90,7 +91,7 @@ describe('installed connector collection link', () => {
       });
       const view = render(createElement(RouterProvider, { router }));
       const link = view.getByRole('link', { name: /installed/i });
-      const expectedPath = '/acme/marketplace/connector/installed';
+      const expectedPath = '/acme/marketplace/mcp/installed';
       expect(link.getAttribute('href')).toBe(expectedPath + expectedSearch);
       fireEvent.click(link);
       expect(router.state.location.pathname + router.state.location.search).toBe(

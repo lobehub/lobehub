@@ -10,19 +10,22 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import {
-  MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_APPS_PATH,
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  MARKETPLACE_INSTALLED_MCP_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
+  MARKETPLACE_MCP_PATH,
   MARKETPLACE_SKILL_PATH,
 } from './paths';
 import { pillTabClassNames } from './pillTabs';
 
 export type CatalogView = 'discover' | 'installed';
-export type CatalogKind = 'connector' | 'skill';
+export type CatalogKind = 'connector' | 'mcp' | 'skill';
 
 export const CATALOG_VIEW_PATHS: Record<CatalogKind, Record<CatalogView, string>> = {
+  mcp: { discover: MARKETPLACE_MCP_PATH, installed: MARKETPLACE_INSTALLED_MCP_PATH },
   connector: {
-    discover: MARKETPLACE_CONNECTOR_PATH,
+    discover: MARKETPLACE_APPS_PATH,
     installed: MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   },
   skill: {
@@ -45,16 +48,7 @@ interface CatalogViewTabsProps {
   kind: CatalogKind;
 }
 
-/**
- * Switches a Marketplace entry between its public catalog (Discover) and its
- * management page (Installed): Skills (`/marketplace/skill[/installed]`) and
- * Connectors, which merges the MCP catalog with the connector manager
- * (`/marketplace/connector[/installed]`).
- * With the market disabled only the installed view exists, so no tabs render.
- * Desktop has no tabs either: the sidebar lists the installed items under the
- * Skills / Connectors entries (Codex Customize), so only mobile, which has no
- * sidebar, switches views here.
- */
+/** The mobile catalog switcher. Desktop collections have dedicated sidebar links. */
 const CatalogViewTabs = memo<CatalogViewTabsProps>(({ active, inset, kind }) => {
   const { t } = useTranslation('discover');
   const navigate = useWorkspaceAwareNavigate();
