@@ -13,6 +13,7 @@ import {
   type EnvFinding,
   mergeEnvFindings,
   parseEnvReads,
+  settleFallbackGroups,
   strongerRequirement,
 } from './parseEnvReads';
 
@@ -199,6 +200,8 @@ export const scanSkillFiles = (files: SkillPackageFile[]): SkillRequirements => 
       }
     }
   }
+
+  settleFallbackGroups(findings);
 
   const toUsage = (name: string): SkillEnvVarUsage => {
     const found = findings.get(name);

@@ -9,6 +9,8 @@ export interface EnvFinding {
   alternatives: string[];
   /** A bare shell `$NAME`, which may be a local variable rather than the environment */
   bare?: boolean;
+  /** Read in fallback groups that differ, so no single group is known to be enough */
+  conflictingGroups?: boolean;
   /** The fallback value; `null` when one exists but is not a literal in this file */
   defaultValue: string | null;
   hasDefault: boolean;
@@ -356,15 +358,47 @@ const RANK: Record<SkillEnvRequirement, number> = {
   unknown: 0,
 };
 
-/** The strongest requirement wins when a variable is read in several places. */
+const sameNames = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((name) => b.includes(name));
+
+/**
+ * The strongest requirement wins when a variable is read in several places.
+ * Two different fallback groups cannot be merged: with `A or B` and `A or C`,
+ * B alone does not satisfy the second read, so the requirement becomes unknown.
+ */
 export const mergeEnvFindings = (a: EnvFinding, b: EnvFinding): EnvFinding => {
   const winner = RANK[b.requirement] > RANK[a.requirement] ? b : a;
-  return {
-    ...winner,
-    alternatives:
-      winner.requirement === 'one_of' ? [...new Set([...a.alternatives, ...b.alternatives])] : [],
-    bare: a.bare && b.bare,
-  };
+  const conflictingGroups =
+    a.conflictingGroups ||
+    b.conflictingGroups ||
+    (a.requirement === 'one_of' &&
+      b.requirement === 'one_of' &&
+      !sameNames(a.alternatives, b.alternatives));
+
+  if (conflictingGroups && winner.requirement !== 'required') {
+    return {
+      alternatives: [],
+      bare: a.bare && b.bare,
+      conflictingGroups: true,
+      defaultValue: null,
+      hasDefault: false,
+      name: a.name,
+      requirement: 'unknown',
+    };
+  }
+  return { ...winner, bare: a.bare && b.bare, conflictingGroups };
+};
+
+/** A group that includes a variable with conflicting groups no longer means "any one is enough". */
+export const settleFallbackGroups = (findings: Map<string, EnvFinding>) => {
+  for (const [name, finding] of findings) {
+    if (
+      finding.requirement === 'one_of' &&
+      finding.alternatives.some((alternative) => findings.get(alternative)?.conflictingGroups)
+    ) {
+      findings.set(name, { ...finding, alternatives: [], requirement: 'unknown' });
+    }
+  }
 };
 
 export const strongerRequirement = (a: SkillEnvRequirement, b: SkillEnvRequirement) =>

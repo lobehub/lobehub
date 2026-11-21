@@ -299,6 +299,33 @@ describe('scanSkillFiles', () => {
     });
   });
 
+  it('does not merge different fallback groups into "any one is enough"', () => {
+    const { credentials, requiresApiKey } = scanSkillFiles([
+      {
+        content: [
+          'x = os.getenv("A_API_KEY") or os.getenv("B_API_KEY")',
+          'y = os.getenv("A_API_KEY") or os.getenv("C_API_KEY")',
+          'p = os.getenv("P_TOKEN") or os.getenv("Q_TOKEN")',
+          'q = os.getenv("Q_TOKEN") or os.getenv("P_TOKEN")',
+        ].join('\n'),
+        path: 'scripts/a.py',
+      },
+    ]);
+    const need = Object.fromEntries(
+      credentials.map((c) => [c.name, [c.requirement, c.alternatives]]),
+    );
+
+    expect(requiresApiKey).toBe(true);
+    expect(need).toEqual({
+      A_API_KEY: ['unknown', []],
+      B_API_KEY: ['unknown', []],
+      C_API_KEY: ['unknown', []],
+      // The same group read in another order is still one group.
+      P_TOKEN: ['one_of', ['Q_TOKEN']],
+      Q_TOKEN: ['one_of', ['P_TOKEN']],
+    });
+  });
+
   it('keeps a strict read required when it comes first in a chain', () => {
     const { credentials, settings } = scanSkillFiles([
       {
