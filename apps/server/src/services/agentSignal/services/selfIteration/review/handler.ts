@@ -12,6 +12,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AGENT_SIGNAL_DEFAULTS } from '../../../constants';
 import { defineSourceHandler } from '../../../runtime/middleware';
 import { enqueueSelfIterationRun } from '../dispatch/enqueueSelfIterationRun';
+import { resolveSelfIterationResponseLanguage } from '../dispatch/resolveResponseLanguage';
 import { buildNightlyReviewSourceId, ReviewRunStatus } from '../types';
 import type { CollectNightlyReviewContextInput, NightlyReviewContext } from './collect';
 
@@ -110,6 +111,13 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
    * @default builtin agent default
    */
   maxSteps?: number;
+  /**
+   * Resolves the owner's response language for user-visible run output.
+   * Overridable for tests.
+   *
+   * @default reads the user's `responseLanguage` setting
+   */
+  resolveResponseLanguage?: typeof resolveSelfIterationResponseLanguage;
   /** Workspace id, threaded so the enqueued run targets the correct workspace. */
   workspaceId?: string;
 }
@@ -350,10 +358,14 @@ export const createNightlyReviewSourceHandler = (
           };
         }
 
+        const responseLanguage = await (
+          deps.resolveResponseLanguage ?? resolveSelfIterationResponseLanguage
+        )(deps.db, payload.userId);
         const prompt = createAgentSignalSelfIterationPrompt({
           agentId: payload.agentId,
           context,
           mode: 'review',
+          responseLanguage,
           sourceId: source.sourceId,
           userId: payload.userId,
           window: {

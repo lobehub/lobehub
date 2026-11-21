@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicPermission } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, PaginationQuerySchema } from './common.type';
 
 // ==================== Permission Query Types ====================
 
@@ -62,3 +63,29 @@ export const UpdatePermissionRequestSchema = CreatePermissionRequestSchema.parti
 export const PermissionIdParamSchema = z.object({
   id: z.string().length(16, 'Permission ID must be 16 characters'),
 });
+
+// ==================== Response Schemas ====================
+
+/** `PUBLIC_PERMISSION_FIELDS` projection of an `rbac_permissions` row. */
+export const PermissionSchema = z
+  .object({
+    category: z.string(),
+    code: z.string(),
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    id: z.string(),
+    isActive: z.boolean(),
+    name: z.string(),
+    updatedAt: dateTimeSchema,
+  })
+  .strict()
+  .meta({ id: 'Permission' });
+
+export const PermissionListSchema = z
+  .object({
+    ...pageInfoShape,
+    permissions: z.array(PermissionSchema),
+    ...totalShape,
+  })
+  .strict()
+  .meta({ id: 'PermissionList' });

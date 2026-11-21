@@ -2,9 +2,9 @@ import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import {
   type ActionIconGroupEvent,
   type ActionIconGroupItemType,
-  type GenericItemType,
+  type DropdownItem,
 } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
@@ -55,8 +55,6 @@ export const useChatItemContextMenu = ({
   inPortalThread,
   topic,
 }: UseChatItemContextMenuProps) => {
-  const contextMenuMode = useUserStore(userGeneralSettingsSelectors.contextMenuMode);
-
   const { t } = useTranslation('common');
   const { allowed: canCreateContent } = usePermission('create_content');
   const { allowed: canEditContent } = usePermission('edit_own_content');
@@ -354,7 +352,7 @@ export const useChatItemContextMenu = ({
     [handleAction],
   );
 
-  const contextMenuItems = useMemo<GenericItemType[]>(() => {
+  const contextMenuItems = useMemo<DropdownItem[]>(() => {
     if (!menuItems) return [];
     return menuItems.filter(Boolean).map((item) => {
       if ('type' in item && item.type === 'divider') return { type: 'divider' as const };
@@ -384,10 +382,6 @@ export const useChatItemContextMenu = ({
 
   const handleContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      if (contextMenuMode === 'disabled') {
-        return;
-      }
-
       if (editing) {
         return;
       }
@@ -425,7 +419,7 @@ export const useChatItemContextMenu = ({
 
       showContextMenu(contextMenuItems);
     },
-    [contextMenuItems, contextMenuMode, editing],
+    [contextMenuItems, editing],
   );
 
   return {

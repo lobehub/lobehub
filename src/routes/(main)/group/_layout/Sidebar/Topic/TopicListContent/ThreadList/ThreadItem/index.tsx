@@ -1,5 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Icon } from '@lobehub/ui';
 import { CornerDownRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
@@ -11,6 +10,7 @@ import Actions from './Actions';
 import { useThreadItemDropdownMenu } from './useDropdownMenu';
 
 export interface ThreadItemProps {
+  deletable?: boolean;
   id: string;
   index: number;
   isSubagent?: boolean;
@@ -19,7 +19,7 @@ export interface ThreadItemProps {
 
 const SUBAGENT_PADDING_INLINE_START = 32;
 
-const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
+const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, deletable }) => {
   const activeThreadId = useChatStore((s) => s.activeThreadId);
 
   const { navigateToThread, isInAgentSubRoute } = useThreadNavigation();
@@ -29,6 +29,7 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
   }, [id, navigateToThread]);
 
   const dropdownMenu = useThreadItemDropdownMenu({
+    deletable,
     id,
     title,
   });

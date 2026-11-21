@@ -1,3 +1,5 @@
+import { verifyTextEvidenceTypes } from '@lobechat/const/verify';
+
 /**
  * What the review predictor could NOT look at.
  *
@@ -14,7 +16,7 @@
 
 /** Media a still frame can carry a judgement about — mirrors the predictor. */
 const IMAGE_TYPES = new Set(['gif', 'screenshot']);
-const TEXT_TYPES = new Set(['dom_snapshot', 'markdown', 'text', 'transcript']);
+const TEXT_TYPES = verifyTextEvidenceTypes;
 
 export interface WithheldEvidenceInput {
   /** Visual rows actually attached to the request, after the frame cap. */

@@ -1,0 +1,126 @@
+import type {
+  ChannelDetail,
+  ChannelJoinableItem,
+  ChannelListItem,
+  ChannelVisibility,
+  ShareVisitorConversation,
+  ShareVisitorTopicGroup,
+} from '@lobechat/types';
+
+import { lambdaClient } from '@/libs/trpc/client';
+
+export interface ChannelAgentSelection {
+  agentId: string;
+  description?: string;
+  deviceId?: string;
+  name?: string;
+  workingDirectory?: string;
+}
+
+/** The fields of a stored reply strategy this client edits; any others are written back as read. */
+export type ChannelWakeConfig = Record<string, unknown> & {
+  customInstructions?: string;
+  customInstructionsEnabled?: boolean;
+  duties?: Record<string, unknown> & { text?: string };
+  enabled?: boolean;
+  pace?: 'active' | 'balanced' | 'calm' | 'custom';
+};
+
+export interface ChannelViewParams {
+  before?: number;
+  channelId: string;
+  threadId?: string | null;
+}
+
+class ChannelService {
+  archive = (channelId: string) => lambdaClient.channel.archive.mutate({ channelId });
+  unarchive = (channelId: string) => lambdaClient.channel.unarchive.mutate({ channelId });
+  archiveThread = (channelId: string, threadId: string) =>
+    lambdaClient.channel.archiveThread.mutate({ channelId, threadId });
+  unarchiveThread = (channelId: string, threadId: string) =>
+    lambdaClient.channel.unarchiveThread.mutate({ channelId, threadId });
+  agentEnvironment = async (channelId: string, memberId: string) =>
+    (await lambdaClient.channel.agentEnvironment.query({ channelId, memberId })).data;
+  updateAgentEnvironment = (
+    channelId: string,
+    memberId: string,
+    environment: Pick<ChannelAgentSelection, 'deviceId' | 'workingDirectory'>,
+  ) => lambdaClient.channel.updateAgentEnvironment.mutate({ channelId, environment, memberId });
+  wakeConfig = async (channelId: string) =>
+    (await lambdaClient.channel.wakeConfig.query({ channelId })).data;
+  /** Replaces the Channel's whole reply strategy; `null` returns it to the defaults. */
+  updateWakeConfig = (channelId: string, wake: ChannelWakeConfig | null) =>
+    lambdaClient.channel.updateWakeConfig.mutate({ channelId, wake });
+  rename = (channelId: string, title: string) =>
+    lambdaClient.channel.rename.mutate({ channelId, title });
+  updateVisibility = (channelId: string, visibility: ChannelVisibility) =>
+    lambdaClient.channel.updateVisibility.mutate({ channelId, visibility });
+  /** Public Channels in the active workspace the caller has not joined. */
+  listJoinable = async (search: string): Promise<ChannelJoinableItem[]> =>
+    (await lambdaClient.channel.listJoinable.query({ search })).data;
+  join = (channelId: string) => lambdaClient.channel.join.mutate({ channelId });
+  addUser = (channelId: string, userId: string) =>
+    lambdaClient.channel.addUser.mutate({ channelId, userId });
+  /** Without a Channel, the people a new Channel in the active workspace can start with. */
+  userCandidates = async (channelId: string | undefined, search: string) =>
+    (await lambdaClient.channel.userCandidates.query({ channelId, search })).data;
+  /** In a project Channel, `joinProject` adds an Agent from outside to the project first. */
+  addAgent = (channelId: string, agent: ChannelAgentSelection, joinProject?: boolean) =>
+    lambdaClient.channel.addAgent.mutate({ agent, channelId, joinProject });
+  removeMember = (channelId: string, memberId: string) =>
+    lambdaClient.channel.removeMember.mutate({ channelId, memberId });
+  leave = (channelId: string) => lambdaClient.channel.leave.mutate({ channelId });
+  create = (input: {
+    agents: ChannelAgentSelection[];
+    joinProject?: boolean;
+    projectId?: string;
+    title: string;
+    userIds?: string[];
+  }) => lambdaClient.channel.create.mutate(input);
+  createGroupFromDirect = (input: {
+    agents: ChannelAgentSelection[];
+    channelId: string;
+    title: string;
+    userIds: string[];
+  }) => lambdaClient.channel.createGroupFromDirect.mutate(input);
+  /** The caller's direct Channel with an Agent, opened if missing; null when it cannot answer there. */
+  openDirect = async (input: { agentId: string }) =>
+    (await lambdaClient.channel.openDirect.mutate(input)).data;
+  /** The caller's direct Channel with another person's shared Agent, from its share id or handle. */
+  openShared = async (input: { share: string }) =>
+    (await lambdaClient.channel.openShared.mutate(input)).data;
+  /** Visitors' conversations with the caller's shared Agent, when its share lets the owner read them. */
+  shareVisitors = async (agentId: string): Promise<ShareVisitorConversation[]> =>
+    (await lambdaClient.channel.shareVisitors.query({ agentId })).data;
+  /** The run topics of those conversations, grouped by visitor. */
+  shareVisitorTopics = async (agentId: string): Promise<ShareVisitorTopicGroup[]> =>
+    (await lambdaClient.channel.shareVisitorTopics.query({ agentId })).data;
+  /** A visitor's run topic with its transcript, read-only for the Agent's owner. */
+  shareVisitorTopic = async (topicId: string) =>
+    (await lambdaClient.channel.shareVisitorTopic.query({ topicId })).data;
+  detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
+    (await lambdaClient.channel.detail.query(params)).data;
+  list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;
+  markRead = (channelId: string, sequence: number) =>
+    lambdaClient.channel.markRead.mutate({ channelId, sequence });
+  remove = (channelId: string) => lambdaClient.channel.remove.mutate({ channelId });
+  removeThread = (channelId: string, threadId: string) =>
+    lambdaClient.channel.removeThread.mutate({ channelId, threadId });
+  send = (input: {
+    channelId: string;
+    content: string;
+    fileIds?: string[];
+    mentions: string[];
+    requestKey: string;
+    replyToId?: string;
+    rootMessageId?: string;
+    threadId?: string | null;
+  }) => lambdaClient.channel.send.mutate(input);
+  stop = (channelId: string, scope: { jobId: string } | { threadId: string | null }) =>
+    lambdaClient.channel.stop.mutate({ channelId, scope });
+}
+
+export const channelService = new ChannelService();
+
+/** A workspace member who can still be invited into a Channel. */
+export type ChannelPersonOption = Awaited<ReturnType<typeof channelService.userCandidates>>[number];

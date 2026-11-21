@@ -181,13 +181,15 @@ export function registerWidgetCommand(program: Command) {
     .option('--runtime <runtime>', `Runtime (${WIDGET_RUNTIMES.join(', ')})`)
     .option('--output-type <type>', `Printed JSON shape (${WIDGET_OUTPUT_TYPES.join(', ')})`)
     .option('--manifest <json>', 'Manifest JSON: env, network, schedule, metric, timeoutMs')
-    .option('--view <json>', 'View hints JSON: chart, columns, limit')
+    .option('--view <json>', 'View JSON: chart, columns, limit, layout, surface, html')
+    .option('--html-file <path>', "Read view.html (the card's own sandboxed HTML) from a file")
     .option('--note <text>', 'One line on what changed')
     .option('--json [fields]', 'Output JSON')
     .action(
       async (
         widgetId: string,
         options: {
+          htmlFile?: string;
           json?: boolean | string;
           manifest?: string;
           note?: string;
@@ -217,13 +219,16 @@ export function registerWidgetCommand(program: Command) {
           return fail(`--output-type must be one of: ${WIDGET_OUTPUT_TYPES.join(', ')}`);
         }
 
+        const view = parseJsonOption(options.view, '--view') ?? base?.view;
+        const html = options.htmlFile ? await readFile(options.htmlFile, 'utf8') : undefined;
+
         const { data } = await client.widget.saveDraft.mutate({
           changeNote: options.note,
           manifest: (parseJsonOption(options.manifest, '--manifest') ?? base?.manifest) as any,
           outputType: outputType as WidgetOutputType,
           runtime: runtime as WidgetRuntime,
           script,
-          view: (parseJsonOption(options.view, '--view') ?? base?.view) as any,
+          view: (html === undefined ? view : { ...view, html }) as any,
           widgetId,
         });
         if (options.json !== undefined) return outputJson(data, options.json);

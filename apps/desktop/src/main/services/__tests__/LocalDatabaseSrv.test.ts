@@ -28,6 +28,11 @@ describe('LocalDatabaseService', () => {
     await service.set('first', 'scope-b::1', 'first-3');
     await service.set('second', 'scope-a::1', 'second-1');
 
+    await expect(service.listCollections()).resolves.toEqual([
+      { entryCount: 3, name: 'first' },
+      { entryCount: 1, name: 'second' },
+    ]);
+
     await expect(service.entriesByPrefix('first', 'scope-a::')).resolves.toEqual([
       { key: 'scope-a::1', value: 'first-1' },
       { key: 'scope-a::2', value: 'first-2' },
@@ -39,6 +44,10 @@ describe('LocalDatabaseService', () => {
       { key: 'scope-b::1', value: 'first-3' },
     ]);
     await expect(service.get('second', 'scope-a::1')).resolves.toBe('second-1');
+    await expect(service.listCollections()).resolves.toEqual([
+      { entryCount: 1, name: 'first' },
+      { entryCount: 1, name: 'second' },
+    ]);
   });
 
   it('preserves keys when collection names contain key-like delimiters', async () => {
@@ -50,6 +59,37 @@ describe('LocalDatabaseService', () => {
     ]);
     await expect(service.entriesByPrefix('cache', '1:scope::')).resolves.toEqual([
       { key: '1:scope::1', value: 'second' },
+    ]);
+  });
+
+  it('lists, counts, searches and groups keys without reading values', async () => {
+    await service.batch([
+      { collection: 'cache', key: 'replica:topicList:v1:user:Agent_1', type: 'set', value: 'a' },
+      { collection: 'cache', key: 'replica:topicList:v1:user:agent_2', type: 'set', value: 'b' },
+      { collection: 'cache', key: 'replica:agentDetail:v1:user:agent_1', type: 'set', value: 'c' },
+      { collection: 'cache', key: 'plain', type: 'set', value: 'd' },
+      { collection: 'other', key: 'replica:topicList:v1:user:agent_1', type: 'set', value: 'e' },
+    ]);
+
+    await expect(service.keysByPrefix('cache', '', { limit: 2 })).resolves.toEqual({
+      keys: ['plain', 'replica:agentDetail:v1:user:agent_1'],
+      total: 4,
+    });
+    await expect(service.keysByPrefix('cache', 'replica:topicList:')).resolves.toEqual({
+      keys: ['replica:topicList:v1:user:Agent_1', 'replica:topicList:v1:user:agent_2'],
+      total: 2,
+    });
+    await expect(service.keysByPrefix('cache', '', { search: ' AGENT_1 ' })).resolves.toEqual({
+      keys: ['replica:agentDetail:v1:user:agent_1', 'replica:topicList:v1:user:Agent_1'],
+      total: 2,
+    });
+    await expect(service.keysByPrefix('cache', '', { search: 'cache' })).resolves.toEqual({
+      keys: [],
+      total: 0,
+    });
+    await expect(service.keyGroupsByPrefix('cache', 'replica:', ':')).resolves.toEqual([
+      { entryCount: 1, name: 'agentDetail' },
+      { entryCount: 2, name: 'topicList' },
     ]);
   });
 

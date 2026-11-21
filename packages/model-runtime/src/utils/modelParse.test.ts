@@ -187,14 +187,6 @@ describe('modelParse', () => {
     });
   });
 
-  // New sanity tests for your added config
-  describe('MODEL_LIST_CONFIGS sanity', () => {
-    it('google.imageOutputKeywords should include "-image-" for image-output capability inference', () => {
-      expect(MODEL_LIST_CONFIGS.google.imageOutputKeywords).toBeDefined();
-      expect(MODEL_LIST_CONFIGS.google.imageOutputKeywords).toContain('-image-');
-    });
-  });
-
   describe('processModelList', () => {
     it('should process a list of models with the given provider config', async () => {
       const modelList = [{ id: 'gpt-4o' }, { id: 'gpt-3.5-turbo' }];

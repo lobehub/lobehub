@@ -1,8 +1,8 @@
+import type { UserMemoryExperienceInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryExperience } from '../../../schemas';
 import { userMemories, userMemoriesExperiences, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryExperienceModel } from '../experience';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryExperienceModel', () => {
   describe('create', () => {
     it('should create a new experience', async () => {
-      const experienceData: Omit<NewUserMemoryExperience, 'userId'> = {
+      const experienceData: Omit<UserMemoryExperienceInsert, 'userId'> = {
         type: 'lesson',
         situation: 'When debugging code',
         reasoning: 'Checking logs helps identify issues',
@@ -82,17 +82,13 @@ describe('UserMemoryExperienceModel', () => {
       ]);
     });
 
-    it('should return experiences for current user only', async () => {
+    it('returns current user experiences newest first', async () => {
       const result = await experienceModel.query();
 
       expect(result).toHaveLength(2);
       expect(result.every((e) => e.userId === userId)).toBe(true);
-    });
 
-    it('should order by createdAt desc', async () => {
-      const result = await experienceModel.query();
-
-      expect(result[0].id).toBe('experience-2'); // Most recent first
+      expect(result[0].id).toBe('experience-2');
       expect(result[1].id).toBe('experience-1');
     });
 
@@ -101,13 +97,6 @@ describe('UserMemoryExperienceModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('experience-2');
-    });
-
-    it('should not return other users experiences', async () => {
-      const result = await experienceModel.query();
-
-      const otherExperience = result.find((e) => e.id === 'other-experience');
-      expect(otherExperience).toBeUndefined();
     });
   });
 
@@ -396,13 +385,16 @@ describe('UserMemoryExperienceModel', () => {
       ]);
     });
 
-    it('should return paginated list with default parameters', async () => {
+    it('returns the default experience page within the user scope', async () => {
       const result = await experienceModel.queryList();
 
       expect(result.items).toHaveLength(3);
       expect(result.page).toBe(1);
       expect(result.pageSize).toBe(20);
       expect(result.total).toBe(3);
+
+      const otherExperience = result.items.find((e) => e.id === 'other-list-exp');
+      expect(otherExperience).toBeUndefined();
     });
 
     it('should return correct page and pageSize', async () => {
@@ -537,13 +529,6 @@ describe('UserMemoryExperienceModel', () => {
       expect(result.items[0].id).toBe('list-exp-2'); // 0.9
       expect(result.items[1].id).toBe('list-exp-1'); // 0.8
       expect(result.items[2].id).toBe('list-exp-3'); // 0.7
-    });
-
-    it('should not return other users experiences', async () => {
-      const result = await experienceModel.queryList();
-
-      const otherExperience = result.items.find((e) => e.id === 'other-list-exp');
-      expect(otherExperience).toBeUndefined();
     });
 
     it('should return correct fields structure', async () => {

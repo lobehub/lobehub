@@ -1,25 +1,26 @@
 'use client';
 
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
 import {
   Accordion,
   ActionIcon,
-  Avatar,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   Input,
   InputNumber,
   Select,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
@@ -30,11 +31,6 @@ const DEFAULT_TIMEOUT_MINUTES = 30;
 const MAX_TIMEOUT_MINUTES = 240;
 
 const styles = createStaticStyles(({ css }) => ({
-  agentSelect: css`
-    .ant-select-content-value {
-      height: 22px !important;
-    }
-  `,
   hint: css`
     display: inline-block;
     margin-block-start: 4px;
@@ -147,9 +143,12 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       allAgents.map((agent) => ({
         label: (
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <Avatar
+            <AgentAvatar
+              agentId={agent.id}
               avatar={agent.avatar || undefined}
               background={agent.backgroundColor || undefined}
+              name={agent.title || undefined}
+              shape={'circle'}
               size={20}
               title={agent.title || ''}
             />
@@ -186,11 +185,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
         const timeoutMinutes = values.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES;
         const k = values.k ?? 1;
         const run = await createRun({
-          config: {
-            k,
-            maxSteps,
-            timeout: timeoutMinutes * 60_000,
-          },
+          config: { k, maxSteps, timeout: timeoutMinutes * 60_000 },
           datasetId: (isDatasetMode ? datasetId : values.datasetId)!,
           experimentId,
           name: values.name,
@@ -268,7 +263,6 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
         <Select
           allowClear
           showSearch
-          className={styles.agentSelect}
           loading={loadingAgents}
           options={agentOptions}
           placeholder={t('run.create.agent.placeholder')}

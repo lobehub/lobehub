@@ -5,6 +5,7 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
 
 import { didToolMutateWorkView, workService } from '@/services/work';
@@ -19,7 +20,7 @@ const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/search': 0.001,
 };
 
-const CANCELLED_CONTENT = 'Tool execution was cancelled by user.';
+export const TOOL_CANCELLED_CONTENT = 'Tool execution was cancelled by user.';
 
 /** Client tool adapter backed by optimistic messages and local tool executors. */
 export class ClientToolTransport implements ToolTransport {
@@ -45,7 +46,9 @@ export class ClientToolTransport implements ToolTransport {
     const opContext = rootOperation.context;
     const messages = store.dbMessagesMap[this.messageKey] ?? [];
     const existingToolMessage = context.reuseExistingMessage
-      ? messages.find((message) => message.id === context.parentMessageId)
+      ? messages.find(
+          (message) => message.id === (context.toolMessageId ?? context.parentMessageId),
+        )
       : undefined;
     const assistantMessage =
       messages.find(
@@ -94,7 +97,7 @@ export class ClientToolTransport implements ToolTransport {
 
     try {
       const toolMessageId = context.reuseExistingMessage
-        ? context.parentMessageId
+        ? (context.toolMessageId ?? context.parentMessageId)
         : await this.createToolMessage({
             assistantGroupId: assistantMessage?.groupId ?? undefined,
             call,
@@ -125,7 +128,12 @@ export class ClientToolTransport implements ToolTransport {
         rawResult = await store.internal_invokeDifferentTypePlugin(
           toolMessageId,
           call,
-          context.stepContext,
+          call.identifier === LobeActivatorIdentifier
+            ? {
+                ...context.stepContext,
+                discoverableToolIds: Object.keys(context.effectiveManifestMap),
+              }
+            : context.stepContext,
         );
       } finally {
         // Drain the Work-registration intent stashed during tool execution in a
@@ -286,7 +294,7 @@ export class ClientToolTransport implements ToolTransport {
     return {
       attempts: 0,
       interrupted: true,
-      result: { content: CANCELLED_CONTENT, success: false },
+      result: { content: TOOL_CANCELLED_CONTENT, success: false },
       resultPersisted: true,
       toolMessageId,
     };
@@ -305,7 +313,7 @@ export class ClientToolTransport implements ToolTransport {
   private async markMessageCancelled(messageId: string, operationId: string) {
     const store = this.get();
     await Promise.all([
-      store.optimisticUpdateMessageContent(messageId, CANCELLED_CONTENT, undefined, {
+      store.optimisticUpdateMessageContent(messageId, TOOL_CANCELLED_CONTENT, undefined, {
         operationId,
       }),
       store.optimisticUpdateMessagePlugin(

@@ -226,6 +226,26 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     platform: 'darwin' as const,
   };
 
+  const createAgentConfig = (agencyConfig: Record<string, unknown>) => ({
+    agencyConfig,
+    chatConfig: {},
+    files: [],
+    id: 'agent-1',
+    knowledgeBases: [],
+    model: 'gpt-4',
+    plugins: [],
+    provider: 'openai',
+    systemRole: 'You are a helpful assistant',
+  });
+
+  const createOwnerBotContext = () => ({
+    applicationId: 'app-1',
+    isOwner: true,
+    platform: 'discord',
+    platformThreadId: 'discord:guild-1:channel-1',
+    senderExternalUserId: 'owner-id',
+  });
+
   // Override the agent's agencyConfig and rebuild the service. Auto-activation
   // is now exclusive to `executionTarget: 'auto'` — the default (`local`) never
   // grabs a device — so the auto-activation specs opt in explicitly.
@@ -233,17 +253,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     const { AgentService } = await import('@/server/services/agent');
     vi.mocked(AgentService).mockImplementation(function () {
       return {
-        getAgentConfig: vi.fn().mockResolvedValue({
-          agencyConfig,
-          chatConfig: {},
-          files: [],
-          id: 'agent-1',
-          knowledgeBases: [],
-          model: 'gpt-4',
-          plugins: [],
-          provider: 'openai',
-          systemRole: 'You are a helpful assistant',
-        }),
+        getAgentConfig: vi.fn().mockResolvedValue(createAgentConfig(agencyConfig)),
       } as any;
     });
     service = new AiAgentService(mockDb, userId);
@@ -257,13 +267,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -279,13 +283,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -301,13 +299,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -316,26 +308,19 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBeUndefined();
     });
 
-    it('should NOT auto-activate the single online device by default (executionTarget unset → local)', async () => {
-      // The default mode never grabs a device — only explicit `auto` does.
+    it('should auto-activate the single online device by default (executionTarget unset → auto)', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
-      await useAgencyConfig({}); // unset executionTarget → default `local`
+      await useAgencyConfig({}); // unset executionTarget → default `auto`
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
-      expect(createOpArgs.activeDeviceId).toBeUndefined();
+      expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
   });
 
@@ -362,7 +347,8 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     // local-system system prompt's {{workingDirectory}} / {{hostname}}
     // placeholders resolve instead of reaching the LLM as literals. Multi-device
     // users still pick explicitly (the model selects via the remote-device
-    // tool). The default mode never auto-activates.
+    // tool). An unset target defaults to `auto`; an explicit `local` never
+    // auto-activates.
     it('should auto-activate the only online device (executionTarget: auto)', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
@@ -406,10 +392,24 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBeUndefined();
     });
 
-    it('should NOT auto-activate the single online device by default (unset → local)', async () => {
+    it('should auto-activate the single online device by default (unset → auto)', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
-      await useAgencyConfig({}); // unset executionTarget → default `local`
+      await useAgencyConfig({}); // unset executionTarget → default `auto`
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'List my files',
+      });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('device-001');
+    });
+
+    it('should NOT auto-activate the single online device for an explicit local target', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await useAgencyConfig({ executionTarget: 'local' });
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -426,17 +426,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig,
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi.fn().mockResolvedValue(createAgentConfig(agencyConfig)),
         } as any;
       });
       service = new AiAgentService(mockDb, userId);
@@ -486,17 +476,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-001' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-001' })),
         } as any;
       });
 
@@ -519,17 +501,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-001' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-001' })),
         } as any;
       });
 
@@ -636,17 +610,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-002' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-002' })),
         } as any;
       });
 
@@ -689,6 +655,71 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).not.toBe('device-002');
       expect(createOpArgs.activeDeviceId).toBe('device-001');
+    });
+
+    // An unset target is the same default as `auto`, so it must not resurrect a
+    // stale topic device either: the default agent re-picks the single online
+    // device instead of staying unrouted on the offline one.
+    it('should not reuse topic boundDeviceId for an unset target either', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      topicMock.findById.mockResolvedValue({ metadata: { boundDeviceId: 'device-002' } });
+      await useAgencyConfig({});
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        prompt: 'Run a command',
+      });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('device-001');
+    });
+
+    // An explicit device on the request is a promise to the caller, so the new
+    // topic records that the binding was pinned rather than auto-picked — a
+    // later turn on an `auto` agent then stays on it instead of choosing
+    // whichever machine happens to be online.
+    it('should pin an explicitly requested device on the new topic metadata', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await useAgencyConfig({ executionTarget: 'auto' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        deviceId: 'device-001',
+        prompt: 'Run a command',
+      });
+
+      expect(topicMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            boundDeviceId: 'device-001',
+            deviceBindingPinned: true,
+          }),
+        }),
+        undefined,
+      );
+    });
+
+    // Same setup as the "not silently reused" spec above, except the topic
+    // records that the device was chosen explicitly. An `auto` agent must now
+    // honour it even though both machines are online.
+    it('should keep a pinned topic device on later turns for an auto agent', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      topicMock.findById.mockResolvedValue({
+        metadata: { boundDeviceId: 'device-002', deviceBindingPinned: true },
+      });
+      await useAgencyConfig({ executionTarget: 'auto' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        prompt: 'Run a command',
+      });
+
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
     });
 
     it('should keep explicit topic binding when the bound device is offline', async () => {
@@ -888,13 +919,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -982,13 +1007,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -1006,17 +1025,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-001' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-001' })),
         } as any;
       });
 
@@ -1054,13 +1065,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -1074,13 +1079,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 

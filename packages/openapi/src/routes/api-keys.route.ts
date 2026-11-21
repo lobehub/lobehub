@@ -1,18 +1,26 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ApiKeyController } from '../controllers/api-key.controller';
+import {
+  LEGACY_ARRAY_LIST_DESCRIPTION,
+  LegacyArrayListQuerySchema,
+} from '../helpers/legacy-array-list';
+import { paginatedListSchema } from '../helpers/pagination';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import { requireWorkspaceRoleWhenScoped } from '../middleware/workspace';
 import {
   ApiKeyIdParamSchema,
+  ApiKeySchema,
   CreateApiKeyRequestSchema,
+  CreatedApiKeySchema,
   UpdateApiKeyRequestSchema,
 } from '../types/api-key.type';
+import { DeletedResourceSchema } from '../types/common.type';
 
 const app = new Hono();
 
@@ -24,15 +32,28 @@ const requireWorkspaceAdmin = requireWorkspaceRoleWhenScoped('admin');
 
 app.get(
   '/',
-  describeRoute({ summary: 'List API keys', tags: ['api-keys'] }),
+  routeDoc({
+    data: paginatedListSchema(ApiKeySchema, { total: true }),
+    description: LEGACY_ARRAY_LIST_DESCRIPTION,
+    summary: 'List API keys',
+    tags: ['api-keys'],
+  }),
   requireAuth,
   requireWorkspaceAdmin,
   requireAnyPermission(getAllScopePermissions('API_KEY_READ')),
+  zValidator('query', LegacyArrayListQuerySchema),
   async (c) => new ApiKeyController().getApiKeys(c),
 );
 
 app.post(
   '/',
+  routeDoc({
+    data: CreatedApiKeySchema,
+    description: 'The plaintext key is returned only in this response.',
+    status: 201,
+    summary: 'Create an API key',
+    tags: ['api-keys'],
+  }),
   requireAuth,
   requireWorkspaceAdmin,
   requireAnyPermission(getAllScopePermissions('API_KEY_CREATE')),
@@ -42,6 +63,7 @@ app.post(
 
 app.get(
   '/:id',
+  routeDoc({ data: ApiKeySchema, errors: [404], summary: 'Get an API key', tags: ['api-keys'] }),
   requireAuth,
   requireWorkspaceAdmin,
   requireAnyPermission(getAllScopePermissions('API_KEY_READ')),
@@ -51,6 +73,12 @@ app.get(
 
 app.patch(
   '/:id',
+  routeDoc({
+    data: ApiKeySchema,
+    errors: [404],
+    summary: 'Update an API key',
+    tags: ['api-keys'],
+  }),
   requireAuth,
   requireWorkspaceAdmin,
   requireAnyPermission(getAllScopePermissions('API_KEY_UPDATE')),
@@ -61,6 +89,12 @@ app.patch(
 
 app.delete(
   '/:id',
+  routeDoc({
+    data: DeletedResourceSchema,
+    errors: [404],
+    summary: 'Delete an API key',
+    tags: ['api-keys'],
+  }),
   requireAuth,
   requireWorkspaceAdmin,
   requireAnyPermission(getAllScopePermissions('API_KEY_DELETE')),

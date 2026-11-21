@@ -83,6 +83,7 @@ const noop = vi.fn();
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      dbMessagesMap: {},
       operations: {},
       operationsByMessage: {},
 

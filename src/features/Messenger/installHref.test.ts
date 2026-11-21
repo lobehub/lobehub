@@ -3,9 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { resolveMessengerInstallHref } from './installHref';
 
 describe('resolveMessengerInstallHref', () => {
-  it('builds an absolute install URL against the app origin on web', () => {
+  it('keeps official cloud installs on the app login origin', () => {
     expect(resolveMessengerInstallHref('discord', 'https://lobehub.com')).toBe(
-      'https://lobehub.com/api/agent/messenger/discord/install',
+      'https://app.lobehub.com/api/agent/messenger/discord/install',
+    );
+    expect(resolveMessengerInstallHref('slack', 'https://lobehub.com/')).toBe(
+      'https://app.lobehub.com/api/agent/messenger/slack/install',
+    );
+  });
+
+  it('preserves the configured self-hosted install origin and path prefix', () => {
+    expect(resolveMessengerInstallHref('slack', 'https://chat.example.com/lobe/')).toBe(
+      'https://chat.example.com/lobe/api/agent/messenger/slack/install',
     );
   });
 

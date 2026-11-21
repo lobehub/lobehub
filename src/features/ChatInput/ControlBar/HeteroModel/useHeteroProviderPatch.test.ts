@@ -9,6 +9,13 @@ const state = vi.hoisted(() => ({
     activeTopicId: 'topic-a' as string | null,
     updateTopicHeteroPin: vi.fn(),
   },
+  /** `undefined`: the host publishes no topic; `null`: its conversation has none. */
+  composerTopicId: undefined as string | null | undefined,
+}));
+
+vi.mock('../../store', () => ({
+  useChatInputStore: (selector: (value: object) => unknown) =>
+    selector({ topicId: state.composerTopicId }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -24,6 +31,48 @@ describe('useHeteroProviderPatch', () => {
     state.agent.updateAgentConfigById.mockReset();
     state.chat.activeTopicId = 'topic-a';
     state.chat.updateTopicHeteroPin.mockReset();
+    state.composerTopicId = undefined;
+  });
+
+  // A side-by-side portal pane renders another topic while the main column's
+  // topic stays globally active.
+  it("pins the composer's own topic rather than the global active topic", async () => {
+    state.composerTopicId = 'topic-pane';
+    const { result } = renderHook(() =>
+      useHeteroProviderPatch({
+        agentId: 'agent-a',
+        enabled: true,
+        provider: { model: 'global-model', type: 'codex' },
+      }),
+    );
+
+    await act(() => result.current({ model: 'pane-model' }));
+
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-pane', {
+      effort: undefined,
+      model: 'pane-model',
+      provider: 'codex',
+    });
+  });
+
+  it('updates the Agent default when the composer conversation has no topic, even with an active topic', async () => {
+    state.composerTopicId = null;
+    const { result } = renderHook(() =>
+      useHeteroProviderPatch({
+        agentId: 'agent-a',
+        enabled: true,
+        provider: { model: 'global-model', type: 'cursor' },
+      }),
+    );
+
+    await act(() => result.current({ model: 'next-default' }));
+
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
+    expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
+      agencyConfig: {
+        heterogeneousProvider: { args: undefined, model: 'next-default' },
+      },
+    });
   });
 
   it('writes a model selection to the active topic without changing the Agent default', async () => {
@@ -64,7 +113,7 @@ describe('useHeteroProviderPatch', () => {
     expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
   });
 
-  it('keeps the remaining dimensions global when selecting a topic effort', async () => {
+  it('writes a speed selection to the active topic without changing the Agent default', async () => {
     const { result } = renderHook(() =>
       useHeteroProviderPatch({
         agentId: 'agent-a',
@@ -79,11 +128,25 @@ describe('useHeteroProviderPatch', () => {
       effort: 'medium',
       model: undefined,
       provider: 'codex',
+      speed: 'fast',
     });
+    expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('keeps the mode selection on the Agent default', async () => {
+    const { result } = renderHook(() =>
+      useHeteroProviderPatch({
+        agentId: 'agent-a',
+        enabled: true,
+        provider: { type: 'amp' },
+      }),
+    );
+
+    await act(() => result.current({ mode: 'high' }));
+
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
-      agencyConfig: {
-        heterogeneousProvider: { args: undefined, speed: 'fast' },
-      },
+      agencyConfig: { heterogeneousProvider: expect.objectContaining({ mode: 'high' }) },
     });
   });
 

@@ -1,18 +1,20 @@
 'use client';
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Select,
   Tag,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { CircleCheck, Lock, Users } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -22,12 +24,14 @@ import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOpt
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { densityVars } from '@/styles/densityVars';
 
 import { refreshDeviceList } from './const';
+import { getDeviceActionErrorMessage } from './deviceActionError';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 24px;
   `,
   optionHint: css`
@@ -194,8 +198,8 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
       setStep('done');
     } catch (error) {
       // Server messages (e.g. PRECONDITION_FAILED when the device dropped
-      // offline mid-flow) are user-facing — surface them verbatim.
-      toast.error(`${target.name}: ${(error as Error).message}`);
+      // offline mid-flow) are user-facing; known refusals get localized copy.
+      toast.error(`${target.name}: ${getDeviceActionErrorMessage(error)}`);
     } finally {
       setSharing(false);
       setCanDismissByClickOutside?.(true);

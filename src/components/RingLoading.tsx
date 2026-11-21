@@ -1,4 +1,4 @@
-import { cssVar, cx } from 'antd-style';
+import { cssVar, cx } from '@lobehub/ui';
 import { type CSSProperties, type SVGProps } from 'react';
 
 interface RingLoadingIconProps extends SVGProps<SVGSVGElement> {

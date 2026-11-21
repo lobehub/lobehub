@@ -17,11 +17,80 @@ const log = debug('lobe-server:sandbox:workspace-files');
  */
 export interface SandboxStorageFileEntry {
   isDirectory: boolean;
+  /** A directory that is the top of a git checkout; absent where it is not. */
+  isGitRepository?: boolean;
   modifiedAt?: string;
   name: string;
   /** Relative to the workspace root. */
   path: string;
   size?: number;
+}
+
+/**
+ * What a drive's space goes to, in the categories the storage analysis sorts
+ * it into. `dependencies` and `cache` (caches and build output) can be
+ * regenerated; the rest cannot, and `environments` is the runtime's own
+ * snapshot store, deleted through the environment, never as files.
+ */
+export const SANDBOX_STORAGE_CATEGORIES = [
+  'dependencies',
+  'cache',
+  'archives',
+  'media',
+  'git',
+  'environments',
+  'other',
+] as const;
+
+export type SandboxStorageCategory = (typeof SANDBOX_STORAGE_CATEGORIES)[number];
+
+export interface SandboxStorageAnalysisItem {
+  bytes: number;
+  category: SandboxStorageCategory;
+  /** `environments` only: the stored environment (instance id) this is. */
+  environment?: string;
+  isDirectory: boolean;
+  /** Relative to the drive's root. */
+  path: string;
+  /** Deletable without asking: a dependency directory, a cache or build output. */
+  regenerable: boolean;
+}
+
+export interface SandboxStorageAnalysisResult {
+  categories: { bytes: number; category: SandboxStorageCategory; items: number }[];
+  items: SandboxStorageAnalysisItem[];
+  largestDirectories: { bytes: number; path: string }[];
+  largestFiles: { bytes: number; category: SandboxStorageCategory; path: string }[];
+  /** A delete since the scan could not be subtracted exactly; scan again for exact figures. */
+  stale?: boolean;
+  totalBytes: number;
+}
+
+export interface SandboxStorageAnalysis {
+  finishedAt?: string;
+  /** Snapshot so far while scanning; the final figures once `done`. */
+  result?: SandboxStorageAnalysisResult;
+  scannedBytes: number;
+  startedAt?: string;
+  /** `scanning`: this call advanced the scan; `running`: another call is advancing it. */
+  status: 'done' | 'running' | 'scanning';
+}
+
+export interface SandboxStorageDeleteResult {
+  deleted: string[];
+  /** Everything requested is gone or failed; otherwise call again with `pending`. */
+  done: boolean;
+  /** Paths the volume refused to remove (permissions, busy); the rest of the batch still ran. */
+  failed?: { message: string; path: string }[];
+  freedBytes: number;
+  missing: string[];
+  pending: string[];
+}
+
+export interface SandboxStorageExportResult {
+  contentType: string;
+  kind: 'directory' | 'file';
+  size: number;
 }
 
 export interface SandboxStorageFileList {
@@ -34,6 +103,11 @@ export interface SandboxStorageFileList {
 export interface SandboxStorageInfo {
   dir: string;
   key: string;
+  /**
+   * `public` or `member` for a workspace's drives, `personal` for an
+   * account's own. Absent from an execution plane that predates member drives.
+   */
+  kind?: 'member' | 'personal' | 'public';
   lastActiveAt: string | null;
   /**
    * Outcome of the most recent environment snapshot. Snapshots happen when a
@@ -46,6 +120,17 @@ export interface SandboxStorageInfo {
   status: 'active' | 'archived';
   usageBytes: number | null;
   usageCheckedAt: string | null;
+  /**
+   * Every drive in that pool with its stored figure, when the read asked for
+   * them (`withDrives`). Absent from an execution plane that predates it.
+   */
+  workspaceDrives?: { storageKey: string; usageBytes: number | null }[];
+  /**
+   * A workspace drive's pool: its public drive plus every member's personal
+   * one, which is the figure the quota is judged on. Absent for a personal
+   * account's drive.
+   */
+  workspaceUsageBytes?: number | null;
 }
 
 /**
@@ -215,6 +300,32 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
 
   return {
     /**
+     * Copy one file as it is, or one folder as a zip, to a presigned upload
+     * URL — read off the volume by the storage service itself, without a
+     * sandbox session. A refusal carries an `EXPORT_*` code; a deployment
+     * that cannot export answers 501 `EXPORT_UNAVAILABLE`, and one that
+     * predates the route answers 404 with no code.
+     */
+    exportFile: async (
+      params: {
+        fileOnly?: boolean;
+        hidden?: string[];
+        maxBytes?: number;
+        maxFiles?: number;
+        path: string;
+        uploadHeaders?: Record<string, string>;
+        uploadUrl: string;
+      },
+      options: { signal?: AbortSignal } = {},
+    ): Promise<SandboxStorageExportResult> =>
+      request(`${CURRENT_STORAGE}/export`, {
+        body: JSON.stringify(params),
+        signal: options.signal,
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    /**
      * Create a directory, parents included. Idempotent — an existing directory
      * is a success, so a picker can offer "new folder" without first proving
      * the name is free.
@@ -255,6 +366,41 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       });
     },
 
+    /**
+     * One step of the drive's space analysis: what takes the space, by
+     * category, with the largest files and folders. A large drive takes
+     * several steps — call again while `status` is not `done`. A finished
+     * analysis is reused for a while unless `restart`. Not quota gated, and
+     * no sandbox session: it is how an over-quota drive is emptied.
+     */
+    analyzeStorage: async (
+      params: RequestContext & { restart?: boolean; top?: number } = {},
+    ): Promise<SandboxStorageAnalysis> =>
+      request(`${CURRENT_STORAGE}/analysis`, {
+        body: JSON.stringify({ restart: params.restart, top: params.top, topicId: params.topicId }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    /**
+     * Delete several files or folders at once, for good. Not quota gated.
+     * With `regenerableOnly` the storage service refuses the whole call
+     * (`storage_paths_not_regenerable`) unless every path is a dependency
+     * directory, a cache or build output, or inside one.
+     */
+    deletePaths: async (
+      params: RequestContext & { paths: string[]; regenerableOnly?: boolean },
+    ): Promise<SandboxStorageDeleteResult> =>
+      request(`${CURRENT_STORAGE}/files/delete`, {
+        body: JSON.stringify({
+          paths: params.paths,
+          regenerableOnly: params.regenerableOnly,
+          topicId: params.topicId,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
     deleteFile: async (
       params: RequestContext & { path: string; recursive?: boolean },
     ): Promise<{ path: string }> => {
@@ -264,8 +410,31 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       return request(`${CURRENT_STORAGE}/file?${query.toString()}`, { method: 'DELETE' });
     },
 
-    getStorage: async (params: RequestContext = {}): Promise<SandboxStorageInfo> => {
+    /**
+     * Rename or move a file or folder. Never overwrites: an existing
+     * destination is refused with 409, and the drive's root cannot be renamed.
+     */
+    renameFile: async (
+      params: RequestContext & { newPath: string; path: string },
+    ): Promise<{ path: string }> =>
+      request(`${CURRENT_STORAGE}/rename`, {
+        body: JSON.stringify({
+          newPath: params.newPath,
+          path: params.path,
+          topicId: params.topicId,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    getStorage: async (
+      params: RequestContext & {
+        /** Also list every drive in a workspace pool with its figure, in this one read. */
+        withDrives?: boolean;
+      } = {},
+    ): Promise<SandboxStorageInfo> => {
       const query = withTopic(new URLSearchParams(), params);
+      if (params.withDrives) query.set('drives', 'true');
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
       return request(`${CURRENT_STORAGE}${suffix}`);
@@ -342,10 +511,43 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
      * packing. `stopped: false` means nothing held it. Control plane only —
      * stopping a sandbox never starts one.
      */
-    stopInstance: async (params: { name: string }): Promise<{ stopped: boolean }> =>
-      request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/stop`, {
-        method: 'POST',
-      }),
+    readStopTarget: async (params: {
+      name: string;
+    }): Promise<{ sessionId: string; topicId: string | null } | null> =>
+      request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/stop-target`),
+
+    prepareStop: async (params: {
+      expectedSessionId: string;
+      name: string;
+      operationIds: string[];
+    }): Promise<{ prepared: boolean }> => {
+      const query = new URLSearchParams({
+        expectedSessionId: params.expectedSessionId,
+        prepare: 'true',
+      });
+      for (const id of params.operationIds) query.append('operationId', id);
+      return request(
+        `${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/stop?${query}`,
+        { method: 'POST' },
+      );
+    },
+
+    stopInstance: async (params: {
+      expectedSessionId?: string;
+      name: string;
+      operationIds?: string[];
+    }): Promise<{ stopped: boolean }> => {
+      const query = new URLSearchParams();
+      if (params.expectedSessionId) query.set('expectedSessionId', params.expectedSessionId);
+      for (const id of params.operationIds ?? []) query.append('operationId', id);
+      const suffix = query.size ? `?${query.toString()}` : '';
+      return request(
+        `${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/stop${suffix}`,
+        {
+          method: 'POST',
+        },
+      );
+    },
 
     /**
      * Start building an environment from its specification.

@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
-import { topics } from '@/database/schemas';
+import { ThreadModel } from '@/database/models/thread';
+import { agentOperations, topics } from '@/database/schemas';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 
@@ -272,6 +273,79 @@ describe('AgentEvalRunService', () => {
       expect(mockInstance.interruptOperation).toHaveBeenCalledTimes(2);
       expect(mockInstance.interruptOperation).toHaveBeenCalledWith('op-111');
       expect(mockInstance.interruptOperation).toHaveBeenCalledWith('op-222');
+    });
+
+    it('interrupts the sub-agent operations an attempt forked, not the finished ones', async () => {
+      const { run, cases } = await setupMultiCaseRun([{ assistantOutput: null }]);
+
+      const runModel = new AgentEvalRunModel(serverDB, userId);
+      await runModel.update(run.id, { status: 'running' });
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      const rt = await runTopicModel.findByRunAndTestCase(run.id, cases[0].testCase.id);
+      await runTopicModel.updateByRunAndTopic(rt!.runId, rt!.topicId, {
+        evalResult: { operationId: 'op-parent', rubricScores: [] },
+        status: 'running',
+      });
+      // The attempt parked on a `callSubAgent` child; one child still runs,
+      // one already finished, and a stranger's child must stay untouched.
+      await serverDB.insert(agentOperations).values([
+        { id: 'op-parent', status: 'waiting_for_async_tool', userId },
+        { id: 'op-child-live', parentOperationId: 'op-parent', status: 'running', userId },
+        { id: 'op-child-done', parentOperationId: 'op-parent', status: 'done', userId },
+        { id: 'op-other', parentOperationId: 'op-elsewhere', status: 'running', userId },
+      ]);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.abortRun(run.id);
+
+      const mockInstance = vi.mocked(AgentRuntimeService).mock.results[0].value;
+      expect(mockInstance.interruptOperation).toHaveBeenCalledTimes(2);
+      expect(mockInstance.interruptOperation).toHaveBeenCalledWith('op-parent');
+      expect(mockInstance.interruptOperation).toHaveBeenCalledWith('op-child-live');
+    });
+
+    it('marks Stop before callbacks and interrupts every attempt root and open child', async () => {
+      const { run, cases } = await setupMultiCaseRun([{ assistantOutput: null }]);
+      const model = new AgentEvalRunTopicModel(serverDB, userId);
+      const topicId = cases[0].topic.id;
+      await model.updateByRunAndTopic(run.id, topicId, { status: 'running' });
+      const threadModel = new ThreadModel(serverDB, userId);
+      for (const id of ['one', 'two', 'three']) {
+        const thread = await threadModel.create({ topicId, type: 'eval' });
+        await threadModel.update(thread!.id, { metadata: { operationId: id } });
+        await serverDB.insert(agentOperations).values([
+          { id, status: 'running', userId },
+          { id: `${id}-child`, parentOperationId: id, status: 'waiting_for_async_tool', userId },
+          { id: `${id}-done`, parentOperationId: id, status: 'done', userId },
+        ]);
+      }
+      const observed: string[] = [];
+      vi.mocked(AgentRuntimeService).mockImplementationOnce(function () {
+        return {
+          interruptOperation: async (id: string) => {
+            const current = await model.findByRunAndTestCase(run.id, cases[0].testCase.id);
+            expect(current?.evalResult?.completionReason).toBe('aborted');
+            // A callback that races with interrupt is rejected by the DB predicate.
+            const late = await model.updateByRunAndTopic(run.id, topicId, {
+              status: 'passed',
+              passed: true,
+            });
+            expect(late).toBeUndefined();
+            observed.push(id);
+          },
+        } as any;
+      });
+      await new AgentEvalRunService(serverDB, userId).abortRun(run.id);
+      expect(observed.sort()).toEqual([
+        'one',
+        'one-child',
+        'three',
+        'three-child',
+        'two',
+        'two-child',
+      ]);
     });
 
     it('should skip interrupt for topics without operationId', async () => {

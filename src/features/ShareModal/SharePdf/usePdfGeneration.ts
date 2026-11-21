@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client/lambda';
 
-interface PdfGenerationParams {
+export interface PdfGenerationParams {
   content: string;
   sessionId: string;
   title: string;
@@ -21,42 +21,60 @@ export const usePdfGeneration = (): PdfGenerationState => {
   const [pdfData, setPdfData] = useState<string | null>(null);
   const [filename, setFilename] = useState<string>('chat-export.pdf');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const runningRef = useRef(false);
+  // Options can change while a render is in flight; only the newest request
+  // matters, so it waits here and replaces any request queued before it.
+  const pendingRef = useRef<PdfGenerationParams | null>(null);
+
+  useEffect(
+    () => () => {
+      pendingRef.current = null;
+    },
+    [],
+  );
 
   const exportPdfMutation = lambdaQuery.exporter.exportPdf.useMutation();
+  const { mutateAsync } = exportPdfMutation;
 
   const generatePdf = useCallback(
     async (params: PdfGenerationParams) => {
-      const { content, sessionId, title, topicId } = params;
+      pendingRef.current = params;
+      if (runningRef.current) return;
 
-      // Prevent multiple simultaneous requests only; allow user to re-generate
-      if (exportPdfMutation.isPending) return;
+      runningRef.current = true;
+      setLoading(true);
 
-      try {
-        setError(null);
-        setPdfData(null);
+      while (pendingRef.current) {
+        const next = pendingRef.current;
+        pendingRef.current = null;
 
-        const result = await exportPdfMutation.mutateAsync({
-          content,
-          sessionId,
-          title,
-          topicId,
-        });
+        try {
+          setError(null);
+          const result = await mutateAsync(next);
+          if (pendingRef.current) continue;
 
-        setPdfData(result.pdf);
-        setFilename(result.filename);
-      } catch (error) {
-        console.error('Failed to generate PDF:', error);
-        setError(error instanceof Error ? error.message : 'Failed to generate PDF');
+          setPdfData(result.pdf);
+          setFilename(result.filename);
+        } catch (error) {
+          if (pendingRef.current) continue;
+
+          console.error('Failed to generate PDF:', error);
+          setError(error instanceof Error ? error.message : 'Failed to generate PDF');
+        }
       }
+
+      runningRef.current = false;
+      setLoading(false);
     },
-    [exportPdfMutation.mutateAsync],
+    [mutateAsync],
   );
 
   const downloadPdf = useCallback(async () => {
     if (!pdfData) return;
 
     try {
-      // Convert base64 to blob
       const byteCharacters = atob(pdfData);
       const byteNumbers = Array.from({ length: byteCharacters.length }, (_, i) =>
         byteCharacters.charCodeAt(i),
@@ -64,7 +82,6 @@ export const usePdfGeneration = (): PdfGenerationState => {
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: 'application/pdf' });
 
-      // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -81,9 +98,9 @@ export const usePdfGeneration = (): PdfGenerationState => {
 
   return {
     downloadPdf,
-    error: error || (exportPdfMutation.error?.message ?? null),
+    error,
     generatePdf,
-    loading: exportPdfMutation.isPending,
+    loading,
     pdfData,
   };
 };

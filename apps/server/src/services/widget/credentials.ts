@@ -1,11 +1,29 @@
-import type { WidgetEnvRequirement } from '@lobechat/types';
+import { needsConnectorReauthorization, type WidgetEnvRequirement } from '@lobechat/types';
 
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
+import type { DecryptedConnectorLink } from '@/database/models/connectorLink';
 import type { ConnectorCredentials } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import {
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from '@/server/services/connector/links';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+} from '@/server/services/connector/tokens';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
+
+import {
+  buildMarketInjects,
+  createMarketPlaceholder,
+  isInjectHostAllowed,
+  isMarketOAuthConnector,
+  marketInjectTarget,
+} from './marketConnectorInject';
+import type { WidgetSandboxEgressInject } from './sandbox/types';
 
 /** Ownership columns of the widget whose script needs credentials. */
 export interface WidgetCredentialScope {
@@ -27,8 +45,19 @@ export interface MissingWidgetEnv {
   field?: string;
   /** The connector's headers, for a requirement that did not pick exactly one. */
   fields?: string[];
+  /** The header a Market connector's token is sent as. */
+  header?: string;
+  /** Inject hosts `manifest.network.allow` does not cover. */
+  hosts?: string[];
   name: string;
-  reason: 'ambiguous_field' | 'connector_not_connected' | 'no_source' | 'unknown_field';
+  reason:
+    | 'ambiguous_field'
+    | 'connector_not_connected'
+    | 'connector_without_secret'
+    | 'inject_host_not_allowed'
+    | 'no_inject_target'
+    | 'no_source'
+    | 'unknown_field';
 }
 
 export class MissingWidgetEnvError extends Error {
@@ -63,6 +92,15 @@ const describeMissing = (m: MissingWidgetEnv) => {
     }
     case 'connector_not_connected': {
       return `${m.name} (connect "${m.connector}" for this widget's agent or workspace)`;
+    }
+    case 'connector_without_secret': {
+      return `${m.name} (connector "${m.connector}" is connected but holds no secret a script can read; reconnect it with a token or API key)`;
+    }
+    case 'inject_host_not_allowed': {
+      return `${m.name} (connector "${m.connector}" is a LobeHub Market connector: its token is sent as the ${m.header} header to ${m.hosts?.join(', ')}; add ${m.hosts && m.hosts.length > 1 ? 'these hosts' : 'that host'} to manifest.network.allow)`;
+    }
+    case 'no_inject_target': {
+      return `${m.name} (connector "${m.connector}" is a LobeHub Market connector with no default API host; set manifest.env[].inject.host to the API host the script calls)`;
     }
     case 'ambiguous_field': {
       return `${m.name} (connector "${m.connector}" holds several headers; set "field" to one of: ${m.fields?.join(', ')})`;
@@ -124,6 +162,19 @@ export interface ResolveWidgetEnvOptions {
   connectorModel?: Pick<ConnectorModel, 'resolveByIdentifiers' | 'update'>;
   /** Injected for tests; defaults to the workspace's primary-owner check. */
   isWorkspaceOwner?: (userId: string, workspaceId: string) => Promise<boolean>;
+  /**
+   * Hosts the run may reach (`manifest.network.allow`). A Market connector's
+   * inject hosts must all be covered; the allowlist is never widened here,
+   * since network hosts are part of what the user approves.
+   */
+  networkAllow?: string[];
+}
+
+export interface ResolvedWidgetEnv {
+  /** Variables exposed to the script: local secrets and Market placeholders. */
+  env: Record<string, string>;
+  /** Credential headers the sandbox's egress proxy adds for Market connectors. */
+  inject: WidgetSandboxEgressInject[];
 }
 
 /**
@@ -155,6 +206,23 @@ const mayInject = async (
 };
 
 /**
+ * The OAuth account whose token a script may receive. A script can read and
+ * send its environment anywhere, so an account's token goes only to the member
+ * who authorized it, or to the workspace owner, who may use any workspace
+ * credential. Creating the connector does not make a teammate's account yours.
+ */
+const pickInjectableAccount = async (
+  connector: DecryptedConnector,
+  accounts: DecryptedConnectorLink[],
+  scope: WidgetCredentialScope,
+  isOwner: () => Promise<boolean>,
+): Promise<DecryptedConnectorLink | undefined> => {
+  const own = accounts.filter((account) => account.userId === scope.authorUserId);
+  if (own.length) return pickPrimaryLink(own);
+  return connector.workspaceId && (await isOwner()) ? pickPrimaryLink(accounts) : undefined;
+};
+
+/**
  * Resolve the environment a widget script declares in `manifest.env`.
  *
  * Credentials come from `user_connectors` through the same agent-aware chain
@@ -170,6 +238,13 @@ const mayInject = async (
  * connector may be injected is decided by the script's author (see
  * {@link mayInject}), not by who triggers the run.
  *
+ * LobeHub Market OAuth connectors keep their token in Market; the local row
+ * only proves the connection (and passes the same scope and author checks).
+ * For those the variable holds a per-run placeholder and an `inject` entry
+ * asks the sandbox's egress proxy to set the real token as a header on the
+ * provider's API hosts, so the secret never reaches the script or this server.
+ * A connector row holding a usable local secret keeps injecting it directly.
+ *
  * Throws `ForbiddenWidgetCredentialsError` when a declared connector resolves
  * to one the author may not read, and `MissingWidgetEnvError` listing every
  * required variable it could not fill; optional ones are left out.
@@ -179,9 +254,10 @@ export const resolveWidgetEnv = async (
   scope: WidgetCredentialScope,
   requirements: WidgetEnvRequirement[] | undefined,
   options: ResolveWidgetEnvOptions = {},
-): Promise<Record<string, string>> => {
+): Promise<ResolvedWidgetEnv> => {
   const env: Record<string, string> = {};
-  if (!requirements?.length) return env;
+  const inject: WidgetSandboxEgressInject[] = [];
+  if (!requirements?.length) return { env, inject };
 
   const connectorModel =
     options.connectorModel ??
@@ -196,7 +272,11 @@ export const resolveWidgetEnv = async (
     ...new Set(requirements.map((r) => r.connector).filter((c): c is string => !!c)),
   ];
   const resolved = identifiers.length
-    ? await connectorModel.resolveByIdentifiers(identifiers, scope.agentId ?? undefined)
+    ? // No topic: a widget renders for whoever views it, so it only ever
+      // resolves shared connectors, never a member's private one.
+      await connectorModel.resolveByIdentifiers(identifiers, {
+        agentId: scope.agentId ?? undefined,
+      })
     : [];
 
   const byIdentifier = new Map<string, DecryptedConnector>();
@@ -220,9 +300,22 @@ export const resolveWidgetEnv = async (
       : isWorkspacePrimaryOwner({ db, userId: scope.authorUserId, workspaceId: scope.workspaceId });
     return ownerCheck;
   };
+  const model = connectorModel as ConnectorModel;
+  const accountsByConnector = await loadConnectorLinksMap([...byIdentifier.values()], {
+    connectorModel: model,
+  });
   const forbidden: string[] = [];
+  const accountOf = new Map<string, DecryptedConnectorLink>();
   for (const connector of byIdentifier.values()) {
-    if (!(await mayInject(connector, scope, isOwner))) forbidden.push(connector.identifier);
+    if (!(await mayInject(connector, scope, isOwner))) {
+      forbidden.push(connector.identifier);
+      continue;
+    }
+    const accounts = accountsByConnector.get(connector.id) ?? [];
+    if (!accounts.length) continue;
+    const account = await pickInjectableAccount(connector, accounts, scope, isOwner);
+    if (account) accountOf.set(connector.id, account);
+    else forbidden.push(connector.identifier);
   }
   if (forbidden.length > 0) throw new ForbiddenWidgetCredentialsError(forbidden);
 
@@ -236,9 +329,17 @@ export const resolveWidgetEnv = async (
 
     let connector = byIdentifier.get(requirement.connector);
     if (connector) {
-      connector = await ensureFreshConnectorToken(connector, connectorModel as ConnectorModel);
+      const link = accountOf.get(connector.id);
+      // The refresh writes through the row's own scope (`tokens.refreshSlot`)
+      connector = link
+        ? withLinkCredentials(connector, await ensureFreshLinkToken(connector, link, model))
+        : await ensureFreshConnectorToken(connector, model);
     }
-    const selection = selectConnectorSecret(connector?.credentials ?? null, requirement.field);
+    const credentials = connector?.credentials ?? null;
+    const selection = selectConnectorSecret(
+      needsConnectorReauthorization(credentials) ? null : credentials,
+      requirement.field,
+    );
     if ('error' in selection) {
       // A manifest that does not pick one header is wrong whether or not the
       // variable is optional: report it rather than silently dropping it.
@@ -251,15 +352,53 @@ export const resolveWidgetEnv = async (
       });
     } else if (selection.secret) {
       env[requirement.name] = selection.secret;
+    } else if (connector && isMarketOAuthConnector(connector)) {
+      // A manifest that cannot route the token is wrong whether or not the
+      // variable is optional, like an ambiguous field above.
+      const target = marketInjectTarget(requirement);
+      if (!target) {
+        missing.push({
+          connector: requirement.connector,
+          name: requirement.name,
+          reason: 'no_inject_target',
+        });
+        continue;
+      }
+      const uncovered = target.hosts.filter(
+        (host) => !isInjectHostAllowed(host, options.networkAllow ?? []),
+      );
+      if (uncovered.length > 0) {
+        missing.push({
+          connector: requirement.connector,
+          header: target.header,
+          hosts: uncovered,
+          name: requirement.name,
+          reason: 'inject_host_not_allowed',
+        });
+        continue;
+      }
+      env[requirement.name] = createMarketPlaceholder();
+      inject.push(...buildMarketInjects(connector.identifier, target));
     } else if (required) {
       missing.push({
         connector: requirement.connector,
         name: requirement.name,
-        reason: 'connector_not_connected',
+        reason: connector ? 'connector_without_secret' : 'connector_not_connected',
       });
     }
   }
 
   if (missing.length > 0) throw new MissingWidgetEnvError(missing);
-  return env;
+  return { env, inject: dedupeInjects(inject) };
+};
+
+/** Two variables backed by one connector need its header set only once per host. */
+const dedupeInjects = (injects: WidgetSandboxEgressInject[]) => {
+  const seen = new Set<string>();
+  return injects.filter((entry) => {
+    const id = `${entry.host}\n${entry.header.toLowerCase()}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 };

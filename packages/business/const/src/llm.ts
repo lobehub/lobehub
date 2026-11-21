@@ -1,9 +1,25 @@
+/** Decision model selecting the Agents that reply in a channel. */
+export const DEFAULT_CHANNEL_ROUTING_MODEL = 'jev-1.14.0';
+export const DEFAULT_CHANNEL_ROUTING_PROVIDER = 'typesafe';
+
 export const DEFAULT_EMBEDDING_PROVIDER = 'openai';
 
 export const DEFAULT_MODEL = 'deepseek-v4-flash';
 export const DEFAULT_PROVIDER = 'deepseek';
 export const DEFAULT_MINI_MODEL = 'gpt-5.6-luna';
 export const DEFAULT_MINI_PROVIDER = 'openai';
+
+/**
+ * The model that scores "is this message talking to the bot?" before a bot joins a conversation
+ * nobody addressed to it. It sits on the path to a reply and has a 2s deadline, so it is a
+ * decision model: one pass over the input that answers typed questions with probabilities,
+ * instead of a chat model that generates JSON. The cloud build points it at its own Jev route.
+ * `engine: 'chat'` points it at a chat model (for example DeepSeek flash) when a deployment has
+ * no decision model.
+ */
+export const DEFAULT_BOT_WAKE_ENGINE: 'chat' | 'decision' = 'decision';
+export const DEFAULT_BOT_WAKE_MODEL = 'gpt-6-luna:decision';
+export const DEFAULT_BOT_WAKE_PROVIDER = 'openai';
 
 /**
  * The speech-to-text model that transcribes voice messages for runtimes that only take text
@@ -30,6 +46,20 @@ export const DEFAULT_ONBOARDING_PROVIDER = 'google';
  */
 export const DEFAULT_REVIEW_PREDICT_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_REVIEW_PREDICT_PROVIDER = 'google';
+
+/**
+ * The panel that arbitrates a builder's dispute that an Acceptance check itself
+ * is invalid. Three members from three vendors, so one model's blind spot cannot
+ * decide alone; the ruling is a majority vote. A member whose provider is not
+ * configured is replaced from the review model chain by a provider not yet
+ * seated, and a dispute without three distinct usable providers stays
+ * undecided (the check stands).
+ */
+export const DEFAULT_ACCEPTANCE_DISPUTE_PANEL: { model: string; provider: string }[] = [
+  { model: 'claude-sonnet-5', provider: 'anthropic' },
+  { model: 'gemini-3.8-flash', provider: 'google' },
+  { model: 'deepseek-v4-flash', provider: 'deepseek' },
+];
 
 /**
  * The model the Verify LobeHub LLM calls judge a deliverable with when neither

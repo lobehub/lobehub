@@ -11,6 +11,8 @@ export interface MenuOptions {
  * Based on Electron's ContextMenuParams
  */
 export interface ContextMenuData {
+  /** Whether the right-clicked element has a decoded image to copy (false for broken/loading images) */
+  hasImageContents?: boolean;
   /** Whether the context is editable (input, textarea, contenteditable) */
   isEditable?: boolean;
   /** URL of the link if right-clicked on a link */

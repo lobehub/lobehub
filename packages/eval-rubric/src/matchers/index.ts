@@ -11,6 +11,7 @@ import { matchLLMEq } from './llmEq';
 import { matchLLMRubric } from './llmRubric';
 import { matchNumeric } from './numeric';
 import { matchRegex } from './regex';
+import { matchRuleChecklist } from './ruleChecklist';
 import { matchStartsWith } from './startsWith';
 import type { MatchContext, MatchResult } from './types';
 
@@ -70,6 +71,10 @@ export const match = async (
 
     case 'llm-rubric': {
       return matchLLMRubric({ actual, context, expected, input, rubric });
+    }
+
+    case 'rule-checklist': {
+      return matchRuleChecklist({ actual, context, expected, input, rubric });
     }
 
     case 'json-schema': {

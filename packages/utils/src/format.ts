@@ -88,6 +88,23 @@ export const formatUsageValue = (number: number) => {
   return numeral(number).format('0,0');
 };
 
+/**
+ * Format a dollar amount as `$1,234.56`. Amounts below $1 keep up to 4 decimals, and a
+ * positive amount that would round to $0.0000 reads `<$0.0001` so it does not look free.
+ */
+export const formatUsd = (usd: number): string => {
+  if (!Number.isFinite(usd)) return '--';
+
+  const magnitude = Math.abs(usd);
+  if (magnitude > 0 && magnitude < 0.00005) return `${usd < 0 ? '-' : ''}<$0.0001`;
+
+  const formatted = new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: magnitude < 1 ? 4 : 2,
+    minimumFractionDigits: 2,
+  }).format(magnitude);
+  return `${usd < 0 ? '-' : ''}$${formatted}`;
+};
+
 export const formatTokenNumber = (num: number): string => {
   if (!num && num !== 0) return '--';
 

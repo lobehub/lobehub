@@ -54,14 +54,15 @@ describe('acceptancePurge', () => {
       .insert(verifyCheckResults)
       .values({ checkItemId: 'c1', userId, verifierType: 'agent', verifyRunId: run.id })
       .returning();
-    await serverDB.insert(verifyEvidence).values(
-      fileIds.map((fileId) => ({
-        checkResultId: result.id,
-        fileId,
-        type: 'screenshot' as const,
-        userId,
-      })),
-    );
+    if (fileIds.length > 0)
+      await serverDB.insert(verifyEvidence).values(
+        fileIds.map((fileId) => ({
+          checkResultId: result.id,
+          fileId,
+          type: 'screenshot' as const,
+          userId,
+        })),
+      );
     return run.id;
   };
 
@@ -248,6 +249,56 @@ describe('acceptancePurge', () => {
       .innerJoin(verifyCheckResults, eq(verifyCheckResults.id, verifyEvidence.checkResultId))
       .where(eq(verifyCheckResults.verifyRunId, otherRunId));
     expect(otherEvidence.map((row) => row.fileId)).toEqual([fileIds[2]]);
+  });
+
+  it('purges a terminal evidence’s artifact files unless another round still cites them', async () => {
+    const stdout = await seedFile({ fileHash: null, url: 'stdout.txt' });
+    const cast = await seedFile({ fileHash: null, url: 'session.cast' });
+    const shared = await seedFile({ fileHash: null, url: 'shared-stderr.txt' });
+    const terminal = (artifacts: Record<string, string>) => ({
+      terminal: {
+        artifacts: Object.fromEntries(
+          Object.entries(artifacts).map(([key, fileId]) => [key, { fileId }]),
+        ),
+      },
+    });
+    const resultOf = async (runId: string) =>
+      (await serverDB.query.verifyCheckResults.findFirst({
+        where: eq(verifyCheckResults.verifyRunId, runId),
+      }))!.id;
+
+    await serverDB.insert(verifyEvidence).values({
+      checkResultId: await resultOf(runIds[0]),
+      content: '$ ls',
+      metadata: terminal({ cast, stderr: shared, stdout }),
+      type: 'terminal',
+      userId,
+    });
+    const otherRunId = await seedRound(await seedAcceptance(), 1, []);
+    await serverDB.insert(verifyEvidence).values({
+      checkResultId: await resultOf(otherRunId),
+      content: '$ ls',
+      metadata: terminal({ stderr: shared }),
+      type: 'terminal',
+      userId,
+    });
+
+    await expect(
+      previewAcceptancePurge(serverDB, userId, undefined, [acceptanceId]),
+    ).resolves.toMatchObject({ fileCount: 5 });
+    await expect(
+      purgeAcceptance(serverDB, fileService, userId, undefined, acceptanceId),
+    ).resolves.toEqual({ deletedFiles: 5, deletedRuns: 2 });
+
+    expect(fileService.deleteFiles).toHaveBeenCalledWith(
+      expect.arrayContaining(['stdout.txt', 'session.cast']),
+    );
+    await expect(
+      serverDB.query.files.findMany({ where: inArray(files.id, [stdout, cast]) }),
+    ).resolves.toHaveLength(0);
+    await expect(
+      serverDB.query.files.findFirst({ where: eq(files.id, shared) }),
+    ).resolves.toBeDefined();
   });
 
   it('deletes rows but leaves storage alone when REMOVE_GLOBAL_FILE is off', async () => {

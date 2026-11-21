@@ -17,7 +17,7 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
+    "@lobehub/ui": "^6.0.4",
     "react": "^19"
   }
 }

@@ -1,14 +1,16 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Center,
+  cssVar,
+  Flexbox,
+  Icon,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

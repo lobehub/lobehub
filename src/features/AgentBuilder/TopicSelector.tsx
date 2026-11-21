@@ -1,17 +1,16 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, DropdownMenu, Flexbox } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useHeaderActionSize } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`
@@ -22,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   title: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -36,6 +35,7 @@ interface TopicSelectorProps {
 
 const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   // Fetch topics for the agent builder
   useFetchAgentChatTopics(agentId);
@@ -79,7 +79,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           type: 'checkbox',
         };
       }),
-    [topics, switchTopic, styles, activeTopicId],
+    [topics, switchTopic, activeTopicId],
   );
   const isEmpty = !topics || topics.length === 0;
 
@@ -99,7 +99,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           <ActionIcon
             disabled={disabled}
             icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSmallSize}
             title={t('actions.addNewTopic')}
             onClick={() => {
               if (disabled) return;
@@ -116,7 +116,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
             <ActionIcon
               disabled={disabled || isEmpty}
               icon={Clock3Icon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
             />
           </DropdownMenu>
         </>

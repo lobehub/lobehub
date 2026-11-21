@@ -1,5 +1,6 @@
 export * from './acceptanceReview';
 export * from './agentDocument';
+export * from './agentDocumentDrag';
 export * from './agentName';
 export * from './agentShare';
 export * from './apiKeyScope';

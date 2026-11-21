@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, responsive } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, responsive, Text } from '@lobehub/ui';
 import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +9,7 @@ import { TaskTemplateCard } from '@/features/RecommendTaskTemplates/TaskTemplate
 import { TaskTemplateCardSkeleton } from '@/features/RecommendTaskTemplates/TaskTemplateCardSkeleton';
 import { useDailyBriefRecommendationsUI } from '@/features/RecommendTaskTemplates/useDailyBriefRecommendationsUI';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { densityVars } from '@/styles/densityVars';
 
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 
@@ -20,7 +19,7 @@ const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     ${responsive.md} {
       grid-template-columns: 1fr;

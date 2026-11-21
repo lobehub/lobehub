@@ -1,10 +1,10 @@
 import { ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
 import {
   createOpenAICompatibleRuntime,
   transformResponseToStream,
-} from '../../core/openaiCompatibleFactory';
+} from '../../core/openaiCompatible';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const params = {

@@ -1,6 +1,5 @@
 import type { ChatTopic } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Icon, toast } from '@lobehub/ui';
 import {
   ArrowUpRightIcon,
   LinkIcon,

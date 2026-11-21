@@ -3,6 +3,8 @@
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
+
 import { buildSlackOpenBotUrl } from '../../constants';
 import {
   ConfirmCard,
@@ -69,9 +71,9 @@ const SlackBody = memo<SlackBodyProps>(
         blockingNotice={
           rebindBlocked
             ? {
-                ctaHref: '/settings/messenger/slack',
-                ctaLabel: t('verify.confirm.relink.manage'),
-                description: t('verify.confirm.relink.description', {
+                ctaHref: marketplaceAppPath('slack'),
+                ctaLabel: t('verify.confirm.relink.openApp'),
+                description: t('verify.confirm.relink.disconnectInMarketplace', {
                   account:
                     existingLink?.platformUsername ?? `ID ${existingLink?.platformUserId ?? ''}`,
                   platform: platformLabel,

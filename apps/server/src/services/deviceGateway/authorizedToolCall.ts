@@ -1,5 +1,9 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { DeviceToolCallResult } from '@lobechat/device-gateway-client';
+import type {
+  DeviceToolCallResult,
+  GatewayToolCallCompletion,
+} from '@lobechat/device-gateway-client';
+import type { DeviceClient } from '@lobechat/types';
 
 import { resolveDeviceDispatchAuthorizationFailure } from './dispatchAuthorization';
 import { deviceGateway } from './index';
@@ -18,7 +22,16 @@ import { deviceGateway } from './index';
  */
 export const executeAuthorizedDeviceToolCall = async (
   serverDB: LobeChatDatabase | undefined,
-  params: { deviceId: string; operationId?: string; userId: string; workspaceId?: string },
+  params: {
+    /** Device clients that may serve the call; see `deviceGateway.executeToolCall`. */
+    clientKinds?: DeviceClient[];
+    /** Lets the device report this call's final result later; see `buildShellCompletion`. */
+    completion?: GatewayToolCallCompletion;
+    deviceId: string;
+    operationId?: string;
+    userId: string;
+    workspaceId?: string;
+  },
   toolCall: { apiName: string; arguments: string; identifier: string },
   timeout?: number,
 ): Promise<DeviceToolCallResult> => {

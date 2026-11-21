@@ -19,7 +19,7 @@ export interface NotifyScheduledTaskFailedParams {
   /** Consecutive automation-tick failures including this one (schedule fuse). */
   consecutiveFailures?: number;
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`). Never
-   *  the raw error text — that stays in briefs/logs. */
+   *  the raw error text — that stays on the task and in logs. */
   errorCode?: string;
   operationId: string;
   /** True when this failure blew the fuse and auto-paused the task. */

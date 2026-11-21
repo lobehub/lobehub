@@ -7,6 +7,7 @@ import type {
   BrowserNavigateArgs,
   BrowserPressArgs,
   BrowserScrollArgs,
+  BrowserSetViewportArgs,
 } from '../../types';
 import { BrowserIdentifier } from '../../types';
 
@@ -18,6 +19,7 @@ const BrowserApiEnum = {
   readPage: 'readPage' as const,
   screenshot: 'screenshot' as const,
   scroll: 'scroll' as const,
+  setViewport: 'setViewport' as const,
   snapshot: 'snapshot' as const,
 };
 
@@ -144,6 +146,30 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       });
       if (!result.success) return this.failure(result.error ?? 'Key press failed');
       return this.success(`Pressed ${params.key}.`);
+    } catch (error) {
+      return this.errorResult(error);
+    }
+  };
+
+  setViewport = async (params: BrowserSetViewportArgs, ctx?: BuiltinToolContext) => {
+    try {
+      const { electronBrowserControlService } = await import('@/services/electron/browserControl');
+      const result = await electronBrowserControlService.setViewport({
+        height: params.height,
+        sessionId: this.sessionIdOf(ctx),
+        width: params.width,
+      });
+      if (!result.success) return this.failure(result.error ?? 'Setting the viewport failed');
+
+      if (params.width === undefined && params.height === undefined) {
+        return this.success('Viewport reset to the browser panel size.');
+      }
+      const scale = result.scale ?? 1;
+      const fitted =
+        scale < 1
+          ? ` The panel shows it at ${Math.round(scale * 100)}%, so screenshots come out at that scale.`
+          : '';
+      return this.success(`Viewport set to ${params.width}×${params.height}.${fitted}`);
     } catch (error) {
       return this.errorResult(error);
     }

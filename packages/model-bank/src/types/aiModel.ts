@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
+import {
+  type ModelParamsSchema,
+  type MusicModelParamsSchema,
+  type TTSModelParamsSchema,
+  type TTSVoice,
+  type VideoModelParamsSchema,
+} from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -21,6 +27,7 @@ export const AiModelTypeSchema = z.enum([
   'video',
   'text2music',
   'realtime',
+  'decision',
 ] as const);
 
 export type AiModelType = z.infer<typeof AiModelTypeSchema>;
@@ -170,13 +177,17 @@ export type PricingUnitName =
 
   // Video-based pricing units
   | 'videoInput'
-  | 'videoGeneration';
+  | 'videoGeneration'
+
+  // Music-based pricing units
+  | 'musicGeneration'; // for text-to-music models
 
 export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
   | 'millionCharacters' // per 1M characters
   | 'image' // per image
   | 'video' // per video
+  | 'song' // per generated song (music models)
   | 'megapixel' // per megapixel
   | 'second'; // per second
 
@@ -311,6 +322,12 @@ export interface AIBaseModelCard {
   generation?: string;
   id: string;
   /**
+   * Whether this card is listed by the vendor that makes the model, so its `pricing` is the
+   * official list price. Resellers that list another vendor's model (e.g. DeepSeek on Qwen)
+   * leave it unset. Unset also means "not checked yet", so treat it as unknown, not as false.
+   */
+  isOfficial?: boolean;
+  /**
    * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
    * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
    */
@@ -373,6 +390,7 @@ export interface AiModelReasoningConfig {
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  thinkingLevel5?: 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 export const AiModelReasoningConfigSchema = z.object({
@@ -404,6 +422,7 @@ export const AiModelReasoningConfigSchema = z.object({
   thinkingLevel2: z.enum(['low', 'high']).optional(),
   thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
   thinkingLevel4: z.enum(['minimal', 'high']).optional(),
+  thinkingLevel5: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
 });
 
 /**
@@ -451,6 +470,7 @@ export const MODEL_REASONING_PARAM_LEVELS: {
   thinkingLevel2: ['low', 'high'],
   thinkingLevel3: ['low', 'medium', 'high'],
   thinkingLevel4: ['minimal', 'high'],
+  thinkingLevel5: ['low', 'medium', 'high', 'xhigh'],
 };
 
 /**
@@ -489,6 +509,7 @@ export const MODEL_REASONING_PARAM_DEFAULTS: {
   thinkingLevel2: 'high',
   thinkingLevel3: 'high',
   thinkingLevel4: 'minimal',
+  thinkingLevel5: 'high',
 };
 
 export interface AiModelConfig {
@@ -551,6 +572,7 @@ export type ExtendParamsType =
   | 'thinkingLevel2'
   | 'thinkingLevel3'
   | 'thinkingLevel4'
+  | 'thinkingLevel5'
   | 'imageAspectRatio'
   | 'imageAspectRatio2'
   | 'imageResolution'
@@ -572,6 +594,11 @@ export interface AiModelSettings {
    */
   searchImpl?: ModelSearchImplementType;
   searchProvider?: string;
+  /**
+   * The user's default voice for a `tts` model, used when a speech request names no voice.
+   * Takes precedence over the card's `parameters.voice.default`.
+   */
+  ttsVoice?: string;
 }
 
 export const ExtendParamsTypeSchema = z.enum([
@@ -614,6 +641,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'thinkingLevel2',
   'thinkingLevel3',
   'thinkingLevel4',
+  'thinkingLevel5',
   'imageAspectRatio',
   'imageAspectRatio2',
   'imageResolution',
@@ -635,6 +663,7 @@ export const AiModelSettingsSchema = z.object({
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),
+  ttsVoice: z.string().optional(),
 });
 
 export interface AIChatModelCard extends AIBaseModelCard {
@@ -666,14 +695,47 @@ export interface AIVideoModelCard extends AIBaseModelCard {
   type: 'video';
 }
 
+export interface AIText2MusicModelCard extends AIBaseModelCard {
+  /**
+   * How many songs one request returns.
+   * Generation pre-creates this many result rows.
+   * @default 1
+   */
+  outputsPerRequest?: number;
+  /**
+   * Standard music parameters the model accepts and their allowed values.
+   */
+  parameters?: MusicModelParamsSchema;
+  pricing?: Pricing;
+  type: 'text2music';
+}
+
 export interface AITTSModelCard extends AIBaseModelCard {
+  /**
+   * Standard TTS parameters the model accepts and their allowed values.
+   */
+  parameters?: TTSModelParamsSchema;
   pricing?: Pricing;
   type: 'tts';
+  /**
+   * Voice catalog. `payload.voice` takes one of these ids.
+   */
+  voices?: TTSVoice[];
 }
 
 export interface AIASRModelCard extends AIBaseModelCard {
   pricing?: Pricing;
   type: 'asr';
+}
+
+/**
+ * Decision models answer caller-defined typed questions with calibrated probabilities
+ * instead of generating text, and are called through `decide` rather than `chat`.
+ * @see https://openrouter.ai/docs/guides/community/jev
+ */
+export interface AIDecisionModelCard extends AIBaseModelCard {
+  pricing?: Pricing;
+  type: 'decision';
 }
 
 export interface AIRealtimeModelCard extends AIBaseModelCard {
@@ -712,10 +774,14 @@ export interface AiFullModelCard extends AIBaseModelCard {
   displayName?: string;
   id: string;
   maxDimension?: number;
-  parameters?: ModelParamsSchema;
+  /** Songs returned per request, for `text2music` models. */
+  outputsPerRequest?: number;
+  /** Image generation params, standard TTS params for `tts`, or music params for `text2music`. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema | MusicModelParamsSchema;
   pricing?: Pricing;
   settings?: AiModelSettings;
   type: AiModelType;
+  voices?: TTSVoice[];
 }
 
 export interface LobeDefaultAiModelListItem extends AiFullModelCard {
@@ -762,6 +828,8 @@ export interface AiProviderModelListItem {
   source?: AiModelSourceType;
   type: AiModelType;
   visible?: boolean;
+  /** Voice catalog of a built-in `tts` model, carried over from its card. */
+  voices?: TTSVoice[];
 }
 
 // Update
@@ -840,7 +908,8 @@ export interface EnabledAiModel {
   id: string;
   knowledgeCutoff?: string;
   maxOutput?: number;
-  parameters?: ModelParamsSchema;
+  /** Image generation params, or standard TTS params for `tts` models. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema;
   pricing?: Pricing;
   providerId: string;
   releasedAt?: string;

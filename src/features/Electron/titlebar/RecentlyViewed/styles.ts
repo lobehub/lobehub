@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   actionIcon: css`
@@ -19,8 +21,8 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     background-color: ${cssVar.colorBorderSecondary};
   `,
   empty: css`
-    padding-block: 16px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.cardPadding};
+    padding-inline: ${densityVars.contentGap};
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};

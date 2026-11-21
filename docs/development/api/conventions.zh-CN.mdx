@@ -1,0 +1,178 @@
+---
+title: LobeHub API 错误、分页、限流与重试
+description: >-
+  LobeHub 公开 REST API 的错误格式与错误码目录、分页、限流、幂等键以及重试建议。
+tags:
+  - LobeHub
+  - REST API
+  - 错误
+  - 分页
+  - 限流
+  - 幂等
+---
+
+# LobeHub API 错误、分页、限流与重试
+
+本页介绍所有 `/api/v1` 端点共享的约定。每一节先说明 `canary` 上当前的行为，再说明由 [#23231](https://github.com/lobehub/lobehub/pull/23231) 新增、**即将推出**的行为。
+
+## 响应信封
+
+成功的 JSON 响应会被包裹：
+
+```json
+{ "success": true, "data": {}, "message": "optional", "timestamp": "2026-11-18T08:00:00.000Z" }
+```
+
+每个 `DELETE` 都返回 `{ "deleted": true, "id": "…" }`，批量删除返回 `{ "deleted": true, "count": 3 }`。`GET /health` 和流式响应不被包裹。`POST /responses` 返回不带信封的 OpenResponses 对象。
+
+## 错误
+
+### 已可用：当前错误体
+
+```json
+{ "success": false, "error": "Agent not found", "timestamp": "2026-11-18T08:00:00.000Z" }
+```
+
+使用 HTTP 状态码区分处理：
+
+| 状态码   | 含义                                    |
+| ----- | ------------------------------------- |
+| `400` | 校验失败或请求无法处理。校验错误时，`error` 包含序列化后的字段错误 |
+| `401` | 凭证缺失、无效或已过期                           |
+| `403` | 已通过鉴权但不被允许：缺少 scope、工作区角色不足或工作区不匹配    |
+| `404` | 资源不存在，或对调用者不可见                        |
+| `405` | 不支持该方法                                |
+| `408` | 超时                                    |
+| `409` | 与资源当前状态冲突                             |
+| `412` | 前置条件不满足，例如任务已归档                       |
+| `413` | 请求体过大                                 |
+| `422` | 请求有效，但无法应用                            |
+| `429` | 请求过多                                  |
+| `500` | 意外的服务端错误                              |
+
+### 即将推出：统一错误体与错误码
+
+[#23231](https://github.com/lobehub/lobehub/pull/23231) 为每个错误添加稳定的 `code`、人类可读的 `message`、字段级 `details` 以及 `requestId`。原有的 `error` 字段保留，内容与 `message` 相同，因此现有客户端可以继续工作。
+
+```json
+{
+  "success": false,
+  "code": "validation_error",
+  "message": "Too big: expected number to be <=100",
+  "details": [{ "path": "query.limit", "message": "Too big: expected number to be <=100" }],
+  "error": "Too big: expected number to be <=100",
+  "requestId": "req_6f1c2b…",
+  "timestamp": "2026-11-18T08:00:00.000Z"
+}
+```
+
+`details[].path` 以请求中出错的部分开头：`json`、`query`、`param` 或 `header`。
+
+<a id="error-codes" />
+
+#### 错误码
+
+错误码只会新增，不会重命名或删除。遇到未知错误码时，按其 HTTP 状态码处理。
+
+| 错误码                    | 状态码       | 含义                                                       | 是否重试                   |
+| ---------------------- | --------- | -------------------------------------------------------- | ---------------------- |
+| `validation_error`     | 400       | 某个字段校验失败，见 `details`                                     | 否，修正请求                 |
+| `bad_request`          | 400       | 请求可以理解，但按原样无法处理                                          | 否                      |
+| `unauthorized`         | 401       | 凭证缺失、无效或已过期                                              | 刷新令牌后重试                |
+| `payment_required`     | 402       | 需要调用者没有的额度或套餐                                            | 否                      |
+| `forbidden`            | 403       | 已通过鉴权但不被允许                                               | 否                      |
+| `insufficient_scope`   | 403       | API Key 缺少所需 scope                                       | 否，签发带该 scope 的 Key     |
+| `workspace_mismatch`   | 403       | `X-Workspace-Id` 与 Key 不匹配，或调用者不是成员                      | 否                      |
+| `not_found`            | 404       | 不存在或不可见                                                  | 否                      |
+| `conflict`             | 409       | 与资源当前状态冲突                                                | 重新读取资源后重试              |
+| `idempotency_conflict` | 409 / 422 | 409：使用该 `Idempotency-Key` 的请求仍在执行。422：该 Key 首次用于另一个不同的请求 | 409：是，配合退避。422：否       |
+| `precondition_failed`  | 412       | 前置条件不满足                                                  | 否                      |
+| `payload_too_large`    | 413       | 请求体超过允许大小                                                | 否                      |
+| `unprocessable_entity` | 422       | 请求有效但无法应用                                                | 否                      |
+| `rate_limited`         | 429       | 该 Key 请求过多                                               | 是，等待 `Retry-After` 后重试 |
+| `internal_error`       | 500       | 意外错误                                                     | 是，配合退避                 |
+| `upstream_error`       | 502       | 模型服务商或其他上游失败                                             | 是，配合退避                 |
+| `service_unavailable`  | 503       | 某个依赖暂时不可用                                                | 是，配合退避                 |
+
+`POST /responses` 保持 OpenResponses 的错误结构 `{ "error": { "type", "message", "code", "param" } }`，其中 `code` 取自同一目录。`/openai` 和 `/anthropic` 兼容路由保留各自厂商的错误体。
+
+#### 请求 ID
+
+每个响应都携带 `X-Request-Id`。你可以自行发送（最多 128 个字符，允许字母、数字、`_`、`.`、`:`、`-`）以便关联日志；否则服务端会生成 `req_…`。反馈问题时请附上该 ID。
+
+## 分页
+
+### 已可用：页码
+
+列表端点接受 `page`（从 1 开始）和 `pageSize`（1–100，默认 20）。大多数端点还接受 `keyword`（最多 100 个字符）。响应中的数组以资源名命名，并包含总数：
+
+```json
+{ "success": true, "data": { "agents": [], "total": 42 } }
+```
+
+有三个列表例外，目前直接返回包含全部条目的数组：`GET /agent-groups`、`GET /api-keys` 和 `GET /mcp-servers`。
+
+### 即将推出：游标
+
+在 [#23231](https://github.com/lobehub/lobehub/pull/23231) 中，列表接受 `limit`（1–100，默认 20）和 `cursor`，并返回 `hasMore` 和 `nextCursor`：
+
+```bash
+curl "https://app.lobehub.com/api/v1/agent-groups?limit=50" -H "Authorization: Bearer $KEY"
+# next page:
+curl "https://app.lobehub.com/api/v1/agent-groups?limit=50&cursor=bzo1MA" -H "Authorization: Bearer $KEY"
+```
+
+```json
+{ "success": true, "data": { "items": [], "total": 120, "hasMore": true, "nextCursor": "bzo1MA" } }
+```
+
+- 将 `nextCursor` 视为不透明值，原样传回。最后一页时它为 `null`。无效游标会在 `query.cursor` 上返回 `400` `validation_error`。
+- 只有在计算成本较低时才返回 `total`。
+- 新端点使用 `items`。现有列表保留原来的数组键（`agents`、`topics` 等），并新增 `hasMore` 和 `nextCursor`。
+- **返回结构变化：**`GET /agent-groups`、`GET /api-keys` 和 `GET /mcp-servers` 将从数组改为 `{ items, total, hasMore, nextCursor }`。迁移期间可以发送 `format=array`（已弃用）继续获得包含全部条目的旧数组。
+- `page`、`pageSize` 和 `offset` 仍可使用，但已弃用。同时发送多个时，`cursor` 优先于 `offset`，`offset` 优先于 `page`。
+
+## 限流
+
+目前公开 API 不发送限流相关的响应头。
+
+**即将推出**（[#23231](https://github.com/lobehub/lobehub/pull/23231)）：每个 API Key 默认获得每 60 秒 600 个请求的固定窗口（自托管实例通过 `OPENAPI_RATE_LIMIT_PER_MINUTE` 设置）。届时每个 API Key 请求的响应都会携带：
+
+| 响应头                     | 含义                |
+| ----------------------- | ----------------- |
+| `X-RateLimit-Limit`     | 窗口内允许的请求数         |
+| `X-RateLimit-Remaining` | 当前窗口剩余的请求数        |
+| `X-RateLimit-Reset`     | 窗口重置时间，单位为 Unix 秒 |
+
+超出限制的请求返回 `429` `rate_limited`，并带有以秒为单位的 `Retry-After`。限流及其响应头只作用于 API Key 请求，OIDC 会话不计入。自托管实例未配置 Redis 时不限流，也不发送这些响应头。
+
+## 幂等
+
+**即将推出**（[#23231](https://github.com/lobehub/lobehub/pull/23231)）：在 `POST` 请求中发送 `Idempotency-Key`，即可安全重试。
+
+```bash
+curl https://app.lobehub.com/api/v1/agents \
+  -H "Authorization: Bearer $KEY" \
+  -H "Idempotency-Key: 0b8f6a52-6c1e-4b8a-9d55-3f0d7f2a91c4" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Researcher"}'
+```
+
+- Key 长度为 1–255 个字符；每个逻辑操作使用一个 UUID 即可。
+- 首次响应会保存 24 小时。使用同一 Key 重复相同的方法、路径、查询参数和请求体时，返回已保存的响应并带上 `Idempotent-Replayed: true`，不会再次执行操作。
+- Key 按调用者和工作区隔离，因此不同 API Key 或不同工作区之间不会冲突。
+- 在首个请求仍在执行时重复请求，返回 `409` `idempotency_conflict`。用同一 Key 发送不同请求体，返回 `422` `idempotency_conflict`。
+- `5xx` 和 `429` 错误响应、流式响应以及空响应不会被保存，因此重试会再次执行操作。
+
+## 重试建议
+
+| 情况                                    | 是否重试                    | 方式                                 |
+| ------------------------------------- | ----------------------- | ---------------------------------- |
+| `GET`、`HEAD`、`PUT`、`DELETE` 出现网络错误或超时 | 是                       | 指数退避                               |
+| `POST` 出现网络错误                         | 仅在带 `Idempotency-Key` 时 | 相同 Key、相同请求体                       |
+| `408`、`500`、`502`、`503`、`504`         | 是，限安全方法或带 Key 的 `POST`  | 带抖动的指数退避                           |
+| `429`                                 | 是                       | 等待 `Retry-After`；如果时间很长，应向上报告而不是等待 |
+| `409` `idempotency_conflict`          | 是                       | 退避；首个请求仍在执行                        |
+| 其他 `4xx`                              | 否                       | 修正请求、凭证或 scope                     |
+
+推荐的默认退避策略：初始 0.5 秒，每次翻倍，最长 8 秒，加 ±25% 随机抖动，最多重试 2 次。这也是 [#23246](https://github.com/lobehub/lobehub/pull/23246) 和 [#23337](https://github.com/lobehub/lobehub/pull/23337) 上线后 TypeScript 与 Python SDK 采用的策略。当 `Retry-After` 超过 60 秒时，SDK 不等待，直接返回错误。不要自动重试 `PATCH` 或不带 Key 的 `POST`：这可能导致变更被应用两次。

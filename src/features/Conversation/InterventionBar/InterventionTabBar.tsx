@@ -1,12 +1,12 @@
-import { Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Button, Tabs, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
 import { styles } from './style';
+import { interventionTabLabelKey, numberDuplicateLabels } from './tabLabel';
 
 interface InterventionTabBarProps {
   activeIndex: number;
@@ -26,21 +26,24 @@ interface InterventionTabBarProps {
 
 const InterventionTabBar = memo<InterventionTabBarProps>(
   ({ interventions, activeIndex, approveAll, onTabChange }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'plugin']);
+    const labels = numberDuplicateLabels(
+      interventions.map((item) => {
+        const labelKey = interventionTabLabelKey(item);
+        return labelKey ? t(labelKey, { defaultValue: item.apiName, ns: 'plugin' }) : item.apiName;
+      }),
+    );
 
     return (
-      <div className={styles.tabBar}>
-        {interventions.map((item, index) => (
-          <div
-            className={cx(styles.tab, index === activeIndex && styles.tabActive)}
-            key={item.toolCallId}
-            onClick={() => onTabChange(index)}
-          >
-            🔧 {item.apiName}
-          </div>
-        ))}
-        <div className={styles.tabTrailing}>
-          <span className={styles.tabCounter}>
+      <div className={stylex.props(styles.tabBar).className}>
+        <Tabs
+          activeKey={String(activeIndex)}
+          items={labels.map((label, index) => ({ key: String(index), label }))}
+          size={'small'}
+          onChange={(key) => onTabChange(Number(key))}
+        />
+        <div className={stylex.props(styles.tabTrailing).className}>
+          <span className={stylex.props(styles.tabCounter).className}>
             {activeIndex + 1} / {interventions.length}
           </span>
           {/* Only shown for a real batch: with one pending call in the active

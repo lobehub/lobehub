@@ -6,5 +6,6 @@ export default [
   route('share/t/:id/llm.txt', 'routes/shareTopicText.ts'),
   route('share/page/:id', 'routes/sharePage.tsx'),
   route('share/artifact/:id', 'routes/shareArtifact.tsx'),
+  route('share/file/:id', 'routes/shareFile.tsx'),
   route('*', 'routes/catchall.tsx'),
 ] satisfies RouteConfig;

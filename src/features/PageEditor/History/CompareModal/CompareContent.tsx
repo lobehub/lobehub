@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -13,6 +11,7 @@ import type {
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
 } from '@/server/routers/lambda/_schema/documentHistory';
+import { densityVars } from '@/styles/densityVars';
 
 import DocumentHistoryDiff from '../DocumentHistoryDiff';
 import { formatHistoryAbsoluteTime } from '../formatHistoryDate';
@@ -60,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: space-between;
 
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgLayout};

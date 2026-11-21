@@ -301,6 +301,8 @@ describe('WidgetModel', () => {
       expect((await model.findById(inProject.id))?.id).toBe(inProject.id);
       expect((await model.findById(inAgent.id))?.id).toBe(inAgent.id);
       expect((await model.listByProject('wgt-proj-bin')).map((w) => w.id)).toEqual([inProject.id]);
+      // each project widget carries its published version's view for the card
+      expect((await model.listByProject('wgt-proj-bin'))[0].publishedView).toEqual({ size: 'sm' });
       expect(await model.listRuns(inProject.id)).toHaveLength(1);
       expect((await member.findById(wsInProject.id))?.id).toBe(wsInProject.id);
       expect((await member.list({ agentId: 'wgt-agent-bin-ws' })).map((w) => w.id)).toEqual([

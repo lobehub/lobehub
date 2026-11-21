@@ -1,4 +1,5 @@
 import type { MCPErrorType } from '@lobechat/types';
+import type { McpDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 
 interface InputSchema {
   [k: string]: unknown;
@@ -8,6 +9,8 @@ interface InputSchema {
 }
 
 export interface McpTool {
+  /** Server metadata, e.g. MCP Apps `ui.resourceUri` / `ui.visibility` */
+  _meta?: Record<string, unknown>;
   description: string;
   inputSchema: InputSchema;
   name: string;
@@ -133,6 +136,19 @@ export interface AuthConfig {
 
 export interface HttpMCPClientParams {
   auth?: AuthConfig;
+  /**
+   * The device this server is pinned to (`connectorDeviceBinding`): a server
+   * with a device gateway tunnels every call there, and fails when it is
+   * offline. Routing only, never read by the MCP client itself. Absent: the
+   * device is picked automatically.
+   */
+  boundDevice?: McpDeviceBinding;
+  /**
+   * `device`: the user chose to reach this server from their device; a server
+   * with a device gateway tunnels it there (`shouldConnectViaDevice`). Never
+   * read by the MCP client itself. Absent means `auto`.
+   */
+  connectVia?: 'device';
   headers?: Record<string, string>;
   name: string;
   type: 'http';
@@ -141,6 +157,8 @@ export interface HttpMCPClientParams {
 
 export interface StdioMCPParams {
   args: string[];
+  /** The device this server is pinned to, as on {@link HttpMCPClientParams}. */
+  boundDevice?: McpDeviceBinding;
   command: string;
   env?: Record<string, string>;
   name: string;

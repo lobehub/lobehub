@@ -1,3 +1,5 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import type { AgentAccess } from '@/database/models/agentDocuments';
 
 /**
@@ -190,3 +192,37 @@ export const isAgentDocumentFile = (
 export const isAgentDocumentDirectory = (
   node: Pick<AgentDocumentNode, 'type'>,
 ): node is Pick<AgentDocumentNode, 'type'> & { type: 'directory' } => node.type === 'directory';
+
+/**
+ * Agent scope for one VFS call.
+ */
+export interface AgentDocumentVfsContext {
+  agentId: string;
+  topicId?: string;
+}
+
+export interface AgentDocumentWriteOptions {
+  /**
+   * Raw writes bypass the Markdown editor snapshot because arbitrary tool or code output may
+   * contain markup that the editor legitimately normalizes or discards.
+   */
+  contentFormat?: 'markdown' | 'raw';
+  createMode?: 'always-new' | 'if-missing' | 'must-exist';
+  /**
+   * Who asked for the write, for the per-document character limit. Defaults to
+   * `user` (the CLI and API); copies and the tool-result archive pass `system`.
+   */
+  source?: DocumentWriteSource;
+}
+
+export interface AgentDocumentMkdirOptions {
+  recursive?: boolean;
+}
+
+export interface AgentDocumentDeleteOptions {
+  recursive?: boolean;
+}
+
+export interface AgentDocumentCopyOptions {
+  overwrite?: boolean;
+}

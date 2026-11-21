@@ -80,6 +80,14 @@ afterEach(async () => {
   await serverDB.delete(agentHistoryJobs);
 });
 
+const compiledGraph = () => ({
+  edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+  fields: {},
+  name: 'compiled-graph',
+  nodes: { work: { type: 'agent' } },
+  terminal: 'work',
+});
+
 describe('AgentModel', () => {
   describe('existsOwnedById', () => {
     it('is true only for the agent creator (edit-rights gate), not merely visibility', async () => {
@@ -360,6 +368,57 @@ describe('AgentModel', () => {
   });
 
   describe('getAgentSnapshotForTaskCreate', () => {
+    it('reports the native model provider without changing the Agent snapshot', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'subscription', type: 'codex' } },
+        id: 'native-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      expect(await agentModel.getAgentSnapshotForTaskCreate('native-task-snapshot')).toMatchObject({
+        modelOverrideProvider: 'codex',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    /** @example A Task snapshot exposes its personal binding without rewriting runtime identity. */
+    it('reports the API binding provider for model-only Task creation', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          heterogeneousProvider: {
+            authMode: 'api',
+            type: 'codex',
+            apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+          },
+        },
+        id: 'api-bound-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      /** @example Provider inference and inherited runtime snapshots remain distinct. */
+      expect(
+        await agentModel.getAgentSnapshotForTaskCreate('api-bound-task-snapshot'),
+      ).toMatchObject({
+        modelOverrideProvider: 'personal-provider',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    it('does not substitute the native provider for API authentication', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'codex' } },
+        id: 'api-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      expect(await agentModel.getAgentSnapshotForTaskCreate('api-task-snapshot')).toMatchObject({
+        modelOverrideProvider: null,
+      });
+    });
+
     it('returns model/provider snapshot + visibility in one call', async () => {
       const agentId = 'snap-task-create-1';
       await serverDB.insert(agents).values({
@@ -3241,9 +3300,9 @@ describe('AgentModel', () => {
         .values({ systemRole: 'OLD PROMPT', userId })
         .returning();
 
-      const original = (agentModel as any).assertWorkspaceDeviceBinding.bind(agentModel);
+      const original = (agentModel as any).ctx.assertWorkspaceDeviceBinding;
       const spy = vi
-        .spyOn(agentModel as any, 'assertWorkspaceDeviceBinding')
+        .spyOn((agentModel as any).ctx, 'assertWorkspaceDeviceBinding')
         .mockImplementationOnce(async (...args: unknown[]) => {
           await agentModel.update(agent.id, { editorData: null, systemRole: 'NEW PROMPT' });
           return original(...args);
@@ -3335,13 +3394,7 @@ describe('AgentModel', () => {
         states: { legacy: {} },
         terminal: 'legacy',
       };
-      const graph = {
-        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
-        fields: {},
-        name: 'compiled-graph',
-        nodes: { work: { type: 'agent' } },
-        terminal: 'work',
-      };
+      const graph = compiledGraph();
       const [agent] = await serverDB
         .insert(agents)
         .values({
@@ -3359,13 +3412,7 @@ describe('AgentModel', () => {
     });
 
     it('should migrate a legacy chatConfig graph to agencyConfig on write', async () => {
-      const graph = {
-        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
-        fields: {},
-        name: 'compiled-graph',
-        nodes: { work: { type: 'agent' } },
-        terminal: 'work',
-      };
+      const graph = compiledGraph();
       const [agent] = await serverDB
         .insert(agents)
         .values({
@@ -3389,13 +3436,7 @@ describe('AgentModel', () => {
     });
 
     it('should let an explicit null agency graph clear a legacy chatConfig graph', async () => {
-      const graph = {
-        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
-        fields: {},
-        name: 'compiled-graph',
-        nodes: { work: { type: 'agent' } },
-        terminal: 'work',
-      };
+      const graph = compiledGraph();
       const [agent] = await serverDB
         .insert(agents)
         .values({

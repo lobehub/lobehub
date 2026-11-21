@@ -3,6 +3,7 @@ export interface ChatGroupConfig {
   forkedFromIdentifier?: string;
   openingMessage?: string;
   openingQuestions?: string[];
+  personal?: boolean;
   revealDM?: boolean;
   systemPrompt?: string;
 }

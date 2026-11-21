@@ -22,7 +22,7 @@ export const useCanEditEnvironment = () => {
   const currentUserId = useUserStore(userProfileSelectors.userId);
 
   return useCallback(
-    (environment: SandboxEnvironment): boolean => {
+    (environment: Pick<SandboxEnvironment, 'userId' | 'workspaceId'>): boolean => {
       // Personal environments have no other member to belong to.
       if (!environment.workspaceId) return true;
       if (!currentUserId) return false;

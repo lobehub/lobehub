@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Block, cssVar, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { BadgeCheck, BookIcon, ChevronRightIcon, KeyIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +35,7 @@ const ProviderList = memo(() => {
                 return (
                   <WorkspaceLink
                     style={{ color: 'inherit' }}
-                    to={urlJoin('/community/provider', record.id)}
+                    to={urlJoin('/marketplace/provider', record.id)}
                   >
                     <Flexbox horizontal align="center" gap={8}>
                       <ProviderIcon provider={record.id} size={24} type={'avatar'} />
@@ -167,7 +165,7 @@ const ProviderList = memo(() => {
                     </Tooltip>
                     <WorkspaceLink
                       style={{ color: 'inherit' }}
-                      to={urlJoin('/community/provider', record.id)}
+                      to={urlJoin('/marketplace/provider', record.id)}
                     >
                       <ActionIcon
                         color={cssVar.colorTextDescription}

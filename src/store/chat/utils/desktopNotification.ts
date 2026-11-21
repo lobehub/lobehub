@@ -4,9 +4,13 @@ import {
   GROUP_CHAT_TOPIC_URL,
   GROUP_CHAT_URL,
   isDesktop,
+  LOADING_FLAT,
 } from '@lobechat/const';
-import type { DesktopNotificationSender } from '@lobechat/electron-client-ipc';
-import type { ConversationContext } from '@lobechat/types';
+import {
+  type DesktopNotificationSender,
+  HeterogeneousAgentSessionErrorCode,
+} from '@lobechat/electron-client-ipc';
+import type { ChatMessageError, ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -125,7 +129,8 @@ export const buildNotificationBody = (
   fallbackBody: string,
 ): string => {
   const text = content ? markdownToTxt(content).trim() : '';
-  if (!text) return fallbackBody;
+  // The assistant row still holding the loading placeholder means the run produced no reply.
+  if (!text || text === LOADING_FLAT) return fallbackBody;
   return text.length > NOTIFICATION_BODY_MAX_LENGTH
     ? `${text.slice(0, NOTIFICATION_BODY_MAX_LENGTH)}…`
     : text;
@@ -223,5 +228,64 @@ export const notifyDesktopAgentCompleted = async (
     }
   } catch (error) {
     console.error('Agent completion desktop notification failed:', error);
+  }
+};
+
+/**
+ * Plain-text reason for a failed run. Errors that render a dedicated guide card
+ * get localized wording; anything else surfaces the error's own message.
+ */
+export const buildFailureNotificationBody = (error: ChatMessageError | undefined): string => {
+  const fallback = t('desktopNotification.agentFailed.body', { ns: 'chat' });
+
+  if (error?.body?.code === HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound) {
+    // Gateway/CLI-classified errors carry the path only inside their raw message.
+    const path: string | undefined = error.body.workingDirectory;
+    return path
+      ? t('desktopNotification.workingDirectoryUnavailable.body', { ns: 'chat', path })
+      : t('desktopNotification.workingDirectoryUnavailable.bodyWithoutPath', { ns: 'chat' });
+  }
+
+  return buildNotificationBody(error?.message, fallback);
+};
+
+/** "<agent> ran into a problem" — names the agent rather than the topic. */
+export const buildFailureNotificationTitle = (context: DesktopNotificationContext): string => {
+  const agentMeta = context.agentId
+    ? agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState())
+    : undefined;
+  const name = agentDisplayName(agentMeta) || t('defaultAgent', { ns: 'chat' });
+
+  return t('desktopNotification.agentFailed.title', { name, ns: 'chat' });
+};
+
+export interface AgentFailedNotificationOptions {
+  context: DesktopNotificationContext;
+  error?: ChatMessageError;
+}
+
+/**
+ * "Agent run failed" desktop notification. Shares the completion notification's
+ * sender and click-through, so a failure in a background conversation is
+ * announced instead of staying silent (or reading as a finished, empty reply).
+ */
+export const notifyDesktopAgentFailed = async (
+  _get: () => ChatStore,
+  { context, error }: AgentFailedNotificationOptions,
+): Promise<void> => {
+  if (!isDesktop) return;
+
+  try {
+    const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const sender = await buildNotificationSender(context);
+
+    await desktopNotificationService.showNotification({
+      body: buildFailureNotificationBody(error),
+      navigate: resolveNotificationNavigate(context),
+      sender,
+      title: buildFailureNotificationTitle(context),
+    });
+  } catch (err) {
+    console.error('Agent failure desktop notification failed:', err);
   }
 };

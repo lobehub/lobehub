@@ -1,3 +1,10 @@
+import type {
+  ConnectorAuthKind,
+  ConnectorLinkProfile,
+  ConnectorLinkStatus,
+  ConnectorVisibility,
+} from '@lobechat/types';
+
 import type { ConnectorToolPermission } from '@/database/schemas';
 
 export interface ConnectorTool {
@@ -6,6 +13,8 @@ export interface ConnectorTool {
   displayName: string | null;
   id: string;
   inputSchema: Record<string, unknown> | null;
+  /** Synced metadata; `visibility` is the MCP tool's `_meta.ui.visibility`. */
+  metadata?: Record<string, unknown> | null;
   permission: ConnectorToolPermission;
   toolName: string;
   userConnectorId: string;
@@ -14,6 +23,7 @@ export interface ConnectorTool {
 export interface ConnectorWithTools {
   /** Set when this connector is fully owned by an agent (Copy / Connect-new). */
   agentId?: string | null;
+  authKind?: ConnectorAuthKind;
   /**
    * Attribution — avatar of the member who authorized this connector (the
    * Composio account linker when present, else the row creator). Server-resolved
@@ -26,16 +36,61 @@ export interface ConnectorWithTools {
   id: string;
   identifier: string;
   isEnabled: boolean;
+  links?: ConnectorLinkSummary[];
   mcpConnectionType: string | null;
   mcpServerUrl: string | null;
   metadata: Record<string, unknown> | null;
   name: string;
   sourceType: string;
   status: string;
+  /**
+   * The row's tool prefix, when the server resolved it for a run
+   * (`connector.listForRun`); otherwise derived with `connectorToolIdentifier`.
+   */
+  toolIdentifier?: string;
   tools: ConnectorTool[];
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;
+  /**
+   * Workspace only: `private` is the creator's own connector, offered only to
+   * their private agents. Absent on rows from older servers (shared).
+   */
+  visibility?: ConnectorVisibility;
 }
+
+export interface ConnectorLinkSummary {
+  authorizedByAvatar: string | null;
+  authorizedByName: string | null;
+  createdAt: string;
+  id: string;
+  name: string;
+  profile: ConnectorLinkProfile | null;
+  status: ConnectorLinkStatus;
+}
+
+export interface ConnectorAccountFlowOptions {
+  popup?: Window | null;
+  signal?: AbortSignal;
+}
+export interface ConnectorAccountFlowResult {
+  linkId?: string;
+  outcome: 'created' | 'reauthorized' | 'matchedExisting';
+}
+
+export const supportsMultipleConnectorAccounts = (
+  connector: Pick<ConnectorWithTools, 'authKind' | 'mcpConnectionType' | 'sourceType'>,
+): boolean =>
+  connector.authKind === 'oauth2' &&
+  connector.sourceType === 'custom' &&
+  connector.mcpConnectionType === 'http';
+
+export const isConnectorLinkNameConflict = (error: unknown): boolean => {
+  const candidate = error as {
+    data?: { code?: string };
+    shape?: { data?: { code?: string } };
+  } | null;
+  return candidate?.data?.code === 'CONFLICT' || candidate?.shape?.data?.code === 'CONFLICT';
+};
 
 /**
  * An agent-owned connector as returned by `connector.listAgentBound`, enriched

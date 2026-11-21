@@ -15,17 +15,17 @@ tags:
 
 ## 代码风格
 
-在 LobeHub 中，我们使用 [@lobehub/lint](https://github.com/lobehub/lobe-lint) 程序包来统一代码风格。该程序包内置了 `ESLint`、`Prettier`、`remarklint` 和 `stylelint` 的配置，以确保我们的 JavaScript、Markdown 和 CSS 文件遵循相同的编码标准。
+在 LobeHub 中，我们使用 [lobe-lint](https://github.com/lobehub/lobe-lint) 提供的共享配置来统一代码风格。这些配置覆盖 `Oxlint`、`Prettier`、`remarklint` 和 `stylelint`，以确保我们的 JavaScript、Markdown 和 CSS 文件遵循相同的编码标准。
 
-### ESLint
+### Oxlint
 
-我们的项目使用 ESLint 来检查 JavaScript 代码中的问题。您可以在项目根目录下找到 `eslint.config.mjs` flat config 文件，其中包含了我们对 `@lobehub/lint` 的 ESLint 配置的扩展和自定义规则。
+我们的项目使用 Oxlint 来检查 JavaScript 和 TypeScript 代码中的问题。您可以在项目根目录下找到 `oxlint.config.mts` 文件，其中包含了我们在 `@lobehub/oxlint-config` 之上的扩展和自定义规则。
 
-为了与 Next.js 框架兼容，我们在配置中添加了 `plugin:@next/next/recommended`。此外，我们禁用了一些规则，以适应我们项目的特定需求。
+为了与 Next.js 框架兼容，我们在配置中开启了 `next` 选项。此外，我们禁用了一些规则，以适应我们项目的特定需求。
 
 ### Prettier
 
-Prettier 负责代码格式化，以保证代码的一致性。您可以在 `prettier.config.mjs` 中找到我们的 Prettier 配置，它是从 `@lobehub/lint` 导入的。
+Prettier 负责代码格式化，以保证代码的一致性。您可以在 `prettier.config.mjs` 中找到我们的 Prettier 配置，它是从 `@lobehub/prettier-config` 导入的。
 
 在保存文件时，建议您配置您的编辑器以自动运行 Prettier。
 
@@ -35,7 +35,7 @@ Prettier 负责代码格式化，以保证代码的一致性。您可以在 `pre
 
 ### stylelint
 
-我们使用 stylelint 来规范 CSS 代码的风格。在 `stylelint` 的配置文件中，我们基于 `@lobehub/lint` 的配置进行了一些自定义规则的调整。
+我们使用 stylelint 来规范 CSS 和 Less 文件的风格。在 `stylelint` 的配置文件中，我们基于 `@lobehub/stylelint-config` 进行了一些自定义规则的调整。StyleX 样式由 Oxlint 检查。
 
 ### 风格检查
 

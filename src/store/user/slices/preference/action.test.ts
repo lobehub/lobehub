@@ -17,12 +17,14 @@ afterEach(() => {
 
 describe('createPreferenceSlice', () => {
   describe('updateGuideState', () => {
-    it('should update guide state', () => {
+    it('should update guide state', async () => {
+      vi.spyOn(userService, 'updatePreference').mockResolvedValue(undefined);
+
       const { result } = renderHook(() => useUserStore());
       const guide: UserGuide = { topic: true };
 
-      act(() => {
-        result.current.updateGuideState(guide);
+      await act(async () => {
+        await result.current.updateGuideState(guide);
       });
 
       expect(result.current.preference.guide!.topic).toBeTruthy();
@@ -30,7 +32,7 @@ describe('createPreferenceSlice', () => {
   });
 
   describe('updateLab', () => {
-    it('mirrors enableGoals into the legacy enableTopicAcceptance key for older clients', async () => {
+    it('preserves other saved preferences when updating a lab', async () => {
       const updatePreferenceSpy = vi
         .spyOn(userService, 'updatePreference')
         .mockResolvedValue(undefined as any);
@@ -45,27 +47,29 @@ describe('createPreferenceSlice', () => {
       });
 
       await act(async () => {
-        await useUserStore.getState().updateLab({ enableGoals: false });
+        await useUserStore.getState().updateLab({ enableProjects: false });
       });
 
       expect(useUserStore.getState().preference.lab).toMatchObject({
-        enableGoals: false,
-        enableTopicAcceptance: false,
+        enableProjects: false,
+        enableTopicAcceptance: true,
       });
       expect(updatePreferenceSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          lab: expect.objectContaining({ enableGoals: false, enableTopicAcceptance: false }),
+          lab: expect.objectContaining({ enableProjects: false, enableTopicAcceptance: true }),
         }),
       );
     });
   });
 
   describe('updatePreference', () => {
-    it('should update preference', () => {
+    it('should update preference', async () => {
+      vi.spyOn(userService, 'updatePreference').mockResolvedValue(undefined);
+
       const { result } = renderHook(() => useUserStore());
 
-      act(() => {
-        result.current.updatePreference({ hideSyncAlert: true });
+      await act(async () => {
+        await result.current.updatePreference({ hideSyncAlert: true });
       });
 
       expect(result.current.preference.hideSyncAlert).toEqual(true);

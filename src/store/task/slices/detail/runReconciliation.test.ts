@@ -31,6 +31,7 @@ const fetchDetail = async (activity: Partial<TaskDetailActivity> = {}) => {
           ...activity,
         },
       ],
+      id: 'task_3',
       identifier: 'T-3',
       status: 'scheduled',
     } as TaskDetailData,
@@ -50,7 +51,10 @@ describe('task run terminal reconciliation', () => {
       topicDataMap: {},
       toolCallingStreamIds: {},
     });
-    useTaskStore.setState({ taskDetailMap: {} });
+    useTaskStore.setState({
+      taskDetailMap: {},
+      taskRefIndex: { 'T-3': 'task_3', 'task_3': 'task_3' },
+    });
     const server = createServerConfigStore();
     server.setState({
       serverConfig: {

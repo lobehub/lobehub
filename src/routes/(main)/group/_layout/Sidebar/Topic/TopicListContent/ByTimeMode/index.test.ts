@@ -12,6 +12,11 @@ describe('resolveGroupSidebarMode', () => {
     expect(resolveGroupSidebarMode('byAgent')).toBe('byTime');
   });
 
+  /** @example A byDevice preference leaked from a project sidebar must not render as time-bucket translation keys in group chats. */
+  it('falls back to byTime for byDevice, which the group sidebar cannot render', () => {
+    expect(resolveGroupSidebarMode('byDevice')).toBe('byTime');
+  });
+
   it('keeps every mode the group sidebar menu offers', () => {
     expect(resolveGroupSidebarMode('byTime')).toBe('byTime');
     expect(resolveGroupSidebarMode('byProject')).toBe('byProject');

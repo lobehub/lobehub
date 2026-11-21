@@ -27,9 +27,10 @@ const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentServ
     if (!ctx.agentId) return;
     return agentDocumentService.associateDocument({ agentId: ctx.agentId, documentId });
   },
-  createDocument: async ({ content, description, title, url }) =>
+  createDocument: async ({ content, contentType, description, title, url }) =>
     webBrowsingService.upsertCrawledDocument({
       content,
+      ...(contentType === 'json' && { contentType: 'json' }),
       description: description || `Crawled from ${url}`,
       title,
       topicId: ctx.topicId ?? undefined,

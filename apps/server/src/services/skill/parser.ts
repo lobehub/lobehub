@@ -12,7 +12,10 @@ import matter from 'gray-matter';
 import { sha256 } from 'js-sha256';
 import { marked, type Token, type Tokens } from 'marked';
 
+import { safeMatterOptions } from '@/server/utils/safeMatterOptions';
+
 import { SkillManifestError, SkillParseError } from './errors';
+import { type GitHubSkillDirectory, readGitHubArchive } from './githubArchive';
 
 export interface ParseSkillMdOptions {
   /**
@@ -91,7 +94,7 @@ export class SkillParser {
   parseSkillMd(fileContent: string, options?: ParseSkillMdOptions): ParsedSkill {
     try {
       const source = this.stripLeadingCommentsBeforeFrontMatter(fileContent);
-      const { data, content } = matter(source);
+      const { data, content } = matter(source, safeMatterOptions);
       // gray-matter yields the same empty `data` for an absent block and for an
       // empty / comment-only one (`---\n---`), so presence is detected on the
       // source: a present-but-incomplete block must stay authoritative.
@@ -128,6 +131,16 @@ export class SkillParser {
     }
   }
 
+  async parseGitHubDirectory(
+    directory: GitHubSkillDirectory,
+    fallbackName?: string,
+  ): Promise<ParsedZipSkill> {
+    const { markdown, resources } = directory;
+    const { manifest, content } = this.parseSkillMd(markdown, { fallbackName });
+    const skillZipBuffer = await this.repackSkillZip(markdown, resources);
+    return { content, manifest, resources, skillZipBuffer, zipHash: sha256(skillZipBuffer) };
+  }
+
   /**
    * Parse ZIP package
    * @param buffer - ZIP file Buffer
@@ -136,6 +149,12 @@ export class SkillParser {
    */
   async parseZipPackage(buffer: Buffer, options?: ParseZipOptions): Promise<ParsedZipSkill> {
     try {
+      if (options?.repackSkillZip) {
+        const path = options.basePath?.replaceAll(/^\/|\/$/g, '') ?? '';
+        const directory = (await readGitHubArchive(buffer, path)).get(path);
+        if (!directory) throw new SkillParseError('SKILL.md not found in zip package');
+        return this.parseGitHubDirectory(directory, options.fallbackName || path.split('/').at(-1));
+      }
       const unzipped = await this.unzipBuffer(buffer);
 
       // Find SKILL.md (support root directory, first-level subdirectory, or specified basePath)
@@ -152,13 +171,6 @@ export class SkillParser {
 
       // Extract resource files
       const resources = this.extractResources(unzipped, skillMdPath);
-
-      // If repackSkillZip is true, create a new ZIP with only the skill files
-      if (options?.repackSkillZip) {
-        const skillZipBuffer = await this.repackSkillZip(skillMdContent, resources);
-        const zipHash = sha256(skillZipBuffer);
-        return { content, manifest, resources, skillZipBuffer, zipHash };
-      }
 
       // Calculate ZIP hash from original buffer
       const zipHash = sha256(buffer);
@@ -296,8 +308,9 @@ export class SkillParser {
   private repackSkillZip(skillMdContent: string, resources: Map<string, Buffer>): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       // Use fixed timestamp (1980-01-01) for deterministic output
-      // ZIP format requires dates in 1980-2099 range
-      const fixedMtime = new Date('1980-01-01T00:00:00Z');
+      // ZIP format requires dates in 1980-2099 range and stores local time, so
+      // build the date in local time: a UTC midnight is still 1979 west of UTC.
+      const fixedMtime = new Date(1980, 0, 1);
 
       // Use Zippable format with fixed mtime for deterministic output
       const files: Record<string, [Uint8Array, { mtime: Date }]> = {

@@ -4,11 +4,16 @@ import { Flexbox } from '@lobehub/ui';
 import { useLocation, useSearchParams } from 'react-router';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
 import ListViewSkeleton from '@/features/ResourceManager/components/Explorer/ListView/Skeleton';
 import MasonryViewSkeleton from '@/features/ResourceManager/components/Explorer/MasonryView/Skeleton';
 import { useMasonryColumnCount } from '@/features/ResourceManager/components/Explorer/useMasonryColumnCount';
 import WorkGallerySkeleton from '@/features/WorkGallery/Skeleton';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useDensityTokens } from '@/styles/density';
 
 import { resolveResourceSkeletonView } from './skeletonView';
 
@@ -16,9 +21,16 @@ const ResourceCategorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const columnCount = useMasonryColumnCount();
+  const { headerHeight } = useDensityTokens();
   const view = resolveResourceSkeletonView(pathname, searchParams.get('view'));
 
   if (view === 'works') return <WorkGallerySkeleton />;
+  if (view === 'libraries')
+    return (
+      <Flexbox aria-busy flex={1} padding={32}>
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.libraries} />
+      </Flexbox>
+    );
 
   return (
     <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -27,7 +39,7 @@ const ResourceCategorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
           horizontal
           align={'center'}
           flex={'none'}
-          height={44}
+          height={headerHeight}
           justify={'space-between'}
           paddingInline={16}
         >

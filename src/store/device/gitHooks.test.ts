@@ -90,7 +90,8 @@ describe('pullRequestDetailRefreshInterval', () => {
   });
 });
 
-vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', async (importOriginal) => ({
+  ...(await importOriginal()),
   useActiveWorkspaceId: () => 'test-workspace',
 }));
 afterEach(() => vi.restoreAllMocks());

@@ -1,20 +1,23 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Accordion,
   Button,
+  Center,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   Spin,
   Text,
   TextArea,
   toast,
+  Tooltip,
   Upload,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

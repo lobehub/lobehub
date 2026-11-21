@@ -1,0 +1,27 @@
+name = "no-inferred-schema-types"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from LobeHub that is NOT a database schema file (`packages/database/src/schemas/**` is out of scope).
+
+Team rule, from the owner's review rejection of `diff?: typeof userPersonaDocumentHistories.$inferSelect; document: typeof userPersonaDocuments.$inferSelect;`: "这种写法不对，应该都换成放在 types 包里面的导入，而不是用 db schema。"
+
+Why: a row type carved out of a Drizzle table has no name and no home. Every model, service, router and client re-derives it, the shape silently follows whatever the table happens to contain, and code far from the database ends up depending on the schema module. The shape of a row is a contract, so it is declared once in the types package (`packages/types/src/<domain>`, imported as `@lobechat/types`) and code imports that name. The schema package keeps the declared types honest with a compile-time check next to the tables (for user memory: `packages/database/src/schemas/userMemories/rowTypes.check.ts`).
+
+Report every type position in this file whose type is INFERRED from a concrete Drizzle table:
+1. `typeof <table>.$inferSelect` or `typeof <table>.$inferInsert` — alone or wrapped in `Omit<…>`, `Pick<…>`, `Partial<…>`, `NonNullable<…>`, an array, a `Promise<…>` argument, or indexed (`['metadata']`), where `<table>` is a table object (`userMemoriesActivities`, `tasks`, `topics`, any value created with `pgTable(…)` or imported from a `schemas` module);
+2. `InferSelectModel<typeof <table>>` / `InferInsertModel<typeof <table>>` (from `drizzle-orm`) and `typeof <table>._.inferSelect` / `._.inferInsert` for a concrete table;
+3. a type-only import of a row type from a database schema module — `import type { TaskItem, NewTopic } from '@/database/schemas'`, `'@lobechat/database/schemas'`, `'../../schemas'`, `'../schemas/<file>'` — i.e. a PascalCase type name imported from a path that ends in `schemas` or points into `database/src/schemas`. Tables themselves are camelCase values and are not findings when imported to build queries.
+This covers type aliases, interface fields, variable and parameter annotations, function return annotations, generic arguments, `as` casts and `satisfies` clauses (`} satisfies typeof userMemoriesContexts.$inferInsert`).
+Anchor each finding on the line that contains `$inferSelect` / `$inferInsert` / `InferSelectModel` / `InferInsertModel` / `_.infer…`, or on the import line for case 3 — one finding per occurrence, never folded into the first one. A later line that merely uses an alias declared above is not another finding.
+The message must name the table (or the imported schema type). The suggestion must name the type to use from `@lobechat/types` (the row name, e.g. `UserMemoryActivity`, its insert shape `UserMemoryActivityInsert`, or the vector-free view `UserMemoryActivityWithoutVectors` when the code omits vector columns) and say that, if it does not exist yet, it is declared in `packages/types/src/<domain>` and checked against the table in the schema package.
+
+Do not report — these are not inferred row types:
+- types already imported from `@lobechat/types`, from another `@lobechat/*` package that is not the database package, or a local `interface` / `type` literal written field by field;
+- generic helpers over ANY table: `InferSelectModel<T>`, `T['$inferSelect']`, `TTable['$inferInsert']` where `T` / `TTable` is a type parameter (`<T extends PgTable>`), not a concrete table;
+- the type of a table OBJECT rather than of a row: `typeof userMemories`, `table: typeof tasks`, `PgTable`, `AnyPgColumn`, `SQL`, column types;
+- Drizzle's own query result inference that is never written down as a type (`const rows = await db.select().from(tasks)`), `ReturnType<typeof someModel.method>` (another rule's concern), and `z.infer<typeof schema>` for zod schemas;
+- value imports of tables, relations or enums from a schemas module (`import { userMemories, tasks } from '../../schemas'`);
+- test files, `__tests__`, fixtures, mocks, seed and migration scripts.
+
+If an exclusion applies, return no finding. If you cannot tell from this file whether a name is a concrete Drizzle table, return no finding rather than a low-confidence guess.
+"""

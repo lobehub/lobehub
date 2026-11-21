@@ -1,10 +1,10 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Icon, Text, Tooltip } from '@lobehub/ui';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import TaskStatusIcon from '../features/TaskStatusIcon';
 
@@ -42,7 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 6px;
 
     color: ${cssVar.colorTextSecondary};

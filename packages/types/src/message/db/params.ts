@@ -15,7 +15,7 @@ import {
   ChatImageItemSchema,
   ChatMessageErrorSchema,
   ChatToolPayloadSchema,
-  MessageMetadataSchema,
+  ClientMessageMetadataSchema,
   MessageToolCallSchema,
   ModelReasoningSchema,
   ModelUsageSchema,
@@ -33,6 +33,8 @@ export interface QueryMessageParams {
   before?: { createdAt: Date; id: string };
   current?: number;
   groupId?: string | null;
+  /** Same opt-in as `includeFileWorks`, for `artboard` work summaries. */
+  includeArtboardWorks?: boolean;
   /**
    * Opt-in for `file` work summaries embedded in the message payload. Absent →
    * the legacy set, so already-deployed clients (whose descriptor table lacks
@@ -42,6 +44,15 @@ export interface QueryMessageParams {
   includeFileWorks?: boolean;
   pageSize?: number;
   sessionId?: string | null;
+  /**
+   * Load no compression-group member in full. A `compressedGroup` node keeps
+   * its summary, every member id (`compressedOmittedIds`) and the members that
+   * carry runtime state as flat `tool` rows, but no message content. A group
+   * otherwise loads its newest 300 members in full, often most of a long
+   * topic's bytes. For readers that use only the summary, such as the agent
+   * runtime's model context.
+   */
+  skipCompressedMembers?: boolean;
   /**
    * Skip the Work-summary assembly (`message.works`). Mid-stream refetches
    * (tool_end / step_complete / step_start snapshots) set this so each tool
@@ -150,7 +161,7 @@ export const UpdateMessageParamsSchema = z
     editorData: z.record(z.string(), z.any()).nullish(),
     error: ChatMessageErrorSchema.nullish(),
     imageList: z.array(ChatImageItemSchema).optional(),
-    metadata: MessageMetadataSchema.optional(),
+    metadata: ClientMessageMetadataSchema.optional(),
     model: z.string().optional(),
     observationId: z.string().optional(),
     provider: z.string().optional(),

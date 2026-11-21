@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { systemPrompt } from './systemRole';
 
 describe('systemPrompt', () => {
+  it('prefers stable ids without rejecting user identifiers', () => {
+    expect(systemPrompt).toContain(
+      'use the stable id returned by createTask/listTasks in subsequent calls',
+    );
+    expect(systemPrompt).toContain('User-provided identifiers remain accepted');
+    expect(systemPrompt).toContain(
+      'Use the display identifier in user-facing URLs, e.g. /task/T-3',
+    );
+  });
   it('does not instruct the task tool to run the goal workflow', () => {
     expect(systemPrompt).not.toContain('**createGoal**');
   });
@@ -15,6 +24,12 @@ describe('systemPrompt', () => {
     expect(systemPrompt).toContain('can coexist');
     expect(systemPrompt).toContain('Setting one never clears the other');
     expect(systemPrompt).not.toContain('cannot be started with runTask/runTasks');
+  });
+
+  it('embeds instruction images as markdown instead of bare urls', () => {
+    expect(systemPrompt).toContain('![alt](https://...)');
+    expect(systemPrompt).toContain('a bare URL renders as a plain link');
+    expect(systemPrompt).toContain('Never pass a bare URL');
   });
 
   it('starts a configured cron schedule by default without running it immediately', () => {

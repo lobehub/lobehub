@@ -1,9 +1,11 @@
 import type { TaskSummary } from './index';
-import { priorityLabel, statusIcon, timeAgo } from './index';
+import { priorityLabel, statusIcon, taskIdentity, timeAgo } from './index';
 import type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 import { buildTaskManagerDefaultsBlock } from './taskManagerDefaults';
 
 export interface BuildTaskListPromptInput extends TaskManagerPromptDefaults {
+  /** The user narrowed the list with the page's filter, so it is not every task. */
+  filtered?: boolean;
   tasks: Array<TaskSummary & { createdAt?: string | Date }>;
   total: number;
 }
@@ -12,12 +14,14 @@ export interface BuildTaskListPromptInput extends TaskManagerPromptDefaults {
  * Task list prompt for Task Manager conversational reference.
  */
 export const buildTaskListPrompt = (input: BuildTaskListPromptInput, now?: Date): string => {
-  const { tasks, total } = input;
+  const { filtered, tasks, total } = input;
   const shown = tasks.length;
 
   const lines: string[] = [
     '<task_list>',
-    `<hint>The user is currently viewing the tasks list page. These are the ${shown} task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>`,
+    filtered
+      ? `<hint>The user is currently viewing the tasks list page with a filter applied. These are the ${shown} task(s) matching that filter, not every task; tasks outside the filter are not listed here.</hint>`
+      : `<hint>The user is currently viewing the tasks list page. These are the ${shown} task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>`,
     ...buildTaskManagerDefaultsBlock(input),
   ];
 
@@ -33,7 +37,7 @@ export const buildTaskListPrompt = (input: BuildTaskListPromptInput, now?: Date)
         ? `  ${timeAgo(typeof t.createdAt === 'string' ? t.createdAt : t.createdAt.toISOString(), now)}`
         : '';
       lines.push(
-        `  ${t.identifier} ${statusIcon(t.status)} ${t.status}  [${priorityLabel(t.priority)}]  ${t.name || '(unnamed)'}${ago}`,
+        `  ${taskIdentity(t)} ${statusIcon(t.status)} ${t.status}  [${priorityLabel(t.priority)}]  ${t.name || '(unnamed)'}${ago}`,
       );
     }
     if (total > shown) {

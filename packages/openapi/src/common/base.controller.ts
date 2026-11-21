@@ -7,7 +7,11 @@ import { RbacModel } from '@/database/models/rbac';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { parseFormData } from '../helpers/file';
+import type { PaginationRequest } from '../helpers/pagination';
+import { buildPageInfo, resolvePagination } from '../helpers/pagination';
 import type { ApiResponse } from '../types';
+import type { ApiErrorCode } from './errors';
+import { errorInitFromException, getRequestId, renderApiError } from './errors';
 
 /**
  * tRPC error codes, mapped to their HTTP equivalents.
@@ -18,7 +22,7 @@ import type { ApiResponse } from '../types';
  * `@trpc/server` keeps the package free of that dependency — `TRPCError` sets
  * `name` to `'TRPCError'`, which is part of its own public shape.
  */
-const TRPC_CODE_TO_STATUS: Record<string, number> = {
+export const TRPC_CODE_TO_STATUS: Record<string, number> = {
   BAD_REQUEST: 400,
   CLIENT_CLOSED_REQUEST: 499,
   CONFLICT: 409,
@@ -32,6 +36,16 @@ const TRPC_CODE_TO_STATUS: Record<string, number> = {
   TOO_MANY_REQUESTS: 429,
   UNAUTHORIZED: 401,
   UNPROCESSABLE_CONTENT: 422,
+};
+
+/** Domain error classes the services throw, by `name`, and the status each answers with. */
+const ERROR_NAME_TO_STATUS: Record<string, number> = {
+  AuthenticationError: 401,
+  AuthorizationError: 403,
+  BusinessError: 400,
+  ConflictError: 409,
+  NotFoundError: 404,
+  ValidationError: 400,
 };
 
 /**
@@ -71,20 +85,47 @@ export abstract class BaseController {
   }
 
   /**
+   * Success response for one page of an offset-backed list: adds `hasMore`
+   * and `nextCursor` (see `helpers/pagination.ts`) to the payload, deriving
+   * the page window from the same query the service paginated with.
+   * @param key The payload field holding this page's items, e.g. `agents`
+   */
+  protected list<K extends string, T extends { [P in K]: unknown[] } & { total?: number }>(
+    c: Context,
+    key: K,
+    payload: T,
+    {
+      defaultLimit,
+      message,
+      pagination = this.getQuery<PaginationRequest>(c) ?? {},
+    }: { defaultLimit?: number; message?: string; pagination?: PaginationRequest } = {},
+  ): Response {
+    const window = resolvePagination(pagination, defaultLimit);
+    return this.success(
+      c,
+      {
+        ...payload,
+        ...buildPageInfo({ ...window, returned: payload[key].length, total: payload.total }),
+      },
+      message,
+    );
+  }
+
+  /**
    * Error response formatting
    * @param c Hono Context
    * @param error Error message
    * @param statusCode HTTP status code, default 500
-   * @returns Formatted error response
+   * @param code Catalogue code; inferred from the status when omitted
+   * @returns The shared `ApiError` body (or the route's protocol error format)
    */
-  protected error(c: Context, error: string, statusCode: number = 500): Response {
-    const response: ApiResponse = {
-      error,
-      success: false,
-      timestamp: new Date().toISOString(),
-    };
-
-    return c.json(response, statusCode as any);
+  protected error(
+    c: Context,
+    error: string,
+    statusCode: number = 500,
+    code?: ApiErrorCode,
+  ): Response {
+    return renderApiError(c, { code, message: error, status: statusCode });
   }
 
   /**
@@ -94,11 +135,12 @@ export abstract class BaseController {
    * @returns Formatted error response
    */
   protected handleError(c: Context, error: unknown): Response {
-    console.error('Controller Error:', error);
+    // The request id ties this log line to the `requestId` the client received.
+    console.error(`Controller Error [${getRequestId(c)}]:`, error);
 
-    // Handle HTTPException
+    // Handle HTTPException (including `ApiException`, which carries its code)
     if (error instanceof HTTPException) {
-      return this.error(c, error.message, error.status);
+      return renderApiError(c, errorInitFromException(error));
     }
 
     // Handle other known error types
@@ -110,32 +152,14 @@ export abstract class BaseController {
         return this.error(c, error.message, (code && TRPC_CODE_TO_STATUS[code]) || 500);
       }
 
-      // Handle business logic errors
-      if (error.name === 'BusinessError') {
-        return this.error(c, error.message, 400);
-      }
-
-      // Handle authentication errors
-      if (error.name === 'AuthenticationError') {
-        return this.error(c, error.message, 401);
-      }
-
-      // Handle authorization errors
-      if (error.name === 'AuthorizationError') {
-        return this.error(c, error.message, 403);
-      }
-
-      if (error.name === 'ConflictError') {
-        return this.error(c, error.message, 409);
-      }
-
-      // Handle not found errors
-      if (error.name === 'NotFoundError') {
-        return this.error(c, error.message, 404);
-      }
-
-      if (error.name === 'ValidationError') {
-        return this.error(c, error.message, 400);
+      const status = ERROR_NAME_TO_STATUS[error.name];
+      if (status) {
+        return this.error(
+          c,
+          error.message,
+          status,
+          error.name === 'ValidationError' ? 'validation_error' : undefined,
+        );
       }
 
       // Other errors

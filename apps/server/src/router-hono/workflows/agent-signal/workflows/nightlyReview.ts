@@ -2,7 +2,11 @@ import type { WorkflowContext } from '@upstash/workflow';
 import { chunk } from 'es-toolkit/compat';
 
 import { getServerDB } from '@/database/server';
-import { createServerNightlyReviewScheduleService } from '@/server/services/agentSignal/services';
+import {
+  createServerNightlyReviewScheduleService,
+  getLocalNightWindow,
+} from '@/server/services/agentSignal/services';
+import { BotRetroService } from '@/server/services/agentSignal/services/botRetro';
 import {
   AgentSignalNightlyReviewWorkflow,
   type ExecuteNightlyReviewUserPayload,
@@ -21,6 +25,14 @@ const USER_FAN_OUT_CHUNK_SIZE = 20;
 
 /** Dependencies that isolate nightly-review workflow orchestration from storage and child triggers. */
 export interface NightlyReviewWorkflowDependencies {
+  /** Creates the per-user bot retro service used by the `bot-retro` job. */
+  createBotRetroService?: (
+    db: Awaited<ReturnType<typeof getServerDB>>,
+    userId: string,
+  ) => {
+    listTargets: BotRetroService['listTargets'];
+    runForAgent: BotRetroService['runForAgent'];
+  };
   /** Creates the database-backed scheduler service used inside durable steps. */
   createScheduleService?: typeof createServerNightlyReviewScheduleService;
   /** Resolves the main database connection used by scheduler steps. */
@@ -77,6 +89,10 @@ export const paginateNightlyReviewUsers = async (
 
   parseWorkflowDate(payload.requestedAt, 'Invalid nightly review requestedAt');
 
+  const job = payload.job ?? 'self-review';
+  // Self-review keeps its original step names so runs in flight across a deploy replay cleanly.
+  const stepPrefix =
+    job === 'self-review' ? 'agent-signal:nightly-review' : 'agent-signal:nightly-bot-retro';
   const pageSize = boundedInteger(payload.pageSize, DEFAULT_PAGE_SIZE, HARD_MAX_PAGE_SIZE);
   const targetLimit = boundedInteger(
     payload.targetLimit,
@@ -91,8 +107,9 @@ export const paginateNightlyReviewUsers = async (
   if (payload.users && payload.users.length > 0) {
     await Promise.all(
       payload.users.map((user) =>
-        runStep(context, `agent-signal:nightly-review:execute:${user.id}`, () =>
+        runStep(context, `${stepPrefix}:execute:${user.id}`, () =>
           triggerExecuteUser({
+            job,
             requestedAt: payload.requestedAt,
             targetLimit,
             user,
@@ -118,13 +135,14 @@ export const paginateNightlyReviewUsers = async (
   const getDb = dependencies.getDb ?? getServerDB;
   const page = await runStep(
     context,
-    `agent-signal:nightly-review:list-users:${cursor?.id ?? 'root'}`,
+    `${stepPrefix}:list-users:${cursor?.id ?? 'root'}`,
     async () => {
       const db = await getDb();
       const service = createScheduleService(db);
 
       return service.listEligibleUsersPage({
         cursor,
+        job,
         limit: pageSize,
         requestedAt: parseWorkflowDate(payload.requestedAt, 'Invalid nightly review requestedAt'),
         whitelist: payload.whitelist,
@@ -137,8 +155,9 @@ export const paginateNightlyReviewUsers = async (
 
   await Promise.all(
     batches.map((batchUsers, index) =>
-      runStep(context, `agent-signal:nightly-review:fanout:${index + 1}/${batches.length}`, () =>
+      runStep(context, `${stepPrefix}:fanout:${index + 1}/${batches.length}`, () =>
         triggerPaginateUsers({
+          job,
           pageSize,
           requestedAt: payload.requestedAt,
           targetLimit,
@@ -157,9 +176,10 @@ export const paginateNightlyReviewUsers = async (
     : undefined;
 
   if (nextCursor) {
-    await runStep(context, `agent-signal:nightly-review:next-page:${nextCursor.id}`, () =>
+    await runStep(context, `${stepPrefix}:next-page:${nextCursor.id}`, () =>
       triggerPaginateUsers({
         cursor: nextCursor,
+        job,
         pageSize,
         requestedAt: payload.requestedAt,
         targetLimit,
@@ -214,9 +234,19 @@ export const executeNightlyReviewUser = async (
     DEFAULT_TARGET_LIMIT,
     HARD_MAX_TARGET_LIMIT,
   );
+  const getDb = dependencies.getDb ?? getServerDB;
+
+  if (payload.job === 'bot-retro') {
+    return executeBotRetroUser(context, {
+      createBotRetroService: dependencies.createBotRetroService,
+      getDb,
+      requestedAt,
+      targetLimit,
+    });
+  }
+
   const createScheduleService =
     dependencies.createScheduleService ?? createServerNightlyReviewScheduleService;
-  const getDb = dependencies.getDb ?? getServerDB;
   const summary = await runStep(
     context,
     `agent-signal:nightly-review:dispatch-user:${payload.user.id}`,
@@ -237,6 +267,63 @@ export const executeNightlyReviewUser = async (
   );
 
   return { ...summary, success: true, userId: payload.user.id };
+};
+
+/**
+ * Runs the `bot-retro` job for one user: one durable step lists the agents that worked in a bot
+ * topic on the user's previous local day, then one step per agent writes its retro, so a failed
+ * agent retries alone.
+ *
+ * Call stack:
+ *
+ * executeNightlyReviewUser (job: 'bot-retro')
+ *   -> executeBotRetroUser
+ *     -> {@link BotRetroService.listTargets}
+ *     -> {@link BotRetroService.runForAgent}
+ */
+const executeBotRetroUser = async (
+  context: WorkflowContext<ExecuteNightlyReviewUserPayload>,
+  options: {
+    createBotRetroService?: NightlyReviewWorkflowDependencies['createBotRetroService'];
+    getDb: typeof getServerDB;
+    requestedAt: Date;
+    targetLimit: number;
+  },
+) => {
+  const { user } = context.requestPayload;
+  const window = getLocalNightWindow(options.requestedAt, user.timezone, 'bot-retro');
+
+  if (!window.withinWindow) return { enqueued: 0, skipped: 1, success: true, userId: user.id };
+
+  const createService =
+    options.createBotRetroService ??
+    ((db: Awaited<ReturnType<typeof getServerDB>>, userId: string) =>
+      new BotRetroService(db, userId));
+  const withService = async () => createService(await options.getDb(), user.id);
+
+  const agentIds = await runStep(
+    context,
+    `agent-signal:nightly-bot-retro:list-agents:${user.id}`,
+    async () =>
+      (await withService()).listTargets({
+        limit: options.targetLimit,
+        windowEnd: window.reviewWindowEnd,
+        windowStart: window.reviewWindowStart,
+      }),
+  );
+
+  for (const agentId of agentIds) {
+    await runStep(context, `agent-signal:nightly-bot-retro:run:${agentId}`, async () =>
+      (await withService()).runForAgent({
+        agentId,
+        localDate: window.localDate,
+        windowEnd: window.reviewWindowEnd,
+        windowStart: window.reviewWindowStart,
+      }),
+    );
+  }
+
+  return { enqueued: agentIds.length, skipped: 0, success: true, userId: user.id };
 };
 
 /**

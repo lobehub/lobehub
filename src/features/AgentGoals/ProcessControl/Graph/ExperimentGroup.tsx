@@ -1,9 +1,9 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { KIND_ICON } from '../shared';
 import { experimentStatusVisual } from './experimentStatus';
@@ -26,8 +26,8 @@ const styles = createStaticStyles(({ css }) => ({
     background: color-mix(in srgb, ${cssVar.colorInfo} 3%, transparent);
   `,
   header: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px 12px 0 0;
 

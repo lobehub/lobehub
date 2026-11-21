@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -7,7 +9,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     padding-block: 10px;
     padding-inline: 8px;
-    padding-inline-end: 12px;
+    padding-inline-end: ${densityVars.contentGap};
     border-radius: 8px;
 
     color: ${cssVar.colorText};

@@ -16,6 +16,8 @@ export interface ToolIntervention {
   resolutionRequestId?: string;
   /** User decision published, awaiting the blocked producer's ACK. */
   resolving?: boolean;
+  /** Runtime that owns this intervention; tool dispatch location is independent. */
+  runtimeType?: 'client' | 'server';
   /**
    * The user skipped the interaction (e.g. AskUserQuestion) rather than
    * rejecting the tool call — still `status: 'rejected'` for the runtime, but
@@ -30,6 +32,7 @@ export const ToolInterventionSchema = z.object({
   batchId: z.string().optional(),
   itemIndex: z.number().int().nonnegative().optional(),
   operationId: z.string().optional(),
+  runtimeType: z.enum(['client', 'server']).optional(),
   rejectedReason: z.string().optional(),
   resolving: z.boolean().optional(),
   resolutionRequestId: z.string().optional(),

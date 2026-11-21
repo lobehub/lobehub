@@ -19,11 +19,8 @@ const gitServiceMocks = vi.hoisted(() => ({
   listGitWorktrees: vi.fn(),
 }));
 
-const swrMocks = vi.hoisted(() => ({
-  mutate: vi.fn(),
-}));
-
-vi.mock('@/libs/swr', () => swrMocks);
+const gsMocks = vi.hoisted(() => ({ revalidateGitStatus: vi.fn() }));
+vi.mock('@/store/device/gitStatus/store', () => ({ getGitStatusStoreState: () => gsMocks }));
 
 vi.mock('@/store/chat/store', () => ({
   getChatStoreState: () => chatMocks,
@@ -42,6 +39,23 @@ vi.mock('@/services/git', () => ({
 vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
 }));
+
+const previousGithubMetadata = () => ({
+  git: {
+    branch: 'canary',
+    github: {
+      pullRequest: {
+        number: 1,
+        state: 'OPEN',
+        title: 'old',
+        url: 'https://github.com/lobehub/lobehub/pull/1',
+      },
+      pullRequestStatus: 'ok',
+    },
+  },
+  path: '/repo',
+  repoType: 'github',
+});
 
 describe('parseWorktreeAddPath', () => {
   it('resolves a relative path against the source cwd', () => {
@@ -318,7 +332,7 @@ describe('recordGitCommandEffects', () => {
 
     await recordGitCommandEffects({ command: 'git switch fix/topic', topicId: 't1' });
 
-    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'local', '/repo']);
+    expect(gsMocks.revalidateGitStatus).toHaveBeenCalledWith(undefined, '/repo', ['branch']);
   });
 
   it('refreshes the remote-device branch cache after a branch switch', async () => {
@@ -337,29 +351,14 @@ describe('recordGitCommandEffects', () => {
 
     await recordGitCommandEffects({ command: 'git switch fix/topic', topicId: 't1' });
 
-    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'remote-device', '/repo']);
+    expect(gsMocks.revalidateGitStatus).toHaveBeenCalledWith('remote-device', '/repo', ['branch']);
   });
 
   it('updates the topic branch when the agent switches branch with git switch', async () => {
     chatMocks.topics = {
       t1: {
         metadata: {
-          workingDirectoryConfig: {
-            git: {
-              branch: 'canary',
-              github: {
-                pullRequest: {
-                  number: 1,
-                  state: 'OPEN',
-                  title: 'old',
-                  url: 'https://github.com/lobehub/lobehub/pull/1',
-                },
-                pullRequestStatus: 'ok',
-              },
-            },
-            path: '/repo',
-            repoType: 'github',
-          },
+          workingDirectoryConfig: previousGithubMetadata(),
         },
       },
     };
@@ -405,22 +404,7 @@ describe('recordGitCommandEffects', () => {
     chatMocks.topics = {
       t1: {
         metadata: {
-          workingDirectoryConfig: {
-            git: {
-              branch: 'canary',
-              github: {
-                pullRequest: {
-                  number: 1,
-                  state: 'OPEN',
-                  title: 'old',
-                  url: 'https://github.com/lobehub/lobehub/pull/1',
-                },
-                pullRequestStatus: 'ok',
-              },
-            },
-            path: '/repo',
-            repoType: 'github',
-          },
+          workingDirectoryConfig: previousGithubMetadata(),
         },
       },
     };
@@ -1130,6 +1114,6 @@ describe('recordGitCommandEffects — git push', () => {
       topicId: 't1',
     });
 
-    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'local', '/repo']);
+    expect(gsMocks.revalidateGitStatus).toHaveBeenCalledWith(undefined, '/repo', ['branch']);
   });
 });

@@ -1,9 +1,8 @@
 'use client';
 
-import { type ActionIconGroupProps } from '@lobehub/ui';
+import { type ActionIconGroupProps, type ActionIconProps } from '@lobehub/ui';
 import { ActionIconGroup } from '@lobehub/ui';
-import { type ActionIconProps } from '@lobehub/ui/base-ui';
-import { Dices, Download, Trash2 } from 'lucide-react';
+import { Dices, Download, Share2, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,11 +18,12 @@ export const ActionButtons = memo<ActionButtonsProps>(
     onDelete,
     onDownload,
     onCopySeed,
+    onShare,
     showDownload = false,
     showCopySeed = false,
     seedTooltip,
   }) => {
-    const { t } = useTranslation('image');
+    const { t } = useTranslation(['image', 'chat']);
 
     return (
       <ActionIconGroup
@@ -40,6 +40,12 @@ export const ActionButtons = memo<ActionButtonsProps>(
                 label: t('generation.actions.download'),
                 onClick: onDownload,
               },
+              Boolean(onShare) && {
+                icon: Share2,
+                key: 'share',
+                label: t('shareModal.generation.entry', { ns: 'chat' }),
+                onClick: onShare,
+              },
               Boolean(showCopySeed && onCopySeed) && {
                 icon: Dices,
                 key: 'copySeed',
@@ -54,7 +60,7 @@ export const ActionButtons = memo<ActionButtonsProps>(
                 onClick: onDelete,
               },
             ].filter(Boolean) as ActionIconGroupProps['items'],
-          [showDownload, onDownload, showCopySeed, onCopySeed, seedTooltip, onDelete],
+          [showDownload, onDownload, onShare, showCopySeed, onCopySeed, seedTooltip, onDelete, t],
         )}
       />
     );

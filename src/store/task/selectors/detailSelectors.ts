@@ -1,4 +1,10 @@
-import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import type {
+  HeterogeneousProviderConfig,
+  TaskDetailData,
+  TaskVerifyConfig,
+} from '@lobechat/types';
+import { isTaskArchiveBlocked, resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
 
 import type { SaveStatus } from '@/types/saveState';
 
@@ -11,7 +17,8 @@ const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
 
 const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
 
-const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
+const taskDetailById = (ref: string) => (s: TaskStoreState) =>
+  s.taskDetailMap[s.taskRefIndex?.[ref] ?? ref];
 
 const isTaskDetailLoading = (s: TaskStoreState): boolean =>
   !s.activeTaskId || !s.taskDetailMap[s.activeTaskId];
@@ -22,10 +29,28 @@ const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
 const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority ?? 0;
 
+const activeTaskProjectId = (s: TaskStoreState) => activeTaskDetail(s)?.projectId ?? null;
+
+const EMPTY_LABELS: NonNullable<TaskDetailData['labels']> = [];
+const activeTaskLabels = (s: TaskStoreState) => activeTaskDetail(s)?.labels ?? EMPTY_LABELS;
+
 const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
   activeTaskDetail(s)?.visibility ?? 'public';
 
 const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
+
+const activeTaskArchivedAt = (s: TaskStoreState) => activeTaskDetail(s)?.archivedAt;
+
+const isActiveTaskArchiveBlocked = (s: TaskStoreState) => {
+  const detail = activeTaskDetail(s);
+  if (!detail) return false;
+  return isTaskArchiveBlocked({
+    automationMode: detail.automationMode,
+    heartbeatInterval: detail.heartbeat?.interval,
+    schedulePattern: detail.schedule?.pattern,
+    status: detail.status,
+  });
+};
 
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
@@ -51,7 +76,38 @@ const activeTaskModel = (s: TaskStoreState) =>
 const activeTaskProvider = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.provider as string | undefined;
 
+/**
+ * Selects the assignee's effective external runtime settings for the next Task run.
+ *
+ * Use when:
+ * - Rendering Task configuration in detail and portal surfaces.
+ *
+ * Expects:
+ * - The Task assignee's provider, rather than an unrelated active chat Agent.
+ *
+ * Returns:
+ * - Runtime, model, effort and speed with their sources; undefined for ordinary Agents.
+ */
+const activeTaskRuntimeConfig =
+  (provider: HeterogeneousProviderConfig | undefined) => (s: TaskStoreState) => {
+    if (!provider) return undefined;
+    const model = activeTaskModel(s);
+    // Task snapshots can identify the runtime (codex/openai) rather than its
+    // native model. Match dispatch's guard before constructing a model pin.
+    return resolveHeterogeneousRuntimeConfig(
+      provider,
+      isHeterogeneousAgentModelId(model) ? undefined : { model, provider: activeTaskProvider(s) },
+    );
+  };
+
 const activeTaskSubtasks = (s: TaskStoreState) => activeTaskDetail(s)?.subtasks ?? [];
+
+type SubtaskNode = NonNullable<TaskDetailData['subtasks']>[number];
+const countSubtasks = (nodes: SubtaskNode[] = []): number =>
+  nodes.reduce((total, node) => total + 1 + countSubtasks(node.children), 0);
+
+/** Subtasks of the active task at every depth that the caller can see. */
+const activeTaskSubtaskCount = (s: TaskStoreState) => countSubtasks(activeTaskDetail(s)?.subtasks);
 
 const activeTaskDependencies = (s: TaskStoreState) => activeTaskDetail(s)?.dependencies ?? [];
 
@@ -132,9 +188,11 @@ const topicDrawerFocusRequest = (s: TaskStoreState) => s.activeTopicDrawerFocusR
 
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskLabels,
   activeTaskAssigneeUserId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
+  activeTaskArchivedAt,
   activeTaskCreatedByUserId,
   activeTaskDatabaseId,
   activeTaskModel,
@@ -152,11 +210,14 @@ export const taskDetailSelectors = {
   activeTaskParent,
   activeTaskPeriodicInterval,
   activeTaskPriority,
+  activeTaskProjectId,
   activeTaskProvider,
+  activeTaskRuntimeConfig,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
   activeTaskStatus,
+  activeTaskSubtaskCount,
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskVerifyConfig,
@@ -165,6 +226,7 @@ export const taskDetailSelectors = {
   activeTaskWorkspaceId,
   activeTopicDrawerTopicId,
   canCancelActiveTask,
+  isActiveTaskArchiveBlocked,
   canPauseActiveTask,
   canRunActiveTask,
   isTaskDetailLoading,

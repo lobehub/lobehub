@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -10,6 +9,7 @@ import {
   useLiveTabRouterCap,
 } from '@/features/Electron/TabHost/liveTabRouterCap';
 import { useElectronStore } from '@/store/electron';
+import { densityVars } from '@/styles/densityVars';
 
 import { type TabRouterRow, useTabRouterDebug } from './useTabRouterDebug';
 
@@ -57,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 10px;
@@ -82,7 +82,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 5px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};
@@ -105,7 +105,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};

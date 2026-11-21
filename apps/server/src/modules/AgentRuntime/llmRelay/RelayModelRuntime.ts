@@ -44,6 +44,12 @@ export interface RelayModelRuntimeParams {
   assistantMessageId?: string;
   attempt: number;
   callId: string;
+  /**
+   * Gateway channel `llm_execute` / `llm_cancel` go out on, when the executor
+   * listens on another run's (a sub-agent relaying through its parent's).
+   * Defaults to `operationId`, which the event still names as the run.
+   */
+  channelOperationId?: string;
   deadlines?: LlmRelayDeadlines;
   now?: () => number;
   operationId: string;
@@ -201,6 +207,11 @@ export class RelayModelRuntime implements Pick<
     log('[%s] relayed attempt failed: %O', this.params.callId, error);
   }
 
+  /** The gateway channel the executor listens on. */
+  private get channel() {
+    return this.params.channelOperationId ?? this.params.operationId;
+  }
+
   /**
    * Hand the call to the user's clients. Resolves to how many the gateway
    * delivered it to when it can tell, else `undefined`.
@@ -232,8 +243,9 @@ export class RelayModelRuntime implements Pick<
     };
 
     const { streamManager } = params;
+    const channel = this.channel;
     if (streamManager.sendLlmExecute) {
-      const { delivered, routed } = await streamManager.sendLlmExecute(params.operationId, data);
+      const { delivered, routed } = await streamManager.sendLlmExecute(channel, data);
       log(
         '[%s] llm_execute dispatched (routed=%s, delivered=%s)',
         params.callId,
@@ -244,7 +256,7 @@ export class RelayModelRuntime implements Pick<
       return routed ? delivered : undefined;
     }
 
-    await streamManager.publishStreamEvent(params.operationId, {
+    await streamManager.publishStreamEvent(channel, {
       data,
       stepIndex: params.stepIndex,
       type: 'llm_execute',
@@ -502,7 +514,8 @@ export class RelayModelRuntime implements Pick<
    * `cancel: true`, the event reaches it while it is between uploads.
    */
   private async cancel(reason: LlmCancelData['reason']) {
-    const { callId, operationId, redis, stepIndex, streamManager } = this.params;
+    const { callId, redis, stepIndex, streamManager } = this.params;
+    const channel = this.channel;
     try {
       await redis.set(
         llmRelayKeys.cancel(callId),
@@ -512,9 +525,9 @@ export class RelayModelRuntime implements Pick<
       );
       const data: LlmCancelData = { callId, reason };
       if (streamManager.sendLlmCancel) {
-        await streamManager.sendLlmCancel(operationId, { ...data, stepIndex });
+        await streamManager.sendLlmCancel(channel, { ...data, stepIndex });
       } else {
-        await streamManager.publishStreamEvent(operationId, {
+        await streamManager.publishStreamEvent(channel, {
           data,
           stepIndex,
           type: 'llm_cancel',
@@ -527,7 +540,8 @@ export class RelayModelRuntime implements Pick<
 
   /** Close the call: late uploads find no open call and get `410`. */
   private async cleanup(reader?: RelayBatchReader) {
-    const { callId, operationId, redis, streamManager } = this.params;
+    const { callId, redis, streamManager } = this.params;
+    const channel = this.channel;
     try {
       await redis
         .multi()
@@ -541,7 +555,7 @@ export class RelayModelRuntime implements Pick<
     // Stop the gateway replaying the attempt to clients that subscribe later.
     // Best-effort and bounded by the attempt deadline anyway, so a stalled
     // gateway must not hold up settling the stream.
-    void Promise.resolve(streamManager.closeLlmCall?.(operationId, callId)).catch((error) =>
+    void Promise.resolve(streamManager.closeLlmCall?.(channel, callId)).catch((error) =>
       log('[%s] failed to close the call on the gateway: %O', callId, error),
     );
   }

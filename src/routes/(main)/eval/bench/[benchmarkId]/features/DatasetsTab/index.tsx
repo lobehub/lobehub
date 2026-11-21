@@ -1,20 +1,29 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
 import { testCaseSelectors, useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import { createDatasetCreateModal } from '../../../../features/DatasetCreateModal';
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
 import { createDatasetImportModal } from '../../../../features/DatasetImportModal';
 import { createTestCaseCreateModal } from '../../../../features/TestCaseCreateModal';
-import { createRunCreateModal } from '../RunCreateModal';
+import { useCreateRun } from '../RunCreateModal/useCreateRun';
 import DatasetCard from './DatasetCard';
 import EmptyState from './EmptyState';
 
@@ -24,9 +33,9 @@ const loadingStyles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   icon: css`
     flex-shrink: 0;
@@ -74,13 +83,10 @@ const DatasetsTab = memo<DatasetsTabProps>(
     const total = useEvalStore(testCaseSelectors.testCaseTotal(caseQuery));
     const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(caseQuery));
 
-    const handleRefreshTestCases = useCallback(
-      async () => {
-        await refreshTestCases();
-        onRefresh();
-      },
-      [refreshTestCases, onRefresh],
-    );
+    const handleRefreshTestCases = useCallback(async () => {
+      await refreshTestCases();
+      onRefresh();
+    }, [refreshTestCases, onRefresh]);
 
     const filteredCases = testCases.filter((c: any) => {
       if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;
@@ -138,15 +144,10 @@ const DatasetsTab = memo<DatasetsTabProps>(
       [handleRefreshTestCases],
     );
 
+    const { createRun } = useCreateRun(benchmarkId);
     const handleRunDataset = useCallback(
-      (ds: any) => {
-        createRunCreateModal({
-          benchmarkId,
-          datasetId: ds.id,
-          datasetName: ds.name,
-        });
-      },
-      [benchmarkId],
+      (ds: any) => createRun({ id: ds.id, name: ds.name }),
+      [createRun],
     );
 
     const handleDeleteCase = useCallback(

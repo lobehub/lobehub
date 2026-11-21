@@ -4,8 +4,9 @@ import { systemPrompt } from './systemRole';
 import { AuvApiName, AuvIdentifier } from './types';
 
 export const AuvManifest: BuiltinToolManifest = {
-  // Only the desktop app runs auv; `lh connect` would treat runCommand as a shell call.
-  deviceClients: ['desktop'],
+  // The desktop app always can; `lh connect` only when started with `--auv`. The
+  // server runtime picks the client that reports the capability (see `auvRuntime`).
+  deviceClients: ['desktop', 'cli'],
   executors: ['client', 'server'],
   api: [
     {

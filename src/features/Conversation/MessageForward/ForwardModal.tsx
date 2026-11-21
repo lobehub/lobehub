@@ -1,19 +1,28 @@
 'use client';
 
-import { agentDisplayName, type StoreApiWithSelector } from '@lobechat/types';
-import { Flexbox, SearchBar } from '@lobehub/ui';
-import { Button, createModal, Text, TextArea, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { type StoreApiWithSelector } from '@lobechat/types';
+import {
+  Button,
+  createModal,
+  Flexbox,
+  SearchBar,
+  Text,
+  TextArea,
+  useModalContext,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
-import { memo, useMemo, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { getForwardedMessageText } from '@/store/chat/slices/forward/helpers';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   contextSelectors,
@@ -23,84 +32,71 @@ import {
   useConversationStore,
 } from '../store';
 import SelectCircle from './SelectCircle';
-import { type ForwardTarget, useForwardMessages } from './useForwardMessages';
+import { useForwardMessages } from './useForwardMessages';
+import { useForwardTargets } from './useForwardTargets';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    block-size: 460px;
-  `,
-  divider: css`
-    align-self: stretch;
-    inline-size: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  list: css`
-    overflow-y: auto;
-    flex: 1;
-    margin-inline: -4px;
-    padding-inline: 4px;
-  `,
-  // Shared container holding the message preview and the note input, split by a
-  // divider above the input.
-  preview: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  previewLines: css`
-    overflow-y: auto;
-    flex: 1;
-    padding-block: 12px;
-    padding-inline: 12px;
-  `,
-  note: css`
-    background: transparent;
-  `,
-  noteDivider: css`
-    block-size: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  previewLine: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  previewMore: css`
-    padding-block-start: 2px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    min-block-size: 44px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    transition: background-color 0.1s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background-color: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowSelected: css`
-    background-color: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  body: { blockSize: '460px' },
+  divider: {
+    alignSelf: 'stretch',
+    inlineSize: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  list: { overflowY: 'auto', flex: '1', marginInline: '-4px', paddingInline: '4px' },
+  preview: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  previewLines: {
+    overflowY: 'auto',
+    flex: '1',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
+  note: { backgroundColor: 'transparent', backgroundImage: 'none' },
+  noteDivider: {
+    blockSize: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  previewLine: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  previewMore: { paddingBlockStart: '2px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  row: {
+    cursor: 'pointer',
+    minBlockSize: '44px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: `background-color 0.1s ${cssVar.motionEaseInOut}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+  },
+  rowSelected: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+  },
+});
 
 const ForwardModalContent = memo(() => {
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
-  const [keyword, setKeyword] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const currentAgentId = useConversationStore(contextSelectors.agentId);
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const { candidates, keyword, selectedIds, setKeyword, targets, toggle } = useForwardTargets(
+    agents,
+    currentAgentId,
+  );
   const forwardMessages = useForwardMessages();
 
   // What's being forwarded — count + a few role-labelled snippets for the panel.
@@ -117,28 +113,7 @@ const ForwardModalContent = memo(() => {
 
   useFetchAgentList();
 
-  const candidates = useMemo(() => {
-    const trimmed = keyword.trim().toLowerCase();
-    return agents
-      .filter((agent) => agent.type === 'agent' && agent.id !== currentAgentId)
-      .filter(
-        (agent) => !trimmed || (agentDisplayName(agent) ?? '').toLowerCase().includes(trimmed),
-      );
-  }, [agents, currentAgentId, keyword]);
-
-  const selectedAgents = useMemo(
-    () =>
-      selectedIds
-        .map((id) => agents.find((a) => a.id === id))
-        .filter((a): a is NonNullable<typeof a> => !!a),
-    [selectedIds, agents],
-  );
-
-  const toggle = (id: string) =>
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
   const handleForward = () => {
-    const targets: ForwardTarget[] = selectedAgents.map((a) => ({ id: a.id, title: a.title }));
     if (targets.length === 0) return;
     forwardMessages(targets, note);
     close();
@@ -147,7 +122,7 @@ const ForwardModalContent = memo(() => {
   const avatarOf = (avatar: unknown) => (typeof avatar === 'string' ? avatar : undefined);
 
   return (
-    <Flexbox horizontal className={styles.body} gap={16}>
+    <Flexbox horizontal className={stylex.props(styles.body).className} gap={16}>
       {/* Left: searchable multi-select agent list */}
       <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
         <SearchBar
@@ -156,7 +131,7 @@ const ForwardModalContent = memo(() => {
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
         />
-        <Flexbox className={styles.list} gap={4}>
+        <Flexbox className={stylex.props(styles.list).className} gap={4}>
           {candidates.length === 0 ? (
             <Flexbox align={'center'} justify={'center'} padding={24}>
               <Text type={'secondary'}>{t('messageForward.modal.empty')}</Text>
@@ -168,15 +143,21 @@ const ForwardModalContent = memo(() => {
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={cx(styles.row, checked && styles.rowSelected)}
+                  className={stylex.props(styles.row, checked && styles.rowSelected).className}
                   gap={8}
                   key={agent.id}
                   onClick={() => toggle(agent.id)}
                 >
                   <SelectCircle checked={checked} />
-                  <AgentAvatar avatar={avatarOf(agent.avatar)} />
+                  <AgentAvatar
+                    agentId={agent.id}
+                    avatar={avatarOf(agent.avatar)}
+                    background={agent.backgroundColor || undefined}
+                    name={agent.label || t('untitledAgent')}
+                    size={22}
+                  />
                   <Text ellipsis style={{ flex: 1 }}>
-                    {agentDisplayName(agent, t('untitledAgent'))}
+                    {agent.label || t('untitledAgent')}
                   </Text>
                 </Flexbox>
               );
@@ -185,17 +166,17 @@ const ForwardModalContent = memo(() => {
         </Flexbox>
       </Flexbox>
 
-      <div className={styles.divider} />
+      <div {...stylex.props(styles.divider)} />
 
       {/* Right: forwarded content preview + note */}
       <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
         <Text style={{ fontSize: 12 }} type={'secondary'}>
           {t('messageForward.transcript.header', { count: preview.count })}
         </Text>
-        <Flexbox className={styles.preview} flex={1}>
-          <Flexbox className={styles.previewLines} flex={1} gap={4}>
+        <Flexbox className={stylex.props(styles.preview).className} flex={1}>
+          <Flexbox className={stylex.props(styles.previewLines).className} flex={1} gap={4}>
             {preview.lines.map((line, i) => (
-              <div className={styles.previewLine} key={i}>
+              <div {...stylex.props(styles.previewLine)} key={i}>
                 <Text strong style={{ fontSize: 12 }}>
                   {line.role}:
                 </Text>{' '}
@@ -203,17 +184,17 @@ const ForwardModalContent = memo(() => {
               </div>
             ))}
             {preview.count > preview.lines.length && (
-              <div className={styles.previewMore}>
+              <div {...stylex.props(styles.previewMore)}>
                 {t('messageForward.modal.moreMessages', {
                   count: preview.count - preview.lines.length,
                 })}
               </div>
             )}
           </Flexbox>
-          <div className={styles.noteDivider} />
+          <div {...stylex.props(styles.noteDivider)} />
           <TextArea
             autoSize={{ maxRows: 4, minRows: 2 }}
-            className={styles.note}
+            className={stylex.props(styles.note).className}
             placeholder={t('messageForward.modal.notePlaceholder')}
             resize={false}
             value={note}

@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
     on: vi.fn(),
     commandLine: {
       appendSwitch: vi.fn(),
+      hasSwitch: vi.fn(() => false),
     },
     dock: {
       setIcon: vi.fn(),
@@ -147,7 +148,7 @@ vi.mock('../infrastructure/ProtocolManager', () => ({
   ProtocolManager: vi.fn(function () {
     return {
       initialize: vi.fn(),
-      processPendingUrls: vi.fn().mockResolvedValue(undefined),
+      processPendingTargets: vi.fn().mockResolvedValue(undefined),
     };
   }),
 }));
@@ -362,6 +363,25 @@ describe('App', () => {
       expect(
         vi.mocked(appInstance.browserManager.initializeBrowsers).mock.invocationCallOrder[0],
       ).toBeLessThan(initialize.mock.invocationCallOrder[0]);
+    });
+  });
+
+  describe('single instance lock', () => {
+    it('stops bootstrapping side effects when another instance holds the lock', async () => {
+      vi.mocked(electronApp.requestSingleInstanceLock).mockReturnValue(false);
+      appInstance = new App();
+      const makeAppReady = vi
+        .spyOn(appInstance as any, 'makeAppReady')
+        .mockImplementation(async () => {});
+
+      await appInstance.bootstrap();
+
+      expect(electronApp.exit).toHaveBeenCalledWith(0);
+      // The duplicate instance must not get as far as creating windows,
+      // starting the gateway connection or the shell services: two live
+      // device processes for one machine both answer gateway tool calls.
+      expect(makeAppReady).not.toHaveBeenCalled();
+      expect(appInstance.browserManager.initializeBrowsers).not.toHaveBeenCalled();
     });
   });
 

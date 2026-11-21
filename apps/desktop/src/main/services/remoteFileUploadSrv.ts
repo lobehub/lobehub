@@ -174,6 +174,8 @@ export default class RemoteFileUploadService extends ServiceModule {
       ]);
       if (token && serverUrl) {
         env.LOBEHUB_JWT = token;
+        // An inherited agent-run JWT file would win over this fresh token.
+        delete env.LOBEHUB_JWT_FILE;
         env.LOBEHUB_SERVER = serverUrl.replace(/\/$/, '');
       }
     }

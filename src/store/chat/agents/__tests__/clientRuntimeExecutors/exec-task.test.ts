@@ -8,6 +8,26 @@ import { createExecSubAgentInstruction } from './fixtures';
 import { createMockStore } from './fixtures/mockStore';
 import { createInitialState, createTestContext, executeWithMockContext } from './helpers';
 
+const createTaskSuccessResponse = () => ({
+  assistantMessageId: 'asst_1',
+  operationId: 'op_1',
+  success: true,
+  threadId: 'thread_1',
+});
+
+const createTaskExecutionOptions = (
+  context: Parameters<typeof executeWithMockContext>[0]['context'],
+  instruction: Parameters<typeof executeWithMockContext>[0]['instruction'],
+  mockStore: Parameters<typeof executeWithMockContext>[0]['mockStore'],
+  state: Parameters<typeof executeWithMockContext>[0]['state'],
+): Parameters<typeof executeWithMockContext>[0] => ({
+  context,
+  executor: 'exec_sub_agent',
+  instruction,
+  mockStore,
+  state,
+});
+
 // Mock aiAgentService
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
@@ -39,12 +59,7 @@ describe('exec_sub_agent executor', () => {
       const state = createInitialState({ operationId: 'test-op' });
 
       // Mock task execution
-      mockExecSubAgentTask.mockResolvedValueOnce({
-        assistantMessageId: 'asst_1',
-        operationId: 'op_1',
-        success: true,
-        threadId: 'thread_1',
-      });
+      mockExecSubAgentTask.mockResolvedValueOnce(createTaskSuccessResponse());
 
       // Mock task status polling - completed on first poll
       mockGetSubAgentTaskStatus.mockResolvedValueOnce({
@@ -53,13 +68,9 @@ describe('exec_sub_agent executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       expect(result.nextContext).toBeDefined();
@@ -99,13 +110,9 @@ describe('exec_sub_agent executor', () => {
       };
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       expect(result.nextContext).toBeDefined();
@@ -130,13 +137,9 @@ describe('exec_sub_agent executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
@@ -159,12 +162,7 @@ describe('exec_sub_agent executor', () => {
       const instruction = createExecSubAgentInstruction(undefined, 'msg_parent');
       const state = createInitialState({ operationId: 'test-op' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
-        assistantMessageId: 'asst_1',
-        operationId: 'op_1',
-        success: true,
-        threadId: 'thread_1',
-      });
+      mockExecSubAgentTask.mockResolvedValueOnce(createTaskSuccessResponse());
 
       mockGetSubAgentTaskStatus.mockResolvedValueOnce({
         error: 'Execution error',
@@ -172,13 +170,9 @@ describe('exec_sub_agent executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
@@ -195,12 +189,7 @@ describe('exec_sub_agent executor', () => {
       const instruction = createExecSubAgentInstruction(undefined, 'msg_parent');
       const state = createInitialState({ operationId: 'test-op' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
-        assistantMessageId: 'asst_1',
-        operationId: 'op_1',
-        success: true,
-        threadId: 'thread_1',
-      });
+      mockExecSubAgentTask.mockResolvedValueOnce(createTaskSuccessResponse());
 
       // Return completed with taskDetail on first poll
       mockGetSubAgentTaskStatus.mockResolvedValueOnce({
@@ -210,13 +199,9 @@ describe('exec_sub_agent executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       expect(mockStore.internal_dispatchMessage).toHaveBeenCalledWith(
@@ -238,12 +223,7 @@ describe('exec_sub_agent executor', () => {
       const instruction = createExecSubAgentInstruction(undefined, 'msg_parent');
       const state = createInitialState({ operationId: 'test-op' });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
-        assistantMessageId: 'asst_1',
-        operationId: 'op_1',
-        success: true,
-        threadId: 'thread_1',
-      });
+      mockExecSubAgentTask.mockResolvedValueOnce(createTaskSuccessResponse());
 
       // Use mockImplementationOnce to ensure fresh mock behavior
       mockGetSubAgentTaskStatus.mockImplementationOnce(async () => ({
@@ -251,13 +231,9 @@ describe('exec_sub_agent executor', () => {
       }));
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
@@ -290,22 +266,13 @@ describe('exec_sub_agent executor', () => {
         // After task creation API is called, mark operation as cancelled
         // This simulates cancellation happening right after task creation
         mockStore.operations[operationId].status = 'cancelled';
-        return {
-          assistantMessageId: 'asst_1',
-          operationId: 'op_1',
-          success: true,
-          threadId: 'thread_1',
-        };
+        return createTaskSuccessResponse();
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       const payload = (result.nextContext as AgentRuntimeContext).payload as SubAgentResultPayload;
@@ -328,12 +295,7 @@ describe('exec_sub_agent executor', () => {
       );
       const state = createInitialState({ operationId: 'test-op', stepCount: 5 });
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
-        assistantMessageId: 'asst_1',
-        operationId: 'op_1',
-        success: true,
-        threadId: 'thread_1',
-      });
+      mockExecSubAgentTask.mockResolvedValueOnce(createTaskSuccessResponse());
 
       mockGetSubAgentTaskStatus.mockResolvedValueOnce({
         result: 'Done',
@@ -341,13 +303,9 @@ describe('exec_sub_agent executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       expect(result.nextContext).toBeDefined();
@@ -370,12 +328,7 @@ describe('exec_sub_agent executor', () => {
       const updatedMessages = [{ content: 'test', id: 'msg_1', role: 'user' }];
       mockStore.dbMessagesMap[context.messageKey] = updatedMessages as any;
 
-      mockExecSubAgentTask.mockResolvedValueOnce({
-        assistantMessageId: 'asst_1',
-        operationId: 'op_1',
-        success: true,
-        threadId: 'thread_1',
-      });
+      mockExecSubAgentTask.mockResolvedValueOnce(createTaskSuccessResponse());
 
       mockGetSubAgentTaskStatus.mockResolvedValueOnce({
         result: 'Done',
@@ -383,13 +336,9 @@ describe('exec_sub_agent executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        context,
-        executor: 'exec_sub_agent',
-        instruction,
-        mockStore,
-        state,
-      });
+      const result = await executeWithMockContext(
+        createTaskExecutionOptions(context, instruction, mockStore, state),
+      );
 
       // Then
       expect(result.newState.messages).toEqual(updatedMessages);

@@ -2,15 +2,15 @@ import {
   formatSelfReviewKindLabel,
   getSelfReviewBriefLead,
   type SelfReviewBriefDetails as SelfReviewBriefDetailsModel,
+  type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { homeType } from '@/features/Home/components/homeType';
 
+import { createSelfReviewProposalModal } from './SelfReviewProposalModal';
 import { useSelfReviewTranslator } from './useSelfReviewBriefView';
 
 /** Rows shown before the rest fold behind "N more". */
@@ -48,6 +48,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface SelfReviewBriefDetailsProps {
   /** Display name of the agent the proposal is for. */
   agentName?: string;
+  /** Full proposal content; when present, a "View details" button opens it. */
+  content?: SelfReviewProposalContentItem[];
   details: SelfReviewBriefDetailsModel;
 }
 
@@ -56,7 +58,7 @@ interface SelfReviewBriefDetailsProps {
  * is for, a one- or two-line lead, and — when it holds several changes or
  * ideas — one row per change (kind · target — why), folded past three rows.
  */
-const SelfReviewBriefDetails = ({ agentName, details }: SelfReviewBriefDetailsProps) => {
+const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBriefDetailsProps) => {
   const { t } = useTranslation('home');
   const [expanded, setExpanded] = useState(false);
   const translate = useSelfReviewTranslator();
@@ -111,15 +113,29 @@ const SelfReviewBriefDetails = ({ agentName, details }: SelfReviewBriefDetailsPr
           })}
         </Flexbox>
       )}
-      {hidden > 0 && (
-        <Button
-          className={styles.more}
-          size={'small'}
-          type={'text'}
-          onClick={() => setExpanded(true)}
-        >
-          {t('brief.agentSignal.selfReview.list.more', { count: String(hidden) })}
-        </Button>
+      {(hidden > 0 || content) && (
+        <Flexbox horizontal align={'center'} gap={12}>
+          {hidden > 0 && (
+            <Button
+              className={styles.more}
+              size={'small'}
+              type={'text'}
+              onClick={() => setExpanded(true)}
+            >
+              {t('brief.agentSignal.selfReview.list.more', { count: String(hidden) })}
+            </Button>
+          )}
+          {content && (
+            <Button
+              className={styles.more}
+              size={'small'}
+              type={'text'}
+              onClick={() => createSelfReviewProposalModal(content)}
+            >
+              {t('brief.agentSignal.selfReview.detail.open')}
+            </Button>
+          )}
+        </Flexbox>
       )}
     </Flexbox>
   );

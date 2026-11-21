@@ -4,10 +4,14 @@ import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { CreateThreadWithMessageParams } from '../aiChat';
 import type { DeviceUnavailableErrorData } from '../device';
 import { workingDirConfigSchema } from '../device';
-import type { TaskDetail, UIChatMessage } from '../message';
+import type { EvalToolForwardingConfig } from '../eval/agentEval';
+import type { EvalMemoryReference } from '../eval/evalMemory';
+import { HETERO_PERMISSION_MODES } from '../heteroPermissionMode';
+import type { ComposerUserMessage, TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
 export * from './credentialFacts';
+export * from './initRequest';
 export * from './modelFacts';
 
 /**
@@ -21,16 +25,30 @@ export * from './modelFacts';
  * and the call still answers 200.
  */
 export const initialTopicMetadataSchema = z.object({
+  /**
+   * Claude Code permission mode the composer chip showed (Better Coding
+   * Experience); the topic's first dispatched run starts in it.
+   */
+  heteroPermissionMode: z.enum(HETERO_PERMISSION_MODES).optional(),
   repos: z.array(z.string()).optional(),
   /**
-   * Cloud-sandbox instance the composer chose before any topic existed. The
-   * choice is made on a conversation that has nothing to write to yet, so it
-   * travels with the first send instead — the server cannot read the client's
-   * pending selection, and without this the new topic would be born unbound and
-   * silently run at the workspace root.
+   * Cloud-sandbox placement the composer chose before any topic existed — an
+   * instance, or a folder on the drive. The choice is made on a conversation
+   * that has nothing to write to yet, so it travels with the first send
+   * instead — the server cannot read the client's pending selection, and
+   * without this the new topic would be born unbound and silently run in a
+   * temporary sandbox.
    */
+  /** Which workspace drive the placement is on; see `ChatTopicMetadata.sandboxDrive`. */
+  sandboxDrive: z.enum(['personal', 'public']).optional(),
+  /** The environment to initialize the sandbox from; see `ChatTopicMetadata.sandboxEnvironmentId`. */
+  sandboxEnvironmentId: z.string().max(255).optional(),
   sandboxInstanceId: z.string().optional(),
-  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
+  /** A default nobody picked; see `ChatTopicMetadata.sandboxSeeded`. */
+  sandboxSeeded: z.boolean().optional(),
+  /** An explicit temporary-sandbox pick; see `ChatTopicMetadata.sandboxTemporary`. */
+  sandboxTemporary: z.boolean().optional(),
+  sandboxWorkingDirectory: z.string().max(1024).optional(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
 });
@@ -174,6 +192,14 @@ export interface ExecAgentAppContext {
    */
   orchestrationRole?: 'supervisor' | 'member';
   /**
+   * Project the run belongs to. On a NEW topic it is written onto the row, so
+   * a conversation started from the project home is born inside the project
+   * even without a working directory. For an existing topic the server
+   * resolves it from the topic (or the run's task) and fills it in here, so
+   * every downstream stage reads one value.
+   */
+  projectId?: string;
+  /**
    * Project working directory a NEW topic is born in — the blank conversation a
    * project group's "+" opened. The topic is bound to it and the run routes to
    * the directory's device. Ignored when a topicId is already provided.
@@ -239,6 +265,12 @@ export interface ExecAgentClientIds {
   topicId?: string;
   /** Id for the user message row this run creates. */
   userMessageId?: string;
+  /**
+   * Tail of the branch the client renders the new user row under. The server
+   * keeps the turn on this branch unless its newer spine head extends it, so a
+   * turn sent while an older branch is selected stays visible.
+   */
+  userMessageParentId?: string;
 }
 
 /** A client's declaration that it can run relayed LLM attempts (`llm_execute`). */
@@ -346,6 +378,13 @@ export interface ExecAgentParams {
   /** Override the agent's default model */
   model?: string;
   /**
+   * The conversation this NEW topic is opened from — its parent topic
+   * (`metadata.openedBy`). Resolved through the caller's own topic scope: an
+   * unknown or foreign topic records no link. Ignored when the run continues
+   * an existing topic.
+   */
+  openedByTopicId?: string;
+  /**
    * Parent operation ID when this run is a sub-agent invocation. Forwarded
    * to `agent_operations.parent_operation_id` so analytics can join the
    * sub-tree back to its root.
@@ -363,12 +402,33 @@ export interface ExecAgentParams {
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
   /**
+   * The operation the launcher's run belongs to, when another agent started this
+   * run. Every runtime hands its process its own `LOBEHUB_OPERATION_ID` but
+   * deliberately strips the launcher's agent id (device-dispatched runs), so the
+   * operation is the one identifier that survives every path. The server reads
+   * the topic and the agent from that operation row — its own record, and one
+   * that must belong to the caller — and stamps `metadata.agentSender` on the
+   * created user message.
+   *
+   * Deliberately not a topic id: a topic is a bare client claim no server row
+   * can vouch for, whereas the operation's topic and agent are written by the
+   * server itself.
+   */
+  sourceOperationId?: string;
+  /**
    * User agent of the originating request, captured server-side for run
    * attribution. Propagated into the run's `state.metadata` and downstream
    * LLM-call metadata for auditing and spend attribution. Never client-passable
    * input — derived from the request context.
    */
   userAgent?: string;
+  /**
+   * The composer-authored part of the user message this send creates: rich-text
+   * `editorData` and attached content (`metadata.contextSelections`, …). The
+   * same shape `aiChat.sendMessageInServer` persists, so a gateway send stores
+   * the row a client-runtime send would. See `ComposerUserMessageSchema`.
+   */
+  userMessage?: ComposerUserMessage;
 }
 
 /**
@@ -601,6 +661,12 @@ export interface ExecVirtualSubAgentParams {
   /** The agent ID to execute */
   agentId: string;
   /**
+   * Detached run (`callSubAgent({ runInBackground })`): the parent is not
+   * parked on it, its placeholder already holds the start receipt, and the
+   * answer is delivered to the parent as a separate message on completion.
+   */
+  background?: boolean;
+  /**
    * chatConfig overrides (thinking / reasoning-effort extend params) for the
    * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
    * Merged over the executing agent's own chatConfig, skipping nulled keys.
@@ -612,6 +678,25 @@ export interface ExecVirtualSubAgentParams {
    * runs instead of re-routing through the agent-level `boundDeviceId`.
    */
   deviceId?: string;
+  /**
+   * What the child inherits when the parent runs inside an eval attempt: the
+   * attempt's prompt context (session clock), its runtime (tool forwarding,
+   * Memory scope) and its step cap. Without these the child leaves the sandbox:
+   * it reaches real services, the caller's own Memory and the wall clock, and
+   * runs with no step limit.
+   */
+  eval?: {
+    context?: { envPrompt?: string; sessionDate?: string; timezone?: string };
+    maxSteps?: number;
+    runtime?: {
+      /** The parent's tool allowlist; the child may not reach past it either. */
+      allowedTools?: string[];
+      attemptId?: string;
+      caseId?: string;
+      memory?: EvalMemoryReference;
+      toolForwarding?: EvalToolForwardingConfig;
+    };
+  };
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
@@ -636,6 +721,12 @@ export interface ExecVirtualSubAgentParams {
   /** Provider for {@link model}. */
   provider?: string;
   /**
+   * The tool call (`callSubAgent` / `callAgent`) that spawned this sub-agent,
+   * stored on a new thread's metadata so the UI shows the thread as a
+   * sub-agent. A continued thread keeps the call that first spawned it.
+   */
+  sourceToolCallId?: string;
+  /**
    * Existing isolation thread of an earlier `callSubAgent` run to continue.
    * When set, the instruction becomes a new turn on that thread (the sub-agent
    * keeps its history) instead of a new thread being created.
@@ -659,9 +750,51 @@ export interface ExecSubAgentResult {
   error?: string;
   /** Operation ID for tracking execution status */
   operationId: string;
+  /**
+   * The thread's previous run was still going, so no run was started: the
+   * instruction was queued behind that run (`operationId`) and joins it before
+   * its next LLM call.
+   */
+  steered?: boolean;
   /** Whether the execution was created successfully */
   success: boolean;
   /** The Thread ID where the execution is isolated */
+  threadId: string;
+  /** Short-lived Gateway ticket for streaming this run (absent when withheld) */
+  token?: string;
+}
+
+/**
+ * Parameters for cancelVirtualSubAgent - stop a running `lobe-agent.callSubAgent`
+ * child run on behalf of the agent that dispatched it.
+ */
+export interface CancelVirtualSubAgentParams {
+  /** The dispatching agent; the sub-agent's thread must belong to it */
+  agentId: string;
+  /** The sub-agent's isolation thread id (its `<sub_agent id>`) */
+  threadId: string;
+  /** The topic the sub-agent was dispatched from */
+  topicId: string;
+}
+
+/**
+ * Result from cancelVirtualSubAgent
+ *
+ * - `cancelled`: the run was asked to stop and acknowledged it.
+ * - `not_running`: there is no live run on the thread; nothing was stopped.
+ * - `failed`: the thread is not a cancellable sub-agent, or the stop could not
+ *   be confirmed (`error` says which).
+ */
+export interface CancelVirtualSubAgentResult {
+  error?: string;
+  /** The stopped (or last) run of the sub-agent */
+  operationId?: string;
+  status: 'cancelled' | 'failed' | 'not_running';
+  /**
+   * For `cancelled`: whether the run already reached its end. `false` means it
+   * is still finishing its current step and refuses follow-ups until then.
+   */
+  stopped?: boolean;
   threadId: string;
 }
 

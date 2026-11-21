@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   revalidateTree: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 vi.mock('react-i18next', () => ({

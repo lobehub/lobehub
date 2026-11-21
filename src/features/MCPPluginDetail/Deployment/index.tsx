@@ -1,8 +1,21 @@
-import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
+import SiApple from '@icons-pack/react-simple-icons/icons/SiApple';
+import SiLinux from '@icons-pack/react-simple-icons/icons/SiLinux';
 import { Microsoft } from '@lobehub/icons';
-import { Block, Empty, Flexbox, Icon, Popover, Snippet } from '@lobehub/ui';
-import { Accordion, ActionIcon, Divider, Steps, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Accordion,
+  ActionIcon,
+  Block,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Empty,
+  Flexbox,
+  Icon,
+  Popover,
+  Snippet,
+  Steps,
+  Tag,
+} from '@lobehub/ui';
 import { startCase } from 'es-toolkit/compat';
 import {
   CheckIcon,

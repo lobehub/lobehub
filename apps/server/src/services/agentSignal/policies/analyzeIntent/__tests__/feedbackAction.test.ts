@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentSignalProcedureInspector, createProcedurePolicyOptions } from '../../../procedure';
-import { createRuntimeProcessorContext } from '../../../runtime/context';
 import type { AgentSignalPolicyStateStore } from '../../../store/types';
 import type {
   ActionUserMemoryHandle,
@@ -13,18 +12,9 @@ import type {
 } from '../../types';
 import { createAnalyzeIntentPolicy } from '..';
 import { createFeedbackActionPlannerSignalHandler } from '../feedbackAction';
+import { createFeedbackTestContext } from './testUtils';
 
-const context = createRuntimeProcessorContext({
-  backend: {
-    async getGuardState() {
-      return {};
-    },
-    async touchGuardState() {
-      return {};
-    },
-  },
-  scopeKey: 'topic:thread_1',
-});
+const context = createFeedbackTestContext();
 
 const createStore = (): AgentSignalPolicyStateStore => {
   const state = new Map<string, Record<string, string>>();
@@ -54,10 +44,7 @@ type DomainSignalInput<TTarget extends SupportedTask4DomainTarget> = {
   skillActionIntent?: 'consolidate' | 'create' | 'maintain' | 'noop' | 'refine';
   skillIntentConfidence?: number;
   skillIntentExplicitness?:
-    | 'explicit_action'
-    | 'implicit_strong_learning'
-    | 'non_skill_preference'
-    | 'weak_positive';
+    'explicit_action' | 'implicit_strong_learning' | 'non_skill_preference' | 'weak_positive';
   skillIntentReason?: string;
   skillRoute?: 'accumulate' | 'direct_decision' | 'non_skill';
   signalId: string;

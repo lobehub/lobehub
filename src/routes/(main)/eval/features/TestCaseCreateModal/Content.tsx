@@ -1,17 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Accordion,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   Input,
   Select,
   Text,
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -59,7 +60,8 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
         },
         datasetId,
         evalConfig:
-          values.evalMode === 'llm-rubric' && values.evalConfig?.judgePrompt
+          (values.evalMode === 'llm-rubric' || values.evalMode === 'rule-checklist') &&
+          values.evalConfig?.judgePrompt
             ? values.evalConfig
             : undefined,
         evalMode: values.evalMode || undefined,
@@ -124,10 +126,11 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
             { label: t('evalMode.equals'), value: 'equals' },
             { label: t('evalMode.contains'), value: 'contains' },
             { label: t('evalMode.llm-rubric'), value: 'llm-rubric' },
+            { label: t('evalMode.rule-checklist'), value: 'rule-checklist' },
           ]}
         />
       </Form.Field>
-      {evalModeValue === 'llm-rubric' && (
+      {(evalModeValue === 'llm-rubric' || evalModeValue === 'rule-checklist') && (
         <Form.Field label={t('evalMode.prompt.label')} name="evalConfig.judgePrompt">
           <TextArea
             autoSize={{ maxRows: 8, minRows: 3 }}

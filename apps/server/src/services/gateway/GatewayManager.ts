@@ -126,8 +126,7 @@ export class GatewayManager {
       return;
     }
 
-    await client.start();
-    this.clients.set(key, client);
+    await this.startTracked(key, client);
     log('Started client %s', key);
   }
 
@@ -139,6 +138,29 @@ export class GatewayManager {
     await client.stop();
     this.clients.delete(key);
     log('Stopped client %s', key);
+  }
+
+  /**
+   * Register the client before awaiting `start()`. A slow start (WeCom waits for
+   * its subscribe receipt) must stay reachable by `stopClient` / `stop`, or a
+   * disable that races it finds nothing to stop and the connection comes up
+   * afterwards, still receiving messages and displacing its replacement.
+   */
+  private async startTracked(key: string, client: PlatformClient): Promise<void> {
+    // A concurrent start may have registered a client while this one loaded.
+    const raced = this.clients.get(key);
+    if (raced && raced !== client) {
+      log('Stopping client %s registered by a concurrent start', key);
+      await raced.stop();
+    }
+
+    this.clients.set(key, client);
+    try {
+      await client.start();
+    } catch (error) {
+      if (this.clients.get(key) === client) this.clients.delete(key);
+      throw error;
+    }
   }
 
   // ------------------------------------------------------------------
@@ -217,8 +239,7 @@ export class GatewayManager {
           continue;
         }
 
-        await client.start();
-        this.clients.set(key, client);
+        await this.startTracked(key, client);
         log('Sync: started client %s', key);
       } catch (err) {
         log('Sync: failed to start client %s: %O', key, err);

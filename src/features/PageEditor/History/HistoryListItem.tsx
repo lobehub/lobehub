@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Tag, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, cx, Flexbox, Tag, Tooltip } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ArrowLeftRightIcon, RotateCcwIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
@@ -10,8 +8,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import type { DocumentHistorySaveSource } from '@/server/routers/lambda/_schema/documentHistory';
+import { densityVars } from '@/styles/densityVars';
 
 import { formatHistoryAbsoluteTime, formatHistoryRowTime } from './formatHistoryDate';
 import { historyItemSelectors, useHistoryItemsStore } from './HistoryItemsProvider';
@@ -71,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
@@ -121,7 +122,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
   `,
   rowTimeCurrent: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorPrimary};
   `,
   sourceTag: css`
@@ -142,6 +143,7 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
   const item = useHistoryItemsStore(historyItemSelectors.itemById(historyId));
   const isRestoring = useHistoryItemsStore(historyItemSelectors.isRestoring(historyId));
   const authorInfo = useAuthorInfo(item?.userId);
+  useFetchWorkspaceMembers({ enabled: !!item?.userId });
 
   const handleCompare = useEventCallback(() => {
     onCompare(historyId);
@@ -172,7 +174,14 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
           </span>
         </Tooltip>
         <span className={styles.description}>
-          {authorInfo?.fullName ? `${authorInfo.fullName} · ` : ''}
+          {authorInfo?.fullName && (
+            <>
+              <MemberProfilePopup placement={'left'} userId={item.userId}>
+                {authorInfo.fullName}
+              </MemberProfilePopup>
+              {' · '}
+            </>
+          )}
           {dayjs(item.savedAt).fromNow()}
         </span>
       </Flexbox>

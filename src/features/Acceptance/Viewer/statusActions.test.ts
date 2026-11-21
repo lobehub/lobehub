@@ -14,4 +14,9 @@ describe('getAcceptanceStatusActions', () => {
   it('keeps close available while verification is still active', () => {
     expect(getAcceptanceStatusActions('verifying')).toEqual(['close']);
   });
+
+  it('offers no lifecycle override for a Goal release gate, decided only by its review', () => {
+    expect(getAcceptanceStatusActions('delivered', 'goal_gate')).toEqual([]);
+    expect(getAcceptanceStatusActions('accepted', 'goal_gate')).toEqual([]);
+  });
 });

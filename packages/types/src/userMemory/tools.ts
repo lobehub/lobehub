@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
 import type { StrictOnly } from '../zodStrict';
-import type { UserMemoryIdentity } from './identity';
 import type {
   UserMemoryActivity,
   UserMemoryContext,
   UserMemoryExperience,
+  UserMemoryIdentity,
   UserMemoryPreference,
-} from './layers';
+} from './rows';
 import { LayersEnum } from './shared';
 
 const stringArrayFieldSchema = z.preprocess(

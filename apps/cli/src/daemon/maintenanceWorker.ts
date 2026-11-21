@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
@@ -12,7 +13,8 @@ export interface MaintenanceConfig {
   operation: DeviceCliUpdateOperation;
   parentPid: number;
   receiptPath: string;
-  restartArgs: string[];
+  /** Daemon only. A systemd service is started again by its manager after the parent exits. */
+  restartArgs?: string[];
   statePath: string;
 }
 
@@ -72,6 +74,7 @@ export async function runMaintenanceWorker(config: MaintenanceConfig, ready: () 
         throw new Error('The previous CLI did not stop. No second daemon was started.');
       await delay(100);
     }
+    if (!config.restartArgs) return;
     // The normal daemon launcher waits for startup preflight and writes its own PID.
     // Preserve argv as an array: paths and workspace flags never pass through a shell.
     await run(executable, [entry, ...config.restartArgs, '--daemon'], 45_000);
@@ -108,6 +111,11 @@ if (process.argv[2] === '--maintenance-config') {
         if (process.connected) process.disconnect();
         await rm(process.argv[1], { force: true });
       });
+  });
+  // Stopping a service also stops the rest of its control group, including this worker.
+  process.once('SIGTERM', () => {
+    rmSync(process.argv[1], { force: true });
+    process.exit(143);
   });
   // A parent disappearing before it acknowledges the request must not leave an idle helper.
   process.once('disconnect', () => {

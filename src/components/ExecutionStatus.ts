@@ -1,6 +1,6 @@
 import type { ChatTopicStatus, ProjectStatus, TaskStatus } from '@lobechat/types';
 import { PROJECT_STATUSES } from '@lobechat/types';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   Archive,

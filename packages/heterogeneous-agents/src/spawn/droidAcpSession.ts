@@ -14,6 +14,7 @@ const NOTIFICATION_DRAIN_TIMEOUT_MS = 2000;
 const TRANSPORT = 'droid-acp' as const;
 
 const DROID_ACP_VALUE_ARGS = new Set([
+  '--settings',
   '--additional-tools',
   '--append-system-prompt',
   '--append-system-prompt-file',

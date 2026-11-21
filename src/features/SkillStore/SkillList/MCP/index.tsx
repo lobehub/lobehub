@@ -1,13 +1,13 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
 import AsyncError from '@/components/AsyncError';
+import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useToolStore } from '@/store/tool';
 
 import Item from '../Community/Item';
@@ -40,6 +40,8 @@ export const MCPList = memo(() => {
   }, [keywords, resetMCPPluginList]);
 
   const { error, isValidating } = useFetchMCPPluginList({ pageSize: 20, q: keywords });
+  // Each item shows whether it is installed: a plugin row or a connector install
+  useFetchInstalledPlugins();
 
   const allItems = list?.items ?? [];
   const hasSearchKeywords = Boolean(keywords && keywords.trim());

@@ -1,4 +1,4 @@
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 
 export interface LibraryMenuEntry {
   item: NonNullable<DropdownItem>;

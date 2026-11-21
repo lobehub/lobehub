@@ -1,9 +1,7 @@
 import { type AgentState, selectOperationToolSet } from '@lobechat/agent-runtime';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   buildStepSkillDelta,
   buildStepToolDelta,
-  type LobeToolManifest,
   type OperationToolSet,
   type ResolvedSkillSet,
   type ResolvedToolSet,
@@ -52,20 +50,22 @@ export const resolveServerCallLlmTooling = (
 ): ServerCallLlmTooling => {
   // Resolve tools via ToolResolver (unified tool injection).
   //
-  // Single-track device gate: `buildStepToolDelta` treats activeDeviceId as
-  // an independent activation signal (it only dedupes against already-
-  // enabled tools), so any id that reaches it WILL inject local-system.
-  // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
-  // forbids devices — the same filter the tool executors apply.
+  // Resolve device policy first, then activate only tools already allowed by
+  // the operation snapshot. Routing a device must not widen that tool pool.
   const activeDeviceId = resolveRunActiveDeviceId(state);
-  const executionTarget = (state.plan?.execution as ExecutionPlan | undefined)?.target;
+  const executionPlan = state.plan?.execution as ExecutionPlan | undefined;
+  const executionTarget = executionPlan?.target;
   const operationToolSet: OperationToolSet = selectOperationToolSet(state);
 
   const stepDelta = buildStepToolDelta({
-    activeDeviceId,
+    // A pre-bound device makes local-system discoverable. Only a device selected
+    // mid-run (or a legacy operation without a plan) activates its functions.
+    activeDeviceId:
+      !executionPlan || executionPlan.kind === 'device-unrouted' ? activeDeviceId : undefined,
     enabledToolIds: operationToolSet.enabledToolIds,
     forceFinish: state.forceFinish,
-    localSystemManifest: LocalSystemManifest as unknown as LobeToolManifest,
+    // Device activation cannot widen the operation's allowed tool pool.
+    localSystemManifest: operationToolSet.manifestMap['lobe-local-system'],
     operationManifestMap: operationToolSet.manifestMap,
   });
 

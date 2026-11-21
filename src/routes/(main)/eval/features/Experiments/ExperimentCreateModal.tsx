@@ -10,8 +10,8 @@ import {
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { t } from 'i18next';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +37,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
     const createExperiment = useEvalStore((s) => s.createExperiment);
     const updateExperiment = useEvalStore((s) => s.updateExperiment);
     const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
-    const benchmarkList = useEvalStore(benchmarkSelectors.benchmarkList);
+    const benchmarkList = useEvalStore(benchmarkSelectors.agentBenchmarkList);
 
     useFetchBenchmarks();
 

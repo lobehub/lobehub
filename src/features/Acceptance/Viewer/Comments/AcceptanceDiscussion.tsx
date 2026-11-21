@@ -1,21 +1,24 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { BadgeCheck, Undo2 } from 'lucide-react';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { BadgeCheck, Info, MessagesSquare, RefreshCw, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { useVerifyStore } from '@/store/verify';
 import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import QuietState from '../QuietState';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
-import { useCommentAnchor } from './anchor';
+import AccessRequestEntry from './AccessRequestEntry';
+import { commentAnchorId, useCommentAnchor } from './anchor';
 import { commentAuthorName } from './CommentCard';
 import CommentComposer from './CommentComposer';
 import DiscussionAside from './DiscussionAside';
@@ -46,7 +49,7 @@ const COMPOSER_MIN_HEIGHT = 80;
 const SignInPrompt = memo(() => {
   const { t } = useTranslation('verify');
   return (
-    <Flexbox className={local.signInPrompt} gap={10}>
+    <Flexbox gap={10} {...stylex.props(local.signInPrompt)}>
       <Text weight={600}>{t('acceptance.comments.signInTitle')}</Text>
       <Text fontSize={13} type={'secondary'}>
         {t('acceptance.comments.signInDescription')}
@@ -65,45 +68,43 @@ const SignInPrompt = memo(() => {
 
 SignInPrompt.displayName = 'AcceptanceDiscussionSignInPrompt';
 
-const local = createStaticStyles(({ css }) => ({
-  composer: css`
-    margin-block: 12px 4px;
-  `,
-  empty: css`
-    padding-block: 16px;
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  feed: css`
-    flex: 999 1 480px;
-    min-width: 0;
-  `,
-  round: css`
-    & + & {
-      margin-block-start: 28px;
-    }
-  `,
-  layout: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 32px;
-    align-items: flex-start;
-  `,
-  signInPrompt: css`
-    padding-block: 16px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const local = stylex.create({
+  composer: {
+    marginBlockStart: '12px',
+    marginBlockEnd: '4px',
+  },
+  feed: {
+    flex: '1',
+    minWidth: 0,
+  },
+  // Every round after the first (the old `& + &`).
+  roundSpaced: {
+    marginBlockStart: '28px',
+  },
+  container: { containerType: 'inline-size' },
+  layout: {
+    display: 'flex',
+    flexDirection: { 'default': null, '@container (width < 720px)': 'column' },
+    gap: '32px',
+    alignItems: { 'default': 'flex-start', '@container (width < 720px)': 'stretch' },
+  },
+  signInPrompt: {
+    paddingBlock: '16px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+});
 
 const entryCommentIds = (entry: DiscussionEntry): string[] => {
   if (entry.kind === 'message') return [entry.comment.id];
   if (entry.kind === 'region')
     return [entry.thread.root.id, ...entry.thread.replies.map((reply) => reply.id)];
   if (entry.kind === 'round' && entry.proposal) return [entry.proposal.id];
+  if (entry.kind === 'accessRequest') return [entry.request.id];
   return [];
 };
 
@@ -124,8 +125,10 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const { data } = useAcceptanceBundle(acceptanceId);
   const {
+    answerAccessRequest,
     canApprove,
     canComment,
+    canManageAccess,
     create,
     error,
     isLoading,
@@ -234,7 +237,7 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
             </>
           }
         >
-          {entry.comment && <div className={entryStyles.quote}>{entry.comment}</div>}
+          {entry.comment && <div {...stylex.props(entryStyles.quote)}>{entry.comment}</div>}
         </TimelineEvent>
       );
     }
@@ -246,8 +249,23 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
           key={`round-reject-${entry.roundIndex}`}
           text={t('acceptance.comments.roundRejected', { round: entry.roundIndex })}
         >
-          {entry.comment && <div className={entryStyles.quote}>{entry.comment}</div>}
+          {entry.comment && <div {...stylex.props(entryStyles.quote)}>{entry.comment}</div>}
         </TimelineEvent>
+      );
+    if (entry.kind === 'accessRequest')
+      return (
+        <div
+          {...stylex.props(entry.request.id === anchoredId && styles.entryAnchored)}
+          id={commentAnchorId(entry.request.id)}
+          key={entry.request.id}
+        >
+          <AccessRequestEntry
+            at={entry.at}
+            canManage={canManageAccess}
+            request={entry.request}
+            onAnswer={answerAccessRequest}
+          />
+        </div>
       );
     if (entry.kind === 'approval') {
       const who =
@@ -284,8 +302,8 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   };
 
   const reply = canComment ? (
-    <Flexbox className={local.composer}>
-      <Flexbox className={styles.composerBlock}>
+    <Flexbox {...stylex.props(local.composer)}>
+      <Flexbox {...stylex.props(styles.composerBlock)}>
         <CommentComposer
           borderless
           minHeight={COMPOSER_MIN_HEIGHT}
@@ -303,9 +321,24 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
     </Flexbox>
   ) : error ? (
     // A read that failed says nothing about permission.
-    <Text fontSize={13} type={'secondary'}>
-      {t('acceptance.comments.loadFailed')}
-    </Text>
+    <QuietState
+      icon={Info}
+      title={t('acceptance.comments.loadFailedTitle')}
+      tone={'warning'}
+      action={
+        <Button
+          icon={<Icon icon={RefreshCw} />}
+          onClick={() =>
+            void useVerifyStore
+              .getState()
+              .refreshAcceptanceComments(acceptanceId)
+              .catch(() => undefined)
+          }
+        >
+          {t('report.actions.retry')}
+        </Button>
+      }
+    />
   ) : isLoading ? null : isSignedIn ? ( // Neither line below is true yet while the answer is in flight.
     <Text fontSize={13} type={'secondary'}>
       {t('acceptance.comments.readOnly')}
@@ -317,41 +350,43 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const ungrouped = sections.length <= 1 && (sections[0]?.roundIndex ?? null) === null;
 
   return (
-    <div className={local.layout}>
-      <Flexbox className={local.feed}>
-        {timeline.length === 0 && (
-          <span className={local.empty}>{t('acceptance.comments.empty')}</span>
-        )}
-        {ungrouped ? (
-          <>
-            {sections[0]?.entries.map((entry) => renderEntry(entry))}
-            {reply}
-          </>
-        ) : (
-          sections.map((section, index) => {
-            const key = sectionKey(section);
-            const open = toggled[key] ?? (index === 0 || section === anchoredSection);
-            return (
-              <div className={local.round} key={key}>
-                <RoundSection
-                  open={open}
-                  section={section}
-                  onToggle={() => setToggled((state) => ({ ...state, [key]: !open }))}
-                >
-                  {section.entries.map((entry) => renderEntry(entry))}
-                </RoundSection>
-                {index === 0 && reply}
-              </div>
-            );
-          })
-        )}
-      </Flexbox>
-      <DiscussionAside
-        items={items}
-        latestRound={data?.rounds.at(-1)?.run.roundIndex ?? undefined}
-        status={data?.acceptance.status}
-        onOpenChecks={onOpenChecks}
-      />
+    <div {...stylex.props(local.container)}>
+      <div {...stylex.props(local.layout)}>
+        <Flexbox {...stylex.props(local.feed)}>
+          {timeline.length === 0 && !error && (
+            <QuietState icon={MessagesSquare} title={t('acceptance.comments.emptyTitle')} />
+          )}
+          {ungrouped ? (
+            <>
+              {sections[0]?.entries.map((entry) => renderEntry(entry))}
+              {reply}
+            </>
+          ) : (
+            sections.map((section, index) => {
+              const key = sectionKey(section);
+              const open = toggled[key] ?? (index === 0 || section === anchoredSection);
+              return (
+                <div {...stylex.props(index > 0 && local.roundSpaced)} key={key}>
+                  <RoundSection
+                    open={open}
+                    section={section}
+                    onToggle={() => setToggled((state) => ({ ...state, [key]: !open }))}
+                  >
+                    {section.entries.map((entry) => renderEntry(entry))}
+                  </RoundSection>
+                  {index === 0 && reply}
+                </div>
+              );
+            })
+          )}
+        </Flexbox>
+        <DiscussionAside
+          items={items}
+          latestRound={data?.rounds.at(-1)?.run.roundIndex ?? undefined}
+          status={data?.acceptance.status}
+          onOpenChecks={onOpenChecks}
+        />
+      </div>
     </div>
   );
 });

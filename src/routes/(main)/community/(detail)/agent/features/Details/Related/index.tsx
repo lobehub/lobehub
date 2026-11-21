@@ -25,7 +25,7 @@ const Related = memo(() => {
               category,
               source: marketSource,
             },
-            url: '/community/agent',
+            url: '/marketplace/agent',
           },
           { skipNull: true },
         )}

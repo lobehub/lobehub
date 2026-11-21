@@ -21,8 +21,11 @@ import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
 import { default as deepseek } from './deepseek';
+import { default as doubaospeech } from './doubaospeech';
+import { default as elevenlabs } from './elevenlabs';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
+import { default as fishaudio } from './fishaudio';
 import { default as giteeai } from './giteeai';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
@@ -38,6 +41,7 @@ import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
+import { default as magpie } from './magpie';
 import { default as meta } from './meta';
 import { default as minimax } from './minimax';
 import { default as minimaxcodingplan } from './minimaxCodingPlan';
@@ -71,6 +75,7 @@ import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
+import { typeSafeModels as typesafe } from './typesafe';
 import { default as unsloth } from './unsloth';
 import { default as upstage } from './upstage';
 import { default as v0 } from './v0';
@@ -133,8 +138,11 @@ const staticModelMap: ModelsMap = {
   cometapi,
   comfyui,
   deepseek,
+  doubaospeech,
+  elevenlabs,
   fal,
   fireworksai,
+  fishaudio,
   giteeai,
   github,
   githubcopilot,
@@ -150,6 +158,7 @@ const staticModelMap: ModelsMap = {
   kimicodingplan,
   lmstudio,
   longcat,
+  magpie,
   meta,
   minimax,
   minimaxcodingplan,
@@ -183,6 +192,7 @@ const staticModelMap: ModelsMap = {
   taichu,
   tencentcloud,
   togetherai,
+  typesafe,
   unsloth,
   upstage,
   v0,
@@ -251,8 +261,11 @@ export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
 export { default as deepseek } from './deepseek';
+export { default as doubaospeech } from './doubaospeech';
+export { default as elevenlabs } from './elevenlabs';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';
+export { default as fishaudio } from './fishaudio';
 export { default as giteeai } from './giteeai';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';
@@ -268,6 +281,7 @@ export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
+export { default as magpie } from './magpie';
 export { default as meta } from './meta';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';
@@ -301,6 +315,7 @@ export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';
+export { typeSafeModels as typesafe } from './typesafe';
 export { default as unsloth } from './unsloth';
 export { default as upstage } from './upstage';
 export { default as v0 } from './v0';

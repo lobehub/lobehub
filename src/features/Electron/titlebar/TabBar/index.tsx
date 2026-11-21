@@ -1,9 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { ActionIcon, cx, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ChevronDown, Plus } from 'lucide-react';
 import { useMotionValue, useSpring } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -11,12 +9,12 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { captureVisibleTabPreviews } from '@/features/Electron/TabHost';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
@@ -25,7 +23,8 @@ import { useResolvedTabs } from './hooks/useResolvedTabs';
 import { useStripWidth } from './hooks/useStripWidth';
 import { useTabDrag } from './hooks/useTabDrag';
 import { TAB_SPRING } from './motion';
-import { resolveTabScope } from './scope';
+import { resolveCloseShortcut } from './resolveCloseShortcut';
+import { resolveNewTabUrl, tabScopeKey } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 import {
@@ -46,6 +45,7 @@ const TabBar = () => {
   const { allowed: canCreate, reason } = usePermission('create_content');
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
   const splitView = useElectronStore((s) => s.splitView);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const switchTab = useElectronStore((s) => s.switchTab);
@@ -59,6 +59,10 @@ const TabBar = () => {
   const unpinTab = useElectronStore((s) => s.unpinTab);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
+  const reopenClosedTab = useElectronStore((s) => s.reopenClosedTab);
+  const canReopenClosed = useElectronStore(
+    (s) => (s.closedTabBuckets[tabScopeKey(s.activeTabScope)]?.length ?? 0) > 0,
+  );
 
   const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
   const pinnedCount = useMemo(() => tabs.filter((tab) => tab.tab.pinned).length, [tabs]);
@@ -106,9 +110,10 @@ const TabBar = () => {
   // their final geometry rather than spring in from nothing like a tab the user opened.
   const hasPopulated = useRef(false);
   const settleInstantly = !hasPopulated.current;
+  const followInstantly = settleInstantly || navPanelResizing;
 
   useEffect(() => {
-    if (settleInstantly) {
+    if (followInstantly) {
       targetTotal.jump(total);
       springTotal.jump(total);
       targetDividerX.jump(dividerX);
@@ -128,15 +133,10 @@ const TabBar = () => {
     springDividerX,
     tabs.length,
     stripWidth,
-    settleInstantly,
+    followInstantly,
   ]);
 
-  const newTabUrl = useMemo(() => {
-    const scope = resolveTabScope(location.pathname + location.search);
-    const activeSlug = scope.type === 'workspace' ? scope.slug : null;
-
-    return buildWorkspaceAwarePath(NEW_TAB_URL, activeSlug);
-  }, [location.pathname, location.search]);
+  const activeUrl = location.pathname + location.search;
 
   const handleMoveBy = useCallback(
     (id: string, delta: -1 | 1) => {
@@ -207,11 +207,11 @@ const TabBar = () => {
   );
 
   useWatchBroadcast('closeCurrentTabOrWindow', () => {
-    if (tabs.length > 1 && activeTabId) {
-      handleClose(activeTabId);
-    } else {
-      void electronSystemService.closeWindow();
-    }
+    const state = useElectronStore.getState();
+    const action = resolveCloseShortcut(state.tabs, state.activeTabId, state.activeTabScope);
+
+    if (action.type === 'closeTab') handleClose(action.id);
+    else void electronSystemService.closeWindow();
   });
 
   const handleNewTab = useCallback(
@@ -219,14 +219,16 @@ const TabBar = () => {
       if (!canCreate) return;
 
       // Always open a fresh tab, even if one with the same target already exists.
-      addNewTab(path ?? newTabUrl);
+      addNewTab(resolveNewTabUrl(path ?? NEW_TAB_URL, activeUrl));
     },
-    [canCreate, addNewTab, newTabUrl],
+    [canCreate, addNewTab, activeUrl],
   );
 
   useWatchBroadcast('createNewTab', (data) => {
     handleNewTab(data?.path);
   });
+
+  useWatchBroadcast('reopenClosedTab', reopenClosedTab);
 
   const overflowItems = useCallback((): DropdownItem[] => {
     const visible = new Set(visibleIndices);
@@ -247,11 +249,14 @@ const TabBar = () => {
   // row would visibly widen from compact to full once the measurement lands.
   const measured = stripWidth > 0;
 
+  // The strip is flex: 1, so it owns the empty titlebar space after the last tab. It
+  // declares the drag region itself instead of relying on the TitleBar's — only the tabs
+  // and controls inside opt out with nodrag.
   return (
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={cx(electronStylish.draggable, styles.container)}
       gap={TAB_GAP}
       ref={stripRef}
       onPointerEnter={captureVisibleTabPreviews}
@@ -269,10 +274,12 @@ const TabBar = () => {
 
               return (
                 <TabItem
+                  canReopenClosed={canReopenClosed}
                   drag={drag.session?.id === placement.id ? dragFollow : undefined}
                   enterWidth={settleInstantly ? placement.width : 0}
                   enterX={settleInstantly ? placement.x : previousTotal.current}
                   index={tabIds.indexOf(placement.id)}
+                  instant={navPanelResizing}
                   isActive={placement.id === activeTabId}
                   item={tab}
                   key={placement.id}
@@ -295,6 +302,7 @@ const TabBar = () => {
                   onDragStart={drag.startDrag}
                   onMoveBy={handleMoveBy}
                   onOpenInSplitView={openTabInSplitView}
+                  onReopenClosed={reopenClosedTab}
                   onTogglePin={handleTogglePin}
                 />
               );

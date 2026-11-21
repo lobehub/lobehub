@@ -1,7 +1,6 @@
 'use client';
 
-import { Alert } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Alert, createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,26 +21,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 8px 10px !important;
     border-radius: ${cssVar.borderRadius};
 
-    .ant-alert-content {
-      min-width: 0;
-    }
-
-    .ant-alert-message,
-    .ant-alert-title {
-      overflow: hidden;
-
-      font-size: 12px;
-      line-height: 18px !important;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .ant-alert-icon {
-      flex: none;
-      height: 18px !important;
-      margin-inline-end: 6px !important;
-    }
-
     @media (width <= 768px) {
       max-width: 100%;
     }
@@ -51,7 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface GenerationModelNoticeProps {
   notice: GenerationModelNoticeType | undefined;
   /** i18n namespace the notice key resolves against. */
-  ns: 'image' | 'video';
+  ns: 'image' | 'music' | 'video';
 }
 
 const GenerationModelNotice = memo<GenerationModelNoticeProps>(({ notice, ns }) => {

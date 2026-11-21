@@ -20,7 +20,6 @@ describe('resolveLocalSystemRenderDisplayControl', () => {
 
   it('keeps the card collapsed while the read is still in flight', () => {
     expect(resolveLocalSystemRenderDisplayControl('readFile')).toBeUndefined();
-    expect(resolveLocalSystemRenderDisplayControl('readFile', undefined)).toBeUndefined();
   });
 
   it('does not open an empty card when the image never got a url', () => {

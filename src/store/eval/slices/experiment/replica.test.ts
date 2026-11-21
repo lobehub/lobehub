@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The experiment list and detail are `@lobechat/replica` resources whose views
+ * The experiment list and detail are `local-replica` resources whose views
  * are the eval store's flat `experimentList` / `experimentDetailMap` fields.
  * This suite drives the real replica sync through SWR (no mocked fetch hook) to
  * show the behaviour the migration must preserve: a persisted list paints while

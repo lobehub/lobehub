@@ -12,6 +12,7 @@ vi.mock('../services', () => ({
 }));
 
 const { UserController } = await import('./user.controller');
+const { CurrentUserSchema, UserIdentitySchema } = await import('../types/user.type');
 
 /**
  * `/me` is open to any authenticated caller so a key can resolve its own
@@ -56,7 +57,11 @@ describe('UserController.getCurrentUser', () => {
         contextFor({ authType: 'apikey', scopes: ['model:invoke'] }),
       );
 
-      await expect(bodyOf(res)).resolves.toEqual({ id: 'user-1' });
+      const body = await bodyOf(res);
+      expect(body).toEqual({ id: 'user-1' });
+      // The narrowed body is the documented `UserIdentity` branch of `/me`.
+      expect(() => UserIdentitySchema.parse(body)).not.toThrow();
+      expect(() => CurrentUserSchema.parse(body)).not.toThrow();
     });
 
     it('returns the full profile to a key holding user:read', async () => {
@@ -83,40 +88,45 @@ describe('UserController.getCurrentUser', () => {
     });
   });
 
-  it('withholds the count from a restricted key without chat:read, without failing', async () => {
+  it('skips the count unless the caller opts in, even for full-access callers', async () => {
+    for (const auth of [{ authType: 'apikey', scopes: ['*'] }, { authType: 'oidc' }]) {
+      await new UserController().getCurrentUser(contextFor(auth));
+      expect(getCurrentUser).toHaveBeenLastCalledWith(false);
+
+      for (const query of ['includeCount=0', 'includeCount=false', 'includeCount=yes']) {
+        await new UserController().getCurrentUser(contextFor(auth, query));
+        expect(getCurrentUser).toHaveBeenLastCalledWith(false);
+      }
+    }
+  });
+
+  it('withholds an opted-in count from a restricted key without chat:read, without failing', async () => {
     const res = await new UserController().getCurrentUser(
-      contextFor({
-        authType: 'apikey',
-        scopes: ['agent:read'],
-      }),
+      contextFor({ authType: 'apikey', scopes: ['agent:read'] }, 'includeCount=1'),
     );
 
     expect(res.status).toBe(200);
     expect(getCurrentUser).toHaveBeenCalledWith(false);
   });
 
-  it('returns the count to a restricted key holding chat:read', async () => {
+  it('returns an opted-in count to a restricted key holding chat:read', async () => {
     await new UserController().getCurrentUser(
-      contextFor({ authType: 'apikey', scopes: ['chat:read'] }),
+      contextFor({ authType: 'apikey', scopes: ['chat:read'] }, 'includeCount=1'),
     );
 
     expect(getCurrentUser).toHaveBeenCalledWith(true);
   });
 
-  it('returns the count to full-access keys and session callers', async () => {
-    await new UserController().getCurrentUser(contextFor({ authType: 'apikey', scopes: ['*'] }));
-    expect(getCurrentUser).toHaveBeenLastCalledWith(true);
-
-    await new UserController().getCurrentUser(contextFor({ authType: 'apikey', scopes: null }));
-    expect(getCurrentUser).toHaveBeenLastCalledWith(true);
-
-    await new UserController().getCurrentUser(contextFor({ authType: 'oidc' }));
-    expect(getCurrentUser).toHaveBeenLastCalledWith(true);
-  });
-
-  it('still honours an explicit includeCount=0 for permitted callers', async () => {
-    await new UserController().getCurrentUser(contextFor({ authType: 'oidc' }, 'includeCount=0'));
-
-    expect(getCurrentUser).toHaveBeenCalledWith(false);
+  it('returns an opted-in count to full-access keys and session callers', async () => {
+    for (const auth of [
+      { authType: 'apikey', scopes: ['*'] },
+      { authType: 'apikey', scopes: null },
+      { authType: 'oidc' },
+    ]) {
+      for (const query of ['includeCount=1', 'includeCount=true']) {
+        await new UserController().getCurrentUser(contextFor(auth, query));
+        expect(getCurrentUser).toHaveBeenLastCalledWith(true);
+      }
+    }
   });
 });

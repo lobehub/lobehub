@@ -1,6 +1,16 @@
-import { copyToClipboard, Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  confirmModal,
+  copyToClipboard,
+  cssVar,
+  Flexbox,
+  Switch,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LucidePencil, TrashIcon } from 'lucide-react';
 import { type AiProviderModelListItem } from 'model-bank';
 import { AiModelSourceEnum } from 'model-bank/aiModel';
@@ -10,52 +20,27 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
+import RoutingBadge from '@/components/ModelSelect/RoutingBadge';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { formatPriceByCurrency } from '@/utils/format';
-import {
-  getAudioInputUnitRate,
-  getTextInputUnitRate,
-  getTextOutputUnitRate,
-} from '@/utils/pricing';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { createModelConfigModal } from './ModelConfigModal';
+import { formatModelPricingLabels } from './pricingLabels';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
-const styles = createStaticStyles(({ css, cx }) => {
-  return {
-    config: cx(
-      'model-item-config',
-      css`
-        opacity: 0;
-        transition: all 100ms ease-in-out;
-      `,
-    ),
-    container: css`
-      position: relative;
-      border-radius: ${cssVar.borderRadiusLG}px;
-      transition: all 200ms ease-in-out;
-
-      &:hover {
-        background-color: ${cssVar.colorFillTertiary};
-
-        .model-item-config {
-          opacity: 1;
-        }
-      }
-    `,
-    desc: css`
-      flex: 1;
-      min-width: 0;
-
-      span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-    `,
-  };
+const styles = stylex.create({
+  config: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'all 100ms ease-in-out',
+  },
+  container: {
+    position: 'relative',
+    borderRadius: `${sxVar.borderRadiusLG}px`,
+    transition: 'all 200ms ease-in-out',
+    backgroundColor: { 'default': null, ':hover': sxVar.colorFillTertiary },
+  },
 });
 
 interface ModelItemProps extends AiProviderModelListItem {
@@ -82,6 +67,7 @@ const ModelItem = memo<ModelItemProps>(
     const { t } = useTranslation(['modelProvider', 'components', 'models', 'common']);
     const { modelEditable, showDeployName } = use(ProviderSettingsContext);
     const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
+    const compact = useInterfaceDensity() === 'compact';
 
     const [activeAiProvider, isModelLoading, toggleModelEnabled, removeAiModel] = useAiInfraStore(
       (s) => [
@@ -94,65 +80,9 @@ const ModelItem = memo<ModelItemProps>(
 
     const [checked, setChecked] = useState(enabled);
 
-    const formatPricing = (): string[] => {
-      if (!pricing) return [];
-
-      switch (type) {
-        case 'chat': {
-          const inputRate = getTextInputUnitRate(pricing);
-          const outputRate = getTextOutputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputTokens', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-            typeof outputRate === 'number' &&
-              t('providerModels.item.pricing.outputTokens', {
-                amount: formatPriceByCurrency(outputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-        case 'embedding': {
-          const inputRate = getTextInputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputTokens', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-        case 'tts': {
-          const inputRate = getAudioInputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputCharts', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-        case 'asr': {
-          const inputRate = getAudioInputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputMinutes', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-
-        case 'image': {
-          return [];
-        }
-
-        default: {
-          return [];
-        }
-      }
-    };
-
     const content = [
       releasedAt && t('providerModels.item.releasedAt', { releasedAt }),
-      ...formatPricing(),
+      ...formatModelPricingLabels(type, pricing, t),
     ].filter(Boolean) as string[];
 
     const copyModelId = async () => {
@@ -189,7 +119,7 @@ const ModelItem = memo<ModelItemProps>(
     const Actions =
       modelEditable &&
       ((style?: React.CSSProperties) => (
-        <Flexbox horizontal className={styles.config} style={style}>
+        <Flexbox horizontal className={stylex.props(styles.config).className} style={style}>
           <ActionIcon
             disabled={!canManageProvider}
             icon={LucidePencil}
@@ -244,6 +174,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
+              <RoutingBadge id={id} provider={activeAiProvider} />
               <Flexbox horizontal align={'center'} gap={8}>
                 <ModelInfoTags
                   placement={'top'}
@@ -267,24 +198,39 @@ const ModelItem = memo<ModelItemProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.container}
+        className={stylex.props(styles.container, stylex.defaultMarker()).className}
         gap={24}
         justify={'space-between'}
-        padding={12}
+        paddingBlock={compact ? 4 : 12}
+        paddingInline={12}
+        style={compact ? { minHeight: 40 } : undefined}
         width={'100%'}
       >
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
-          <ModelIcon model={id} size={32} />
-          <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-            <Flexbox horizontal align={'center'} gap={8}>
+          <ModelIcon model={id} size={compact ? 24 : 32} />
+          <Flexbox flex={1} gap={compact ? 0 : 2} style={{ minWidth: 0 }}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={8}
+              style={compact ? { fontSize: 13 } : undefined}
+            >
               {displayName || id}
+              <RoutingBadge id={id} provider={activeAiProvider} />
               {ModelIdTag}
               {NewTag}
               {Actions && Actions()}
             </Flexbox>
             <Flexbox horizontal align={'baseline'} gap={8}>
               {content.length > 0 && (
-                <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12, marginBottom: 0 }}>
+                <Text
+                  style={{
+                    color: cssVar.colorTextSecondary,
+                    fontSize: 12,
+                    lineHeight: compact ? '16px' : undefined,
+                    marginBottom: 0,
+                  }}
+                >
                   {content.join(' · ')}
                 </Text>
               )}

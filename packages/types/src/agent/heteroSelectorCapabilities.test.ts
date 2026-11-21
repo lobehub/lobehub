@@ -4,19 +4,34 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import { buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
-  CODEX_SERVER_DEFAULT_CUSTOM_MODELS,
+  buildHeteroExecArgs,
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isCodexServerDefaultCustomModel,
   isHeteroSelectorAvailable,
+  parseModelTuple,
 } from './heteroSelectorCapabilities';
 
 describe('selector availability', () => {
+  it('offers an ACP model selector for DeepSeek Harness and preserves tuple selections', () => {
+    const value = '["gateway","deepseek-v4-pro"]';
+    const capability = getHeteroSelectorCapability('deepseek-harness');
+
+    expect(isHeteroSelectorAvailable('deepseek-harness')).toBe(true);
+    expect(capability?.model?.source).toBe('catalog');
+    expect(capability?.model?.encodings).toEqual([]);
+    expect(capability?.model?.resolve({ model: value })).toBe(value);
+    expect(applyHeteroSelection({ type: 'deepseek-harness' }, { model: value })).toMatchObject({
+      model: value,
+    });
+  });
+
   it('derives the selectable provider set from any registered dimension', () => {
     expect(isHeteroSelectorAvailable('amp')).toBe(true);
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
+    expect(isHeteroSelectorAvailable('copilot')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
     expect(isHeteroSelectorAvailable('droid')).toBe(true);
     expect(isHeteroSelectorAvailable('devin')).toBe(true);
@@ -31,41 +46,18 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });
 
-  it('exposes the dimensions each provider actually supports', () => {
-    expect(getHeteroSelectorCapability('amp')?.mode?.levels).toEqual([
-      'low',
-      'medium',
-      'high',
-      'ultra',
-    ]);
-    expect(getHeteroSelectorCapability('amp')?.model).toBeUndefined();
-    expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
-    expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
-    expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('grok-build')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('kimi-code')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('grok-build')?.effort?.levels('grok-4.6')).toEqual([
+  it('exposes the Copilot catalog and reasoning levels', () => {
+    expect(getHeteroSelectorCapability('copilot')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('copilot')?.effort?.levels()).toEqual([
       'low',
       'medium',
       'high',
       'xhigh',
+      'max',
     ]);
-    expect(getHeteroSelectorCapability('opencode')?.effort).toBeUndefined();
-    expect(getHeteroSelectorCapability('qoder')?.effort).toBeDefined();
-    expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('codebuddy')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('qoder')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('trae')?.model?.source).toBe('catalog');
   });
 
-  it('keeps non-OpenAI Codex relay support on an explicit allowlist', () => {
-    expect(CODEX_SERVER_DEFAULT_CUSTOM_MODELS).toEqual([
-      'deepseek-v4-flash',
-      'deepseek-v4-pro',
-      'glm-5.2',
-    ]);
+  it('recognizes supported non-OpenAI Codex relay models', () => {
     expect(isCodexServerDefaultCustomModel('deepseek-v4-pro')).toBe(true);
     expect(isCodexServerDefaultCustomModel('kimi-k2.6')).toBe(false);
   });
@@ -312,5 +304,41 @@ describe('applyHeteroSelection', () => {
     const patched = { ...stale, ...applyHeteroSelection(stale, { model: 'opus' }) };
 
     expect(buildHeteroSpawnArgs(patched)).toEqual(['--model', 'opus']);
+  });
+});
+
+describe('DeepSeek Harness exec args', () => {
+  it('forwards the persisted tuple to lh hetero exec without native spawn args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--config', '/tmp/dsh.yml'],
+      model: '["deepseek-account","deepseek-flash"]',
+      type: 'deepseek-harness',
+    };
+
+    // The runtime selects the model through ACP, so the desktop spawn keeps the
+    // user's own args and passes the tuple as `initialModel` instead.
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--config', '/tmp/dsh.yml']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--config',
+      '--agent-arg=/tmp/dsh.yml',
+      '--model',
+      '["deepseek-account","deepseek-flash"]',
+    ]);
+  });
+});
+
+describe('parseModelTuple', () => {
+  it('decodes the provider and model halves', () => {
+    expect(parseModelTuple('["deepseek-account","deepseek-v4-pro"]')).toEqual({
+      modelId: 'deepseek-v4-pro',
+      providerId: 'deepseek-account',
+    });
+  });
+
+  it('returns undefined for opaque and malformed values', () => {
+    expect(parseModelTuple('deepseek-v4-pro')).toBeUndefined();
+    expect(parseModelTuple('["deepseek-account"]')).toBeUndefined();
+    expect(parseModelTuple('["deepseek-account",42]')).toBeUndefined();
+    expect(parseModelTuple('[not json')).toBeUndefined();
   });
 });

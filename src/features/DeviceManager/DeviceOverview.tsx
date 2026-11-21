@@ -1,9 +1,17 @@
 'use client';
 
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,
@@ -13,6 +21,7 @@ import {
   CpuIcon,
   FolderIcon,
   GaugeIcon,
+  HardDriveIcon,
   HeartPulseIcon,
   LayersIcon,
   type LucideIcon,
@@ -30,18 +39,32 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import UserAvatar from '@/components/UserAvatar';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { densityVars } from '@/styles/densityVars';
 import { formatSize } from '@/utils/format';
 
 import Connections from './Connections';
 import { refreshDeviceList } from './const';
 import { BoundAgentList, RunningTopicList } from './DeviceActivity';
 import DeviceHealth, { HealthLegend } from './DeviceHealth';
-import { formatPercent, usageLevel } from './DeviceHealth/format';
+import {
+  formatPercent,
+  LOAD_THRESHOLDS,
+  usageLevel,
+  type UsageThresholds,
+} from './DeviceHealth/format';
 import { usageTextColor, useDeviceMetricSeries } from './DeviceHealth/shared';
 import { UsageBar } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from './getDeviceIcon';
+import {
+  getManagedDeviceStatus,
+  managedStatusBackground,
+  managedStatusColor,
+  managedStatusLabelKey,
+  presenceDotColor,
+} from './managedDeviceStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -56,11 +79,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   cardBody: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   cardHeader: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -80,12 +103,12 @@ const styles = createStaticStyles(({ css }) => ({
   infoGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   row: css`
     min-height: 48px;
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -94,7 +117,7 @@ const styles = createStaticStyles(({ css }) => ({
   statGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   statusPill: css`
     display: inline-flex;
@@ -181,12 +204,13 @@ interface StatCardProps {
   icon: LucideIcon;
   /** First read still in flight: placeholders in the reading's own line boxes. */
   loading?: boolean;
+  thresholds?: UsageThresholds;
   title: string;
   value: number | null | undefined;
 }
 
 /** One reading at a glance: the big share, its absolute size, and the segmented bar. */
-const StatCard = ({ detail, icon, loading, title, value }: StatCardProps) => (
+const StatCard = ({ detail, icon, loading, thresholds, title, value }: StatCardProps) => (
   <DetailCard icon={icon} title={title}>
     {loading ? (
       <Flexbox aria-busy gap={14}>
@@ -200,7 +224,7 @@ const StatCard = ({ detail, icon, loading, title, value }: StatCardProps) => (
         <Flexbox horizontal align={'baseline'} distribution={'space-between'} gap={8}>
           <Text
             fontSize={28}
-            style={{ color: usageTextColor(usageLevel(value)), lineHeight: 1.2 }}
+            style={{ color: usageTextColor(usageLevel(value, thresholds)), lineHeight: 1.2 }}
             weight={600}
           >
             {formatPercent(value)}
@@ -211,7 +235,7 @@ const StatCard = ({ detail, icon, loading, title, value }: StatCardProps) => (
             </Text>
           )}
         </Flexbox>
-        <UsageBar height={8} value={value} />
+        <UsageBar height={8} thresholds={thresholds} value={value} />
       </Flexbox>
     )}
   </DetailCard>
@@ -229,17 +253,22 @@ interface DeviceOverviewProps {
  */
 const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
   const { t } = useTranslation('setting');
-  const { data, error } = useDeviceMetricSeries(device.deviceId);
+  const { data, error } = useDeviceMetricSeries(device.deviceId, device.scope);
   const usage = latestUsageView({ data, error });
   const latest = usage.loading ? null : usage.latest;
 
   const channels = device.channels ?? [];
   const online = channels.length > 0;
+  // The persisted copy carries no channels: presence is unknown, not offline.
+  const presenceUnknown = !!device.onlineUnknown;
+  const managedStatus = getManagedDeviceStatus(device);
 
   const newest = data?.points.at(-1);
   const cores = data?.cpuCount ?? null;
   const memoryTotal = data?.memoryTotalBytes ?? null;
   const memoryUsed = newest?.memoryUsedBytes ?? null;
+  const diskTotal = data?.diskTotalBytes ?? null;
+  const diskUsed = newest?.diskUsedBytes ?? null;
 
   const lastConnected = dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow();
   const platformLabel = getPlatformLabel(device.platform);
@@ -281,19 +310,33 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
             <span
               className={styles.statusPill}
               style={{
-                background: online ? cssVar.colorSuccessBg : cssVar.colorFillTertiary,
-                color: online ? cssVar.colorSuccess : cssVar.colorTextSecondary,
+                background: managedStatus
+                  ? managedStatusBackground[managedStatus]
+                  : online
+                    ? cssVar.colorSuccessBg
+                    : cssVar.colorFillTertiary,
+                color: managedStatus
+                  ? managedStatusColor[managedStatus]
+                  : online
+                    ? cssVar.colorSuccess
+                    : cssVar.colorTextSecondary,
               }}
             >
               <span
                 style={{
-                  background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary,
+                  background: presenceDotColor(managedStatus, online),
                   borderRadius: '50%',
                   height: 6,
                   width: 6,
                 }}
               />
-              {online ? t('devices.status.online') : t('devices.status.offline')}
+              {managedStatus
+                ? t(managedStatusLabelKey[managedStatus])
+                : presenceUnknown
+                  ? t('devices.status.checking')
+                  : online
+                    ? t('devices.status.online')
+                    : t('devices.status.offline')}
             </span>
           </InfoRow>
           <InfoRow icon={MonitorIcon} label={t('devices.detail.os')}>
@@ -316,7 +359,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           </InfoRow>
           {device.scope === 'workspace' && device.enroller && (
             <InfoRow icon={UserIcon} label={t('workspaceSetting.devices.enrolledByLabel')}>
-              <Avatar avatar={device.enroller.avatar ?? undefined} size={20} />
+              <UserAvatar avatar={device.enroller.avatar} name={enrollerName} size={20} />
               <Text ellipsis>{enrollerName}</Text>
             </InfoRow>
           )}
@@ -341,6 +384,11 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
             {memoryTotal ? <Text>{formatSize(memoryTotal)}</Text> : <Empty />}
           </InfoRow>
+          {diskTotal ? (
+            <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+              <Text>{formatSize(diskTotal)}</Text>
+            </InfoRow>
+          ) : null}
           <InfoRow icon={FolderIcon} label={t('devices.card.workingDir')}>
             {device.defaultCwd ? (
               <span className={styles.code} title={device.defaultCwd}>
@@ -390,6 +438,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
         <StatCard
           icon={GaugeIcon}
           loading={usage.loading}
+          thresholds={LOAD_THRESHOLDS}
           title={t('devices.detail.loadUsage')}
           value={latest?.loadPercent}
           detail={
@@ -398,10 +447,22 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
               : undefined
           }
         />
+        {!usage.loading && usage.reportsDisk && (
+          <StatCard
+            icon={HardDriveIcon}
+            title={t('devices.card.diskUsage')}
+            value={latest?.diskPercent}
+            detail={
+              diskUsed !== null && diskTotal
+                ? `${formatSize(diskUsed)} / ${formatSize(diskTotal)}`
+                : undefined
+            }
+          />
+        )}
       </div>
 
       <DetailCard extra={<HealthLegend />} icon={HeartPulseIcon} title={t('devices.health.title')}>
-        <DeviceHealth deviceId={device.deviceId} />
+        <DeviceHealth deviceId={device.deviceId} scope={device.scope} />
       </DetailCard>
 
       <DetailCard icon={CableIcon} title={t('devices.detail.connections')}>

@@ -23,6 +23,18 @@ export interface FileAccessUrlItem {
   url?: string | null;
 }
 
+interface FileRecordParams {
+  fileHash: string;
+  fileType: string;
+  id?: string;
+  metadata?: Record<string, unknown>;
+  name: string;
+  size: number;
+  source?: FileItem['source'];
+  url: string;
+  visibility?: FileItem['visibility'];
+}
+
 /**
  * File service class
  * Provides file operation services using a modular implementation approach
@@ -84,6 +96,20 @@ export class FileService {
   }
 
   /**
+   * Up to `limit` storage keys under a prefix, in lexical order
+   */
+  public async listFileKeys(prefix: string, limit?: number): Promise<string[]> {
+    return this.impl.listFileKeys(prefix, limit);
+  }
+
+  /**
+   * Like listFileKeys, with each object's ETag (unquoted) and size
+   */
+  public async listFileObjects(prefix: string, limit?: number) {
+    return this.impl.listFileObjects(prefix, limit);
+  }
+
+  /**
    * Get file content
    */
   public async getFileContent(key: string, byteLength?: number): Promise<string> {
@@ -109,8 +135,11 @@ export class FileService {
   /**
    * Create pre-signed upload descriptor
    */
-  public async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
-    return this.impl.createPreSignedUpload(key);
+  public async createPreSignedUpload(
+    key: string,
+    options?: { private?: boolean },
+  ): Promise<PreSignedUpload> {
+    return this.impl.createPreSignedUpload(key, options);
   }
 
   /**
@@ -162,6 +191,9 @@ export class FileService {
    * Get full file URL
    */
   public async getFullFileUrl(url?: string | null, expiresIn?: number): Promise<string> {
+    // Native documents keep their content in the database, not object storage.
+    if (url?.startsWith('internal://')) return '';
+
     return this.impl.getFullFileUrl(url, expiresIn);
   }
 
@@ -201,8 +233,9 @@ export class FileService {
     key: string,
     buffer: Buffer,
     contentType: string,
+    options?: { abortSignal?: AbortSignal; private?: boolean },
   ): Promise<{ key: string }> {
-    return this.impl.uploadBuffer(key, buffer, contentType);
+    return this.impl.uploadBuffer(key, buffer, contentType, options);
   }
 
   private async isStoredFileAvailable(url: string): Promise<boolean> {
@@ -224,59 +257,62 @@ export class FileService {
    * @returns File record and proxy URL
    */
   public async createFileRecord(
-    params: {
-      fileHash: string;
-      fileType: string;
-      id?: string;
-      metadata?: Record<string, unknown>;
-      name: string;
-      size: number;
-      source?: FileItem['source'];
-      url: string;
-      visibility?: FileItem['visibility'];
-    },
-    trx?: Transaction,
+    params: FileRecordParams,
   ): Promise<{ fileId: string; url: string }> {
-    // Check if hash already exists in globalFiles
-    const existingFile = await this.fileModel.checkHash(params.fileHash);
-    const { isExist } = existingFile;
-
-    let shouldRefreshGlobalFile = false;
-    if (isExist && existingFile.url && existingFile.url !== params.url) {
-      shouldRefreshGlobalFile = !(await this.isStoredFileAvailable(existingFile.url));
-    }
-
-    if (shouldRefreshGlobalFile) {
-      // Keep global hash dedup usable when the same file is uploaded again to a
-      // fresh object key after the previous storage object has been removed.
-      await this.fileModel.updateGlobalFile(params.fileHash, {
-        metadata: params.metadata,
-        url: params.url,
-      });
-    }
-
-    // Create database record
-    // If hash doesn't exist, also create globalFiles record
-    const { id } = await this.fileModel.create(
-      {
-        fileHash: params.fileHash,
-        fileType: params.fileType,
-        id: params.id, // Use custom ID if provided
-        metadata: params.metadata,
-        name: params.name,
-        size: params.size,
-        source: params.source,
-        url: params.url,
-        visibility: params.visibility,
-      },
-      !isExist, // insertToGlobalFiles
-      trx,
-    );
+    const id = await this.writeFileRecord(params);
 
     return {
       fileId: id,
       url: await this.getFileAccessUrl({ id, url: params.url }),
     };
+  }
+
+  /** Probe storage before borrowing a connection; keep all record queries on that transaction. */
+  private async writeFileRecord(
+    params: FileRecordParams,
+    beforeRecord?: (trx: Transaction) => Promise<void>,
+  ): Promise<string> {
+    const observed = await this.fileModel.checkHash(params.fileHash);
+    const missingHashUrl =
+      observed.isExist &&
+      observed.url &&
+      observed.url !== params.url &&
+      !(await this.isStoredFileAvailable(observed.url))
+        ? observed.url
+        : undefined;
+
+    const { id } = await this.db.transaction(async (trx) => {
+      await beforeRecord?.(trx);
+
+      // The probe describes only the URL it observed. Re-read on the record transaction so a
+      // replaced pointer is preserved and a deleted global row is reinserted before the file row.
+      const current = await this.fileModel.checkHash(params.fileHash, trx);
+      if (missingHashUrl && current.isExist && current.url === missingHashUrl) {
+        await this.fileModel.updateGlobalFile(
+          params.fileHash,
+          { metadata: params.metadata, url: params.url },
+          trx,
+        );
+      }
+
+      return this.fileModel.create(
+        {
+          fileHash: params.fileHash,
+          fileType: params.fileType,
+          id: params.id,
+          metadata: params.metadata,
+          name: params.name,
+          size: params.size,
+          source: params.source,
+          url: params.url,
+          visibility: params.visibility,
+        },
+        !current.isExist,
+        trx,
+      );
+    });
+
+    return id;
   }
 
   /**
@@ -452,33 +488,28 @@ export class FileService {
     const filename = parts.pop() || name;
     const dirname = parts.join('/');
 
-    const { fileId: createdId, url } = await this.db
-      .transaction(async (trx) => {
-        await beforeRecord?.(trx);
-
-        return this.createFileRecord(
-          {
-            fileHash: hash,
-            fileType: mimeType,
-            id: fileId,
-            metadata: {
-              date: new Date().toISOString().slice(0, 10),
-              dirname,
-              filename,
-              path: pathname,
-            },
-            name,
-            size,
-            url: key,
-            ...recordOptions,
-          },
-          trx,
-        );
-      })
-      .catch(async (error) => {
-        await this.deleteFile(key).catch(() => {});
-        throw error;
-      });
+    const createdId = await this.writeFileRecord(
+      {
+        fileHash: hash,
+        fileType: mimeType,
+        id: fileId,
+        metadata: {
+          date: new Date().toISOString().slice(0, 10),
+          dirname,
+          filename,
+          path: pathname,
+        },
+        name,
+        size,
+        url: key,
+        ...recordOptions,
+      },
+      beforeRecord,
+    ).catch(async (error) => {
+      await this.deleteFile(key).catch(() => {});
+      throw error;
+    });
+    const url = await this.getFileAccessUrl({ id: createdId, url: key });
 
     return { fileId: createdId, key, url };
   }
@@ -539,14 +570,28 @@ export class FileService {
     return { fileId: createdId, key, url };
   }
 
+  /**
+   * Downloads a stored file to a temp path. `maxBytes` (optional) refuses a file larger than the
+   * limit before any bytes are read, by the stored size, and again by the bytes actually received.
+   * Callers that do not pass it (skill ZIP import) keep their own limits.
+   */
   async downloadFileToLocal(
     fileId: string,
     accessScope: FileAccessScope = ordinaryFileAccessScope,
-  ): Promise<{ cleanup: () => void; file: FileItem; filePath: string }> {
+    options: { maxBytes?: number } = {},
+  ): Promise<{ cleanup: () => Promise<void>; file: FileItem; filePath: string }> {
     const file = await this.fileModel.findById(fileId, { accessScope });
     if (!file) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
     }
+
+    const { maxBytes } = options;
+    const tooLarge = () =>
+      new TRPCError({
+        code: 'PAYLOAD_TOO_LARGE',
+        message: `Files larger than ${maxBytes} bytes cannot be parsed in memory`,
+      });
+    if (maxBytes !== undefined && file.size > maxBytes) throw tooLarge();
 
     let content: Uint8Array | undefined;
     try {
@@ -564,6 +609,7 @@ export class FileService {
     }
 
     if (!content) throw new TRPCError({ code: 'BAD_REQUEST', message: 'File content is empty' });
+    if (maxBytes !== undefined && content.byteLength > maxBytes) throw tooLarge();
 
     const dir = nanoid();
     const tempManager = new TempFileManager(dir);

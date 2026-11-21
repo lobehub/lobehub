@@ -1,4 +1,4 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from './imageToBase64';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,7 +8,7 @@ import {
   referenceImageUrlToBase64,
 } from './referenceImageCache';
 
-vi.mock('@lobechat/utils', () => ({ imageUrlToBase64: vi.fn() }));
+vi.mock('./imageToBase64', () => ({ imageUrlToBase64: vi.fn() }));
 
 const createCache = (now = () => 0) => {
   const cache = new DownloadCache({ maxEntryBytes: 10, maxTotalBytes: 12, ttlMs: 1000 }, now);

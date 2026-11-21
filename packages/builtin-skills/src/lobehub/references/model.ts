@@ -27,6 +27,7 @@ The \`--type\` filter accepts the following values:
 | \`video\` | Video generation models |
 | \`text2music\` | Music generation models |
 | \`realtime\` | Realtime audio/video models |
+| \`decision\` | Decision models that answer typed questions with probabilities |
 
 ## Tips
 

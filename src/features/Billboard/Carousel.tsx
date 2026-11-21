@@ -1,14 +1,21 @@
 'use client';
 
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Carousel } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Carousel,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { X } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAnalytics } from '@/libs/analytics/client';
+import { densityVars } from '@/styles/densityVars';
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
 import { resolveBillboardAction, runBillboardAction } from './actions';
@@ -75,7 +82,7 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 4;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
   `,
@@ -108,7 +115,7 @@ const styles = createStaticStyles(({ css }) => ({
     object-fit: cover;
   `,
   itemBody: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   title: css`
     overflow: hidden;
@@ -116,7 +123,7 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;

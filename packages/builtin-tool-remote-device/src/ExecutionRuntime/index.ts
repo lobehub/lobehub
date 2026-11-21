@@ -4,6 +4,16 @@ import { type DeviceAttachment } from './types';
 
 export interface RemoteDeviceRuntimeService {
   queryDeviceList: () => Promise<DeviceAttachment[]>;
+  /**
+   * Called when the model activates a device that is not online. A host that
+   * can start the device (a managed cloud device) starts it, then returns
+   * `'online'` when it came online (the list is read again), or the result to
+   * report instead, such as a `DEVICE_WAKING` error that tells the model to
+   * retry. Returning `undefined` keeps the default offline answer.
+   */
+  resolveOfflineDevice?: (
+    deviceId: string,
+  ) => Promise<BuiltinServerRuntimeOutput | 'online' | undefined>;
 }
 
 export class RemoteDeviceExecutionRuntime {
@@ -37,8 +47,17 @@ export class RemoteDeviceExecutionRuntime {
 
   async activateDevice(args: { deviceId: string }): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const devices = await this.service.queryDeviceList();
-      const target = devices.find((d) => d.deviceId === args.deviceId && d.online);
+      const findOnline = async () =>
+        (await this.service.queryDeviceList()).find(
+          (d) => d.deviceId === args.deviceId && d.online,
+        );
+      let target = await findOnline();
+
+      if (!target) {
+        const resolved = await this.service.resolveOfflineDevice?.(args.deviceId);
+        if (resolved === 'online') target = await findOnline();
+        else if (resolved) return resolved;
+      }
 
       if (!target) {
         // The device list can go stale between listOnlineDevices and this call

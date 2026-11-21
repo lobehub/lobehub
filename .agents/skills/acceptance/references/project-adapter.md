@@ -11,7 +11,9 @@ plan gate owned by the acceptance-checker once environment readiness is establis
 target, a report directory convention. Those live beside the adapter in
 `.agents/acceptance/PROCESS.md`. **When that file exists it owns the run process,
 and this skill supplies the acceptance contract** — plan, evidence, report,
-round. Read both before executing; where they disagree about _how to run_, the
+round. The execution owner acquires the relevant sections of both once, or reuses
+their already acquired rules for the same revision; other roles receive those
+rules and provenance in their handoff. Where they disagree about _how to run_, the
 project layer wins, and where they disagree about _what a valid round is_, this
 skill wins.
 
@@ -29,8 +31,8 @@ skill wins.
 
 `.agents/acceptance/` is **committed** (the adapter and the project living logs are
 shared, versioned team assets). The report output directory `.acceptances/` is
-**gitignored** — reports are per-run artifacts, published to LobeHub Acceptance,
-not committed.
+**gitignored** — reports are per-run artifacts, published to LobeHub Acceptance
+or rendered locally, not committed.
 
 ## Fixed section skeleton
 

@@ -1,5 +1,11 @@
 # Parent-Keyed Lists
 
+> Legacy SWR layout. New parent-keyed data uses a replica: its `key(params)` returns
+> the parent id, so the view map holds one entry per parent and no SWR key is added (see
+> [zustand](../../zustand/SKILL.md), Replica-Backed Server Data). Apply this page only
+> when editing an existing SWR-backed store whose key is already in
+> `src/libs/swr/keys.ts`.
+
 Use this variant when the store needs to retain separate lists for multiple parents,
 such as datasets under different benchmarks. A single visible list does not need a
 parent-keyed map merely because its request has a parent parameter.

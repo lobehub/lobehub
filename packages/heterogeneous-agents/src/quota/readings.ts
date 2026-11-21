@@ -47,6 +47,23 @@ export const currentUtilization = (reading: QuotaDisplayReading, now: number): n
   hasWindowRolledOver(reading, now) ? 0 : clampPercent(reading.utilization);
 
 /**
+ * Drop the limits the provider has stopped reporting. A sample reports every
+ * limit the plan has — an idle window too, against a reset already in the past
+ * — so a limit missing from a sample taken after its window ended is one the
+ * plan no longer has: Claude Ultra has no 5-hour limit, and an account upgraded
+ * from Max keeps a last session reading that would otherwise render as a
+ * refilled window forever. A limit missing while its window is still live may
+ * just have landed in another batch, so it stays.
+ */
+export const dropRetiredLimits = <T extends QuotaDisplayReading>(readings: T[]): T[] => {
+  const newestSampleAt = readings.reduce((newest, r) => Math.max(newest, r.capturedAt), 0);
+
+  return readings.filter(
+    (r) => r.capturedAt >= newestSampleAt || !hasWindowRolledOver(r, newestSampleAt),
+  );
+};
+
+/**
  * A reading as a display window. A rolled-over window is reported as refilled
  * (0% used, no countdown) rather than dropped: hiding the row reads as "this
  * plan has no such limit", while replaying its last utilization paints an
@@ -104,9 +121,10 @@ export const buildClaudeQuotaWindows = (
   readings: QuotaDisplayReading[],
   now: number,
 ): ClaudeQuotaWindows => {
-  const session = newestMatch(readings, isSessionLimit);
-  const weekly = newestMatch(readings, isWeeklyAllLimit);
-  const scoped = newestMatch(readings, isScopedWeeklyLimit);
+  const reported = dropRetiredLimits(readings);
+  const session = newestMatch(reported, isSessionLimit);
+  const weekly = newestMatch(reported, isWeeklyAllLimit);
+  const scoped = newestMatch(reported, isScopedWeeklyLimit);
 
   return {
     scopedWeekly: scoped

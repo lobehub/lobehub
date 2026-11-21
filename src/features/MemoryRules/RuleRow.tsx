@@ -1,14 +1,22 @@
 'use client';
 
 import type { ExpertiseEnforcement, ExpertiseRuleDirection } from '@lobechat/types';
-import { Flexbox, SortableList } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, Tag, Tooltip } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import {
+  ActionIcon,
+  cx,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  SortableList,
+  Tag,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { RuleItem } from '@/services/expertise';
+import { useInterfaceDensity } from '@/styles/density';
 
 import DirectionToggle from './DirectionToggle';
 import EnforcementToggle from './EnforcementToggle';
@@ -50,6 +58,7 @@ const RuleRow = ({
   const { t } = useTranslation('memory');
   const archived = rule.status === 'retired';
   const authored = rule.authored;
+  const compact = useInterfaceDensity() === 'compact';
 
   const archivedWhy = archivedInto
     ? t('rules.archived.mergedInto', { title: archivedInto })
@@ -61,6 +70,7 @@ const RuleRow = ({
         className={cx(
           styles.grid,
           styles.row,
+          compact && styles.rowCompact,
           styles.rowHover,
           active && styles.rowActive,
           archived && styles.rowArchived,

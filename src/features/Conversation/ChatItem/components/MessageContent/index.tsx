@@ -1,37 +1,38 @@
-import { Flexbox } from '@lobehub/ui';
-import { type ModalInstance } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Flexbox, type ModalInstance } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePrintMode } from '@/features/Conversation/components/PrintModeContext';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import { openEditorModal } from '@/features/EditorModal';
 import { usePermission } from '@/hooks/usePermission';
+import { densityTokens } from '@/styles/density.stylex';
+import { sx } from '@/styles/sx';
 
 import { type ChatItemProps } from '../../type';
 import { useEditConfirmation } from './useEditConfirmation';
 
 export const MSG_CONTENT_CLASSNAME = 'msg_content_flag';
 
-export const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    bubble: css`
-      padding-block: 8px;
-      padding-inline: 12px;
-      border-radius: ${cssVar.borderRadiusLG};
-      background-color: ${cssVar.colorFillTertiary};
-    `,
-    disabled: css`
-      user-select: ${'none'};
-      color: ${cssVar.colorTextSecondary};
-    `,
-    message: css`
-      position: relative;
-      overflow: hidden;
-      max-width: 100%;
-    `,
-  };
+const styles = stylex.create({
+  bubble: {
+    paddingBlock: '8px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillTertiary,
+  },
+  disabled: {
+    userSelect: 'none',
+    color: cssVar.colorTextSecondary,
+  },
+  message: {
+    position: 'relative',
+    overflow: 'hidden',
+    maxWidth: '100%',
+  },
 });
 
 export interface MessageContentProps {
@@ -59,6 +60,7 @@ const MessageContent = memo<MessageContentProps>(
     variant,
   }) => {
     const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
+    const printMode = usePrintMode();
 
     const editorData = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
@@ -99,20 +101,21 @@ const MessageContent = memo<MessageContentProps>(
       });
 
     useEffect(() => {
-      if (!editing) return;
+      // The print copy renders this component too; opening a second editor for it
+      // would close the real one (and drop its draft) when printing ends.
+      if (!editing || printMode) return;
       const instance = openEditorRef.current!();
       return () => instance.close();
-    }, [editing]);
+    }, [editing, printMode]);
 
     return (
       <Flexbox
         gap={16}
-        className={cx(
-          MSG_CONTENT_CLASSNAME,
+        {...sx(
           styles.message,
           variant === 'bubble' && styles.bubble,
           disabled && styles.disabled,
-          className,
+          [MSG_CONTENT_CLASSNAME, className].filter(Boolean).join(' '),
         )}
         onDoubleClick={onDoubleClick}
       >

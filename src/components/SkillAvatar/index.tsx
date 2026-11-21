@@ -1,6 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
+import { Center, cssVar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { type CSSProperties, memo } from 'react';
 
@@ -17,14 +17,14 @@ const SkillAvatar = memo<SkillAvatarProps>(({ size = 40, className, style }) => 
       flex={'none'}
       style={{
         borderRadius: Math.floor(size * 0.1),
-        color: '#000',
+        color: cssVar.colorText,
         height: size,
         overflow: 'hidden',
         width: size,
         ...style,
       }}
     >
-      <SkillsIcon color={'#000'} size={size} style={{ transform: 'scale(0.75)' }} />
+      <SkillsIcon size={size} style={{ transform: 'scale(0.75)' }} />
     </Center>
   );
 });

@@ -6,13 +6,18 @@ import { advanceGoal } from '@/server/services/goal/advanceGoal';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { BaseService } from '../common/base.service';
+import { resolvePagination } from '../helpers/pagination';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateGoalRequest,
   GoalListQuery,
   RestartGoalRequest,
   UpdateGoalRequest,
 } from '../types/goal.type';
+
+/** The model's own default page size, kept so omitting `limit` still returns 50 rows. */
+export const GOAL_LIST_DEFAULT_LIMIT = 50;
 
 /**
  * Goals REST service.
@@ -46,11 +51,12 @@ export class GoalRestService extends BaseService {
     return goal;
   }
 
-  async listGoals(query: GoalListQuery): ServiceResult<unknown> {
+  async listGoals(query: GoalListQuery) {
+    const { limit, offset } = resolvePagination(query, GOAL_LIST_DEFAULT_LIMIT);
     return this.goalModel.list({
       agentId: query.agentId,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       projectId: query.projectId,
       statuses: query.statuses,
       topicId: query.topicId,
@@ -178,11 +184,12 @@ export class GoalRestService extends BaseService {
     return this.goalService.graph(id);
   }
 
-  async deleteGoal(id: string): ServiceResult<void> {
+  async deleteGoal(id: string): ServiceResult<DeletedResource> {
     const goal = await this.requireGoal(id);
     // Same rule as `restart`: visibility is not manageability, so only the
     // goal's creator (or a workspace owner) may cascade its graph away.
     await this.assertRowManageable(goal.userId, 'AGENT_UPDATE', 'goal');
     await this.goalService.delete(id);
+    return { deleted: true, id };
   }
 }

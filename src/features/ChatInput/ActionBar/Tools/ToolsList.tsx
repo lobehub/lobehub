@@ -1,49 +1,51 @@
 import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Divider, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Divider, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { Fragment, isValidElement, memo } from 'react';
+
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useScrollSignal } from './ScrollSignalContext';
 
-export const toolsListStyles = createStaticStyles(({ css }) => ({
-  groupLabel: css`
-    padding-block: 12px 4px;
-    padding-inline: 12px;
-  `,
-  item: css`
-    cursor: pointer;
+const styles = stylex.create({
+  groupLabel: { paddingBlockStart: '10px', paddingBlockEnd: '4px', paddingInline: '10px' },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemContent: { flex: '1', minWidth: '0' },
+  itemIcon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
+  },
+});
 
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 6px;
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemContent: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  itemIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-  `,
-}));
+/**
+ * Class names for callers outside this file (the profile editor popover reuses the row look).
+ */
+export const toolsListStyles = {
+  item: stylex.props(styles.item).className,
+  itemContent: stylex.props(styles.itemContent).className,
+  itemIcon: stylex.props(styles.itemIcon).className,
+};
 
 interface ToolItemData {
   children?: ToolItemData[];
@@ -76,6 +78,7 @@ const RegularItem = memo<{
   item: ToolItemData;
 }>(({ detailPopoverDisabled, item, index }) => {
   const { close, onOpenChange, open } = useDetailPopoverState(detailPopoverDisabled);
+  const { iconSize } = useDensityTokens();
 
   // Close hover popover whenever the surrounding list scrolls — avoids the
   // detail panel hovering in mid-air after its anchor row has moved away.
@@ -85,20 +88,20 @@ const RegularItem = memo<{
     isValidElement(item.icon) ? (
       item.icon
     ) : (
-      <Icon icon={item.icon as any} size={20} />
+      <Icon icon={item.icon as any} size={iconSize} />
     )
   ) : null;
 
   const row = (
     <div
-      className={toolsListStyles.item}
+      {...stylex.props(styles.item)}
       key={item.key || `item-${index}`}
       role="button"
       tabIndex={0}
       onClick={item.onClick}
     >
-      {iconNode && <div className={toolsListStyles.itemIcon}>{iconNode}</div>}
-      <div className={toolsListStyles.itemContent}>{item.label}</div>
+      {iconNode && <div {...stylex.props(styles.itemIcon)}>{iconNode}</div>}
+      <div {...stylex.props(styles.itemContent)}>{item.label}</div>
       {item.extra}
     </div>
   );
@@ -131,7 +134,7 @@ const GroupItem = memo<{
   item: ToolItemData;
 }>(({ detailPopoverDisabled, item, index }) => (
   <Fragment key={item.key || `group-${index}`}>
-    <Text className={toolsListStyles.groupLabel} fontSize={12} type="secondary">
+    <Text className={stylex.props(styles.groupLabel).className} fontSize={12} type="secondary">
       {item.label}
     </Text>
     {item.children?.map((child, childIndex) => (

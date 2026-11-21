@@ -1,3 +1,4 @@
+import { logGatewayLifecycle } from '../lifecycleLog';
 import type { AgentStreamClientEvents, ConnectionStatus } from '../types';
 import type { GatewayMuxClient } from './GatewayMuxClient';
 import type { OperationSubscription, ResumeCompleteInfo, ToolResultPayload } from './types';
@@ -75,6 +76,7 @@ export const createOperationClient = (
   let status: ConnectionStatus = 'disconnected';
 
   const emit = (event: string, ...args: unknown[]): void => {
+    logGatewayLifecycle('OperationClient', operationId, event, args);
     const set = listeners.get(event);
     if (!set) return;
     for (const listener of set) {

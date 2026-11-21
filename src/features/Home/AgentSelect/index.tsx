@@ -1,24 +1,33 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Button, Popover, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  Text,
+} from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentList from './AgentList';
-import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
+import { useResolvedHomeAgentId, useSelectHomeAgent } from './useResolvedHomeAgentId';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -27,8 +36,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transition: opacity 0.2s ${cssVar.motionEaseOut};
   `,
   name: css`
-    font-size: 14px;
-    line-height: 20px;
+    font-size: ${densityVars.fontSize};
+    line-height: ${densityVars.lineHeight};
+  `,
+  popup: css`
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    width: 360px;
+    max-width: calc(100vw - 16px);
   `,
   trigger: css`
     gap: 8px;
@@ -58,9 +75,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const AgentSelect = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const [open, setOpen] = useState(false);
+  const { compact } = useDensity();
   const { error, mutate } = useFetchAgentList();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const selectHomeAgent = useSelectHomeAgent();
   const { agentId: resolvedAgentId, isInbox } = useResolvedHomeAgentId();
   const displayAgentId = resolvedAgentId ?? '';
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
@@ -70,58 +88,70 @@ const AgentSelect = memo(() => {
   const displayMeta = showInboxFallback ? inboxMeta : (sidebarItem ?? agentMapMeta);
   const displayTitle = agentDisplayName(
     displayMeta,
-    showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }),
+    showInboxFallback ? DEFAULT_INBOX_TITLE : t('defaultSession', { ns: 'common' }),
   );
   const displayAvatar =
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
-    (showInboxFallback ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
+    (showInboxFallback ? DEFAULT_INBOX_AVATAR : undefined);
 
-  const handleSelect = (agentId: string) => {
-    updateSystemStatus({ homeSelectedAgentId: agentId });
-    setOpen(false);
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+  }, []);
 
-    const agentState = useAgentStore.getState();
-    if (agentState.agentMap[agentId]) return;
+  const handleSelect = useCallback(
+    (agentId: string) => {
+      selectHomeAgent(agentId);
+      setOpen(false);
 
-    agentService
-      .getAgentConfigById(agentId)
-      .then((config) => {
-        if (config) agentState.internal_dispatchAgentMap(agentId, config);
-      })
-      .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
-  };
+      const agentState = useAgentStore.getState();
+      if (agentState.agentMap[agentId]) return;
+
+      agentService
+        .getAgentConfigById(agentId)
+        .then((config) => {
+          if (config) agentState.internal_dispatchAgentMap(agentId, config);
+        })
+        .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
+    },
+    [selectHomeAgent],
+  );
 
   return (
-    <Popover
-      classNames={{ trigger: styles.trigger }}
-      open={open}
-      placement={'bottomLeft'}
-      styles={{ content: { padding: 0, width: 360 } }}
-      trigger={'click'}
-      content={
-        <AgentList
-          activeAgentId={displayAgentId}
-          error={error}
-          onRetry={() => mutate()}
-          onSelect={handleSelect}
-        />
-      }
-      onOpenChange={setOpen}
-    >
-      <Button aria-expanded={open} aria-haspopup={'dialog'} type={'text'}>
-        <Avatar
-          avatar={displayAvatar}
-          background={displayMeta?.backgroundColor || undefined}
-          name={displayTitle}
-          shape={'square'}
-          size={24}
-        />
-        <Text ellipsis className={styles.name} style={{ minWidth: 0 }} weight={600}>
-          {displayTitle}
-        </Text>
-        <ChevronsUpDownIcon className={`${styles.chevron} agent-select-chevron`} size={12} />
-      </Button>
-    </Popover>
+    <DropdownMenuRoot open={open} onOpenChange={handleOpenChange}>
+      <DropdownMenuTrigger>
+        <Button
+          aria-expanded={open}
+          aria-haspopup={'menu'}
+          className={styles.trigger}
+          type={'text'}
+        >
+          <AgentAvatar
+            agentId={showInboxFallback ? inboxAgentId : displayAgentId}
+            avatar={displayAvatar}
+            background={displayMeta?.backgroundColor || undefined}
+            name={displayTitle}
+            shape={'square'}
+            size={compact ? 20 : 24}
+          />
+          <Text ellipsis className={styles.name} style={{ minWidth: 0 }} weight={600}>
+            {displayTitle}
+          </Text>
+          <ChevronsUpDownIcon className={`${styles.chevron} agent-select-chevron`} size={12} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuPositioner placement={'bottomLeft'} sideOffset={8}>
+          <DropdownMenuPopup className={styles.popup}>
+            <AgentList
+              activeAgentId={displayAgentId}
+              error={error}
+              onRetry={() => mutate()}
+              onSelect={handleSelect}
+            />
+          </DropdownMenuPopup>
+        </DropdownMenuPositioner>
+      </DropdownMenuPortal>
+    </DropdownMenuRoot>
   );
 });
 

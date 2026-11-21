@@ -28,6 +28,8 @@ vi.mock('@/helpers/gatewayMode', () => ({
   useIsGatewayModeEnabled: () => true,
 }));
 
+vi.mock('@/features/ChatInput/hooks/useTopicId', () => ({ useTopicId: () => 'topic-1' }));
+
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
     agencyConfig: effective.agencyConfig,

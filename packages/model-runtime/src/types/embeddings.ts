@@ -1,6 +1,5 @@
-import type { ModelUsage } from '@lobechat/types';
-
 import type { ModelPricingContext } from './pricing';
+import type { OnUsageCallback } from './routeAttempt';
 
 export interface EmbeddingsPayload {
   /**
@@ -24,7 +23,7 @@ export interface EmbeddingsOptions {
   headers?: Record<string, any>;
   /** Metadata passed to hooks (billing, tracing, etc.) */
   metadata?: Record<string, unknown>;
-  onUsage?: (usage: ModelUsage) => void | Promise<void>;
+  onUsage?: OnUsageCallback;
   /** Request-scoped pricing context for model-bank pricing lookups. */
   pricingContext?: ModelPricingContext;
   signal?: AbortSignal;

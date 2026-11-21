@@ -1,4 +1,4 @@
-const ACTIVATION_PARAM = 'lh-acceptance';
+import { ACCEPTANCE_REVIEW_ACTIVATION_PARAM } from '@lobechat/const';
 
 interface RoundLike {
   run: { metadata?: unknown };
@@ -10,7 +10,7 @@ export const previewReviewUrl = (acceptanceId: string, rounds: RoundLike[]) => {
   try {
     const url = new URL(metadata.previewUrl);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    url.searchParams.set(ACTIVATION_PARAM, acceptanceId);
+    url.searchParams.set(ACCEPTANCE_REVIEW_ACTIVATION_PARAM, acceptanceId);
     return url.toString();
   } catch {
     return null;

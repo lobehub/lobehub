@@ -13,9 +13,12 @@ const INTERACTION_KINDS = new Set<AgentInterventionInteractionKind>([
 ]);
 const PROVIDERS = new Set<AgentInterventionProvider>([
   'claude-code',
+  'codex',
+  'copilot',
   'cursor',
   'devin',
   'droid',
+  'opencode',
   'qoder',
 ]);
 
@@ -75,7 +78,7 @@ export const sanitizeAgentInterventionRequestForReview = (
         typeof questionRecord.multiSelect !== 'boolean') ||
       (request.interactionKind !== 'question' && questionRecord.multiSelect === true) ||
       !Array.isArray(rawOptions) ||
-      rawOptions.length < 1 ||
+      (rawOptions.length < 1 && request.interactionKind !== 'question') ||
       rawOptions.length > 16
     ) {
       return;

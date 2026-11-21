@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Icon, Text } from '@lobehub/ui';
 import {
   AlertTriangle,
   CheckCheck,

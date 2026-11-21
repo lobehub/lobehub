@@ -2,6 +2,7 @@ import { ThreadType } from '@lobechat/types';
 import { ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { isSubagentThread } from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/subagent';
 import { useFetchThreads } from '@/hooks/useFetchThreads';
 import { useScrollActiveThreadIntoView } from '@/hooks/useScrollActiveThreadIntoView';
 import { useChatStore } from '@/store/chat';
@@ -34,6 +35,7 @@ const ThreadList = memo(() => {
     >
       {threads?.map((item, index) => (
         <ThreadItem
+          deletable={!isSubagentThread(item)}
           id={item.id}
           index={index}
           isSubagent={item.type === ThreadType.Isolation}

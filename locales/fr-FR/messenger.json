@@ -220,7 +220,6 @@
   "verify.error.generic": "Une erreur s'est produite. Veuillez réessayer.",
   "verify.error.missingToken": "Lien invalide. Ouvrez cette page depuis le bot.",
   "verify.error.title": "Impossible de confirmer la liaison",
-  "verify.error.unlinkBeforeRelink": "Ce compte LobeHub est déjà lié à un autre compte Telegram. Déconnectez-le dans Paramètres → Messagerie avant d'en lier un nouveau.",
   "verify.signInCta": "Connectez-vous pour continuer",
   "verify.signInRequired": "Veuillez vous connecter à LobeHub pour confirmer la liaison.",
   "verify.success.backToLobeHub": "Retour à LobeHub",

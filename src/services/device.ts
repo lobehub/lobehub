@@ -1,6 +1,11 @@
-import type { DeviceBoundAgentItem, DeviceEnroller, DeviceRunningSummary } from '@lobechat/types';
+import type {
+  DeviceBoundAgentItem,
+  DeviceEnroller,
+  DeviceRunningSummary,
+  DeviceScope,
+} from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { type TopicListItem } from '@/services/topic';
 
 type DeviceClient = typeof lambdaClient.device;
@@ -22,7 +27,37 @@ class DeviceService {
 
   /** Update user-editable device fields (defaultCwd / friendlyName / workingDirs). */
   updateDevice(input: Parameters<DeviceClient['updateDevice']['mutate']>[0]) {
-    return lambdaClient.device.updateDevice.mutate(input);
+    // Personal devices remain editable while the UI has an active workspace.
+    return createWorkspaceLambdaClient(null).device.updateDevice.mutate(input);
+  }
+
+  /**
+   * Ask a managed cloud device to start. Resolves when the request is
+   * accepted, not when the device is online. Routed by the device's own
+   * scope, like the other per-device writes.
+   */
+  wakeManagedDevice({ deviceId, scope }: { deviceId: string; scope: DeviceScope }) {
+    const client = scope === 'personal' ? createWorkspaceLambdaClient(null) : lambdaClient;
+    return client.device.wakeManagedDevice.mutate({ deviceId });
+  }
+
+  /** Update user-editable fields of a workspace-enrolled device (workspace-scoped write). */
+  updateWorkspaceDevice(input: Parameters<DeviceClient['updateWorkspaceDevice']['mutate']>[0]) {
+    return lambdaClient.device.updateWorkspaceDevice.mutate(input);
+  }
+
+  /** Add (or move to the front) one recent working dir on a workspace device. */
+  addWorkspaceDeviceWorkingDir(
+    input: Parameters<DeviceClient['addWorkspaceDeviceWorkingDir']['mutate']>[0],
+  ) {
+    return lambdaClient.device.addWorkspaceDeviceWorkingDir.mutate(input);
+  }
+
+  /** Remove one recent working dir from a workspace device. */
+  removeWorkspaceDeviceWorkingDir(
+    input: Parameters<DeviceClient['removeWorkspaceDeviceWorkingDir']['mutate']>[0],
+  ) {
+    return lambdaClient.device.removeWorkspaceDeviceWorkingDir.mutate(input);
   }
 
   /**
@@ -30,6 +65,14 @@ class DeviceService {
    * `statPath` RPC). Returns `null` when the device is unreachable — callers
    * treat "can't verify" as non-blocking.
    */
+  /**
+   * Conversations running in `path` on `deviceId` (every member's, in a
+   * workspace). Read from the database, so an offline device still answers.
+   */
+  countRunningTopicsInDirectory(deviceId: string, path: string): Promise<number> {
+    return lambdaClient.device.countRunningTopicsInDirectory.query({ deviceId, path });
+  }
+
   statPath(deviceId: string, path: string) {
     return lambdaClient.device.statPath.query({ deviceId, path });
   }
@@ -68,6 +111,15 @@ class DeviceService {
     return lambdaClient.device.getDeviceActivity.query(input) as any;
   }
 
+  /**
+   * The device each agent runs on for the caller, resolved server-side in one
+   * read. Agents that route to no device (sandbox, none, auto, unbound) are
+   * absent from the result.
+   */
+  getAgentDeviceBindings(agentIds: string[]): Promise<Record<string, string>> {
+    return lambdaClient.device.getAgentDeviceBindings.query({ agentIds });
+  }
+
   /** Running-topic count and the members behind it, for every device in the list. */
   getRunningSummary(): Promise<DeviceRunningSummary[]> {
     return lambdaClient.device.getRunningSummary.query();
@@ -94,6 +146,11 @@ class DeviceService {
   /** Ports the device is listening on; `null` when it can't answer. */
   listListeningPorts(input: Parameters<DeviceClient['listListeningPorts']['query']>[0]) {
     return lambdaClient.device.listListeningPorts.query(input);
+  }
+
+  /** The device's reported paths and runtime info (home, desktop, shell, ...). */
+  getDeviceSystemInfo(input: Parameters<DeviceClient['getDeviceSystemInfo']['query']>[0]) {
+    return lambdaClient.device.getDeviceSystemInfo.query(input);
   }
 
   /** Where the device's desktop app update stands; never starts a check. */
@@ -152,8 +209,8 @@ class DeviceService {
   }
 
   /** The device's recent CPU / memory / load history, bucketed for charting. */
-  getMetricSeries(deviceId: string) {
-    return lambdaClient.deviceMetric.getSeries.query({ deviceId });
+  getMetricSeries(deviceId: string, scope?: DeviceScope) {
+    return lambdaClient.deviceMetric.getSeries.query({ deviceId, scope });
   }
 
   /** Revoke a link. */

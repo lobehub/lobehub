@@ -168,12 +168,13 @@ describe('chatTopicMetadataUpdateSchema', () => {
     expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
   });
 
-  it('carries the sandbox mode through, and rejects a mode outside the pair', () => {
-    for (const sandboxMode of ['ephemeral', 'persistent'] as const) {
-      expect(chatTopicMetadataUpdateSchema.parse({ sandboxMode })).toEqual({ sandboxMode });
-    }
-
-    expect(chatTopicMetadataUpdateSchema.safeParse({ sandboxMode: 'forever' }).success).toBe(false);
+  it('carries the drive folder through and drops the retired sandbox mode', () => {
+    expect(chatTopicMetadataUpdateSchema.parse({ sandboxWorkingDirectory: 'reports' })).toEqual({
+      sandboxWorkingDirectory: 'reports',
+    });
+    // Choosing a folder is the choice to persist, so a mode written by an old
+    // client is stripped rather than stored next to a choice it contradicts.
+    expect(chatTopicMetadataUpdateSchema.parse({ sandboxMode: 'persistent' })).toEqual({});
   });
 
   it('keeps the onboarding feedback comment limit at the shared contract boundary', () => {
@@ -209,6 +210,19 @@ describe('parseTopicScheduledRun', () => {
       runAt: '2026-07-12T03:00:00.000Z',
       updatedAt: '2026-07-12T00:00:00.000Z',
       userMessageId: 'user-1',
+    };
+
+    expect(parseTopicScheduledRun(run)).toEqual(run);
+  });
+
+  it('preserves the operation reservation for a first send awaiting a worktree', () => {
+    const run = {
+      createdAt: legacy.createdAt,
+      kind: 'worktree_start',
+      operationId: 'operation-1',
+      runAt: legacy.createdAt,
+      updatedAt: legacy.updatedAt,
+      userMessageId: legacy.userMessageId,
     };
 
     expect(parseTopicScheduledRun(run)).toEqual(run);

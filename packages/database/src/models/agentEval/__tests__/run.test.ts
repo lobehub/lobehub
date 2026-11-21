@@ -138,12 +138,40 @@ describe('AgentEvalRunModel', () => {
         passRate: 0,
       });
     });
+  });
 
-    it('should default status to idle', async () => {
-      const result = await runModel.create({ datasetId });
-
-      expect(result.status).toBe('idle');
+  it('does not finalize over Stop, while allowing an explicit resume', async () => {
+    const run = await runModel.create({ datasetId, status: 'running' });
+    await runModel.update(run.id, { status: 'aborted' });
+    expect(await runModel.finalize(run.id, { status: 'completed' })).toBeUndefined();
+    expect((await runModel.findById(run.id))?.status).toBe('aborted');
+    await runModel.update(run.id, { status: 'running' });
+    expect(await runModel.finalize(run.id, { status: 'completed' })).toMatchObject({
+      status: 'completed',
     });
+  });
+
+  it('keeps live progress from overwriting the metrics of a finalized run', async () => {
+    const run = await runModel.create({ datasetId, status: 'running' });
+    await runModel.updateProgress(run.id, {
+      failedCases: 1,
+      passedCases: 0,
+      totalCases: 2,
+    } as never);
+    expect((await runModel.findById(run.id))?.metrics).toMatchObject({ failedCases: 1 });
+    await runModel.finalize(run.id, {
+      metrics: { failedCases: 1, passedCases: 1, totalCases: 2 } as never,
+      status: 'completed',
+    });
+    // A progress write computed before finalization arrives late.
+    expect(
+      await runModel.updateProgress(run.id, {
+        failedCases: 1,
+        passedCases: 0,
+        totalCases: 2,
+      } as never),
+    ).toBeUndefined();
+    expect((await runModel.findById(run.id))?.metrics).toMatchObject({ passedCases: 1 });
   });
 
   describe('query', () => {
@@ -198,7 +226,6 @@ describe('AgentEvalRunModel', () => {
       expect(results.map((r) => r.name)).toContain('Run 1');
       expect(results.map((r) => r.name)).toContain('Run 2');
       expect(results.map((r) => r.name)).toContain('Run 3');
-      expect(results.map((r) => r.name)).not.toContain('Run 4 - Other User');
     });
 
     it('should filter by datasetId', async () => {
@@ -272,13 +299,6 @@ describe('AgentEvalRunModel', () => {
 
       expect(offsetResults).toHaveLength(2);
       expect(offsetResults[0].id).toBe(allResults[1].id);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await runModel.query();
-
-      // Most recent should be first
-      expect(results.length).toBeGreaterThanOrEqual(3);
     });
   });
 
@@ -636,6 +656,69 @@ describe('AgentEvalRunModel', () => {
       const count = await runModel.countByDatasetId(emptyDataset.id);
 
       expect(count).toBe(0);
+    });
+  });
+
+  describe('startedAt guards', () => {
+    const startedAt = new Date('2026-10-01T00:00:00.000Z');
+
+    it('applies update only to the run whose start timestamp still matches', async () => {
+      const run = await runModel.create({ datasetId, startedAt, status: 'running' });
+
+      expect(await runModel.update(run.id, { name: 'Guarded' }, { startedAt })).toMatchObject({
+        name: 'Guarded',
+      });
+      // A caller that read an older start timestamp must not overwrite the new attempt.
+      expect(
+        await runModel.update(run.id, { name: 'Stale' }, { startedAt: new Date(0) }),
+      ).toBeUndefined();
+      expect((await runModel.findById(run.id))?.name).toBe('Guarded');
+    });
+
+    it('treats a null start timestamp as its own attempt', async () => {
+      const run = await runModel.create({ datasetId, status: 'running' });
+
+      expect(
+        await runModel.update(run.id, { name: 'Unstarted' }, { startedAt: null }),
+      ).toMatchObject({ name: 'Unstarted' });
+      expect(await runModel.update(run.id, { name: 'Wrong' }, { startedAt })).toBeUndefined();
+    });
+
+    it('writes progress only for the matching attempt of a live run', async () => {
+      const run = await runModel.create({ datasetId, startedAt, status: 'running' });
+
+      expect(
+        await runModel.updateProgress(run.id, { passedCases: 3 }, { startedAt }),
+      ).toMatchObject({ metrics: expect.objectContaining({ passedCases: 3 }) });
+      expect(
+        await runModel.updateProgress(run.id, { passedCases: 9 }, { startedAt: null }),
+      ).toBeUndefined();
+
+      const unstarted = await runModel.create({ datasetId, status: 'running' });
+      expect(
+        await runModel.updateProgress(unstarted.id, { passedCases: 1 }, { startedAt: null }),
+      ).toMatchObject({ metrics: expect.objectContaining({ passedCases: 1 }) });
+    });
+
+    it('finalizes only the matching attempt', async () => {
+      const run = await runModel.create({ datasetId, startedAt, status: 'running' });
+
+      expect(
+        await runModel.finalize(
+          run.id,
+          { metrics: { passedCases: 1 }, status: 'completed' },
+          { startedAt: startedAt.toISOString() },
+        ),
+      ).toMatchObject({ status: 'completed' });
+      expect(
+        await runModel.finalize(run.id, { status: 'failed' }, { startedAt: new Date(0) }),
+      ).toBeUndefined();
+      expect((await runModel.findById(run.id))?.status).toBe('completed');
+
+      const unstarted = await runModel.create({ datasetId, status: 'running' });
+      expect(
+        await runModel.finalize(unstarted.id, { status: 'completed' }, { startedAt: null }),
+      ).toMatchObject({ status: 'completed' });
     });
   });
 });

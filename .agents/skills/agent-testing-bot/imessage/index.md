@@ -83,7 +83,7 @@ registers the BlueBubbles webhook. `removeConfig` + `stop` reverse it.
 The bridge settings only render in Desktop (`isDesktop` guard) under the agent's
 **Channel → iMessage** screen. The platform tile only appears as a real (non
 "Coming Soon") entry once the server registers `imessage` **and** the frontend
-drops it from `COMING_SOON_PLATFORMS` (`src/routes/(main)/agent/channel/const.ts`).
+drops it from `COMING_SOON_PLATFORMS` (`src/features/AgentChannel/const.ts`).
 
 ```bash
 agent-browser --cdp 9222 open "http://localhost:5173/agent/<aid>/channel"

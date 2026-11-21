@@ -80,11 +80,16 @@ export const mergeNotificationSettings = (
   const next: NotificationSettings = { ...current };
   for (const [channel, channelPatch] of Object.entries(patch)) {
     if (!channelPatch) continue;
+    // `content` holds body-detail switches, not a channel — flat merge.
+    if (channel === 'content') {
+      next.content = { ...next.content, ...patch.content };
+      continue;
+    }
     if (channel === 'im') {
       next.im = mergeIMSettings(next.im, channelPatch as IMNotificationChannelSettings);
       continue;
     }
-    const key = channel as keyof Omit<NotificationSettings, 'im'>;
+    const key = channel as keyof Omit<NotificationSettings, 'content' | 'im'>;
     next[key] = mergeChannelSettings(next[key], channelPatch as NotificationChannelSettings);
   }
   return next;

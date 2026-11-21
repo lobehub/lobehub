@@ -2,14 +2,14 @@ import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import type { ModulePreloadOptions, Plugin } from 'vite';
 
+import { canvasRuntime } from './canvasRuntime';
 import { viteCompletionSounds } from './completionSounds';
-import { viteEmotionSpeedy } from './emotionSpeedy';
 import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
-import { viteStaticStylesPrecompile } from './staticStylesPrecompile';
+import { stylexPlugin, stylexTokenModules } from './stylex';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
@@ -455,6 +455,14 @@ const splitByInitial = (
 // entry-set chunking. Requires preserveEntrySignatures: 'allow-extension'.
 export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => {
   const groups: Group[] = [
+    // The canvas runtime's own modules carry page-level CSS (base.css styles
+    // body). App chunks also reuse modules the runtime pulls in, so without a
+    // chunk of its own that CSS would ride along and restyle the App's body.
+    {
+      name: 'canvas-runtime',
+      priority: 4,
+      test: /[\\/]packages[\\/]canvas-runtime[\\/]src[\\/]/,
+    },
     {
       name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
       priority: 3,
@@ -485,13 +493,14 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 interface SharedRendererOptions {
   platform: Platform;
+  stylexOverlaySrcDirs?: string[];
   tsconfigPaths?: boolean;
 }
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
+    canvasRuntime(),
     viteCompletionSounds(),
-    viteEmotionSpeedy(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
@@ -524,11 +533,28 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         exclude: [/\.(css|json|html)$/],
         hotKeys: ['altKey', 'ctrlKey'],
       }),
+    stylexPlugin({ overlaySrcDirs: options.stylexOverlaySrcDirs }),
     react(),
-    viteStaticStylesPrecompile(),
     ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];
 }
+
+/**
+ * `LOBE_REACT_PROFILING=1` builds the renderer against React's profiling build,
+ * so `<Profiler>` callbacks fire in a production bundle. Render-budget E2E runs
+ * read the counts through `window.__LOBE_RENDER_PROFILE__`.
+ */
+export const isReactProfilingBuild = () => process.env.LOBE_REACT_PROFILING === '1';
+
+/**
+ * Only `react-dom/client` is swapped: `react-dom/profiling` re-exports the client
+ * API and still imports `react-dom` for the shared internals, so `createPortal`
+ * and `flushSync` callers keep using the same renderer instance.
+ */
+export const sharedRendererAlias = () =>
+  isReactProfilingBuild()
+    ? [{ find: /^react-dom\/client$/, replacement: 'react-dom/profiling' }]
+    : [];
 
 export function sharedRendererDefine(options: { isElectron: boolean; isMobile: boolean }) {
   const nextPublicDefine = Object.fromEntries(
@@ -542,6 +568,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
     '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
+    '__REACT_PROFILING__': JSON.stringify(isReactProfilingBuild()),
     '__REACT_SCAN__': process.env.REACT_SCAN === 'true' ? 'true' : 'false',
     '__TEST__': 'false',
     ...nextPublicDefine,
@@ -551,18 +578,17 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
+  // Keep Markdown inside pre-bundling: externalizing it loses the CJK extension's
+  // importer path and resolves its required 2.2 handlers to the root's pinned 2.1.
+  exclude: [...stylexTokenModules],
   include: [
     'react',
     'react-dom',
     'react-dom/client',
     'react-router',
     'react-router/dom',
-    'antd',
-    '@ant-design/icons',
     '@lobehub/ui',
-    '@lobehub/ui/base-ui',
     '@lobehub/ui > @emotion/react',
-    'antd-style',
     'zustand',
     'zustand/middleware',
     'swr',

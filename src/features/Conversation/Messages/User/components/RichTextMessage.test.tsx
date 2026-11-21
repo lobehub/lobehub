@@ -3,9 +3,17 @@
  */
 import { moment } from '@lobehub/editor';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import RichTextMessage from './RichTextMessage';
+
+vi.mock('@/features/MemberProfileCard/MentionProfileTrigger', () => ({
+  default: ({ children, id, type }: { children: React.ReactNode; id?: string; type?: string }) => (
+    <span data-mention-profile={id} data-mention-type={type}>
+      {children}
+    </span>
+  ),
+}));
 
 const mentionEditorState = {
   root: {
@@ -87,6 +95,37 @@ afterEach(() => {
   cleanup();
 });
 
+const imageRefEditorState = {
+  root: {
+    children: [
+      {
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: 'compare ',
+            type: 'text',
+            version: 1,
+          },
+          { number: 2, src: 'blob:gone', type: 'image-ref-tag', version: 1 },
+        ],
+        direction: null,
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+      },
+    ],
+    direction: null,
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+};
+
 describe('RichTextMessage', () => {
   it('should allow document comments to use the default 16px renderer scale', async () => {
     const { container } = render(
@@ -112,6 +151,19 @@ describe('RichTextMessage', () => {
     expect(container.querySelector('.editor_mention')?.textContent).toBe('@Agent A');
   });
 
+  it('should open the profile card of the mentioned Agent on hover', async () => {
+    const { container } = render(<RichTextMessage editorState={mentionEditorState} />);
+
+    await act(async () => {
+      await moment();
+    });
+
+    const trigger = container.querySelector('[data-mention-profile]');
+    expect(trigger?.getAttribute('data-mention-profile')).toBe('agent-a');
+    expect(trigger?.getAttribute('data-mention-type')).toBe('agent');
+    expect(trigger?.querySelector('.editor_mention')?.textContent).toBe('@Agent A');
+  });
+
   // Regression: a local file dragged from the working sidebar serializes to a
   // `local-file-tag` node. If that node isn't registered on the renderer,
   // LexicalRenderer throws while parsing the state and the whole message crashes.
@@ -123,6 +175,19 @@ describe('RichTextMessage', () => {
     });
 
     expect(container.textContent).toContain('report.md');
+  });
+
+  // Regression: an image pasted into the composer serializes to an `image-ref-tag`
+  // node. Unregistered on the renderer, it made the sent message drop all its text.
+  it('should render image-ref-tag nodes with the surrounding text', async () => {
+    const { container } = render(<RichTextMessage editorState={imageRefEditorState} />);
+
+    await act(async () => {
+      await moment();
+    });
+
+    expect(container.textContent).toContain('compare');
+    expect(container.textContent).toContain('upload.image.label');
   });
 
   // Regression: the renderer's stock image node is a bare <img>,

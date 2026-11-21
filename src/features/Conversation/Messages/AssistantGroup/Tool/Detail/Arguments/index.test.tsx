@@ -7,7 +7,28 @@ import { describe, expect, it, vi } from 'vitest';
 
 import Arguments from './index';
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+const accountNames: Record<string, string> = { lnk_work: 'work@acme.com' };
+
+vi.mock('@/store/tool', () => ({
+  useToolStore: <T,>(selector: (state: object) => T) => selector({}),
+}));
+
+vi.mock('@/store/tool/slices/connector', () => ({
+  connectorSelectors: {
+    // Names resolve only on the connector the call runs on, for the agent that ran it
+    connectorLinkNameForTool: (identifier: string, linkId: string, agentId?: string) => () =>
+      identifier === 'mail' && agentId === 'agt_mail' ? accountNames[linkId] : undefined,
+  },
+}));
+
+vi.mock('../../../../../store', () => ({
+  useConversationStore: <T,>(selector: (state: object) => T) =>
+    selector({ context: { agentId: 'agt_mail' }, dbMessages: [] }),
+}));
+
+const scope = { identifier: 'mail', messageId: 'msg_1' };
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({
     active,
@@ -66,5 +87,51 @@ describe('Arguments', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('names the connector account a call uses instead of its link id', () => {
+    render(
+      <Arguments
+        {...scope}
+        arguments={JSON.stringify({ link_id: 'lnk_work', subject: 'Hello', to: 'lnk_work' })}
+      />,
+    );
+
+    const values = screen.getByTestId('descriptions');
+    expect(values).toHaveTextContent('work@acme.com');
+    expect(values).toHaveTextContent('Hello');
+    // Only the account argument is translated; a lookalike value elsewhere is data.
+    expect(values).toHaveTextContent('lnk_work');
+  });
+
+  it('uses the renamed argument when the tool has its own link_id', () => {
+    render(
+      <Arguments
+        {...scope}
+        arguments={JSON.stringify({ connector_link_id: 'lnk_work', link_id: 'https://a.b/c' })}
+      />,
+    );
+
+    expect(screen.getByTestId('descriptions')).toHaveTextContent('work@acme.comhttps://a.b/c');
+  });
+
+  it('shows an id that names no known account as it was sent', () => {
+    render(<Arguments {...scope} arguments={JSON.stringify({ link_id: 'lnk_gone' })} />);
+
+    expect(screen.getByTestId('descriptions')).toHaveTextContent('lnk_gone');
+  });
+
+  // Account ids repeat across connectors (every legacy one is `lnk_default`)
+  it("never names an account from a connector other than the call's", () => {
+    render(
+      <Arguments
+        arguments={JSON.stringify({ link_id: 'lnk_work' })}
+        identifier="calendar"
+        messageId="msg_1"
+      />,
+    );
+
+    expect(screen.getByTestId('descriptions')).toHaveTextContent('lnk_work');
+    expect(screen.getByTestId('descriptions')).not.toHaveTextContent('work@acme.com');
   });
 });

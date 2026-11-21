@@ -1,11 +1,54 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as LobeUI from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import Nav from './Nav';
+import Nav from './index';
+
+vi.mock('./Agent', () => ({ default: () => null }));
+const platformMock = vi.hoisted(() => ({ isMacDesktop: true }));
+vi.mock('@/features/NavPanel/ToggleLeftPanelButton', () => ({
+  default: () => null,
+  get isMacDesktop() {
+    return platformMock.isMacDesktop;
+  },
+}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeUI>();
+  return {
+    ...actual,
+    // Real ActionIcon only surfaces `title` through a hover Tooltip, which
+    // happy-dom cannot open; a plain button keeps the hover label assertable.
+    ActionIcon: ({
+      'aria-label': ariaLabel,
+      onClick,
+      title,
+    }: {
+      'aria-label'?: string;
+      'onClick'?: () => void;
+      'title'?: ReactNode;
+    }) => (
+      <button
+        aria-label={ariaLabel}
+        data-hover-title={typeof title === 'string' ? title : undefined}
+        type="button"
+        onClick={onClick}
+      />
+    ),
+  };
+});
+vi.mock('@/features/NavPanel/backOrigin', () => ({ useBackButtonProps: () => ({}) }));
+vi.mock('@/features/NavPanel/SideBarHeaderLayout', () => ({
+  default: ({ left, right }: { left: ReactNode; right?: ReactNode }) => (
+    <header>
+      {left}
+      {right}
+    </header>
+  ),
+}));
 
 const mutateMock = vi.hoisted(() => vi.fn());
 const openNewTopicOrSaveTopicMock = vi.hoisted(() => vi.fn());
@@ -22,8 +65,9 @@ const labMock = vi.hoisted(() => ({
   enableSelfLearning: true,
   enableGoals: true,
 }));
+const resourceAccessMock = vi.hoisted(() => ({ canEditResource: true, isAccessResolved: true }));
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
-  useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
+  useResourceAccess: () => resourceAccessMock,
 }));
 
 vi.mock('react-router', async () => {
@@ -103,14 +147,19 @@ vi.mock('@/store/global', () => ({
 }));
 
 interface ServerConfigTestState {
-  featureFlags: { isAgentEditable: boolean };
+  featureFlags: { isAgentEditable: boolean | undefined };
   serverConfigInit: boolean;
 }
+
+const serverConfigMock = vi.hoisted((): ServerConfigTestState => ({
+  featureFlags: { isAgentEditable: true },
+  serverConfigInit: true,
+}));
 
 vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
   useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
-    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
+    selector(serverConfigMock),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -119,15 +168,18 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   labPreferSelectors: {
     enableSelfLearning: (state: { preference: { lab?: { enableSelfLearning?: boolean } } }) =>
       state.preference.lab?.enableSelfLearning ?? false,
-    enableGoals: (state: { preference: { lab?: { enableGoals?: boolean } } }) =>
-      state.preference.lab?.enableGoals ?? false,
   },
 }));
 
 describe('Agent sidebar header nav', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     mutateMock.mockReset();
     openNewTopicOrSaveTopicMock.mockReset();
@@ -136,10 +188,14 @@ describe('Agent sidebar header nav', () => {
     toggleCommandMenuMock.mockReset();
     useParamsMock.mockReset();
     usePathnameMock.mockReset();
+    serverConfigMock.featureFlags.isAgentEditable = true;
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
     labMock.enableGoals = true;
+    resourceAccessMock.canEditResource = true;
+    resourceAccessMock.isAccessResolved = true;
+    platformMock.isMacDesktop = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -196,7 +252,8 @@ describe('Agent sidebar header nav', () => {
     ['/agent/agt_eH4zL98zBx5u/channel'],
     ['/agent/agt_eH4zL98zBx5u/channel/slack'],
     ['/agent/agt_eH4zL98zBx5u/statistics'],
-  ])('keeps the profile entry active on %s', (pathname) => {
+  ])('keeps the mobile profile entry active on %s', (pathname) => {
+    vi.stubGlobal('__MOBILE__', true);
     usePathnameMock.mockReturnValue(pathname);
 
     render(<Nav />);
@@ -207,77 +264,210 @@ describe('Agent sidebar header nav', () => {
     );
   });
 
-  it('navigates to the agent goals page', () => {
+  it('opens the agent profile from the desktop header settings button', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
-    fireEvent.click(screen.getByRole('button', { name: 'goalList.title' }));
+    const settingsButton = screen.getByRole('button', { name: 'tab.profile' });
+    expect(screen.getByRole('banner')).toContainElement(settingsButton);
+    fireEvent.click(settingsButton);
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
-    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/goals');
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
   });
 
-  it('navigates to the agent tasks page', () => {
+  it('opens search from the header, not from the nav list, in the macOS app', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
-    fireEvent.click(screen.getByRole('button', { name: 'tab.tasks' }));
+    const searchButton = screen.getByRole('button', { name: 'tab.search' });
+    expect(screen.getByRole('banner')).toContainElement(searchButton);
+    expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    fireEvent.click(searchButton);
+
+    expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
+  });
+
+  // Web, mobile and the Windows app show the panel toggle in the header, which
+  // leaves no room for search there.
+  it('keeps search as a nav row outside the macOS app', () => {
+    platformMock.isMacDesktop = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const searchButton = screen.getByRole('button', { name: 'tab.search' });
+    expect(screen.getByRole('banner')).not.toContainElement(searchButton);
+    expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    expect(searchButton).toHaveTextContent('tab.search');
+    fireEvent.click(searchButton);
+
+    expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps header search for members who cannot open the profile', () => {
+    permissionMock.edit_own_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('banner')).toContainElement(
+      screen.getByRole('button', { name: 'tab.search' }),
+    );
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
+  });
+
+  it.each(['tab.search', 'tab.profile'])('shows the %s label on hover', (label) => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: label })).toHaveAttribute('data-hover-title', label);
+  });
+
+  it.each([
+    [false, false],
+    [false, undefined],
+    [true, false],
+    [true, undefined],
+  ])('hides profile when mobile=%s and isAgentEditable=%s', (mobile, isAgentEditable) => {
+    vi.stubGlobal('__MOBILE__', mobile);
+    serverConfigMock.featureFlags.isAgentEditable = isAgentEditable;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'title' })).toBeInTheDocument();
+  });
+
+  it('opens the combined entry even when a previous Goals preference is false', () => {
+    labMock.enableGoals = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    fireEvent.click(screen.getByRole('button', { name: 'tab.goalsAndTasks' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
   });
 
-  it.each(['/agent/agt_eH4zL98zBx5u/tasks', '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA'])(
-    'keeps the tasks entry active on %s',
-    (pathname) => {
-      usePathnameMock.mockReturnValue(pathname);
+  it.each([
+    '/agent/agt_eH4zL98zBx5u/goals',
+    '/agent/agt_eH4zL98zBx5u/goal/example',
+    '/agent/agt_eH4zL98zBx5u/tasks',
+    '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA',
+  ])('keeps the tasks entry active on %s', (pathname) => {
+    usePathnameMock.mockReturnValue(pathname);
 
-      render(<Nav />);
+    render(<Nav />);
 
-      expect(screen.getByRole('button', { name: 'tab.tasks' })).toHaveAttribute(
-        'data-active',
-        'true',
-      );
-    },
-  );
+    expect(screen.getByRole('button', { name: 'tab.goalsAndTasks' })).toHaveAttribute(
+      'data-active',
+      'true',
+    );
+  });
 
-  it('navigates to the agent self-learning page', () => {
+  it('moves self-evolving into the profile group for members who can open it', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toBeInTheDocument();
+  });
+
+  it('keeps self-evolving reachable when the profile entry is hidden', () => {
+    permissionMock.edit_own_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'title' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/self-evolving');
   });
 
-  // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
-  // rather than lead everyone to a page whose data pipeline isn't running yet.
-  it('hides the self-learning entry when the labs toggle is off', () => {
-    labMock.enableSelfLearning = false;
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+  describe('on mobile, where the profile Segmented has no room for it', () => {
+    beforeEach(() => {
+      vi.stubGlobal('__MOBILE__', true);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
 
-    render(<Nav />);
+    it('lights only the self-evolving entry on its own route', () => {
+      usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving/dom_1');
 
-    expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+      render(<Nav />);
+
+      expect(screen.getByRole('button', { name: 'title' })).toHaveAttribute('data-active', 'true');
+      expect(screen.getByRole('button', { name: 'tab.profile' })).toHaveAttribute(
+        'data-active',
+        'false',
+      );
+    });
+
+    // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
+    // rather than lead everyone to a page whose data pipeline isn't running yet.
+    it('hides the entry when the labs toggle is off', () => {
+      labMock.enableSelfLearning = false;
+      usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+      render(<Nav />);
+
+      expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+    });
   });
 
-  it('keeps the self-learning entry active on its own route', () => {
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving');
-
-    render(<Nav />);
-
-    expect(screen.getByRole('button', { name: 'title' })).toHaveAttribute('data-active', 'true');
-  });
-
-  it('places topics above profile, goals, self-learning, and tasks in the agent navigation', () => {
+  it('opens tasks from the combined entry, with profile settings in the header', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
 
     const labels = screen.getAllByRole('button').map((button) => button.textContent);
-    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
-    expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
-    expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+    expect(labels).not.toContain('tab.profile');
+    expect(screen.getByRole('banner')).toContainElement(
+      screen.getByRole('button', { name: 'tab.profile' }),
+    );
+    expect(labels).not.toContain('goalList.title');
+    expect(labels).not.toContain('tab.tasks');
+    fireEvent.click(screen.getByRole('button', { name: 'tab.goalsAndTasks' }));
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
+  });
+
+  // The full topic page is reached from the Topics section header arrow, not a
+  // nav entry that duplicated the section right below it.
+  it('has no Topics nav entry', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/topics');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'management.sidebarEntry' })).toBeNull();
+  });
+
+  // r1018 issue 7: in a workspace, `useResourceAccess` reports the edit check as
+  // permissive while `getGeneralAccess` is in flight (`canEditResource: true`,
+  // `isAccessResolved: false`). The profile entry must not vanish for that
+  // window — it used to disappear right after opening an agent and only
+  // reappear once the batched request returned.
+  it('keeps the profile entry visible while workspace resource access is still loading', () => {
+    resourceAccessMock.canEditResource = true;
+    resourceAccessMock.isAccessResolved = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toBeInTheDocument();
+  });
+
+  it('hides the profile entry once the server confirms the member cannot edit the agent', () => {
+    resourceAccessMock.canEditResource = false;
+    resourceAccessMock.isAccessResolved = true;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
   });
 });

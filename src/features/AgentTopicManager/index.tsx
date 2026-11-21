@@ -8,29 +8,46 @@ import {
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
+import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
 import type { ChatTopic } from '@/types/topic';
 
 import BulkActionBar from './BulkActionBar';
+import ChannelSection from './ChannelSection';
 import EmptyState from './EmptyState';
 import Header from './Header';
+import ShareVisitorSection from './ShareVisitorSection';
 import { useTopicsViewStore } from './store';
 import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
+import type { StatusFilter } from './types';
+import { parseTriggerParam, TOPICS_TRIGGER_PARAM } from './urlState';
+import { useShareVisitors } from './useShareVisitors';
 import {
+  agentGroupChannels,
   buildBotChannelOptions,
+  channelListState,
   getProjectFilterLabel,
   matchesBotChannel,
+  matchesChannelSearch,
+  matchesChannelStatus,
   matchesGroup,
+  matchesShareVisitorSearch,
+  matchesShareVisitorStatus,
   matchesStatus,
   matchesTimeRange,
   matchesTrigger,
+  sortChannelsBy,
+  sortShareVisitorsBy,
   sortTopics,
 } from './utils';
 
@@ -41,6 +58,7 @@ const PAGE_SIZE = 30;
 const AgentTopicManager = memo(() => {
   const { t } = useTranslation('topic');
   const activeAgentId = useChatStore((s) => s.activeAgentId);
+  const localDeviceIds = useLocalMachineDeviceIds();
   // Use the management page's dedicated SWR pipeline so the heavier
   // `withDetails` fetch doesn't share a bucket with the sidebar's cheap
   // fetch (the shared bucket let whichever response landed last clobber the
@@ -83,6 +101,24 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
+  // A link that names a source (`?trigger=share` from the sidebar's Visitors section) picks only
+  // that source. Declared after the reset so it lands on top of it, then dropped from the URL so a
+  // later agent switch or reload keeps the page's own filters.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedTrigger = parseTriggerParam(searchParams.get(TOPICS_TRIGGER_PARAM));
+  useEffect(() => {
+    if (!searchParams.has(TOPICS_TRIGGER_PARAM)) return;
+    if (linkedTrigger) setTriggers([linkedTrigger]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(TOPICS_TRIGGER_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [linkedTrigger, searchParams, setSearchParams, setTriggers]);
+
   const { error, isHydrated, isValidating, revalidate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
     pageSize: PAGE_SIZE,
@@ -94,6 +130,24 @@ const AgentTopicManager = memo(() => {
 
   // Rows come from the store; the hook only reports fetch progress.
   const isLoading = !isHydrated || isValidating;
+
+  // Channel conversations are listed as Channels: the Agent's run topics there stay hidden.
+  const channelsEnabled = useChannelsEnabled();
+  const showChannels = channelsEnabled && triggers.includes('channel');
+  const channelSync = channelActions.useFetchList(showChannels);
+  const allChannels = useChannelStore(channelSelectors.list);
+  const { error: channelsError, loading: channelsLoading } = channelListState(
+    showChannels,
+    allChannels,
+    channelSync.error,
+  );
+  const retryChannels = () => {
+    void channelActions.refreshList().catch(() => {});
+  };
+  const shareVisitors = useShareVisitors(
+    activeAgentId,
+    channelsEnabled && triggers.includes('share'),
+  );
 
   const trimmedSearch = search.trim();
   const { data: searchResults } = useSearchTopics(
@@ -126,18 +180,60 @@ const AgentTopicManager = memo(() => {
     return sortTopics(out, sortBy);
   }, [preStatusPool, status, sortBy]);
 
-  const statusCounts = useMemo(
-    () => ({
-      active: preStatusPool.filter((t) => matchesStatus(t, 'active')).length,
-      all: preStatusPool.length,
+  // Project and bot-platform filters describe topics only, so no Channel matches them.
+  const channelPool = useMemo(
+    () =>
+      showChannels && activeAgentId && groupIds.length === 0 && botChannels.length === 0
+        ? agentGroupChannels(allChannels, activeAgentId).filter(
+            (channel) =>
+              matchesChannelSearch(channel, trimmedSearch) && matchesTimeRange(channel, timeRange),
+          )
+        : [],
+    [showChannels, activeAgentId, groupIds, botChannels, allChannels, trimmedSearch, timeRange],
+  );
+
+  const visibleChannels = useMemo(
+    () =>
+      sortChannelsBy(
+        channelPool.filter((channel) => matchesChannelStatus(channel, status)),
+        sortBy,
+      ),
+    [channelPool, status, sortBy],
+  );
+
+  // Project and bot-platform filters describe topics only, as for Channels.
+  const shareVisitorPool = useMemo(
+    () =>
+      groupIds.length === 0 && botChannels.length === 0
+        ? shareVisitors.conversations.filter(
+            (conversation) =>
+              matchesShareVisitorSearch(conversation, trimmedSearch) &&
+              matchesTimeRange(conversation, timeRange),
+          )
+        : [],
+    [shareVisitors.conversations, groupIds, botChannels, trimmedSearch, timeRange],
+  );
+
+  const visibleShareVisitors = useMemo(
+    () => (matchesShareVisitorStatus(status) ? sortShareVisitorsBy(shareVisitorPool, sortBy) : []),
+    [shareVisitorPool, status, sortBy],
+  );
+
+  const statusCounts = useMemo(() => {
+    const count = (tab: StatusFilter) =>
+      preStatusPool.filter((t) => matchesStatus(t, tab)).length +
+      channelPool.filter((channel) => matchesChannelStatus(channel, tab)).length +
+      (matchesShareVisitorStatus(tab) ? shareVisitorPool.length : 0);
+    return {
+      active: count('active'),
+      all: count('all'),
       // 'archived' has no visible tab today, but StatusFilter still includes it
       // — count it so the Record satisfies the type for any future tab.
-      archived: preStatusPool.filter((t) => matchesStatus(t, 'archived')).length,
-      completed: preStatusPool.filter((t) => matchesStatus(t, 'completed')).length,
-      running: preStatusPool.filter((t) => matchesStatus(t, 'running')).length,
-    }),
-    [preStatusPool],
-  );
+      archived: count('archived'),
+      completed: count('completed'),
+      running: count('running'),
+    };
+  }, [preStatusPool, channelPool, shareVisitorPool]);
 
   // Search results are flat — grouping by time confuses the relevance order
   // returned by the BM25 keyword search.
@@ -148,10 +244,10 @@ const AgentTopicManager = memo(() => {
     if (!useGroups) return [{ children: filtered, id: 'all' }];
     if (groupBy === 'byProject') {
       const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
-      return groupTopicsByProject(filtered, field);
+      return groupTopicsByProject(filtered, field, { localDeviceIds });
     }
     return groupTopicsByUpdatedTime(filtered);
-  }, [filtered, useGroups, groupBy, sortBy]);
+  }, [filtered, useGroups, groupBy, sortBy, localDeviceIds]);
 
   const projects = useMemo(() => {
     const map = new Map<string, string>();
@@ -241,7 +337,7 @@ const AgentTopicManager = memo(() => {
             projects={projects}
             statusCounts={statusCounts}
           />
-          <BulkActionBar />
+          <BulkActionBar topics={baseTopics} />
           {!isSearchMode && error && !isLoading && baseTopics.length === 0 ? (
             <AsyncError
               error={error}
@@ -250,9 +346,20 @@ const AgentTopicManager = memo(() => {
                 void revalidate();
               }}
             />
-          ) : isLoading && baseTopics.length === 0 ? (
+          ) : (isLoading && baseTopics.length === 0) ||
+            ((channelsLoading || shareVisitors.loading) && totalAfterFilter === 0) ? (
             <TopicsSkeleton chrome={'body'} />
-          ) : totalAfterFilter === 0 ? (
+          ) : channelsError && totalAfterFilter === 0 ? (
+            <AsyncError error={channelsError} variant={'block'} onRetry={retryChannels} />
+          ) : shareVisitors.error && totalAfterFilter === 0 && visibleChannels.length === 0 ? (
+            <AsyncError
+              error={shareVisitors.error}
+              variant={'block'}
+              onRetry={shareVisitors.retry}
+            />
+          ) : totalAfterFilter === 0 &&
+            visibleChannels.length === 0 &&
+            visibleShareVisitors.length === 0 ? (
             <EmptyState
               agentId={activeAgentId}
               hasFilters={hasActiveFilters}
@@ -260,7 +367,21 @@ const AgentTopicManager = memo(() => {
             />
           ) : (
             <>
-              {viewMode === 'card' ? (
+              {channelsError ? (
+                <AsyncError error={channelsError} variant={'inline'} onRetry={retryChannels} />
+              ) : (
+                <ChannelSection channels={visibleChannels} />
+              )}
+              {shareVisitors.error ? (
+                <AsyncError
+                  error={shareVisitors.error}
+                  variant={'inline'}
+                  onRetry={shareVisitors.retry}
+                />
+              ) : (
+                <ShareVisitorSection agentId={activeAgentId} conversations={visibleShareVisitors} />
+              )}
+              {totalAfterFilter === 0 ? null : viewMode === 'card' ? (
                 <TopicGrid
                   agentId={activeAgentId}
                   groupBy={groupBy}

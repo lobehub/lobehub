@@ -10,8 +10,12 @@ vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
 }));
 
 const mockQueryDeviceList = vi.fn();
+const mockReadDeviceSystemInfo = vi.fn();
 vi.mock('@/server/services/deviceGateway', () => ({
-  deviceGateway: { queryDeviceList: (...args: unknown[]) => mockQueryDeviceList(...args) },
+  deviceGateway: {
+    queryDeviceList: (...args: unknown[]) => mockQueryDeviceList(...args),
+    readDeviceSystemInfo: (...args: unknown[]) => mockReadDeviceSystemInfo(...args),
+  },
 }));
 
 const mockUploadBase64 = vi.fn();
@@ -37,6 +41,7 @@ describe('browserRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockQueryDeviceList.mockResolvedValue([]);
+    mockReadDeviceSystemInfo.mockResolvedValue({ ok: true, systemInfo: {} });
   });
 
   describe('device client kind', () => {
@@ -50,10 +55,10 @@ describe('browserRuntime', () => {
       userId: 'user-1',
     } as ToolExecutionContext;
 
-    // Only the desktop app hosts the browser panel. `lh connect` answers every
-    // browser api with `Unknown tool API: navigate`, which left agents retrying
-    // blind after activating a CLI-only device (agent vent reports).
-    it('does not dispatch to a device whose only live connection is the CLI', async () => {
+    // A CLI without agent-browser has no browser; dispatching there answered
+    // `Unknown tool API: navigate`, which left agents retrying blind after
+    // activating a CLI-only device (agent vent reports).
+    it('does not dispatch to a CLI-only device that does not offer the browser', async () => {
       mockQueryDeviceList.mockResolvedValue([
         {
           channels: [{ channel: 'cli', connectedAt: 1, connectionId: 'c1' }],
@@ -70,6 +75,10 @@ describe('browserRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.error.code).toBe('BROWSER_DEVICE_UNSUPPORTED');
       expect(result.content).toContain('lh connect');
+      expect(result.content).toContain('agent-browser');
+      expect(mockReadDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'vm-cli', undefined, {
+        clientKinds: ['cli'],
+      });
       // lobe-web-browsing is not in this run's tool set, so it must not be offered.
       expect(result.content).not.toContain('lobe-web-browsing');
     });
@@ -89,7 +98,53 @@ describe('browserRuntime', () => {
       expect(result.content).toContain('use lobe-web-browsing (search / crawl) instead');
     });
 
-    it('dispatches when the device also has a desktop connection', async () => {
+    it('dispatches to the CLI when it lists the browser in supportedTools', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        { channels: [{ channel: 'cli', connectedAt: 1, connectionId: 'c1' }], deviceId: 'vm-cli' },
+      ]);
+      mockReadDeviceSystemInfo.mockResolvedValue({
+        ok: true,
+        systemInfo: { supportedTools: [BrowserIdentifier] },
+      });
+      mockExecuteToolCall.mockResolvedValue({ content: 'ok', success: true });
+
+      const runtime = browserRuntime.factory(context);
+      await runtime.navigate({ url: 'https://example.com' });
+      await runtime.snapshot({});
+
+      expect(mockExecuteToolCall).toHaveBeenCalledTimes(2);
+      expect(mockExecuteToolCall.mock.calls[0][0]).toMatchObject({ clientKinds: ['cli'] });
+      // The target is resolved once per runtime, not per call.
+      expect(mockReadDeviceSystemInfo).toHaveBeenCalledTimes(1);
+    });
+
+    // A timed-out capability read was cached as "unsupported", so a CLI with
+    // agent-browser installed got install guidance for the rest of the run.
+    it('does not treat an unanswered capability read as missing support', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        { channels: [{ channel: 'cli', connectedAt: 1, connectionId: 'c1' }], deviceId: 'vm-cli' },
+      ]);
+      mockReadDeviceSystemInfo
+        .mockResolvedValueOnce({ ok: false, reason: 'TIMEOUT' })
+        .mockResolvedValueOnce({ ok: true, systemInfo: { supportedTools: [BrowserIdentifier] } });
+      mockExecuteToolCall.mockResolvedValue({ content: 'ok', success: true });
+
+      const runtime = browserRuntime.factory(context);
+      const first = await runtime.navigate({ url: 'https://example.com' });
+
+      expect(first.success).toBe(false);
+      expect(first.error.code).toBe('BROWSER_DEVICE_UNVERIFIED');
+      expect(first.content).toContain('TIMEOUT');
+      expect(first.content).not.toContain('install agent-browser');
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
+
+      const second = await runtime.navigate({ url: 'https://example.com' });
+
+      expect(second.success).toBe(true);
+      expect(mockExecuteToolCall.mock.calls[0][0]).toMatchObject({ clientKinds: ['cli'] });
+    });
+
+    it('dispatches to the desktop app when the device also has one', async () => {
       mockQueryDeviceList.mockResolvedValue([
         {
           channels: [
@@ -107,6 +162,9 @@ describe('browserRuntime', () => {
       const result = await runtime.navigate({ url: 'https://example.com' });
 
       expect(mockExecuteToolCall).toHaveBeenCalledTimes(1);
+      // Both clients can serve lobe-browser now; the desktop's panel wins.
+      expect(mockExecuteToolCall.mock.calls[0][0]).toMatchObject({ clientKinds: ['desktop'] });
+      expect(mockReadDeviceSystemInfo).not.toHaveBeenCalled();
       expect(result.success).toBe(true);
     });
 

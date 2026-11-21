@@ -1,9 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar, Button, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { LucideArrowUpRightFromSquare, TelescopeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

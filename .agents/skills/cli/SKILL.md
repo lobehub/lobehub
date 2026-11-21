@@ -23,6 +23,7 @@ apps/cli/src/
 ├── index.ts                  # Entry point — parses argv, invokes program.ts
 ├── program.ts                # Builds the Commander program, registers every command
 ├── api/
+│   ├── acceptance/           # `lh acceptance`: review loop, rounds (run/), plans, criteria, rubrics; `lh verify` aliases
 │   ├── client.ts             # tRPC client (type-safe backend API)
 │   └── http.ts               # Raw HTTP utilities
 ├── auth/
@@ -35,6 +36,7 @@ apps/cli/src/
 │   ├── agent-group.ts        # Agent group CRUD
 │   ├── agent-signal/         # Inspect and trigger Agent Signal source events
 │   ├── artifact.ts           # Publish local HTML pages as artifacts
+│   ├── automation.ts         # Automations = MCP Events subscriptions (helpers in automation/)
 │   ├── bot.ts                # Bot integrations (channels, access policies, messengers)
 │   ├── completion.ts         # Shell completion script output
 │   ├── config.ts             # whoami, usage
@@ -55,8 +57,9 @@ apps/cli/src/
 │   ├── message.ts            # Message management
 │   ├── migrate/              # Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)
 │   ├── model.ts              # AI model management
+│   ├── notification.ts       # Notification delivery settings (personal / workspace)
 │   ├── notify.ts             # Send a callback message to a topic to trigger the agent
-│   ├── plugin.ts             # Plugin management
+│   ├── plugin.ts             # Legacy 1.0 plugins (`lh legacy-plugin`)
 │   ├── project.ts            # Goal-oriented project management
 │   ├── provider.ts           # AI provider management
 │   ├── search.ts             # Global search
@@ -69,8 +72,7 @@ apps/cli/src/
 │   ├── trace/                # Inspect and replay recorded agent execution traces
 │   ├── update.ts             # Self-update to the latest published version
 │   ├── user.ts               # User account & settings
-│   ├── verify.ts             # Agent Run verification machinery (criteria, rubrics, check plans)
-│   ├── verifyAcceptance.ts   # `lh acceptance`: cross-round delivery review loop
+│   ├── webhook.ts            # Custom webhooks (helpers in webhook/, shared with automation)
 │   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
@@ -82,64 +84,73 @@ apps/cli/src/
 ├── utils/
 │   ├── logger.ts             # Logging (verbose mode)
 │   ├── format.ts             # Table output, JSON, timeAgo/timeUntil, truncate
-│   └── agentStream.ts        # SSE streaming for agent runs
+│   └── agentStream.ts        # WebSocket streaming for agent runs and task follow
 └── constants/
     └── urls.ts               # Official server & gateway URLs
 ```
 
 ## Command Groups
 
-| Command            | Alias | Description                                                                        |
-| ------------------ | ----- | ---------------------------------------------------------------------------------- |
-| `lh login`         | -     | Authenticate via OIDC Device Code Flow or API key                                  |
-| `lh logout`        | -     | Clear stored credentials                                                           |
-| `lh connect`       | -     | Device gateway connection & daemon management                                      |
-| `lh device`        | -     | Manage connected devices                                                           |
-| `lh status`        | -     | Quick gateway connectivity check                                                   |
-| `lh doctor`        | -     | Diagnose machine readiness (runtime, endpoints, credentials, scope, device, agent) |
-| `lh agent`         | -     | Agent CRUD, run, status                                                            |
-| `lh agent-group`   | -     | Agent group CRUD                                                                   |
-| `lh agent-signal`  | -     | Inspect and trigger Agent Signal source events                                     |
-| `lh hetero`        | -     | Run heterogeneous agent CLIs (Claude Code, Codex, etc.), stream their output       |
-| `lh goal`          | -     | Run long-horizon Goal Graphs                                                       |
-| `lh project`       | -     | Manage goal-oriented projects                                                      |
-| `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                          |
-| `lh thread`        | -     | Manage message threads                                                             |
-| `lh trace`         | -     | Inspect and replay recorded agent execution traces                                 |
-| `lh verify`        | -     | Agent Run verification machinery — criteria, rubrics, per-run check plans          |
-| `lh acceptance`    | -     | Delivery acceptances — the cross-round review loop (checks, feedback, decision)    |
-| `lh eval`          | -     | Manage evaluation workflows and benchmarks                                         |
-| `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                        |
-| `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                  |
-| `lh file`          | -     | File list, view, delete, recent                                                    |
-| `lh artifact`      | -     | Publish local HTML pages as artifacts                                              |
-| `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                              |
-| `lh memory`        | -     | User memory CRUD + extraction                                                      |
-| `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
-| `lh topic`         | -     | Topic CRUD + search + recent                                                       |
-| `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
-| `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                  |
-| `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                    |
-| `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                            |
-| `lh model`         | -     | Model CRUD, toggle, batch-toggle, clear                                            |
-| `lh provider`      | -     | Provider CRUD, config, test, toggle                                                |
-| `lh plugin`        | -     | Plugin install, uninstall, update                                                  |
-| `lh search`        | -     | Global search across all types                                                     |
-| `lh session-group` | -     | Manage agent session groups                                                        |
-| `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                              |
-| `lh user`          | -     | Manage user account and settings                                                   |
-| `lh whoami`        | -     | Current user info (including the resolved workspace scope)                         |
-| `lh usage`         | -     | Monthly/daily usage statistics                                                     |
-| `lh man`           | -     | Show a manual page for the CLI or a subcommand                                     |
-| `lh completion`    | -     | Output shell completion script                                                     |
-| `lh update`        | -     | Update the CLI to the latest published version                                     |
+| Command            | Alias | Description                                                                         |
+| ------------------ | ----- | ----------------------------------------------------------------------------------- |
+| `lh login`         | -     | Authenticate via OIDC Device Code Flow or API key                                   |
+| `lh logout`        | -     | Clear stored credentials                                                            |
+| `lh connect`       | -     | Device gateway connection & daemon management                                       |
+| `lh device`        | -     | Manage connected devices                                                            |
+| `lh status`        | -     | Quick gateway connectivity check                                                    |
+| `lh doctor`        | -     | Diagnose machine readiness (runtime, endpoints, credentials, scope, device, agent)  |
+| `lh agent`         | -     | Agent CRUD, run, status                                                             |
+| `lh agent-group`   | -     | Agent group CRUD                                                                    |
+| `lh agent-signal`  | -     | Inspect and trigger Agent Signal source events                                      |
+| `lh hetero`        | -     | Run heterogeneous agent CLIs (Claude Code, Codex, etc.), stream their output        |
+| `lh goal`          | -     | Run long-horizon Goal Graphs                                                        |
+| `lh project`       | -     | Manage goal-oriented projects                                                       |
+| `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                           |
+| `lh thread`        | -     | Manage message threads                                                              |
+| `lh trace`         | -     | Inspect and replay recorded agent execution traces                                  |
+| `lh acceptance`    | -     | Delivery acceptances: review loop, rounds, per-run check plans, criteria, rubrics   |
+| `lh verify`        | -     | Deprecated alias of `lh acceptance` commands                                        |
+| `lh eval`          | -     | Manage evaluation workflows and benchmarks                                          |
+| `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                         |
+| `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                   |
+| `lh file`          | -     | File list, view, delete, recent                                                     |
+| `lh artifact`      | -     | Publish local HTML pages as artifacts                                               |
+| `lh automation`    | -     | Automations (alias `automations`): list, view, rename, check, delete                |
+| `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                               |
+| `lh memory`        | -     | User memory CRUD + extraction                                                       |
+| `lh message`       | -     | Message list, search, delete, count, heatmap                                        |
+| `lh topic`         | -     | Topic CRUD + search + recent                                                        |
+| `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it              |
+| `lh notification`  | -     | Notification settings: show, enable/disable channels, IM platforms and types        |
+| `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                   |
+| `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                     |
+| `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                             |
+| `lh model`         | -     | Model CRUD, toggle, batch-toggle, clear                                             |
+| `lh provider`      | -     | Provider CRUD, config, test, toggle                                                 |
+| `lh legacy-plugin` | -     | Legacy 1.0 plugins: list, search, uninstall, update                                 |
+| `lh search`        | -     | Global search across all types                                                      |
+| `lh work`          | -     | Register the files and links an agent run produced as Works, update, delete, lookup |
+| `lh session-group` | -     | Manage agent session groups                                                         |
+| `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                               |
+| `lh user`          | -     | Manage user account and settings                                                    |
+| `lh webhook`       | -     | Custom webhooks (alias `webhooks`): create, edit, pause, test, rotate-key, calls    |
+| `lh whoami`        | -     | Current user info (including the resolved workspace scope)                          |
+| `lh usage`         | -     | Monthly/daily usage statistics                                                      |
+| `lh man`           | -     | Show a manual page for the CLI or a subcommand                                      |
+| `lh completion`    | -     | Output shell completion script                                                      |
+| `lh update`        | -     | Update the CLI to the latest published version                                      |
 
 ### Workspace Scope
 
 Every command runs against one scope, resolved in this order:
 
-1. an explicit `--workspace <id>` on the commands that take it
-2. the `LOBEHUB_WORKSPACE_ID` env var
+1. an explicit `--workspace <id|slug>` on the `workspace`, `device` and `topic`
+   commands that take it (a slug is resolved against `lh workspace list`; one
+   that matches nothing fails). A credential that cannot call `workspace.list`
+   (no `workspace:read`, such as a workspace-bound API key) skips resolution and
+   sends the value as an id with a warning, so it must pass the id.
+   `lh connect --workspace` takes an id only.
+2. the `LOBEHUB_WORKSPACE_ID` env var (an id only)
 3. the scope persisted by `lh workspace use <id|slug>`
 4. personal content (no workspace)
 
@@ -362,3 +373,5 @@ See `references/` for each command group:
 - **Skills & Plugins**: `references/skills-plugins.md` (skill, plugin)
 - **Models & Providers**: `references/models-providers.md` (model, provider)
 - **Search & Config**: `references/search-config.md` (search, whoami, usage, workspace)
+- **Webhooks**: `references/webhook.md` (custom webhooks, identifier, Channel delivery)
+- **Automations**: `references/automation.md` (MCP Events subscriptions: list, view, rename, check, delete)

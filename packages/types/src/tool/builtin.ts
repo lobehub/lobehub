@@ -3,8 +3,12 @@ import { z } from 'zod';
 
 import { type DeviceUnavailableErrorData } from '../device';
 import { type RuntimeStepContext } from '../stepContext';
+import { type PluginApiWorkConfig, PluginApiWorkConfigSchema } from './builtinWork';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
+
+export * from './builtinIntervention';
+export * from './builtinWork';
 
 export interface Meta {
   /**
@@ -132,42 +136,6 @@ export const ExtendedHumanInterventionConfigSchema = z.union([
   HumanInterventionConfigSchema,
   z.object({ dynamic: DynamicInterventionConfigSchema }),
 ]);
-
-/**
- * Lifecycle action a tool API performs on its Work resource. Drives the Work
- * version `role` (`create`/`update` → `created`/`updated`) and, for `delete`,
- * routes to the resource's delete path instead of a version upsert.
- */
-export type PluginApiWorkAction = 'create' | 'delete' | 'update';
-
-/**
- * The Work resource kind an API produces. Selects the framework-side identity
- * extractor and the `WorkModel` register method used by the dispatch layer.
- */
-export type PluginApiWorkResourceType = 'document' | 'task';
-
-/**
- * Declarative Work-registration config on a builtin tool API.
- *
- * Presence of this field is the single source of truth for "this API produces a
- * Work". The tool-execution dispatch layers (server `BuiltinToolsExecutor` /
- * client `invokeExecutor`) read it after a successful call, extract the resource
- * identity from the result/args, and register the Work version — so tools need
- * zero imperative registration code.
- *
- * Like `humanIntervention`, this is framework-only config: the model tools
- * schema conversion only reads `name`/`description`/`parameters`, so `work`
- * never leaks into the LLM-facing tool spec.
- */
-export interface PluginApiWorkConfig {
-  action: PluginApiWorkAction;
-  resourceType: PluginApiWorkResourceType;
-}
-
-export const PluginApiWorkConfigSchema = z.object({
-  action: z.enum(['create', 'update', 'delete']),
-  resourceType: z.enum(['document', 'task']),
-});
 
 export interface LobeChatPluginApi {
   /**
@@ -561,56 +529,13 @@ export interface BuiltinServerRuntimeOutput {
   errorData?: DeviceUnavailableErrorData;
   state?: any;
   success: boolean;
+  /**
+   * The tool message this call already created for itself (e.g. a background
+   * sub-agent's placeholder, which anchors its thread). The agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
 }
-
-export interface BuiltinInterventionProps<Arguments = any> {
-  /**
-   * When present, a custom intervention should portal its action footer
-   * (submit / skip + status) into this node so it stays pinned below the
-   * scrollable content instead of scrolling with it. Hosts that render a fixed
-   * footer (e.g. the global approval card) supply this; when absent the
-   * component renders its footer inline.
-   */
-  actionsPortalTarget?: HTMLElement | null;
-  apiName?: string;
-  args: Arguments;
-  /** Keep the form visible but inert while a remote resolution awaits producer ACK. */
-  disabled?: boolean;
-  identifier?: string;
-  interactionMode?: 'approval' | 'custom';
-  messageId: string;
-  /**
-   * Hold the host's approve action while the intervention cannot show what is
-   * being approved — e.g. its review data is still loading or failed to load.
-   * Pass `true` to block approval and `false` to release it; reject / stop stay
-   * available. Hosts without approval controls ignore it. Only approval-mode
-   * interventions receive it.
-   */
-  onApprovalBlockedChange?: (blocked: boolean) => void;
-  /**
-   * Callback to update the arguments before approval
-   * This is called when the user modifies the intervention content
-   * The approve action will wait for this async callback to complete
-   */
-  onArgsChange?: (args: Arguments) => void | Promise<void>;
-  onInteractionAction?: (
-    action:
-      | { type: 'submit'; payload: Record<string, unknown> }
-      | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
-      | { type: 'cancel'; payload?: Record<string, unknown> },
-  ) => Promise<void>;
-  /**
-   * Register a callback to be called before approval
-   * Used by intervention components that need to flush pending saves (e.g., debounced saves)
-   * before the approve action proceeds
-   * @param id - Unique identifier for the callback (for reliable cleanup)
-   * @param callback - The callback to execute before approval
-   * @returns Cleanup function to unregister the callback
-   */
-  registerBeforeApprove?: (id: string, callback: () => void | Promise<void>) => () => void;
-}
-
-export type BuiltinIntervention = (props: BuiltinInterventionProps) => ReactNode;
 
 // ==================== Executor Types ====================
 
@@ -776,6 +701,9 @@ export interface BuiltinToolContext {
    * tool result. Only present during client-mode tool execution.
    */
   subAgent?: SubAgentCallbacks;
+
+  /** Agent whose profile is used for this run when it differs from the conversation owner. */
+  subAgentId?: string;
 
   /**
    * Current task identifier or database id when the conversation is scoped to a task detail page.

@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Outlet } from 'react-router';
 
 import CategoryContainer from '../../../components/CategoryContainer';
@@ -7,7 +8,12 @@ import { styles } from './style';
 
 const Layout = () => {
   return (
-    <Flexbox horizontal className={styles.mainContainer} gap={24} width={'100%'}>
+    <Flexbox
+      horizontal
+      className={stylex.props(styles.mainContainer).className}
+      gap={24}
+      width={'100%'}
+    >
       <CategoryContainer>
         <Category />
       </CategoryContainer>

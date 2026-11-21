@@ -5,6 +5,7 @@ import {
   CUSTOM_DOCUMENT_FILE_TYPE,
   EDITOR_DOCUMENT_SOURCE_TYPES,
   hasFilenameExtension,
+  HTML_DOCUMENT_FILE_TYPE,
   MARKDOWN_DOCUMENT_FILE_TYPES,
 } from '@lobechat/const';
 
@@ -22,7 +23,10 @@ interface DocumentRenderModeFields {
 
 /** Content surface selected for an uploaded file or an editable document. */
 export type DocumentRenderMode =
-  { mode: 'editor' } | { language: string; mode: 'highlight' } | { mode: 'file' };
+  | { mode: 'editor' }
+  | { language: string; mode: 'highlight' }
+  | { mode: 'file' }
+  | { mode: 'html' };
 
 const EDITOR_DOCUMENT_FILE_TYPES = new Set([
   AGENT_DOCUMENT_FILE_TYPE,
@@ -47,9 +51,14 @@ const isEditorDocument = (document: DocumentRenderModeFields): boolean => {
  * - Document metadata; file source attribution survives deletion of the original file.
  *
  * Returns:
- * - File preview, rich-text editor, or source editor mode.
+ * - File preview, rich-text editor, sandboxed HTML page, or source editor mode.
  */
 export const getDocumentRenderMode = (document: DocumentRenderModeFields): DocumentRenderMode => {
+  // Only pages are created with this type (uploads carry a MIME type). A page in
+  // a knowledge base also has a placeholder mirror fileId, but its body stays in
+  // `content`, so the type wins over the upload check below.
+  if (document.fileType === HTML_DOCUMENT_FILE_TYPE) return { mode: 'html' };
+
   // Keep deleted uploads in the file view even after their fileId FK is cleared.
   if (document.fileId || document.sourceType === 'file') return { mode: 'file' };
 

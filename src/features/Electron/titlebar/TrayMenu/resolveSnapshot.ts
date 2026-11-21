@@ -47,7 +47,7 @@ const activeTopicUrl = (scope: TabScope, { agentId, groupId, topicId }: ActiveTo
 
 const recentRoute = (item: RecentItem) =>
   item.type === 'task'
-    ? taskDetailPath(item.id, item.agentId ?? undefined, item.slugTitle)
+    ? taskDetailPath(item.taskIdentifier ?? item.id, item.agentId ?? undefined, item.slugTitle)
     : item.routePath;
 
 export const resolveTrayNavigationSnapshot = ({

@@ -1,9 +1,11 @@
+import { DEFAULT_VERIFY_PLAN_PROVIDER } from '@lobechat/business-const';
+import type { AcceptanceVisibility } from '@lobechat/const/verify';
 import type {
   AcceptanceChecklistItem,
   AcceptanceCheckReviewAction,
   AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
-  AcceptanceSubjectType,
+  CreatableAcceptanceSubjectType,
   ReviewAdjudication,
   ReviewProposalEdit,
   VerifierType,
@@ -17,13 +19,20 @@ import type {
 } from '@lobechat/types';
 
 import type { VerifyStatus } from '@/database/models/agentOperation';
+import type { VerifyAutoRepairOutcome } from '@/database/models/verifyRun';
 import type {
   VerifyCheckResultItem,
   VerifyCriterionItem,
   VerifyRubricItem,
   VerifyRunItem,
 } from '@/database/schemas/verify';
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { oneShotRelay } from '@/services/llmRelay';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors } from '@/store/user/selectors';
+
+/** The `goal` system agent's provider: goal criteria / plans run on it server-side. */
+const goalModelProvider = () => systemAgentSelectors.goal(useUserStore.getState()).provider;
 
 /** Criterion row plus the judge instruction resolved from its linked document. */
 export type GoalCriterionWithInstruction = VerifyCriterionItem & { instruction?: string };
@@ -113,6 +122,8 @@ export interface VerifyCriterionDraft {
 }
 
 export interface VerifyStateResponse {
+  /** The server's auto-repair decision for a failed round; absent until it decided. */
+  verifyAutoRepair?: VerifyAutoRepairOutcome | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   verifyStatus: VerifyStatus | null;
@@ -122,6 +133,13 @@ export interface VerifyStateResponse {
 export type VerifyEvidenceWithUrl = VerifyEvidence & {
   fileName: string | null;
   fileUrl: string | null;
+  /** `terminal` evidence only: signed URLs for the stdout / stderr / output / recording files. */
+  terminalArtifacts?: Partial<
+    Record<
+      'cast' | 'output' | 'stderr' | 'stdout',
+      { fileUrl: string | null; sha256: string; size: number }
+    >
+  >;
 };
 
 /** One check result plus the evidence artifacts attached to it. */
@@ -142,30 +160,10 @@ export interface VerifyReportBundle {
   run: VerifyRunItem;
 }
 
-export interface VerifyReportSummary {
-  report: Pick<
-    VerifyReport,
-    | 'createdAt'
-    | 'failedChecks'
-    | 'generatedAt'
-    | 'id'
-    | 'overallConfidence'
-    | 'passedChecks'
-    | 'reviewedByUser'
-    | 'summary'
-    | 'totalChecks'
-    | 'uncertainChecks'
-    | 'verdict'
-    | 'verifyRunId'
-  > | null;
-  run: VerifyRunItem;
-}
-
-/** One cursor-paginated page of report summaries. */
-export interface VerifyReportSummaryPage {
-  items: VerifyReportSummary[];
-  /** Opaque token for the next page, or `null` when this is the last page. */
-  nextCursor: string | null;
+/** The acceptance round a verify run belongs to — where its old `/verify/:runId` link lands. */
+export interface VerifyRunAcceptanceRound {
+  acceptanceId: string;
+  roundIndex: number | null;
 }
 
 export interface GenerateDraftPlanInput {
@@ -190,23 +188,23 @@ export class VerifyService {
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
 
-  setAcceptanceVisibility = (id: string, visibility: 'private' | 'public') =>
+  setAcceptanceVisibility = (id: string, visibility: AcceptanceVisibility) =>
     lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
 
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
-  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+  getAcceptanceBySubject = (subjectType: CreatableAcceptanceSubjectType, subjectId: string) =>
     lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
 
   /** Persist a subject's standing acceptance checklist (topic tray). */
   saveAcceptanceChecklist = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     checklist: AcceptanceChecklistItem[],
   ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
 
   /** Set/update a subject's acceptance goal (the one-sentence outcome). */
   saveAcceptanceGoal = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
@@ -247,16 +245,26 @@ export class VerifyService {
    * per-row state must ask about its own subjects instead.
    */
   listAcceptanceStatuses = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectIds: string[],
   ): Promise<Array<{ status: string; subjectId: string }>> =>
     lambdaClient.acceptance.listStatusesBySubjects.query({ subjectIds, subjectType });
 
-  acceptDelivery = (id: string, comment?: string) =>
-    lambdaClient.acceptance.accept.mutate({ comment, id });
+  /** `roundId` binds the decision to the round on screen; a gate refuses a stale one. */
+  acceptDelivery = (id: string, comment?: string, options?: { roundId?: string }) =>
+    lambdaClient.acceptance.accept.mutate({ comment, id, roundId: options?.roundId });
 
-  rejectDelivery = (id: string, comment?: string, options?: { dispatch?: boolean }) =>
-    lambdaClient.acceptance.reject.mutate({ comment, dispatch: options?.dispatch, id });
+  rejectDelivery = (
+    id: string,
+    comment?: string,
+    options?: { dispatch?: boolean; roundId?: string },
+  ) =>
+    lambdaClient.acceptance.reject.mutate({
+      comment,
+      dispatch: options?.dispatch,
+      id,
+      roundId: options?.roundId,
+    });
 
   /**
    * The user's verdict on individual union checks — accept settles a check for
@@ -325,6 +333,9 @@ export class VerifyService {
 
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
+  requestAcceptanceRepair = (id: string, comment?: string) =>
+    lambdaClient.acceptance.requestRepair.mutate({ id, comment });
 
   /** Rename the acceptance's sidebar entry (a metadata title override). */
   renameAcceptance = (id: string, title: string) =>
@@ -399,8 +410,15 @@ export class VerifyService {
     provider: string | null;
   } | null> => lambdaClient.verify.getVerifierTracing.query({ tracingId });
 
+  /**
+   * The server-side LLM calls below run on a model only this device may reach;
+   * such a call is relayed back to this tab (one-shot relay). Plan / criteria
+   * generation runs on the pinned plan model.
+   */
   generateDraftPlan = (input: GenerateDraftPlanInput): Promise<VerifyCheckItem[]> =>
-    lambdaClient.verify.generateDraftPlan.mutate(input) as Promise<VerifyCheckItem[]>;
+    oneShotRelay.run(DEFAULT_VERIFY_PLAN_PROVIDER, (relay) =>
+      lambdaClient.verify.generateDraftPlan.mutate(input, withLlmRelay(relay)),
+    ) as Promise<VerifyCheckItem[]>;
 
   updateDraftItems = (operationId: string, items: VerifyCheckItem[]): Promise<unknown> =>
     lambdaClient.verify.updateDraftItems.mutate({ items, operationId });
@@ -422,16 +440,11 @@ export class VerifyService {
     }) as Promise<VerifyReportBundle | null>;
 
   /**
-   * One cursor-paginated page of the current user's verification sessions with
-   * report rollup fields. `cursor` comes from the previous page's `nextCursor`;
-   * `q` filters by title on the server so search spans the whole history.
+   * The acceptance round a run belongs to, under the same access rule as
+   * `getReportBundle`. `null` for a missing, denied or standalone run.
    */
-  listReportSummaries = (params?: {
-    cursor?: string;
-    limit?: number;
-    q?: string;
-  }): Promise<VerifyReportSummaryPage> =>
-    lambdaClient.verify.listReportSummaries.query(params) as Promise<VerifyReportSummaryPage>;
+  getRunAcceptanceRound = (verifyRunId: string): Promise<VerifyRunAcceptanceRound | null> =>
+    lambdaClient.verify.getRunAcceptanceRound.query({ verifyRunId });
 
   deleteRun = (verifyRunId: string): Promise<unknown> =>
     lambdaClient.verify.deleteRun.mutate({ verifyRunId });
@@ -446,7 +459,9 @@ export class VerifyService {
     modelConfig: { model: string; provider: string };
     operationId: string;
   }): Promise<VerifyCheckResultItem[]> =>
-    lambdaClient.verify.executeVerify.mutate(input) as Promise<VerifyCheckResultItem[]>;
+    oneShotRelay.run(input.modelConfig.provider, (relay) =>
+      lambdaClient.verify.executeVerify.mutate(input, withLlmRelay(relay)),
+    ) as Promise<VerifyCheckResultItem[]>;
 
   submitDecision = (resultId: string, decision: VerifyUserDecision): Promise<unknown> =>
     lambdaClient.verify.submitDecision.mutate({ decision, resultId });
@@ -458,7 +473,9 @@ export class VerifyService {
     goal: string;
     maxCriteria?: number;
   }): Promise<VerifyCriterionDraft[]> =>
-    lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+    oneShotRelay.run(DEFAULT_VERIFY_PLAN_PROVIDER, (relay) =>
+      lambdaClient.verify.generateCriteria.mutate(input, withLlmRelay(relay)),
+    ) as Promise<VerifyCriterionDraft[]>;
 
   /** Draft the standing acceptance criteria used by the create-goal review step. */
   generateGoalCriteria = (input: {
@@ -466,7 +483,9 @@ export class VerifyService {
     goal: string;
     maxCriteria?: number;
   }): Promise<VerifyCriterionDraft[]> =>
-    lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+    oneShotRelay.run(goalModelProvider(), (relay) =>
+      lambdaClient.verify.generateGoalCriteria.mutate(input, withLlmRelay(relay)),
+    ) as Promise<VerifyCriterionDraft[]>;
 
   /** Draft the title, instruction, and criteria used by the create-goal review step. */
   generateGoalPlan = (input: {
@@ -476,7 +495,9 @@ export class VerifyService {
   }): Promise<
     { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
   > =>
-    lambdaClient.verify.generateGoalPlan.mutate(input) as Promise<
+    oneShotRelay.run(goalModelProvider(), (relay) =>
+      lambdaClient.verify.generateGoalPlan.mutate(input, withLlmRelay(relay)),
+    ) as Promise<
       { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
     >;
 

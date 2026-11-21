@@ -57,8 +57,12 @@ describe('coverageGaps', () => {
     expect(coverageGaps([{ type: 'markdown' }], [{ type: 'transcript' }])).toEqual([]);
   });
 
+  it('accepts a GIF recording for a screenshot requirement', () => {
+    expect(coverageGaps([{ type: 'screenshot' }], [{ type: 'gif' }, { type: 'text' }])).toEqual([]);
+  });
+
   it('keeps visual and structured evidence strict', () => {
-    expect(coverageGaps([{ type: 'screenshot' }], [{ type: 'gif' }, { type: 'text' }])).toEqual([
+    expect(coverageGaps([{ type: 'screenshot' }], [{ type: 'video' }, { type: 'text' }])).toEqual([
       'screenshot',
     ]);
     expect(coverageGaps([{ type: 'dom_snapshot' }], [{ type: 'text' }])).toEqual(['dom_snapshot']);

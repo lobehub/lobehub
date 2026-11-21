@@ -1,0 +1,189 @@
+---
+title: LobeHub 开发者 Webhook
+description: >-
+  订阅 LobeHub 事件，接收带签名的投递，并在 Node.js 和 Python 中校验
+  X-LobeHub-Signature 请求头。
+tags:
+  - LobeHub
+  - REST API
+  - Webhook
+  - HMAC
+  - 签名
+---
+
+# LobeHub 开发者 Webhook
+
+<Callout type="info">
+  **即将推出**（[#23272](https://github.com/lobehub/lobehub/pull/23272)）。开发者 Webhook 尚未上线
+  LobeHub Cloud。本页介绍该 PR 中实现的投递格式和签名方案，方便你提前准备接收端；正式发布前，名称和限制仍可能调整。
+</Callout>
+
+Webhook 端点是你提供的一个 URL。当你的个人空间或工作区中发生特定事件（例如运行结束、消息创建、文件解析完成）时，LobeHub 会向它发送一个带签名的 `POST` 请求。端点通过 `/api/v1/webhooks` 管理，需要 `webhook:read` 和 `webhook:write` scope；也可以在应用的 **设置 → Webhook** 中管理，该页面由同一 PR 添加。
+
+## 管理端点
+
+| 方法与路径                                                   | 用途                                                                |
+| ------------------------------------------------------- | ----------------------------------------------------------------- |
+| `GET /webhooks`                                         | 列出端点（游标分页）                                                        |
+| `POST /webhooks`                                        | 创建端点：`url`、`events`，可选 `description` 和 `enabled`。响应中包含签名密钥，仅在此处显示 |
+| `GET /webhooks/{id}`                                    | 读取端点                                                              |
+| `PATCH /webhooks/{id}`                                  | 修改 URL、事件、描述，或重新启用端点                                              |
+| `DELETE /webhooks/{id}`                                 | 删除端点                                                              |
+| `POST /webhooks/{id}/rotate-secret`                     | 签发新的签名密钥（仅显示一次）                                                   |
+| `POST /webhooks/{id}/test`                              | 发送一个 `webhook.test` 事件                                            |
+| `GET /webhooks/{id}/deliveries`                         | 投递日志                                                              |
+| `POST /webhooks/{id}/deliveries/{deliveryId}/redeliver` | 重新发送一次历史投递，事件 id 和请求体保持不变                                         |
+
+```bash
+curl -X POST https://app.lobehub.com/api/v1/webhooks \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/lobehub/webhook","events":["run.completed","run.failed"]}'
+```
+
+每个空间最多可创建 20 个端点。订阅某个事件还需要该事件数据的读取 scope，例如订阅 `run.*` 需要 `run:read`；否则请求返回 `403` `insufficient_scope`。
+
+## 事件目录
+
+| 事件                           | 触发时机                                                          | `data`                                                  | 读取 scope     |
+| ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------- | ------------ |
+| `run.started`                | Agent 运行开始                                                    | `{ runId, agentId, topicId }`                           | `run:read`   |
+| `run.completed`              | 运行结束                                                          | 运行字段，外加 `assistantMessageId`、`steps`                    | `run:read`   |
+| `run.failed`                 | 运行失败                                                          | 运行字段，外加 `error`                                         | `run:read`   |
+| `run.intervention_requested` | 运行等待[人工审批](/zh/docs/development/api/streaming#human-approval) | `{ runId, agentId, topicId }`                           | `run:read`   |
+| `message.created`            | 创建了一条消息                                                       | `{ messageId, role, topicId, threadId, agentId }`       | `chat:read`  |
+| `topic.created`              | 创建了一个话题                                                       | `{ topicId, title, agentId }`                           | `chat:read`  |
+| `task.status_changed`        | 任务状态变化                                                        | `{ taskId, identifier, status, previousStatus }`        | `agent:read` |
+| `goal.status_changed`        | 目标状态变化                                                        | `{ goalId, status, previousStatus }`                    | `agent:read` |
+| `file.parsed`                | 文件解析完成                                                        | `{ fileId, name, status: "success" \| "error", error }` | `file:read`  |
+| `notification.created`       | 创建了一条通知                                                       | `{ notificationId, category, type, title }`             | `user:read`  |
+| `webhook.test`               | 调用 `POST /webhooks/{id}/test` 时                               | `{ webhookId, message }`                                | 不可订阅         |
+
+## 投递格式
+
+```http
+POST /lobehub/webhook HTTP/1.1
+Content-Type: application/json
+User-Agent: LobeHub-Webhooks/1.0
+X-LobeHub-Event-Id: evt_…
+X-LobeHub-Event-Type: run.completed
+X-LobeHub-Delivery-Id: …
+X-LobeHub-Timestamp: 1795075200
+X-LobeHub-Signature: v1=5d41402abc4b2a76b9719d911017c592…
+
+{"id":"evt_…","type":"run.completed","createdAt":"2026-11-18T08:00:00.000Z","workspaceId":"ws_…","data":{…}}
+```
+
+- `id` 在重试和重新投递时保持不变，可用它忽略重复事件。
+- 来自个人空间的事件，`workspaceId` 为 `null`。
+- 只有 `2xx` 响应才算投递成功，不跟随重定向。请在 10 秒内响应，耗时操作放到响应之后处理。
+
+### 重试
+
+投递失败后最多共尝试 6 次，每次间隔依次为 30 秒、2 分钟、8 分钟、32 分钟和约 2 小时。如果连续 5 次投递的所有尝试都失败，端点会被停用；修复接收端后，用 `PATCH /webhooks/{id}` 重新启用。测试投递只尝试一次。
+
+## 校验签名
+
+每次投递都使用端点的签名密钥（`whsec_…`）签名：
+
+```text
+X-LobeHub-Signature: v1=<hex HMAC-SHA256(secret, "<X-LobeHub-Timestamp>.<raw body>")>
+```
+
+- HMAC 的密钥是完整的签名密钥字符串，包括 `whsec_` 前缀。
+- 被签名的字符串由时间戳请求头、一个点号和**收到的原始请求体**拼接而成。解析后再序列化 JSON 会改变内容，导致签名不匹配。
+- 拒绝与本地时钟相差超过 300 秒的时间戳，防止截获的请求在之后被重放。
+- 请求头中可以包含多个 `v1=` 值，以空格或逗号分隔，例如刚轮换签名密钥之后。只要其中任意一个匹配，就接受该请求。
+- 使用常量时间比较。
+
+### Node.js
+
+```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+const TOLERANCE_SECONDS = 300;
+
+export function verifyLobeHubWebhook(
+  rawBody: string,
+  headers: Record<string, string | undefined>,
+  secret: string,
+): void {
+  const timestamp = headers['x-lobehub-timestamp'];
+  const signatureHeader = headers['x-lobehub-signature'];
+  if (!timestamp || !signatureHeader) throw new Error('Missing signature headers');
+
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) throw new Error('Timestamp out of range');
+
+  const expected = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest();
+  const matches = signatureHeader
+    .split(/[\s,]+/)
+    .filter((part) => part.startsWith('v1='))
+    .some((part) => {
+      const received = Buffer.from(part.slice(3), 'hex');
+      return received.length === expected.length && timingSafeEqual(received, expected);
+    });
+  if (!matches) throw new Error('Signature does not match');
+}
+```
+
+使用 Express 时，需要在任何 JSON 解析器之前读取原始请求体：`app.post('/lobehub/webhook', express.raw({ type: 'application/json' }), …)`，然后传入 `req.body.toString('utf8')` 和 `req.headers`。
+
+### Python
+
+```python
+import hashlib
+import hmac
+import time
+
+TOLERANCE_SECONDS = 300
+
+
+def verify_lobehub_webhook(raw_body: bytes, headers: dict, secret: str) -> None:
+    timestamp = headers.get("x-lobehub-timestamp")
+    signature_header = headers.get("x-lobehub-signature")
+    if not timestamp or not signature_header:
+        raise ValueError("Missing signature headers")
+
+    if abs(time.time() - int(timestamp)) > TOLERANCE_SECONDS:
+        raise ValueError("Timestamp out of range")
+
+    signed = timestamp.encode() + b"." + raw_body
+    expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    candidates = [
+        part[3:]
+        for part in signature_header.replace(",", " ").split()
+        if part.startswith("v1=")
+    ]
+    if not any(hmac.compare_digest(candidate, expected) for candidate in candidates):
+        raise ValueError("Signature does not match")
+```
+
+请求头名称需转为小写后传入（Flask：`{k.lower(): v for k, v in request.headers.items()}`），请求体取自 `request.get_data()`。
+
+### 使用 TypeScript SDK
+
+同一个 PR 为 `@lobehub/sdk` 增加了校验辅助函数，支持 Fetch `Headers` 和 Node 请求头对象：
+
+```ts
+import { constructWebhookEvent } from '@lobehub/sdk';
+
+export async function POST(request: Request) {
+  const rawBody = await request.text();
+  const event = await constructWebhookEvent({
+    headers: request.headers,
+    payload: rawBody,
+    secret: process.env.LOBEHUB_WEBHOOK_SECRET!,
+  });
+
+  if (event.type === 'run.completed') {
+    // event.data is typed for run.completed
+  }
+  return new Response(null, { status: 204 });
+}
+```
+
+`verifyWebhookSignature` 只校验、不解析。两者都会抛出 `WebhookSignatureVerificationError`，其 `code` 取值如 `missing_signature`、`timestamp_out_of_range` 或 `signature_mismatch`。
+
+## 聊天平台的 Webhook 渠道
+
+另一个 PR [#23332](https://github.com/lobehub/lobehub/pull/23332)（**即将推出**）新增了 **Custom Webhook** 渠道，可将任意聊天平台连接到 Agent，并提供 `/api/v1/bots`（`bot:read`、`bot:write`）用于管理机器人。其入站和出站消息使用相同的 `X-LobeHub-Timestamp` 与 `X-LobeHub-Signature` 方案，并以机器人自己的签名密钥签名。

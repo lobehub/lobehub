@@ -314,3 +314,106 @@ describe('resolveRunDeviceId', () => {
     expect(resolveRunDeviceId({ boundDeviceId: 'device-a' }, fixedDevice)).toBe('device-a');
   });
 });
+
+// The scheduler dispatches `lh task run <id> --device <id>` by machine load; a
+// device the caller names for one run must beat the task's own pin, except
+// where the workspace author fixed the agent's target.
+describe('explicit run device', () => {
+  const pinnedToA: TaskExecutionConfig = {
+    boundDeviceId: 'device-a',
+    workingDirectory: '/a/project',
+    workingDirectoryConfig: { path: '/a/project' },
+  };
+  const memberSelected: LobeAgentAgencyConfig = { executionTarget: 'device' };
+  const fixedAgentDevice: LobeAgentAgencyConfig = {
+    boundDeviceId: 'device-c',
+    executionTarget: 'device',
+    executionTargetSelectionPolicy: 'fixed',
+  };
+
+  it('runs on the requested device instead of the task pin', () => {
+    expect(resolveRunDeviceId(pinnedToA, memberSelected, 'ws-1', 'device-b')).toBe('device-b');
+  });
+
+  it('keeps the task pin when no device is requested', () => {
+    expect(resolveRunDeviceId(pinnedToA, memberSelected, 'ws-1', undefined)).toBe('device-a');
+  });
+
+  it("keeps the agent's fixed target over a requested device", () => {
+    expect(resolveRunDeviceId(pinnedToA, fixedAgentDevice, 'ws-1', 'device-b')).toBe('device-c');
+  });
+
+  it("sends the requested device without the pinned machine's directory", () => {
+    const runDeviceId = resolveRunDeviceId(pinnedToA, memberSelected, 'ws-1', 'device-b');
+
+    expect(resolveTaskRunExecution(pinnedToA, runDeviceId, 'device-b')).toEqual({
+      deviceId: 'device-b',
+    });
+  });
+
+  it('keeps the repo fallback when the requested device drops the pinned directory', () => {
+    const execution = { ...pinnedToA, repos: ['lobehub/lobehub'] };
+
+    expect(resolveTaskRunExecution(execution, 'device-b', 'device-b')).toEqual({
+      deviceId: 'device-b',
+      initialTopicMetadata: {
+        repos: ['lobehub/lobehub'],
+        workingDirectory: 'lobehub/lobehub',
+        workingDirectoryConfig: { path: 'lobehub/lobehub', repoType: 'github' },
+      },
+    });
+  });
+
+  it('forwards the requested device for a task that pins nothing', () => {
+    const runDeviceId = resolveRunDeviceId(undefined, memberSelected, 'ws-1', 'device-b');
+
+    expect(resolveTaskRunExecution(undefined, runDeviceId, 'device-b')).toEqual({
+      deviceId: 'device-b',
+    });
+  });
+
+  it('drops a requested device the fixed target replaces for a task that pins nothing', () => {
+    const runDeviceId = resolveRunDeviceId(undefined, fixedAgentDevice, 'ws-1', 'device-b');
+
+    expect(runDeviceId).toBe('device-c');
+    expect(resolveTaskRunExecution(undefined, runDeviceId, 'device-b')).toBeUndefined();
+  });
+
+  it('ignores a requested device the fixed agent target replaces', () => {
+    const runDeviceId = resolveRunDeviceId(pinnedToA, fixedAgentDevice, 'ws-1', 'device-b');
+
+    // Same as before a caller could name a device: the pin rides as `deviceId`
+    // (turnSetup drops it for device-c), and A's directory stays behind.
+    expect(resolveTaskRunExecution(pinnedToA, runDeviceId, 'device-b')).toEqual({
+      deviceId: 'device-a',
+    });
+    expect(
+      resolveTopicExecutionPatch(
+        { boundDeviceId: 'device-a' },
+        { execution: pinnedToA },
+        runDeviceId,
+        'device-b',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('moves a continued topic to the requested device without the pinned directory', () => {
+    expect(
+      resolveTopicExecutionPatch(
+        {
+          boundDeviceId: 'device-a',
+          workingDirectory: '/a/project',
+          workingDirectoryConfig: { path: '/a/project' },
+        },
+        { execution: pinnedToA },
+        'device-b',
+        'device-b',
+      ),
+    ).toEqual({
+      boundDeviceId: 'device-b',
+      repos: undefined,
+      workingDirectory: undefined,
+      workingDirectoryConfig: undefined,
+    });
+  });
+});

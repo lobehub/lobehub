@@ -332,8 +332,22 @@ describe('acceptanceRouter reject', () => {
   });
 
   it('does not let another user return a private delivery without a reason', async () => {
+    await serverDB
+      .update(acceptances)
+      .set({ visibility: 'private' })
+      .where(eq(acceptances.id, acceptanceId));
     const caller = acceptanceRouter.createCaller(createTestContext(strangerId));
     await expect(caller.reject({ id: acceptanceId })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const [acceptance] = await serverDB
+      .select()
+      .from(acceptances)
+      .where(eq(acceptances.id, acceptanceId));
+    expect(acceptance.status).toBe('delivered');
+  });
+
+  it('tells a reader of a public delivery that they cannot decide it', async () => {
+    const caller = acceptanceRouter.createCaller(createTestContext(strangerId));
+    await expect(caller.reject({ id: acceptanceId })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const [acceptance] = await serverDB
       .select()
       .from(acceptances)

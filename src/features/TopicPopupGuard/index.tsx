@@ -1,20 +1,19 @@
 'use client';
 
 import { type TopicPopupInfo } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
     max-width: 360px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
     text-align: center;

@@ -1,5 +1,6 @@
 import {
   GOAL_BATCH_ASSAY_TITLE,
+  GOAL_BATCH_RELEASE_TITLE,
   GOAL_BATCH_TEMPLATE_TITLE,
   ROLLOUT_WAVE_SIZE_DEFAULT,
 } from '@lobechat/const/goal';
@@ -10,6 +11,8 @@ import type {
   GoalRolloutLearning,
   GoalRolloutPhase,
   GoalRolloutPlanSkill,
+  GoalRolloutRetro,
+  GoalRolloutVerifier,
 } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
 
@@ -30,6 +33,8 @@ import { type GoalGraphView, type GoalNodeView, isRunningNode } from '../goalGra
 export type BatchCellState = 'backlog' | 'running' | 'human' | 'done' | 'stale';
 
 export interface BatchCell {
+  /** Done, and its delivery's Acceptance was signed off. */
+  accepted?: true;
   /** 0-based position inside its wave. */
   index: number;
   /** The node that delivers this unit on the main roster, once released. */
@@ -51,8 +56,14 @@ export type BatchUnitOrigin =
   | { index: number; kind: 'wave'; wave: number };
 
 export interface BatchProbe {
+  /** Done, and its delivery's Acceptance was signed off. */
+  accepted?: true;
+  /** Which run of the unit this is, when it was sent back and run again in the round (2, 3…). */
+  attempt?: number;
   from?: BatchUnitOrigin;
   nodeId: string;
+  /** Every run of a unit sent back inside its round, first to latest — this one last. */
+  runs?: { nodeId: string; state: BatchCellState }[];
   state: BatchCellState;
   title: string;
 }
@@ -82,7 +93,11 @@ export interface BatchRound {
     | { kind: 'round'; revision: number }
     /** `wave`: the 0-based roster wave the re-opened units ran in. */
     | { kind: 'waves'; wave: number };
+  /** The plan skill version this round runs on; a rewritten plan moves it past `revision`. */
+  planVersion: number;
   probes: BatchProbe[];
+  /** The release this round's passed gate is holding for a person, while it waits. */
+  releaseId?: string;
   /** 1-based recipe revision. */
   revision: number;
   templateId?: string;
@@ -108,7 +123,11 @@ export interface BatchModel {
   phase?: GoalRolloutPhase;
   /** The execution plan as a skill in the user's library; round N is its version N. */
   planSkill?: GoalRolloutPlanSkill;
+  /** The retro after each execution: index 0 reads the probes, N reads roster wave N. */
+  retros: GoalRolloutRetro[];
   rounds: BatchRound[];
+  /** What every unit is judged on, once a retro produced it. */
+  verifier?: GoalRolloutVerifier;
   /**
    * The round (1-based revision) each wave belongs to. A released wave belongs
    * to the plan it went out under; the waves not yet released belong to the
@@ -135,7 +154,8 @@ export const batchCellState = (
   if (status === 'resolved') return 'done';
   if (status === 'waiting' || view.decision || view.isStale || waitingOn.has(view.node.id))
     return 'human';
-  if (isRunningNode(view)) return 'running';
+  // Held for a usage window to reopen: still in flight, resumes on its own.
+  if (isRunningNode(view) || view.quotaRetryAt) return 'running';
   return 'backlog';
 };
 
@@ -165,6 +185,11 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
   );
   const cellOf = (id?: string): BatchCellState =>
     id && superseded.has(id) ? 'stale' : batchCellState(id ? graph.byId[id] : undefined, waitingOn);
+  // A done square whose delivery a person signed off carries the mark of it.
+  const acceptedOf = (id?: string) =>
+    id && cellOf(id) === 'done' && graph.byId[id]?.acceptance?.status === 'accepted'
+      ? { accepted: true as const }
+      : undefined;
 
   const templates = members.filter(
     (view) => view.node.kind === 'finding' && view.node.title === GOAL_BATCH_TEMPLATE_TITLE,
@@ -180,6 +205,23 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
       .filter((edge) => edge.kind === 'depends_on' && edge.sourceNodeId === assayId)
       .map((edge) => edge.targetNodeId)
       .filter((id) => memberIds.has(id));
+  // Each held release is a decision node of its own; only an open one belongs
+  // on the gate, the answered ones are its history.
+  const releaseReviews = members.filter(
+    (view) => view.node.kind === 'decision' && view.node.title === GOAL_BATCH_RELEASE_TITLE,
+  );
+  const openRelease = releaseReviews.find((view) => view.node.status === 'waiting');
+  // A round whose held release the owner sent back ended rejected, though its
+  // Assay itself was never answered: the decision lives on the release node,
+  // opened between this round's Assay and the next one.
+  const sentBack = (assay?: GoalNodeView, nextAssay?: GoalNodeView) =>
+    !!assay &&
+    releaseReviews.some(
+      (view) =>
+        byCreatedAt(view, assay) >= 0 &&
+        (!nextAssay || byCreatedAt(view, nextAssay) < 0) &&
+        view.humanTouches.some((touch) => touch.resolvedOptionId === 'revise'),
+    );
   const roundCount = Math.max(templates.length, assays.length, 1);
   const probeIdsByRound = Array.from({ length: roundCount }, (_, r) => {
     const assay = assays[r];
@@ -226,6 +268,7 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     (waves[wave] ??= []).push(
       main
         ? {
+            ...(!later && acceptedOf(main.node.id)),
             index,
             nodeId: main.node.id,
             reopenedIn: laterRound,
@@ -235,6 +278,7 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
             wave,
           }
         : {
+            ...acceptedOf(later?.node.id),
             index,
             // Never released here: the square follows the round that runs it.
             nodeId: later?.node.id,
@@ -288,16 +332,63 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
   });
 
   const rounds: BatchRound[] = probeIdsByRound.map((ids, r) => {
+    // A unit sent back and run again inside its round keeps one place there:
+    // its latest run, numbered, instead of a superseded square beside it.
+    const inRound = new Set(ids);
+    const rerunOf = new Map(
+      graph.edges
+        .filter(
+          (edge) =>
+            edge.kind === 'derived_from' &&
+            inRound.has(edge.sourceNodeId) &&
+            inRound.has(edge.targetNodeId),
+        )
+        .map((edge) => [edge.sourceNodeId, edge.targetNodeId]),
+    );
+    const rerun = new Set(rerunOf.values());
+    const attemptOf = (id: string): number => {
+      const earlier = rerunOf.get(id);
+      return earlier ? attemptOf(earlier) + 1 : 1;
+    };
+    // Where the unit first ran, so a re-run keeps its place among the trials.
+    const firstRunOf = (id: string): string => {
+      const earlier = rerunOf.get(id);
+      return earlier ? firstRunOf(earlier) : id;
+    };
+    // The unit's runs in this round, first to latest.
+    const runsOf = (id: string): string[] => {
+      const earlier = rerunOf.get(id);
+      return earlier ? [...runsOf(earlier), id] : [id];
+    };
     const probes = ids
+      .filter((id) => !rerun.has(id))
       .map((id) => graph.byId[id])
       .filter((view): view is GoalNodeView => !!view)
-      .sort(byCreatedAt)
-      .map((view) => ({
-        from: r > 0 ? originOf(view) : undefined,
-        nodeId: view.node.id,
-        state: cellOf(view.node.id),
-        title: view.node.title,
-      }));
+      .sort(
+        (a, b) =>
+          byCreatedAt(
+            graph.byId[firstRunOf(a.node.id)] ?? a,
+            graph.byId[firstRunOf(b.node.id)] ?? b,
+          ) || byCreatedAt(a, b),
+      )
+      .map((view) => {
+        const attempt = attemptOf(view.node.id);
+        return {
+          ...(attempt > 1 && {
+            attempt,
+            // A superseded run is history here, read as it ended, not as superseded.
+            runs: runsOf(view.node.id).map((id) => ({
+              nodeId: id,
+              state: batchCellState(graph.byId[id], waitingOn),
+            })),
+          }),
+          ...acceptedOf(view.node.id),
+          from: r > 0 ? originOf(view) : undefined,
+          nodeId: view.node.id,
+          state: cellOf(view.node.id),
+          title: view.node.title,
+        };
+      });
     const template = templates[r];
     const assay = assays[r];
     const previousTemplate = templates[r - 1];
@@ -315,15 +406,22 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
       assayId: assay?.node.id,
       evaluations: verdicts.filter((entry) => entry.revision === r + 1),
       forked,
-      gate: gateState(assay, r === roundCount - 1, state?.phase, probes),
+      gate:
+        r === roundCount - 1 && openRelease
+          ? 'human'
+          : r < roundCount - 1 && sentBack(assay, assays[r + 1])
+            ? 'rejected'
+            : gateState(assay, r === roundCount - 1, state?.phase, probes),
       origin: r > 0 ? roundOrigin(probes, r) : undefined,
+      planVersion: state?.planVersions?.[String(r + 1)] ?? r + 1,
       probes,
+      releaseId: r === roundCount - 1 ? openRelease?.node.id : undefined,
       revision: r + 1,
       templateId: template?.node.id,
     };
   });
 
-  const assayIds = new Set(assays.map((view) => view.node.id));
+  const assayIds = new Set([...assays, ...releaseReviews].map((view) => view.node.id));
   const decisionIds = members
     .filter((view) => view.node.kind === 'decision' && !assayIds.has(view.node.id))
     .map((view) => view.node.id);
@@ -335,6 +433,10 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     { key: 'no_open_decision' },
     { key: 'plan_written' },
     ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes_covered' as const }] : []),
+    // A batch that runs retros opens its gate on them: re-verified, every intervention accounted.
+    ...(state?.retros?.length
+      ? [{ key: 'reverified' as const }, { key: 'interventions_accounted' as const }]
+      : []),
   ];
 
   return {
@@ -344,7 +446,9 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     learnings: state?.learnings ?? [],
     phase: state?.phase,
     planSkill: state?.planSkill,
+    retros: state?.retros ?? [],
     rounds,
+    verifier: state?.verifier,
     waveRounds,
     waves,
     waveSize,
@@ -360,7 +464,7 @@ const gateState = (
   if (assay && (assay.decision || assay.node.status === 'waiting')) return 'human';
   if (!current) return assay?.humanTouches.length ? 'rejected' : 'passed';
   if (phase === 'mass' || phase === 'done') return 'passed';
-  if (phase === 'pattern_break') return 'human';
+  if (phase === 'pattern_break' || phase === 'release_review') return 'human';
   const settled = probes.length > 0 && probes.every((probe) => probe.state === 'done');
   return settled ? 'checking' : 'locked';
 };
@@ -384,6 +488,27 @@ export const countCells = (cells: { state: BatchCellState }[]) => {
   };
   for (const cell of cells) counts[cell.state] += 1;
   return counts;
+};
+
+export type BatchUnitsPhase = 'done' | 'held' | 'human' | 'pending' | 'running' | 'stale';
+
+/**
+ * One group's phase from its units: a person first, then progress. A group its
+ * gate holds for a person, with nothing running, waits on that person — its
+ * started units do not make it "in progress".
+ */
+export const unitsPhase = (
+  cells: { state: BatchCellState }[],
+  started: boolean,
+  held = false,
+): BatchUnitsPhase => {
+  const counts = countCells(cells);
+  if (counts.human) return 'human';
+  if (counts.stale && counts.stale + counts.done < cells.length) return 'stale';
+  if (cells.length > 0 && counts.done + counts.stale === cells.length) return 'done';
+  if (held && !counts.running) return 'held';
+  if (!started && !counts.running) return 'pending';
+  return 'running';
 };
 
 /**
@@ -478,3 +603,11 @@ export const findBatchPlan = (
   const round = model.rounds.find((item) => item.templateId === nodeId);
   return round ? { model, round } : undefined;
 };
+
+/**
+ * The retro a round starts from, drawn at the top of its frame: the cold
+ * start's for the first round, and for a later one the retro of the wave whose
+ * break opened it.
+ */
+export const roundRetro = (model: Pick<BatchModel, 'retros'>, revision: number) =>
+  model.retros.find((retro) => (revision === 1 ? retro.wave === 0 : retro.opens === revision));

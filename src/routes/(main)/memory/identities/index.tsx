@@ -1,5 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
@@ -17,11 +16,11 @@ import { isIdentityQueryCurrent } from '@/store/userMemory/slices/identity/proje
 import EditableModal from '../features/EditableModal';
 import Loading from '../features/Loading';
 import { SCROLL_PARENT_ID } from '../features/TimeLineView/useScrollParent';
-import { type ViewMode } from '../features/ViewModeSwitcher';
 import ViewModeSwitcher from '../features/ViewModeSwitcher';
+import { type ViewMode } from '../features/ViewModeSwitcher';
 import IdentityRightPanel from './features/IdentityRightPanel';
-import { type IdentityType } from './features/List';
 import List from './features/List';
+import { type IdentityType } from './features/List';
 import SegmentedBar from './features/SegmentedBar';
 import { identityListBoundary } from './identityListBoundary';
 import { identityListParamsOf } from './identityListParams';

@@ -1,44 +1,57 @@
-import { AGENT_CHAT_TOPIC_URL, DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { formatElapsedClockTime } from '@lobechat/utils';
 import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useTheme } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Popover,
+  Skeleton,
+  Tag,
+  Text,
+  Tooltip,
+  useTheme,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed, TargetIcon } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import DotsLoading from '@/components/DotsLoading';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import UnreadDot from '@/components/UnreadDot';
 import { isDesktop } from '@/const/version';
+import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { TopicMigrationIndicator } from '@/features/AgentTransferMigration';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import { startTopicDrag } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { getProjectConversationPath } from '@/features/Projects/Layout/navigation';
+import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import TopicCreatorAvatar, { useTopicCreator } from '@/features/TopicCreatorAvatar';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
-import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
+import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
+import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
 import { useTopicListScope } from '../../TopicListScope';
@@ -93,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
       }
     }
   `,
-  prIcon: css`
+  markerIcon: css`
     position: relative;
     display: inline-flex;
     flex: none;
@@ -111,11 +124,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-// Module-scoped so a click on any topic cancels a pending click on another.
-// Per-item refs can't do that, which lets rapid clicks across items all
-// fire — each racing to write activeTopicId (see ).
-let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
-
 /**
  * The mobile surface renders its topic list in a modal and never mounts the
  * working sidebar — the desktop host of a topic's thread list. Without nesting
@@ -132,13 +140,6 @@ let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
 const isMobileSurface = () => typeof __MOBILE__ !== 'undefined' && __MOBILE__;
 // Nesting cue: keeps the rows visually under their topic row.
 const NESTED_THREAD_LIST_INDENT = 32;
-
-const cancelPendingSingleClick = () => {
-  if (pendingSingleClickTimer) {
-    clearTimeout(pendingSingleClickTimer);
-    pendingSingleClickTimer = null;
-  }
-};
 
 const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => {
   const config = metadata?.workingDirectoryConfig;
@@ -210,6 +211,8 @@ RunningElapsedTime.displayName = 'RunningElapsedTime';
 
 interface TopicItemProps {
   fav?: boolean;
+  /** A goal was planned in this conversation — marks the row's identity slot. */
+  hasGoal?: boolean;
   id?: string;
   metadata?: ChatTopicMetadata;
   /**
@@ -254,6 +257,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     id,
     title,
     fav,
+    hasGoal,
     metadata,
     runStartedAt,
     status,
@@ -281,7 +285,16 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
     // Creator of the topic — resolves only inside an active workspace; drives
     // the identity-first icon layout below.
-    const author = useTopicCreator(isSharedAgent ? userId : undefined);
+    // "Only my topics" makes the viewer's own rows self-evident, so the creator
+    // avatar carries no information there — drop it and fall back to the
+    // personal-mode row. A teammate's topic can still be listed (the active
+    // topic is retained under the filter) and keeps its ownership cue. Bot
+    // topics still resolve their initiator via `botCreator`.
+    const onlyMine = useTopicOnlyMine();
+    const currentUserId = useUserStore(userProfileSelectors.userId);
+    const hideOwnCreator = onlyMine && userId === currentUserId;
+    const creatorUserId = isSharedAgent && !metadata?.bot && !hideOwnCreator ? userId : undefined;
+    const author = useTopicCreator(creatorUserId, metadata?.botCreator);
 
     const loadingRingColor = isDarkMode
       ? cssVar.colorWarningBorder
@@ -291,9 +304,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const href = useMemo(() => {
       if (!activeAgentId || !id) return undefined;
       return buildWorkspaceAwarePath(
-        scope
-          ? getProjectConversationPath(scope.projectId, id)
-          : AGENT_CHAT_TOPIC_URL(activeAgentId, id),
+        scope ? getProjectTopicPath(scope.projectId, id) : AGENT_CHAT_TOPIC_URL(activeAgentId, id),
         activeWorkspaceSlug,
       );
     }, [activeAgentId, activeWorkspaceSlug, id, scope]);
@@ -319,43 +330,19 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const handleDragStart = useCallback(
       (event: DragEvent) => {
         if (!id) return;
-        cancelPendingSingleClick();
         startTopicDrag(event, { topicId: id, topicTitle: title });
       },
       [id, title],
     );
 
+    // A plain click only switches the topic. Opening a new tab takes an explicit
+    // gesture (Cmd/Ctrl+click, middle click, or the context menu): a double
+    // click used to open one, and a lagging UI turned repeated clicks into
+    // unwanted tabs.
     const handleClick = useCallback(() => {
-      if (isDesktop) {
-        cancelPendingSingleClick();
-        pendingSingleClickTimer = setTimeout(() => {
-          pendingSingleClickTimer = null;
-          void navRef.current.navigateToTopic(id);
-        }, 250);
-      } else {
-        void navRef.current.navigateToTopic(id);
-      }
-    }, [id, navRef]);
-
-    const handleDoubleClick = useCallback(async () => {
-      if (!id || !activeAgentId || !isDesktop) return;
-      cancelPendingSingleClick();
-      if (scope && href) {
-        useElectronStore.getState().addTab(href);
-        void navRef.current.navigateToTopic(id);
-        return;
-      }
-      if (await navRef.current.focusTopicPopup(id)) {
-        void navRef.current.navigateToTopic(id, { skipPopupFocus: true });
-        return;
-      }
-      useElectronStore
-        .getState()
-        .addTab(
-          buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug),
-        );
+      if (id) markSidebarTopicActivation(id);
       void navRef.current.navigateToTopic(id);
-    }, [id, activeAgentId, activeWorkspaceSlug, navRef, scope, href]);
+    }, [id, navRef]);
 
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
@@ -389,7 +376,14 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // while the user is viewing the topic, like markTopicUnread's own guard.
     const isRunningTailUnread = isMaskedRunningTail && !isTopicActive;
 
-    const hasUnread = id && (isUnreadCompleted || isRunningTailUnread);
+    // `status` is the row's own copy: a project list keeps its topics outside
+    // the chat store, so `isUnreadCompleted` never sees them there.
+    const hasUnread = id && (isUnreadCompleted || status === 'unread' || isRunningTailUnread);
+    const hoverPrefetchHandlers = useTopicHoverPrefetch({
+      agentId: activeAgentId,
+      status,
+      topicId: id,
+    });
 
     useEffect(() => {
       if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;
@@ -413,11 +407,25 @@ const TopicItemRow = memo<TopicItemRowProps>(
         {t('draft')}
       </Text>
     ) : undefined;
+    // On a two-line row (title + working directory) the hint sits under the
+    // leading avatar instead, so it no longer eats into the title width.
+    const draftBelowIcon = hasDraft ? (
+      <Text
+        fontSize={10}
+        style={{ color: cssVar.colorError, flex: 'none', lineHeight: 1, whiteSpace: 'nowrap' }}
+      >
+        {t('draft')}
+      </Text>
+    ) : undefined;
 
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
     // keeping the row itself clean.
-    const metaCard = useMemo(() => getTopicMetaCard(metadata), [metadata]);
+    const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+    const metaCard = useMemo(
+      () => getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding }),
+      [betterCoding, metadata],
+    );
 
     // For default topic (no id)
     if (!id) {
@@ -510,24 +518,42 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return null;
     })();
 
-    // Identity-flavored icons the row owns (bot platform, PR marker) — these
+    // Identity-flavored icons the row owns (goal, PR marker, bot platform) — these
     // keep the leading slot even in workspace mode, with the creator shrunk to
     // a corner badge.
     const identityIconNode = (() => {
+      // The conversation a goal was planned in says more about the row than
+      // the PR it produced, so it outranks the PR marker (which stays in the
+      // meta hover card).
+      if (hasGoal) {
+        return (
+          <Tooltip title={t('metaCard.goal')}>
+            <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
+              <Icon
+                icon={TargetIcon}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
+              />
+            </span>
+          </Tooltip>
+        );
+      }
       // GitHub PR state marker (open=green, merged=purple, closed=red),
       // like Codex. It is secondary metadata, so only an idle topic uses it
       // as the leading icon.
       if (metaCard?.pullRequest) {
-        const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
+        const prState = getPullRequestState(metaCard.pullRequest);
+        const prVisual = PR_STATE_VISUAL[prState];
         const ciStatus = metaCard.pullRequest.ciStatus;
         const ciVisual = getCiVisual(ciStatus);
-        const showCiBadge = ciStatus !== undefined && ciStatus !== 'unknown';
+        const showCiBadge =
+          prState !== 'merged' && ciStatus !== undefined && ciStatus !== 'unknown';
         const tooltip = showCiBadge
           ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
           : t(prVisual.labelKey);
         return (
           <Tooltip title={tooltip}>
-            <span className={styles.prIcon}>
+            <span className={styles.markerIcon}>
               <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
               {showCiBadge && (
                 <span className={styles.ciBadge}>
@@ -562,17 +588,23 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const ownIconNode = statusIconNode ?? identityIconNode;
     const leadingIconNode =
       scopedTopic && !suppressAgentAvatar ? (
-        <Avatar
+        <AgentAvatar
+          agentId={scopedTopic.agentId}
           name={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
+          shape={'circle'}
           size={20}
           title={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
           avatar={
             scopedTopic.agentAvatar ||
-            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)
+            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : undefined)
           }
         />
       ) : author ? (
-        <TopicCreatorAvatar corner={ownIconNode} userId={userId} />
+        <TopicCreatorAvatar
+          botCreator={metadata?.botCreator}
+          corner={ownIconNode}
+          userId={creatorUserId}
+        />
       ) : (
         (ownIconNode ?? idleIconPlaceholder)
       );
@@ -581,14 +613,23 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
         <NavItem
           draggable
-          actions={() => <Actions fav={fav} id={id} status={status} title={title} />}
+          titleMarquee
           active={isTopicActive}
           description={workingDirectoryNode}
           href={href}
           icon={leadingIconNode}
-          slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
+          actions={() => (
+            <Actions
+              fav={fav}
+              id={id}
+              // Archiving a topic mid-run would hide work that is still going.
+              showInlineArchive={!shouldShowRunningIcon}
+              status={status}
+              title={title}
+            />
+          )}
           extra={
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
@@ -609,15 +650,22 @@ const TopicItemRow = memo<TopicItemRowProps>(
               )}
             </>
           }
+          slots={
+            workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
+          }
           onClick={handleClick}
-          onDoubleClick={() => void handleDoubleClick()}
           onDragStart={handleDragStart}
         />
       </TopicItemContextMenu>
     );
 
     return (
-      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
+      <Flexbox
+        data-testid="topic-item"
+        data-topic-id={id}
+        style={{ position: 'relative' }}
+        {...hoverPrefetchHandlers}
+      >
         {metaCard ? (
           <Popover
             arrow={false}
