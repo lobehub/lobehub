@@ -134,6 +134,7 @@ export const chatViaResponses = async (
     response: responseWithMetadata.response,
   });
 
+  const pricingOptions = await factory.chatCompletion?.getPricingOptions?.(payload, requestPayload);
   const streamOptions: OpenAIStreamOptions = {
     bizErrorTypeTransformer: factory.chatCompletion?.handleStreamBizErrorType,
     callbacks: options?.callback,
@@ -141,6 +142,7 @@ export const chatViaResponses = async (
       apiMode: 'responses',
       model: usageModel,
       pricing: await getModelPricing(usageModel, runtime.id, options?.pricingContext),
+      pricingOptions,
       provider: runtime.id,
       reasoningSignatureScope,
     },
