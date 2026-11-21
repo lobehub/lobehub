@@ -7,7 +7,7 @@ interface FirecrawlScrapeOptions {
   removeBase64Images?: boolean;
 }
 
-type FirecrawlSource =
+export type FirecrawlSource =
   | { location?: string; tbs?: string; type: 'web' }
   | { type: 'images' }
   | { type: 'news' };
