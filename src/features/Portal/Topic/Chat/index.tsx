@@ -72,6 +72,7 @@ const TopicChat = memo(() => {
   const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(activeAgentId));
   const hooks: ConversationHooks = useChatFollowUp({
     agentChatConfig,
+    agentId: activeAgentId,
     conversationKey: chatKey,
     topicId: portalTopicId ?? undefined,
   });

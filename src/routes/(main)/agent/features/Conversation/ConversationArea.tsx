@@ -108,6 +108,7 @@ const Conversation = memo(() => {
   const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(context.agentId));
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
+    agentId: context.agentId,
     conversationKey: chatKey,
     threadId: context.threadId ?? undefined,
     topicId: context.topicId ?? undefined,

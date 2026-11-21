@@ -395,7 +395,7 @@ export interface StepCompleteData {
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
-  phase: 'turn_metadata' | 'result_usage' | 'user_message';
+  phase: 'prompt_suggestion' | 'turn_metadata' | 'result_usage' | 'user_message';
   /**
    * Provider identifier for this turn — the CLI / adapter name (e.g.
    * `claude-code`, `codex`), not the underlying LLM vendor. CLI-wrapped agents

@@ -1,6 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { stripGoalCommand } from '@lobechat/builtin-tool-goal';
-import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import {
   appendAttachedFilesToPrompt,
   buildSubagentRunSnapshot,
@@ -98,6 +97,7 @@ import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { waitForPersistQueue } from './persistQueue';
+import { applyPromptSuggestion, resolvePromptSuggestionArgs } from './promptSuggestions';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
 import {
   buildEditedTopicPreviousConversation,
@@ -110,6 +110,7 @@ import {
   createSubagentStoreDispatcher,
   type SubagentStoreDispatcher,
 } from './subagentStoreDispatcher';
+import { subscribeBroadcasts } from './subscribeBroadcasts';
 import { createToolStateSnapshotClaimer } from './toolStateSnapshot';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
@@ -205,49 +206,6 @@ const toStreamRetryMetadata = (
     errorStatus: pickFiniteNumber(data.errorStatus, data.status, data.statusCode, data.httpStatus),
     maxAttempts: pickFiniteNumber(data.maxAttempts),
     provider: pickString(data.provider),
-  };
-};
-
-/**
- * Subscribe to Electron IPC broadcasts. As of phase 0, the main
- * process runs JSONL framing + adapter conversion + `toStreamEvent` itself
- * (`AgentStreamPipeline` from `@lobechat/heterogeneous-agents/spawn`), so the
- * renderer receives ready-made `AgentStreamEvent`s with no per-event adapter
- * step. Returns unsubscribe function.
- */
-const subscribeBroadcasts = (
-  sessionId: string,
-  callbacks: {
-    onComplete: () => void;
-    onError: (error: HeterogeneousAgentSessionError | string) => void;
-    onStreamEvent: (event: AgentStreamEvent) => void;
-  },
-): (() => void) => {
-  if (!window.electron?.ipcRenderer) return () => {};
-
-  const ipc = window.electron.ipcRenderer;
-
-  const onStreamEvent = (_e: any, data: { event: AgentStreamEvent; sessionId: string }) => {
-    if (data.sessionId === sessionId) callbacks.onStreamEvent(data.event);
-  };
-  const onComplete = (_e: any, data: { sessionId: string }) => {
-    if (data.sessionId === sessionId) callbacks.onComplete();
-  };
-  const onError = (
-    _e: any,
-    data: { error: HeterogeneousAgentSessionError | string; sessionId: string },
-  ) => {
-    if (data.sessionId === sessionId) callbacks.onError(data.error);
-  };
-
-  const unsubscribeStreamEvent = ipc.on('heteroAgentEvent' as any, onStreamEvent);
-  const unsubscribeComplete = ipc.on('heteroAgentSessionComplete' as any, onComplete);
-  const unsubscribeError = ipc.on('heteroAgentSessionError' as any, onError);
-
-  return () => {
-    unsubscribeStreamEvent();
-    unsubscribeComplete();
-    unsubscribeError();
   };
 };
 
@@ -1781,7 +1739,11 @@ export const executeHeterogeneousAgent = async (
       if (deepSeekAuth.apiKey) sessionEnv.DEEPSEEK_API_KEY = deepSeekAuth.apiKey;
     }
 
-    const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
+    const spawnArgs = resolvePromptSuggestionArgs({
+      adapterType,
+      agentId: context.agentId,
+      args: buildHeteroSpawnArgs(heterogeneousProvider),
+    });
     const providerBinding = serverDefaultBindingActive
       ? {
           apiConfig: serverDefaultApiConfig,
@@ -1954,6 +1916,21 @@ export const executeHeterogeneousAgent = async (
       }
       if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
         void applyPermissionModeReport(get, context.topicId, event.data, { persist: true });
+        return;
+      }
+      // Arrives after `result`: only the chip needs it, nothing is persisted.
+      if (event.type === 'step_complete' && event.data?.phase === 'prompt_suggestion') {
+        persistQueue = persistQueue.then(() => {
+          if (isAborted()) return;
+          const conversationKey = messageMapKey(context);
+          applyPromptSuggestion({
+            assistantMessageId: mainState.currentAssistantId,
+            conversationKey,
+            messages:
+              get().dbMessagesMap?.[conversationKey] ?? get().messagesMap?.[conversationKey],
+            suggestion: event.data.suggestion,
+          });
+        });
         return;
       }
 

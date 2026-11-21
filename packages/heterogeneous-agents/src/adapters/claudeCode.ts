@@ -36,6 +36,7 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { toPromptSuggestionData } from '../claudeCodePromptSuggestions';
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import {
   classifyCliQuotaMessage,
@@ -59,6 +60,7 @@ import type {
   UsageData,
 } from '../types';
 import { ClaudeCodeBackgroundTasks } from './claudeCodeBackgroundTasks';
+import { toRateLimitInfo } from './claudeCodeRateLimit';
 import { ClaudeCodeTaskSignals } from './claudeCodeTaskSignals';
 
 /**
@@ -797,22 +799,6 @@ const buildFallbackTerminalError = (
   };
 };
 
-const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined => {
-  if (!value || typeof value !== 'object') return;
-
-  const raw = value as Record<string, unknown>;
-
-  return {
-    isUsingOverage: typeof raw.isUsingOverage === 'boolean' ? raw.isUsingOverage : undefined,
-    overageDisabledReason:
-      typeof raw.overageDisabledReason === 'string' ? raw.overageDisabledReason : undefined,
-    overageStatus: typeof raw.overageStatus === 'string' ? raw.overageStatus : undefined,
-    rateLimitType: typeof raw.rateLimitType === 'string' ? raw.rateLimitType : undefined,
-    resetsAt: typeof raw.resetsAt === 'number' ? raw.resetsAt : undefined,
-    status: typeof raw.status === 'string' ? raw.status : undefined,
-  };
-};
-
 const getOverloadedTerminalError = (
   result: unknown,
   profile: ClaudeCompatibleAdapterProfile,
@@ -1274,6 +1260,10 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       }
       case 'result': {
         return this.handleResult(raw);
+      }
+      case 'prompt_suggestion': {
+        const data = toPromptSuggestionData(raw);
+        return data ? [this.makeEvent('step_complete', data)] : [];
       }
       case 'session_configured': {
         if (typeof raw.initialSessionCostUsd === 'number') {

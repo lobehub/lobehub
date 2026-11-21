@@ -19,6 +19,7 @@ export {
   normalizeClaudeCodeEntrypoint,
   resolveDispatchedClaudeCodeEntrypoint,
 } from './claudeCodeEntrypoint';
+export { withPromptSuggestionArg } from './claudeCodePromptSuggestions';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,

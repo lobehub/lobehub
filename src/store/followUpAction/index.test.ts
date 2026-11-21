@@ -28,6 +28,18 @@ describe('useFollowUpActionStore', () => {
     vi.useRealTimers();
   });
 
+  it('setNativeSuggestion shows a CLI suggestion with a shortened label', () => {
+    const suggestion = '一'.repeat(50);
+    useFollowUpActionStore.getState().setNativeSuggestion(KEY_A, { messageId: MSG, suggestion });
+
+    expect(slotA().status).toBe('ready');
+    expect(slotA().messageId).toBe(MSG);
+    expect(slotA().tracingId).toBeUndefined();
+    expect(slotA().chips[0].message).toBe(suggestion);
+    expect([...slotA().chips[0].label]).toHaveLength(40);
+    expect(slotA().chips[0].label.endsWith('…')).toBe(true);
+  });
+
   it('fetchFor sets loading then ready on success', async () => {
     const spy = vi.spyOn(followUpActionService, 'extract').mockResolvedValue({
       messageId: MSG,

@@ -26,6 +26,26 @@ vi.mock('@/store/user', () => ({
   useUserStore: vi.fn(),
 }));
 
+const desktop = vi.hoisted(() => ({ isDesktop: false }));
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  get isDesktop() {
+    return desktop.isDesktop;
+  },
+}));
+
+const agentType = vi.hoisted(() => ({ value: undefined as string | undefined }));
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: {
+    getAgentConfigById: () => () => ({
+      agencyConfig: { heterogeneousProvider: { type: agentType.value } },
+    }),
+  },
+}));
+
 describe('useChatFollowUp', () => {
   let fetchFor: ReturnType<typeof vi.fn>;
   let clear: ReturnType<typeof vi.fn>;
@@ -49,6 +69,48 @@ describe('useChatFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     (useUserStore as unknown as Mock).mockReset();
+  });
+
+  describe('Claude Code native suggestions', () => {
+    const renderNative = () =>
+      renderHook(() =>
+        useChatFollowUp({
+          agentChatConfig: VALID_AGENT,
+          agentId: 'agent-1',
+          conversationKey: CONVERSATION_KEY,
+          topicId: TOPIC_ID,
+        }),
+      ).result.current;
+
+    afterEach(() => {
+      desktop.isDesktop = false;
+      agentType.value = undefined;
+    });
+
+    it('skips extraction on desktop and still clears on send', async () => {
+      desktop.isDesktop = true;
+      agentType.value = 'claude-code';
+      (useUserStore as unknown as Mock).mockImplementation((selector: any) =>
+        selector({ settings: { systemAgent: { followUpAction: { enabled: false } } } }),
+      );
+
+      const hooks = renderNative();
+
+      expect(hooks.onAssistantTurnSettled).toBeUndefined();
+      await hooks.onBeforeSendMessage?.({} as any);
+      expect(clear).toHaveBeenCalledWith(CONVERSATION_KEY);
+    });
+
+    it('keeps server extraction for Claude Code on the web', () => {
+      agentType.value = 'claude-code';
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
+
+    it('keeps server extraction for other CLI agents on desktop', () => {
+      desktop.isDesktop = true;
+      agentType.value = 'codex';
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
   });
 
   describe('disabled effective state — returns empty hooks', () => {
