@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { gptImage2Schema } from '../const/imageParameters';
 import type { ModelParamsSchema, RuntimeImageGenParams } from './index';
 import { extractDefaultValues, ModelParamsMetaSchema, validateModelParamsSchema } from './index';
 
@@ -23,6 +24,28 @@ describe('meta-schema', () => {
       };
 
       expect(() => ModelParamsMetaSchema.parse(validSchema)).not.toThrow();
+    });
+
+    it('gpt-image-2 opts into the background parameter', () => {
+      expect(gptImage2Schema.background).toEqual({
+        default: 'auto',
+        enum: ['auto', 'opaque', 'transparent'],
+      });
+      expect(ModelParamsMetaSchema.parse(gptImage2Schema).background?.default).toBe('auto');
+    });
+
+    it('should validate and default the background parameter', () => {
+      const schema = {
+        background: { default: 'auto', enum: ['auto', 'opaque', 'transparent'] },
+        prompt: { default: '' },
+      };
+
+      const result = ModelParamsMetaSchema.parse(schema);
+      expect(result.background?.enum).toEqual(['auto', 'opaque', 'transparent']);
+      expect(extractDefaultValues(schema as ModelParamsSchema)).toEqual({
+        background: 'auto',
+        prompt: '',
+      });
     });
 
     it('should validate minimal parameter schema with only prompt', () => {
