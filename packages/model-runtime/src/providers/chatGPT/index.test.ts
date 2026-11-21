@@ -269,17 +269,21 @@ describe('LobeChatGPTAI', () => {
   // `400 reasoning.mode is not supported with this model` (unsupported_value),
   // leaving callSubAgent with no recovery path. The provider now strips
   // `reasoning.mode` for models outside the gpt-5.6 family.
-  it('strips reasoning.mode for Codex models that reject it', async () => {
-    await instance.chat({
-      messages: [{ content: 'Write a chapter', role: 'user' }],
-      model: 'gpt-6.1-sol',
-      reasoning: { effort: 'max', mode: 'pro', summary: 'auto' },
-    });
+  it.each(['gpt-6.1-sol', 'gpt-6.2-astra', 'gpt-6.2-sol'])(
+    'strips unsupported reasoning.mode for %s',
+    async (model) => {
+      await instance.chat({
+        messages: [{ content: 'Write a chapter', role: 'user' }],
+        model,
+        reasoning: { effort: 'max', mode: 'pro', summary: 'auto' },
+      });
 
-    const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
 
-    expect(request.reasoning).toEqual({ effort: 'max', summary: 'auto' });
-  });
+      expect(request.model).toBe(model);
+      expect(request.reasoning).toEqual({ effort: 'max', summary: 'auto' });
+    },
+  );
 
   it('reduces mode-only reasoning to the provider baseline on a rejecting model', async () => {
     await instance.chat({

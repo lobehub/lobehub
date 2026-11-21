@@ -1,5 +1,5 @@
 import { Settings } from 'lucide-react';
-import { type ComponentType } from 'react';
+import { type ComponentType, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
@@ -40,13 +40,29 @@ interface SettingsRouteMetaOptions {
   tab?: SettingsTabs;
 }
 
-/** Settings route meta; explicit tab routes pass their tab and page-shaped skeleton. */
-export const createSettingsRouteMeta = ({ Skeleton, tab }: SettingsRouteMetaOptions = {}) =>
+/** The settings title alone, for routes whose layout owns the loading skeleton (mobile). */
+export const createSettingsTitleRouteMeta = (tab?: SettingsTabs) =>
   routeMeta({
     DynamicMeta: createSettingsDynamicMeta(tab),
     icon: Settings,
-    Skeleton: Skeleton ?? SettingsPageSkeleton,
     titleKey: 'navigation.settings',
   });
 
+/** Settings route meta; explicit tab routes pass their tab and page-shaped skeleton. */
+export const createSettingsRouteMeta = ({ Skeleton, tab }: SettingsRouteMetaOptions = {}) =>
+  routeMeta({
+    ...createSettingsTitleRouteMeta(tab),
+    Skeleton: Skeleton ?? SettingsPageSkeleton,
+  });
+
 export const settingsRouteMeta = createSettingsRouteMeta();
+
+// Route metas load with the router on first paint; keep the AI infra store out of that graph.
+const ProviderDynamicMeta = lazy(() => import('./ProviderDynamicMeta'));
+
+/** A provider's detail (`/settings/provider/:providerId`), titled after the provider. */
+export const providerDetailRouteMeta = routeMeta({
+  DynamicMeta: ProviderDynamicMeta,
+  icon: Settings,
+  titleKey: 'navigation.provider',
+});

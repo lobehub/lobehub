@@ -37,7 +37,6 @@ const readText = (editor: ReturnType<typeof createEditor>) =>
 describe('LexicalDictationEditor', () => {
   it('inserts at the cursor, replaces only the dictation segment, and preserves the draft suffix', () => {
     const { adapter, lexicalEditor } = createFixture();
-    const attachmentDraft = [{ id: 'attachment-1', name: 'brief.pdf' }];
     const snapshot = adapter.begin(vi.fn());
 
     expect(snapshot).toEqual({ anchor: 6, prefix: 'draft ', suffix: 'tail' });
@@ -48,7 +47,6 @@ describe('LexicalDictationEditor', () => {
     adapter.finalize('hello ');
 
     expect(readText(lexicalEditor)).toBe('draft hello tail');
-    expect(attachmentDraft).toEqual([{ id: 'attachment-1', name: 'brief.pdf' }]);
     lexicalEditor.getEditorState().read(() => {
       const selection = $getSelection();
       expect($isRangeSelection(selection)).toBe(true);

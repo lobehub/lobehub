@@ -49,6 +49,11 @@ class AgentShareService {
     return lambdaClient.agentShare.listGrantableSkills.query({ agentId });
   }
 
+  /** People the creator may grant the execution environment to: the Agent scope's address book. */
+  async listDeviceGrantablePeople(agentId: string) {
+    return lambdaClient.agentShare.listDeviceGrantablePeople.query({ agentId });
+  }
+
   async updateShareConfig(agentId: string, config: AgentShareConfigPatchInput) {
     return lambdaClient.agentShare.updateShareConfig.mutate({ agentId, config });
   }

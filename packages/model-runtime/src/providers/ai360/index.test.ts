@@ -1,7 +1,18 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Ai360ModelCard } from './index';
 import { LobeAi360AI, params } from './index';
+
+const createModel = (id: string, maxTokens: number, totalTokens: number): Ai360ModelCard => ({
+  id,
+  max_tokens: maxTokens,
+  total_tokens: totalTokens,
+});
+
+const createModelsClient = (data: Ai360ModelCard[]) => ({
+  models: { list: vi.fn().mockResolvedValue({ data }) },
+});
 
 describe('LobeAi360AI - custom features', () => {
   let instance: InstanceType<typeof LobeAi360AI>;
@@ -53,22 +64,6 @@ describe('LobeAi360AI - custom features', () => {
           search_mode: 'auto',
         },
       });
-    });
-
-    it('should correctly set web_search properties', () => {
-      const payload = {
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: '360gpt-pro',
-        enabledSearch: true,
-      } as any;
-
-      const result = params.chatCompletion.handlePayload!(payload);
-      const webSearchTool = result.tools?.find((tool: any) => tool.type === 'web_search');
-
-      expect(webSearchTool).toBeDefined();
-      expect(webSearchTool.type).toBe('web_search');
-      expect(webSearchTool.web_search).toBeDefined();
-      expect(webSearchTool.web_search.search_mode).toBe('auto');
     });
 
     it('should not add web_search tool when enabledSearch is false', () => {
@@ -211,24 +206,10 @@ describe('LobeAi360AI - custom features', () => {
 
   describe('params.models', () => {
     it('should fetch and process models successfully', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-              {
-                id: '360gpt2-o1',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([
+        createModel('360gpt-pro', 4096, 8192),
+        createModel('360gpt2-o1', 8192, 16384),
+      ]);
 
       const models = await params.models!({ client: mockClient as any });
 
@@ -237,19 +218,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should correctly map model properties', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-pro', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -260,19 +229,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should detect 360gpt-pro as function call capable', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-pro', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -280,19 +237,7 @@ describe('LobeAi360AI - custom features', () => {
       expect(model.functionCall).toBe(true);
     });
     it('should handle case-insensitive reasoning keyword matching', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360GPT2-O1',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360GPT2-O1', 8192, 16384)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -301,19 +246,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should merge with LOBE_DEFAULT_MODEL_LIST for known models', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-pro', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -324,19 +257,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should handle models not in LOBE_DEFAULT_MODEL_LIST', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: 'unknown-model',
-                max_tokens: 2048,
-                total_tokens: 4096,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('unknown-model', 2048, 4096)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -347,19 +268,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should inherit abilities from LOBE_DEFAULT_MODEL_LIST', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-pro', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -370,19 +279,7 @@ describe('LobeAi360AI - custom features', () => {
       expect(typeof model.reasoning).toBe('boolean');
     });
     it('should handle models with null max_tokens', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: 'test-model',
-                max_tokens: null as any,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('test-model', null as any, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -391,13 +288,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should handle empty model list', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([]);
 
       const models = await params.models!({ client: mockClient as any });
 
@@ -405,24 +296,10 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should handle model list with valid models only', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: 'model1',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-              {
-                id: 'model2',
-                max_tokens: 2048,
-                total_tokens: 4096,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([
+        createModel('model1', 4096, 8192),
+        createModel('model2', 2048, 4096),
+      ]);
 
       const models = await params.models!({ client: mockClient as any });
 
@@ -441,19 +318,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should set reasoning to false for non-reasoning models', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-base',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-base', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -462,19 +327,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should set functionCall to false for non-360gpt-pro models without functionCall ability', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: 'test-model',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('test-model', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -483,19 +336,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should set vision to false for models without vision ability', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: 'test-model',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('test-model', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -504,19 +345,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should handle case-insensitive model ID matching with LOBE_DEFAULT_MODEL_LIST', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360GPT-PRO',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360GPT-PRO', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -527,19 +356,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should handle models with all properties present', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-pro', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -554,34 +371,12 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should detect all reasoning model variants correctly', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt2-o1',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-              {
-                id: '360gpt2-o1-preview',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-              {
-                id: '360zhinao2-o1',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-              {
-                id: '360zhinao2-o1-mini',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([
+        createModel('360gpt2-o1', 8192, 16384),
+        createModel('360gpt2-o1-preview', 8192, 16384),
+        createModel('360zhinao2-o1', 8192, 16384),
+        createModel('360zhinao2-o1-mini', 8192, 16384),
+      ]);
 
       const models = await params.models!({ client: mockClient as any });
 
@@ -590,19 +385,7 @@ describe('LobeAi360AI - custom features', () => {
     });
 
     it('should handle models with zero context window', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: 'test-model',
-                max_tokens: 0,
-                total_tokens: 0,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('test-model', 0, 0)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -611,19 +394,7 @@ describe('LobeAi360AI - custom features', () => {
       expect(model.maxOutput).toBe(0);
     });
     it('should handle models with special characters in ID', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro-v2.0-beta',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt-pro-v2.0-beta', 4096, 8192)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -631,19 +402,7 @@ describe('LobeAi360AI - custom features', () => {
       expect(model.id).toBe('360gpt-pro-v2.0-beta');
     });
     it('should prioritize reasoning from keyword over knownModel', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt2-o1-custom',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt2-o1-custom', 8192, 16384)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
@@ -652,41 +411,8 @@ describe('LobeAi360AI - custom features', () => {
       expect(model.reasoning).toBe(true);
     });
 
-    it('should prioritize functionCall from model ID check over knownModel', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      const model = models[0];
-
-      expect(model.functionCall).toBe(true);
-    });
-
     it('should merge multiple capabilities correctly', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt2-o1',
-                max_tokens: 8192,
-                total_tokens: 16384,
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createModelsClient([createModel('360gpt2-o1', 8192, 16384)]);
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];

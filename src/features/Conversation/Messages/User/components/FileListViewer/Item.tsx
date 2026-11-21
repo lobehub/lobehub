@@ -1,5 +1,4 @@
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { FileLock2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,33 +38,36 @@ const InaccessibleFileItem = memo(() => {
   );
 });
 
-const FileItem = memo<ChatFileItem>(({ id, fileType, size, name, inaccessible }) => {
-  const openFilePreview = useChatStore((s) => s.openFilePreview);
+const FileItem = memo<ChatFileItem & { onClick?: () => void }>(
+  ({ id, fileType, size, name, inaccessible, onClick }) => {
+    const openFilePreview = useChatStore((s) => s.openFilePreview);
 
-  if (inaccessible) return <InaccessibleFileItem />;
+    if (inaccessible) return <InaccessibleFileItem />;
 
-  return (
-    <Block
-      clickable
-      horizontal
-      align={'center'}
-      gap={12}
-      key={id}
-      paddingBlock={8}
-      paddingInline={'12px 16px'}
-      variant={'outlined'}
-      onClick={() => {
-        openFilePreview({ fileId: id });
-      }}
-    >
-      <FileIcon fileName={name} fileType={fileType} size={32} />
-      <Flexbox style={{ overflow: 'hidden' }}>
-        <Text ellipsis>{name}</Text>
-        <Text fontSize={12} type={'secondary'}>
-          {formatSize(size)}
-        </Text>
-      </Flexbox>
-    </Block>
-  );
-});
+    return (
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        gap={12}
+        key={id}
+        paddingBlock={8}
+        paddingInline={'12px 16px'}
+        variant={'outlined'}
+        onClick={() => {
+          if (onClick) onClick();
+          else openFilePreview({ fileId: id });
+        }}
+      >
+        <FileIcon fileName={name} fileType={fileType} size={32} />
+        <Flexbox style={{ overflow: 'hidden' }}>
+          <Text ellipsis>{name}</Text>
+          <Text fontSize={12} type={'secondary'}>
+            {formatSize(size)}
+          </Text>
+        </Flexbox>
+      </Block>
+    );
+  },
+);
 export default FileItem;

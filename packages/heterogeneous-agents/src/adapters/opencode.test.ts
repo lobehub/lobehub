@@ -87,6 +87,37 @@ describe('OpenCodeAdapter', () => {
     expect(adapter.adapt(raw)).toEqual([]);
   });
 
+  it('maps OpenCode 2.x tool parts, which carry the call id in `id` and rename bash to shell', () => {
+    const adapter = new OpenCodeAdapter();
+    const raw = {
+      part: {
+        id: 'call_00_shell',
+        messageID: 'msg-1',
+        partID: 'prt-tool-1',
+        sessionID: 'ses-v2',
+        state: {
+          input: { command: 'ls', workdir: '/repo' },
+          output: 'a.txt\n',
+          status: 'completed',
+        },
+        tool: 'shell',
+        type: 'tool',
+      },
+      sessionID: 'ses-v2',
+      type: 'tool_use',
+    };
+
+    const events = adapter.adapt(raw);
+    expect(events.map(({ type }) => type)).toEqual(['stream_chunk', 'tool_result', 'tool_end']);
+    expect(events[0].data.toolsCalling[0]).toMatchObject({
+      apiName: 'bash',
+      arguments: '{"command":"ls","workdir":"/repo"}',
+      id: 'call_00_shell',
+    });
+    expect(events[1].data).toMatchObject({ content: 'a.txt\n', toolCallId: 'call_00_shell' });
+    expect(adapter.adapt(raw)).toEqual([]);
+  });
+
   it('maps todowrite snapshots into shared todo plugin state', () => {
     const adapter = new OpenCodeAdapter();
     const todos = [

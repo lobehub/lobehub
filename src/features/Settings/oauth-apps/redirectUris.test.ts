@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { redirectUriListMessageKey, redirectUriMessageKey } from './redirectUris';
+import {
+  MAX_OAUTH_REDIRECT_URIS,
+  redirectUriListMessageKey,
+  redirectUriMessageKey,
+} from './redirectUris';
 
 describe('redirectUriMessageKey', () => {
   it('accepts a valid URI and a blank row', () => {
@@ -28,7 +32,10 @@ describe('redirectUriListMessageKey', () => {
   });
 
   it('refuses more URIs than the cap', () => {
-    const uris = Array.from({ length: 6 }, (_, i) => `https://a${i}.com/cb`);
+    const uris = Array.from(
+      { length: MAX_OAUTH_REDIRECT_URIS + 1 },
+      (_, i) => `https://a${i}.com/cb`,
+    );
     expect(redirectUriListMessageKey(uris)).toBe('oauthApp.validation.redirectUriTooMany');
   });
 

@@ -1,12 +1,22 @@
 import {
   ChartColumnBigIcon,
+  CpuIcon,
+  FileTextIcon,
   FileUserIcon,
   GraduationCapIcon,
+  LibraryBigIcon,
+  MailIcon,
   MessageSquare,
   MessagesSquareIcon,
+  MonitorSmartphoneIcon,
   RadioTowerIcon,
+  ScrollTextIcon,
   Share2Icon,
+  SparklesIcon,
   UsersIcon,
+  WebhookIcon,
+  WrenchIcon,
+  ZapIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
 
@@ -18,15 +28,48 @@ import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
 import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
 import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ReadOnlyConversationSkeleton from '@/components/Skeleton/Conversation/ReadOnly';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
-import { routeMeta } from '@/spa/router/routeMeta';
+import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
+import { tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 
 const AgentDynamicMeta = lazy(() => import('@/features/RouteMeta/AgentDynamicMeta'));
 const TopicsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.TopicsDynamicMeta,
+  })),
+);
+const EngineDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.EngineDynamicMeta,
+  })),
+);
+const InstructionDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.InstructionDynamicMeta,
+  })),
+);
+const KnowledgeDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.KnowledgeDynamicMeta,
+  })),
+);
+const SkillsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.SkillsDynamicMeta,
+  })),
+);
+const EnvironmentDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.EnvironmentDynamicMeta,
+  })),
+);
+const ToolsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ToolsDynamicMeta,
   })),
 );
 const ProfileDynamicMeta = lazy(() =>
@@ -60,6 +103,37 @@ const PermissionDynamicMeta = lazy(() =>
   })),
 );
 
+const DocumentsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.DocumentsDynamicMeta,
+  })),
+);
+const GoalsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.GoalsDynamicMeta,
+  })),
+);
+const TasksDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.TasksDynamicMeta,
+  })),
+);
+const MailDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.MailDynamicMeta,
+  })),
+);
+const AutomationsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.AutomationsDynamicMeta,
+  })),
+);
+const WebhookDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.WebhookDynamicMeta,
+  })),
+);
+
 export const agentRouteMeta = routeMeta({
   DynamicMeta: AgentDynamicMeta,
   icon: MessageSquare,
@@ -71,6 +145,16 @@ export const agentRouteMeta = routeMeta({
 export const agentChatDesktopRouteMeta = routeMeta({
   ...agentRouteMeta,
   Skeleton: AgentConversationLayoutSkeleton,
+});
+
+/** A share visitor's run topic, read-only beside the Agent sidebar. */
+export const agentShareVisitorTopicRouteMeta = routeMeta({
+  // Titled like the Topics page (`Topics · <agent>`): the visitor transcript is fetched by the
+  // page, and a background tab should not poll it just to name itself.
+  DynamicMeta: TopicsDynamicMeta,
+  icon: MessagesSquareIcon,
+  Skeleton: ReadOnlyConversationSkeleton,
+  titleKey: 'navigation.topics',
 });
 
 export const topicsRouteMeta = routeMeta({
@@ -85,6 +169,69 @@ export const agentProfileRouteMeta = routeMeta({
   icon: FileUserIcon,
   Skeleton: ProfileSkeleton,
   titleKey: 'navigation.profile',
+});
+
+export const agentInstructionRouteMeta = routeMeta({
+  DynamicMeta: InstructionDynamicMeta,
+  icon: ScrollTextIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.instruction',
+});
+
+export const agentKnowledgeRouteMeta = routeMeta({
+  DynamicMeta: KnowledgeDynamicMeta,
+  icon: LibraryBigIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.knowledge',
+});
+
+export const agentSkillsRouteMeta = routeMeta({
+  DynamicMeta: SkillsDynamicMeta,
+  icon: SparklesIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.skills',
+});
+
+export const agentEngineRouteMeta = routeMeta({
+  DynamicMeta: EngineDynamicMeta,
+  icon: CpuIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.engine',
+});
+
+export const agentEnvironmentRouteMeta = routeMeta({
+  DynamicMeta: EnvironmentDynamicMeta,
+  icon: MonitorSmartphoneIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.environment',
+});
+
+export const agentToolsRouteMeta = routeMeta({
+  DynamicMeta: ToolsDynamicMeta,
+  icon: WrenchIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.tools',
+});
+
+export const agentMailRouteMeta = routeMeta({
+  DynamicMeta: MailDynamicMeta,
+  icon: MailIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.mail',
+});
+
+export const agentAutomationsRouteMeta = routeMeta({
+  DynamicMeta: AutomationsDynamicMeta,
+  icon: ZapIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.automations',
+});
+
+export const agentWebhookRouteMeta = routeMeta({
+  DynamicMeta: WebhookDynamicMeta,
+  icon: WebhookIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.webhook',
 });
 
 export const agentChannelRouteMeta = routeMeta({
@@ -126,4 +273,23 @@ export const agentPermissionRouteMeta = routeMeta({
   icon: UsersIcon,
   Skeleton: createSurfaceSkeleton('form'),
   titleKey: 'navigation.permission',
+});
+
+// Goals and Tasks are also mounted at workspace and project level, where there is no
+// agent to name, so only their agent-scoped mounts take the agent section title.
+export const agentGoalsRouteMeta = routeMeta({
+  ...goalsRouteMeta,
+  DynamicMeta: GoalsDynamicMeta,
+});
+
+export const agentTasksRouteMeta = routeMeta({
+  ...tasksRouteMeta,
+  DynamicMeta: TasksDynamicMeta,
+});
+
+export const agentDocumentsRouteMeta = routeMeta({
+  DynamicMeta: DocumentsDynamicMeta,
+  icon: FileTextIcon,
+  Skeleton: NoRouteSkeleton,
+  titleKey: 'navigation.document',
 });

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface NotificationChannelSettings {
   enabled?: boolean;
   /** Per-type overrides grouped by category. Missing = use scenario default (true) */
@@ -27,7 +29,18 @@ export interface IMNotificationChannelSettings extends NotificationChannelSettin
   platforms?: Record<string, IMPlatformNotificationSettings>;
 }
 
+/**
+ * How much detail notification bodies carry, independent of which channels
+ * deliver them. Every switch defaults to on — a missing key keeps the detail.
+ */
+export interface NotificationContentSettings {
+  /** Append the run summary to successful scheduled-task notifications. */
+  scheduledTaskSummary?: boolean;
+}
+
 export interface NotificationSettings {
+  /** Body detail switches; not a delivery channel. */
+  content?: NotificationContentSettings;
   email?: NotificationChannelSettings;
   /**
    * IM notifications delivered to the user's DM with the platform System Bot
@@ -43,3 +56,38 @@ export interface NotificationSettings {
    */
   push?: NotificationChannelSettings;
 }
+
+const notificationItemsSchema = z.record(z.string(), z.record(z.string(), z.boolean()));
+
+const notificationChannelSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    items: notificationItemsSchema.optional(),
+  })
+  .strict();
+
+/**
+ * Patch shape for `NotificationSettings`. Strict at every known level so a
+ * misspelled channel or key fails the call instead of being stored and silently
+ * ignored by delivery; category and type ids stay open strings because the
+ * scenario registry lives with the deployment, not in this package.
+ */
+export const NotificationSettingsSchema = z
+  .object({
+    content: z.object({ scheduledTaskSummary: z.boolean().optional() }).strict().optional(),
+    email: notificationChannelSettingsSchema.optional(),
+    im: notificationChannelSettingsSchema
+      .extend({
+        platforms: z
+          .record(
+            z.string(),
+            notificationChannelSettingsSchema.extend({ tenantId: z.string().optional() }).strict(),
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    inbox: notificationChannelSettingsSchema.optional(),
+    push: notificationChannelSettingsSchema.optional(),
+  })
+  .strict();

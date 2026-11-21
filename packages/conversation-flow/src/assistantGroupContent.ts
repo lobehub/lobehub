@@ -168,9 +168,6 @@ export const isAssistantGroupStatusText = (content?: string | null): boolean => 
   return sentenceCount <= 1;
 };
 
-const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean =>
-  hasTools(block) && hasSubstantiveContent(block) && !isAssistantGroupStatusText(block.content);
-
 const appendWorkflowRangeBlock = (
   segments: AssistantGroupSegment[],
   block: AssistantContentBlock,
@@ -207,7 +204,7 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
-  if (collapsesIntoWorkflow && shouldPromoteMixedBlockContent(block)) {
+  if (collapsesIntoWorkflow && hasSubstantiveContent(block)) {
     appendAnswerBlock(
       segments,
       createProjectedBlock(block, 'answer', {
@@ -215,13 +212,15 @@ const appendWorkflowRangeBlock = (
         tools: undefined,
       }),
     );
-    appendWorkflowRest(
-      createProjectedBlock(block, 'workflow', {
-        content: '',
-        imageList: undefined,
-        reasoning: undefined,
-      }),
-    );
+    if (hasTools(block)) {
+      appendWorkflowRest(
+        createProjectedBlock(block, 'workflow', {
+          content: '',
+          imageList: undefined,
+          reasoning: undefined,
+        }),
+      );
+    }
     return;
   }
 
@@ -418,22 +417,18 @@ const resolveLatestAuthoredContent = (blocks?: AssistantContentBlock[]): string 
 /**
  * Resolve the authored text that best represents a parsed assistant group.
  *
- * Both the main chain and post-task summaries use the same settled semantic
- * segmentation as the renderer. A textless final run (for example, an error-only
- * block) falls back through earlier answer segments before raw block content so
- * workflow narration cannot replace an authored answer in the preview.
+ * The main chain uses the same settled semantic segmentation as the renderer.
+ * A textless final run (for example, an error-only block) falls back through
+ * earlier answer segments before raw block content so workflow narration cannot
+ * replace an authored answer in the preview.
  */
 export const resolveAssistantGroupFinalContent = (message?: UIChatMessage): string | undefined => {
-  const taskContent = resolveSegmentedAuthoredContent(message?.taskCompletions);
   const childContent = resolveSegmentedAuthoredContent(message?.children);
 
   return (
-    taskContent.finalAnswer ??
     childContent.finalAnswer ??
     normalizeAuthoredContent(message?.content) ??
-    taskContent.answer ??
     childContent.answer ??
-    resolveLatestAuthoredContent(message?.taskCompletions) ??
     resolveLatestAuthoredContent(message?.children)
   );
 };

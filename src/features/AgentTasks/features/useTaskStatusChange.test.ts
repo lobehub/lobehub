@@ -35,7 +35,7 @@ vi.mock('@/store/task', () => ({
     }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { error: mocks.toastError },
 }));

@@ -9,6 +9,35 @@ import { serverDBEnv } from '@/config/db';
 import * as schema from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
+const DEFAULT_POOL_ACQUIRE_TIMEOUT_MS = 30_000;
+
+/**
+ * Pool options shared by the node and neon drivers.
+ *
+ * `connectionTimeoutMillis` bounds the wait for a free pool connection. pg's default is 0 (wait
+ * forever): on 2026-11-02 one exhausted pool hung every request on its Vercel instance for 300s
+ * until the function timed out, instead of failing the requests that could not get a connection.
+ */
+export const buildPoolOptions = (env: {
+  DATABASE_POOL_ACQUIRE_TIMEOUT?: number;
+  DATABASE_STATEMENT_TIMEOUT?: number;
+}) => {
+  // When DATABASE_STATEMENT_TIMEOUT is set, Postgres aborts any statement (and any
+  // transaction left idle) exceeding it on the server side, so a stuck query can't
+  // block indefinitely. Omit the keys entirely when unset to keep Postgres' defaults.
+  const statementTimeout = env.DATABASE_STATEMENT_TIMEOUT;
+
+  return {
+    connectionTimeoutMillis: env.DATABASE_POOL_ACQUIRE_TIMEOUT ?? DEFAULT_POOL_ACQUIRE_TIMEOUT_MS,
+    ...(statementTimeout
+      ? {
+          idle_in_transaction_session_timeout: statementTimeout,
+          statement_timeout: statementTimeout,
+        }
+      : {}),
+  };
+};
+
 export const getDBInstance = (): LobeChatDatabase => {
   // In test environment, return a mock instance to avoid initialization errors
   if (process.env.NODE_ENV === 'test') return {} as LobeChatDatabase;
@@ -28,19 +57,10 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     throw new Error(`You are try to use database, but "DATABASE_URL" is not set correctly`);
   }
 
-  // When DATABASE_STATEMENT_TIMEOUT is set, Postgres aborts any statement (and any
-  // transaction left idle) exceeding it on the server side, so a stuck query can't
-  // block indefinitely. Omit the keys entirely when unset to keep Postgres' defaults.
-  const statementTimeout = serverDBEnv.DATABASE_STATEMENT_TIMEOUT;
-  const timeoutConfig = statementTimeout
-    ? {
-        idle_in_transaction_session_timeout: statementTimeout,
-        statement_timeout: statementTimeout,
-      }
-    : {};
+  const poolOptions = buildPoolOptions(serverDBEnv);
 
   if (serverDBEnv.DATABASE_DRIVER === 'node') {
-    const client = new NodePool({ connectionString, ...timeoutConfig });
+    const client = new NodePool({ connectionString, ...poolOptions });
     // pg.Pool emits 'error' on idle clients when the backend connection drops.
     // Without a listener Node escalates it to uncaughtException and exits the process.
     // See: https://node-postgres.com/apis/pool#error
@@ -59,7 +79,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     neonConfig.webSocketConstructor = ws;
   }
 
-  const client = new NeonPool({ connectionString, ...timeoutConfig });
+  const client = new NeonPool({ connectionString, ...poolOptions });
   // NeonPool runs over WebSocket; transient drops surface as 'error' on the pool.
   // Without a listener Node escalates it to uncaughtException — on Vercel this killed
   // the entire Lambda 1800+ times in 5 minutes (see ).

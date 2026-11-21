@@ -1,5 +1,5 @@
-import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
@@ -11,13 +11,12 @@ import { createSystemRole } from './systemRole';
  * Note: model and provider are intentionally undefined to use user's default settings
  */
 export const INBOX: BuiltinAgentDefinition = {
-  avatar: '/avatars/lobe-ai.png',
+  avatar: DEFAULT_INBOX_AVATAR,
   runtime: (ctx) => ({
-    plugins: [AgentDocumentsIdentifier, UserInteractionIdentifier, ...(ctx.plugins || [])],
+    plugins: [UserInteractionIdentifier, ...(ctx.plugins || [])],
     // A user-customized prompt wins; the runtime one is only the default.
     systemRole:
-      ctx.storedSystemRole ||
-      createSystemRole(ctx.userLocale, { name: ctx.agentName, title: ctx.agentTitle }),
+      ctx.storedSystemRole || createSystemRole({ name: ctx.agentName, title: ctx.agentTitle }),
   }),
 
   slug: BUILTIN_AGENT_SLUGS.inbox,

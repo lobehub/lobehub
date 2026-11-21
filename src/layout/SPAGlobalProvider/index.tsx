@@ -1,8 +1,6 @@
 'use client';
 
-import { ContextMenuHost, TooltipGroup } from '@lobehub/ui';
-import { ModalHost, ToastHost } from '@lobehub/ui/base-ui';
-import { StyleProvider } from 'antd-style';
+import { ContextMenuHost, ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui';
 import { domMax, LazyMotion } from 'motion/react';
 import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
 
@@ -13,7 +11,6 @@ import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
-import CacheHydrationGate from '@/layout/GlobalProvider/CacheHydrationGate';
 import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import QueryProvider from '@/layout/GlobalProvider/Query';
@@ -22,6 +19,7 @@ import StoreInitialization, {
   BuiltinAgentInitialization,
 } from '@/layout/GlobalProvider/StoreInitialization';
 import { registerNativeContextMenuInterceptor } from '@/libs/contextMenu';
+import PrePaintSignal from '@/libs/replica/PrePaintSignal';
 import { usePostRenderReady } from '@/spa/atoms/app';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
@@ -99,14 +97,12 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
             <DragUploadProvider>
               <LazyMotion features={domMax}>
                 <TooltipGroup layoutAnimation={false}>
-                  <StyleProvider speedy={import.meta.env.PROD}>
-                    <LobeAnalyticsProviderWrapper>
-                      <CacheHydrationGate>
-                        <BuiltinAgentInitialization />
-                        <DevDockLayout>{children}</DevDockLayout>
-                      </CacheHydrationGate>
-                    </LobeAnalyticsProviderWrapper>
-                  </StyleProvider>
+                  <LobeAnalyticsProviderWrapper>
+                    <PrePaintSignal>
+                      <BuiltinAgentInitialization />
+                      <DevDockLayout>{children}</DevDockLayout>
+                    </PrePaintSignal>
+                  </LobeAnalyticsProviderWrapper>
                 </TooltipGroup>
                 <ModalHost />
                 <ToastHost />

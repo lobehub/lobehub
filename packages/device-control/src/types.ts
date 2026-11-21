@@ -6,19 +6,17 @@
  * desktop wiring can pass its own IPC-typed implementations directly.
  */
 
-import type { DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
+import type { DeviceClient, DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
 
 // ─── Workspace scan ───
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 export interface ProjectSkillItem {
   description?: string;
-  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
-  fileCount: number;
-  /** Relative paths (within `skillDir`) of all regular files, sorted, capped. */
-  files: string[];
+  /** SKILL.md declares that the model must not invoke this skill automatically. */
+  disableModelInvocation?: boolean;
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
@@ -33,18 +31,21 @@ export interface ProjectSkillItem {
 }
 
 export interface InitWorkspaceParams {
-  /** Working directory used to resolve the project root. */
-  scope: string;
+  /** Working directory; omitted to discover only device-level skills. */
+  scope?: string;
 }
 
 export interface WorkspaceInstructionsItem {
   content: string;
+  /** Absolute path of the file; the working directory or one of its parents. */
+  path: string;
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
 
 export interface InitWorkspaceResult {
   instructions: WorkspaceInstructionsItem[];
-  root: string;
+  /** Absent for a device-only scan; no working directory is selected implicitly. */
+  root?: string;
   skills: ProjectSkillItem[];
 }
 
@@ -60,7 +61,52 @@ export interface ListProjectSkillsResult {
   source: ProjectSkillSource | null;
 }
 
+/** The run env keys that move where Claude Code keeps auto memory. */
+export interface ClaudeCodeMemoryRunEnv {
+  CLAUDE_CODE_PROJECT_DIR_NAME?: string;
+  CLAUDE_CONFIG_DIR?: string;
+}
+
+export interface ListClaudeCodeMemoryParams {
+  /**
+   * The agent's own values for these keys (`heterogeneousProvider.env`). A run
+   * spreads that env over the device's, so a set value wins here too.
+   */
+  env?: ClaudeCodeMemoryRunEnv;
+  /** Working directory of the Claude Code project. */
+  scope: string;
+}
+
+export interface ClaudeCodeMemoryFile {
+  description?: string;
+  /** The `MEMORY.md` index Claude Code loads into every session. */
+  isIndex: boolean;
+  /** Frontmatter `name`; the file name when absent. */
+  name: string;
+  /** Absolute path to the memory file. */
+  path: string;
+  /** Path within the memory directory, `/`-separated. */
+  relativePath: string;
+  size: number;
+  /** Frontmatter `metadata.type` (or top-level `type`): user / feedback / project / reference. */
+  type?: string;
+  /** Last modification time, epoch ms. */
+  updatedAt: number;
+}
+
+export interface ListClaudeCodeMemoryResult {
+  files: ClaudeCodeMemoryFile[];
+  /**
+   * Claude Code's auto-memory directory for this project
+   * (`~/.claude/projects/<sanitized project root>/memory`). Reported even when
+   * it does not exist yet, so the UI can say where memory will land.
+   */
+  memoryDir: string;
+}
+
 export interface StatPathResult {
+  /** Device-resolved path; aliases and symlinks share one execution-directory lock. */
+  canonicalPath?: string;
   exists: boolean;
   isDirectory: boolean;
   repositoryUrl?: string;
@@ -157,7 +203,16 @@ export type LocalFilePreview =
   | LocalFilePreviewText
   | LocalFilePreviewUnsupported;
 
+/** Terminal reasons a file preview failed (see `LocalFilePreviewResult.code`). */
+export type LocalFilePreviewFailureCode = 'forbidden' | 'not_found';
+
 export interface LocalFilePreviewResult {
+  /**
+   * Set when the failure is terminal for this file: `not_found` (deleted /
+   * moved) or `forbidden` (outside the approved roots, permission denied).
+   * Absent for transient failures, so a cached preview survives those.
+   */
+  code?: LocalFilePreviewFailureCode;
   error?: string;
   preview?: LocalFilePreview;
   success: boolean;
@@ -343,6 +398,13 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   listHeterogeneousAgentModels?: (
     params: ListHeterogeneousAgentModelsParams,
   ) => Promise<HeterogeneousAgentModelCatalog>;
+  /**
+   * List the tools of an MCP server only this machine reaches (stdio, or an
+   * HTTP endpoint on its network), for a server that must not connect to it
+   * itself. Optional: a client that runs no MCP servers omits it, and the
+   * dispatcher fails the RPC with {@link MCP_UNSUPPORTED_MESSAGE}.
+   */
+  listMcpTools?: (params: ListMcpToolsParams) => Promise<ListedMcpServerTool[]>;
   /** Read raw bytes after the user explicitly approved an external publish closure. */
   readExternalAssetForPublish?: (
     params: ExternalAssetForPublishParams,
@@ -374,14 +436,54 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
  * Structural mirrors of the canonical `@lobechat/types` catalog contracts.
  * Kept local so device-control remains a leaf package with no app/type-layer dependency.
  */
+/**
+ * An MCP server's connection, as the server forwards it for `listMcpTools`
+ * (the shape tunneled MCP tool calls forward). Credentials travel decrypted and
+ * narrowed to the token fields; the device stores nothing.
+ */
+export type ListMcpToolsConnection =
+  | {
+      auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+      headers?: Record<string, string>;
+      name: string;
+      type: 'http';
+      url: string;
+    }
+  | {
+      args: string[];
+      command: string;
+      env?: Record<string, string>;
+      name: string;
+      type: 'stdio';
+    };
+
+export interface ListMcpToolsParams {
+  /** List on a session that announces MCP Apps, so view-only tools are listed too. */
+  mcpApps?: boolean;
+  params: ListMcpToolsConnection;
+}
+
+/**
+ * A tool as the MCP server's `tools/list` returns it. Returned as listed, so
+ * the server maps it exactly as it maps a listing it ran itself.
+ */
+export interface ListedMcpServerTool {
+  _meta?: Record<string, unknown>;
+  description?: string;
+  inputSchema: object;
+  name: string;
+}
+
 export interface ListHeterogeneousAgentModelsParams {
   args?: string[];
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
   type:
+    | 'antigravity'
     | 'codebuddy'
     | 'codex'
+    | 'copilot'
     | 'cursor'
     | 'devin'
     | 'droid'
@@ -496,6 +598,8 @@ export interface CreateTerminalSessionParams {
 }
 
 export interface CreateTerminalSessionResult {
+  /** The client hosting the session, so callers can keep its later calls there. */
+  client: DeviceClient;
   /** Directory the shell actually started in (the request's `cwd` may not exist). */
   cwd: string;
   id: string;

@@ -283,6 +283,20 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
     hintsSpy.mockRestore();
   });
 
+  it('leaves inline image references out of a new topic fallback title', async () => {
+    await service.execAgent({ agentId: 'agent-1', prompt: '[Image #1] [Image #1] dup test' });
+    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({ title: 'dup test' });
+  });
+
+  it('leaves inline image references out of a scheduled topic title', async () => {
+    await service.scheduleAgentRun({
+      agentId: 'agent-1',
+      prompt: '[Image #1] dup test',
+      runAt: new Date(Date.now() + 60000).toISOString(),
+    });
+    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({ title: 'dup test' });
+  });
+
   it('does not recreate or snapshot an existing group topic', async () => {
     const runSpy = vi
       .spyOn(service, 'execAgent')

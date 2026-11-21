@@ -180,6 +180,59 @@ describe('TaskModel.findOrphanedRunningTopics', () => {
   });
 });
 
+describe('TaskModel.findInterruptedRunningTopics', () => {
+  const findInterrupted = () => TaskModel.findInterruptedRunningTopics(serverDB, { staleBefore });
+
+  /** Another operation on the same topic, e.g. the follow-up that is still going. */
+  const seedTopicOperation = (topicId: string, status: 'done' | 'running' | 'waiting_for_human') =>
+    serverDB.insert(agentOperations).values({
+      completedAt: longAgo,
+      id: `op-follow-up-${topicId}-${status}`,
+      status,
+      topicId,
+      userId,
+      updatedAt: longAgo,
+    });
+
+  it('returns a running run whose interrupted operation nothing took over', async () => {
+    const { operationId, taskId, topicId } = await seed({ operationStatus: 'interrupted' });
+
+    const rows = await findInterrupted();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ operationId, taskId, taskIdentifier: 'T-1', topicId, userId });
+  });
+
+  it('ignores a run whose topic still has an operation in flight', async () => {
+    // The conversation is still going: the Task is continuing, not stuck.
+    const running = await seed({ operationStatus: 'interrupted' });
+    await seedTopicOperation(running.topicId, 'running');
+    const parked = await seed({ operationStatus: 'interrupted' });
+    await seedTopicOperation(parked.topicId, 'waiting_for_human');
+
+    expect(await findInterrupted()).toHaveLength(0);
+  });
+
+  it('still returns it once the other operations on the topic have ended', async () => {
+    const { topicId } = await seed({ operationStatus: 'interrupted' });
+    await seedTopicOperation(topicId, 'done');
+
+    expect(await findInterrupted()).toHaveLength(1);
+  });
+
+  it('ignores runs ended any other way, inside the grace window, or already settled', async () => {
+    await seed({ operationStatus: 'error' });
+    await seed({ operationStatus: 'done' });
+    await seed({ operationStatus: 'running' });
+    await seed({ endedAt: new Date('2026-10-02T16:00:00Z'), operationStatus: 'interrupted' });
+    await seed({ operationStatus: 'interrupted', taskStatus: 'paused' });
+    await seed({ operationStatus: 'interrupted', runStatus: 'canceled' });
+    await seed({ operationStatus: 'interrupted', parentOperationId: 'op-parent' });
+
+    expect(await findInterrupted()).toHaveLength(0);
+  });
+});
+
 describe('TaskRunClaimRepo', () => {
   it('flips a run that still names its own operation out of `running`', async () => {
     const { operationId, topicId } = await seed();

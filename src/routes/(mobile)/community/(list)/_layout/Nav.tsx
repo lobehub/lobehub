@@ -1,14 +1,15 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Drawer, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import Menu from '@/components/Menu';
+import { MARKETPLACE_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { DiscoverTab } from '@/types/discover';
 
 import { useNav } from '../../../../(main)/community/features/useNav';
 
@@ -21,34 +22,25 @@ const scrollToTop = () => {
   scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });
 };
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  activeNavItem: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  container: css`
-    height: auto;
-    padding-block: 4px;
-    background: ${cssVar.colorBgLayout};
-  `,
-  navItem: css`
-    font-weight: 500;
-  `,
-  title: css`
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.2;
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    fontSize: '18px',
+    fontWeight: 700,
+    lineHeight: 1.2,
+  },
+});
 
 const Nav = memo(() => {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const { items, activeKey, activeItem } = useNav();
   const navigate = useWorkspaceAwareNavigate();
 
   return (
     <>
-      <Flexbox horizontal align={'center'} className={styles.title} gap={4}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.title).className} gap={4}>
         <ActionIcon
+          aria-label={t('navPanel.openMenu')}
           color={cssVar.colorText}
           icon={MenuIcon}
           size={{ blockSize: 32, size: 18 }}
@@ -83,11 +75,7 @@ const Nav = memo(() => {
           items={items}
           onClick={({ key }) => {
             scrollToTop();
-            if (key === DiscoverTab.Home) {
-              navigate('/community');
-            } else {
-              navigate(`/community/${key}`);
-            }
+            navigate(`${MARKETPLACE_PATH}/${key}`);
             setOpen(false);
           }}
         />

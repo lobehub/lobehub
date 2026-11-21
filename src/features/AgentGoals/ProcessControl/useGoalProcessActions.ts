@@ -1,4 +1,3 @@
-import { experimentOwner } from '@lobechat/utils/goalGraph';
 import { useCallback, useMemo } from 'react';
 
 import { goalService } from '@/services/goal';
@@ -7,19 +6,20 @@ import { useGoalStore } from '@/store/goal';
 
 import { isExperiment } from '../Experiments/model';
 import type { FrontierActions } from './Frontier';
-import { type GoalGraphView, opensOnResultSurface } from './goalGraphViewModel';
+import { type GoalGraphView, hasReviewableResult } from './goalGraphViewModel';
 
 /**
  * Where a click on a goal graph node lands, shared by every host of the
- * process-control sections (goal page, conversation portal). A Task with a
- * delivery to read, or a healthy run in flight, lands on its result surface —
- * the live run while it works, the report once it settles. A Task waiting or in
- * trouble opens the original Task detail, where configuration and failure
- * context live. Everything else opens the node drill-down.
+ * process-control sections (goal page, conversation portal) and every link to
+ * a node. A Task that has delivered — resolved, or done and under verification
+ * — opens its result surface: the report, the verdict on it and the artifacts,
+ * which is what the reader of a finished Task came for. A Task still waiting,
+ * running or in trouble opens the original Task detail, where configuration,
+ * runs and failure context live. Everything else opens the node drill-down.
  */
 export const useGoalNodeSelect = (goalId: string, graph?: GoalGraphView) => {
-  const openTaskResult = useChatStore((s) => s.openTaskResult);
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
+  const openTaskResult = useChatStore((s) => s.openTaskResult);
   const openGoalNode = useChatStore((s) => s.openGoalNode);
 
   return useCallback(
@@ -30,12 +30,7 @@ export const useGoalNodeSelect = (goalId: string, graph?: GoalGraphView) => {
         openGoalNode(goalId, nodeId);
         return;
       }
-      if (
-        graph &&
-        experimentOwner({ nodes: graph.nodes.map((item) => item.node), edges: graph.edges }, nodeId)
-      )
-        openTaskDetail(taskId);
-      else if (view && opensOnResultSurface(view)) openTaskResult(taskId);
+      if (view && hasReviewableResult(view)) openTaskResult(taskId);
       else openTaskDetail(taskId);
     },
     [goalId, graph, openGoalNode, openTaskDetail, openTaskResult],

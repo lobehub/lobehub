@@ -1,8 +1,23 @@
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import type { EvalRunConfig } from '@lobechat/types';
+import { and, count, desc, eq, getTableColumns, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
-import { agentEvalDatasets, agentEvalRuns, type NewAgentEvalRun } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agentEvalRuns,
+  agentEvalRunTopics,
+  type NewAgentEvalRun,
+} from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { hasUnverifiedEvalAttempts } from './runEvidence';
+
+/** Lists and status checkpoints do not need any case's frozen tool contracts. */
+export const evalRunSummaryConfig = sql<EvalRunConfig | null>`
+  case when jsonb_typeof(${agentEvalRuns.config}) = 'object'
+    then ${agentEvalRuns.config} - 'connectorSnapshots'
+    else ${agentEvalRuns.config}
+  end
+`;
 
 export class AgentEvalRunModel {
   private userId: string;
@@ -30,7 +45,7 @@ export class AgentEvalRunModel {
   };
 
   /**
-   * Query runs with optional filters
+   * Query run summaries with optional filters. Full frozen evidence remains in findById.
    */
   query = async (filter?: {
     benchmarkId?: string;
@@ -64,7 +79,11 @@ export class AgentEvalRunModel {
     }
 
     const query = this.db
-      .select()
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        config: evalRunSummaryConfig,
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
       .from(agentEvalRuns)
       .where(and(...conditions))
       .orderBy(desc(agentEvalRuns.createdAt), desc(agentEvalRuns.id))
@@ -110,7 +129,48 @@ export class AgentEvalRunModel {
    */
   findById = async (id: string) => {
     const [result] = await this.db
-      .select()
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
+      .from(agentEvalRuns)
+      .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .limit(1);
+    return result;
+  };
+
+  /** Read one case's frozen contracts in SQL, without transporting the entire dataset. */
+  findForCase = async (id: string, testCaseId: string) => {
+    const [result] = await this.db
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        config: sql<EvalRunConfig | null>`
+          case when jsonb_typeof(${agentEvalRuns.config} -> 'connectorSnapshots') = 'object'
+            then jsonb_set(${agentEvalRuns.config}, '{connectorSnapshots}',
+              case when (${agentEvalRuns.config} -> 'connectorSnapshots') ? ${testCaseId}
+                then jsonb_build_object(${testCaseId}::text,
+                  ${agentEvalRuns.config} -> 'connectorSnapshots' -> ${testCaseId}::text)
+                else '{}'::jsonb
+              end, false)
+            else ${agentEvalRuns.config}
+          end
+        `,
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
+      .from(agentEvalRuns)
+      .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .limit(1);
+    return result;
+  };
+
+  /** Read control/configuration fields without frozen connector contracts. */
+  findSummaryById = async (id: string) => {
+    const [result] = await this.db
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        config: evalRunSummaryConfig,
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
       .from(agentEvalRuns)
       .where(and(eq(agentEvalRuns.id, id), this.ownership()))
       .limit(1);
@@ -120,11 +180,74 @@ export class AgentEvalRunModel {
   /**
    * Update run
    */
-  update = async (id: string, value: Partial<NewAgentEvalRun>) => {
+  update = async (
+    id: string,
+    value: Partial<NewAgentEvalRun>,
+    options?: { startedAt: Date | string | null | undefined },
+  ) => {
     const [result] = await this.db
       .update(agentEvalRuns)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .where(
+        and(
+          eq(agentEvalRuns.id, id),
+          this.ownership(),
+          options
+            ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`
+            : undefined,
+        ),
+      )
+      .returning();
+    return result;
+  };
+
+  /**
+   * Live progress counts written as cases end. A progress write computed before
+   * the run was finalized must not land after it: once the run is completed,
+   * failed or aborted, only finalization, rejudging or a rerun change its metrics.
+   */
+  updateProgress = async (
+    id: string,
+    metrics: NewAgentEvalRun['metrics'],
+    options?: { startedAt: Date | string | null | undefined },
+  ) => {
+    const [result] = await this.db
+      .update(agentEvalRuns)
+      .set({ metrics, updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentEvalRuns.id, id),
+          notInArray(agentEvalRuns.status, ['aborted', 'completed', 'failed']),
+          this.ownership(),
+          options
+            ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`
+            : undefined,
+        ),
+      )
+      .returning();
+    return result;
+  };
+
+  /** Finalization may race with Stop; only an explicit resume can reopen an aborted run. */
+  finalize = async (
+    id: string,
+    value: Pick<NewAgentEvalRun, 'metrics' | 'status'>,
+    options?: { startedAt: Date | string | null | undefined },
+  ) => {
+    const [result] = await this.db
+      .update(agentEvalRuns)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentEvalRuns.id, id),
+          ne(agentEvalRuns.status, 'aborted'),
+          this.ownership(),
+          options
+            ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`
+            : undefined,
+          sql`NOT EXISTS (SELECT 1 FROM ${agentEvalRunTopics} WHERE ${agentEvalRunTopics.runId} = ${agentEvalRuns.id} AND ${agentEvalRunTopics.status} IN ('pending', 'running'))`,
+        ),
+      )
       .returning();
     return result;
   };
@@ -150,7 +273,11 @@ export class AgentEvalRunModel {
   claim = async (id: string) => {
     const [result] = await this.db
       .update(agentEvalRuns)
-      .set({ startedAt: new Date(), status: 'running', updatedAt: new Date() })
+      .set({
+        startedAt: sql`GREATEST(${new Date().toISOString()}::timestamptz, ${agentEvalRuns.startedAt} + interval '1 millisecond')`,
+        status: 'running',
+        updatedAt: new Date(),
+      })
       .where(and(eq(agentEvalRuns.id, id), eq(agentEvalRuns.status, 'pending'), this.ownership()))
       .returning();
     return result;

@@ -1,6 +1,6 @@
 // Fixture: a settings page body stretched across the whole main area.
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import IntegrationCard from './IntegrationCard';

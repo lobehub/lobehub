@@ -1,17 +1,23 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
+import { z } from 'zod';
 
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { UserController } from '../controllers';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
+import { DeletedResourceSchema, DeletedResourcesSchema } from '../types/common.type';
 import {
   CreateUserRequestSchema,
+  CurrentUserSchema,
   UpdateUserRequestSchema,
   UpdateUserRolesRequestSchema,
   UserIdParamSchema,
+  UserListSchema,
+  UserRoleSchema,
+  UserSchema,
   UserSearchRequestSchema,
 } from '../types/user.type';
 
@@ -24,7 +30,14 @@ const UserRoutes = new Hono();
  */
 UserRoutes.get(
   '/me',
-  describeRoute({ summary: 'Get current authenticated user', tags: ['users'] }),
+  routeDoc({
+    data: CurrentUserSchema,
+    description:
+      'Reachable by every authenticated caller. An API key without `user:read` receives only `{ id }`; `messageCount` is included only with `?includeCount=1` and `chat:read`.',
+    errors: [404],
+    summary: 'Get current authenticated user',
+    tags: ['users'],
+  }),
   requireAuth,
   // Deliberately reachable by every authenticated caller, including restricted
   // API keys holding no `user:read` — please do not add a scope gate here.
@@ -35,7 +48,8 @@ UserRoutes.get(
   //
   // Reachability is not disclosure: the payload is scoped inside
   // `UserController.getCurrentUser` — a key without `user:read` receives only
-  // `{ id }`, and `messageCount` additionally needs `chat:read`. Widen there,
+  // `{ id }`, and `messageCount` is opt-in (`?includeCount=1`) and additionally
+  // needs `chat:read`. Widen there,
   // under a scope check, rather than by gating the route.
   async (c) => {
     const userController = new UserController();
@@ -50,6 +64,7 @@ UserRoutes.get(
  */
 UserRoutes.get(
   '/',
+  routeDoc({ data: UserListSchema, summary: 'List users', tags: ['users'] }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('USER_READ', ['ALL']),
@@ -69,6 +84,7 @@ UserRoutes.get(
  */
 UserRoutes.post(
   '/',
+  routeDoc({ data: UserSchema, summary: 'Create a user', tags: ['users'] }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('USER_CREATE', ['ALL']),
@@ -88,6 +104,7 @@ UserRoutes.post(
  */
 UserRoutes.get(
   '/:id',
+  routeDoc({ data: UserSchema, errors: [404], summary: 'Get a user', tags: ['users'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('USER_READ'),
@@ -107,6 +124,7 @@ UserRoutes.get(
  */
 UserRoutes.patch(
   '/:id',
+  routeDoc({ data: UserSchema, errors: [404], summary: 'Update a user', tags: ['users'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('USER_UPDATE'),
@@ -127,6 +145,12 @@ UserRoutes.patch(
  */
 UserRoutes.delete(
   '/:id',
+  routeDoc({
+    data: DeletedResourceSchema,
+    errors: [404],
+    summary: 'Delete a user',
+    tags: ['users'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('USER_DELETE'),
@@ -146,6 +170,12 @@ UserRoutes.delete(
  */
 UserRoutes.get(
   '/:id/roles',
+  routeDoc({
+    data: z.array(UserRoleSchema),
+    errors: [404],
+    summary: "List a user's roles",
+    tags: ['users'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('RBAC_USER_ROLE_READ'),
@@ -165,6 +195,13 @@ UserRoutes.get(
  */
 UserRoutes.patch(
   '/:id/roles',
+  routeDoc({
+    data: z.array(UserRoleSchema),
+    description: "Adds and removes role assignments, then returns all of the user's roles.",
+    errors: [404],
+    summary: "Update a user's roles",
+    tags: ['users'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('RBAC_USER_ROLE_UPDATE'),
@@ -185,6 +222,13 @@ UserRoutes.patch(
  */
 UserRoutes.delete(
   '/:id/roles',
+  routeDoc({
+    data: DeletedResourcesSchema,
+    description: '`count` is the number of role assignments removed.',
+    errors: [404],
+    summary: "Clear a user's roles",
+    tags: ['users'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('RBAC_USER_ROLE_UPDATE'),

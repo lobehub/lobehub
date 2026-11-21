@@ -10,6 +10,8 @@ export const DEVICE_SUB_GROUP_PREFIX = 'device:';
 export const UNKNOWN_DEVICE_SUB_GROUP_ID = 'device-unknown';
 
 interface GroupProjectTopicsOptions {
+  /** Devices that get a section even before any topic runs on them, so a topic can start there. */
+  availableDeviceIds?: string[];
   field: 'createdAt' | 'updatedAt';
   loadingTopicIds?: ReadonlySet<string>;
   /** The machine a topic runs on — its project directory's device, else its pinned device. */
@@ -22,12 +24,13 @@ interface GroupProjectTopicsOptions {
  *
  * Device sections keep the incoming (sidebar-sorted) topic order, so the machine
  * with the most recent topic comes first; topics whose machine can't be resolved
- * (path-only or conversation-only rows) trail in their own section.
+ * (path-only or conversation-only rows) trail in their own section. Available
+ * devices without topics follow as empty sections, ahead of the unknown one.
  */
 export const groupProjectTopics = (
   topics: ChatTopic[],
   mode: ProjectTopicSubGroupMode,
-  { field, loadingTopicIds, resolveDeviceId }: GroupProjectTopicsOptions,
+  { availableDeviceIds, field, loadingTopicIds, resolveDeviceId }: GroupProjectTopicsOptions,
 ): GroupedTopic[] | undefined => {
   if (mode === 'byTime')
     return field === 'updatedAt' ? groupTopicsByUpdatedTime(topics) : groupTopicsByTime(topics);
@@ -46,6 +49,11 @@ export const groupProjectTopics = (
     const existing = groups.get(id);
     if (existing) existing.push(topic);
     else groups.set(id, [topic]);
+  }
+
+  for (const deviceId of availableDeviceIds ?? []) {
+    const id = `${DEVICE_SUB_GROUP_PREFIX}${deviceId}`;
+    if (!groups.has(id)) groups.set(id, []);
   }
 
   const result: GroupedTopic[] = Array.from(groups, ([id, children]) => ({ children, id }));

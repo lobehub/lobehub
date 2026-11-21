@@ -4,6 +4,7 @@ import debug from 'debug';
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { qstashClient, workflowClient } from '@/libs/qstash';
+import type { NightlyJob } from '@/server/services/agentSignal/services';
 
 const log = debug('lobe-server:workflows:agent-signal:nightly-review');
 
@@ -74,6 +75,12 @@ export interface NightlyReviewWorkflowUser {
 export interface PaginateNightlyReviewUsersPayload {
   /** Cursor from the previous page; absent for the first page or a fan-out chunk. */
   cursor?: NightlyReviewWorkflowCursor;
+  /**
+   * Nightly job this pagination tree schedules.
+   *
+   * @default 'self-review'
+   */
+  job?: NightlyJob;
   /** Number of users read from the database in one page. */
   pageSize: number;
   /** UTC instant shared by the complete pagination tree. */
@@ -88,6 +95,12 @@ export interface PaginateNightlyReviewUsersPayload {
 
 /** Payload for a workflow that processes exactly one nightly-review user. */
 export interface ExecuteNightlyReviewUserPayload {
+  /**
+   * Nightly job to run for this user.
+   *
+   * @default 'self-review'
+   */
+  job?: NightlyJob;
   /** UTC instant shared by the complete pagination tree. */
   requestedAt: string;
   /** Maximum active agents dispatched for this user. */
@@ -177,6 +190,7 @@ export class AgentSignalNightlyReviewWorkflow {
    */
   static publishPaginateUsersEntry(payload: PaginateNightlyReviewUsersPayload) {
     log('Publishing nightly review cron entry payload=%O', {
+      job: payload.job ?? 'self-review',
       pageSize: payload.pageSize,
       whitelist: payload.whitelist?.length ?? 0,
     });
@@ -219,7 +233,11 @@ export class AgentSignalNightlyReviewWorkflow {
 
   /** Triggers one workflow that processes exactly one user. */
   static triggerExecuteUser(payload: ExecuteNightlyReviewUserPayload) {
-    log('Triggering nightly review execution userId=%s', payload.user.id);
+    log(
+      'Triggering nightly review execution job=%s userId=%s',
+      payload.job ?? 'self-review',
+      payload.user.id,
+    );
 
     return withPublishTimeout(
       workflowClient.trigger({

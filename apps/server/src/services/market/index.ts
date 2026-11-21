@@ -1,6 +1,11 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { CacheRevalidate, CacheTag } from '@lobechat/types';
-import { MarketSDK, type OrgRef, orgRefToPathSegment } from '@lobehub/market-sdk';
+import {
+  MarketSDK,
+  type OrgRef,
+  orgRefToPathSegment,
+  type RunBuildInToolsContext,
+} from '@lobehub/market-sdk';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import pMap from 'p-map';
@@ -95,6 +100,7 @@ export interface MarketOAuthProxyRequest {
   parameters?: MarketOAuthProxyParameter[];
   /** Market OAuth provider identifier. */
   provider: string;
+  signal?: AbortSignal;
 }
 
 /** Provider response returned through the Market OAuth proxy. */
@@ -236,6 +242,7 @@ export class MarketService {
     method,
     parameters,
     provider,
+    signal,
   }: MarketOAuthProxyRequest): Promise<MarketOAuthProxyResponse> => {
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = new URL(
@@ -281,6 +288,7 @@ export class MarketService {
       body: body === undefined ? undefined : JSON.stringify(body),
       headers: forwardedHeaders,
       method,
+      signal,
     });
 
     return { data: (await response.json()) as unknown, status: response.status };
@@ -486,14 +494,10 @@ export class MarketService {
   /**
    * Export file from sandbox to upload URL
    */
-  async exportFile(params: { path: string; topicId: string; uploadUrl: string; userId: string }) {
-    const { path, uploadUrl, topicId, userId } = params;
+  async exportFile(params: { path: string; uploadUrl: string }, context: RunBuildInToolsContext) {
+    const { path, uploadUrl } = params;
 
-    return this.market.plugins.runBuildInTool(
-      'exportFile',
-      { path, uploadUrl },
-      { topicId, userId },
-    );
+    return this.market.plugins.runBuildInTool('exportFile', { path, uploadUrl }, context);
   }
 
   /**
@@ -692,10 +696,10 @@ export class MarketService {
   /**
    * Get skill categories
    */
-  async getSkillCategories() {
-    log('getSkillCategories');
+  async getSkillCategories(params?: { locale?: string; q?: string }) {
+    log('getSkillCategories: %O', params);
 
-    return this.market.marketSkills.getCategories();
+    return this.market.marketSkills.getCategories(params);
   }
 
   /**
@@ -818,6 +822,16 @@ export class MarketService {
     }
   }
 
+  /** The provider ids of the user's LobeHub Skills connections, without listing their tools. */
+  async listLobehubSkillProviderIds(): Promise<string[]> {
+    const { connections } = await this.market.connect.listConnections({
+      signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
+    });
+    return (connections ?? [])
+      .map((connection) => (connection as { providerId?: string }).providerId)
+      .filter((providerId): providerId is string => !!providerId);
+  }
+
   /**
    * Fetch LobeHub Skills manifests from Market API
    * Gets user's connected skills and builds tool manifests for agent execution
@@ -826,16 +840,23 @@ export class MarketService {
    * provider whose tools could not be listed (with its `providerId`), or the
    * connection lookup itself (without one). Lets callers tell degraded
    * discovery apart from a user with no connected skills.
+   * @param options.providerIds - Only build manifests for these providers. The
+   * tool list of any other connection is never requested.
    * @returns Array of tool manifests for connected skills
    */
   async getLobehubSkillManifests(options?: {
     onError?: (error: unknown, providerId?: string) => void;
+    providerIds?: string[];
   }): Promise<LobeToolManifest[]> {
     try {
       // 1. Get user's connected skills
-      const { connections } = await this.market.connect.listConnections({
+      const { connections: allConnections } = await this.market.connect.listConnections({
         signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
       });
+      const providerIds = options?.providerIds && new Set(options.providerIds);
+      const connections = providerIds
+        ? allConnections?.filter((connection) => providerIds.has((connection as any).providerId))
+        : allConnections;
       if (!connections || connections.length === 0) {
         log('getLobehubSkillManifests: no connected skills found');
         return [];

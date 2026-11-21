@@ -149,6 +149,37 @@ describe('FeishuMessageService.readMessages', () => {
   });
 });
 
+describe('FeishuMessageService.getMemberInfo', () => {
+  const failWith = (message: string) =>
+    new FeishuMessageService(
+      { getUserInfo: vi.fn().mockRejectedValue(new Error(message)) } as any,
+      'feishu',
+    );
+
+  it('reports a user outside the contact range as a precondition, naming the fix', async () => {
+    const error = await failWith(
+      'Lark API GET /contact/v3/users/ou_1?user_id_type=open_id failed: 400 {"code":41050,"msg":"no user authority error"}',
+    )
+      .getMemberInfo({ memberId: 'ou_1', platform: 'feishu' } as any)
+      .catch((e) => e);
+
+    expect(error.code).toBe('PRECONDITION_FAILED');
+    expect(error.message).toContain('41050');
+    expect(error.message).toContain('contacts permission scope');
+  });
+
+  it('leaves unrecognized failures untouched', async () => {
+    // The open_id contains the digits, which must not read as the error code.
+    const message = 'Lark API GET /contact/v3/users/ou_41050?user_id_type=open_id failed: 500 boom';
+    const error = await failWith(message)
+      .getMemberInfo({ memberId: 'ou_41050', platform: 'feishu' } as any)
+      .catch((e) => e);
+
+    expect(error.code).toBeUndefined();
+    expect(error.message).toBe(message);
+  });
+});
+
 describe('FeishuMessageService.readDocument', () => {
   const makeDocService = (api: Record<string, ReturnType<typeof vi.fn>>) =>
     new FeishuMessageService(api as any, 'feishu');

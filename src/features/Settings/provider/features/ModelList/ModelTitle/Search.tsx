@@ -1,5 +1,5 @@
 import { SearchBar } from '@lobehub/ui';
-import { type InputProps } from '@lobehub/ui/base-ui';
+import { type InputProps } from '@lobehub/ui';
 import { useDebounce } from 'ahooks';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

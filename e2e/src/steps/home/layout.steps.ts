@@ -68,6 +68,13 @@ Given('用户在受限宽度下打开 Home 页面', async function (this: Custom
   // single rail card still overflows and exposes the real ScrollArea scrollbar.
   await this.page.setViewportSize({ height: 360, width: 1500 });
   await this.page.goto('/');
+  // Home opens in one column by default; this scenario is about the two-column
+  // layout, so store the rail preference and reload, as a user who opened it would.
+  await this.page.evaluate(() => {
+    const status = JSON.parse(localStorage.getItem('LOBE_SYSTEM_STATUS') ?? '{}');
+    localStorage.setItem('LOBE_SYSTEM_STATUS', JSON.stringify({ ...status, showHomeRail: true }));
+  });
+  await this.page.reload();
 
   await expect(this.page.locator('[data-testid="home-rail"]:visible')).toBeVisible({
     timeout: WAIT_TIMEOUT,

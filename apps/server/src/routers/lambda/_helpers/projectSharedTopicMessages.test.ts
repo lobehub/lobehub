@@ -58,7 +58,6 @@ describe('projectSharedTopicMessages', () => {
         error: rawError,
         members: [message('member', { error: rawError })],
         pluginError: { message: 'internal plugin failure' },
-        taskCompletions: [{ content: 'Done', error: rawError, id: 'completion' }],
         tasks: [message('nested-task', { error: rawError })],
       }),
     ];
@@ -75,7 +74,6 @@ describe('projectSharedTopicMessages', () => {
     expect(result[0].compressedMessages?.[0].error).toEqual(safeError);
     expect(result[0].members?.[0].error).toEqual(safeError);
     expect(result[0].tasks?.[0].error).toEqual(safeError);
-    expect(result[0].taskCompletions?.[0].error).toEqual(safeError);
     expect(result[0].children?.[0].tools?.[0].result).toMatchObject({
       content: 'Public result',
       error: undefined,

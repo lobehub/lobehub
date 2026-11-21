@@ -407,6 +407,7 @@ export abstract class ComputerRuntime {
         isBackground: args.background || false,
         output: r.output,
         outputFiles,
+        running: r.running,
         sandboxed: r.sandboxed,
         stderr: r.stderr,
         stdout: r.stdout,

@@ -69,6 +69,18 @@ describe('resolveLlmExecutionSite', () => {
     });
   });
 
+  it('relays an inherited executor on the channel its client subscribed to', async () => {
+    const inherited = executor(['ollama']);
+    (inherited.host.llmExecutor as any).channelOperationId = 'parent-op';
+
+    expect(await resolve('ollama', inherited)).toEqual({
+      channelOperationId: 'parent-op',
+      preferredClientId: 'tab-a',
+      runtimeProvider: 'ollama',
+      site: 'client',
+    });
+  });
+
   it('reports unavailable when no client declared it can run the provider', async () => {
     expect(await resolve('ollama')).toEqual({ reason: 'no_executor', site: 'unavailable' });
     expect(await resolve('ollama', executor(['lmstudio']))).toEqual({

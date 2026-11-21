@@ -28,7 +28,7 @@ describe('message edit confirmation', () => {
     );
     const store = createStore({
       context: { agentId: 'agent', topicId: 'topic', threadId: null },
-      initialMessages: ['u1', 'u2'].map((id, index) => ({
+      messages: ['u1', 'u2'].map((id, index) => ({
         id,
         content: id,
         role: 'user',

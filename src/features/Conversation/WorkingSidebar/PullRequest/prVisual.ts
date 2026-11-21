@@ -1,6 +1,6 @@
 import type { DeviceGitLinkedPullRequest, DeviceGitPullRequestCheck } from '@lobechat/types';
 import { formatDuration } from '@lobechat/utils';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';

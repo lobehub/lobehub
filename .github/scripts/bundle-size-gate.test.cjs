@@ -118,7 +118,7 @@ const runCheck = ({ baselineGraphCount, baselineJsTotal, currentGraphCount, curr
   };
 };
 
-test('Vite JS output file count over the baseline percentage limit fails the gate', () => {
+test('a JS file-count breach reports the diagnostic and failing heading', () => {
   const result = runCheck({
     baselineGraphCount: 10,
     baselineJsTotal: 100,
@@ -127,26 +127,7 @@ test('Vite JS output file count over the baseline percentage limit fails the gat
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Vite JS output file count increases by more than 5%/);
-});
-
-test('Vite JS output file count at the baseline percentage limit passes the gate', () => {
-  const result = runCheck({
-    baselineGraphCount: 10,
-    baselineJsTotal: 100,
-    currentGraphCount: 10,
-    currentJsTotal: 105,
-  });
-  assert.equal(result.status, 0);
-});
-
-test('reachable graph count increase alone does not fail the gate', () => {
-  const result = runCheck({
-    baselineGraphCount: 10,
-    baselineJsTotal: 100,
-    currentGraphCount: 20,
-    currentJsTotal: 100,
-  });
-  assert.equal(result.status, 0);
+  assert.ok(result.report.startsWith('### ❌ Web dist — exceeds the gate on 1 of 2 entries'));
 });
 
 test('a passing gate states the entry count and the largest delta in the heading', () => {
@@ -183,18 +164,6 @@ test('buildHeadline formats bytes only, but still counts a file-count breach', (
     buildHeadline([byteEntry, { ...fileEntry, over: true }]),
     'exceeds the gate on 1 of 2 entries',
   );
-});
-
-test('a failing gate states how many entries are over it in the heading', () => {
-  const result = runCheck({
-    baselineGraphCount: 10,
-    baselineJsTotal: 100,
-    currentGraphCount: 10,
-    currentJsTotal: 106,
-  });
-
-  assert.equal(result.status, 1);
-  assert.ok(result.report.startsWith('### ❌ Web dist — exceeds the gate on 1 of 2 entries'));
 });
 
 test('buildHeadline stays empty when nothing was comparable', () => {

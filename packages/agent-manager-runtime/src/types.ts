@@ -1,4 +1,10 @@
-import type { HeterogeneousProviderConfig, LobeAgentConfig, MetaData } from '@lobechat/types';
+import type {
+  AssistantMarketSource,
+  DiscoverAssistantDetail,
+  HeterogeneousProviderConfig,
+  LobeAgentConfig,
+  MetaData,
+} from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 // ==================== Service Interfaces ====================
@@ -24,7 +30,9 @@ export interface IAgentService {
       avatar?: string | null;
       backgroundColor?: string | null;
       description?: string | null;
+      heteroType?: HeterogeneousProviderConfig['type'];
       id: string;
+      name?: string | null;
       title?: string | null;
     }>
   >;
@@ -35,6 +43,12 @@ export interface IAgentService {
  * Interface for discover/marketplace service operations
  */
 export interface IDiscoverService {
+  getAssistantDetail?: (params: {
+    identifier: string;
+    locale?: string;
+    source?: AssistantMarketSource;
+    version?: string;
+  }) => Promise<DiscoverAssistantDetail | undefined>;
   getAssistantList: (params: { category?: string; pageSize?: number; q?: string }) => Promise<{
     items: Array<{
       avatar?: string;
@@ -155,6 +169,8 @@ export interface AgentSearchItem {
   heteroType?: HeterogeneousProviderConfig['type'];
   id: string;
   isMarket?: boolean;
+  /** User-facing display name; `title` is the agent's role */
+  name?: string;
   title?: string;
 }
 

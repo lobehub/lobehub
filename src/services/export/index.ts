@@ -1,10 +1,15 @@
+import { type DataExportView } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
-import { type ExportDatabaseData } from '@/types/export';
 
 class ExportService {
-  exportData = async (): Promise<ExportDatabaseData> => {
-    return await lambdaClient.exporter.exportData.mutate();
-  };
+  getExportDownloadUrl = async (id: string): Promise<{ fileName: string; url: string }> =>
+    lambdaClient.exporter.getExportDownloadUrl.mutate({ id });
+
+  getLatestExport = async (): Promise<DataExportView | null> =>
+    lambdaClient.exporter.getLatestExport.query();
+
+  startExport = async (): Promise<DataExportView> => lambdaClient.exporter.startExport.mutate();
 }
 
 export const exportService = new ExportService();

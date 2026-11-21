@@ -97,3 +97,19 @@ export const claimRedisOnce = async (
     return claimLocally(key, ttl);
   }
 };
+
+/**
+ * Give a {@link claimRedisOnce} claim back before it expires, so the next
+ * caller wins it. For claims that guard work which can fail after the claim —
+ * a dropped claim must not turn a retry into a skipped duplicate. Clears the
+ * process-local claim too, since the claim may have fallen back to it.
+ */
+export const releaseRedisClaim = async (
+  redis: BaseRedisProvider | null,
+  key: RedisKey,
+): Promise<void> => {
+  localClaims.delete(normalizeRedisKey(key));
+  if (!redis) return;
+
+  await redis.del(key).catch(() => undefined);
+};

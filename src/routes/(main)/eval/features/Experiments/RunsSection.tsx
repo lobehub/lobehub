@@ -1,11 +1,12 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { FlaskConical } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import RunRow from './RunRow';
 import type { useExperimentActions } from './useExperimentActions';
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   sectionTitle: css`
     margin: 0;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
   `,
 }));

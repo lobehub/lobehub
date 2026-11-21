@@ -6,6 +6,18 @@ export {
   convertOpenAIUsage,
 } from './openai';
 export {
+  convertOpenAISpeechTokenUsage,
+  convertTextToSpeechUsage,
+  countFishAudioBilledBytes,
+  countMiniMaxSpeechCharacters,
+  countTextToSpeechCharacters,
+  isFishAudioSpeechModel,
+  isFishAudioSpeechRoute,
+  isMiniMaxSpeechModel,
+  isTokenBilledTextToSpeech,
+  toFishAudioCatalogModel,
+} from './tts';
+export {
   computeChatCost,
   type ComputeChatCostOptions,
   type PricingComputationResult,
@@ -31,7 +43,10 @@ export {
   estimateOpenAIChatInputTokens,
   type EstimateOpenAIChatInputTokensOptions,
 } from './utils/estimateChatCost';
-export { resolveImageSinglePrice } from './utils/resolveImageSinglePrice';
+export {
+  type ImageSinglePriceParams,
+  resolveImageSinglePrice,
+} from './utils/resolveImageSinglePrice';
 export { resolveVideoSinglePrice } from './utils/resolveVideoSinglePrice';
 export {
   countVideoOutputTokens,

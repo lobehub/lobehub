@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 
 import { oneLineEllipsis } from '@/styles';
 

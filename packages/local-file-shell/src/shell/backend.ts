@@ -90,6 +90,8 @@ export interface ShellBackend {
   /** Forget a command the manager no longer tracks. */
   release?: (shellId: string) => void;
   spawn: (command: ShellLaunchCommand, options: ShellSpawnOptions) => ShellHandle;
+  /** Confirm that the command and its process group have exited; unsupported means unknown. */
+  terminate?: (shellId: string) => Promise<boolean>;
   /** Send input to a running command. Present only when `capabilities.interactive`. */
   write?: (shellId: string, data: string) => void;
 }

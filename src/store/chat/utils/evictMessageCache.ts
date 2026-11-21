@@ -1,30 +1,24 @@
 import { type ConversationContext } from '@lobechat/types';
 
-import { mutate } from '@/libs/swr';
-import { isMessageListKey } from '@/libs/swr/keys';
-
 /**
- * Evict persisted `message:list` cache entries whose conversation context
- * matches `predicate`.
+ * Evict the persisted transcripts of conversations matching `predicate` (every
+ * one when omitted), for stores outside the chat store that delete them.
  *
- * The IndexedDB cache tier never expires (see `localStorageProvider`), so once a
- * topic / agent is deleted its message cache would orphan in IndexedDB forever
- * unless we drop it explicitly. Clears the cached value without revalidating —
- * the conversation is gone, there is nothing left to refetch.
+ * Transcripts persist in the message replica's IndexedDB rows, which never
+ * expire, so once a topic / agent is deleted its transcript would orphan there
+ * (and hydrate again) unless it is dropped explicitly. Nothing is refetched —
+ * the conversation is gone. See `evictConversationMessages`.
  *
- * Matches every `message:list` variant (any page-size / version / workspace-
- * augmented key) sharing the same `ConversationContext`, mirroring the matcher
- * used by `refreshMessages` / the write-through cache.
+ * The chat store is loaded on demand: the session / home stores calling this
+ * must not pull the whole chat store graph in at module load.
  *
  * @example
- * // a single deleted topic
- * void evictMessageCache((ctx) => ctx.topicId === topicId);
  * // every topic under a deleted agent
  * void evictMessageCache((ctx) => ctx.agentId === agentId);
- * // wipe everything (delete-all)
- * void evictMessageCache(() => true);
  */
-export const evictMessageCache = (
-  predicate: (ctx: ConversationContext) => boolean,
-): Promise<unknown> =>
-  mutate((key) => isMessageListKey(key, predicate), undefined, { revalidate: false });
+export const evictMessageCache = async (
+  predicate?: (ctx: ConversationContext) => boolean,
+): Promise<void> => {
+  const { getChatStoreState } = await import('@/store/chat/store');
+  await getChatStoreState().evictConversationMessages(predicate);
+};

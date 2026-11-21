@@ -124,42 +124,70 @@ export const createDashboardToolService = (
     sourceType: 'agent' as const,
   };
 
+  /**
+   * Only what listDashboards offers is reachable: boards of the
+   * conversation's own project, or home boards in personal mode. A readable
+   * board of another project, of an agent-only level, or of the workspace
+   * root is out of reach even when the caller owns it.
+   */
+  const isOffered = (board: { agentId: string | null; projectId: string | null }) =>
+    board.projectId === projectId ||
+    (!workspaceId && board.projectId === null && board.agentId === null);
+
+  /**
+   * A workspace-level board has no UI at all — the home dashboard routes are
+   * disabled inside a workspace — so creating one would report success while
+   * leaving an unreachable board behind. Boards belong in the conversation's
+   * project (or the home level in personal mode).
+   */
+  const assertBoardLevelReachable = () => {
+    if (workspaceId && !projectId) {
+      throw new WidgetFlowError(
+        'FORBIDDEN',
+        'Workspace-level dashboards are not available yet — create the dashboard inside a project instead',
+      );
+    }
+  };
+
   return {
     addToDashboard: async (dashboardId, widgetId) => {
       await requireScopedWidget(widgetId);
       const board = await dashboards.findById(dashboardId);
-      // Only what listDashboards offers may take the placement: boards of the
-      // conversation's own project, or home boards in personal mode. A
-      // readable board of another project, of an agent-only level, or of the
-      // workspace root is out of reach even when the caller owns it.
-      const offered =
-        !!board &&
-        (board.projectId === projectId ||
-          (!workspaceId && board.projectId === null && board.agentId === null));
+      const offered = !!board && isOffered(board);
       const item = offered ? await dashboards.addItem(dashboardId, widgetId) : undefined;
       if (!board || !item) throw new Error('Dashboard or widget not found');
       return { projectId: board.projectId, title: board.title };
     },
 
-    createDashboardWithWidget: async (title, widgetId) => {
+    createDashboard: async (title, description) => {
+      assertBoardLevelReachable();
+      const board = await dashboards.create({
+        description: description ?? null,
+        projectId: projectId ?? null,
+        title,
+      });
+      return {
+        description: board.description,
+        id: board.id,
+        projectId: board.projectId,
+        title: board.title,
+      };
+    },
+
+    createDashboardWithWidget: async (title, widgetId, description) => {
       // Same conversation-scope check as placing on an existing board, before
       // anything is written: another agent's or project's widget creates no board.
       await requireScopedWidget(widgetId);
-      // A workspace-level board has no UI at all — the home dashboard routes
-      // are disabled inside a workspace — so creating one would report
-      // success while leaving an unreachable board behind. Boards belong in
-      // the conversation's project (or the home level in personal mode).
-      if (workspaceId && !projectId) {
-        throw new WidgetFlowError(
-          'FORBIDDEN',
-          'Workspace-level dashboards are not available yet — create the dashboard inside a project instead',
-        );
-      }
+      assertBoardLevelReachable();
       // One transaction: a widget that cannot be placed (stale, deleted,
       // unreadable, another workspace) rolls the new board back with it.
       return db.transaction(async (tx) => {
         const scoped = new DashboardModel(tx as unknown as LobeChatDatabase, userId, workspaceId);
-        const board = await scoped.create({ projectId: projectId ?? null, title });
+        const board = await scoped.create({
+          description: description ?? null,
+          projectId: projectId ?? null,
+          title,
+        });
         const item = await scoped.addItem(board.id, widgetId);
         if (!item) throw new Error('Widget not found');
         return { id: board.id, projectId: board.projectId, title: board.title };
@@ -241,6 +269,7 @@ export const createDashboardToolService = (
         widgetsByBoard.set(item.dashboardId, list);
       }
       return boards.map((board) => ({
+        description: board.description,
         id: board.id,
         projectId: board.projectId,
         title: board.title,
@@ -290,6 +319,22 @@ export const createDashboardToolService = (
         parentVersionId: parentVersionId ?? null,
       });
       return toVersionRecord(draft);
+    },
+
+    updateDashboard: async (dashboardId, patch) => {
+      const board = await dashboards.findById(dashboardId);
+      // Writes go through the board's creator (DashboardModel's manageable
+      // rule) on top of the same reach as placing a widget.
+      const updated =
+        board && board.userId === userId && isOffered(board)
+          ? await dashboards.update(dashboardId, patch)
+          : undefined;
+      if (!updated) throw new Error('Dashboard not found or not editable');
+      return {
+        description: updated.description,
+        projectId: updated.projectId,
+        title: updated.title,
+      };
     },
 
     updateWidget: async (widgetId, patch) => {

@@ -77,6 +77,22 @@ describe('/api/auth/[...all] route', () => {
     expect(mocks.post).toHaveBeenCalledTimes(1);
   });
 
+  it('drops the empty body of an untyped POST so Better Auth does not reject it with 415', async () => {
+    const request = new Request('https://localhost/api/auth/get-session', {
+      body: new ReadableStream({ start: (controller) => controller.close() }),
+      duplex: 'half',
+      headers: { cookie: 'better-auth.session_token=token' },
+      method: 'POST',
+    } as RequestInit) as NextRequest;
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const forwarded = mocks.post.mock.calls[0][0];
+    expect(forwarded.body).toBeNull();
+    expect(forwarded.headers.get('cookie')).toBe('better-auth.session_token=token');
+  });
+
   it('delegates GET requests to Better Auth', async () => {
     const request = new Request('https://localhost/api/auth/get-session') as NextRequest;
 

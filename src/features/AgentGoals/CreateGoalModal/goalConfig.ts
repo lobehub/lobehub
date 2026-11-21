@@ -43,3 +43,13 @@ export const buildReviewedGoalContent = (instruction: string) => ({
   problemDescription: instruction,
   requirement: instruction,
 });
+
+/**
+ * Who the goal goes to: its main agent, plus a dedicated executor only when one
+ * was picked that is not the main agent — naming the main agent there is the
+ * same as leaving Tasks with it.
+ */
+export const buildGoalAgents = (plannerId?: string, executorId?: string) => ({
+  agentId: plannerId,
+  taskAgentId: executorId && executorId !== plannerId ? executorId : undefined,
+});

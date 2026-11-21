@@ -1,11 +1,13 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
-import { TaskRestService } from '../services/task.service';
+import { TASK_LIST_DEFAULT_LIMIT, TaskRestService } from '../services/task.service';
 import type {
   CreateTaskRequest,
+  RunTaskRequest,
   TaskIdParam,
   TaskListQuery,
+  TaskRunListQuery,
   UpdateTaskRequest,
   UpdateTaskStatusRequest,
 } from '../types/task.type';
@@ -21,7 +23,11 @@ export class TaskController extends BaseController {
     try {
       const query = this.getQuery<TaskListQuery>(c);
       const service = await this.service(c);
-      return this.success(c, await service.listTasks(query), 'Task list retrieved successfully');
+      return this.list(c, 'tasks', await service.listTasks(query), {
+        defaultLimit: TASK_LIST_DEFAULT_LIMIT,
+        message: 'Task list retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -73,13 +79,36 @@ export class TaskController extends BaseController {
     }
   }
 
+  /** POST /api/v1/tasks/:id/runs */
+  async runTask(c: Context): Promise<Response> {
+    try {
+      const { id } = this.getParams<TaskIdParam>(c);
+      const body = await this.getBody<RunTaskRequest>(c);
+      const service = await this.service(c);
+      return this.success(c, await service.runTask(id, body ?? {}), 'Task run started', 202);
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** GET /api/v1/tasks/:id/runs */
+  async listRuns(c: Context): Promise<Response> {
+    try {
+      const { id } = this.getParams<TaskIdParam>(c);
+      const query = this.getQuery<TaskRunListQuery>(c);
+      const service = await this.service(c);
+      return this.success(c, await service.listRuns(id, query), 'Task runs retrieved successfully');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
   /** DELETE /api/v1/tasks/:id */
   async deleteTask(c: Context): Promise<Response> {
     try {
       const { id } = this.getParams<TaskIdParam>(c);
       const service = await this.service(c);
-      await service.deleteTask(id);
-      return this.success(c, undefined, 'Task deleted');
+      return this.success(c, await service.deleteTask(id), 'Task deleted');
     } catch (error) {
       return this.handleError(c, error);
     }

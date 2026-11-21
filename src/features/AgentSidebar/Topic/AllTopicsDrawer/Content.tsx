@@ -9,6 +9,7 @@ import { VList } from 'virtua';
 import AsyncError from '@/components/AsyncError';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import TopicEmpty from '@/features/TopicEmpty';
+import { useSidebarTopicSearch } from '@/hooks/useSidebarTopicSearch';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -26,23 +27,15 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   const fetchedCountRef = useRef(-1);
   const initializedRef = useRef(false);
 
-  const [
-    hasMore,
-    isLoadingMore,
-    loadMoreError,
-    isExpandingPageSize,
-    loadMoreTopics,
-    activeAgentId,
-    useSearchTopics,
-  ] = useChatStore((s) => [
-    topicSelectors.hasMoreTopics(s),
-    topicSelectors.isLoadingMoreTopics(s),
-    topicSelectors.loadMoreTopicsError(s),
-    topicSelectors.isExpandingPageSize(s),
-    s.loadMoreTopics,
-    s.activeAgentId,
-    s.useSearchTopics,
-  ]);
+  const [hasMore, isLoadingMore, loadMoreError, isExpandingPageSize, loadMoreTopics] = useChatStore(
+    (s) => [
+      topicSelectors.hasMoreTopics(s),
+      topicSelectors.isLoadingMoreTopics(s),
+      topicSelectors.loadMoreTopicsError(s),
+      topicSelectors.isExpandingPageSize(s),
+      s.loadMoreTopics,
+    ],
+  );
 
   // Use server-side search if there's a keyword
   const trimmedKeyword = searchKeyword.trim();
@@ -59,10 +52,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   }, [isSearching]);
 
   // Only search when there's a keyword (pass undefined to disable SWR)
-  useSearchTopics(isSearching ? trimmedKeyword : undefined, {
-    agentId: activeAgentId,
-    groupId: undefined,
-  });
+  useSidebarTopicSearch(isSearching ? trimmedKeyword : undefined);
 
   const searchResults = useChatStore(topicSelectors.searchTopics, isEqual);
   const allTopicList = useChatStore(topicSelectors.displayTopics, isEqual);

@@ -730,9 +730,6 @@ describe('countContextTokens', () => {
       expect(r.bySource.toolCalls).toBeGreaterThan(0);
       // tool.id ships as the flattened tool message's tool_call_id
       expect(r.bySource.toolCallId).toBeGreaterThan(0);
-      expect(r.bySource.content).toBeGreaterThan(150);
-      expect(r.bySource.toolCalls).toBeGreaterThan(0);
-      expect(r.bySource.toolCallId).toBeGreaterThan(0);
     });
 
     it('counts nested assistantGroup members', () => {

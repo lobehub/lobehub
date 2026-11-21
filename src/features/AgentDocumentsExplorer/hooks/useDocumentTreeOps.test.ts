@@ -17,7 +17,7 @@ const moveDocumentsByIdMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 const confirmModalMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: confirmModalMock,
   toast: { error: toastError, success: vi.fn() },

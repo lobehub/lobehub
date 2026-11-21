@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  compareStreamIds,
   getDefaultReasonDetail,
   StreamEventManager,
   stripFinalStateInEventData,
@@ -25,8 +26,10 @@ const mockRedis = {
   keys: vi.fn(),
   quit: vi.fn(),
   xadd: vi.fn(),
+  xdel: vi.fn(),
   xread: vi.fn(),
   xrevrange: vi.fn(),
+  xrange: vi.fn(),
 };
 
 vi.mock('../redis', () => ({
@@ -39,6 +42,34 @@ describe('StreamEventManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     streamManager = new StreamEventManager();
+  });
+
+  describe('compareStreamIds', () => {
+    it('orders by milliseconds, then sequence', () => {
+      expect(compareStreamIds('9-5', '10-0')).toBeLessThan(0);
+      expect(compareStreamIds('10-2', '10-10')).toBeLessThan(0);
+      expect(compareStreamIds('10-1', '10-1')).toBe(0);
+      expect(compareStreamIds('11', '10-99')).toBeGreaterThan(0);
+    });
+
+    it('fails closed for a cursor that is not a stream id', () => {
+      expect(compareStreamIds('missing', '1-0')).toBeNaN();
+      expect(compareStreamIds('1-0', '1-x')).toBeNaN();
+    });
+  });
+
+  describe('deleteStreamEvents', () => {
+    it('removes the given entries from the operation stream', async () => {
+      await streamManager.deleteStreamEvents('op-1', ['1-0', '2-0']);
+
+      expect(mockRedis.xdel).toHaveBeenCalledWith('agent_runtime_stream:op-1', '1-0', '2-0');
+    });
+
+    it('skips the round trip when there is nothing to delete', async () => {
+      await streamManager.deleteStreamEvents('op-1', []);
+
+      expect(mockRedis.xdel).not.toHaveBeenCalled();
+    });
   });
 
   describe('publishAgentRuntimeInit', () => {
@@ -61,9 +92,6 @@ describe('StreamEventManager', () => {
       expect(result).toBe('event-id-123');
       expect(mockRedis.xadd).toHaveBeenCalledWith(
         `agent_runtime_stream:${operationId}`,
-        'MAXLEN',
-        '~',
-        '1000',
         '*',
         'type',
         'agent_runtime_init',
@@ -76,6 +104,83 @@ describe('StreamEventManager', () => {
         'timestamp',
         expect.any(String),
       );
+    });
+  });
+
+  describe('getStreamHistoryPage', () => {
+    const row = (id: string, type: string) => [
+      id,
+      ['type', type, 'stepIndex', '0', 'operationId', 'op-1', 'data', '{}', 'timestamp', '1'],
+    ];
+
+    it('returns forward pages with an exclusive cursor and typed event fields', async () => {
+      mockRedis.xrange.mockResolvedValueOnce([
+        row('1-0', 'agent_runtime_init'),
+        row('2-0', 'stream_chunk'),
+        row('3-0', 'stream_chunk'),
+      ]);
+      const page = await streamManager.getStreamHistoryPage('op-1', '0', 2);
+      expect(page).toMatchObject({ available: true, hasMore: true, nextCursor: '2-0' });
+      expect(page.events.map((event) => event.id)).toEqual(['1-0', '2-0']);
+      expect(page.events[0]).toMatchObject({ data: {}, stepIndex: 0, timestamp: 1 });
+      mockRedis.xrange
+        .mockResolvedValueOnce([row('2-0', 'stream_chunk')])
+        .mockResolvedValueOnce([row('3-0', 'stream_chunk')]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '2-0', 2)).events[0].id).toBe('3-0');
+      expect(mockRedis.xrange).toHaveBeenLastCalledWith(
+        'agent_runtime_stream:op-1',
+        '(2-0',
+        '+',
+        'COUNT',
+        3,
+      );
+    });
+
+    it('fails closed for a legacy truncated prefix, an expired stream, or a missing cursor', async () => {
+      mockRedis.xrange.mockResolvedValueOnce([row('100-0', 'stream_chunk')]);
+      expect((await streamManager.getStreamHistoryPage('op-1')).available).toBe(false);
+      mockRedis.xrange.mockResolvedValueOnce([]);
+      expect((await streamManager.getStreamHistoryPage('op-1')).available).toBe(false);
+      // Missing cursor on an expired stream: no entry, and no init to anchor it.
+      mockRedis.xrange.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '1-0')).available).toBe(false);
+    });
+
+    // A superseded `tools_calling` snapshot is removed after a newer entry lands,
+    // so a follower whose cursor was that snapshot must keep paging, not fail.
+    it('continues after a cursor whose snapshot was removed mid-stream', async () => {
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('1-0', 'agent_runtime_init')])
+        .mockResolvedValueOnce([row('4-0', 'stream_chunk')]);
+
+      const page = await streamManager.getStreamHistoryPage('op-1', '3-0', 2);
+
+      expect(page).toMatchObject({ available: true, hasMore: false, nextCursor: '4-0' });
+      expect(page.events.map((event) => event.id)).toEqual(['4-0']);
+    });
+
+    it('fails closed for a missing cursor with nothing after it or no init before it', async () => {
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('1-0', 'agent_runtime_init')])
+        .mockResolvedValueOnce([]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '3-0')).available).toBe(false);
+
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('5-0', 'agent_runtime_init')]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '3-0')).available).toBe(false);
+
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('1-0', 'stream_chunk')]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '3-0')).available).toBe(false);
+    });
+
+    it('propagates Redis errors instead of reporting an empty successful history', async () => {
+      mockRedis.xrange.mockRejectedValueOnce(new Error('Redis unavailable'));
+      await expect(streamManager.getStreamHistoryPage('op-1')).rejects.toThrow('Redis unavailable');
     });
   });
 
@@ -100,9 +205,6 @@ describe('StreamEventManager', () => {
       expect(result).toBe('event-id-456');
       expect(mockRedis.xadd).toHaveBeenCalledWith(
         `agent_runtime_stream:${operationId}`,
-        'MAXLEN',
-        '~',
-        '1000',
         '*',
         'type',
         'agent_runtime_end',
@@ -192,9 +294,6 @@ describe('StreamEventManager', () => {
         expect.any(String),
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
         operationId,
         'data',
         JSON.stringify({
@@ -230,9 +329,6 @@ describe('StreamEventManager', () => {
       });
 
       expect(mockRedis.xadd).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(String),
-        expect.any(String),
         expect.any(String),
         expect.any(String),
         expect.any(String),
@@ -546,6 +642,42 @@ describe('StreamEventManager', () => {
       expect(mockBlockingRedis.xread).toHaveBeenCalledTimes(1);
       expect(mockRedis.xread).not.toHaveBeenCalled();
       expect(mockBlockingRedis.disconnect).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('publishStreamEvent step_start', () => {
+    const storedData = () => {
+      const dataArg = mockRedis.xadd.mock.calls[0]?.find(
+        (a: any) => typeof a === 'string' && a.startsWith('{'),
+      );
+      return JSON.parse(dataArg);
+    };
+
+    // The snapshot is a whole message list per step (megabytes on a long topic).
+    // Its consumers get it from the gateway push; nothing reads it back from the
+    // stream, so keeping a copy per step only grew the stream and every replay.
+    it('keeps the uiMessages snapshot out of the stored stream entry', async () => {
+      mockRedis.xadd.mockResolvedValue('event-id-step');
+
+      await streamManager.publishStreamEvent('op-step', {
+        data: { llmCalls: 3, uiMessages: [{ content: 'x'.repeat(64), id: 'msg_1' }] },
+        stepIndex: 4,
+        type: 'step_start',
+      });
+
+      expect(storedData()).toEqual({ llmCalls: 3 });
+    });
+
+    it('stores a protocol-2 step_start unchanged', async () => {
+      mockRedis.xadd.mockResolvedValue('event-id-step');
+
+      await streamManager.publishStreamEvent('op-step', {
+        data: { llmCalls: 1, messageRevision: 4 },
+        stepIndex: 4,
+        type: 'step_start',
+      });
+
+      expect(storedData()).toEqual({ llmCalls: 1, messageRevision: 4 });
     });
   });
 

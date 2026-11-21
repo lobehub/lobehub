@@ -99,7 +99,7 @@ describe('bot messengers', () => {
       await createProgram().parseAsync(['node', 'test', 'bot', 'messengers', 'list']);
       const out = renderedOutput();
       expect(out).toContain('No System Bot installations connected.');
-      expect(out).toContain('Settings → Messenger');
+      expect(out).toContain('Marketplace → Apps');
     });
 
     it('--json passes through the payload', async () => {

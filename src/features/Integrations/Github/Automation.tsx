@@ -1,9 +1,7 @@
 'use client';
 
 import type { GithubIntegrationPreference } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Switch, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Icon, Switch, Text } from '@lobehub/ui';
 import {
   CircleXIcon,
   GitMergeIcon,
@@ -17,11 +15,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 2px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -40,7 +39,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   row: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};

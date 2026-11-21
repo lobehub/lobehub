@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { dateTimeSchema } from './common.type';
+
 /**
  * The IM channel: a messaging-app view of one agent conversation.
  *
@@ -11,9 +13,12 @@ import { z } from 'zod';
  * read the user's messages.
  */
 
-export const ImSendRequestSchema = z.object({
-  /** The agent the user is talking to. */
-  agentId: z.string().min(1),
+const ImSendFieldsSchema = z.object({
+  /**
+   * The agent the user is talking to. With `groupId` it must be a member of
+   * that group; the group's supervisor still runs the turn.
+   */
+  agentId: z.string().min(1).optional(),
   /**
    * Client-minted id for the user message (`msg_…`). Makes the send idempotent:
    * retrying with the same id returns the original receipt instead of starting
@@ -24,10 +29,24 @@ export const ImSendRequestSchema = z.object({
     .regex(/^msg_[\w-]{8,64}$/, 'clientMessageId must look like msg_<8-64 url-safe chars>')
     .optional(),
   /** The message text. */
-  content: z.string().trim().min(1).max(100_000),
-  /** The conversation to continue; omit to start a new one for the agent. */
+  content: z.string().trim().max(100_000),
+  /** Already-uploaded files to attach to this turn. */
+  fileIds: z.array(z.string().min(1)).max(10).optional(),
+  /** The group chat the user is talking to; its supervisor orchestrates the members. */
+  groupId: z.string().min(1).optional(),
+  /** The conversation to continue; omit to start a new one for the agent or group. */
   topicId: z.string().min(1).nullish(),
 });
+
+// A union rather than .refine() so the generated spec and SDK require a target too.
+export const ImSendRequestSchema = z
+  .union([
+    ImSendFieldsSchema.extend({ agentId: z.string().min(1) }),
+    ImSendFieldsSchema.extend({ groupId: z.string().min(1) }),
+  ])
+  .refine((input) => input.content.length > 0 || !!input.fileIds?.length, {
+    message: 'A message needs text or an attachment',
+  });
 export type ImSendRequest = z.infer<typeof ImSendRequestSchema>;
 
 export const ImTopicParamSchema = z.object({
@@ -68,12 +87,23 @@ export const ImReadRequestSchema = z.object({
 export type ImReadRequest = z.infer<typeof ImReadRequestSchema>;
 
 export interface ImMessage {
+  /** The agent that wrote the message; null on user messages. */
+  agentId: string | null;
   content: string;
   createdAt: string;
   /** Set when the agent's turn failed; the client shows a retry affordance. */
   error: boolean;
+  files?: ImAttachment[];
   id: string;
   role: 'assistant' | 'user';
+}
+
+export interface ImAttachment {
+  fileType: string;
+  id: string;
+  name: string;
+  size: number;
+  url: string;
 }
 
 export interface ImSendResult {
@@ -119,3 +149,89 @@ export const PushTokenUnregisterQuerySchema = z.object({
   expoToken: z.string().min(1).max(512).optional(),
 });
 export type PushTokenUnregisterQuery = z.infer<typeof PushTokenUnregisterQuerySchema>;
+
+// ==================== Response Schemas ====================
+
+type ShapeOf<T> = Record<keyof T, z.ZodType>;
+
+const ImAttachmentSchema = z
+  .object({
+    fileType: z.string(),
+    id: z.string(),
+    name: z.string(),
+    size: z.number().int().min(0),
+    /** Absolute, fetchable URL. */
+    url: z.string(),
+  } satisfies ShapeOf<ImAttachment>)
+  .strict();
+
+/** One chat bubble of the IM channel — whole, never a partial stream. */
+export const ImMessageSchema = z
+  .object({
+    /** The agent that wrote the message; null on user messages. */
+    agentId: z.string().nullable(),
+    content: z.string(),
+    createdAt: dateTimeSchema,
+    /** Set when the agent's turn failed; the client shows a retry affordance. */
+    error: z.boolean(),
+    /** Present only when the message carries attachments. */
+    files: z.array(ImAttachmentSchema).optional(),
+    id: z.string(),
+    role: z.enum(['assistant', 'user']),
+  } satisfies ShapeOf<ImMessage>)
+  .strict()
+  .meta({ id: 'ImMessage' });
+
+export const ImSendResultSchema = z
+  .object({
+    /** `false` when this was an idempotent retry of an already-received message. */
+    accepted: z.boolean(),
+    /** The agent run that will answer; null on an idempotent retry. */
+    operationId: z.string().nullable(),
+    topicId: z.string(),
+    userMessage: ImMessageSchema,
+  } satisfies ShapeOf<ImSendResult>)
+  .strict()
+  .meta({ id: 'ImSendResult' });
+
+export const ImSyncResultSchema = z
+  .object({
+    /** Pass back as `cursor` to receive only what is new. */
+    cursor: z.string(),
+    /** Whole messages newer than the cursor, oldest first. */
+    messages: z.array(ImMessageSchema),
+    /** The newest user message the agent has picked up (the "read" receipt). */
+    readUpTo: z.object({ messageId: z.string(), readAt: dateTimeSchema }).strict().nullable(),
+    /** Pass back as `state` to long-poll for a change. */
+    state: z.string(),
+    /** The agent is working on a reply ("typing…"). */
+    typing: z.boolean(),
+    /** Agent messages newer than the user's read cursor. */
+    unread: z.number().int().min(0),
+  } satisfies ShapeOf<ImSyncResult>)
+  .strict()
+  .meta({ id: 'ImSyncResult' });
+
+export interface ImReadResult {
+  /** Agent messages still newer than the read cursor. */
+  unread: number;
+}
+
+export const ImReadResultSchema = z
+  .object({ unread: z.number().int().min(0) } satisfies ShapeOf<ImReadResult>)
+  .strict()
+  .meta({ id: 'ImReadResult' });
+
+export interface PushTokenRegistration {
+  deviceId: string;
+  platform: string;
+}
+
+export const PushTokenRegistrationSchema = z
+  .object({
+    deviceId: z.string(),
+    /** `ios` or `android`. */
+    platform: z.string(),
+  } satisfies ShapeOf<PushTokenRegistration>)
+  .strict()
+  .meta({ id: 'PushTokenRegistration' });

@@ -42,6 +42,7 @@ export const GET = async (req: Request, segmentData: { params: Params }) => {
     return new Response(userAvatar, {
       headers: {
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
         'Content-Type': type,
       },
       status: 200,

@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import {
   Activity,
   type CSSProperties,
@@ -9,6 +9,7 @@ import {
   type ReactNode,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from 'react';
@@ -21,6 +22,8 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
+import { useDisplayedTabStore } from './displayedTab';
+import { flushHiddenTabRestores } from './hiddenTabRestore';
 import { useLiveTabRouterCap } from './liveTabRouterCap';
 import { resolveLiveTabIds } from './resolveLiveTabIds';
 import { TabIdContext } from './TabIdContext';
@@ -31,6 +34,7 @@ import {
   syncTabRouters,
   type TabRouter,
 } from './tabRouterManager';
+import { useDisplayedTabIds } from './useDisplayedTabIds';
 import { useTabPreviewCapture } from './useTabPreviewCapture';
 
 interface TabHostProps {
@@ -158,21 +162,49 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
     [activeTabId, effectiveSplitView],
   );
 
+  const existingTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
+  const requestedRouters = useMemo(
+    () =>
+      visibleTabIds.flatMap((id) => {
+        const tab = tabs.find((item) => item.id === id);
+        return tab ? [getOrCreateTabRouter(id, tab.url, createRouter)] : [];
+      }),
+    [createRouter, tabs, visibleTabIds],
+  );
+  const displayedTabIds = useDisplayedTabIds({
+    canHold: !effectiveSplitView,
+    existingTabIds,
+    requestedRouters,
+    requestedTabIds: visibleTabIds,
+  });
+
   useEffect(() => {
     if (isPreferenceInit && !splitViewEnabled && splitView) closeSplitView();
   }, [closeSplitView, isPreferenceInit, splitView, splitViewEnabled]);
 
-  const liveIds = useMemo(
-    () =>
-      resolveLiveTabIds(
-        // Persisted tabs are cold until first shown; only retain already-created routers.
-        tabs.filter((tab) => visibleTabIds.includes(tab.id) || getTabRouter(tab.id)),
-        activeTabId,
-        liveTabCap,
-        visibleTabIds,
-      ),
-    [tabs, activeTabId, liveTabCap, visibleTabIds],
-  );
+  const liveIds = useMemo(() => {
+    const retainedTabIds = [...visibleTabIds, ...displayedTabIds];
+    return resolveLiveTabIds(
+      // Persisted tabs are cold until first shown; only retain already-created routers.
+      tabs.filter((tab) => retainedTabIds.includes(tab.id) || getTabRouter(tab.id)),
+      activeTabId,
+      liveTabCap,
+      retainedTabIds,
+    );
+  }, [tabs, activeTabId, liveTabCap, visibleTabIds, displayedTabIds]);
+
+  const displayedActiveTabId =
+    activeTabId && displayedTabIds.includes(activeTabId)
+      ? activeTabId
+      : (displayedTabIds[0] ?? null);
+
+  useLayoutEffect(() => {
+    useDisplayedTabStore.setState({ tabId: displayedActiveTabId });
+  }, [displayedActiveTabId]);
+
+  useEffect(() => {
+    flushHiddenTabRestores(displayedTabIds);
+  }, [displayedTabIds]);
 
   useEffect(() => {
     const liveSet = new Set(liveIds);
@@ -187,7 +219,10 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   }, [liveIds]);
 
   const liveSet = new Set(liveIds);
-  const visibleSet = new Set(visibleTabIds);
+  const visibleSet = new Set(displayedTabIds);
+  // A held tab must not pre-mount: a hidden RouterProvider has no subscription,
+  // so it would reveal its pre-load (empty) state once the router initializes.
+  const heldSet = new Set(visibleTabIds.filter((id) => !visibleSet.has(id)));
 
   const handleDividerPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
@@ -206,7 +241,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   return (
     <div style={rootStyle}>
       {tabs
-        .filter((tab) => liveSet.has(tab.id))
+        .filter((tab) => liveSet.has(tab.id) && !heldSet.has(tab.id))
         .map((tab) => {
           const isVisible = visibleSet.has(tab.id);
           const isPrimary = effectiveSplitView?.primaryTabId === tab.id;

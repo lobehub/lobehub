@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
-import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
+import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatible';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';

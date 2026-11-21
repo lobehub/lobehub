@@ -1,5 +1,6 @@
 import { setPostRenderReady } from '../atoms/app';
 import { startConnectorInitialization } from './connectors';
+import { purgeLegacySWRCache } from './purgeLegacySWRCache';
 import { shouldSkipRoutePreload, startRoutePreload } from './routePreload';
 import { ensureBuiltinToolSurfaces } from './toolSurfaces';
 
@@ -60,5 +61,7 @@ export const startPostRenderInitialization = () => {
     } catch (error) {
       console.error('[SPA Initialize] route preload initialization failed', error);
     }
+
+    void purgeLegacySWRCache();
   });
 };

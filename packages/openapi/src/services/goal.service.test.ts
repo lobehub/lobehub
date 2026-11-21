@@ -122,7 +122,7 @@ describe('GoalRestService creator gate on restart/delete', () => {
 
     const svc = service(WORKSPACE);
     await expect(svc.restartGoal('goal-1', {})).resolves.toEqual({ restartedTaskIds: ['task-1'] });
-    await expect(svc.deleteGoal('goal-1')).resolves.toBeUndefined();
+    await expect(svc.deleteGoal('goal-1')).resolves.toEqual({ deleted: true, id: 'goal-1' });
     expect(deleteGoalMock).toHaveBeenCalledWith('goal-1');
   });
 

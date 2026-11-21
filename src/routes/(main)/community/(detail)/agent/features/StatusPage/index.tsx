@@ -1,7 +1,6 @@
 'use client';
 
-import { FluentEmoji } from '@lobehub/ui';
-import { Button, Result, Text } from '@lobehub/ui/base-ui';
+import { Button, FluentEmoji, Result, Text } from '@lobehub/ui';
 import { CircleAlertIcon, FolderOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -17,7 +16,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {
-    navigate('/community/agent');
+    navigate('/marketplace/agent');
   };
 
   // Under review status

@@ -24,6 +24,11 @@ vi.mock('../codex/CodexAppServerClient', async (importOriginal) => {
   };
 });
 
+// Transport tests use virtual paths; real filesystem failures are covered by the catalog tests.
+vi.mock('../spawn/workingDirectory', () => ({
+  resolveHeteroSpawnCwd: vi.fn((cwd: string) => cwd),
+}));
+
 const options = {
   commandPath: '/custom/codex',
   cwd: '/repo',
@@ -34,6 +39,22 @@ const options = {
 describe('Codex model discovery', () => {
   beforeEach(() => vi.resetAllMocks());
   afterEach(() => vi.useRealTimers());
+
+  it('preserves account-specific speed tiers and the default model without guessing access', async () => {
+    request.mockResolvedValue({
+      data: [
+        { model: 'gpt-6.1-sol', isDefault: true, serviceTiers: [{ id: 'priority', name: 'Fast' }] },
+        { model: 'gpt-6-astra', serviceTiers: [{ id: 'priority' }, { id: 'ultrafast' }] },
+        { model: 'restricted', serviceTiers: [], additionalSpeedTiers: ['ultrafast'] },
+        { model: 'older-cli', additionalSpeedTiers: ['fast'] },
+      ],
+    });
+    const models = await listCodexModels(options);
+    expect(models[0]).toMatchObject({ isDefault: true, speedModes: ['normal', 'fast'] });
+    expect(models[1]).toMatchObject({ speedModes: ['normal', 'fast', 'ultrafast'] });
+    expect(models[2]).toMatchObject({ speedModes: ['normal'] });
+    expect(models[3]).toMatchObject({ speedModes: ['normal', 'fast'] });
+  });
 
   it('reads all pages without creating a task and returns CLI model values, labels and ordering', async () => {
     request

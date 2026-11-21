@@ -69,7 +69,9 @@ let opSeq = 0;
 const insertOperation = async (params: {
   cost?: Record<string, unknown> | null;
   id?: string;
+  model?: string;
   parentOperationId?: string;
+  provider?: string;
   topicId?: string | null;
   usage?: Record<string, unknown> | null;
   userId?: string;
@@ -78,7 +80,9 @@ const insertOperation = async (params: {
   await serverDB.insert(agentOperations).values({
     cost: params.cost ?? null,
     id,
+    model: params.model ?? null,
     parentOperationId: params.parentOperationId ?? null,
+    provider: params.provider ?? null,
     status: 'done',
     topicId: params.topicId === undefined ? topicId : params.topicId,
     usage: params.usage ?? null,
@@ -565,6 +569,100 @@ describe('recomputeTopicUsage', () => {
         selectRequests: 0,
         totalWaitingTimeMs: 4000,
       });
+    });
+  });
+
+  describe('lump-sum operation LLM cost (heterogeneous CLI runs)', () => {
+    it('fills the LLM cost from the op total when its messages carry tokens but no cost', async () => {
+      await insertAssistantMessage({
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+        usage: { totalInputTokens: 1000, totalOutputTokens: 200, totalTokens: 1200 },
+      });
+      await insertAssistantMessage({
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+        usage: { totalInputTokens: 500, totalOutputTokens: 100, totalTokens: 600 },
+      });
+      await insertOperation({
+        cost: { total: 7.92 },
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+      });
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect(topic.totalCost).toBeCloseTo(7.92, 6);
+      expect(topic.totalTokens).toBe(1800);
+      expect((topic.cost as any).llm.total).toBeCloseTo(7.92, 6);
+      expect((topic.cost as any).llm.byModel).toEqual([
+        expect.objectContaining({
+          id: 'claude-code/claude-opus-5-5',
+          model: 'claude-opus-5-5',
+          provider: 'claude-code',
+          totalCost: 7.92,
+          usage: expect.objectContaining({ cost: 7.92, totalTokens: 1800 }),
+        }),
+      ]);
+    });
+
+    it('sums lump-sum ops and keeps tool cost out of the LLM share', async () => {
+      await insertOperation({
+        cost: { total: 1 },
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+      });
+      await insertOperation({
+        cost: {
+          tools: { byTool: [{ calls: 1, name: 'web-search', totalCost: 0.25 }], total: 0.25 },
+          total: 2.25,
+        },
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+      });
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect((topic.cost as any).llm.total).toBeCloseTo(3, 6);
+      expect((topic.cost as any).tools.total).toBeCloseTo(0.25, 6);
+      expect(topic.totalCost).toBeCloseTo(3.25, 6);
+    });
+
+    it('does not double count a lump-sum op whose provider already itemizes cost on messages', async () => {
+      await insertAssistantMessage({
+        cost: 0.04,
+        model: 'deepseek-flash',
+        provider: 'lobehub',
+        usage: { totalInputTokens: 100, totalOutputTokens: 10, totalTokens: 110 },
+      });
+      await insertOperation({
+        cost: { total: 0.04 },
+        model: 'deepseek-flash',
+        provider: 'lobehub',
+      });
+
+      await recompute();
+
+      expect((await getTopic()).totalCost).toBeCloseTo(0.04, 6);
+    });
+
+    it('ignores an op total that already carries an llm breakdown', async () => {
+      await insertAssistantMessage({
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+        usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+      });
+      await insertOperation({
+        cost: { llm: { byModel: [], currency: 'USD', total: 0.5 }, total: 0.5 },
+        model: 'claude-opus-5-5',
+        provider: 'claude-code',
+      });
+
+      await recompute();
+
+      expect((await getTopic()).totalCost).toBeNull();
     });
   });
 });

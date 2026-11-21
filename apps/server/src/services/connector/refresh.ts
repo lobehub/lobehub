@@ -1,6 +1,8 @@
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import type { LobeChatDatabase } from '@lobechat/database';
+import { connectorMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorMcpConnectionType } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -42,10 +44,31 @@ const pruneAttempts = (now: number): void => {
   }
 };
 
+/**
+ * The sync context that can write a resolved connector's rows. A private
+ * agent's workspace run can resolve its owner's personal connector, whose
+ * connector and tool rows live in the personal scope the run's
+ * workspace-scoped models cannot write (`ConnectorModel.forRow`), so its tool
+ * list is refreshed through that scope. Every other row is in the run's own
+ * scope. `undefined` when the personal scope can't be reached (no database).
+ */
+export const connectorSyncContextForRow = (
+  ctx: ConnectorToolSyncContext,
+  row: { userId: string; workspaceId: string | null },
+  db: LobeChatDatabase | undefined,
+): ConnectorToolSyncContext | undefined => {
+  const connectorModel = ctx.connectorModel.forRow(row);
+  if (connectorModel === ctx.connectorModel) return ctx;
+  if (!db) return undefined;
+  return { connectorModel, connectorToolModel: new ConnectorToolModel(db, row.userId) };
+};
+
 export interface StaleRefreshConnector {
   id: string;
   mcpConnectionType: ConnectorMcpConnectionType | string | null;
   mcpServerUrl: string | null;
+  /** Read for `connectVia`: a connector set to connect through the device is skipped. */
+  metadata?: { connectVia?: unknown } | null;
 }
 
 /**
@@ -89,7 +112,8 @@ export const buildLastSyncedAtMap = (
 export const scheduleStaleConnectorToolsRefresh = (
   connectors: StaleRefreshConnector[],
   lastSyncedAtById: Map<string, number>,
-  ctx: ConnectorToolSyncContext,
+  /** `userId` decides the `mcp_apps` flag the refresh lists tools under. */
+  ctx: ConnectorToolSyncContext & { userId?: string | null },
   now: number = Date.now(),
 ): void => {
   // This runs inline on the request/agent-run hot path. It is a best-effort
@@ -104,12 +128,18 @@ export const scheduleStaleConnectorToolsRefresh = (
       // machine); skip anything without an HTTP endpoint.
       if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) continue;
       if (!connector.mcpServerUrl) continue;
-      // Localhost / private-network endpoints are unreachable from the CLOUD
-      // server — their tool list is synced by the desktop client instead
-      // (`syncToolsFromClientById`). Gate on the device gateway being
-      // configured: a self-hosted server may share a LAN with the endpoint
-      // and can legitimately refresh it.
-      if (deviceGateway.isConfigured && isLocalOrPrivateUrl(connector.mcpServerUrl)) continue;
+      // Device-routed endpoints (localhost / private network, or set to connect
+      // through the device) are unreachable from the CLOUD server — their tool
+      // list is synced on the device instead, when the user installs or
+      // refreshes it. Gated on the device gateway being configured
+      // (`shouldConnectViaDevice`): a self-hosted server may share a LAN with
+      // the endpoint and can legitimately refresh it.
+      if (
+        shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+          deviceGatewayConfigured: deviceGateway.isConfigured,
+        })
+      )
+        continue;
 
       const { id } = connector;
       // Throttle on whichever is more recent: the DB tool marker or the last
@@ -123,7 +153,8 @@ export const scheduleStaleConnectorToolsRefresh = (
       try {
         after(async () => {
           try {
-            const { toolCount } = await syncConnectorToolsById(id, ctx);
+            // Device-routed connectors were skipped above: none tunnels here
+            const { toolCount } = await syncConnectorToolsById(id, { ...ctx, serverDB: undefined });
             log('auto-refreshed connector %s: %d tools', id, toolCount);
           } catch (err) {
             // Remote unreachable / auth failure / etc. — best-effort background

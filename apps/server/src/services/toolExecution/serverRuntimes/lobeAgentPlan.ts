@@ -4,6 +4,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
 
 /**
  * Build a server-side `PlanRuntimeService` backed by the application database.
@@ -47,6 +48,13 @@ export const createServerPlanRuntimeService = (
 
   return {
     createPlan: async ({ topicId, goal, description, content }) => {
+      await assertDocumentWriteWithinLimit({
+        charCount: content.length,
+        source: 'agent',
+        userId,
+        workspaceId,
+      });
+
       const doc = await documentModel.create({
         content,
         description,
@@ -92,6 +100,14 @@ export const createServerPlanRuntimeService = (
       if (goal !== undefined) updateData.title = goal;
       if (description !== undefined) updateData.description = description;
       if (content !== undefined) {
+        const existing = await documentModel.findById(id);
+        await assertDocumentWriteWithinLimit({
+          charCount: content.length,
+          previousCharCount: existing?.content?.length ?? 0,
+          source: 'agent',
+          userId,
+          workspaceId,
+        });
         updateData.content = content;
         updateData.totalCharCount = content.length;
         updateData.totalLineCount = content.split('\n').length;

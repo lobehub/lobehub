@@ -2,18 +2,17 @@ import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
 /**
- * Hook to extract folder slug from URL
- * Supports Google Drive-style slug-based folder navigation
+ * Hook to extract the current folder from URL
  *
  * Example URLs:
- * - /resource/library/kb_123 -> { knowledgeBaseId: 'kb_123', currentFolderSlug: null, isInKnowledgeBase: true }
- * - /resource/library/kb_123/folder-slug-1 -> { knowledgeBaseId: 'kb_123', currentFolderSlug: 'folder-slug-1', isInKnowledgeBase: true }
- * - /knowledge -> { knowledgeBaseId: null, currentFolderSlug: null, isInKnowledgeBase: false }
+ * - /resource/library/kb_123 -> { knowledgeBaseId: 'kb_123', currentFolderId: null, isInKnowledgeBase: true }
+ * - /resource/library/kb_123/folder/docs_1 -> { knowledgeBaseId: 'kb_123', currentFolderId: 'docs_1', isInKnowledgeBase: true }
+ * - /knowledge -> { knowledgeBaseId: null, currentFolderId: null, isInKnowledgeBase: false }
  */
 export const useFolderPath = () => {
   // Active-tab variants, not the raw router hooks: `LibraryHierarchy` renders in
   // the sidebar, which Electron portals into the shell's frozen root router.
-  const params = useActiveRouteParams<{ id: string; slug?: string }>();
+  const params = useActiveRouteParams<{ folderId?: string; id: string }>();
   const location = useActiveLocation();
 
   // Extract knowledge base ID from params
@@ -22,11 +21,10 @@ export const useFolderPath = () => {
   // Determine if we're in a knowledge base context
   const isInKnowledgeBase = location.pathname.includes('/resource/library/');
 
-  // Extract folder slug from params (single slug, not nested paths)
-  const currentFolderSlug = params.slug || null;
+  const currentFolderId = params.folderId || null;
 
   return {
-    currentFolderSlug,
+    currentFolderId,
     isInKnowledgeBase,
     knowledgeBaseId,
   };

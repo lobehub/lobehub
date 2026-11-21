@@ -48,7 +48,7 @@ describe('stashBuiltinToolWorkIntent (client dispatch)', () => {
     expect(takeWorkIntent(ctx.toolCallId)).toEqual({
       action: 'create',
       changeType: 'created',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
   });
@@ -104,7 +104,7 @@ describe('stashBuiltinToolWorkIntent (client dispatch)', () => {
 
     expect(takeWorkIntent(ctx.toolCallId)).toEqual({
       action: 'delete',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
   });

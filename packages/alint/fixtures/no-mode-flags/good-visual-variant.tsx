@@ -1,5 +1,5 @@
 // Fixture: a size variant only changes styling.
-import { Avatar } from '@lobehub/ui/base-ui';
+import { Avatar } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface Props {

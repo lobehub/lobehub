@@ -1,7 +1,15 @@
 'use client';
 
-import { Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  stopPropagation,
+  Tooltip,
+} from '@lobehub/ui';
 import { CircleDashedIcon, HammerIcon, LayersIcon, MessageSquareQuoteIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo } from 'react';
@@ -205,7 +213,7 @@ const Scores = memo<ScoresProps>(
               query: {
                 activeTab: McpNavKey.Score,
               },
-              url: urlJoin('/community/mcp', identifier),
+              url: urlJoin('/marketplace/mcp', identifier),
             })}
           >
             {isValidated ? scoreTag : unvalidatedTag}
@@ -217,7 +225,7 @@ const Scores = memo<ScoresProps>(
               query: {
                 activeTab: McpNavKey.Schema,
               },
-              url: urlJoin('/community/mcp', identifier),
+              url: urlJoin('/marketplace/mcp', identifier),
             })}
           >
             <Flexbox horizontal align={'center'} className={styles.extraTag} gap={16}>

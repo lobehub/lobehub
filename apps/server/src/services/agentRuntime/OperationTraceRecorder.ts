@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
 import type { ChatMessageErrorAttribution, ChatMessageErrorSeverity } from '@lobechat/types';
 import debug from 'debug';
@@ -7,6 +9,25 @@ import type { StepCompletionReason, StepPresentationData } from './types';
 const log = debug('lobe-server:operation-trace-recorder');
 
 type SignalEvent = { [key: string]: unknown; type: string };
+
+/** Pool candidates of one step: ref → JSON text of the value it names. */
+type CePoolCandidates = Map<string, string>;
+
+/** One captured step's CE payload before it is pooled against the partial. */
+interface CapturedCe {
+  candidates: CePoolCandidates;
+  /** Refs of the output messages, in order, when the output is a list. */
+  outputRefs?: string[];
+}
+
+/** What the partial already pools, so a step stores only what is new. */
+interface CePoolState {
+  /** The last pooled output list: its node ancestry (root first) and message refs. */
+  lastOutput?: { chain: Array<{ length: number; ref: string }>; refs: string[] };
+  refs: Set<string>;
+}
+
+const ceRef = (json: string) => createHash('sha256').update(json).digest('base64url').slice(0, 22);
 
 export interface AppendStepParams {
   afterStepSignalEvents: SignalEvent[];
@@ -98,7 +119,12 @@ export class OperationTraceRecorder {
    * Measured in production (Tempo, 75 steps): ~570ms GET + ~960ms PUT per step,
    * on the critical path between two steps of an inlined run.
    */
-  private cached: { operationId: string; partial: Partial<ExecutionSnapshot> } | null = null;
+  private cached: {
+    /** The partial's CE pool index, built on first use. */
+    cePool?: CePoolState;
+    operationId: string;
+    partial: Partial<ExecutionSnapshot>;
+  } | null = null;
 
   /** In-flight upload, if any. Never rejects — `drainSaves` logs and continues. */
   private pendingSave: Promise<void> | undefined;
@@ -124,8 +150,8 @@ export class OperationTraceRecorder {
       this.initPartialHeader(partial, params.agentState);
 
       if (!partial.steps) partial.steps = [];
-      const newStep = this.buildStepSnapshot(params);
-      this.deduplicateCeSnapshot(newStep, partial.steps);
+      const { ce, step: newStep } = this.buildStepSnapshot(params);
+      this.poolCeSnapshot(newStep, ce, partial.steps, this.cePoolState(partial));
       partial.steps.push(newStep);
 
       // Upload in the background: the next step only needs the in-memory copy,
@@ -299,59 +325,180 @@ export class OperationTraceRecorder {
       // Forget the partial before deleting it, so a late `appendStep` on this
       // recorder cannot re-upload the object we just removed.
       this.discardPartial();
-      await this.store.removePartial(operationId);
+      // Human intervention and async tools can continue this operation id. Keep
+      // the partial alongside the readable waiting snapshot until the real end.
+      if (
+        params.completionReason !== 'waiting_for_human' &&
+        params.completionReason !== 'waiting_for_async_tool'
+      ) {
+        await this.store.removePartial(operationId);
+      }
     } catch (e) {
       log('[%s] snapshot finalize failed (reason=%s): %O', operationId, params.completionReason, e);
     }
   }
 
-  /**
-   * Strip `contextEngine` input/output/metadata fields that are identical to the
-   * most-recently stored values in previous steps. The viewer reconstructs the
-   * full snapshot by walking back through the step list (same pattern as
-   * messagesBaseline + messagesDelta).
-   */
-  private deduplicateCeSnapshot(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
-    if (!step.contextEngine) return;
+  /** Index what the partial's steps already pooled — recorded values are never repeated. */
+  private cePoolState(partial: Partial<ExecutionSnapshot>): CePoolState {
+    if (this.cached?.partial === partial && this.cached.cePool) return this.cached.cePool;
 
-    let lastInputJson: string | undefined;
-    let lastMetadataJson: string | undefined;
-    let lastOutputJson: string | undefined;
+    const pool = new Map<string, unknown>();
+    for (const step of partial.steps ?? []) {
+      for (const [ref, value] of Object.entries(step.contextEngine?.pool ?? {})) {
+        pool.set(ref, value);
+      }
+    }
+    const state: CePoolState = { refs: new Set(pool.keys()) };
 
-    for (let i = prevSteps.length - 1; i >= 0; i--) {
-      const prev = prevSteps[i];
-      if (!prev.contextEngine) continue;
-      if (lastInputJson === undefined && prev.contextEngine.input !== undefined) {
-        lastInputJson = JSON.stringify(prev.contextEngine.input);
-      }
-      if (lastMetadataJson === undefined && prev.contextEngine.metadata !== undefined) {
-        lastMetadataJson = JSON.stringify(prev.contextEngine.metadata);
-      }
-      if (lastOutputJson === undefined && prev.contextEngine.output !== undefined) {
-        lastOutputJson = JSON.stringify(prev.contextEngine.output);
-      }
-      if (
-        lastInputJson !== undefined &&
-        lastMetadataJson !== undefined &&
-        lastOutputJson !== undefined
-      )
-        break;
+    // Extend the list of the last recorded step. Any earlier list would also be
+    // correct; the most recent one shares the longest prefix.
+    const lastRef = partial.steps?.findLast((step) => step.contextEngine?.outputRef)?.contextEngine
+      ?.outputRef;
+    const nodes: Array<{ base?: string; ref: string; refs: string[] }> = [];
+    for (let ref = lastRef; ref !== undefined && nodes.length <= pool.size;) {
+      const node = pool.get(ref) as { base?: string; refs: string[] } | undefined;
+      if (!node) break;
+      nodes.unshift({ ...node, ref });
+      ref = node.base;
+    }
+    if (lastRef !== undefined && nodes[0] && nodes[0].base === undefined) {
+      const refs: string[] = [];
+      const chain = nodes.map((node) => {
+        refs.push(...node.refs);
+        return { length: refs.length, ref: node.ref };
+      });
+      state.lastOutput = { chain, refs };
     }
 
-    const storeInput =
-      lastInputJson === undefined || JSON.stringify(step.contextEngine.input) !== lastInputJson;
-    const storeMetadata =
-      step.contextEngine.metadata !== undefined &&
-      (lastMetadataJson === undefined ||
-        JSON.stringify(step.contextEngine.metadata) !== lastMetadataJson);
-    const storeOutput =
-      lastOutputJson === undefined || JSON.stringify(step.contextEngine.output) !== lastOutputJson;
+    if (this.cached?.partial === partial) this.cached.cePool = state;
+    return state;
+  }
 
-    step.contextEngine = {
-      ...(storeInput ? { input: step.contextEngine.input } : {}),
-      ...(storeMetadata ? { metadata: step.contextEngine.metadata } : {}),
-      ...(storeOutput ? { output: step.contextEngine.output } : {}),
+  /**
+   * Store only what the partial does not hold yet. The output list becomes a
+   * node extending the longest prefix it shares with the last recorded list,
+   * every value lands in this step's pool unless an earlier step pooled it, and
+   * `metadata` is dropped when it equals the last stored one. A long run
+   * re-sends nearly the same messages on every LLM call, so storing whole
+   * payloads per step grows the trace — and the per-step read and rewrite of
+   * the partial — with steps × context size. `resolveContextEngineSteps`
+   * reverses this.
+   */
+  private poolCeSnapshot(
+    step: StepSnapshot,
+    captured: CapturedCe,
+    prevSteps: StepSnapshot[],
+    state: CePoolState,
+  ): void {
+    const ce = step.contextEngine;
+    if (!ce) return;
+
+    const { candidates, outputRefs } = captured;
+    if (outputRefs) {
+      const last = state.lastOutput;
+      let shared = 0;
+      while (
+        last &&
+        shared < last.refs.length &&
+        shared < outputRefs.length &&
+        last.refs[shared] === outputRefs[shared]
+      ) {
+        shared++;
+      }
+      const ancestorIndex = last ? last.chain.findLastIndex((node) => node.length <= shared) : -1;
+      const ancestor = ancestorIndex >= 0 ? last!.chain[ancestorIndex] : undefined;
+
+      if (ancestor && ancestor.length === outputRefs.length) {
+        ce.outputRef = ancestor.ref;
+      } else {
+        const node = {
+          ...(ancestor && { base: ancestor.ref }),
+          refs: outputRefs.slice(ancestor?.length ?? 0),
+        };
+        const json = JSON.stringify(node);
+        ce.outputRef = ceRef(json);
+        candidates.set(ce.outputRef, json);
+      }
+      state.lastOutput = {
+        chain: [
+          ...(last?.chain.slice(0, ancestorIndex + 1) ?? []),
+          ...(ancestor?.ref === ce.outputRef
+            ? []
+            : [{ length: outputRefs.length, ref: ce.outputRef }]),
+        ],
+        refs: outputRefs,
+      };
+    }
+
+    const pool: Record<string, unknown> = {};
+    for (const [ref, json] of candidates) {
+      if (state.refs.has(ref)) continue;
+      pool[ref] = JSON.parse(json);
+      state.refs.add(ref);
+    }
+    if (Object.keys(pool).length > 0) ce.pool = pool;
+
+    if (ce.metadata === undefined) return;
+    const lastMetadata = prevSteps.findLast((prev) => prev.contextEngine?.metadata !== undefined)
+      ?.contextEngine?.metadata;
+    if (
+      lastMetadata !== undefined &&
+      JSON.stringify(ce.metadata) === JSON.stringify(lastMetadata)
+    ) {
+      delete ce.metadata;
+    }
+  }
+
+  /**
+   * Capture the CE payload as JSON now: the next step can mutate the source
+   * objects while a trace read is pending, and Dates convert once here instead
+   * of on every serialization of the partial. Object inputs become refs and
+   * array outputs message refs (values go to the pool candidates); other
+   * shapes stay whole.
+   */
+  private captureCeSnapshot(ceInput: AppendStepParams['contextEngine']): {
+    ce: CapturedCe;
+    contextEngine: StepSnapshot['contextEngine'];
+  } {
+    const ce: CapturedCe = { candidates: new Map() };
+    if (!ceInput) return { ce, contextEngine: undefined };
+
+    const toRef = (value: unknown): string | undefined => {
+      const json = JSON.stringify(value);
+      if (json === undefined) return undefined;
+      const ref = ceRef(json);
+      ce.candidates.set(ref, json);
+      return ref;
     };
+    const copy = (value: unknown) => {
+      const json = JSON.stringify(value);
+      return json === undefined ? undefined : JSON.parse(json);
+    };
+
+    const contextEngine: NonNullable<StepSnapshot['contextEngine']> = {};
+    const { input, metadata, output } = ceInput;
+
+    if (input && typeof input === 'object' && !Array.isArray(input)) {
+      const inputRefs: Record<string, string> = {};
+      for (const [key, value] of Object.entries(input)) {
+        const ref = toRef(value);
+        if (ref !== undefined) inputRefs[key] = ref;
+      }
+      contextEngine.inputRefs = inputRefs;
+    } else if (input !== undefined) {
+      contextEngine.input = copy(input);
+    }
+
+    if (Array.isArray(output)) {
+      // JSON turns a hole or `undefined` element into `null`; keep that meaning.
+      ce.outputRefs = output.map((value) => toRef(value) ?? toRef(null)!);
+    } else if (output !== undefined) {
+      contextEngine.output = copy(output);
+    }
+
+    if (metadata !== undefined) contextEngine.metadata = copy(metadata);
+
+    return { ce, contextEngine };
   }
 
   private initPartialHeader(partial: any, agentState: any): void {
@@ -362,7 +509,7 @@ export class OperationTraceRecorder {
       agentState?.world?.agent?.provider ?? agentState?.modelRuntimeConfig?.provider;
   }
 
-  private buildStepSnapshot(params: AppendStepParams): StepSnapshot {
+  private buildStepSnapshot(params: AppendStepParams): { ce: CapturedCe; step: StepSnapshot } {
     const {
       agentState,
       afterStepSignalEvents,
@@ -387,11 +534,8 @@ export class OperationTraceRecorder {
 
     // CE data is structural state, not a streaming event — delivered via the
     // typed `contextEngine` field on AppendStepParams (sourced from
-    // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
-    // pattern as messagesBaseline/messagesDelta.
-    const contextEngine: StepSnapshot['contextEngine'] = ceInput
-      ? { input: ceInput.input, metadata: ceInput.metadata, output: ceInput.output }
-      : undefined;
+    // RuntimeExecutorContext.tracingContextEngine).
+    const { ce, contextEngine } = this.captureCeSnapshot(ceInput);
 
     // Strip heavy/redundant data from events before persisting to snapshot.
     const rawEvents = (stepResult.events as any[]) ?? [];
@@ -448,7 +592,7 @@ export class OperationTraceRecorder {
         ? afterActivated.slice(prevActivated.length)
         : undefined;
 
-    return {
+    const step: StepSnapshot = {
       activatedStepToolsDelta,
       contextEngine,
       completedAt: Date.now(),
@@ -477,5 +621,6 @@ export class OperationTraceRecorder {
       totalCost: presentation.stepCost ?? 0,
       totalTokens: presentation.stepTotalTokens ?? 0,
     };
+    return { ce, step };
   }
 }

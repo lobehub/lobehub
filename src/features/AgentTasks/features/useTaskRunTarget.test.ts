@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useTaskRunTarget } from './useTaskRunTarget';
+import { getTaskDeviceLockReason, useTaskRunTarget } from './useTaskRunTarget';
 
 const DEVICE_AGENT_BOUND = 'device-agent-bound';
 const DEVICE_TASK_PIN = 'device-task-pin';
@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   activeTopicAgency: undefined as undefined | { agencyConfig: Record<string, unknown> },
   agentState: { agentMap: {} as Record<string, { workspaceId?: string }> },
   devices: [] as { deviceId: string; scope?: string; visibility?: string }[],
+  devicesConfirmed: true,
+  devicesError: undefined as unknown,
+  mutateDevices: vi.fn(),
   electron: { currentDeviceId: undefined as string | undefined, isDesktop: false },
 }));
 
@@ -50,8 +53,15 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/features/DeviceManager/useDeviceList', () => ({
-  useDeviceList: () => ({ data: mocks.devices, isLoading: false }),
+vi.mock('@/store/device/useDeviceList', () => ({
+  useDeviceList: () => ({
+    data: mocks.devices,
+    error: mocks.devicesError,
+    isConfirmed: mocks.devicesConfirmed,
+    isLoading: false,
+    isValidating: false,
+    mutate: mocks.mutateDevices,
+  }),
 }));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
@@ -82,6 +92,9 @@ const deviceBoundAgent = {
 
 beforeEach(() => {
   mocks.activeTopicAgency = undefined;
+  mocks.devicesConfirmed = true;
+  mocks.devicesError = undefined;
+  mocks.mutateDevices.mockReset();
   mocks.agency.agencyConfig = {};
   mocks.agency.canSelectExecutionTarget = true;
   mocks.agency.isPreferenceLoading = false;
@@ -90,16 +103,50 @@ beforeEach(() => {
   mocks.electron = { currentDeviceId: undefined, isDesktop: false };
 });
 
+const AS_CREATOR = { canPinPrivateDevices: true };
+
 describe('useTaskRunTarget', () => {
   // A task's runs never carry the open chat topic's binding, so the machine
   // shown for a task must not follow whatever conversation happens to be active.
+  it('keeps the target controls pending while the device list is the stored copy', () => {
+    mocks.devices = [PERSONAL_DEVICE];
+    mocks.devicesConfirmed = false;
+
+    const { result, rerender } = renderHook(() =>
+      useTaskRunTarget('agent-1', undefined, AS_CREATOR),
+    );
+
+    // A stored row may since have been deleted or unshared: no pin from it yet.
+    expect(result.current.isPending).toBe(true);
+
+    mocks.devicesConfirmed = true;
+    rerender();
+
+    expect(result.current.isPending).toBe(false);
+  });
+
+  it('unlocks with a retry, not a pin, when the unconfirmed device list fails to load', () => {
+    mocks.devices = [PERSONAL_DEVICE];
+    mocks.devicesConfirmed = false;
+    mocks.devicesError = new Error('network down');
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
+
+    // Not stuck pending: the chip opens and says why, offering a retry.
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.devicesFailed).toBe(true);
+
+    result.current.retryDevices();
+    expect(mocks.mutateDevices).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores the active chat topic device binding', () => {
     mocks.agency.agencyConfig = deviceBoundAgent;
     mocks.activeTopicAgency = {
       agencyConfig: { ...deviceBoundAgent, boundDeviceId: 'device-chat-topic' },
     };
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
 
     expect(result.current.deviceId).toBe(DEVICE_AGENT_BOUND);
   });
@@ -110,7 +157,7 @@ describe('useTaskRunTarget', () => {
     // no way to pick a directory even though the runner supports one.
     mocks.agency.agencyConfig = deviceBoundAgent;
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
 
     expect(result.current.deviceId).toBe(DEVICE_AGENT_BOUND);
     expect(result.current.directoryKind).toBe('device');
@@ -126,7 +173,7 @@ describe('useTaskRunTarget', () => {
       heterogeneousProvider: { type: 'claude-code' },
     };
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
 
     expect(result.current.inheritedTarget).toBe('local');
     expect(result.current.deviceId).toBe('device-this-desktop');
@@ -142,7 +189,7 @@ describe('useTaskRunTarget', () => {
       heterogeneousProvider: { type: 'claude-code' },
     };
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
 
     expect(result.current.deviceId).toBe(DEVICE_AGENT_BOUND);
     expect(result.current.directoryKind).toBe('device');
@@ -159,7 +206,7 @@ describe('useTaskRunTarget', () => {
       heterogeneousProvider: { type: 'claude-code' },
     };
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
 
     expect(result.current.deviceId).toBeUndefined();
     expect(result.current.directoryKind).not.toBe('device');
@@ -175,7 +222,7 @@ describe('useTaskRunTarget', () => {
     };
     mocks.agency.canSelectExecutionTarget = false;
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1', DEVICE_TASK_PIN));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', DEVICE_TASK_PIN, AS_CREATOR));
 
     expect(result.current.pinnedDeviceId).toBeUndefined();
     expect(result.current.isDeviceTarget).toBe(false);
@@ -187,7 +234,7 @@ describe('useTaskRunTarget', () => {
     mocks.agency.agencyConfig = deviceBoundAgent;
     mocks.agency.canSelectExecutionTarget = false;
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1', DEVICE_TASK_PIN));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', DEVICE_TASK_PIN, AS_CREATOR));
 
     expect(result.current.pinnedDeviceId).toBeUndefined();
     expect(result.current.deviceId).toBe(DEVICE_AGENT_BOUND);
@@ -199,7 +246,7 @@ describe('useTaskRunTarget', () => {
       heterogeneousProvider: { type: 'claude-code' },
     };
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1', DEVICE_TASK_PIN));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', DEVICE_TASK_PIN, AS_CREATOR));
 
     expect(result.current.pinnedDeviceId).toBe(DEVICE_TASK_PIN);
     expect(result.current.isDeviceTarget).toBe(true);
@@ -217,7 +264,9 @@ describe('useTaskRunTarget', () => {
     mocks.agentState.agentMap = { 'agent-1': { workspaceId: 'ws-1' } };
     mocks.devices = [PERSONAL_DEVICE, WORKSPACE_DEVICE];
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1', PERSONAL_DEVICE.deviceId));
+    const { result } = renderHook(() =>
+      useTaskRunTarget('agent-1', PERSONAL_DEVICE.deviceId, AS_CREATOR),
+    );
 
     expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
       WORKSPACE_DEVICE.deviceId,
@@ -225,18 +274,37 @@ describe('useTaskRunTarget', () => {
     expect(result.current.pinnedDeviceId).toBe(PERSONAL_DEVICE.deviceId);
   });
 
-  it('offers a shared task only public workspace devices', () => {
-    // Automated runs execute as the task's creator, who cannot resolve a
-    // colleague's private workspace device — so a private row is not pinnable.
+  it('offers a collaborator on someone else’s task only public workspace devices', () => {
+    // Scheduled runs execute as the task's creator, who cannot resolve a
+    // collaborator's private workspace device.
     mocks.agentState.agentMap = { 'agent-1': { workspaceId: 'ws-1' } };
     mocks.devices = [
       { deviceId: 'device-private', scope: 'workspace', visibility: 'private' },
       WORKSPACE_DEVICE,
     ];
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() =>
+      useTaskRunTarget('agent-1', undefined, { canPinPrivateDevices: false }),
+    );
 
     expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
+      WORKSPACE_DEVICE.deviceId,
+    ]);
+  });
+
+  it('offers the task creator their own private devices with the public pool', () => {
+    // A device list only carries the caller's own private rows, and a Task's
+    // runs execute as its creator, who resolves the machine they enrolled.
+    mocks.agentState.agentMap = { 'agent-1': { workspaceId: 'ws-1' } };
+    mocks.devices = [
+      { deviceId: 'device-private', scope: 'workspace', visibility: 'private' },
+      WORKSPACE_DEVICE,
+    ];
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
+
+    expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
+      'device-private',
       WORKSPACE_DEVICE.deviceId,
     ]);
   });
@@ -244,10 +312,27 @@ describe('useTaskRunTarget', () => {
   it('offers an agent outside a workspace only its own machines', () => {
     mocks.devices = [PERSONAL_DEVICE, WORKSPACE_DEVICE];
 
-    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+    const { result } = renderHook(() => useTaskRunTarget('agent-1', undefined, AS_CREATOR));
 
     expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
       PERSONAL_DEVICE.deviceId,
     ]);
+  });
+});
+
+describe('getTaskDeviceLockReason', () => {
+  it('explains a lock caused by the unconfirmed device list as pending, not fixed', () => {
+    expect(getTaskDeviceLockReason({ canSelect: true, isPending: true })).toBe('pending');
+  });
+
+  it('keeps the fixed reason for an author-fixed policy or a disabled form', () => {
+    expect(getTaskDeviceLockReason({ canSelect: false, isPending: true })).toBe('fixed');
+    expect(getTaskDeviceLockReason({ canSelect: true, disabled: true, isPending: false })).toBe(
+      'fixed',
+    );
+  });
+
+  it('does not lock a selectable, confirmed target', () => {
+    expect(getTaskDeviceLockReason({ canSelect: true, isPending: false })).toBeUndefined();
   });
 });

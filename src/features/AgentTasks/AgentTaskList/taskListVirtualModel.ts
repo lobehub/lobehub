@@ -35,6 +35,8 @@ export type TaskListVirtualItem =
       key: string;
       kind: 'subGroup';
       meta: TaskGroupMeta;
+      /** Meta of the group this sub-group splits; a task created here must fit both. */
+      parentMeta: TaskGroupMeta;
     }
   | {
       key: string;
@@ -105,6 +107,7 @@ export const flattenTaskListEntries = (
         key,
         kind: 'subGroup',
         meta: subGroup.meta,
+        parentMeta: entry.meta,
       });
       if (!subCollapsed) items.push(...rowItems(subGroup.rows, key, true));
     });

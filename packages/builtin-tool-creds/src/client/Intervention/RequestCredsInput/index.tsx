@@ -2,8 +2,7 @@
 
 import { SecretInputView } from '@lobechat/shared-tool-ui/secret-input';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -149,7 +148,9 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
         fields={fieldNames}
         labels={{
           cancel: t('credsInput.skip'),
+          confirmProse: t('credsInput.proseConfirm'),
           placeholder: (field) => t('credsInput.placeholder', { field }),
+          proseWarning: (fields) => t('credsInput.proseWarning', { fields: fields.join(', ') }),
           submit: t(existing ? 'credsInput.update' : 'credsInput.submit'),
           submitting: t('credsInput.submitting'),
         }}

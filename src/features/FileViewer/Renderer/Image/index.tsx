@@ -1,8 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-import { Button, confirmModal, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, Center, confirmModal, createStaticStyles, cssVar, Spin, Text } from '@lobehub/ui';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

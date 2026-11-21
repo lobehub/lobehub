@@ -1,7 +1,6 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, useForm, useWatch } from '@lobehub/ui/base-ui/form';
+import { Flexbox, Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, useForm, useWatch } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
@@ -58,6 +57,7 @@ import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevel3Slider from './ThinkingLevel3Slider';
 import ThinkingLevel4Slider from './ThinkingLevel4Slider';
+import ThinkingLevel5Slider from './ThinkingLevel5Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
@@ -172,6 +172,7 @@ const ControlsForm = memo<ControlsFormProps>(
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
     const thinkingLevel3DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel3');
+    const thinkingLevel5DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel5');
 
     // Show descriptions as a question-mark tooltip beside the label, matching
     // the ControlRow items rendered above this form in the params panel.
@@ -595,6 +596,16 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'thinkingLevel4',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <ThinkingLevel5Slider defaultValue={thinkingLevel5DefaultValue} />,
+        label: t('extendParams.thinkingLevel.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'thinkingLevel5',
         style: {
           paddingBottom: 0,
         },

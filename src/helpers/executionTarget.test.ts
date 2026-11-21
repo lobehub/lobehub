@@ -8,7 +8,6 @@ import {
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
   executionTargetToRuntimeMode,
-  getTopicBoundDeviceId,
   isDeviceLockedPlan,
   isHeterogeneousSandboxExecutionAvailable,
   isLocalSandboxEnabled,
@@ -749,17 +748,6 @@ describe('resolveExecutionPlan', () => {
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
-    it('treats the desktop default (unset target) as `local` but never auto-grabs a device', () => {
-      // unset → `local` on desktop; device-capable but unrouted until bound.
-      expect(
-        resolveExecutionPlan({
-          agencyConfig: undefined,
-          clientExecutionAvailable: true,
-          onlineDeviceIds: ONLINE_A,
-        }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
-    });
-
     it('resolves the unset web target to none', () => {
       expect(
         resolveExecutionPlan({
@@ -1332,28 +1320,6 @@ describe('canExecutionTargetReadLocalPaths', () => {
     expect(canExecutionTargetReadLocalPaths('sandbox', config, 'device-1')).toBe(false);
     expect(canExecutionTargetReadLocalPaths('auto', config, 'device-1')).toBe(false);
     expect(canExecutionTargetReadLocalPaths('none', config, 'device-1')).toBe(false);
-  });
-});
-
-describe('getTopicBoundDeviceId', () => {
-  it('returns the machine an agent topic is pinned to', () => {
-    expect(
-      getTopicBoundDeviceId({ agentId: 'agt', metadata: { boundDeviceId: 'dev-a' } }, 'agt'),
-    ).toBe('dev-a');
-  });
-
-  it('ignores another agent topic and a group topic owned by someone else', () => {
-    expect(
-      getTopicBoundDeviceId({ agentId: 'other', metadata: { boundDeviceId: 'dev-a' } }, 'agt'),
-    ).toBeUndefined();
-    expect(
-      getTopicBoundDeviceId({ groupId: 'grp', metadata: { boundDeviceId: 'dev-a' } }, 'agt'),
-    ).toBeUndefined();
-  });
-
-  it('returns nothing for an unbound topic', () => {
-    expect(getTopicBoundDeviceId({ agentId: 'agt', metadata: {} }, 'agt')).toBeUndefined();
-    expect(getTopicBoundDeviceId(undefined, 'agt')).toBeUndefined();
   });
 });
 

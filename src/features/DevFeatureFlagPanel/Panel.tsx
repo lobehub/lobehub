@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Input, Switch, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Input, Switch, Text } from '@lobehub/ui';
 import { snakeCase } from 'es-toolkit/compat';
 import { ListRestartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -13,6 +11,7 @@ import {
   type FeatureFlagKey,
   isFeatureFlagOverridable,
 } from '@/store/serverConfig/slices/featureFlagOverride/action';
+import { densityVars } from '@/styles/densityVars';
 
 import FlagRow from './FlagRow';
 
@@ -35,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: space-between;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   toolbar: css`
@@ -53,7 +52,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 100%;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

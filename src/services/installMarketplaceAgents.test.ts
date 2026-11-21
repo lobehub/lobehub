@@ -1,10 +1,13 @@
+import { toast } from '@lobehub/ui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
+import { agentSkillService } from '@/services/skill';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
+import { useToolStore } from '@/store/tool';
 
 import { installMarketplaceAgents } from './installMarketplaceAgents';
 
@@ -135,5 +138,83 @@ describe('installMarketplaceAgents', () => {
     expect(items.map((i) => i.sourceIdentifier)).toEqual(['src-a']);
     expect(result.skippedAgentIds).toEqual(['src-b', 'src-c']);
     expect(result.installedAgentIds).toEqual(['agent-src-a']);
+  });
+
+  describe('market skills referenced by the installed agents', () => {
+    const pluginsBySource: Record<string, any[]> = {
+      'src-a': ['skill-a', { identifier: 'skill-shared', mode: 'disabled' }],
+      'src-b': ['skill-b'],
+      'src-c': ['skill-shared', 'skill-c'],
+    };
+
+    const arrange = (failCreateFor?: string) => {
+      vi.spyOn(agentService, 'getAgentByForkedFromIdentifier').mockResolvedValue(null);
+      vi.spyOn(discoverService, 'getAssistantDetail').mockImplementation(
+        async ({ identifier }) =>
+          ({
+            config: { params: {}, plugins: pluginsBySource[identifier] } as any,
+            identifier,
+            title: identifier,
+          }) as any,
+      );
+      vi.spyOn(marketApiService, 'forkAgent').mockImplementation(async (items) =>
+        items.map((item) => ({
+          data: { agent: { identifier: item.identifier, name: item.name ?? '' } } as any,
+          sourceIdentifier: item.sourceIdentifier,
+          success: true as const,
+        })),
+      );
+      createAgent.mockImplementation(async ({ config }: any) => {
+        if (config.params.forkedFromIdentifier === failCreateFor) throw new Error('create failed');
+        return { agentId: `agent-${config.params.forkedFromIdentifier}` };
+      });
+      vi.spyOn(useToolStore, 'getState').mockReturnValue({
+        ...useToolStore.getState(),
+        refreshAgentSkills: vi.fn().mockResolvedValue(undefined),
+      });
+    };
+
+    it('ensures once, after every createAgent settled, for the created agents only', async () => {
+      arrange('src-b');
+      const ensure = vi
+        .spyOn(agentSkillService, 'ensureFromMarket')
+        .mockImplementation(async (ids) =>
+          ids.map((id) => ({ identifier: id, status: 'installed' })),
+        );
+
+      const result = await installMarketplaceAgents(['src-a', 'src-b', 'src-c']);
+
+      expect(ensure).toHaveBeenCalledTimes(1);
+      expect(ensure).toHaveBeenCalledWith(['skill-a', 'skill-shared', 'skill-c']);
+      expect(Math.min(...ensure.mock.invocationCallOrder)).toBeGreaterThan(
+        Math.max(...createAgent.mock.invocationCallOrder),
+      );
+      expect(result.installedAgentIds).toEqual(['agent-src-a', 'agent-src-c']);
+    });
+
+    it('does not ask for skills when no agent could be created', async () => {
+      arrange('src-a');
+      const ensure = vi.spyOn(agentSkillService, 'ensureFromMarket');
+
+      await installMarketplaceAgents(['src-a']);
+
+      expect(ensure).not.toHaveBeenCalled();
+    });
+
+    it('keeps the install result and summaries when ensuring skills fails', async () => {
+      arrange();
+      vi.spyOn(agentSkillService, 'ensureFromMarket').mockRejectedValue(new Error('network down'));
+      const warning = vi.spyOn(toast, 'warning').mockImplementation(() => '' as any);
+
+      const result = await installMarketplaceAgents(['src-a', 'src-b']);
+
+      expect(result.installedAgentIds).toEqual(['agent-src-a', 'agent-src-b']);
+      expect(result.summaries.map((s) => s.installedAgentId)).toEqual([
+        'agent-src-a',
+        'agent-src-b',
+      ]);
+      expect(refreshAgentList).toHaveBeenCalledTimes(1);
+      expect(warning).toHaveBeenCalledTimes(1);
+    });
   });
 });

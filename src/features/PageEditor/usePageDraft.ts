@@ -1,6 +1,6 @@
 'use client';
 
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
 import { useEffect, useMemo, useRef } from 'react';

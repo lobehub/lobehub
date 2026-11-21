@@ -21,6 +21,24 @@ const cdataOf = (prompt: string, tag: string) =>
 const turnPart = (prompt: string) => prompt.slice(0, prompt.indexOf('<instruction>'));
 
 describe('buildGoalManagerPrompt', () => {
+  // Regression: a Task that passed 4/4 checks carried a finding reading "nothing
+  // changed", and the turn re-dispatched the whole verification on that wording.
+  it('names verified Tasks and tells the turn the verdict outranks the summary', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      verifiedTasks: [{ checks: '4/4', taskId: 'task_1', taskTitle: 'Verify the fix' }],
+    });
+
+    expect(turnPart(prompt)).toContain(
+      '<verifiedTask checks="4/4" taskId="task_1" taskTitle="Verify the fix" />',
+    );
+    expect(prompt).toContain('That verdict outranks how a finding or run summary');
+  });
+
+  it('lists no verified Task when there is none', () => {
+    expect(turnPart(buildGoalManagerPrompt(base))).not.toContain('<verifiedTask');
+  });
+
   it.each([
     '探索怎样从用户历史数据提炼领域判断力',
     'Explore personal predictions from past decisions',
@@ -28,7 +46,7 @@ describe('buildGoalManagerPrompt', () => {
     'keeps supervision language tied to the goal rather than the English control prompt: %s',
     (requirement) => {
       const prompt = buildGoalManagerPrompt({ ...base, requirement });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v9');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v16');
       expect(cdataOf(prompt, 'requirement')).toBe(requirement);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
@@ -42,6 +60,33 @@ describe('buildGoalManagerPrompt', () => {
       );
     },
   );
+
+  it('asks a release turn to review the wave and answer release or escalate', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      problem: 'Batch gate passed for v1 after wave 1. Decide whether wave 2 (5 units) goes out.',
+      problemKind: 'rollout_release',
+    });
+    expect(prompt).toContain('trigger="takeover"');
+    expect(prompt).toContain('Batch release:');
+    expect(prompt).toContain('{"action":"release"');
+    // The failure takeover's corrective-task guidance does not apply to a release.
+    expect(prompt).not.toContain('Takeover: without you this Goal stops on a person');
+  });
+
+  it('asks a distill turn to rewrite the plan from the settled probes', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      problem: 'The 2 probes of plan v1 settled. Rewrite the plan before the gate judges them.',
+      problemKind: 'rollout_distill',
+    });
+    expect(prompt).toContain('Plan distillation:');
+    expect(prompt).toContain('{"action":"revise_plan"');
+    // A probe that falls short of the distilled plan goes back instead of to the gate.
+    expect(prompt).toContain('"rerun":["node ids of the probes to run again"]');
+    expect(prompt).toContain('definition of done');
+    expect(prompt).not.toContain('Takeover: without you this Goal stops on a person');
+  });
 
   /**
    * Regression: a main Agent planning one recipe over many units only knew the
@@ -58,6 +103,7 @@ describe('buildGoalManagerPrompt', () => {
       .map((line) => JSON.parse(line));
     expect(tasksSchemas.find((schema) => schema.rollout)?.rollout).toMatchObject({
       recipe: expect.any(String),
+      skillName: expect.any(String),
       units: expect.any(Array),
     });
   });
@@ -139,7 +185,7 @@ describe('buildGoalManagerPrompt', () => {
     });
 
     expect(prompt.split('\n')[0]).toBe(
-      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v9">',
+      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v16">',
     );
     expect(prompt.endsWith('</goalTurn>')).toBe(true);
     // CommonMark ends an HTML block at a blank line; the client needs one block.
@@ -203,5 +249,13 @@ describe('buildGoalManagerPrompt', () => {
     expect(prompt.match(/<\/goalTurn>/g)).toHaveLength(1);
     expect(prompt).toContain(']]]]><![CDATA[>');
     expect(prompt).toContain('<]]><![CDATA[/goalTurn>');
+  });
+
+  it('reads measured acceptance from recorded values, not from task conclusions', () => {
+    // A planner that only saw the declared clause re-submitted verify three
+    // times against a gate no decision answer could clear.
+    const prompt = buildGoalManagerPrompt(base);
+    expect(prompt).toContain('the "metrics" field of lh goal show');
+    expect(prompt).toContain('lh goal metric record');
   });
 });

@@ -7,7 +7,6 @@ import type {
 } from '@lobechat/types';
 import { useCallback, useMemo } from 'react';
 
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import {
   groupExecutionTargetDevices,
   resolveExecutionTargetSelection,
@@ -16,6 +15,7 @@ import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTar
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useDeviceList } from '@/store/device';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -68,7 +68,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
   const { allowed: isWorkspaceOwner } = usePermission('edit_others_content');
   const viewerId = useUserStore(userProfileSelectors.userId);
 
-  const { data: devices } = useDeviceList();
+  const { data: devices, isConfirmed: isDeviceListConfirmed } = useDeviceList();
   const publicWorkspaceDevices = useMemo(
     () => groupExecutionTargetDevices(devices).publicWorkspace,
     [devices],
@@ -82,6 +82,15 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     devices: publicWorkspaceDevices,
     isHeterogeneous: !!heterogeneousType,
   });
+
+  // The selection resolves against the device list; a stored copy may still
+  // hold devices that were since deleted or unshared, so fixing waits for the
+  // server's list rather than pin an unresolvable machine for every member.
+  const canFixSelection =
+    !!executionSelection &&
+    (executionSelection.target !== 'device' || isDeviceListConfirmed) &&
+    (executionSelection.target !== 'sandbox' ||
+      isHeterogeneousSandboxExecutionAvailable(heterogeneousType));
 
   const saveAgencyConfig = useCallback(
     (patch: Partial<LobeAgentAgencyConfig>) =>
@@ -97,7 +106,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
       }
       // Fixing pins whatever is selected right now, so a run can't fall back to
       // a target the author never chose.
-      if (!executionSelection) return;
+      if (!canFixSelection) return;
 
       void saveAgencyConfig({
         ...(executionSelection.deviceId ? { boundDeviceId: executionSelection.deviceId } : {}),
@@ -105,7 +114,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
         executionTargetSelectionPolicy: 'fixed',
       });
     },
-    [executionSelection, saveAgencyConfig],
+    [canFixSelection, executionSelection, saveAgencyConfig],
   );
 
   const setModelPolicy = useCallback(
@@ -123,10 +132,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     // the values shown above come from the same row, so there is nothing
     // meaningful to edit until it loads.
     canEditPolicies: isWorkspaceOwner || (!!agent?.userId && agent.userId === viewerId),
-    canFixExecutionTarget:
-      !!executionSelection &&
-      (executionSelection.target !== 'sandbox' ||
-        isHeterogeneousSandboxExecutionAvailable(heterogeneousType)),
+    canFixExecutionTarget: canFixSelection,
     executionTargetPolicy: agencyConfig?.executionTargetSelectionPolicy ?? 'member',
     modelPolicy: agencyConfig?.modelSelectionPolicy ?? 'member',
     setExecutionTargetPolicy,

@@ -29,7 +29,10 @@ describe('resolveAgentConfig without a host', () => {
   it('appends the reply-language instruction from the snapshot', () => {
     const resolved = resolveAgentConfig({ agentId: 'agt_1' }, snapshot({ userLocale: 'zh-CN' }));
 
-    expect(resolved.agentConfig.systemRole).toContain('zh-CN');
+    expect(resolved.agentConfig.systemRole).toContain('Preferred reply language: zh-CN.');
+    expect(resolved.agentConfig.systemRole).toContain(
+      'Use this language unless the user explicitly asks to switch.',
+    );
   });
 
   it('leaves the system role alone when no locale is supplied', () => {
@@ -177,5 +180,34 @@ describe('resolveAgentConfig without a host', () => {
     // The row has no system role, so the runtime one fills it in.
     expect(empty.agentConfig.systemRole).toBeTruthy();
     expect(empty.agentConfig.systemRole).not.toBe('');
+  });
+});
+
+describe('resolveAgentConfig page agent injection', () => {
+  const pageAgent = 'lobe-page-agent';
+
+  it('injects the page agent in page scope', () => {
+    const resolved = resolveAgentConfig({ agentId: 'agt_1', scope: 'page' }, snapshot());
+
+    expect(resolved.plugins).toContain(pageAgent);
+  });
+
+  it('leaves the page agent out when it cannot run here', () => {
+    const resolved = resolveAgentConfig(
+      { agentId: 'agt_1', pageAgentUnavailable: true, scope: 'page' },
+      snapshot({ agentConfig: { plugins: [pageAgent, 'lobe-web-browsing'] } as never }),
+    );
+
+    expect(resolved.plugins).not.toContain(pageAgent);
+    expect(resolved.plugins).toContain('lobe-web-browsing');
+  });
+
+  it('drops the page agent outside page scope', () => {
+    const resolved = resolveAgentConfig(
+      { agentId: 'agt_1' },
+      snapshot({ agentConfig: { plugins: [pageAgent] } as never }),
+    );
+
+    expect(resolved.plugins).not.toContain(pageAgent);
   });
 });

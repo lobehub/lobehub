@@ -17,6 +17,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { countStats, meanConfidence, rollupVerdict } from './reportRollup';
+import { resolveVerifyResponseLanguage } from './responseLanguage';
 import { ReportNarrativeSchema } from './schema';
 
 const log = debug('lobe-server:verify-reporter');
@@ -42,6 +43,7 @@ export interface GenerateReportParams {
 export class VerifyReporterService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly evidenceModel: VerifyEvidenceModel;
   private readonly reportModel: VerifyReportModel;
@@ -50,6 +52,7 @@ export class VerifyReporterService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
     this.reportModel = new VerifyReportModel(db, userId, workspaceId);
@@ -98,6 +101,7 @@ export class VerifyReporterService {
         title: r.checkItemTitle,
         verdict: r.verdict,
       })),
+      language: await resolveVerifyResponseLanguage(this.db, this.userId),
       stats,
       verdict,
     });
@@ -125,7 +129,7 @@ export class VerifyReporterService {
     modelConfig: { model: string; provider: string },
   ) {
     try {
-      const ai = new AiGenerationService(this.db, this.userId);
+      const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
       const raw = await ai.generateObject(
         {
           ...chain,

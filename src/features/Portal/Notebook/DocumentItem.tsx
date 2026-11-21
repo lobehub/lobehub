@@ -1,7 +1,5 @@
 import { type NotebookDocument } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, confirmModal, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { FileTextIcon, Trash2Icon } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
@@ -9,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { useNotebookStore } from '@/store/notebook';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     cursor: pointer;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: 8px;
     background: ${cssVar.colorFillTertiary};
 

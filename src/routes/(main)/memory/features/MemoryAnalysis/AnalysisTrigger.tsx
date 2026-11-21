@@ -1,13 +1,12 @@
 'use client';
 
-import { Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Tooltip } from '@lobehub/ui';
 import { CalendarClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { createDateRangeModal } from './DateRangeModal';
 
@@ -18,6 +17,7 @@ interface Props {
 const AnalysisTrigger = memo<Props>(({ iconOnly }) => {
   const { t } = useTranslation('memory');
   const { isValidating } = useMemoryAnalysisAsyncTask();
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   const handleClick = () => {
     createDateRangeModal();
@@ -27,7 +27,7 @@ const AnalysisTrigger = memo<Props>(({ iconOnly }) => {
     <Tooltip title={t('analysis.action.button')}>
       <ActionIcon
         icon={CalendarClockIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         tooltipProps={{ placement: 'bottom' }}
         onClick={handleClick}
       />

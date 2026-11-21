@@ -5,9 +5,9 @@ import {
 } from '@lobechat/builtin-tool-activator';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { safeParseJSON } from '@lobechat/utils';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, Edit3Icon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
@@ -18,45 +18,39 @@ import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
+import { useConnectorAccountNames } from '../useConnectorAccountNames';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapseHeader: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  description: css`
-    padding-block: 8px;
-    padding-inline: 16px;
-
-    font-size: ${cssVar.fontSize};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  reason: css`
-    margin-block-start: -4px;
-    padding-block-end: 8px;
-    padding-inline: 16px;
-
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.45;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  collapseHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+  },
+  description: {
+    paddingBlock: '8px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+    fontSize: cssVar.fontSize,
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  reason: {
+    marginBlockStart: '-4px',
+    paddingBlockEnd: '8px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+    fontSize: cssVar.fontSizeSM,
+    lineHeight: 1.45,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface FallbackInterventionProps {
   actionsPortalTarget?: HTMLDivElement | null;
@@ -70,7 +64,7 @@ interface FallbackInterventionProps {
 
 const FallbackIntervention = memo<FallbackInterventionProps>(
   ({ requestArgs, id, identifier, apiName, toolCallId, assistantGroupId, actionsPortalTarget }) => {
-    const { t } = useTranslation(['chat', 'plugin', 'common']);
+    const { t } = useTranslation(['chat', 'plugin', 'common', 'tool']);
     const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
     const [isEditing, setIsEditing] = useState(false);
     const [showArgs, setShowArgs] = useState(false);
@@ -105,6 +99,11 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
       [pendingEditedArguments, requestArgs],
     );
     const argCount = typeof parsedArgs === 'object' ? Object.keys(parsedArgs).length : 0;
+    // The parameters start collapsed, so the account a connector call acts as
+    // is named next to the action: approving "send email" must say from where.
+    const accountName = Object.values(
+      useConnectorAccountNames(parsedArgs, { identifier, messageId: id }),
+    )[0];
     const isActivateToolsIntervention =
       identifier === LobeActivatorIdentifier && apiName === ActivatorApiName.activateTools;
     const requestedToolIdentifiers = useMemo(() => {
@@ -164,7 +163,9 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
 
     if (isEditing)
       return (
-        <Suspense fallback={<Arguments arguments={renderedArgs} />}>
+        <Suspense
+          fallback={<Arguments arguments={renderedArgs} identifier={identifier} messageId={id} />}
+        >
           <KeyValueEditor
             initialValue={parsedArgs}
             onCancel={handleCancel}
@@ -181,6 +182,7 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           assistantGroupId={assistantGroupId}
           identifier={identifier}
           messageId={id}
+          toolArgs={parsedArgs}
           toolCallId={toolCallId}
           onBeforeApprove={() => pendingEditedArgumentsRef.current}
         />
@@ -189,7 +191,12 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
 
     return (
       <Flexbox gap={4}>
-        <Flexbox horizontal align="center" className={styles.description} gap={6}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.description).className}
+          gap={6}
+        >
           {pluginMeta?.avatar && (
             <Avatar
               avatar={pluginMeta.avatar}
@@ -205,14 +212,19 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           </span>
         </Flexbox>
 
-        {activationReason && <div className={styles.reason}>{activationReason}</div>}
+        {activationReason && <div {...stylex.props(styles.reason)}>{activationReason}</div>}
+        {accountName && (
+          <div {...stylex.props(styles.reason)}>
+            {t('connector.account.usingAccount', { name: accountName, ns: 'tool' })}
+          </div>
+        )}
 
         {argCount > 0 && (
           <>
             <Flexbox
               horizontal
               align="center"
-              className={styles.collapseHeader}
+              className={stylex.props(styles.collapseHeader).className}
               gap={4}
               onClick={() => setShowArgs(!showArgs)}
             >
@@ -235,7 +247,9 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
                 />
               )}
             </Flexbox>
-            {showArgs && <Arguments arguments={renderedArgs} />}
+            {showArgs && (
+              <Arguments arguments={renderedArgs} identifier={identifier} messageId={id} />
+            )}
           </>
         )}
 

@@ -1,5 +1,6 @@
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
@@ -20,7 +21,9 @@ import {
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { deferredSessionRefresh } from '@/libs/better-auth/plugins/deferred-session-refresh';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
+import { sessionOptions } from '@/libs/better-auth/session-options';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import {
   createSecondaryStorage,
@@ -210,14 +213,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     onAPIError: {
       errorURL: '/auth-error',
     },
-    session: {
-      cookieCache: {
-        enabled: true,
-        maxAge: 2 * 60, // Cache duration in seconds
-      },
-      // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
-      storeSessionInDatabase: true,
-    },
+    session: sessionOptions,
     database: drizzleAdapter(serverDB, {
       provider: 'pg',
       // experimental joins feature needs schema to pass full relation
@@ -316,6 +312,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     },
     plugins: [
       ...customOptions.plugins,
+      deferredSessionRefresh(),
       emailWhitelist(),
       expo(),
       admin(),
@@ -344,7 +341,10 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         },
       }),
       passkey({
-        rpName: 'LobeHub',
+        // Surfaced by the browser/OS passkey prompt ("Create a passkey for …"),
+        // so a hardcoded value leaks the upstream brand into native UI that no
+        // amount of in-app theming can reach.
+        rpName: BRANDING_NAME,
         // Extract rpID from auth URL (e.g., 'lobehub.com' from 'https://lobehub.com')
         // Returns undefined if AUTH_URL is not set (e.g., in e2e tests)
         rpID: getPasskeyRpID(),

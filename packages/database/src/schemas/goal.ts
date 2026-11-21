@@ -1,5 +1,5 @@
 import { goalStatuses, goalSubjectTypes } from '@lobechat/const/goal';
-import type { GoalConfig } from '@lobechat/types';
+import type { GoalConfig, GoalVisibility } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
@@ -60,6 +60,17 @@ export const goals = pgTable(
 
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
+    // Set when the user archives the goal (put away once it is done with:
+    // signed off or canceled); orthogonal to `status`, null = not archived.
+    // Archived goals drop out of every list unless one asks for them.
+    archivedAt: timestamptz('archived_at'),
+
+    // Visibility (mirrors agent / task visibility). Workspace goals are
+    // 'public' (every member sees them) or 'private' (only the creator does);
+    // `buildWorkspaceWhere` reads this column off the table, so every
+    // goal-joined read is filtered without opting in. Personal-mode rows are
+    // implicitly private to their owner and the column is ignored.
+    visibility: text('visibility').$type<GoalVisibility>().default('public').notNull(),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
     createdAt: createdAt(),
@@ -68,6 +79,7 @@ export const goals = pgTable(
   (t) => [
     index('goals_user_id_idx').on(t.userId),
     index('goals_workspace_id_idx').on(t.workspaceId),
+    index('goals_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     index('goals_agent_id_idx').on(t.agentId),
     index('goals_project_id_idx').on(t.projectId),
     index('goals_status_idx').on(t.status),

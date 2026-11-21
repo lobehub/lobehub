@@ -1,9 +1,10 @@
 /**
  * Highest wire protocol this bundle speaks to the Agent Gateway and to the run
- * that feeds it. Sent when a run starts (`clientProtocol`) — subject to the
- * rollout gate, see `canUseGatewayProtocolV2` — so the run may deliver message
- * revisions (`message_patch`) instead of whole `uiMessages` snapshots. A client
- * that sends nothing is treated as protocol 1 and keeps the snapshots.
+ * that feeds it. Sent when a run starts (`clientProtocol`) — only when the
+ * deployment's gateway serves v2, see `canUseGatewayProtocolV2` — so the run
+ * may deliver message revisions (`message_patch`) instead of whole
+ * `uiMessages` snapshots. A client that sends nothing is treated as protocol 1
+ * and keeps the snapshots.
  *
  * Bump this only together with the client-side handling of whatever the new
  * version lets the server omit — a desktop build lags the server by weeks, and
@@ -63,3 +64,24 @@ export const isOwnLlmRelayChannelId = (channel: string, userId: string): boolean
   const prefix = buildLlmRelayChannelId(userId, '');
   return channel.startsWith(prefix) && CHANNEL_NONCE.test(channel.slice(prefix.length));
 };
+
+/**
+ * The scope a channel that outlives one request (a sub-agent's relay) is bound
+ * to: the workspace the dispatching request runs in, `personal` outside one.
+ * It leads the nonce (`<scope>-<random>`), so a request in one workspace cannot
+ * name the same user's channel of another workspace, whose tab relays with
+ * that workspace's providers.
+ */
+export const llmRelayChannelScope = (workspaceId?: string | null): string =>
+  workspaceId || 'personal';
+
+/** Whether `channel` is `userId`'s own channel bound to `workspaceId`'s scope. */
+export const isScopedLlmRelayChannelId = (
+  channel: string,
+  userId: string,
+  workspaceId?: string | null,
+): boolean =>
+  isOwnLlmRelayChannelId(channel, userId) &&
+  channel
+    .slice(buildLlmRelayChannelId(userId, '').length)
+    .startsWith(`${llmRelayChannelScope(workspaceId)}-`);

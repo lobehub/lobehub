@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { Outlet } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
@@ -12,7 +13,7 @@ const Layout = () => {
   return (
     <MobileContentLayout
       withNav
-      className={styles.mainContainer}
+      className={stylex.props(styles.mainContainer).className}
       gap={16}
       header={<Header />}
       id={SCROLL_PARENT_ID}

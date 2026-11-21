@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  cssVar,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -9,7 +11,6 @@ import {
   Flexbox,
   menuSharedStyles,
 } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -46,8 +47,11 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
       <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
         <DropdownMenuSubmenuRoot open={subOpen} onOpenChange={setSubOpen}>
           <DropdownMenuSubmenuTrigger
-            className={cx(menuSharedStyles.item, isActive && modelSwitchPanelStyles.menuItemActive)}
-            style={{ paddingBlock: 8, paddingInline: 8 }}
+            className={cx(
+              menuSharedStyles.item,
+              modelSwitchPanelStyles.rowTrigger,
+              isActive && modelSwitchPanelStyles.menuItemActive,
+            )}
             onClick={() => {
               setSubOpen(false);
               onModelChange(item.data.model.id, (activeProvider ?? item.data.providers[0]).id);

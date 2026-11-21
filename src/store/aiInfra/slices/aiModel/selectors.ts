@@ -163,10 +163,11 @@ const modelReasoningConfig = (id: string, provider: string) => (s: AIProviderSto
   s.modelReasoningConfigMap?.[modelReasoningConfigKey(provider, id)];
 
 /**
- * Whether `ensureModelReasoningConfig` / the SWR loader has settled the saved
- * config for this model (the key is kept even when nothing is saved). Topic
- * snapshots must not pin "model defaults" while the real value is still in
- * flight, so they skip pinning until this is true.
+ * Whether the replica holds a saved config for this model (the key is kept
+ * even when nothing is saved) — confirmed by the server, or restored from the
+ * local copy for display. Topic snapshots must not pin "model defaults" while
+ * the real value is still in flight, so they run `ensureModelReasoningConfig`
+ * (which confirms a restored-only value) and skip pinning until this is true.
  */
 const isModelReasoningConfigLoaded = (id: string, provider: string) => (s: AIProviderStoreState) =>
   modelReasoningConfigKey(provider, id) in (s.modelReasoningConfigMap ?? {});

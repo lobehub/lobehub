@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 import { SPIN_TURN_MS } from './spinHold';
 
@@ -20,6 +20,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadius};
 
     text-align: start;
+
+    html[data-density='compact'] & {
+      padding-block: 4px;
+    }
 
     transition: background ${cssVar.motionDurationFast};
 

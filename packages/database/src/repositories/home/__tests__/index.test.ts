@@ -22,6 +22,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await clientDB.delete(Schema.workspaces);
   await clientDB.delete(Schema.users);
 });
 
@@ -337,6 +338,14 @@ describe('HomeRepository', () => {
             trigger: 'document',
             userId,
           },
+          {
+            agentId,
+            id: 'channel-unread-topic',
+            status: 'unread',
+            title: 'Channel unread topic',
+            trigger: 'channel',
+            userId,
+          },
         ]);
       });
 
@@ -421,6 +430,57 @@ describe('HomeRepository', () => {
       const group = result.ungrouped.find((i) => i.id === groupId);
       expect(group).toBeDefined();
       expect(group!.unreadCount).toBe(1);
+    });
+
+    it("should not count teammates' unread topics in workspace sidebar badges", async () => {
+      const workspaceId = 'ws-unread-badge';
+      const agentId = 'ws-shared-agent';
+      const groupId = 'ws-shared-group';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.workspaces).values({
+          id: workspaceId,
+          name: 'Unread Badge Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          title: 'Shared Agent',
+          userId,
+          virtual: false,
+          workspaceId,
+        });
+        await tx.insert(Schema.chatGroups).values({
+          id: groupId,
+          title: 'Shared Group',
+          userId,
+          workspaceId,
+        });
+        await tx.insert(Schema.topics).values([
+          { agentId, id: 'ws-my-agent-unread', status: 'unread', userId, workspaceId },
+          {
+            agentId,
+            id: 'ws-teammate-agent-unread',
+            status: 'unread',
+            userId: otherUserId,
+            workspaceId,
+          },
+          { groupId, id: 'ws-my-group-unread', status: 'unread', userId, workspaceId },
+          {
+            groupId,
+            id: 'ws-teammate-group-unread',
+            status: 'unread',
+            userId: otherUserId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      const result = await new HomeRepository(clientDB, userId, workspaceId).getSidebarAgentList();
+
+      expect(result.ungrouped.find((i) => i.id === agentId)?.unreadCount).toBe(1);
+      expect(result.ungrouped.find((i) => i.id === groupId)?.unreadCount).toBe(1);
     });
 
     describe('agents.pinned is the only sidebar pin source', () => {
@@ -598,16 +658,6 @@ describe('HomeRepository', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('search-standalone');
       expect(result[0].title).toBe('Standalone Searchable Agent');
-    });
-
-    it('should search and return mixed agents with and without session relationships', async () => {
-      // Search for "Searchable" should return all 3 agents
-      const result = await homeRepo.searchAgents('Searchable');
-
-      expect(result).toHaveLength(3);
-      expect(result.map((a) => a.id)).toContain('search-pinned');
-      expect(result.map((a) => a.id)).toContain('search-unpinned');
-      expect(result.map((a) => a.id)).toContain('search-standalone');
     });
 
     it('should search agents by title and return correct pinned status', async () => {

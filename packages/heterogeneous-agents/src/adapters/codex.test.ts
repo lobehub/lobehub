@@ -12,6 +12,13 @@ const loadFixture = async (name: string) => {
     .map((line) => JSON.parse(line));
 };
 
+const runningCommandItem = () => ({
+  command: '/bin/zsh -lc pwd',
+  id: 'item_1',
+  status: 'in_progress',
+  type: 'command_execution',
+});
+
 describe('CodexAdapter', () => {
   it('captures the session id from thread.started', () => {
     const adapter = new CodexAdapter();
@@ -548,12 +555,7 @@ describe('CodexAdapter', () => {
       type: 'item.completed',
     });
     adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     adapter.adapt({
@@ -717,12 +719,7 @@ describe('CodexAdapter', () => {
     const adapter = new CodexAdapter();
 
     const started = adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     const completed = adapter.adapt({
@@ -1572,12 +1569,7 @@ describe('CodexAdapter', () => {
     adapter.adapt({ type: 'turn.started' });
 
     const firstTool = adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     const secondTool = adapter.adapt({
@@ -1623,12 +1615,7 @@ describe('CodexAdapter', () => {
       type: 'item.completed',
     });
     adapter.adapt({
-      item: {
-        command: '/bin/zsh -lc pwd',
-        id: 'item_1',
-        status: 'in_progress',
-        type: 'command_execution',
-      },
+      item: runningCommandItem(),
       type: 'item.started',
     });
     adapter.adapt({

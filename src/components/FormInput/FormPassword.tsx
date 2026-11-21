@@ -1,4 +1,4 @@
-import { InputPassword, type InputPasswordProps as Props } from '@lobehub/ui/base-ui';
+import { InputPassword, type InputPasswordProps as Props } from '@lobehub/ui';
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';

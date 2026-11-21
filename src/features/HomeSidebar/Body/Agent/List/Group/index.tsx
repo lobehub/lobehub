@@ -1,5 +1,5 @@
 import { type SidebarGroup } from '@lobechat/types';
-import { AccordionRoot } from '@lobehub/ui/base-ui';
+import { AccordionRoot } from '@lobehub/ui';
 import React, { memo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';

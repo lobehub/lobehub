@@ -79,6 +79,61 @@ describe('TopicModel - Update', () => {
   });
 
   describe('updateMetadata', () => {
+    it('atomically commits the running marker and status, and rolls both back together', async () => {
+      const topicId = 'atomic-running-start';
+      await serverDB.insert(topics).values({ id: topicId, userId, status: 'active' });
+      await expect(
+        serverDB.transaction(async (tx) => {
+          const transactionalModel = new TopicModel(tx as unknown as LobeChatDatabase, userId);
+          await transactionalModel.updateMetadata(
+            topicId,
+            { runningOperation: { operationId: 'rolled-back' } },
+            { status: 'running' },
+          );
+          throw new Error('rollback startup');
+        }),
+      ).rejects.toThrow('rollback startup');
+      expect(await topicModel.findById(topicId)).toMatchObject({ status: 'active' });
+      expect((await topicModel.findById(topicId))?.metadata?.runningOperation).toBeUndefined();
+      await topicModel.updateMetadata(
+        topicId,
+        { runningOperation: { operationId: 'committed' } },
+        { status: 'running' },
+      );
+      expect(await topicModel.findById(topicId)).toMatchObject({
+        status: 'running',
+        metadata: { runningOperation: { operationId: 'committed' } },
+      });
+    });
+
+    it('cannot write the opted-in running status when ownership or onlyIf rejects the marker', async () => {
+      const ownId = 'conditional-running-start';
+      const foreignId = 'foreign-running-start';
+      await serverDB.insert(users).values({ id: 'different-owner' });
+      await serverDB.insert(topics).values([
+        { id: ownId, userId, status: 'active' },
+        { id: foreignId, userId: 'different-owner', status: 'active' },
+      ]);
+      expect(
+        await topicModel.updateMetadata(
+          ownId,
+          { runningOperation: { operationId: 'rejected' } },
+          { status: 'running', onlyIf: () => false },
+        ),
+      ).toEqual([]);
+      expect(
+        await topicModel.updateMetadata(
+          foreignId,
+          { runningOperation: { operationId: 'foreign' } },
+          { status: 'running' },
+        ),
+      ).toEqual([]);
+      expect((await topicModel.findById(ownId))?.status).toBe('active');
+      expect((await serverDB.select().from(topics).where(eq(topics.id, foreignId)))[0].status).toBe(
+        'active',
+      );
+    });
+
     it('should update metadata on a topic with no existing metadata', async () => {
       const topicId = 'metadata-test-1';
       await serverDB.insert(topics).values({ userId, id: topicId, title: 'Test' });
@@ -89,6 +144,30 @@ describe('TopicModel - Update', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].metadata).toEqual({ workingDirectory: '/path/to/dir' });
+    });
+
+    it('should skip the write when onlyIf rejects the current metadata', async () => {
+      const topicId = 'metadata-test-only-if';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: { boundDeviceId: 'device-d' },
+      });
+
+      const skipped = await topicModel.updateMetadata(
+        topicId,
+        { boundDeviceId: 'device-a' },
+        { onlyIf: (metadata) => metadata?.boundDeviceId === 'device-b' },
+      );
+      const written = await topicModel.updateMetadata(
+        topicId,
+        { boundDeviceId: 'device-a' },
+        { onlyIf: (metadata) => metadata?.boundDeviceId === 'device-d' },
+      );
+
+      expect(skipped).toEqual([]);
+      expect(written[0].metadata).toEqual({ boundDeviceId: 'device-a' });
     });
 
     it('should merge metadata with existing metadata', async () => {
@@ -908,6 +987,43 @@ describe('TopicModel - Update', () => {
       expect(topic.totalCost).toBeNull();
       expect(topic.usage).toBeNull();
       expect(topic.cost).toBeNull();
+    });
+  });
+
+  describe('markRead', () => {
+    const statusOf = async (id: string) =>
+      (await serverDB.select().from(topics).where(eq(topics.id, id)))[0]?.status;
+
+    it('flips an unread topic to active and returns the cleared row', async () => {
+      await serverDB.insert(topics).values({ id: 'read-1', sessionId, status: 'unread', userId });
+
+      const cleared = await topicModel.markRead('read-1');
+
+      expect(cleared).toEqual([{ id: 'read-1', status: 'active' }]);
+      expect(await statusOf('read-1')).toBe('active');
+    });
+
+    /** @example A stale "unread" copy must not overwrite a run that started since. */
+    it.each(['running', 'waitingForHuman', 'completed'] as const)(
+      'leaves a %s topic untouched',
+      async (status) => {
+        await serverDB.insert(topics).values({ id: 'read-2', sessionId, status, userId });
+
+        const cleared = await topicModel.markRead('read-2');
+
+        expect(cleared).toEqual([]);
+        expect(await statusOf('read-2')).toBe(status);
+      },
+    );
+
+    it("does not clear another user's topic", async () => {
+      await serverDB.insert(users).values({ id: 'read-other-user' });
+      await serverDB
+        .insert(topics)
+        .values({ id: 'read-3', status: 'unread', userId: 'read-other-user' });
+
+      expect(await topicModel.markRead('read-3')).toEqual([]);
+      expect(await statusOf('read-3')).toBe('unread');
     });
   });
 });

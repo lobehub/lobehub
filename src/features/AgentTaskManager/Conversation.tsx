@@ -1,8 +1,7 @@
 'use client';
 
 import { isChatGroupSessionId } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,7 +55,13 @@ const Conversation = memo(() => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+  const composerKey = useConversationStore(conversationSelectors.composerKey);
+  const { handleUploadFiles } = useUploadFiles({
+    agentId: currentAgentId,
+    contextKey: composerKey,
+    model,
+    provider,
+  });
 
   const handleAgentChange = useCallback(
     (id: string) => {

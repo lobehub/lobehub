@@ -3,7 +3,7 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import type { Cache } from 'swr';
 import { SWRConfig } from 'swr';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { verifyService } from '@/services/verify';
 
@@ -11,25 +11,7 @@ import {
   getAcceptanceBySubjectRefreshInterval,
   useAcceptanceBySubject,
   useAcceptanceList,
-  useRubrics,
-  useVerifyReportBundle,
-  useVerifyReportSummariesInfinite,
 } from './hooks';
-
-const useSWRInfiniteMock = vi.hoisted(() => vi.fn());
-
-vi.mock('swr/infinite', () => ({ default: useSWRInfiniteMock }));
-
-const mockInfiniteResponse = (overrides: Record<string, unknown> = {}) => ({
-  data: undefined,
-  error: undefined,
-  isLoading: false,
-  isValidating: false,
-  mutate: vi.fn(),
-  setSize: vi.fn(),
-  size: 1,
-  ...overrides,
-});
 
 const createSWRWrapper = (cache: Cache) =>
   function SWRTestWrapper({ children }: PropsWithChildren) {
@@ -37,27 +19,8 @@ const createSWRWrapper = (cache: Cache) =>
   };
 
 describe('Verify data hooks', () => {
-  beforeEach(() => {
-    useSWRInfiniteMock.mockReset();
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it('reuses a cached report bundle without revalidating after a remount', async () => {
-    const getReportBundle = vi.spyOn(verifyService, 'getReportBundle').mockResolvedValue(null);
-    const wrapper = createSWRWrapper(new Map());
-
-    const firstMount = renderHook(() => useVerifyReportBundle('run-1'), { wrapper });
-    await waitFor(() => expect(getReportBundle).toHaveBeenCalledTimes(1));
-    firstMount.unmount();
-
-    const secondMount = renderHook(() => useVerifyReportBundle('run-1'), { wrapper });
-    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
-
-    expect(secondMount.result.current.data).toBeNull();
-    expect(getReportBundle).toHaveBeenCalledTimes(1);
   });
 
   it('loads an acceptance by its task subject identifier', async () => {
@@ -71,6 +34,40 @@ describe('Verify data hooks', () => {
 
     await waitFor(() => expect(result.current.data).toEqual({ id: 'acceptance-1' }));
     expect(getAcceptanceBySubject).toHaveBeenCalledWith('task', 'T-231');
+  });
+
+  it('keeps a subject without an acceptance out of loading while it polls', async () => {
+    const getAcceptanceBySubject = vi
+      .spyOn(verifyService, 'getAcceptanceBySubject')
+      .mockResolvedValue(null as never);
+
+    const { result } = renderHook(() => useAcceptanceBySubject('task', 'T-864'), {
+      wrapper: createSWRWrapper(new Map()),
+    });
+
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // A background poll of a subject known to have no acceptance must not flip
+    // the caller back to its loading placeholder on every tick.
+    let resolveNext!: (value: null) => void;
+    getAcceptanceBySubject.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNext = resolve;
+      }) as never,
+    );
+    let revalidation!: Promise<unknown>;
+    act(() => {
+      revalidation = result.current.mutate();
+    });
+    await waitFor(() => expect(result.current.isValidating).toBe(true));
+    expect(result.current.isLoading).toBe(false);
+
+    await act(async () => {
+      resolveNext(null);
+      await revalidation;
+    });
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('forwards the project scope to the acceptance list service', async () => {
@@ -98,38 +95,5 @@ describe('Verify data hooks', () => {
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'delivered' })).toBe(5000);
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'accepted' })).toBe(0);
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'closed' })).toBe(0);
-  });
-
-  it('does not request rubrics while rubric authoring is inactive', async () => {
-    const listRubrics = vi.spyOn(verifyService, 'listRubrics').mockResolvedValue([]);
-
-    renderHook(() => useRubrics(false), { wrapper: createSWRWrapper(new Map()) });
-    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
-
-    expect(listRubrics).not.toHaveBeenCalled();
-  });
-
-  it('keeps loaded reports visible while SWR revalidates after a remount', () => {
-    useSWRInfiniteMock.mockReturnValue(
-      mockInfiniteResponse({
-        data: [{ items: [], nextCursor: null }],
-        isLoading: true,
-        isValidating: true,
-      }),
-    );
-
-    const { result } = renderHook(() => useVerifyReportSummariesInfinite(''));
-
-    expect(result.current.isLoadingInitial).toBe(false);
-    expect(result.current.isLoadingMore).toBe(false);
-  });
-
-  it('reports initial loading only before the first page is available', () => {
-    useSWRInfiniteMock.mockReturnValue(mockInfiniteResponse({ isLoading: true }));
-
-    const { result } = renderHook(() => useVerifyReportSummariesInfinite(''));
-
-    expect(result.current.isLoadingInitial).toBe(true);
-    expect(result.current.isLoadingMore).toBe(false);
   });
 });

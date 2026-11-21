@@ -1,6 +1,8 @@
 import urlJoin from 'url-join';
 
-/** Where the install callback sends the user back to. */
+import { integrationInstallOrigin } from '@/utils/integrationInstallOrigin';
+
+/** Where the install callback returns; the route forwards it to the connector page. */
 export const GITHUB_RETURN_TO = '/settings/integrations/github';
 
 interface GithubInstallHrefParams {
@@ -32,5 +34,5 @@ export const buildGithubInstallHref = (
   });
   if (workspaceId) query.set('workspaceId', workspaceId);
 
-  return `${urlJoin(appOrigin, installPath)}?${query}`;
+  return `${urlJoin(integrationInstallOrigin(appOrigin), installPath)}?${query}`;
 };

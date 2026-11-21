@@ -8,6 +8,7 @@ import {
   hasProjectAcceptanceGroups,
   nextCollapsedGroupKeys,
   normalizeAcceptanceGroupMode,
+  resolveAcceptanceGroupMode,
   shouldRenderAcceptanceGroups,
 } from './groupAcceptanceList';
 
@@ -145,6 +146,18 @@ describe('normalizeAcceptanceGroupMode', () => {
     expect(normalizeAcceptanceGroupMode('unknown')).toBe('project');
     expect(normalizeAcceptanceGroupMode(null)).toBe('project');
     expect(normalizeAcceptanceGroupMode('time')).toBe('time');
+  });
+});
+
+describe('resolveAcceptanceGroupMode', () => {
+  it('shows a project-hosted list flat instead of under one header naming the project', () => {
+    expect(resolveAcceptanceGroupMode('project', 'prj_1')).toBe('none');
+    expect(resolveAcceptanceGroupMode(undefined, 'prj_1')).toBe('none');
+    expect(resolveAcceptanceGroupMode('time', 'prj_1')).toBe('time');
+  });
+
+  it('keeps project grouping on the standalone list', () => {
+    expect(resolveAcceptanceGroupMode('project')).toBe('project');
   });
 });
 

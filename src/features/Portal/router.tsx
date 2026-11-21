@@ -10,6 +10,7 @@ import { Acceptance } from './Acceptance';
 import { AcceptanceCheck } from './AcceptanceCheck';
 import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
+import { Browser } from './Browser';
 import Header from './components/Header';
 import { PortalMoreMenuProvider } from './components/PortalMoreMenu/context';
 import { DashboardWidget } from './DashboardWidget';
@@ -18,6 +19,7 @@ import { FilePreview } from './FilePreview';
 import { Goal } from './Goal';
 import { GoalMetric } from './GoalMetric';
 import { GoalNode } from './GoalNode';
+import { GoalNorthStar } from './GoalNorthStar';
 import { GoalReport, GoalReportChapter } from './GoalReport';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
@@ -45,6 +47,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
     Title: HomeTitle,
   },
   [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.Browser]: Browser,
   [PortalViewType.DashboardWidget]: DashboardWidget,
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,
@@ -52,6 +55,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Goal]: Goal,
   [PortalViewType.GoalMetric]: GoalMetric,
   [PortalViewType.GoalNode]: GoalNode,
+  [PortalViewType.GoalNorthStar]: GoalNorthStar,
   [PortalViewType.GoalReport]: GoalReport,
   [PortalViewType.GoalReportChapter]: GoalReportChapter,
   [PortalViewType.LocalFile]: LocalFile,

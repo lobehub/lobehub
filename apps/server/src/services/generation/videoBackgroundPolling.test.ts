@@ -49,6 +49,28 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 
+const createSuccessfulPollResult = () => ({
+  status: 'success',
+  videoUrl: 'https://example.com/video.mp4',
+});
+
+const createFailedPollResult = () => ({
+  status: 'failed',
+  error: 'Model API error',
+});
+
+const createProcessedVideoResult = () => ({
+  coverKey: 'cover-key',
+  duration: 10,
+  fileHash: 'hash',
+  fileSize: 1024,
+  height: 1080,
+  mimeType: 'video/mp4',
+  thumbnailKey: 'thumb-key',
+  videoKey: 'video-key',
+  width: 1920,
+});
+
 describe('videoBackgroundPolling', () => {
   const mockAsyncTaskModel = {
     update: vi.fn(),
@@ -209,10 +231,7 @@ describe('videoBackgroundPolling', () => {
       vi.mocked(resolveBusinessModelMapping)
         .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any)
         .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any);
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'success',
-        videoUrl: 'https://example.com/video.mp4',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createSuccessfulPollResult());
       mockVideoService.processVideoForGeneration.mockResolvedValue({
         coverKey: 'cover-key',
         duration: 4.04,
@@ -242,10 +261,7 @@ describe('videoBackgroundPolling', () => {
       vi.mocked(resolveBusinessModelMapping).mockResolvedValueOnce({
         resolvedModelId: 'mapped-model',
       } as any);
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'failed',
-        error: 'Model API error',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createFailedPollResult());
       const route = { apiType: 'google', channelId: 'channel-1', routerId: 'router-1' };
 
       await processBackgroundVideoPolling(mockDb, { ...mockParams, route });
@@ -258,10 +274,7 @@ describe('videoBackgroundPolling', () => {
     });
 
     it('should keep spend origin and workspace context on completion', async () => {
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'success',
-        videoUrl: 'https://example.com/video.mp4',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createSuccessfulPollResult());
       const spendOrigin = { trigger: 'agent-share' };
 
       await processBackgroundVideoPolling(mockDb, {
@@ -282,10 +295,7 @@ describe('videoBackgroundPolling', () => {
     });
 
     it('should keep spend origin on the failure refund', async () => {
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'failed',
-        error: 'Model API error',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createFailedPollResult());
 
       await processBackgroundVideoPolling(mockDb, {
         ...mockParams,
@@ -301,10 +311,7 @@ describe('videoBackgroundPolling', () => {
     });
 
     it('should skip a polling result already claimed by a webhook', async () => {
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'success',
-        videoUrl: 'https://example.com/video.mp4',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createSuccessfulPollResult());
       vi.mocked(AsyncTaskModel.claimVideoCompletion).mockResolvedValueOnce(false);
 
       await processBackgroundVideoPolling(mockDb, mockParams);
@@ -319,17 +326,7 @@ describe('videoBackgroundPolling', () => {
         status: 'success',
         videoUrl: 'data:video/mp4;base64,inline-video',
       });
-      mockVideoService.processVideoForGeneration.mockResolvedValue({
-        coverKey: 'cover-key',
-        duration: 10,
-        fileHash: 'hash',
-        fileSize: 1024,
-        height: 1080,
-        mimeType: 'video/mp4',
-        thumbnailKey: 'thumb-key',
-        videoKey: 'video-key',
-        width: 1920,
-      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue(createProcessedVideoResult());
 
       await processBackgroundVideoPolling(mockDb, mockParams);
 
@@ -347,22 +344,9 @@ describe('videoBackgroundPolling', () => {
       mockModelRuntime.handlePollVideoStatus
         .mockResolvedValueOnce({ status: 'processing' })
         .mockResolvedValueOnce({ status: 'processing' })
-        .mockResolvedValueOnce({
-          status: 'success',
-          videoUrl: 'https://example.com/video.mp4',
-        });
+        .mockResolvedValueOnce(createSuccessfulPollResult());
 
-      mockVideoService.processVideoForGeneration.mockResolvedValue({
-        coverKey: 'cover-key',
-        duration: 10,
-        fileHash: 'hash',
-        fileSize: 1024,
-        height: 1080,
-        mimeType: 'video/mp4',
-        thumbnailKey: 'thumb-key',
-        videoKey: 'video-key',
-        width: 1920,
-      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue(createProcessedVideoResult());
 
       const pollPromise = processBackgroundVideoPolling(mockDb, mockParams);
 
@@ -376,10 +360,7 @@ describe('videoBackgroundPolling', () => {
 
   describe('processBackgroundVideoPolling - error handling', () => {
     it('should handle polling failure with error message', async () => {
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'failed',
-        error: 'Model API error',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createFailedPollResult());
 
       await processBackgroundVideoPolling(mockDb, mockParams);
 
@@ -405,10 +386,7 @@ describe('videoBackgroundPolling', () => {
     });
 
     it('should handle video processing error', async () => {
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'success',
-        videoUrl: 'https://example.com/video.mp4',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createSuccessfulPollResult());
 
       mockVideoService.processVideoForGeneration.mockRejectedValue(
         new Error('Video processing failed'),
@@ -423,22 +401,9 @@ describe('videoBackgroundPolling', () => {
     });
 
     it('should handle asset creation error', async () => {
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'success',
-        videoUrl: 'https://example.com/video.mp4',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createSuccessfulPollResult());
 
-      mockVideoService.processVideoForGeneration.mockResolvedValue({
-        coverKey: 'cover-key',
-        duration: 10,
-        fileHash: 'hash',
-        fileSize: 1024,
-        height: 1080,
-        mimeType: 'video/mp4',
-        thumbnailKey: 'thumb-key',
-        videoKey: 'video-key',
-        width: 1920,
-      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue(createProcessedVideoResult());
 
       mockGenerationModel.createAssetAndFile.mockRejectedValue(new Error('DB error'));
 
@@ -456,22 +421,9 @@ describe('videoBackgroundPolling', () => {
       mockModelRuntime.handlePollVideoStatus
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({ status: 'processing' })
-        .mockResolvedValueOnce({
-          status: 'success',
-          videoUrl: 'https://example.com/video.mp4',
-        });
+        .mockResolvedValueOnce(createSuccessfulPollResult());
 
-      mockVideoService.processVideoForGeneration.mockResolvedValue({
-        coverKey: 'cover-key',
-        duration: 10,
-        fileHash: 'hash',
-        fileSize: 1024,
-        height: 1080,
-        mimeType: 'video/mp4',
-        thumbnailKey: 'thumb-key',
-        videoKey: 'video-key',
-        width: 1920,
-      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue(createProcessedVideoResult());
 
       mockGenerationModel.createAssetAndFile.mockResolvedValue(undefined);
 
@@ -492,22 +444,9 @@ describe('videoBackgroundPolling', () => {
       const startTime = new Date('2024-01-01T00:00:00Z');
       const endTime = new Date('2024-01-01T00:05:00Z');
 
-      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
-        status: 'success',
-        videoUrl: 'https://example.com/video.mp4',
-      });
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue(createSuccessfulPollResult());
 
-      mockVideoService.processVideoForGeneration.mockResolvedValue({
-        coverKey: 'cover-key',
-        duration: 10,
-        fileHash: 'hash',
-        fileSize: 1024,
-        height: 1080,
-        mimeType: 'video/mp4',
-        thumbnailKey: 'thumb-key',
-        videoKey: 'video-key',
-        width: 1920,
-      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue(createProcessedVideoResult());
 
       mockGenerationModel.createAssetAndFile.mockResolvedValue(undefined);
 

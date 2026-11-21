@@ -177,18 +177,17 @@ describe('resolveCliCommand', () => {
       expect(execFileMock.mock.calls[1]![1]).toEqual(['agent', '--help']);
     });
 
-    it('resolves and validates OpenCode using its bare semver output', async () => {
+    it.each([
+      ['1.18.3', '1.18.3'],
+      ['opencode v2.2.6\n', '2.2.6'],
+      ['othertool v2.2.6\n', undefined],
+    ])('validates the OpenCode version banner %j', async (banner, version) => {
       callExecFile('/Users/x/.opencode/bin/opencode\n');
-      callExecFile('1.18.3');
-
+      callExecFile(banner);
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
 
-      expect(status).toMatchObject({
-        available: true,
-        path: '/Users/x/.opencode/bin/opencode',
-        version: '1.18.3',
-      });
+      expect(status).toMatchObject(version ? { available: true, version } : { available: false });
     });
 
     it('validates Kimi Code using its bare semver and stream-json capabilities', async () => {
@@ -1269,15 +1268,15 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       expect(resolved.command).toBe('/Users/x/.local/bin/amp');
     });
 
-    it('resolves the default bare command to the validated absolute path', async () => {
+    it('resolves the default bare command to the validated absolute path and version', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');
 
       const { resolveHeteroSpawnCommand } = await importModule();
       const resolved = await resolveHeteroSpawnCommand('codex', undefined);
 
-      expect(resolved.command).toBe('/usr/local/bin/codex');
-      expect(resolved.pathEnv).toBeUndefined();
+      // The version decides how Claude Code is handed the `lh` guide.
+      expect(resolved).toEqual({ command: '/usr/local/bin/codex', version: '0.142.5' });
     });
 
     it('surfaces the login-shell PATH as pathEnv when resolution used it', async () => {

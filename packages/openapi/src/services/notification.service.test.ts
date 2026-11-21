@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -44,6 +45,48 @@ vi.mock('@/database/models/notification', () => ({
 vi.mock('@/database/models/resourceTransferRequest', () => ({
   ResourceTransferRequestModel: class {
     listPendingForUser = listPendingForUserMock;
+  },
+}));
+
+// In-memory stand-ins for the two settings stores, keyed like their tables.
+const { personalSettings, workspacePreferences } = vi.hoisted(() => ({
+  personalSettings: new Map<string, any>(),
+  workspacePreferences: new Map<string, any>(),
+}));
+vi.mock('@/database/models/user', () => ({
+  UserModel: class {
+    constructor(
+      _db: unknown,
+      private userId: string,
+    ) {}
+    getNotificationSetting = async () => personalSettings.get(this.userId) ?? {};
+    mergeNotificationSetting = async (patch: any) => {
+      const next = mergeNotificationSettings(personalSettings.get(this.userId), patch);
+      personalSettings.set(this.userId, next);
+      return next;
+    };
+  },
+}));
+vi.mock('@/database/models/workspaceUserSettings', () => ({
+  WorkspaceUserSettingsModel: class {
+    constructor(
+      _db: unknown,
+      private userId: string,
+      private workspaceId: string,
+    ) {}
+    private get key() {
+      return `${this.workspaceId}/${this.userId}`;
+    }
+    getPreference = async () => workspacePreferences.get(this.key) ?? {};
+    updatePreference = async (patch: any) => {
+      const current = workspacePreferences.get(this.key) ?? {};
+      const preference = {
+        ...current,
+        notification: mergeNotificationSettings(current.notification, patch.notification),
+      };
+      workspacePreferences.set(this.key, preference);
+      return { preference };
+    };
   },
 }));
 
@@ -107,5 +150,47 @@ describe('NotificationRestService live-transfer reconciliation', () => {
       { category: 'system', readCount: 3, totalCount: 3, unreadCount: 0 },
       { category: 'pending', readCount: 0, totalCount: 1, unreadCount: 1 },
     ]);
+  });
+});
+
+describe('NotificationRestService settings', () => {
+  const service = (workspaceId?: string) =>
+    new NotificationRestService({} as LobeChatDatabase, CALLER, workspaceId);
+
+  beforeEach(() => {
+    personalSettings.clear();
+    workspacePreferences.clear();
+  });
+
+  it('patches personal settings without dropping sibling switches', async () => {
+    personalSettings.set(CALLER, { email: { enabled: true }, inbox: { enabled: false } });
+
+    await expect(
+      service(WORKSPACE).updateSettings('personal', {
+        email: { items: { billing: { a: false } } },
+      }),
+    ).resolves.toEqual({
+      email: { enabled: true, items: { billing: { a: false } } },
+      inbox: { enabled: false },
+    });
+    // A personal write never lands in the workspace store, even with a workspace on the request.
+    expect(await service(WORKSPACE).getSettings('workspace')).toEqual({});
+  });
+
+  it('keeps workspace preferences separate from personal settings', async () => {
+    await service(WORKSPACE).updateSettings('workspace', { im: { enabled: false } });
+
+    expect(await service(WORKSPACE).getSettings('workspace')).toEqual({ im: { enabled: false } });
+    expect(await service('ws-2').getSettings('workspace')).toEqual({});
+    expect(await service().getSettings('personal')).toEqual({});
+  });
+
+  it('rejects workspace scope without a workspace on the request', async () => {
+    await expect(service().getSettings('workspace')).rejects.toMatchObject({
+      name: 'ValidationError',
+    });
+    await expect(
+      service().updateSettings('workspace', { im: { enabled: false } }),
+    ).rejects.toMatchObject({ name: 'ValidationError' });
   });
 });

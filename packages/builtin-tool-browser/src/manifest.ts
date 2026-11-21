@@ -75,12 +75,14 @@ export const BrowserManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: 'Send a keyboard key to the page, e.g. Enter, Tab, Escape, ArrowDown.',
+      description:
+        'Send a key or key combination to the focused element, e.g. Enter, Tab, ArrowDown, Control+a, Shift+Tab. Use ControlOrMeta for shortcuts that are Cmd on macOS and Ctrl elsewhere (select all, copy, paste, undo).',
       name: BrowserApiName.press,
       parameters: {
         properties: {
           key: {
-            description: 'KeyboardEvent.key value (Enter, Tab, Escape, ArrowDown, ...).',
+            description:
+              'Enter, Tab, Escape, Backspace, Delete, Space, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1–F12 or a single character, optionally prefixed with Control/Alt/Shift/Meta/ControlOrMeta joined by "+", e.g. "ControlOrMeta+a".',
             type: 'string',
           },
         },
@@ -108,6 +110,24 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Lay the page out at a fixed viewport size in CSS pixels, e.g. 1440×900 to see the desktop layout or 390×844 for a phone. The size stays for later pages in this conversation. Omit width and height to go back to the default size.',
+      name: BrowserApiName.setViewport,
+      parameters: {
+        properties: {
+          height: {
+            description: 'Viewport height in CSS pixels (240–2160).',
+            type: 'integer',
+          },
+          width: {
+            description: 'Viewport width in CSS pixels (320–3840).',
+            type: 'integer',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Capture a screenshot of the current page. The image is stored and returned to you as a file reference, and is also shown to the USER in chat. Use snapshot/readPage when you only need the page structure or text.',
       name: BrowserApiName.screenshot,
       parameters: {
@@ -126,15 +146,15 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
   ],
   // `client`: runs in the desktop renderer (local runtime). `server`: cloud
-  // agent runs proxy each call back to the bound device via deviceGateway.
-  // The browser panel lives in the desktop app; `lh connect` has none.
-  deviceClients: ['desktop'],
+  // agent runs proxy each call back to the bound device via deviceGateway —
+  // the desktop app's panel, or a headless agent-browser under `lh connect`.
+  deviceClients: ['cli', 'desktop'],
   executors: ['client', 'server'],
   identifier: BrowserIdentifier,
   meta: {
     avatar: '🌐',
     description:
-      'Drive the in-app browser sidebar: navigate, inspect pages via accessibility snapshots, click, fill forms, and capture screenshots — visible to the user in real time.',
+      'Drive a browser on the device: navigate, inspect pages via accessibility snapshots, click, fill forms, and capture screenshots. In the desktop app it is the sidebar browser the user watches live; under the CLI it is a headless browser.',
     title: 'Browser',
   },
   systemRole: systemPrompt,

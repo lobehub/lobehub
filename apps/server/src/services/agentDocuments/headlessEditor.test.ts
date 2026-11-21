@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
+import { AgentDocumentEditRejectedError } from './editRejectedError';
 import {
   applyLiteXMLOperations,
   createAgentMarkdownSnapshot,
@@ -47,6 +48,21 @@ describe('agent document headless editor', () => {
     expect(snapshot.content).toContain('Budget variable: $x$ and $100k');
     expect(hasNodeType(snapshot.editorData, 'math')).toBe(false);
     expect(hasNodeType(snapshot.editorData, 'mathBlock')).toBe(true);
+  });
+
+  it('should round-trip a heading list item between Markdown and editor data', async () => {
+    const markdown = '1. ## Overview\n2. Details\n';
+
+    const fromMarkdown = await createMarkdownEditorSnapshot(markdown);
+    const [overview, details] = (fromMarkdown.editorData as any).root.children[0].children;
+
+    expect(overview.$.listHeading).toBe('h2');
+    expect(details.$.listHeading).toBeUndefined();
+    expect(hasNodeType(fromMarkdown.editorData, 'heading')).toBe(false);
+
+    const fromEditorData = await exportEditorDataSnapshot({ editorData: fromMarkdown.editorData });
+
+    expect(fromEditorData.content).toBe(markdown);
   });
 
   it('should safely serialize concurrent headless document lifecycles', async () => {
@@ -210,6 +226,21 @@ describe('agent document headless editor', () => {
     ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
   });
 
+  it("should mark a rejected node edit as the caller's error", async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+
+    await expect(
+      applyLiteXMLOperations({
+        editorData: initial.editorData,
+        fallbackContent: initial.content,
+        operations: [{ action: 'remove', id: 'missing-node' }],
+      }),
+    ).rejects.toBeInstanceOf(AgentDocumentEditRejectedError);
+  });
+
   describe('LiteXML that is not well-formed', () => {
     // Fragment from a real modifyNodes insert that was reported as
     // "the editor rejected it": the text holds a raw `<model>`.
@@ -297,6 +328,77 @@ describe('agent document headless editor', () => {
         createAgentMarkdownSnapshot('[link](https://example.com) text'),
       ).resolves.toBeDefined();
       await expect(createAgentMarkdownSnapshot('{draft} notes')).resolves.toBeDefined();
+    });
+  });
+
+  // T-775: crawl captures (raw HTML/XML pages that Markdown parsing empties)
+  // used to persist as empty-parse shells via the unguarded snapshot: content=''
+  // + editorData {root:{children:[]}}. The shell then read back as Lexical error
+  // #38 ("the editor state is empty"), blocked copy/remove cleanup, and cloned
+  // itself through copyDocument. The guarded agent snapshot must reject those
+  // bodies instead of minting another shell.
+  describe('empty-parse bodies (crawl captures)', () => {
+    const htmlBody =
+      '<!DOCTYPE html><html><head><title>Page</title></head><body>' +
+      '<div class="row"><span>cell</span></div>'.repeat(500) +
+      '</body></html>';
+
+    const xmlBody =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<results>' +
+      Array.from(
+        { length: 200 },
+        (_, i) =>
+          `<result><title>T${i}</title><content>Body text ${i} with some length to it.</content><url>https://example.com/${i}</url></result>`,
+      ).join('') +
+      '</results>';
+
+    it('rejects a raw HTML crawl body that parses to nothing', async () => {
+      // Unguarded snapshot silently mints the shell:
+      const unguarded = await createMarkdownEditorSnapshot(htmlBody);
+      expect(unguarded.content).toBe('');
+      expect(isValidEditorData(unguarded.editorData)).toBe(false);
+
+      await expect(createAgentMarkdownSnapshot(htmlBody)).rejects.toThrow(
+        /empty document after Markdown parsing/i,
+      );
+    });
+
+    it('rejects a raw XML crawl body that parses to nothing', async () => {
+      const unguarded = await createMarkdownEditorSnapshot(xmlBody);
+      expect(unguarded.content).toBe('');
+
+      // `<?xml …` hits the LiteXML guard before the empty-parse guard; either
+      // way the body is rejected and nothing is persisted.
+      await expect(createAgentMarkdownSnapshot(xmlBody)).rejects.toThrow(
+        /looks like LiteXML|empty document after Markdown parsing/i,
+      );
+    });
+
+    it('rejects an XML document fragment body that parses to nothing', async () => {
+      // A comment-only XML fragment carries no Markdown-renderable text — the
+      // empty-parse guard's case.
+      const fragment =
+        '<results>' +
+        Array.from({ length: 200 }, (_, i) => `<!-- result row ${i} -->`).join('') +
+        '</results>';
+
+      const unguarded = await createMarkdownEditorSnapshot(fragment);
+      expect(unguarded.content).toBe('');
+
+      await expect(createAgentMarkdownSnapshot(fragment)).rejects.toThrow(
+        /empty document after Markdown parsing/i,
+      );
+    });
+
+    it('still accepts real Markdown bodies of any length', async () => {
+      const markdown = Array.from(
+        { length: 300 },
+        (_, i) => `## Section ${i}\n\nParagraph ${i} with content.\n`,
+      ).join('\n');
+
+      const snapshot = await createAgentMarkdownSnapshot(markdown);
+      expect(snapshot.content).toContain('Section 0');
+      expect(isValidEditorData(snapshot.editorData)).toBe(true);
     });
   });
 });

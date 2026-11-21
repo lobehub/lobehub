@@ -11,6 +11,14 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
 
+const createStreamClient = () => ({
+  chatCompletionStream: vi.fn().mockReturnValue({
+    async *[Symbol.asyncIterator]() {
+      yield { choices: [] } as any;
+    },
+  }),
+});
+
 describe('LobeHuggingFaceAI', () => {
   let instance: any;
 
@@ -141,13 +149,7 @@ describe('LobeHuggingFaceAI', () => {
 
     describe('createChatCompletionStream', () => {
       it('should call client.chatCompletionStream with correct parameters', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
+        const mockClient = createStreamClient() as any;
 
         const mockInstance = {
           baseURL: 'https://api.example.com',
@@ -175,13 +177,7 @@ describe('LobeHuggingFaceAI', () => {
       });
 
       it('should handle undefined baseURL', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
+        const mockClient = createStreamClient() as any;
 
         const mockInstance = {
           baseURL: undefined,
@@ -201,157 +197,29 @@ describe('LobeHuggingFaceAI', () => {
         );
       });
 
-      it('should clamp top_p to 0.99 when >= 1', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
+      it.each([
+        ['should clamp top_p to 0.99 when >= 1', { top_p: 1 }, 0.99],
+        ['should clamp top_p to 0.99 when > 1', { top_p: 1.5 }, 0.99],
+        ['should set top_p to undefined when 0 (falsy value)', { top_p: 0 }, undefined],
+        ['should clamp top_p to 0.01 when < 0', { top_p: -0.5 }, 0.01],
+        ['should keep top_p unchanged when in valid range', { top_p: 0.5 }, 0.5],
+        ['should set top_p to undefined when not provided', {}, undefined],
+      ] as const)('%s', (_name, topPInput, expected) => {
+        const mockClient = createStreamClient() as any;
 
         const mockInstance = { baseURL: 'https://api.example.com' };
 
         const payload = {
           messages: [{ role: 'user', content: 'test' }],
           model: 'test-model',
-          top_p: 1,
+          ...topPInput,
         };
 
         params.customClient!.createChatCompletionStream(mockClient, payload as any, mockInstance);
 
         expect(mockClient.chatCompletionStream).toHaveBeenCalledWith(
           expect.objectContaining({
-            top_p: 0.99,
-          }),
-        );
-      });
-
-      it('should clamp top_p to 0.99 when > 1', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
-
-        const mockInstance = { baseURL: 'https://api.example.com' };
-
-        const payload = {
-          messages: [{ role: 'user', content: 'test' }],
-          model: 'test-model',
-          top_p: 1.5,
-        };
-
-        params.customClient!.createChatCompletionStream(mockClient, payload as any, mockInstance);
-
-        expect(mockClient.chatCompletionStream).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: 0.99,
-          }),
-        );
-      });
-
-      it('should set top_p to undefined when 0 (falsy value)', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
-
-        const mockInstance = { baseURL: 'https://api.example.com' };
-
-        const payload = {
-          messages: [{ role: 'user', content: 'test' }],
-          model: 'test-model',
-          top_p: 0,
-        };
-
-        params.customClient!.createChatCompletionStream(mockClient, payload as any, mockInstance);
-
-        expect(mockClient.chatCompletionStream).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: undefined,
-          }),
-        );
-      });
-
-      it('should clamp top_p to 0.01 when < 0', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
-
-        const mockInstance = { baseURL: 'https://api.example.com' };
-
-        const payload = {
-          messages: [{ role: 'user', content: 'test' }],
-          model: 'test-model',
-          top_p: -0.5,
-        };
-
-        params.customClient!.createChatCompletionStream(mockClient, payload as any, mockInstance);
-
-        expect(mockClient.chatCompletionStream).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: 0.01,
-          }),
-        );
-      });
-
-      it('should keep top_p unchanged when in valid range', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
-
-        const mockInstance = { baseURL: 'https://api.example.com' };
-
-        const payload = {
-          messages: [{ role: 'user', content: 'test' }],
-          model: 'test-model',
-          top_p: 0.5,
-        };
-
-        params.customClient!.createChatCompletionStream(mockClient, payload as any, mockInstance);
-
-        expect(mockClient.chatCompletionStream).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: 0.5,
-          }),
-        );
-      });
-
-      it('should set top_p to undefined when not provided', () => {
-        const mockClient = {
-          chatCompletionStream: vi.fn().mockReturnValue({
-            async *[Symbol.asyncIterator]() {
-              yield { choices: [] } as any;
-            },
-          }),
-        } as any;
-
-        const mockInstance = { baseURL: 'https://api.example.com' };
-
-        const payload = {
-          messages: [{ role: 'user', content: 'test' }],
-          model: 'test-model',
-        };
-
-        params.customClient!.createChatCompletionStream(mockClient, payload as any, mockInstance);
-
-        expect(mockClient.chatCompletionStream).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: undefined,
+            top_p: expected,
           }),
         );
       });

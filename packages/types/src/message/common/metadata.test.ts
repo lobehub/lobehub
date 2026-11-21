@@ -1,9 +1,71 @@
 import { describe, expect, it } from 'vitest';
 
 import { RequestTrigger } from '../../agentRuntime';
-import { MessageMetadataSchema } from './metadata';
+import { UpdateMessageParamsSchema } from '../db/params';
+import {
+  ClientMessageMetadataSchema,
+  MessageMetadataSchema,
+  omitServerOwnedMessageMetadata,
+} from './metadata';
 
 describe('MessageMetadataSchema', () => {
+  it.each([
+    { action: 'create', targets: [{ taskId: 'task-1' }], type: 'task' },
+    {
+      args: { title: 'one' },
+      data: { body: 'untruncated' },
+      provider: 'example',
+      toolName: 'create',
+      type: 'skill',
+    },
+    {
+      action: 'register',
+      document: { documentId: 'doc-1', changeType: 'created', toolName: 'createDocument' },
+      type: 'document',
+    },
+    { action: 'delete', document: { documentId: 'doc-1' }, type: 'document' },
+    {
+      action: 'register',
+      canvas: {
+        canvasId: 'canvas-1',
+        title: 'one',
+        toolName: 'createCanvas',
+        metadata: {
+          entry: 'index.html',
+          fileCount: 1,
+          manifestKey: 'manifest',
+          runtimeMajor: 1,
+          totalSize: 10,
+        },
+      },
+      type: 'canvas',
+    },
+  ])('preserves a complete durable $type Work registration intent', (intent) => {
+    expect(MessageMetadataSchema.parse({ toolWorkRegistration: intent })).toEqual({
+      toolWorkRegistration: intent,
+    });
+  });
+
+  it('rejects malformed durable Work identities', () => {
+    expect(
+      MessageMetadataSchema.safeParse({
+        toolWorkRegistration: {
+          type: 'document',
+          action: 'register',
+          document: { documentId: 42 },
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('preserves the native Codex turn separately from message item provenance', () => {
+    const metadata = {
+      codexTurnId: 'turn-7',
+      heteroMessageId: 'item-3',
+      heteroSessionId: 'native-thread',
+    };
+    expect(MessageMetadataSchema.parse(metadata)).toEqual(metadata);
+  });
   it('preserves explicit internal agent-dispatch semantics', () => {
     const parsed = MessageMetadataSchema.parse({
       agentDispatch: { kind: 'callAgent', visibility: 'internal' },
@@ -53,5 +115,62 @@ describe('MessageMetadataSchema', () => {
       heterogeneousToolStateOperationId: 'op-1',
       heterogeneousToolStateSeq: 4,
     });
+  });
+
+  it('preserves the agent sender block so an agent → agent turn keeps its author', () => {
+    const parsed = MessageMetadataSchema.parse({
+      agentSender: {
+        agentId: 'agt_coco',
+        avatar: 'https://a.com/coco.png',
+        name: 'Coco',
+        title: 'Product Agent',
+        topicId: 'tpc_source',
+        topicTitle: 'Release risk review',
+      },
+      unknown: 'stripped',
+    });
+
+    expect(parsed).toEqual({
+      agentSender: {
+        agentId: 'agt_coco',
+        avatar: 'https://a.com/coco.png',
+        name: 'Coco',
+        title: 'Product Agent',
+        topicId: 'tpc_source',
+        topicTitle: 'Release risk review',
+      },
+    });
+  });
+});
+
+/**
+ * `agentSender` renders a message as another agent's, so only the server may
+ * write it — a client must not be able to forge it through a message write.
+ */
+describe('client-writable message metadata', () => {
+  const forged = { agentId: 'agt_victim', name: 'Victim Agent' };
+
+  it('drops agentSender from client metadata and keeps the rest', () => {
+    expect(ClientMessageMetadataSchema.parse({ agentSender: forged, collapsed: true })).toEqual({
+      collapsed: true,
+    });
+  });
+
+  it('drops agentSender from a message.update payload', () => {
+    const parsed = UpdateMessageParamsSchema.parse({
+      content: 'edited',
+      metadata: { agentSender: forged, collapsed: true },
+    });
+
+    expect(parsed.metadata).toEqual({ collapsed: true });
+  });
+
+  it('drops agentSender from untyped metadata without touching other keys', () => {
+    expect(omitServerOwnedMessageMetadata({ agentSender: forged, custom: 1 })).toEqual({
+      custom: 1,
+    });
+    expect(omitServerOwnedMessageMetadata(undefined)).toBeUndefined();
+    const clean = { custom: 1 };
+    expect(omitServerOwnedMessageMetadata(clean)).toBe(clean);
   });
 });

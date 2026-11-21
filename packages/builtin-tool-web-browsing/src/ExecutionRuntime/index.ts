@@ -10,13 +10,44 @@ import type {
 } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
-import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
+import {
+  CRAWL_CONTENT_LIMITED_COUNT,
+  CRAWL_SAVE_MAX_CHARS,
+  SEARCH_ITEM_LIMITED_COUNT,
+} from '../const';
+
+const MAX_LOGGED_ERROR_LENGTH = 500;
+
+/**
+ * One-line summary of a document save failure. A Drizzle "Failed query" error
+ * embeds every bound parameter (the whole page and its editor JSON) in its
+ * message, so log the innermost driver cause, truncated.
+ */
+const describeSaveError = (error: unknown): string => {
+  let current = error;
+  while (current instanceof Error && current.cause !== undefined) current = current.cause;
+
+  const code = (current as { code?: unknown } | null)?.code;
+  const message = current instanceof Error ? current.message : String(current);
+  const summary = typeof code === 'string' ? `${code} ${message}` : message;
+
+  return summary.length > MAX_LOGGED_ERROR_LENGTH
+    ? `${summary.slice(0, MAX_LOGGED_ERROR_LENGTH)}…`
+    : summary;
+};
 
 export interface WebBrowsingDocumentService {
   /** Returns the agent document binding when one was created, so its id can be handed to the model. */
   associateDocument: (documentId: string) => Promise<{ id?: string } | void>;
   createDocument: (params: {
     content: string;
+    /**
+     * Crawler content type from `CrawlSuccessResult`. The persistence layer
+     * wraps `json` bodies in a fenced code block — the markdown snapshot
+     * guard rejects raw JSON (markdown parsing would rewrite it), but fenced
+     * blocks are stored byte-exact.
+     */
+    contentType?: 'json';
     description?: string;
     title: string;
     url: string;
@@ -111,9 +142,17 @@ export class WebBrowsingExecutionRuntime {
           const pageData = item.data as CrawlSuccessResult;
           if (!pageData.content) return;
 
+          if (pageData.content.length > CRAWL_SAVE_MAX_CHARS) {
+            console.warn(
+              `[WebBrowsing] Skipped saving crawl result as a document, ${pageData.content.length} characters exceeds the ${CRAWL_SAVE_MAX_CHARS} limit (${pageData.url})`,
+            );
+            return;
+          }
+
           try {
             const doc = await this.documentService!.createDocument({
               content: pageData.content,
+              ...(pageData.contentType === 'json' && { contentType: 'json' }),
               description: pageData.description || `Crawled from ${pageData.url}`,
               title: pageData.title || pageData.url,
               url: pageData.url,
@@ -122,7 +161,9 @@ export class WebBrowsingExecutionRuntime {
             const binding = await this.documentService!.associateDocument(doc.id);
             if (binding?.id) savedDocumentIds.set(pageData.url, binding.id);
           } catch (error) {
-            console.error('[WebBrowsing] Failed to save crawl result to agent document:', error);
+            console.error(
+              `[WebBrowsing] Failed to save crawl result to agent document (${pageData.url}): ${describeSaveError(error)}`,
+            );
           }
         }),
       );

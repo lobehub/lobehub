@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./store', () => ({
+  conversationSelectors: { composerKey: () => 'main_agt_inbox_new' },
   useConversationStore: (selector: (s: unknown) => unknown) =>
     selector({
       context: mocks.context,

@@ -2,24 +2,27 @@
 
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Badge,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   Select,
   Table,
   type TableColumn,
   Tag,
   Tooltip,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { Footprints, Play, RotateCcw, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import SegmentBar from '@/routes/(main)/eval/features/SegmentBar';
+import { densityVars } from '@/styles/densityVars';
 
 import { getResumeTarget } from '../resumeTarget';
 
@@ -87,12 +90,12 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 999px;
   `,
   filterBar: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   summaryBar: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 20px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,

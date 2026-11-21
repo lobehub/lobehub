@@ -5,9 +5,8 @@ import {
   type SidebarAgentLabel,
   type SidebarVisibility,
 } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
@@ -32,10 +31,12 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentService } from '@/services/agent';
@@ -48,6 +49,7 @@ import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 import { useRevealSidebarSection } from '../../../../hooks';
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
+import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
 import { getAgentPublishErrorKey } from './agentMenuVisibility';
 
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
@@ -89,7 +91,7 @@ export const useAgentDropdownMenu = ({
   title,
   userId,
   visibility,
-}: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
+}: UseAgentDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common', 'setting']);
   const navigate = useWorkspaceAwareNavigate();
 
@@ -142,6 +144,7 @@ export const useAgentDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
+  const refreshWorkspaceUserPreference = useUserStore((s) => s.refreshWorkspaceUserPreference);
   const isShownInSidebar = isSidebarItemVisible({ id, slug, type: 'agent', userId });
   const isPrivate = visibility === 'private';
   const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
@@ -169,6 +172,10 @@ export const useAgentDropdownMenu = ({
   // Row-level ownership: delete/transfer/visibility management stays scoped
   // to the creator or a workspace owner, separate from collaborative editing.
   const canManage = useResourceManageable(userId);
+  // Delete also opens to a workspace Admin on another member's shared agent
+  // (server `canManage`); the confirmation then warns that someone else created
+  // it, and the server only accepts the delete with that acknowledgment.
+  const canDelete = canManage || canManageResource;
 
   // Cross-workspace Transfer to… / Copy to… items (null when workspace
   // feature is off or the viewer lacks permission for this agent)
@@ -189,6 +196,8 @@ export const useAgentDropdownMenu = ({
     { userId, visibility },
   );
 
+  const copyAgentIdItem = useCopyAgentIdMenuItem(id);
+
   const isDefault = group === SessionDefaultGroup.Default;
 
   // Visibility flips move the item across accordions. Reveal the destination
@@ -197,21 +206,34 @@ export const useAgentDropdownMenu = ({
   // vanish from the sidebar.
   const revealSidebarSection = useRevealSidebarSection();
 
+  // Workspace: a personal pin for every member plus an owner/admin-only team
+  // pin on public rows. Personal mode keeps the single column-backed pin.
+  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
+    id,
+    pinned,
+    type: 'agent',
+    visibility,
+  });
+
   return useMemo(
     () => () =>
       [
-        ...(canEdit
-          ? [
-              {
-                icon: <Icon icon={pinned ? PinOff : Pin} />,
-                key: 'pin',
-                label: t(pinned ? 'pinOff' : 'pin'),
-                onClick: () => pinAgent(id, !pinned),
-                sfSymbol: pinned ? 'pin.slash' : 'pin',
-              },
-            ]
-          : []),
-        ...(isShownInSidebar
+        ...(activeWorkspaceId
+          ? workspacePinItems
+          : canEdit
+            ? [
+                {
+                  icon: <Icon icon={pinned ? PinOff : Pin} />,
+                  key: 'pin',
+                  label: t(pinned ? 'pinOff' : 'pin'),
+                  onClick: () => pinAgent(id, !pinned),
+                  sfSymbol: pinned ? 'pin.slash' : 'pin',
+                },
+              ]
+            : []),
+        // Team-pinned rows are the fixed section every member sees; hiding
+        // them would do nothing there.
+        ...(isShownInSidebar && !isTeamPinned
           ? [
               {
                 icon: <Icon icon={EyeOffIcon} />,
@@ -240,6 +262,7 @@ export const useAgentDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
+        ...(copyAgentIdItem ? [copyAgentIdItem] : []),
         ...(canConfigure || canCreate || canEdit ? [{ type: 'divider' as const }] : []),
         ...(canConfigure
           ? [
@@ -490,7 +513,12 @@ export const useAgentDropdownMenu = ({
                           onOk: async () => {
                             try {
                               await agentService.publishAgentToWorkspace(id);
-                              await refreshAgentList();
+                              // Publishing moves a private pin into this
+                              // member's personal pin list server-side.
+                              await Promise.all([
+                                refreshAgentList(),
+                                refreshWorkspaceUserPreference(),
+                              ]);
                               revealSidebarSection('agent');
                               toast.success(
                                 t('agent.publishToWorkspaceSuccess', {
@@ -538,7 +566,7 @@ export const useAgentDropdownMenu = ({
                             try {
                               await agentService.setAgentVisibility(id, 'private');
                               await refreshAgentList();
-                              revealSidebarSection('private');
+                              revealSidebarSection('agent');
                               toast.success(t('makePrivate.success', { ns: 'common' }));
                             } catch (error) {
                               console.error('Failed to make agent private:', error);
@@ -552,7 +580,7 @@ export const useAgentDropdownMenu = ({
                     },
                   ]
                 : []),
-              ...(canManage
+              ...(canDelete
                 ? [
                     { type: 'divider' as const },
                     {
@@ -562,20 +590,16 @@ export const useAgentDropdownMenu = ({
                       label: t('delete', { ns: 'common' }),
                       onClick: ({ domEvent }: any) => {
                         domEvent.stopPropagation();
-                        confirmModal({
-                          cancelText: t('cancel', { ns: 'common' }),
-                          content: t('confirmRemoveSessionItemAlert'),
-                          okButtonProps: { danger: true },
-                          okText: t('delete', { ns: 'common' }),
-                          onOk: async () => {
+                        confirmRemoveAgent({
+                          agentId: id,
+                          onConfirm: async (options) => {
                             try {
-                              await removeAgent(id);
+                              await removeAgent(id, options);
                               toast.success(t('confirmRemoveSessionSuccess'));
                             } catch (error) {
                               toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                             }
                           },
-                          title: t('delete', { ns: 'common' }),
                         });
                       },
                       sfSymbol: 'trash',
@@ -584,14 +608,16 @@ export const useAgentDropdownMenu = ({
                 : []),
             ]
           : []),
-      ] as MenuProps['items'],
+      ] as DropdownItem[],
     [
       activeWorkspaceId,
+      workspacePinItems,
+      isTeamPinned,
       canCreate,
       canConfigure,
       canEdit,
-      canManage,
       canManageResource,
+      canDelete,
       navigate,
       pinned,
       id,
@@ -610,6 +636,7 @@ export const useAgentDropdownMenu = ({
       labelsEnabled,
       openCreateLabelModal,
       openAgentInNewWindow,
+      copyAgentIdItem,
       sessionCustomGroups,
       group,
       isDefault,
@@ -621,6 +648,7 @@ export const useAgentDropdownMenu = ({
       isShownInSidebar,
       setSidebarItemVisible,
       refreshAgentList,
+      refreshWorkspaceUserPreference,
       revealSidebarSection,
       t,
     ],

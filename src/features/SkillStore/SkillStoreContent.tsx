@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
+import { Flexbox, Segmented } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,10 +30,10 @@ export const SkillStoreContent = () => {
   const useFetchUninstalledBuiltinTools = useToolStore((s) => s.useFetchUninstalledBuiltinTools);
   useFetchUninstalledBuiltinTools(true);
 
-  const options: TabsItem[] = [
-    { key: SkillStoreTab.LobeHub, label: t('skillStore.tabs.lobehub') },
-    { key: SkillStoreTab.Skills, label: t('skillStore.tabs.skills') },
-    { key: SkillStoreTab.MCP, label: t('skillStore.tabs.mcp') },
+  const options = [
+    { label: t('skillStore.tabs.lobehub'), value: SkillStoreTab.LobeHub },
+    { label: t('skillStore.tabs.skills'), value: SkillStoreTab.Skills },
+    { label: t('skillStore.tabs.mcp'), value: SkillStoreTab.MCP },
   ];
 
   const isLobeHub = activeTab === SkillStoreTab.LobeHub;
@@ -43,25 +42,25 @@ export const SkillStoreContent = () => {
 
   return (
     <Flexbox gap={8} style={{ maxHeight: '75vh' }} width={'100%'}>
-      <Flexbox gap={8}>
+      {/* Source chips, then search and Add on one row, like the connectors page header. */}
+      <Flexbox gap={12}>
+        <Segmented<SkillStoreTab>
+          aria-label={t('connectorMarket.source')}
+          options={options}
+          style={{ alignSelf: 'flex-start' }}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
         <Flexbox horizontal align={'center'} gap={8}>
-          <Tabs
-            activeKey={activeTab}
-            items={options}
-            style={{ flex: 1 }}
-            styles={{
-              list: { display: 'flex', width: '100%' },
-              tab: { flex: 1 },
-            }}
-            onChange={(key) => setActiveTab(key as SkillStoreTab)}
-          />
+          <Flexbox flex={1}>
+            <Search
+              activeTab={activeTab}
+              onLobeHubSearch={setLobehubKeywords}
+              onSkillSearch={setSkillKeywords}
+            />
+          </Flexbox>
           <AddSkillButton />
         </Flexbox>
-        <Search
-          activeTab={activeTab}
-          onLobeHubSearch={setLobehubKeywords}
-          onSkillSearch={setSkillKeywords}
-        />
       </Flexbox>
       <Flexbox height={496} style={{ marginBlockEnd: -12, marginInline: -16 }}>
         <Flexbox flex={1} style={{ display: isLobeHub ? 'flex' : 'none', overflow: 'auto' }}>

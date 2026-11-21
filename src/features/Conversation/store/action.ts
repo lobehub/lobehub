@@ -13,7 +13,7 @@ import {
 import { type State } from './initialState';
 import { initialState } from './initialState';
 import { type DataAction } from './slices/data/action';
-import { dataSlice } from './slices/data/action';
+import { chatTranscriptState, dataSlice } from './slices/data/action';
 import { type GenerationAction } from './slices/generation/action';
 import { generationSlice } from './slices/generation/action';
 import { type InputAction } from './slices/input/action';
@@ -48,21 +48,11 @@ export interface CreateStoreParams {
   context: ConversationContext;
   hooks?: ConversationHooks;
   /**
-   * Messages to seed the freshly-created store with, already known by the parent
-   * (ConversationArea reads them from ChatStore's `dbMessagesMap`). Seeding at
-   * creation — rather than waiting for StoreUpdater's post-mount effect — is what
-   * keeps a store *mount* from painting an empty/skeleton frame first.
-   *
-   * The store instance now survives topic switches (the Provider is not keyed by
-   * context — StoreUpdater resets state in place instead), so this only covers
-   * genuine mounts: first navigation to a surface, or hosts that key the whole
-   * provider themselves (e.g. eval bench). Without a seed such a mount starts
-   * `messagesInit: false` and only gets populated by a post-paint effect — one
-   * blank frame, i.e. the "message disappears then reappears" flicker.
-   * `undefined` means "not fetched yet" (stay uninitialized); `[]` means
-   * "loaded, empty".
+   * A static transcript (a render gallery, a share snapshot). Held by this
+   * store and never synced; without it the store mirrors the chat store bucket
+   * of `context`, read at creation so a mount paints its rows on the first frame.
    */
-  initialMessages?: UIChatMessage[];
+  messages?: UIChatMessage[];
   skipFetch?: boolean;
 }
 
@@ -71,24 +61,22 @@ type CreateStore = (
 ) => StateCreator<Store, [['zustand/devtools', never]]>;
 
 export const createStoreAction: CreateStore =
-  ({ composerTarget, context, hooks = {}, initialMessages, skipFetch }) =>
+  ({ composerTarget, context, hooks = {}, messages, skipFetch }) =>
   (...params) => ({
     ...initialState,
     composerTarget: composerTarget ?? createComposerTarget(messageMapKey(context)),
     context,
     hooks,
-    skipFetch,
-    // Seed known messages so a remount renders content on its first paint instead
-    // of a blank/skeleton frame. `initialMessages` truthy ([] included) mirrors
-    // StoreUpdater's `hasInitMessages = !!messages` → messagesInit semantics.
-    ...(initialMessages
+    ...(messages
       ? {
-          dbMessages: initialMessages,
-          displayMessages: parse(initialMessages, undefined, { threadId: context.threadId })
+          dbMessages: messages,
+          displayMessages: parse(messages, undefined, { threadId: context.threadId ?? undefined })
             .flatList,
           messagesInit: true,
+          skipFetch: true,
+          transcriptSource: 'static' as const,
         }
-      : {}),
+      : { ...chatTranscriptState(context, skipFetch, []), skipFetch }),
     // ===== Slices =====
     ...dataSlice(...params),
     ...generationSlice(...params),

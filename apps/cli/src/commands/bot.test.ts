@@ -338,6 +338,26 @@ describe('bot command', () => {
       });
     });
 
+    it('turns the processing message off without touching other settings', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'public-key' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'bot',
+        'update',
+        'b1',
+        '--processing-message',
+        'off',
+      ]);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        id: 'b1',
+        settings: { processingMessage: false },
+      });
+    });
+
     it('does not carry credentials from the old platform when changing platform', async () => {
       mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'discord-public-key' });
 
@@ -454,6 +474,85 @@ describe('bot command', () => {
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('watch-keywords', () => {
+    const withKeywords = (watchKeywords: unknown[]) => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        { agentId: 'agent1', id: 'b1', platform: 'discord' },
+      ]);
+      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([
+        { id: 'b1', platform: 'discord', settings: { dmPolicy: 'open', watchKeywords } },
+      ]);
+    };
+    const savedKeywords = () =>
+      mockTrpcClient.agentBotProvider.update.mutate.mock.calls[0][0].settings.watchKeywords;
+
+    it('adds a keyword as one of the bot names with --as-name', async () => {
+      withKeywords([{ keyword: 'bug' }]);
+
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'bot',
+        'watch-keywords',
+        'add',
+        'b1',
+        'Canis',
+        '--as-name',
+      ]);
+
+      expect(savedKeywords()).toEqual([
+        { instruction: undefined, keyword: 'bug' },
+        { asName: true, keyword: 'canis' },
+      ]);
+    });
+
+    it('keeps the name mark on existing entries when another keyword is added', async () => {
+      withKeywords([{ asName: true, keyword: 'canis' }]);
+
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'bot',
+        'watch-keywords',
+        'add',
+        'b1',
+        'bug',
+      ]);
+
+      expect(savedKeywords()).toEqual([
+        { asName: true, instruction: undefined, keyword: 'canis' },
+        { keyword: 'bug' },
+      ]);
+    });
+
+    it('marks an existing keyword as a name when re-added with --as-name', async () => {
+      withKeywords([{ instruction: 'look', keyword: 'canis' }]);
+
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'bot',
+        'watch-keywords',
+        'add',
+        'b1',
+        'canis',
+        '--as-name',
+      ]);
+
+      expect(savedKeywords()).toEqual([{ asName: true, instruction: 'look', keyword: 'canis' }]);
+    });
+
+    it('shows which keywords are bot names in the list', async () => {
+      withKeywords([{ asName: true, keyword: 'canis' }, { keyword: 'bug' }]);
+
+      await createProgram().parseAsync(['node', 'test', 'bot', 'watch-keywords', 'list', 'b1']);
+
+      const printed = consoleSpy.mock.calls.map((call) => String(call[0]));
+      expect(printed[0]).toContain('BOT NAME');
+      expect(printed.find((line) => line.includes('canis'))).toContain('yes');
     });
   });
 });

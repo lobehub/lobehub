@@ -15,7 +15,6 @@ export {
 export type {
   ServerDefaultHeterogeneousAgentType,
   ServerDefaultHeterogeneousIngress,
-  ServerDefaultHeterogeneousModelPolicy,
   ServerDefaultHeterogeneousTokenHeader,
 } from './serverDefault';
 export {

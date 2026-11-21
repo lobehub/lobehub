@@ -1,3 +1,9 @@
+import {
+  readTerminalEvidenceMetadata,
+  TERMINAL_ARTIFACT_KEYS,
+  type TerminalArtifactKey,
+} from '@lobechat/utils/verify/terminalEvidence';
+
 import { FileModel } from '@/database/models/file';
 import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
@@ -77,5 +83,53 @@ export const createEvidenceFileResolver = (
       console.error('[verify:getReportBundle:resolveFileMeta]', error);
       return empty;
     }
+  };
+};
+
+/** A terminal evidence artifact as the page loads it: a signed URL in place of the file id. */
+export interface TerminalArtifactLink {
+  fileUrl: string | null;
+  sha256: string;
+  size: number;
+}
+
+/**
+ * Display metadata for an evidence row: its own file, plus — for a `terminal`
+ * evidence — signed URLs for the stdout / stderr / output / recording files
+ * its record references. Unknown or invalid records resolve to no artifacts,
+ * and the page falls back to the row's text payload.
+ */
+export const resolveEvidenceFiles = async <
+  T extends { fileId?: string | null; metadata?: unknown; type: string },
+>(
+  resolveFileMeta: (fileId: string | null) => Promise<EvidenceFileMeta>,
+  evidence: T,
+): Promise<
+  T &
+    EvidenceFileMeta & {
+      terminalArtifacts?: Partial<Record<TerminalArtifactKey, TerminalArtifactLink>>;
+    }
+> => {
+  const meta = await resolveFileMeta(evidence.fileId ?? null);
+  if (evidence.type !== 'terminal') return { ...evidence, ...meta };
+
+  const terminal = readTerminalEvidenceMetadata(evidence.metadata);
+  if (!terminal) return { ...evidence, ...meta };
+
+  const entries = await Promise.all(
+    TERMINAL_ARTIFACT_KEYS.map(async (key) => {
+      const artifact = terminal.artifacts[key];
+      if (!artifact?.fileId) return null;
+      const file = await resolveFileMeta(artifact.fileId);
+      return [
+        key,
+        { fileUrl: file.fileUrl, sha256: artifact.sha256, size: artifact.size },
+      ] as const;
+    }),
+  );
+  return {
+    ...evidence,
+    ...meta,
+    terminalArtifacts: Object.fromEntries(entries.filter((entry) => entry !== null)),
   };
 };

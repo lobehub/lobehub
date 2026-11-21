@@ -35,10 +35,14 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
   };
 
   return (
-    <Flexbox gap={2} style={{ minWidth: 300 }}>
+    // lobe-ui List rows carry no outer padding, so the panel keeps a 4px bottom
+    // inset (matching the rows' 4px side inset) or the last row sits on the edge.
+    <Flexbox gap={2} paddingBlock={'0 4px'} style={{ minWidth: 300 }}>
       {isDesktop || isLoginWithAuth ? (
         <>
-          <UserInfo avatarProps={{ clickable: false }} />
+          {/* The section below opens with gap + divider margin (6px), so a 6px bottom
+              padding keeps the header's space below the avatar equal to the 12px above. */}
+          <UserInfo avatarProps={{ clickable: false }} paddingBlock={'12px 6px'} />
           <UserPanelStatistics />
           {enableBusinessFeatures && <BusinessPanelContent />}
           <UserPanelWorkspaceSection onSwitch={closePopover} />

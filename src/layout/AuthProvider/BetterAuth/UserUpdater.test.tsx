@@ -99,6 +99,23 @@ describe('UserUpdater', () => {
     expect(useUserStore.getState().isSignedIn).toBe(true);
   });
 
+  it('restores cached profile and settings while the session keeps its own identity', () => {
+    writeUserDisplaySnapshot('u1', {
+      firstName: 'Cached',
+      fullName: 'Stale Name',
+      interests: ['design'],
+      settings: { general: { fontSize: 18 } },
+    });
+    useSessionMock.mockReturnValue(sampleSession());
+    render(<UserUpdater />);
+
+    const { settings, user } = useUserStore.getState();
+    expect(user?.firstName).toBe('Cached');
+    expect(user?.interests).toEqual(['design']);
+    expect(user?.fullName).toBe('Alice');
+    expect(settings.general?.fontSize).toBe(18);
+  });
+
   it('does not restore another user display snapshot or authenticate from a cache entry', () => {
     writeUserDisplaySnapshot('u1', {
       avatar: '/private-avatar.webp',

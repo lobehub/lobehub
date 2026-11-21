@@ -1,26 +1,19 @@
-import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import { AgentGraphSchema } from '@lobechat/types/agent/graph';
-import { type Command, InvalidArgumentError } from 'commander';
+import { type Command, InvalidArgumentError, Option } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { getAgentStreamAuthInfo } from '../api/http';
-import { resolveAgentGatewayUrl } from '../settings';
-import type { AgentRunOutcome } from '../utils/agentRunOutcome';
-import { AGENT_RUN_EXIT_CODES, colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
-import {
-  replayAgentEvents,
-  streamAgentEvents,
-  streamAgentEventsViaWebSocket,
-} from '../utils/agentStream';
-import { resolveLocalDeviceId } from '../utils/device';
+import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log, setVerbose } from '../utils/logger';
+import { log } from '../utils/logger';
+import { registerAgentAccountCommand, registerAgentInboxCommand } from './agent/account';
+import { registerAgentMoveCommands } from './agent/move';
 import { resolveAgentId } from './agent/resolveAgentId';
-import { pollAgentRunStatus, probeRunOutcome, RUN_POLL_INTERVAL_MS } from './agent/runStatus';
+import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
@@ -51,12 +44,25 @@ const readJsonObjectFile = async (
   return parsed as Record<string, unknown>;
 };
 
+/** Values `agent.createAgent` accepts for `visibility`; omit it to keep the server default. */
+const AGENT_VISIBILITIES = ['private', 'public'] as const;
+type AgentVisibility = (typeof AGENT_VISIBILITIES)[number];
+
 const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
   readJsonObjectFile(agencyConfigFile, 'agencyConfig');
+
+interface AgentListOptions {
+  json?: string | boolean;
+  keyword?: string;
+  limit?: string;
+  tag?: string;
+}
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
+  registerAgentAccountCommand(agent);
+  registerAgentInboxCommand(agent);
 
   // ── list ──────────────────────────────────────────────
 
@@ -65,8 +71,9 @@ export function registerAgentCommand(program: Command) {
     .description('List agents')
     .option('-L, --limit <n>', 'Maximum number of items', '30')
     .option('-k, --keyword <keyword>', 'Filter by keyword')
+    .option('--tag <tag>', 'Only agents carrying this tag')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
+    .action(async (options: AgentListOptions) => {
       const client = await getTrpcClient();
 
       // The inbox (Lobe AI) is a real assistant the user can open, and this is
@@ -78,16 +85,34 @@ export function registerAgentCommand(program: Command) {
         keyword?: string;
         limit?: number;
         offset?: number;
+        tag?: string;
       } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
+      if (options.tag?.trim()) input.tag = options.tag.trim();
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
       const result = await client.agent.queryAgents.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+      const listed: any[] = Array.isArray(result) ? result : ((result as any).items ?? []);
+      // An older server drops the unknown `tag` input and returns an unfiltered
+      // page whose rows carry no `tags`: keep only rows that really carry the
+      // tag, so unrelated agents are never printed as a filtered result.
+      const tag = input.tag;
+      const items =
+        tag === undefined
+          ? listed
+          : listed.filter((a) => Array.isArray(a?.tags) && a.tags.includes(tag));
+      if (tag !== undefined && listed.length > 0 && !listed.some((a) => Array.isArray(a?.tags))) {
+        log.warn('This server does not filter agents by tag; upgrade it to use --tag.');
+      }
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.agent(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -135,7 +160,10 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result, fields);
+          outputJson(
+            withUrl(result, await resolveUrlBuilder(client), resourcePath.agent(agentId)),
+            fields,
+          );
           return;
         }
 
@@ -152,6 +180,8 @@ export function registerAgentCommand(program: Command) {
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
+        // Visibility only means something inside a workspace.
+        if (r.workspaceId && r.visibility) meta.push(`Visibility: ${r.visibility}`);
         if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
 
         if (r.systemRole) {
@@ -173,14 +203,29 @@ export function registerAgentCommand(program: Command) {
     .option('-p, --provider <provider>', 'Provider ID')
     .option('-s, --system-role <role>', 'System role prompt')
     .option('--group <groupId>', 'Group ID')
+    .option(
+      '--tag <tag>',
+      'Tag the agent (repeatable), e.g. so an app can find the agents it created',
+      (tag: string, tags: string[] = []) => [...tags, tag],
+    )
+    .addOption(
+      new Option(
+        '--visibility <visibility>',
+        'Who can see the agent in a workspace: `private` (only you) or `public` (workspace members). Omit to use the server default',
+      ).choices(AGENT_VISIBILITIES),
+    )
+    .option('--json [fields]', 'Output the created agent as JSON, optionally selecting fields')
     .action(
       async (options: {
         description?: string;
         group?: string;
+        json?: string | boolean;
         model?: string;
         provider?: string;
         systemRole?: string;
+        tag?: string[];
         title?: string;
+        visibility?: AgentVisibility;
       }) => {
         const client = await getTrpcClient();
         const buildUrl = await resolveAppUrlBuilder(client);
@@ -191,16 +236,51 @@ export function registerAgentCommand(program: Command) {
         if (options.model) config.model = options.model;
         if (options.provider) config.provider = options.provider;
         if (options.systemRole) config.systemRole = options.systemRole;
+        const tags = [...new Set((options.tag ?? []).map((t) => t.trim()).filter(Boolean))];
+        if (tags.length > 0) config.tags = tags;
 
         const input: Record<string, any> = { config };
         if (options.group) input.groupId = options.group;
+        // Passed through as-is. When omitted the key is left out entirely so the
+        // server keeps deciding (its default, or the folder's visibility).
+        if (options.visibility) input.visibility = options.visibility;
 
         const result = await client.agent.createAgent.mutate(input as any);
         const r = result as any;
         const agentId = r.agentId || r.id;
         const url = buildUrl(`/agent/${encodeURIComponent(agentId)}`);
+
+        if (options.json !== undefined) {
+          // `createAgent` only returns the id, so read the stored row back: the
+          // visibility reported here is what the server persisted (default or
+          // folder-inherited included), never an echo of the flag. The agent
+          // already exists at this point, so a failed read-back must still print
+          // its id (with `visibility: null`) — exiting non-zero would invite the
+          // caller to retry and create a duplicate.
+          let created: any = null;
+          try {
+            created = await client.agent.getAgentConfigById.query({ agentId });
+          } catch (error) {
+            log.warn(`Created ${agentId}, but could not read it back: ${(error as Error).message}`);
+          }
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(
+            {
+              id: agentId,
+              ...(r.sessionId ? { sessionId: r.sessionId } : {}),
+              title: created?.title ?? options.title ?? null,
+              url,
+              visibility: created?.visibility ?? null,
+              workspaceId: created?.workspaceId ?? null,
+            },
+            fields,
+          );
+          return;
+        }
+
         console.log(`${pc.green('✓')} Created agent ${pc.bold(agentId)}`);
         if (r.sessionId) console.log(`  Session: ${r.sessionId}`);
+        if (options.visibility) console.log(`  Visibility: ${options.visibility}`);
         console.log(`${pc.bold('agent')}: ${url}`);
       },
     );
@@ -209,6 +289,7 @@ export function registerAgentCommand(program: Command) {
 
   agent
     .command('edit [agentId]')
+    .alias('update')
     .description('Update agent configuration')
     .option('--slug <slug>', 'Agent slug (e.g. inbox)')
     .option('-t, --title <title>', 'New title')
@@ -321,7 +402,14 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result?.agent ?? result, fields);
+          outputJson(
+            withUrl(
+              result?.agent ?? result,
+              await resolveUrlBuilder(client),
+              resourcePath.agent(agentId),
+            ),
+            fields,
+          );
           return;
         }
 
@@ -367,231 +455,7 @@ export function registerAgentCommand(program: Command) {
 
   // ── run ──────────────────────────────────────────────
 
-  agent
-    .command('run')
-    .description('Run an agent with a prompt')
-    .option('-a, --agent-id <id>', 'Agent ID')
-    .option('-s, --slug <slug>', 'Agent slug')
-    .option('-p, --prompt <text>', 'User prompt')
-    .option('-t, --topic-id <id>', 'Reuse an existing topic')
-    .option('--no-auto-start', 'Do not auto-start the agent')
-    .option(
-      '--device <target>',
-      'Target device ID, or use "local" for the current connected device',
-    )
-    .option(
-      '--no-headless',
-      "Disable headless mode: tool calls that need approval park the run for a human (default: headless — tools auto-run, matching the CLI's non-interactive nature). The CLI does not wait for that approval; it returns with exit code 2 and the run continues once it is answered in LobeHub",
-    )
-    .option('--json', 'Output full JSON event stream')
-    .option('--detach', 'Start the operation and return its IDs without waiting for events')
-    .option('-v, --verbose', 'Show detailed tool call info')
-    .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
-    .option('--sse', 'Force SSE stream instead of WebSocket gateway')
-    .option(
-      '--timeout <seconds>',
-      'Stop waiting after this many seconds (exit code 3; the run keeps going server-side). Default: wait as long as the server reports the run active',
-      parsePositiveSeconds,
-    )
-    .addHelpText(
-      'after',
-      `
-Exit codes:
-  0  the run finished (done)
-  1  the run failed or was interrupted
-  2  the run is paused waiting for human approval / input
-  3  the outcome could not be confirmed (no or unreadable status, status checks kept failing, or --timeout reached)`,
-    )
-    .action(
-      async (options: {
-        agentId?: string;
-        autoStart?: boolean;
-        device?: string;
-        detach?: boolean;
-        headless?: boolean;
-        json?: boolean;
-        prompt?: string;
-        replay?: string;
-        slug?: string;
-        sse?: boolean;
-        timeout?: number;
-        topicId?: string;
-        verbose?: boolean;
-      }) => {
-        if (options.verbose) setVerbose(true);
-
-        // Replay mode: render from saved JSON file, no network needed
-        if (options.replay) {
-          const data = readFileSync(options.replay, 'utf8');
-          const events = JSON.parse(data);
-          const replayed = replayAgentEvents(events, {
-            json: options.json,
-            verbose: options.verbose,
-          });
-          // A recording without a terminal event cannot tell how the run ended.
-          const replayExitCode = AGENT_RUN_EXIT_CODES[(replayed ?? { kind: 'unknown' }).kind];
-          if (replayExitCode !== 0) process.exitCode = replayExitCode;
-          return;
-        }
-
-        if (!options.agentId && !options.slug) {
-          log.error('Either --agent-id or --slug is required.');
-          process.exit(1);
-          return;
-        }
-        if (!options.prompt) {
-          log.error('--prompt is required.');
-          process.exit(1);
-          return;
-        }
-
-        const client = await getTrpcClient();
-
-        let deviceId: string | undefined;
-        if (options.device !== undefined) {
-          if (options.device === 'local') {
-            deviceId = resolveLocalDeviceId();
-            if (!deviceId) {
-              log.error(
-                "No local device found. Run 'lh connect' first, then retry with --device local.",
-              );
-              process.exit(1);
-              return;
-            }
-          } else {
-            deviceId = options.device;
-          }
-
-          const devices = await client.device.listDevices.query();
-          const matchedDevice = devices.find(
-            (device: { deviceId?: string; online?: boolean }) => device.deviceId === deviceId,
-          );
-          if (!matchedDevice) {
-            log.error(`Device "${deviceId}" was not found. Check 'lh device list' and try again.`);
-            process.exit(1);
-            return;
-          }
-          if (!matchedDevice.online) {
-            log.error(
-              options.device === 'local'
-                ? `Local device "${deviceId}" is not online. Reconnect with 'lh connect' and try again.`
-                : `Device "${deviceId}" is not online. Bring it online and try again.`,
-            );
-            process.exit(1);
-            return;
-          }
-        }
-
-        // 1. Exec agent to get operationId
-        const input: Record<string, any> = { prompt: options.prompt, trigger: 'cli' };
-        if (options.agentId) input.agentId = options.agentId;
-        if (deviceId) input.deviceId = deviceId;
-        if (options.slug) input.slug = options.slug;
-        if (options.topicId) input.appContext = { topicId: options.topicId };
-        if (options.autoStart === false) input.autoStart = false;
-        // commander's --no-headless sets `headless` to false. Anything else
-        // (undefined, true) → headless mode is on and tool calls auto-execute.
-        if (options.headless !== false) {
-          input.userInterventionConfig = { approvalMode: 'headless' };
-        }
-
-        const result = await client.aiAgent.execAgent.mutate(input as any);
-        const r = result as any;
-
-        if (!r.success) {
-          log.error(`Failed to start agent: ${r.error || r.message || 'Unknown error'}`);
-          process.exit(1);
-        }
-
-        const operationId = r.operationId;
-        if (options.detach) {
-          const started = {
-            autoStarted: r.autoStarted,
-            operationId,
-            status: r.status,
-            topicId: r.topicId,
-          };
-          if (options.json) outputJson(started);
-          else log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
-          return;
-        }
-        if (!options.json) {
-          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
-        }
-
-        // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
-        const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
-        const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
-
-        const waitForRun = async (): Promise<AgentRunOutcome> => {
-          let streamed: AgentRunOutcome | undefined;
-          try {
-            if (agentGatewayUrl) {
-              streamed = await streamAgentEventsViaWebSocket({
-                gatewayUrl: agentGatewayUrl,
-                json: options.json,
-                // A quiet stream is checked against the run status rather than
-                // treated as finished or failed — a long tool call can be silent.
-                onStall: () => probeRunOutcome(client, operationId, { json: options.json }),
-                operationId,
-                serverUrl,
-                token,
-                tokenType,
-                verbose: options.verbose,
-              });
-            } else {
-              const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
-              streamed = await streamAgentEvents(streamUrl, headers, {
-                json: options.json,
-                // SSE heartbeats keep the response open even when the terminal
-                // event was published before this subscription (in-memory event
-                // manager), so a quiet stream is checked against the run status.
-                onStall: () => probeRunOutcome(client, operationId, { json: options.json }),
-                verbose: options.verbose,
-              });
-            }
-          } catch (error) {
-            // The live stream (gateway WS / SSE) dropped before the run finished —
-            // the run may still be executing server-side, in --json mode too.
-            // Fall back to polling the run status until it reaches a terminal state.
-            log.warn(
-              `Live stream unavailable (${(error as Error).message}). Polling run status every ${RUN_POLL_INTERVAL_MS / 1000}s…`,
-            );
-            return pollAgentRunStatus(client, operationId, { json: options.json });
-          }
-
-          // The stream closed without a terminal event: that is not a success
-          // signal, so ask the server how the run actually ended.
-          return streamed ?? pollAgentRunStatus(client, operationId, { json: options.json });
-        };
-
-        let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-        let didTimeOut = false;
-        const timedOut =
-          options.timeout === undefined
-            ? undefined
-            : new Promise<AgentRunOutcome>((resolve) => {
-                timeoutTimer = setTimeout(() => {
-                  didTimeOut = true;
-                  log.error(
-                    `Stopped waiting after ${options.timeout}s (--timeout). The run may still be executing — check it with 'lh agent status ${operationId}'.`,
-                  );
-                  resolve({ kind: 'unknown' });
-                }, options.timeout! * 1000);
-              });
-
-        const outcome = await (timedOut ? Promise.race([waitForRun(), timedOut]) : waitForRun());
-        clearTimeout(timeoutTimer);
-
-        const exitCode = AGENT_RUN_EXIT_CODES[outcome.kind];
-        if (exitCode !== 0) {
-          // A timeout leaves the stream / poll pending, so exit hard; otherwise
-          // set the code and let stdout (possibly a large --json array) drain.
-          if (didTimeOut) process.exit(exitCode);
-          process.exitCode = exitCode;
-        }
-      },
-    );
+  registerAgentRunCommand(agent);
 
   // ── pin / unpin ─────────────────────────────────────
 
@@ -612,6 +476,10 @@ Exit codes:
       await client.agent.updateAgentPinned.mutate({ id: agentId, pinned: false });
       console.log(`${pc.green('✓')} Unpinned agent ${pc.bold(agentId)}`);
     });
+
+  // ── transfer / move-group ───────────────────────────
+
+  registerAgentMoveCommands(agent);
 
   // ── kb-files ───────────────────────────────────────
 
@@ -887,12 +755,4 @@ Exit codes:
         }
       },
     );
-}
-
-function parsePositiveSeconds(value: string): number {
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    throw new InvalidArgumentError('Expected a positive number of seconds.');
-  }
-  return seconds;
 }

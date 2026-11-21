@@ -16,17 +16,28 @@ dayjs.extend(utc);
 dayjs.extend(timezonePlugin);
 
 const FALLBACK_TIMEZONE = 'UTC';
-const NIGHT_WINDOW_START_HOUR = 2;
-const NIGHT_WINDOW_END_HOUR_EXCLUSIVE = 4;
+
+/**
+ * Nightly jobs that share the scheduler: the Agent Signal self-review, and the retro a bot agent
+ * writes about its day on chat platforms. Each reviews the previous local day.
+ */
+export type NightlyJob = 'bot-retro' | 'self-review';
+
+/** Local hours (start inclusive, end exclusive) in which each nightly job runs. */
+export const NIGHT_WINDOW_HOURS: Record<NightlyJob, { endExclusive: number; start: number }> = {
+  'bot-retro': { endExclusive: 6, start: 4 },
+  'self-review': { endExclusive: 4, start: 2 },
+};
 
 /**
  * How far back the candidate scan looks for user activity.
  *
  * A user is dispatched only if their local previous day had activity, and that day can start
- * at most `NIGHT_WINDOW_END_HOUR_EXCLUSIVE + 24` hours before the cron instant. Rounding up
- * keeps the floor a strict superset of every per-user window regardless of timezone.
+ * at most `endExclusive + 24` hours before the cron instant. Taking the latest window keeps the
+ * floor a strict superset of every per-user window of every job regardless of timezone.
  */
-const ACTIVITY_LOOKBACK_HOURS = 30;
+const ACTIVITY_LOOKBACK_HOURS =
+  Math.max(...Object.values(NIGHT_WINDOW_HOURS).map((window) => window.endExclusive)) + 24;
 
 const HOUR_IN_MS = 60 * 60 * 1000;
 
@@ -123,6 +134,12 @@ export interface NightlyReviewScheduleAdapters {
 
 /** Options for listing exactly one page of nightly review user candidates. */
 export interface ListNightlyReviewEligibleUsersPageOptions extends ListNightlyReviewEligibleUsersInput {
+  /**
+   * Job whose local night window the page is filtered to.
+   *
+   * @default 'self-review'
+   */
+  job?: NightlyJob;
   /** Maximum eligible users returned by this page. */
   limit: number;
   /** UTC instant shared by the whole pagination tree, used to narrow the candidate scan. */
@@ -198,7 +215,8 @@ export interface NightlyReviewScheduleService {
   ) => Promise<NightlyReviewEligibleUsersPage>;
 }
 
-interface LocalNightWindow {
+/** One user's review day and whether their local clock is inside a job's night window. */
+export interface LocalNightWindow {
   localDate: string;
   reviewWindowEnd: Date;
   reviewWindowStart: Date;
@@ -219,7 +237,17 @@ const resolveTimezone = (timezone: string | null | undefined): string => {
   }
 };
 
-const getLocalNightWindow = (now: Date, timezone: string | null | undefined): LocalNightWindow => {
+/**
+ * Resolves the previous local day under review and whether `now` falls in the job's night window.
+ *
+ * Invalid or missing timezones fall back to UTC.
+ */
+export const getLocalNightWindow = (
+  now: Date,
+  timezone: string | null | undefined,
+  job: NightlyJob = 'self-review',
+): LocalNightWindow => {
+  const hours = NIGHT_WINDOW_HOURS[job];
   const resolvedTimezone = resolveTimezone(timezone);
   const localNow = dayjs(now).tz(resolvedTimezone);
   const reviewDate = localNow.subtract(1, 'day').format('YYYY-MM-DD');
@@ -231,8 +259,7 @@ const getLocalNightWindow = (now: Date, timezone: string | null | undefined): Lo
     reviewWindowEnd: localDayStart.toDate(),
     reviewWindowStart: localDayStart.subtract(1, 'day').toDate(),
     timezone: resolvedTimezone,
-    withinWindow:
-      localHour >= NIGHT_WINDOW_START_HOUR && localHour < NIGHT_WINDOW_END_HOUR_EXCLUSIVE,
+    withinWindow: localHour >= hours.start && localHour < hours.endExclusive,
   };
 };
 
@@ -341,9 +368,11 @@ export const createSelfReviewScheduleService = (
         },
         async (span) => {
           try {
+            const { job = 'self-review', ...listOptions } = options;
             const { requestedAt } = options;
+            const hours = NIGHT_WINDOW_HOURS[job];
             const scannedUsers = await adapters.listEligibleUsers({
-              ...options,
+              ...listOptions,
               // Without `requestedAt` the caller is a test or a legacy path; fall back to the
               // unnarrowed scan rather than inventing a floor from wall-clock time.
               ...(requestedAt
@@ -353,8 +382,8 @@ export const createSelfReviewScheduleService = (
                     ),
                     localHourWindow: {
                       at: requestedAt,
-                      endHourExclusive: NIGHT_WINDOW_END_HOUR_EXCLUSIVE + SQL_PREFILTER_SLACK_HOURS,
-                      startHour: NIGHT_WINDOW_START_HOUR - SQL_PREFILTER_SLACK_HOURS,
+                      endHourExclusive: hours.endExclusive + SQL_PREFILTER_SLACK_HOURS,
+                      startHour: hours.start - SQL_PREFILTER_SLACK_HOURS,
                     },
                   }
                 : {}),
@@ -369,7 +398,7 @@ export const createSelfReviewScheduleService = (
 
             const users = requestedAt
               ? scannedUsers.filter(
-                  (user) => getLocalNightWindow(requestedAt, user.timezone).withinWindow,
+                  (user) => getLocalNightWindow(requestedAt, user.timezone, job).withinWindow,
                 )
               : scannedUsers;
 

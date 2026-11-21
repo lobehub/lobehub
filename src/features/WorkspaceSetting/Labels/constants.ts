@@ -25,3 +25,6 @@ export const DEFAULT_LABEL_COLOR = LABEL_COLOR_PRESETS[0];
  */
 export const isValidLabelColor = (value: string): boolean =>
   /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value);
+
+/** Column widths shared by the label rows, their header and the loading skeleton. */
+export const LABEL_COLUMN_WIDTHS = { action: 32, created: 96, name: 200, usage: 88 } as const;

@@ -1,6 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Divider, Skeleton } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 /** Loading placeholder for {@link BriefCard}. */

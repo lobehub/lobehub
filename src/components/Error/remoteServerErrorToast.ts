@@ -1,5 +1,5 @@
 import type { RemoteServerNetworkErrorType } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 export const remoteServerErrorToast = (errorType: RemoteServerNetworkErrorType) => {

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
 import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,9 +11,10 @@ import NavHeader from '@/features/NavHeader';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
-import { FilesTabs } from '@/types/files';
+import { useHeaderActionSize } from '@/styles/density';
 
 import AddButton from '../../Header/AddButton';
 import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
@@ -23,6 +22,7 @@ import SortDropdown from '../ToolBar/SortDropdown';
 import SourceFilter from '../ToolBar/SourceFilter';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
+import DriveCategoryTabs from './DriveCategoryTabs';
 import SearchInput from './SearchInput';
 
 /**
@@ -30,6 +30,7 @@ import SearchInput from './SearchInput';
  */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
+  const headerActionSize = useHeaderActionSize(true);
 
   const activeWorkspaceId = useActiveWorkspaceId();
 
@@ -52,6 +53,7 @@ const Header = memo(() => {
     s.viewMode,
   ]);
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
+  const isMobile = useIsMobile();
   const total = useFileStore((s) => s.total);
   const selectCount = getExplorerSelectedCount({
     selectAllState,
@@ -62,13 +64,14 @@ const Header = memo(() => {
   const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
   const batchTransferActions = useFileBatchTransferActions(selectCount);
 
-  // If no libraryId, show category name or "Resource" for All
+  // Outside a library the explorer is the drive: its header switches file types
   const leftContent = hasSelected ? (
     <Flexbox horizontal align={'center'} gap={8} style={{ marginLeft: 0 }}>
       {libraryId ? (
         <ActionIcon
           disabled={!canEditResources}
           icon={BookMinusIcon}
+          size={headerActionSize}
           title={canEditResources ? t('FileManager.actions.removeFromLibrary') : reason}
           onClick={() => {
             if (!canEditResources) return;
@@ -94,6 +97,7 @@ const Header = memo(() => {
       <ActionIcon
         disabled={!canEditResources}
         icon={FileBoxIcon}
+        size={headerActionSize}
         title={canEditResources ? t('FileManager.actions.batchChunking') : reason}
         onClick={async () => {
           if (!canEditResources) return;
@@ -106,6 +110,7 @@ const Header = memo(() => {
           disabled={!canEditResources}
           icon={action.icon}
           key={action.key}
+          size={headerActionSize}
           title={canEditResources ? action.label : reason}
           onClick={() => {
             if (!canEditResources) return;
@@ -117,6 +122,7 @@ const Header = memo(() => {
       <ActionIcon
         disabled={!canEditResources}
         icon={Trash2Icon}
+        size={headerActionSize}
         title={
           canEditResources
             ? t(isWorkspaceDeleteAll ? 'FileManager.actions.deleteAll' : 'delete', {
@@ -165,10 +171,8 @@ const Header = memo(() => {
       />
     </Flexbox>
   ) : !libraryId ? (
-    <Flexbox style={{ marginLeft: 8 }}>
-      {category === FilesTabs.All
-        ? t('resource', { ns: 'file' })
-        : t(`tab.${category as FilesTabs}` as any, { ns: 'file' })}
+    <Flexbox style={{ marginLeft: 4, minWidth: 0 }}>
+      <DriveCategoryTabs />
     </Flexbox>
   ) : (
     <Flexbox horizontal align={'center'} gap={4} style={{ marginLeft: 8 }}>
@@ -193,8 +197,9 @@ const Header = memo(() => {
           <SortDropdown />
           <BatchActionsDropdown selectCount={selectCount} onActionClick={onActionClick} />
           <ViewSwitcher />
-          <Flexbox style={{ marginLeft: 8 }}>
-            <AddButton />
+          <Flexbox style={{ marginLeft: isMobile ? 4 : 8 }}>
+            {/* A phone header has no room for the labelled button. */}
+            <AddButton iconOnly={isMobile} />
           </Flexbox>
         </>
       }

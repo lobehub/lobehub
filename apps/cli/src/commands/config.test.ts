@@ -5,6 +5,9 @@ import { registerConfigCommand } from './config';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    auth: {
+      getScope: { query: vi.fn() },
+    },
     usage: {
       findAndGroupByDateRange: { query: vi.fn() },
       findAndGroupByDay: { query: vi.fn() },
@@ -20,7 +23,14 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
+const { mockGetOpenApi, mockResolveWorkspaceRef } = vi.hoisted(() => ({
+  mockGetOpenApi: vi.fn(),
+  mockResolveWorkspaceRef: vi.fn(async (ref?: string) => (ref ? `ws-${ref}` : undefined)),
+}));
+
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../api/openapi', () => ({ getOpenApi: mockGetOpenApi }));
+vi.mock('../api/workspaceRef', () => ({ resolveWorkspaceRef: mockResolveWorkspaceRef }));
 // Scope resolution falls through to the persisted `workspace use` value, which
 // must not leak the developer's own machine state into these assertions.
 vi.mock('../settings', () => ({
@@ -36,6 +46,12 @@ describe('config command', () => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockTrpcClient.user.getUserState.query.mockReset();
+    mockTrpcClient.auth.getScope.query.mockReset();
+    mockTrpcClient.auth.getScope.query.mockResolvedValue({
+      scope: 'personal',
+      source: 'personal',
+      workspaceId: null,
+    });
     mockTrpcClient.usage.findByMonth.query.mockReset();
     mockTrpcClient.usage.findAndGroupByDay.query.mockReset();
     mockTrpcClient.usage.findAndGroupByDateRange.query.mockReset();
@@ -87,30 +103,43 @@ describe('config command', () => {
       );
     });
 
-    // Every command resolves its scope from this env var, so reporting it is
-    // what lets a caller — usually an agent editing its own config — tell a
-    // real "not found" from "I'm looking in the wrong workspace".
-    it('should report the active workspace scope', async () => {
-      process.env.LOBEHUB_WORKSPACE_ID = 'ws-42';
+    // The server reports the scope the request actually ran under, so a
+    // workspace API key shows its own workspace even with no local scope set.
+    it('should report the workspace scope the server resolved', async () => {
+      mockTrpcClient.auth.getScope.query.mockResolvedValue({
+        scope: 'workspace',
+        source: 'apiKey',
+        workspaceId: 'ws-42',
+      });
       mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'whoami']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('workspace ws-42'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('(from apiKey)'));
     });
 
-    it('should report personal scope when no workspace is set', async () => {
+    // A header naming a workspace the caller cannot use is demoted to personal
+    // on the server; the locally configured id must not be shown instead.
+    it('should report personal when the server ignores the local workspace', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws-missing';
       mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'whoami']);
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('personal'));
+      expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('ws-missing'));
     });
 
-    it('should carry the workspace scope into --json output', async () => {
-      process.env.LOBEHUB_WORKSPACE_ID = 'ws-42';
+    it('should carry the server scope into --json output', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws-other';
+      mockTrpcClient.auth.getScope.query.mockResolvedValue({
+        scope: 'workspace',
+        source: 'header',
+        workspaceId: 'ws-42',
+      });
       mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
 
       const program = createProgram();
@@ -118,11 +147,44 @@ describe('config command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         JSON.stringify(
-          { userId: 'u1', scope: 'workspace', scopeSource: 'env', workspaceId: 'ws-42' },
+          { userId: 'u1', scope: 'workspace', scopeSource: 'header', workspaceId: 'ws-42' },
           null,
           2,
         ),
       );
+    });
+
+    // Self-hosted servers older than this CLI have no `auth.getScope`; whoami
+    // must still print the identity rather than failing outright.
+    it('should fall back to the local scope when the server lacks auth.getScope', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws-local';
+      mockTrpcClient.auth.getScope.query.mockRejectedValue(
+        Object.assign(new Error('No "query"-procedure on path "auth.getScope"'), {
+          data: { code: 'NOT_FOUND' },
+        }),
+      );
+      mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'whoami', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          { userId: 'u1', scope: 'workspace', scopeSource: 'env', workspaceId: 'ws-local' },
+          null,
+          2,
+        ),
+      );
+    });
+
+    it('should surface other auth.getScope failures', async () => {
+      mockTrpcClient.auth.getScope.query.mockRejectedValue(
+        Object.assign(new Error('boom'), { data: { code: 'INTERNAL_SERVER_ERROR' } }),
+      );
+      mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
+
+      const program = createProgram();
+      await expect(program.parseAsync(['node', 'test', 'whoami'])).rejects.toThrow('boom');
     });
   });
 
@@ -173,6 +235,71 @@ describe('config command', () => {
 
       expect(mockTrpcClient.usage.findAndGroupByDay.query).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
+    });
+  });
+
+  describe('usage quota', () => {
+    const quota = {
+      limit: 10,
+      remaining: 3.8,
+      resetsAt: '2026-11-30T00:00:00.000Z',
+      source: 'personal',
+      used: 6.2,
+      usedRatio: 0.62,
+    };
+
+    const output = () => consoleSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+
+    beforeEach(() => mockGetOpenApi.mockReset());
+
+    it('shows the used share of the allowance, what is left and when it resets', async () => {
+      mockGetOpenApi.mockResolvedValue({ quota, scope: 'personal' });
+
+      await createProgram().parseAsync(['node', 'test', 'usage', 'quota']);
+
+      expect(mockGetOpenApi).toHaveBeenCalledWith('/usage', undefined);
+      expect(output()).toContain('62% ($6.20 of $10.00)');
+      expect(output()).toContain('Remaining: $3.80');
+      expect(output()).toContain('Resets:    2026-11-30');
+      expect(mockTrpcClient.usage.findAndGroupByDay.query).not.toHaveBeenCalled();
+    });
+
+    it('reads the workspace passed with --workspace', async () => {
+      mockGetOpenApi.mockResolvedValue({ quota, scope: 'workspace' });
+
+      await createProgram().parseAsync(['node', 'test', 'usage', 'quota', '--workspace', 'acme']);
+
+      expect(mockGetOpenApi).toHaveBeenCalledWith('/usage', 'ws-acme');
+    });
+
+    it('prints the quota and scope as JSON', async () => {
+      mockGetOpenApi.mockResolvedValue({ quota, remainingBalance: 3.8, scope: 'personal' });
+
+      await createProgram().parseAsync(['node', 'test', 'usage', 'quota', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify({ quota, scope: 'personal' }, null, 2),
+      );
+    });
+
+    it('says so when the server has no allowance', async () => {
+      mockGetOpenApi.mockResolvedValue({ quota: null, scope: 'personal' });
+
+      await createProgram().parseAsync(['node', 'test', 'usage', 'quota']);
+
+      expect(output()).toContain('No usage allowance on this server.');
+    });
+
+    it('shows spend without a percentage when the allowance has no cap', async () => {
+      mockGetOpenApi.mockResolvedValue({
+        quota: { ...quota, limit: null, source: 'workspace_pool', usedRatio: null },
+        scope: 'workspace',
+      });
+
+      await createProgram().parseAsync(['node', 'test', 'usage', 'quota']);
+
+      expect(output()).toContain('$6.20 (no cap)');
+      expect(output()).not.toContain('%');
     });
   });
 });

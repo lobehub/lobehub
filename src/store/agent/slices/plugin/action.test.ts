@@ -13,15 +13,6 @@ vi.mock('@/services/agent', () => ({
   },
 }));
 
-// Mock sessionStore
-vi.mock('@/store/session', () => ({
-  useSessionStore: {
-    getState: vi.fn(() => ({
-      refreshSessions: vi.fn(),
-    })),
-  },
-}));
-
 beforeEach(() => {
   vi.clearAllMocks();
   useAgentStore.setState({
@@ -365,6 +356,35 @@ describe('PluginSlice Actions', () => {
         'agent-1',
         expect.objectContaining({
           plugins: ['plugin-2'],
+        }),
+        expect.any(AbortSignal),
+        undefined,
+      );
+    });
+
+    it('keeps an explicit auto entry for a library skill, whose absence means disabled', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: {} as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({
+          activeAgentId: 'agent-1',
+          agentMap: { 'agent-1': { plugins: ['plugin-2'] } as any },
+        });
+      });
+
+      await act(async () => {
+        await result.current.setPluginMode('excalidraw', 'auto', 'disabled');
+      });
+
+      expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
+        'agent-1',
+        expect.objectContaining({
+          plugins: ['plugin-2', { identifier: 'excalidraw', mode: 'auto' }],
         }),
         expect.any(AbortSignal),
         undefined,

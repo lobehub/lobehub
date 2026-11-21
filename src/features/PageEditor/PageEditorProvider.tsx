@@ -5,8 +5,8 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import { createStore, Provider } from './store';
-import { type StoreUpdaterProps } from './StoreUpdater';
 import StoreUpdater from './StoreUpdater';
+import { type StoreUpdaterProps } from './StoreUpdater';
 
 interface PageEditorProviderProps extends StoreUpdaterProps {
   children: ReactNode;
@@ -27,6 +27,7 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
     onTitleChange,
     onDelete,
     onBack,
+    onCollabReset,
     parentId,
     title,
     emoji,
@@ -43,6 +44,7 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
             knowledgeBaseId,
             metaReadOnly,
             onBack,
+            onCollabReset,
             onDelete,
             onDocumentIdChange,
             onEmojiChange,
@@ -61,6 +63,7 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
           parentId={parentId}
           title={title}
           onBack={onBack}
+          onCollabReset={onCollabReset}
           onDelete={onDelete}
           onDocumentIdChange={onDocumentIdChange}
           onEmojiChange={onEmojiChange}

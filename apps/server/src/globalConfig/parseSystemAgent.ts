@@ -1,7 +1,12 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
 import { type UserServiceModelConfig } from '@/types/user/settings';
 
-const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
+// `DEFAULT_FILES_CONFIG` owns the deployment default of the file embedding
+// slot; a second knob here could disagree with what file indexing runs.
+const otherEnvKeys = new Set(['fileEmbedding']);
+const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG).filter(
+  (key) => !otherEnvKeys.has(key),
+);
 
 const defaultTrueLey = new Set(['promptRewrite', 'autoSuggestion']);
 const memoryServiceModelKeys = new Set([
@@ -10,7 +15,7 @@ const memoryServiceModelKeys = new Set([
   'userMemoryPersonaWriter',
 ]);
 // `default=` names a chat model; a speech-to-text slot must be set explicitly.
-const nonChatModelKeys = new Set(['asr']);
+const nonChatModelKeys = new Set(['asr', 'channelRouting']);
 const defaultModelAssignmentKeys = protectedKeys.filter(
   (key) => !memoryServiceModelKeys.has(key) && !nonChatModelKeys.has(key),
 );

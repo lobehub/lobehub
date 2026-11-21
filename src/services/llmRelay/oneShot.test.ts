@@ -131,6 +131,78 @@ describe('OneShotRelay', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it('stops the calls a run relayed on the channel left running once it is released', async () => {
+    const endOperation = vi.fn();
+    const { close, emit, markReady, relay } = createRelay({ endOperation });
+
+    const result = relay.run('ollama', async () => {
+      // A sub-agent's call names the child run, not the channel.
+      emit({ data: { callId: 'c1', operationId: 'child-op' }, type: 'llm_execute' } as any);
+      return 'given up';
+    });
+    await vi.waitFor(() => expect(endOperation).not.toHaveBeenCalled());
+    markReady();
+
+    expect(await result).toBe('given up');
+    expect(endOperation).toHaveBeenCalledWith('child-op');
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads a lazy provider list only once the provider runtime state is known', async () => {
+    let enabled: string[] = [];
+    let markKnown!: () => void;
+    const { deps, markReady, relay } = createRelay({
+      whenProvidersKnown: () =>
+        new Promise<void>((resolve) => {
+          markKnown = () => {
+            enabled = ['openai', 'ollama'];
+            resolve();
+          };
+        }),
+    });
+
+    // Read too early, the list would be empty and no channel would open.
+    const result = relay.run(
+      () => enabled,
+      async () => 'ok',
+    );
+    await Promise.resolve();
+    expect(deps.subscribe).not.toHaveBeenCalled();
+
+    markKnown();
+    await vi.waitFor(() => expect(deps.subscribe).toHaveBeenCalled());
+    markReady();
+    expect(await result).toBe('ok');
+  });
+
+  it('binds the channel to a scope when asked', async () => {
+    const { deps, markReady, relay } = createRelay();
+
+    const result = relay.run('ollama', async () => 'ok', { scope: 'ws_a1b2c3d4e5f6' });
+    await vi.waitFor(() => expect(deps.subscribe).toHaveBeenCalled());
+    markReady();
+    await result;
+
+    const [channel] = vi.mocked(deps.subscribe).mock.calls[0];
+    expect(channel).toMatch(/^llmcall:user-1:ws_a1b2c3d4e5f6-[\da-f]{32}$/);
+  });
+
+  it('stands by for a list of providers when any of them needs this tab', async () => {
+    const { deps, markReady, relay } = createRelay();
+    const request = vi.fn(async () => 'ok');
+
+    expect(await relay.run(['openai'], request)).toBe('ok');
+    expect(deps.subscribe).not.toHaveBeenCalled();
+
+    const result = relay.run(['openai', 'ollama'], request);
+    await vi.waitFor(() => expect(deps.subscribe).toHaveBeenCalled());
+    markReady();
+    expect(await result).toBe('ok');
+    expect(request).toHaveBeenLastCalledWith(
+      expect.objectContaining({ channel: expect.stringMatching(/^llmcall:user-1:/) }),
+    );
+  });
+
   it('releases the channel when the request fails', async () => {
     const { close, markReady, relay } = createRelay();
     const result = relay.run('ollama', async () => {

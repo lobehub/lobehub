@@ -218,19 +218,6 @@ describe('LobeStepfunAI - custom features', () => {
       expect(models).toBeDefined();
     });
 
-    it('should merge abilities from known models', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'step-1-8k' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
     it('should handle empty model list', async () => {
       const mockClient = {
         models: {

@@ -1,4 +1,3 @@
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
@@ -12,26 +11,33 @@ import {
   VERIFY_FALLBACK_MODEL_CONFIG,
 } from '../modelConfig';
 
-const { getAgentModelConfigMock, getBuiltinAgentMock } = vi.hoisted(() => ({
+const { appEnvMock, getAgentModelConfigMock, getUserSettingsMock } = vi.hoisted(() => ({
+  appEnvMock: { SYSTEM_AGENT: '' as string | undefined },
   getAgentModelConfigMock: vi.fn(),
-  getBuiltinAgentMock: vi.fn(),
+  getUserSettingsMock: vi.fn(),
 }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(function () {
-    return {
-      getAgentModelConfig: getAgentModelConfigMock,
-      getBuiltinAgent: getBuiltinAgentMock,
-    };
+    return { getAgentModelConfig: getAgentModelConfigMock };
   }),
 }));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn().mockImplementation(function () {
+    return { getUserSettings: getUserSettingsMock };
+  }),
+}));
+
+vi.mock('@/envs/app', () => ({ appEnv: appEnvMock }));
 
 const db = {} as any;
 
 describe('resolveVerifyModelConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+    appEnvMock.SYSTEM_AGENT = '';
+    getUserSettingsMock.mockResolvedValue({});
   });
 
   it('recognizes heterogeneous providers that cannot run Verify LLM calls', () => {
@@ -47,10 +53,13 @@ describe('resolveVerifyModelConfig', () => {
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });
 
-  it('uses a pinned verifier agent model before the builtin verify agent', async () => {
+  it('uses a pinned verifier agent model before the verify service model', async () => {
     getAgentModelConfigMock.mockResolvedValueOnce({
       model: 'deepseek-v4-pro',
       provider: 'lobehub',
+    });
+    getUserSettingsMock.mockResolvedValue({
+      systemAgent: { verify: { model: 'gpt-user', provider: 'openai' } },
     });
 
     await expect(
@@ -67,64 +76,75 @@ describe('resolveVerifyModelConfig', () => {
     ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
 
     expect(getAgentModelConfigMock).toHaveBeenCalledWith('agt-verifier');
-    expect(getBuiltinAgentMock).not.toHaveBeenCalled();
+    expect(getUserSettingsMock).not.toHaveBeenCalled();
   });
 
-  it.each(['claude-code', 'devin'])(
-    'filters a %s parent and falls back to the builtin verifier model',
-    async (parentProvider) => {
-      getAgentModelConfigMock
-        // 1st call: no pinned verifier (undefined → not called), so the mock
-        // queue starts at the builtin slug lookup.
-        .mockResolvedValueOnce({
-          model: 'deepseek-v4-pro',
-          provider: 'lobehub',
-        });
-
-      await expect(
-        resolveVerifyModelConfig(db, 'u', {
-          parentModel: 'claude-opus-4-8',
-          parentProvider,
-        }),
-      ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
-
-      expect(getBuiltinAgentMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-      expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-    },
-  );
-
-  /**
-   * Regression: the resolver used to inherit the parent run's model, so the
-   * verification bar drifted with whichever chat model spawned the task. The
-   * parent model is no longer a resolution source — verification judges on
-   * the verifier chain exclusively.
-   */
-  it('ignores a usable parent model and judges on the verifier chain', async () => {
-    getAgentModelConfigMock.mockResolvedValueOnce({
-      model: 'deepseek-v4-pro',
-      provider: 'lobehub',
+  it('uses the user verify service model when no verifier agent is pinned', async () => {
+    getUserSettingsMock.mockResolvedValue({
+      systemAgent: { verify: { model: 'gpt-5.6', provider: 'openai' } },
     });
 
+    await expect(
+      resolveVerifyModelConfig(db, 'u', {
+        parentModel: 'claude-opus-4-8',
+        parentProvider: 'claude-code',
+      }),
+    ).resolves.toEqual({ model: 'gpt-5.6', provider: 'openai' });
+
+    expect(getAgentModelConfigMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the deployment SYSTEM_AGENT verify model when the user has none', async () => {
+    appEnvMock.SYSTEM_AGENT = 'verify=google/gemini-3.8-flash';
+
+    await expect(resolveVerifyModelConfig(db, 'u', {})).resolves.toEqual({
+      model: 'gemini-3.8-flash',
+      provider: 'google',
+    });
+  });
+
+  it('lets SYSTEM_AGENT default= repoint verification for self-hosted deployments', async () => {
+    appEnvMock.SYSTEM_AGENT = 'default=openai/gpt-5.6';
+
+    await expect(resolveVerifyModelConfig(db, 'u', {})).resolves.toEqual({
+      model: 'gpt-5.6',
+      provider: 'openai',
+    });
+  });
+
+  /**
+   * Regression: the chain read the builtin verify agent's row before the
+   * vision-capable floor. That row is persisted with the generic chat default
+   * (text-only deepseek-v4-flash) and has no UI, so the floor was never reached
+   * and screenshot checks judged on a model that could not see them.
+   */
+  it('falls to the vision-capable floor instead of the builtin verify agent row', async () => {
+    getAgentModelConfigMock.mockResolvedValue({ model: 'deepseek-v4-flash', provider: 'deepseek' });
+
+    await expect(resolveVerifyModelConfig(db, 'u', {})).resolves.toEqual(
+      VERIFY_FALLBACK_MODEL_CONFIG,
+    );
+    expect(getAgentModelConfigMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores a usable parent model and judges on the verifier chain', async () => {
     await expect(
       resolveVerifyModelConfig(db, 'u', {
         parentModel: 'gpt-5.4',
         parentProvider: 'openai',
       }),
-    ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
-
-    expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
+    ).resolves.toEqual(VERIFY_FALLBACK_MODEL_CONFIG);
   });
 
-  it('does not fall back to the parent model when a pinned verifier model is unusable', async () => {
-    getAgentModelConfigMock
-      .mockResolvedValueOnce({
-        model: 'claude-opus-4-8',
-        provider: 'claude-code',
-      })
-      .mockResolvedValueOnce({
-        model: 'deepseek-v4-pro',
-        provider: 'lobehub',
-      });
+  it('skips an unusable pinned verifier and a heterogeneous service model', async () => {
+    getAgentModelConfigMock.mockResolvedValueOnce({
+      model: 'claude-opus-4-8',
+      provider: 'claude-code',
+    });
+    getUserSettingsMock.mockResolvedValue({
+      systemAgent: { verify: { model: 'gpt-5.5-codex', provider: 'codex' } },
+    });
+    appEnvMock.SYSTEM_AGENT = 'verify=zhipu/glm-5.3';
 
     await expect(
       resolveVerifyModelConfig(db, 'u', {
@@ -132,24 +152,7 @@ describe('resolveVerifyModelConfig', () => {
         parentProvider: 'openai',
         verifierAgentId: 'agt-verifier',
       }),
-    ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
-
-    expect(getAgentModelConfigMock).toHaveBeenNthCalledWith(1, 'agt-verifier');
-    expect(getAgentModelConfigMock).toHaveBeenNthCalledWith(2, BUILTIN_AGENT_SLUGS.verifyAgent);
-  });
-
-  it('falls back to the pinned verify model when no runnable agent model is available', async () => {
-    getAgentModelConfigMock.mockResolvedValueOnce({
-      model: 'claude-opus-4-8',
-      provider: 'claude-code',
-    });
-
-    await expect(
-      resolveVerifyModelConfig(db, 'u', {
-        parentModel: null,
-        parentProvider: null,
-      }),
-    ).resolves.toEqual(VERIFY_FALLBACK_MODEL_CONFIG);
+    ).resolves.toEqual({ model: 'glm-5.3', provider: 'zhipu' });
   });
 });
 

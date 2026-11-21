@@ -54,6 +54,7 @@ import {
   normalizeEvidenceMetadata,
   normalizeVerifySurface,
   readEvidenceChapters,
+  verifyEvidenceFileIds,
 } from './verify';
 
 /**
@@ -217,6 +218,29 @@ describe('readEvidenceChapters', () => {
   });
 });
 
+describe('verifyEvidenceFileIds', () => {
+  it('lists a terminal evidence payload and every artifact file', () => {
+    expect(
+      verifyEvidenceFileIds({
+        fileId: 'payload',
+        metadata: {
+          terminal: {
+            artifacts: { cast: { fileId: 'cast' }, output: null, stdout: { fileId: 'out' } },
+          },
+        },
+        type: 'terminal',
+      }),
+    ).toEqual(['payload', 'cast', 'out']);
+  });
+
+  it('ignores artifact records on other media and tolerates missing metadata', () => {
+    const metadata = { terminal: { artifacts: { stdout: { fileId: 'out' } } } };
+    expect(verifyEvidenceFileIds({ fileId: 'f', metadata, type: 'text' })).toEqual(['f']);
+    expect(verifyEvidenceFileIds({ type: 'terminal' })).toEqual([]);
+    expect(verifyEvidenceFileIds({ metadata: { terminal: {} }, type: 'terminal' })).toEqual([]);
+  });
+});
+
 describe('normalizeEvidenceMetadata', () => {
   const chapters = [
     { kind: 'step', label: 'Open', t: 0 },
@@ -235,6 +259,15 @@ describe('normalizeEvidenceMetadata', () => {
       comparison: { id: 'a' },
     });
     expect(normalizeEvidenceMetadata({ chapters }, 'screenshot')).toBeNull();
+  });
+
+  it('keeps a terminal record only on terminal evidence', () => {
+    const terminal = { version: 1 };
+    expect(normalizeEvidenceMetadata({ terminal }, 'terminal')).toEqual({ terminal });
+    expect(normalizeEvidenceMetadata({ comparison: { id: 'a' }, terminal }, 'text')).toEqual({
+      comparison: { id: 'a' },
+    });
+    expect(normalizeEvidenceMetadata({ chapters, terminal }, 'screenshot')).toBeNull();
   });
 
   it('passes metadata without chapters through untouched', () => {

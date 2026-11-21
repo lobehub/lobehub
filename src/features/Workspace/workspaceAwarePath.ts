@@ -1,5 +1,7 @@
 import type { NavigateOptions } from 'react-router';
 
+import { parseRootSegment, WORKSPACE_MIRRORED_ROOT_SEGMENTS } from './rootSegments';
+
 export interface WorkspaceAwareNavigateOptions extends NavigateOptions {
   /** When true, navigate to the literal `to` path without applying the workspace prefix. */
   escape?: boolean;
@@ -35,13 +37,19 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'about',
   'advanced',
   'apikey',
-  // Account-level tabs (profile / appearance / hotkey / messenger) are
+  // Account-level tabs (profile / appearance / hotkey) are
   // mirrored under the workspace so members can reach them without leaving
   // the workspace.
   'appearance',
   'audit-log',
+  // Automations (event subscriptions) are listed per workspace.
+  'automations',
   'billing',
   'budget',
+  // Personal chat-assist preferences, reachable by every member.
+  'chat-preference',
+  // Legacy alias: connectors moved to `/marketplace/connector`; the routers keep
+  // a redirect, so prefixed deep-links land on `/:slug/marketplace/connector`.
   'connector',
   'credential',
   // Legacy alias for `credential` — the routers keep a redirect, so prefixed
@@ -49,14 +57,17 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'creds',
   'credits',
   'devices',
+  'drive',
   'environments',
   'general',
   'hotkey',
-  // Third-party integrations bind to the workspace that connected them.
+  // Legacy alias: integrations moved to `/marketplace/connector`; the routers
+  // keep a redirect, and the install callbacks still return here.
   'integrations',
   'labels',
   'labs',
   'members',
+  // Legacy settings bookmarks redirect to the app within the same workspace.
   'messenger',
   'notification',
   'oauth-apps',
@@ -64,43 +75,24 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'profile',
   'provider',
   'service-model',
+  // Legacy alias: installed skills moved to `/marketplace/skill/installed`; the
+  // routers keep a redirect from `/:slug/settings/skill`.
   'skill',
   'statistics',
   // Legacy alias for `statistics` — the routers keep a redirect, so prefixed
   // deep-links still land on `/:slug/settings/statistics`.
   'stats',
   'storage',
+  'subscription-accounts',
   'teams',
+  // Trashed rows are recorded per workspace; the bin follows the active one.
+  'trash',
   'usage',
+  // Agents' webhooks are listed per workspace, like automations.
+  'webhooks',
 ]);
 
 const SETTINGS_PREFIX_REGEX = /^\/settings\/([^/?#]+)/;
-const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
-
-const WORKSPACE_MIRRORED_FIRST_SEGMENTS = new Set([
-  'agent',
-  'agents',
-  'community',
-  'eval',
-  // Top-level goal detail lives beside task/tasks in the shared main area.
-  'goal',
-  'group',
-  'image',
-  'memory',
-  'page',
-  'project',
-  'projects',
-  'resource',
-  'settings',
-  'task',
-  'tasks',
-  'video',
-]);
-
-const parseFirstSegment = (pathname: string): string | null => {
-  const match = pathname.match(FIRST_SEGMENT_REGEX);
-  return match ? match[1] : null;
-};
 
 /**
  * Returns `true` for `/settings/<tab>` where `<tab>` is NOT in
@@ -136,8 +128,8 @@ export const buildWorkspaceAwarePath = (
   if (isPersonalSettingsPath(to)) return to;
   if (to === `/${activeSlug}` || to.startsWith(`/${activeSlug}/`)) return to;
 
-  const firstSegment = parseFirstSegment(to);
-  if (firstSegment && !WORKSPACE_MIRRORED_FIRST_SEGMENTS.has(firstSegment)) return to;
+  const firstSegment = parseRootSegment(to);
+  if (firstSegment && !WORKSPACE_MIRRORED_ROOT_SEGMENTS.has(firstSegment)) return to;
 
   return `/${activeSlug}${to}`;
 };

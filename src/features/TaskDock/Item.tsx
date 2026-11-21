@@ -1,9 +1,9 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { CopyIcon, ExternalLinkIcon, RotateCwIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import type { DockTask } from './type';
 
@@ -45,7 +45,7 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.4;
     text-overflow: ellipsis;
   `,

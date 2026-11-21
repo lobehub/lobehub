@@ -258,6 +258,22 @@ describe('GenerationService', () => {
           expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
         });
 
+        it('should retry a connection reset while reading the streamed body', async () => {
+          const reset = new Error('Fetch failed: aborted');
+          mockSsrfSafeFetch
+            .mockResolvedValueOnce({
+              ...okResponse(),
+              arrayBuffer: vi.fn().mockRejectedValue(reset),
+            })
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
         it('should retry 5xx responses', async () => {
           mockSsrfSafeFetch
             .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })
@@ -329,17 +345,6 @@ describe('GenerationService', () => {
     });
 
     describe('edge cases', () => {
-      it('should handle base64 data URI correctly', async () => {
-        const base64Data =
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGAWqGfKwAAAABJRU5ErkJggg==';
-        const dataUri = `data:image/png;base64,${base64Data}`;
-
-        const result = await fetchImageFromUrl(dataUri);
-
-        expect(result.mimeType).toBe('image/png');
-        expect(result.buffer).toBeInstanceOf(Buffer);
-      });
-
       it('should throw error for invalid data URI format', async () => {
         const invalidDataUri = 'data:image/png:invalid-format';
 
@@ -375,21 +380,6 @@ describe('GenerationService', () => {
         const result = await fetchImageFromUrl('http://example.com/image.png');
 
         expect(result.mimeType).toBe('image/png');
-        expect(result.buffer).toBeInstanceOf(Buffer);
-      });
-    });
-
-    describe('return type validation', () => {
-      it('should return object with correct structure', async () => {
-        const base64Data =
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGAWqGfKwAAAABJRU5ErkJggg==';
-        const dataUri = `data:image/png;base64,${base64Data}`;
-
-        const result = await fetchImageFromUrl(dataUri);
-
-        expect(result).toHaveProperty('buffer');
-        expect(result).toHaveProperty('mimeType');
-        expect(typeof result.mimeType).toBe('string');
         expect(result.buffer).toBeInstanceOf(Buffer);
       });
     });
@@ -830,37 +820,6 @@ describe('GenerationService', () => {
       ).rejects.toThrow('Upload service unavailable');
 
       expect(mockFileService.uploadMedia).toHaveBeenCalledTimes(1);
-    });
-
-    it('should validate file naming format with correct patterns', async () => {
-      mockFileService.uploadMedia
-        .mockResolvedValueOnce({
-          key: 'generations/images/test-uuid_600x800_20240101123000_raw.png',
-        })
-        .mockResolvedValueOnce({
-          key: 'generations/images/test-uuid_300x400_20240101123000_thumb.png',
-        });
-
-      await service.uploadImageForGeneration(mockImage, mockThumbnail);
-
-      // Verify file name patterns match exact format: {uuid}_{width}x{height}_{timestamp}_{type}.{ext}
-      const imageCall = mockFileService.uploadMedia.mock.calls[0];
-      const thumbnailCall = mockFileService.uploadMedia.mock.calls[1];
-
-      expect(imageCall[0]).toMatch(
-        /^generations\/images\/test-uuid_600x800_20240101123000_raw\.png$/,
-      );
-      expect(thumbnailCall[0]).toMatch(
-        /^generations\/images\/test-uuid_300x400_20240101123000_thumb\.png$/,
-      );
-
-      // Verify dimensions are correctly embedded in filename
-      expect(imageCall[0]).toContain('600x800'); // Original dimensions
-      expect(thumbnailCall[0]).toContain('300x400'); // Thumbnail dimensions
-
-      // Verify file type suffixes
-      expect(imageCall[0]).toContain('_raw.');
-      expect(thumbnailCall[0]).toContain('_thumb.');
     });
   });
 

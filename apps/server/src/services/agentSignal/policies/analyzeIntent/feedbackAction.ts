@@ -138,7 +138,10 @@ const detectServerInboundDeferredSkill = (signal: FeedbackDomainSignal): boolean
   if (!trigger) return false;
   if (trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart) return false;
   if (trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete) return false;
-  if (trigger === RequestTrigger.AgentSignal) return false;
+  // Task-result wakeups (and their sub-agents, which inherit the trigger) are
+  // server-started follow-ups like Agent Signal runs, so they dispatch inline too.
+  if (trigger === RequestTrigger.AgentSignal || trigger === RequestTrigger.TaskCallback)
+    return false;
 
   return true;
 };

@@ -1,11 +1,10 @@
 'use client';
 
-import { Center, Flexbox, Tooltip } from '@lobehub/ui';
-import { Avatar, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Center, createStaticStyles, cssVar, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar, { isDefaultAgentAvatar } from '@/components/AgentAvatar';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   banner: css`
@@ -41,32 +40,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
   `,
-  descriptionSkeleton: css`
-    .ant-skeleton-paragraph {
-      margin-block-start: 4px !important;
-    }
-
-    .ant-skeleton-paragraph > li {
-      height: 12px !important;
-    }
-
-    .ant-skeleton-paragraph > li + li {
-      margin-block-start: 6px !important;
-    }
-  `,
   header: css`
     position: relative;
     margin-block-start: -24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   name: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,
 }));
 
 export interface AgentProfileCardProps {
+  /** Seeds the generated avatar of an agent without one. */
+  agentId?: string | null;
   avatar?: string | null;
   backgroundColor?: string | null;
   children?: ReactNode;
@@ -81,6 +69,7 @@ export interface AgentProfileCardProps {
 
 const AgentProfileCard = memo<AgentProfileCardProps>(
   ({
+    agentId,
     avatar,
     backgroundColor,
     description,
@@ -93,25 +82,32 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
     return (
       <Flexbox className={styles.container}>
         <Center className={styles.banner} style={{ background: cssVar.colorFillTertiary }}>
-          <Avatar
-            emojiScaleWithBackground
-            avatar={avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={agentId}
+            avatar={avatar}
             background={backgroundColor ?? undefined}
             className={styles.bannerInner}
+            name={title}
             shape={'square'}
             size={400}
           />
         </Center>
 
         <Flexbox className={styles.header} gap={8}>
-          <Avatar
-            emojiScaleWithBackground
-            avatar={avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={agentId}
+            avatar={avatar}
             background={backgroundColor ?? undefined}
             className={onHeaderClick ? styles.clickableAvatar : undefined}
+            name={title}
             shape={'square'}
             size={48}
-            style={{ border: `2px solid ${cssVar.colorBgElevated}` }}
+            // The generated character has no tile, so a frame would box empty space.
+            style={
+              isDefaultAgentAvatar(avatar)
+                ? undefined
+                : { border: `2px solid ${cssVar.colorBgElevated}` }
+            }
             onClick={onHeaderClick}
           />
           <Flexbox gap={2}>
@@ -132,11 +128,7 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
                 </Text>
               </Tooltip>
             ) : loading ? (
-              <Skeleton.Text
-                className={styles.descriptionSkeleton}
-                rows={2}
-                width={['100%', '60%']}
-              />
+              <Skeleton.Text rows={2} width={['100%', '60%']} />
             ) : null}
           </Flexbox>
         </Flexbox>

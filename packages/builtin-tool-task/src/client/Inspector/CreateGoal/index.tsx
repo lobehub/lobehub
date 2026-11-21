@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +17,7 @@ const CreateGoalInspector = memo<BuiltinInspectorProps<CreateGoalParams, CreateG
     return (
       <div className={inspectorTextStyles.root}>
         <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
-          {t('builtins.lobe-goal.apiName.createGoal')}
+          {t('builtins.builtin-goal.apiName.createGoal')}
         </span>
         {name && <span> · {name}</span>}
       </div>

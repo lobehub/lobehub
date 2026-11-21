@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import type { ConnectorOAuthIpc } from '@lobechat/electron-client-ipc/types';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -8,25 +9,62 @@ export class ConnectorOAuthError extends Error {
   }
 }
 
+/** The account a callback reports it stored, and how. */
+export interface ConnectorOAuthOutcome {
+  linkId: string;
+  outcome: 'created' | 'matchedExisting' | 'reauthorized';
+}
+
+const OUTCOMES = new Set<string>(['created', 'matchedExisting', 'reauthorized']);
+const reportedOutcome = (data: {
+  linkId?: unknown;
+  outcome?: unknown;
+}): ConnectorOAuthOutcome | undefined =>
+  typeof data.linkId === 'string' && typeof data.outcome === 'string' && OUTCOMES.has(data.outcome)
+    ? { linkId: data.linkId, outcome: data.outcome as ConnectorOAuthOutcome['outcome'] }
+    : undefined;
+
 /** Must be called synchronously from the click, before validation or network IO. */
 export const openConnectorOAuthPopup = () =>
   isDesktop
     ? undefined
     : window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
 
-/** Navigate and wait for the server callback, not messages from the provider. */
+/**
+ * Navigate and wait for the server callback, not messages from the provider.
+ * Resolves with the account the callback reports, when its message carries
+ * one (the native window reports success alone).
+ */
 export const waitForConnectorOAuth = async (
   popup: Window | null | undefined,
   connectorId: string,
   authorizationUrl: string,
-): Promise<void> => {
+  signal?: AbortSignal,
+  freshSession?: boolean,
+): Promise<ConnectorOAuthOutcome | undefined> => {
+  signal?.throwIfAborted();
   if (isDesktop) {
     // Native ownership survives provider COOP headers that sever window.opener.
-    const result = await ensureElectronIpc().connectorOAuth.authorize({
-      authorizationUrl,
-      connectorId,
-    });
-    if (result !== 'success') throw new ConnectorOAuthError(result);
+    const oauth: ConnectorOAuthIpc = ensureElectronIpc().connectorOAuth;
+    const requestId = crypto.randomUUID();
+    const onAbort = () => {
+      oauth.cancel({ requestId }).catch((error: unknown) => {
+        console.error('Failed to cancel native connector authorization', error);
+      });
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      const result = await oauth.authorize({
+        authorizationUrl,
+        connectorId,
+        requestId,
+        freshSession,
+      });
+      if (signal?.aborted) throw new ConnectorOAuthError('dismissed');
+      if (result !== 'success') throw new ConnectorOAuthError(result);
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
     return;
   }
   if (!popup) throw new ConnectorOAuthError('blocked');
@@ -36,13 +74,14 @@ export const waitForConnectorOAuth = async (
   const callbackOrigin = redirectUri ? new URL(redirectUri).origin : window.location.origin;
 
   return new Promise((resolve, reject) => {
-    const finish = (error?: ConnectorOAuthError) => {
+    const finish = (error?: ConnectorOAuthError, outcome?: ConnectorOAuthOutcome) => {
+      signal?.removeEventListener('abort', onAbort);
       window.removeEventListener('message', onMessage);
       clearInterval(timer);
       clearTimeout(timeout);
       if (!popup.closed) popup.close();
       if (error) reject(error);
-      else resolve();
+      else resolve(outcome);
     };
 
     const onMessage = (event: MessageEvent) => {
@@ -51,15 +90,18 @@ export const waitForConnectorOAuth = async (
       if (!data || data.type !== 'lobe-connector-oauth') return;
       // Early callback failures (e.g. access_denied) have no connector ID.
       if (data.connectorId && data.connectorId !== connectorId) return;
-      if (data.success === true && data.connectorId === connectorId) finish();
+      if (data.success === true && data.connectorId === connectorId)
+        finish(undefined, reportedOutcome(data));
       else if (data.success === false) finish(new ConnectorOAuthError('failed'));
     };
+    const onAbort = () => finish(new ConnectorOAuthError('dismissed'));
 
     window.addEventListener('message', onMessage);
     const timer = setInterval(() => {
       if (popup.closed) finish(new ConnectorOAuthError('dismissed'));
     }, 800);
     const timeout = setTimeout(() => finish(new ConnectorOAuthError('timeout')), 5 * 60_000);
+    signal?.addEventListener('abort', onAbort, { once: true });
 
     if (popup.closed) {
       finish(new ConnectorOAuthError('dismissed'));

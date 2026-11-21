@@ -104,6 +104,8 @@ describe('parseSearchQuery', () => {
       'plugin',
       'communityAgent',
       'knowledgeBase',
+      'task',
+      'goal',
     ];
 
     for (const type of types) {
@@ -111,6 +113,13 @@ describe('parseSearchQuery', () => {
       expect(result.typeFilter).toBe(type);
       expect(result.cleanQuery).toBe('search');
     }
+  });
+
+  it('should keep a task identifier as the query under a task filter', () => {
+    expect(parseSearchQuery('is:task T-827')).toEqual({
+      cleanQuery: 'T-827',
+      typeFilter: 'task',
+    });
   });
 
   it('should trim whitespace from clean query', () => {

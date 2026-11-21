@@ -40,6 +40,18 @@ const TRANSIENT_STATUSES = new Set([408, 425, 429]);
 const CREDENTIAL_SPENT_ERROR = 'invalid_grant';
 
 /**
+ * The refresh currently on the wire, shared by every caller.
+ *
+ * A WebSocket reconnect and the journal catch-up it triggers can both find the
+ * stored token inside the refresh window. The provider rotates refresh tokens,
+ * so the second request spends one that is already gone, comes back
+ * `invalid_grant`, and a transient disconnect is then reported as a dead login —
+ * which is exactly the case where the run still has recovery attempts left. One
+ * refresh at a time; concurrent callers ride the same result.
+ */
+let refreshInFlight: Promise<TokenLookup> | undefined;
+
+/**
  * Get a valid access token, refreshing if expired.
  */
 export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
@@ -54,8 +66,20 @@ export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
   // Token expired — try refresh
   if (!credentials.refreshToken) return { status: 'no-login' };
 
+  if (refreshInFlight) return refreshInFlight;
+
+  const pending = refreshStoredToken(credentials);
+  refreshInFlight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (refreshInFlight === pending) refreshInFlight = undefined;
+  }
+}
+
+const refreshStoredToken = async (credentials: StoredCredentials): Promise<TokenLookup> => {
   const serverUrl = resolveServerUrl();
-  const refreshed = await refreshAccessToken(serverUrl, credentials.refreshToken);
+  const refreshed = await refreshAccessToken(serverUrl, credentials.refreshToken!);
   if (refreshed.status !== 'ok') return refreshed;
 
   const updated: StoredCredentials = {
@@ -68,7 +92,7 @@ export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
 
   saveCredentials(updated);
   return { credentials: updated, status: 'ok' };
-}
+};
 
 /**
  * What went wrong, and what the user can do about it.
@@ -85,11 +109,36 @@ export interface TokenLookupReport {
 }
 
 /**
+ * Whether this process runs inside a LobeHub agent run: the app stamps the run's ids into the
+ * environment of every agent it launches, and every shell that agent opens inherits them.
+ */
+export const isInsideAgentRun = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  !!(env.LOBEHUB_TOPIC_ID || env.LOBEHUB_OPERATION_ID);
+
+/**
+ * The missing-login report for a command run by an agent inside LobeHub.
+ *
+ * Read by the agent, not by a person at a terminal, and a bare "run `lh login`" there got turned
+ * into guesses — restart the app, set a workspace id — because nothing said why a conversation the
+ * user is signed in to has no credential. Spell out the cause and hand the login to the user:
+ * `lh login` rewrites this machine's CLI credentials and registers the device, which is not the
+ * agent's call to make.
+ */
+export const agentRunMissingLoginReport = (): TokenLookupReport => ({
+  detail:
+    'This command runs inside a LobeHub agent conversation, but the run passed no LobeHub sign-in to the CLI and this machine has no CLI login of its own.',
+  fix: `Ask the user to run '${CLI_PRIMARY_BIN} login' in a terminal on this machine and approve it in the browser, then retry. Do not run it yourself; restarting LobeHub does not fix this. Updating LobeHub Desktop lets local agents use the app's own sign-in.`,
+});
+
+/**
  * How to explain a lookup that produced no token, or `undefined` when there is nothing to
  * diagnose and the caller's own "log in first" message fits.
  */
 export function describeTokenLookup(lookup: TokenLookup): TokenLookupReport | undefined {
   switch (lookup.status) {
+    case 'no-login': {
+      return isInsideAgentRun() ? agentRunMissingLoginReport() : undefined;
+    }
     case 'spent': {
       return {
         detail: `The stored login is no longer valid (${lookup.detail}).`,

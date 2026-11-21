@@ -1,12 +1,15 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
+import type { LegacyArrayListQuery } from '../helpers/legacy-array-list';
+import { pageLoadedList } from '../helpers/legacy-array-list';
 import { AgentGroupService } from '../services/agent-group.service';
 import type {
   CreateAgentGroupRequest,
   DeleteAgentGroupRequest,
   UpdateAgentGroupRequest,
 } from '../types/agent-group.type';
+import type { DeletedResource } from '../types/common.type';
 
 /**
  * AgentGroup controller class
@@ -29,7 +32,11 @@ export class AgentGroupController extends BaseController {
       );
       const agentGroups = await agentGroupService.getAgentGroups();
 
-      return this.success(c, agentGroups, 'Agent category list retrieved successfully');
+      return this.success(
+        c,
+        pageLoadedList(agentGroups, this.getQuery<LegacyArrayListQuery>(c)),
+        'Agent category list retrieved successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -117,9 +124,9 @@ export class AgentGroupController extends BaseController {
         this.getUserId(c),
         this.getWorkspaceId(c),
       );
-      await agentGroupService.updateAgentGroup(request);
+      const updated = await agentGroupService.updateAgentGroup(request);
 
-      return this.success(c, null, 'Agent category updated successfully');
+      return this.success(c, updated, 'Agent category updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -151,7 +158,11 @@ export class AgentGroupController extends BaseController {
       );
       await agentGroupService.deleteAgentGroup(request);
 
-      return this.success(c, null, 'Agent category deleted successfully');
+      return this.success(
+        c,
+        { deleted: true, id: groupId } satisfies DeletedResource,
+        'Agent category deleted successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

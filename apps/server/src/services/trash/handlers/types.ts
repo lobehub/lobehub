@@ -35,6 +35,19 @@ export class TrashRestoreError extends Error {
 }
 
 /**
+ * Thrown by a purge handler when the root cannot be hard-deleted yet (for
+ * example a channel whose replies are still stopping). The root stays in the
+ * bin with its registry row, so an explicit purge reports it as blocked and the
+ * expiry sweep retries it on a later tick.
+ */
+export class TrashPurgeBlockedError extends Error {
+  constructor(message?: string) {
+    super(message ?? 'Trash item is still in use');
+    this.name = 'TrashPurgeBlockedError';
+  }
+}
+
+/**
  * One handler per {@link TrashResourceType}. A handler owns three things:
  * how its rows are stamped (and which children go along), how they come back,
  * and how they are finally hard-deleted — including external side effects
@@ -44,6 +57,7 @@ export interface TrashHandler {
   /**
    * Hard-delete the root and its registered children. Runs after the row has
    * been in the bin for the retention window, or when the user empties the bin.
+   * Throws {@link TrashPurgeBlockedError} when the root must stay for now.
    */
   purge: (ctx: TrashHandlerContext, root: TrashItemRow, children: TrashItemRow[]) => Promise<void>;
   /**

@@ -1,13 +1,12 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Segmented, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { snakeCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOverride/action';
+import { densityVars } from '@/styles/densityVars';
 
 type SegmentedValue = 'true' | 'false' | 'inherit';
 
@@ -28,12 +27,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: space-between;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-inline-start: 2px solid transparent;
 

@@ -45,18 +45,6 @@ export interface StepActivatedSkill {
 }
 
 /**
- * Page Editor context for each step
- * Contains the latest XML structure fetched at each step
- */
-export interface StepPageEditorContext {
-  /**
-   * Current XML structure of the page
-   * Fetched at the beginning of each step to get latest state
-   */
-  xml: string;
-}
-
-/**
  * Initial Page Editor context
  * Stored at operation initialization and remains constant
  */
@@ -174,17 +162,14 @@ export interface RuntimeStepContext {
    * Tools once activated remain active for the rest of the conversation
    */
   activatedToolIds?: string[];
+  /** Tools the current operation can load through the client activator. */
+  discoverableToolIds?: string[];
   /**
    * Whether there are queued user messages waiting to be processed.
    * When true after tool completion, the agent should finish early
    * so the queued messages can be sent as a new operation.
    */
   hasQueuedMessages?: boolean;
-  /**
-   * Page Editor context for current step
-   * Contains the latest XML structure fetched at each step
-   */
-  stepPageEditor?: StepPageEditorContext;
   /**
    * Current todo list state
    * Computed from the latest lobe-agent tool message in the conversation
@@ -250,10 +235,10 @@ export interface RuntimeInitialContext {
    */
   mentionedAgents?: RuntimeMentionedAgent[];
   /**
-   * Initial Page Editor context
-   * Contains markdown content and metadata captured at operation start
+   * Live project context (members, knowledge, open tasks) for a run inside a
+   * project, rebuilt each turn so renames and membership changes never go stale.
    */
-  pageEditor?: InitialPageEditorContext;
+  projectContext?: InitialProjectContext;
   /**
    * Skills explicitly selected by the user for the current request
    * This is ephemeral runtime context and is not persisted to chat history
@@ -270,6 +255,11 @@ export interface RuntimeInitialContext {
    * answer questions about the on-screen tasks without extra tool calls.
    */
   taskManager?: InitialTaskManagerContext;
+}
+
+export interface InitialProjectContext {
+  /** Prebuilt prompt describing the project the run belongs to. */
+  contextPrompt: string;
 }
 
 export interface InitialTaskManagerContext {

@@ -556,6 +556,22 @@ describe('DataImporter', () => {
       });
     });
 
+    it('should parse a real unique violation that escapes the import transaction', async () => {
+      // A real conflict raised through drizzle: the driver error (code + detail) sits on `cause`.
+      vi.spyOn(clientDB, 'transaction').mockImplementationOnce(async () => {
+        await clientDB.insert(Schema.users).values({ id: userId });
+      });
+
+      const result = await importer.importPgData(agentsData as ImportPgDataStructure);
+
+      expect(result.success).toBe(false);
+      expect((result as ImportErrorResult).error?.details).toEqual({
+        constraintType: 'unique',
+        field: 'id',
+        value: userId,
+      });
+    });
+
     it('should fall back to raw detail when error is not a 23505 unique violation', async () => {
       const genericError: any = new Error('some db failure');
       genericError.detail = 'raw detail message';
@@ -616,6 +632,11 @@ describe('DataImporter', () => {
       // The transaction itself still succeeds; the batch error is swallowed and counted.
       expect(result.success).toBe(true);
       expect(result.results.userInstalledPlugins?.errors).toBe(2);
+      // The real driver error reaches the catch wrapped by drizzle (code on `cause`), and is
+      // still recognised as a unique conflict.
+      expect((importer as any).conflictRecords.userInstalledPlugins).toEqual([
+        { field: 'user_id, identifier', value: `${userId}, dup-plugin` },
+      ]);
     });
   });
 

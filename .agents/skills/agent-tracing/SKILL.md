@@ -272,7 +272,7 @@ says which basis is in use. Analysis lives in `analysis/contextMap.ts` and is ex
 | `--step <n>`      | `-s`  | Target a specific step                                                                            | —            |
 | `--messages`      | `-m`  | Messages context (CE input → params → LLM payload)                                                | —            |
 | `--tools`         | `-t`  | Tool calls & results (what agent invoked)                                                         | —            |
-| `--events`        | `-e`  | Raw events (llm\_start, llm\_result, etc.)                                                        | —            |
+| `--events`        | `-e`  | Raw events (llm_start, llm_result, etc.)                                                          | —            |
 | `--context`       | `-c`  | Runtime context & payload (raw)                                                                   | —            |
 | `--system-role`   | `-r`  | Full system role content                                                                          | 0            |
 | `--env`           |       | Environment context                                                                               | 0            |
@@ -372,6 +372,6 @@ When using `--messages`, the output shows three sections (if context engine data
 
 ## Integration Points
 
-- **Recording**: `apps/server/src/services/agentRuntime/AgentRuntimeService.ts` — in the `executeStep()` method, after building `stepPresentationData`, writes partial snapshot in dev mode
+- **Recording**: `apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts` — in `executeStep()`, after `saveAndPublishStep` builds `stepPresentationData`, writes partial snapshot in dev mode
 - **Context engine capture**: `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts` — in `call_llm` executor, after `serverMessagesEngine()` returns, calls `ctx.tracingContextEngine(input, output, metadata)`. `AgentRuntimeService.executeStep` buffers it per step and passes it to `traceRecorder.appendStep` as the typed `contextEngine` field (kept off the `events` array to stay out of Redis state).
 - **Store**: `FileSnapshotStore` reads/writes to `.agent-tracing/` relative to `process.cwd()`

@@ -5,6 +5,7 @@ import { memo, useCallback } from 'react';
 
 import { startThreadDrag } from '@/features/ChatInput/InputEditor/ReferTopic/threadDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors } from '@/store/chat/selectors';
 
@@ -21,6 +22,7 @@ export interface ThreadItemProps {
 }
 
 const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessageId }) => {
+  const { rowHeight } = useNavItemMetrics();
   const activeThreadId = useChatStore((s) => s.activeThreadId);
   // This row opens its thread in the Portal, so its "current" state is the
   // portal's thread — see `isThreadRowActive` for the conversation fallback.
@@ -39,6 +41,7 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessage
   );
 
   const dropdownMenu = useThreadItemDropdownMenu({
+    deletable: !isSubagent,
     id,
     sourceMessageId,
     title,
@@ -57,8 +60,8 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessage
       iconSize={16}
       // The capped ThreadList is a flex column, so rows shrink to fit its
       // max-height instead of overflowing — the scroll never engages. Pin the
-      // row min-height to the NavItem height (36) to force overflow → scroll.
-      style={{ minHeight: 36 }}
+      // row min-height to the NavItem height to force overflow → scroll.
+      style={{ minHeight: rowHeight }}
       title={title}
       onClick={handleClick}
       onDragStart={handleDragStart}

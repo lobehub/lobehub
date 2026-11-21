@@ -1,40 +1,26 @@
 'use client';
 
 import type { ListHeterogeneousAgentModelsParams } from '@lobechat/types';
-import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
-import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
-import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { ModelCatalogSelector } from './ModelCatalogSelector';
 import SelectorMenu from './SelectorMenu';
 import { resolveSelectorShape } from './selectorView';
+import { useEffectiveHeteroProvider } from './useEffectiveHeteroProvider';
 import { useHeteroProviderPatch } from './useHeteroProviderPatch';
 
 const HeteroModel = memo(() => {
-  const agentId = useAgentId();
-  const provider = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
-    isEqual,
-  );
+  const { agentId, effectiveProvider, provider, topicId, topicPin } = useEffectiveHeteroProvider();
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Model picks are topic-scoped once a topic exists; the remaining dimensions
-  // still write the shared heterogeneous-provider config.
+  // Model, effort and speed picks are topic-scoped once a topic exists; mode
+  // still writes the shared heterogeneous-provider config.
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const patch = useHeteroProviderPatch({ agentId, enabled, provider });
-  // Model AND effort pins: both follow the active topic once one exists.
-  const topicPin = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
-  const effectiveProvider = provider
-    ? applyTopicModelToHeterogeneousProvider(provider, topicPin)
-    : undefined;
+  const topicScoped = !!topicId;
 
   const shape = resolveSelectorShape(effectiveProvider, enabled);
 
@@ -59,6 +45,8 @@ const HeteroModel = memo(() => {
       patch={patch}
       permissionReason={reason}
       provider={effectiveProvider}
+      topicPin={topicPin}
+      topicScoped={topicScoped}
     />
   );
 });

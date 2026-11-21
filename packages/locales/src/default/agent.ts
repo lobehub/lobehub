@@ -1,4 +1,130 @@
 export default {
+  'channel.quickSetup.needsApplicationId': 'Fill in the Application ID to get this link.',
+  'channel.quickSetup.connect.title': 'Save and connect',
+  'channel.quickSetup.connect.desc':
+    'Saves what you filled in above and brings the bot online. Everything else can be changed later.',
+  'channel.quickSetup.link.createSlackApp': 'Create Slack app',
+  'channel.quickSetup.link.inviteBot': 'Invite bot to server',
+  'channel.quickSetup.link.openBotFather': 'Open BotFather',
+  'channel.quickSetup.link.openBotSettings': 'Open bot settings',
+  'channel.quickSetup.link.openConsole': 'Open developer console',
+  'channel.quickSetup.link.openAdminConsole': 'Open admin console',
+  'channel.quickSetup.link.createLineAccount': 'Create Official Account',
+  'channel.quickSetup.link.openLineAccountManager': 'Open Official Account Manager',
+  'channel.quickSetup.link.openSlackApp': 'Open app settings',
+  'channel.quickSetup.manualToggle': 'Already have an app? Enter credentials manually',
+  'channel.quickSetup.scanToggle': 'Scan to create instead',
+  'channel.quickSetup.guideTitle': 'Setup steps',
+  'channel.quickSetup.feishu.scan.brandMismatch.lark':
+    'This app was created with a Lark account. Connect it as a Lark bot instead.',
+  'channel.quickSetup.feishu.scan.brandMismatch.feishu':
+    'This app was created with a Feishu account. Connect it as a Feishu bot instead.',
+  'channel.quickSetup.feishu.scan.regenerate': 'Generate a new code',
+  'channel.quickSetup.feishu.scan.title': 'Scan with Feishu to create the bot',
+  'channel.quickSetup.feishu.scan.does.app': 'Creates the app with the bot capability turned on',
+  'channel.quickSetup.feishu.scan.does.permissions':
+    'Grants messaging permissions and subscribes to incoming messages',
+  'channel.quickSetup.feishu.scan.does.credentials':
+    'Fills in the credentials and connects — nothing to copy',
+  'channel.quickSetup.feishu.scan.waiting': 'Waiting for you to confirm in Feishu…',
+  'channel.quickSetup.feishu.scan.openInBrowser': 'Open in browser instead',
+  'channel.quickSetup.feishu.scan.created': 'App created. Connecting…',
+  'channel.quickSetup.feishu.scan.expired': 'The QR code expired.',
+  'channel.quickSetup.feishu.scan.denied': 'Creation was declined in Feishu.',
+  'channel.quickSetup.feishu.scan.error': "Couldn't create the app. Try a new code.",
+  'channel.quickSetup.feishu.scan.saveFailed':
+    "The app was created but couldn't be saved. Keep these credentials and save again.",
+  'channel.quickSetup.feishu.scan.saveAgain': 'Save again',
+  'channel.quickSetup.feishu.scan.lark.title': 'Scan with Lark to create the bot',
+  'channel.quickSetup.feishu.scan.lark.waiting': 'Waiting for you to confirm in Lark…',
+  'channel.quickSetup.feishu.scan.lark.denied': 'Creation was declined in Lark.',
+  'channel.quickSetup.feishu.create.title': 'Create a custom app',
+  'channel.quickSetup.feishu.create.desc':
+    'Copy the App ID and App Secret from Credentials & Basic Info.',
+  'channel.quickSetup.feishu.bot.title': 'Turn on the bot',
+  'channel.quickSetup.feishu.bot.desc': 'Under App Capabilities, add Bot.',
+  'channel.quickSetup.feishu.events.title': 'Subscribe to messages',
+  'channel.quickSetup.feishu.events.desc':
+    'Choose long connection, add im.message.receive_v1 and grant im:message.',
+  'channel.quickSetup.feishu.publish.title': 'Publish a version',
+  'channel.quickSetup.feishu.publish.desc': 'Permission changes take effect once published.',
+  'channel.quickSetup.slack.create.title': 'Create the app in one click',
+  'channel.quickSetup.slack.create.desc':
+    'Scopes, events and Socket Mode are pre-filled; pick a workspace and create.',
+  'channel.quickSetup.slack.install.title': 'Install it and copy the Bot Token',
+  'channel.quickSetup.slack.install.desc':
+    'Install it from OAuth & Permissions, then copy the Bot User OAuth Token.',
+  'channel.quickSetup.slack.tokens.title': 'Copy the App ID, Signing Secret and App Token',
+  'channel.quickSetup.slack.tokens.desc':
+    'All on Basic Information; the App Token needs connections:write.',
+  'channel.quickSetup.discord.create.title': 'Create an application',
+  'channel.quickSetup.discord.create.desc':
+    'In the Developer Portal, click New Application and name it.',
+  'channel.quickSetup.discord.credentials.title': 'Copy the Application ID and Public Key',
+  'channel.quickSetup.discord.credentials.desc': 'Both are on General Information.',
+  'channel.quickSetup.discord.bot.title': 'Get the bot token',
+  'channel.quickSetup.discord.bot.desc': 'On the Bot page, click Reset Token and copy it.',
+  'channel.quickSetup.discord.intent.title': 'Turn on Message Content Intent',
+  'channel.quickSetup.discord.intent.desc':
+    "On the Bot page, under Privileged Gateway Intents, turn on Message Content Intent and save. Without it, the bot can't read messages.",
+  'channel.quickSetup.discord.invite.title': 'Invite the bot to your server',
+  'channel.quickSetup.discord.invite.desc':
+    "The invite link already carries the permissions the bot needs. For a private channel, also add the bot in that channel's Settings → Permissions.",
+  'channel.quickSetup.telegram.botfather.title': 'Create a bot with BotFather',
+  'channel.quickSetup.telegram.botfather.desc': 'Send /newbot and pick a name and username.',
+  'channel.quickSetup.telegram.token.title': 'Copy the token',
+  'channel.quickSetup.telegram.token.desc':
+    'BotFather replies with a token like 1234567890:ABC… — paste it here.',
+  'channel.quickSetup.telegram.privacy.title': 'Let it read group messages (optional)',
+  'channel.quickSetup.telegram.privacy.desc':
+    'Send /setprivacy, pick the bot and choose Disable, then add it to your group.',
+  'channel.quickSetup.qq.create.title': 'Create a bot',
+  'channel.quickSetup.qq.create.desc':
+    'On the QQ Open Platform, create a bot and finish its basic setup.',
+  'channel.quickSetup.qq.credentials.title': 'Copy the App ID and App Secret',
+  'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
+  'channel.quickSetup.wecom.access.title': 'Get permission to create long-connection bots',
+  'channel.quickSetup.wecom.access.desc':
+    'Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console, and to add them to Bot Creation Permission too if the organization restricts it.',
+  'channel.quickSetup.wecom.create.title': 'Create an AI bot in API mode',
+  'channel.quickSetup.wecom.create.desc':
+    'In the admin console, go to Smart Zone → AI Bots and click Create, or open Workbench → AI Bots in the WeCom app. Choose to create it in API mode.',
+  'channel.quickSetup.wecom.connection.title': 'Choose long connection and set the visible range',
+  'channel.quickSetup.wecom.connection.desc':
+    'On the API settings page, set the connection method to Use long connection, then set the visible range: only members in it can find and use the bot. Leave the rest as is.',
+  'channel.quickSetup.wecom.credentials.title': 'Copy the BotID and Secret',
+  'channel.quickSetup.wecom.credentials.desc':
+    'The page generates the BotID and Secret. Copy them into the fields below and keep the Secret somewhere safe before you save the bot settings.',
+  'channel.quickSetup.wecom.usage.title': 'Use it in direct and group chats',
+  'channel.quickSetup.wecom.usage.desc':
+    "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External, interconnected, and upstream/downstream groups aren't supported.",
+  'channel.quickSetup.dingtalk.create.title': 'Create an internal app',
+  'channel.quickSetup.dingtalk.create.desc':
+    'In the DingTalk developer console, create an internal app, then copy the Client ID and Client Secret from Credentials & Basic Info.',
+  'channel.quickSetup.dingtalk.robot.title': 'Add the robot and choose Stream mode',
+  'channel.quickSetup.dingtalk.robot.desc':
+    'Under App Capabilities, add Robot, fill in its details and set the message receiving mode to Stream mode.',
+  'channel.quickSetup.dingtalk.robotWebhook.title': 'Add the robot and choose HTTP callback',
+  'channel.quickSetup.dingtalk.robotWebhook.desc':
+    'Under App Capabilities, add Robot, fill in its details, set the message receiving mode to HTTP callback, and paste the Webhook URL shown here after saving as the message receiving address.',
+  'channel.quickSetup.dingtalk.permissions.title': 'Grant the robot send permission',
+  'channel.quickSetup.dingtalk.permissions.desc':
+    'Under Permissions, request qyapi_robot_sendmsg so the bot can reply in single and group chats.',
+  'channel.quickSetup.dingtalk.publish.title': 'Publish a version',
+  'channel.quickSetup.dingtalk.publish.desc':
+    'Under Version Management, publish and choose who can see the robot. Internal apps go live without review.',
+  'channel.quickSetup.line.account.title': 'Create a LINE Official Account',
+  'channel.quickSetup.line.account.desc':
+    'Sign in with your LINE Business ID and create the account the bot speaks as.',
+  'channel.quickSetup.line.messagingApi.title': 'Turn on the Messaging API',
+  'channel.quickSetup.line.messagingApi.desc':
+    'In Official Account Manager, open Settings → Messaging API and enable it. The channel then appears in the Developers Console.',
+  'channel.quickSetup.line.credentials.title': 'Copy the channel secret and access token',
+  'channel.quickSetup.line.credentials.desc':
+    'The secret is on Basic settings; issue a long-lived access token on Messaging API.',
+  'channel.quickSetup.line.webhook.title': 'Turn on the webhook',
+  'channel.quickSetup.line.webhook.desc':
+    'After saving, paste the webhook URL shown below into Messaging API settings, turn on Use webhook, and click Verify.',
   'channel.applicationId': 'Application ID / Bot Username',
   'channel.applicationIdHint': 'Unique identifier for your bot application.',
   'channel.applicationIdInvalid.discord':
@@ -16,25 +142,25 @@ export default {
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
   'channel.paidFeature.desc':
-    '{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this channel connected.',
+    '{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this bot connected.',
   'channel.paidFeature.title': 'Paid plan required',
   'channel.paidFeature.badge': 'Pro',
   'channel.paidFeature.cta.personal': 'Upgrade',
   'channel.paidFeature.cta.workspace': 'Upgrade',
   'channel.paidFeature.fieldLocked': 'Available on paid plans. Upgrade to configure this feature.',
   'channel.paidFeature.enforce.desc':
-    '{{name}} is available on paid plans. Upgrade to a paid personal plan or a Pro / Business workspace to configure and keep this channel connected.',
+    '{{name}} is available on paid plans. Upgrade to a paid personal plan or a Pro / Business workspace to configure and keep this bot connected.',
   'channel.paidFeature.enforce.desc.personal':
-    '{{name}} is available on paid personal plans. Upgrade to configure and keep this channel connected.',
+    '{{name}} is available on paid personal plans. Upgrade to configure and keep this bot connected.',
   'channel.paidFeature.enforce.desc.workspace':
-    '{{name}} is available on Pro / Business workspaces. Upgrade this workspace to configure and keep this channel connected.',
+    '{{name}} is available on Pro / Business workspaces. Upgrade this workspace to configure and keep this bot connected.',
   'channel.paidFeature.enforce.title': 'Paid plan required',
   'channel.paidFeature.notice.desc':
-    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel now requires a paid personal plan or a Pro / Business workspace.',
+    'Due to the high communication costs for the {{name}} bot, we plan to make this bot a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this bot now requires a paid personal plan or a Pro / Business workspace.',
   'channel.paidFeature.notice.desc.personal':
-    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel requires a paid personal plan.',
+    'Due to the high communication costs for the {{name}} bot, we plan to make this bot a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this bot requires a paid personal plan.',
   'channel.paidFeature.notice.desc.workspace':
-    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel requires upgrading this workspace to Pro or Business.',
+    'Due to the high communication costs for the {{name}} bot, we plan to make this bot a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this bot requires upgrading this workspace to Pro or Business.',
   'channel.paidFeature.notice.title': '{{name}} will soon require a paid plan',
   'channel.paidFeature.noticeBadge': 'Pro soon',
   'channel.comingSoon': 'Coming Soon',
@@ -42,20 +168,22 @@ export default {
     'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
   'channel.comingSoonTitle': '{{name}} integration is coming soon',
   'channel.copy': 'Copy',
-  'channel.deleteAllChannels': 'Remove All Channels',
+  'channel.deleteAllChannels': 'Remove All IM Bots',
   'channel.deleteAllConfirmDesc':
-    'This action will permanently remove all message channels and their configurations for this agent. This cannot be undone.',
+    'This action will permanently remove all bots and their configurations for this agent. This cannot be undone.',
   'channel.deleteAllSuccess': 'All channels removed',
-  'channel.deleteAllFailed': 'Failed to remove all channels',
+  'channel.deleteAllFailed': 'Failed to remove all bots',
   'channel.deleteConfirmDesc':
-    'This action will permanently remove this message channel and its configuration. This cannot be undone.',
+    'This action will permanently remove this bot and its configuration. This cannot be undone.',
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',
   'channel.devWebhookProxyUrlHint':
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',
   'channel.discard': 'Discard',
-  'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite App',
+  'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite Chat App',
   'channel.platform.default.description':
     'Let people reach this agent from {{name}} without switching apps—ideal for anyone who wants help close at hand.',
+  'channel.platform.dingtalk.description':
+    'Answer questions and assist work in single chats and group @-mentions—ideal for teams that collaborate in DingTalk.',
   'channel.platform.discord.description':
     'Support communities in servers and DMs—ideal for moderators, member support, and always-on help.',
   'channel.platform.feishu.description':
@@ -68,6 +196,8 @@ export default {
     'Provide help in direct and group chats—ideal for customer service, communities, and official accounts.',
   'channel.platform.qq.description':
     'Serve users in private, group, and guild chats—ideal for Chinese communities, support, and fan groups.',
+  'channel.platform.wecom.description':
+    'Answer colleagues in WeCom direct chats and in internal group chats when they @-mention the bot—ideal for teams that already work in WeCom.',
   'channel.platform.slack.description':
     'Answer questions and run agent workflows in channels or DMs—ideal for teams that live in Slack.',
   'channel.platform.telegram.description':
@@ -98,33 +228,55 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.connectionError.application_mismatch':
+    "The Application ID doesn't match the bot token. Copy both from the same app in the Discord Developer Portal.",
   'channel.connectionError.application_not_found':
     'The bot application does not exist. Check the application ID in the platform console.',
+  'channel.connectionError.bot_not_installed':
+    "The bot isn't in any server yet. Open the invite link in the setup steps, add the bot to your server, then test again.",
   'channel.connectionError.connection_closed':
     'The platform connection was interrupted. LobeHub will try to reconnect automatically.',
   'channel.connectionError.invalid_credentials':
     'The bot credentials are invalid. Check the application ID, secret, and access tokens.',
+  'channel.connectionError.message_content_intent_disabled':
+    "Message Content Intent is off, so the bot can't read messages. Turn it on under Bot → Privileged Gateway Intents in the Discord Developer Portal and save.",
   'channel.connectionError.missing_credentials':
-    'Required bot credentials are missing. Complete the channel configuration and try again.',
+    'Required bot credentials are missing. Complete the bot configuration and try again.',
   'channel.connectionError.permission_denied':
     "The platform denied access. Check the bot's permissions and enabled capabilities.",
   'channel.connectionError.rate_limited':
     'The platform is rate limiting this bot. Wait a moment and try again.',
   'channel.connectionError.session_expired':
-    'The bot session has expired. Save the channel again to reconnect it.',
+    'The bot session has expired. Save the bot again to reconnect it.',
   'channel.connectionError.upstream_unavailable':
     'The platform service is temporarily unavailable. LobeHub will try again later.',
+  'channel.connectionError.webhook_mode_required':
+    'This deployment can only connect this platform in Webhook mode. Switch the connection mode to Webhook and update the callback address in the platform console.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
+  'channel.dingtalk.clientId': 'Client ID (AppKey)',
+  'channel.dingtalk.clientIdHint':
+    'From the DingTalk developer console → your internal app → Credentials & Basic Info. Formerly called AppKey.',
+  'channel.dingtalk.clientIdPlaceholder': 'e.g. dingxxxxxxxxxxxxxxxx',
+  'channel.dingtalk.clientSecret': 'Client Secret (AppSecret)',
+  'channel.dingtalk.clientSecretHint':
+    'Shown next to the Client ID. Formerly called AppSecret. It will be encrypted and stored securely.',
+  'channel.dingtalk.description':
+    'Connect this agent to a DingTalk robot for single chats and group @-mentions.',
+  'channel.dingtalk.identifierInvalid':
+    'Use only letters, digits, hyphens and underscores. Copy the value from the DingTalk developer console without spaces.',
+  'channel.dingtalk.robotCode': 'RobotCode',
+  'channel.dingtalk.robotCodeHint':
+    "Optional. An internal-app robot's RobotCode is its Client ID, which is used when this is blank. Fill it in only if the robot page shows a different code.",
   'channel.feishu.description': 'Connect this agent to Feishu for private and group chats.',
   'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.feishu.webhookMigrationDesc':
-    'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
+    'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket under Connection options on the Connect tab. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.imessage.description':
     'Connect this agent to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'channel.imessage.applicationIdHint':
-    'A stable identifier shared by the cloud channel and the Desktop bridge.',
+    'A stable identifier shared by the cloud bot and the Desktop bridge.',
   'channel.imessage.applicationIdPlaceholder': 'e.g. home-mac-mini',
   'channel.imessage.blueBubblesPassword': 'BlueBubbles Password',
   'channel.imessage.blueBubblesPasswordHint':
@@ -206,7 +358,12 @@ export default {
   'channel.qq.description': 'Connect this agent to QQ for group chats and direct messages.',
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.qq.webhookMigrationDesc':
-    'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket in Advanced Settings.',
+    'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket under Connection options on the Connect tab.',
+  'channel.wecom.botId': 'BotID',
+  'channel.wecom.botIdHint': 'The BotID of your WeCom AI bot (API mode).',
+  'channel.wecom.secret': 'Secret',
+  'channel.wecom.secretHint':
+    "The bot's long-connection Secret. A bot can be connected in only one place at a time: saving here takes over a connection it has elsewhere, and connecting it elsewhere later disconnects it here.",
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
@@ -226,12 +383,18 @@ export default {
   'channel.wechatUserId': 'WeChat User ID',
   'channel.wechatBotIdHint': 'Bot identifier assigned after QR code authorization.',
   'channel.wechatUserIdHint': 'WeChat account identifier returned by the authorization flow.',
-  'channel.removeChannel': 'Remove Channel',
-  'channel.removed': 'Channel removed',
-  'channel.removeFailed': 'Failed to remove channel',
+  'channel.removeChannel': 'Remove IM Bot',
+  'channel.removed': 'Bot removed',
+  'channel.removeFailed': 'Failed to remove bot',
   'channel.save': 'Save Configuration',
   'channel.setupGuide': 'Setup Guide',
   'channel.saveFailed': 'Failed to save configuration',
+  'channel.saveFailedHint': 'Check the fields above and try again.',
+  'channel.connectFailedHint':
+    'Check the credentials and platform settings, then save again to reconnect.',
+  'channel.testFailedHint': 'Check the credentials and try again.',
+  'channel.resultDetail.show': 'Show details',
+  'channel.resultDetail.hide': 'Hide details',
   'channel.saveFirstWarning': 'Please save configuration first',
   'channel.saved': 'Configuration saved successfully',
   'channel.secretToken': 'Webhook Secret Token',
@@ -243,7 +406,7 @@ export default {
     'Connect this agent to Slack for channel conversations and direct messages.',
   'channel.slack.webhookMigrationTitle': 'Consider migrating to Socket Mode (WebSocket)',
   'channel.slack.webhookMigrationDesc':
-    'Socket Mode provides real-time event delivery via WebSocket without exposing a public HTTP endpoint. To migrate, enable Socket Mode in your Slack app settings, generate an App-Level Token, then switch the Connection Mode to WebSocket in Advanced Settings.',
+    'Socket Mode provides real-time event delivery via WebSocket without exposing a public HTTP endpoint. To migrate, enable Socket Mode in your Slack app settings, generate an App-Level Token, then switch the Connection Mode to WebSocket under Connection options on the Connect tab.',
   'channel.secretTokenHint':
     'Used to verify webhook requests from Telegram. Leave blank and LobeHub derives one for this bot — verification is always on.',
   'channel.secretTokenPlaceholder': 'Leave blank to auto-generate',
@@ -336,9 +499,354 @@ export default {
   'channel.watchKeywordInstructionLabel': 'Instruction',
   'channel.watchKeywordInstructionPlaceholder':
     'e.g. Scan the recent thread and reply if there is an actionable bug report',
+  'channel.watchKeywordAsNameLabel': 'Bot name',
+  'channel.watchKeywordAsNameHint':
+    'Saying this word calls the bot, like its own name: it answers right away, even while you\'re active in the channel. Leave it off for topic words like "bug".',
   'channel.watchKeywordsAdd': 'Add keyword',
   'channel.watchKeywordsEmpty':
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
+  'channel.replyStyle': 'Reply style',
+  'channel.replyStyleHint':
+    'How the bot talks in every channel, in your own words: tone, length, formatting, language, emoji. It shapes how the bot speaks, not what it does. You can also ask the bot to update this itself. Up to 2000 characters.',
+  'channel.replyStylePlaceholder':
+    'Casual and short, like a teammate. No bullet lists. Reply in the language you were spoken to.',
+  'channel.channelReplyStyles': 'Reply style per channel',
+  'channel.channelReplyStylesHint':
+    'A style for one channel or thread, used there instead of the reply style above.',
+  'channel.channelReplyStylesAdd': 'Add channel',
+  'channel.channelReplyStylesEmpty':
+    'No channel has its own style. Every channel uses the reply style above.',
+  'channel.channelReplyStyleChannelLabel': 'Channel ID',
+  'channel.channelReplyStyleChannelPlaceholder': 'Channel or thread ID',
+  'channel.channelReplyStyleStyleLabel': 'Style',
+  'channel.replyEmojis': 'Emoji the bot can use',
+  'channel.replyEmojisHint':
+    "Emoji and stickers the bot may drop into a reply, and when each fits. Paste the code as it appears in a message: a Discord custom emoji is <:name:id>; send \\:name: in Discord to see it. The bot uses them sparingly and never any custom emoji that isn't listed.",
+  'channel.replyEmojisAdd': 'Add emoji',
+  'channel.replyEmojisEmpty':
+    'No emoji added. The bot uses plain Unicode emoji only when its style calls for it.',
+  'channel.replyEmojiLabel': 'Emoji',
+  'channel.replyEmojiPlaceholder': 'e.g. <:doge:1234567890>',
+  'channel.replyEmojiUsageLabel': 'When to use',
+  'channel.replyEmojiUsagePlaceholder': 'e.g. when someone ships something',
+  'channel.botWakeEnabled': 'Speak up on its own',
+  'channel.botWakeEnabledHint':
+    'When on, the bot reads messages nobody addressed to it and may join in, following the duties, channels and pace below. When off, it only answers @-mentions, DMs, replies and watch keywords.',
+  'channel.botWakeScope': 'Where it may join',
+  'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
+  'channel.botWakeScopeAll': 'Everywhere it can see',
+  'channel.botWakeScopeAllHint': 'Any channel or thread the bot can read.',
+  'channel.botWakeScopeBotThreads': 'Only where it already spoke',
+  'channel.botWakeScopeBotThreadsHint':
+    'A channel or thread where the bot posted within the follow-up window. Discord counts a channel and its threads as one place.',
+  'channel.botWakeScopeBotThreadsHintLark':
+    'A group chat where the bot posted within the follow-up window.',
+  'channel.botWakeScopeNone': 'Nowhere',
+  'channel.botWakeScopeNoneHint': 'The bot never joins unprompted.',
+  'channel.botWakeAllowChannels': 'Allowed channels',
+  'channel.botWakeAllowChannelsHint':
+    'Channel or thread IDs where the bot may join. Leave empty for no limit.',
+  'channel.botWakeAllowChannelsAdd': 'Add channel',
+  'channel.botWakeAllowChannelsEmpty': 'No limit — the bot may join anywhere in scope.',
+  'channel.botWakeDenyChannels': 'Blocked channels',
+  'channel.botWakeDenyChannelsHint':
+    'Channel or thread IDs where the bot never joins. Takes priority over allowed channels.',
+  'channel.botWakeDenyChannelsAdd': 'Add channel',
+  'channel.botWakeDenyChannelsEmpty': 'No channels blocked.',
+  'channel.botWakeChannelIdLabel': 'Channel ID',
+  'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
+  'channel.botWakeChannelIdPlaceholderLark':
+    'Group chat ID, e.g. oc_a0553eda9014c201e6969b478895c230',
+  'channel.channelListLimit': 'Lists hold at most {{max}} entries — remove one first.',
+  'channel.botWakePace': 'How often it joins',
+  'channel.botWakePaceHint':
+    'How often the bot speaks up on its own. Pick a preset, or Custom to set the numbers.',
+  'channel.botWakePaceCalm': 'Calm',
+  'channel.botWakePaceCalmHint':
+    'Joins rarely: a short follow-up window, quiet while you are around, and a burst of messages gets one reply.',
+  'channel.botWakePaceBalanced': 'Balanced',
+  'channel.botWakePaceBalancedHint':
+    'Follows up for 5 minutes after it speaks and stays quiet for 2 minutes after you do.',
+  'channel.botWakePaceActive': 'Active',
+  'channel.botWakePaceActiveHint':
+    'Keeps up for 10 minutes after it speaks and joins even while you are around.',
+  'channel.botWakePaceCustom': 'Custom',
+  'channel.botWakePaceCustomHint':
+    'Set the follow-up window, silence limit, owner presence and batching yourself.',
+  'channel.botWakeWindowSeconds': 'Follow-up window (seconds)',
+  'channel.botWakeWindowSecondsHint':
+    'After the bot speaks, plain messages in the same place within this time count as a follow-up to it.',
+  'channel.botWakeMaxSilentWakes': 'Silent wake limit',
+  'channel.botWakeMaxSilentWakesHint':
+    'After this many wakes in a row where the bot chose to stay silent, it stops joining until it speaks again. 0 means no limit.',
+  'channel.botWakeOwnerPresenceSeconds': 'Owner presence (seconds)',
+  'channel.botWakeOwnerPresenceSecondsHint':
+    "If the bot's owner posted in the channel within this time, the bot stays quiet. 0 turns this off.",
+  'channel.botWakeClassifierThreshold': 'Follow-up sensitivity',
+  'channel.botWakeClassifierThresholdHint':
+    'Right after the bot replied, how sure it must be that a message is still for it before it joins, from 0 to 1. A higher value makes it join less often.',
+  'channel.botWakeDuties': 'What the bot handles',
+  'channel.botWakeDutiesHint':
+    "What the bot is responsible for in its channels, in your own words, one duty per line. When anyone's message falls within them, the bot may step in without being called, and may still stay silent. Leave empty to turn this off. You can also ask the bot to keep this up to date itself. Up to 4000 characters.",
+  'channel.botWakeDutiesPlaceholder':
+    'When someone describes a feature request, assess it; for easy ones, create a task for dario.\nOnce the PR is up, tell the person who asked for it.',
+  'channel.botWakeDutiesThreshold': 'Duty sensitivity',
+  'channel.botWakeDutiesThresholdHint':
+    'How sure the bot must be that a message falls within its duties before it steps in, from 0 to 1. A higher value makes it step in less often.',
+  'channel.botWakeCustomInstructionsEnabled': 'Custom instructions',
+  'channel.botWakeCustomInstructionsEnabledHint':
+    'Tell the bot in your own words whom to answer and what to leave alone. Turn on to write them.',
+  'channel.botWakeCustomInstructions': 'Instructions',
+  'channel.botWakeCustomInstructionsHint':
+    'Written to the bot like a prompt: who it should answer, what to leave alone, examples of each. It guides the judgement and is not a hard rule. Up to 4000 characters.',
+  'channel.botWakeCustomInstructionsPlaceholder':
+    'Answer when someone asks about billing, refunds or invoices, or follows up on something you said.\nStay out of casual chat between teammates and of messages addressed to someone else.\nIf a message mentions you only in passing, do not reply.',
+  'channel.botWakeSchedulerMode': 'Batch follow-ups',
+  'channel.botWakeSchedulerModeHint':
+    'Hold follow-ups briefly and answer a burst of messages in one run instead of one run per message. Has no effect on deployments without a job queue.',
+  'channel.botWakeSchedulerOff': 'Off',
+  'channel.botWakeSchedulerOffHint': 'Each follow-up is handled immediately.',
+  'channel.botWakeSchedulerEnforce': 'On',
+  'channel.botWakeSchedulerEnforceHint': 'Messages are collected, then answered together.',
+  'channel.botWakeCollectSeconds': 'Collect for (seconds)',
+  'channel.botWakeCollectSecondsHint':
+    'How long a burst is collected before the bot answers. At least 20.',
+  'channel.botWakeCooldownSeconds': 'Cool down (seconds)',
+  'channel.botWakeCooldownSecondsHint':
+    'Quiet time after a run before the next one may start. At least 60.',
+  'channel.group.setup': 'Get started',
+  'channel.group.credentialsDesc': 'Encrypted when saved, and shown masked afterwards.',
+  'channel.group.credentialsOptional': 'Optional credentials',
+  'channel.quickView.title': 'Quick view',
+  'channel.quickView.open': 'Preview',
+  'channel.quickView.collapse': 'Collapse preview',
+  'channel.quickView.desc':
+    'How the bot behaves in chat with the settings as they are now, before you save. Illustrative.',
+  'channel.quickView.sceneGroup': 'Group',
+  'channel.quickView.sceneDm': 'Direct message',
+  'channel.quickView.stranger': 'Someone new',
+  'channel.quickView.bot': 'Bot',
+  'channel.quickView.ask': "Summarize today's discussion",
+  'channel.quickView.askDm': "Can you summarize today's discussion?",
+  'channel.quickView.answer':
+    'Three things came up today: the release moved to Thursday, the sign-in page copy, and the priority of the bug list. Want me to turn them into to-dos?',
+  'channel.quickView.toolCall': 'Read 12 earlier messages',
+  'channel.quickView.dm.pairing':
+    "To DM this bot, send this pairing code to the bot's owner: 7K2F. They run /approve 7K2F to grant you access. The code expires in 1 hour.",
+  'channel.quickView.dm.allowlist':
+    "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.",
+  'channel.quickView.dm.disabled':
+    "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
+  'channel.quickView.group.disabled':
+    "Sorry, you don't have permission to talk to this bot in groups or channels. Please contact the bot's owner if you need access.",
+  'channel.quickView.group.allowlist':
+    "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
+  'channel.quickView.sender.rejected':
+    "Sorry, you aren't authorized to interact with this bot. Please contact the bot's owner if you need access.",
+  'channel.quickView.groupAllowlist': 'Replies only in the groups on your list.',
+  'channel.quickView.keywords': 'Also wakes on {{keywords}} without an @mention.',
+  'channel.saveAndConnect': 'Save and connect',
+  'channel.access.recommended': 'Recommended',
+  'channel.access.dm.label': 'Who can message it directly',
+  'channel.access.dm.everyone': 'Everyone',
+  'channel.access.dm.everyoneDesc': 'Anyone can message it directly.',
+  'channel.access.dm.approval': 'Strangers need my approval',
+  'channel.access.dm.approvalDesc':
+    'A stranger gets a pairing code, and you run /approve to let them in.',
+  'channel.access.dm.listed': 'Only people on the list',
+  'channel.access.dm.listedDesc': 'Only listed people can use it; everyone else is turned away.',
+  'channel.access.dm.closed': 'No direct messages',
+  'channel.access.dm.closedDesc': 'It ignores DMs and points people to a shared group instead.',
+  'channel.access.list.approved': 'Approved people',
+  'channel.access.list.listed': 'People on the list',
+  'channel.access.list.hint':
+    'The list applies everywhere: only these people can use the bot, in DMs and in groups.',
+  'channel.access.list.emptyApproval': 'No one is approved yet. Strangers get a pairing code.',
+  'channel.access.list.emptyListed':
+    'The list is empty, so apart from you nobody can message it yet.',
+  'channel.access.list.clearTitle': 'Clear the list?',
+  'channel.access.list.clearContent':
+    'Switching to Everyone also removes the {{count}} people on the list, since a filled list limits everyone.',
+  'channel.access.list.clearOk': 'Switch and clear',
+  'channel.access.group.label': 'How it responds in groups and channels',
+  'channel.access.group.open': 'Every group and channel',
+  'channel.access.group.openDesc': 'Replies whenever it is @mentioned.',
+  'channel.access.group.allowlist': 'Only chosen groups',
+  'channel.access.group.allowlistDesc': 'Replies only in the groups you list below.',
+  'channel.access.group.disabled': 'Only me in groups',
+  'channel.access.group.disabledDesc':
+    'In groups and channels it has joined, only you can use it (once your own ID is set above); others are told they lack permission. Telegram Guest Mode follows its own setting.',
+  'channel.access.group.listNote':
+    'The people list above also applies here: only people on it can use the bot in groups.',
+  'channel.access.identity.desc':
+    'Lets the bot reach you with reminders and notices, and makes you the one who approves strangers. The settings below never block you.',
+  'channel.access.identity.required': 'Required to approve strangers',
+  'channel.access.identity.approverMissing':
+    'To approve strangers, add your own ID first, or nobody can run /approve.',
+  'channel.access.section.identity': 'Owner identity',
+  'channel.access.section.conversation': 'Conversation access',
+  'channel.access.section.conversationDesc':
+    'Determines who may talk to the bot in direct messages, and in which groups and channels it responds.',
+  'channel.access.section.device': 'Device access',
+  'channel.access.section.deviceDesc':
+    'Determines who may operate your devices through the bot, such as reading files or running commands. Conversation access does not include device access.',
+  'channel.access.device.label': 'Who can use your devices',
+  'channel.access.device.owner': 'Only me',
+  'channel.access.device.ownerDesc':
+    'Only you can have the bot operate your devices. Others can still talk to it.',
+  'channel.access.device.allowlist': 'Me and authorized people',
+  'channel.access.device.allowlistDesc':
+    'You and the people listed below can have the bot operate your devices.',
+  'channel.access.device.list': 'Authorized people',
+  'channel.access.device.listHint':
+    'Listed people can read and write files and run commands on your devices through the bot. Add only people you trust.',
+  'channel.access.device.listEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.access.device.channel.label': 'Where devices can be used',
+  'channel.access.device.channel.any': 'Any channel',
+  'channel.access.device.channel.anyDesc':
+    'Device access follows the choice above wherever the bot is used.',
+  'channel.access.device.channel.allowlist': 'Only listed channels',
+  'channel.access.device.channel.allowlistDesc':
+    'Outside the channels listed below, the bot runs in the sandbox for everyone, you included. Direct messages are not affected.',
+  'channel.access.device.channel.list': 'Channels for devices',
+  'channel.access.device.channel.listHint':
+    'Use the same channel / group / chat IDs as Allowed Channels for conversations.',
+  'channel.access.device.channel.listEmpty':
+    'No channels added yet, so devices cannot be used in any channel.',
+  'channel.access.device.channelMembers': 'Anyone in the listed channels',
+  'channel.access.device.channelMembersDesc':
+    'You anywhere, plus everyone in the channels listed below. In other channels and in direct messages, only you.',
+  'channel.access.device.channelMembersRisk':
+    'Anyone in these channels can have the bot read and write files and run commands on your devices. List only channels whose members you all trust.',
+  'channel.access.device.grant.listEmpty':
+    'No channels added yet, so only you can use your devices.',
+  'channel.access.device.grant.listHint':
+    'Everyone in these channels can use your devices. Use the same channel / group / chat IDs as Allowed Channels for conversations.',
+  'channel.access.device.grantConfirmTitle': 'Grant these channels?',
+  'channel.access.device.grantConfirmContent':
+    '{{count}} channel(s) are already on the device channel list. They will now grant access: everyone in them can have the bot operate your devices.',
+  'channel.access.device.grantConfirmOk': 'Grant access',
+  'channel.access.device.ownerMissing':
+    'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, and no one can use your devices.',
+  'channel.access.device.ownerMissingChannel':
+    'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, so only members of the listed channels can use your devices, and only in those channels.',
+  'channel.devicePolicy': 'Device Access',
+  'channel.devicePolicyHint': 'Who may operate your devices through the bot.',
+  'channel.deviceAllowFrom': 'Authorized People',
+  'channel.deviceAllowFromAdd': 'Add person',
+  'channel.deviceAllowFromEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.deviceChannelPolicy': 'Device Channels',
+  'channel.deviceChannelPolicyHint': 'In which channels the bot may operate your devices.',
+  'channel.deviceChannelAllowFrom': 'Device Channels',
+  'channel.deviceChannelAllowFromAdd': 'Add channel',
+  'channel.deviceChannelAllowFromEmpty':
+    'No channels added yet, so devices cannot be used in any channel.',
+  'channel.deviceChannelAllowFromHint':
+    'Channel / group / chat IDs where the bot may operate your devices.',
+  'channel.deviceAllowFromHint':
+    'Listed people can read and write files and run commands on your devices through the bot.',
+  'channel.hero.title': '{{name}} bot',
+  'channel.hero.connected': '{{agent}} · app ID {{id}}',
+  'channel.hero.new': 'Once connected, {{agent}} can work in {{name}}.',
+  'channel.tab.connect': 'Connect',
+  'channel.tab.access': 'Access',
+  'channel.tab.reply': 'Replies',
+  'channel.tab.wake': 'Wake policy',
+  'channel.wake.intro':
+    'Lets the bot speak up when nobody @-mentioned it: when a message calls it by name, when someone follows up soon after it spoke, or when a watch keyword matches. It judges each message first, and may choose to stay silent.',
+  'channel.wake.feishuScope.title': 'Group messages need an extra permission',
+  'channel.wake.feishuScope.desc':
+    'To hear group messages that do not @-mention the bot, the app needs the im:message.group_msg scope. If other bots share the group, also add im:message.group_msg.include_bot:read so the bot sees what they say when it decides whether to step in. Add scopes under Permissions & Scopes in the developer console, then create and publish a new version. Apps made with one-click setup already have the first one.',
+  'channel.wake.section.keywords': 'Keywords',
+  'channel.wake.section.channels': 'Channels',
+  'channel.wake.section.channelsDesc':
+    'Where the bot may join a conversation nobody addressed to it.',
+  'channel.wake.section.pace': 'Pace',
+  'channel.wake.section.paceDesc': 'How soon, and how often, the bot speaks up on its own.',
+  'channel.wake.section.judgement': 'Duties',
+  'channel.wake.section.judgementDesc':
+    'What the bot is responsible for, so it can step in without being called, and the instructions it follows.',
+  'channel.wake.section.more': 'More',
+  'channel.wake.section.switch': 'Proactive participation',
+  'channel.tab.advanced': 'Advanced',
+  'channel.tab.unsaved': 'Unsaved changes',
+  'channel.tab.records': 'Wake records',
+  'channel.records.intro':
+    'Every message the bot judged in the last {{days}} days: whether it woke up, and why. Mark the ones it got wrong.',
+  'channel.records.summary.wake': 'Woke',
+  'channel.records.summary.skip': 'Skipped',
+  'channel.records.summary.defer': 'Deferred',
+  'channel.records.summary.followup': 'Proactive wakes',
+  'channel.records.summary.followupHint': 'Woke up without being @-mentioned',
+  'channel.records.summary.marked': 'Marked by you',
+  'channel.records.filter.all': 'All',
+  'channel.records.filter.followupOnly': 'Proactive only',
+  'channel.records.filter.unmarkedOnly': 'Unmarked only',
+  'channel.records.outcome.wake': 'Woke',
+  'channel.records.outcome.skip': 'Skipped',
+  'channel.records.outcome.defer': 'Deferred',
+  'channel.records.proactive': 'Proactive',
+  'channel.records.refresh': 'Refresh',
+  'channel.records.purged': 'Message expired',
+  'channel.records.purgedHint': 'Message text is kept for 7 days.',
+  'channel.records.silenced': 'Chose not to reply',
+  'channel.records.silencedWithReason': 'Chose not to reply: {{reason}}',
+  'channel.records.reason.access-gate-rejected': 'Blocked by access rules',
+  'channel.records.reason.addressed': 'A reply to the bot',
+  'channel.records.reason.classifier-confident': 'Judged as meant for it',
+  'channel.records.reason.command': 'Command',
+  'channel.records.reason.direct-message': 'Direct message',
+  'channel.records.reason.explicit-mention': '@-mentioned',
+  'channel.records.reason.followup-window': 'Follow-up right after it spoke',
+  'channel.records.reason.in-duty': 'Within its duties',
+  'channel.records.reason.monitoring-not-allowed': 'Channel not open to proactive replies',
+  'channel.records.reason.named-in-text': 'Called by name',
+  'channel.records.reason.not-addressed': 'Not addressed to it',
+  'channel.records.reason.policy-denied': 'Wake rules said no',
+  'channel.records.reason.proactive-help': 'Offered help',
+  'channel.records.reason.scheduled': 'Held to read with the next messages',
+  'channel.records.reason.solo-conversation': 'One-on-one conversation',
+  'channel.records.reason.watch-keyword': 'Watch keyword matched',
+  'channel.records.noReplyReason.already_handled': 'Already handled',
+  'channel.records.noReplyReason.duplicate': 'Already answered',
+  'channel.records.noReplyReason.empty_completion': 'Empty reply',
+  'channel.records.noReplyReason.not_addressed': 'Not talking to it',
+  'channel.records.noReplyReason.nothing_to_add': 'Nothing to add',
+  'channel.records.noReplyReason.off_topic': 'Off topic',
+  'channel.records.noReplyReason.stand_down': 'Asked to step back',
+  'channel.records.noReplyReason.unspecified': 'No reason given',
+  'channel.records.mark.correct': 'Right call',
+  'channel.records.mark.false_wake': "Shouldn't have woken",
+  'channel.records.mark.missed_wake': 'Should have woken',
+  'channel.records.mark.failed': "Couldn't save your mark. Try again.",
+  'channel.records.column.time': 'Time',
+  'channel.records.column.message': 'Message',
+  'channel.records.column.outcome': 'Result',
+  'channel.records.column.reason': 'Why',
+  'channel.records.column.mark': 'Right?',
+  'channel.records.mark.wrong': 'Wrong call',
+  'channel.records.openMessage': 'Open the message',
+  'channel.records.column.score': 'Score',
+  'channel.records.judge.addressed': 'Is it meant for the bot',
+  'channel.records.judge.duty': 'Is it within its duties',
+  'channel.records.judge.routing': 'Should it be the one to answer',
+  'channel.records.judge.allow': 'over the threshold',
+  'channel.records.judge.deny': 'under the threshold',
+  'channel.records.judge.hint': '{{judge}}: {{verdict}}',
+  'channel.records.mark.undo': 'Click again to remove the mark',
+  'channel.records.empty.title': 'No records yet',
+  'channel.records.total': '{{count}} records',
+  'channel.records.empty.desc':
+    'Records show up here once the bot judges a message in a channel it can see.',
+  'channel.records.emptyFiltered.title': 'Nothing matches these filters',
+  'channel.records.emptyFiltered.clear': 'Clear filters',
+  'channel.module.save': 'Save',
+  'channel.module.unsaved': 'Unsaved changes',
+  'channel.group.connection': 'Connection options',
+  'channel.reply.instant':
+    'Changes here take effect as soon as you make them. There is nothing to save.',
+  'channel.reply.section.display': 'How replies look',
+  'channel.reply.section.style': 'Style and emoji',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',
@@ -349,6 +857,9 @@ export default {
   'channel.displayToolCalls': 'Display Tool Calls',
   'channel.displayToolCallsHint':
     'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
+  'channel.processingMessage': 'Processing Message',
+  'channel.processingMessageHint':
+    'Post a short message saying the bot is working on it before the reply. Where messages can be edited, tool call progress also shows in this message.',
   'channel.reactionMode': 'Status Reactions',
   'channel.reactionModeHint':
     'How the bot updates the emoji reaction on your message while it works. Every change can notify members who have message alerts enabled.',
@@ -358,10 +869,20 @@ export default {
   'channel.reactionModeFullHint': 'Also switch between thinking and working after every step',
   'channel.reactionModeNone': 'Off',
   'channel.reactionModeNoneHint': 'Never add status reactions',
+  'channel.replyPlacement': 'Where to Reply',
+  'channel.replyPlacementHint':
+    'Where the bot answers a message sent to it in a channel. Messages already in a thread or a DM are answered where they are.',
+  'channel.replyPlacementAgent': 'Let the bot decide',
+  'channel.replyPlacementAgentHint':
+    'Quick answers stay in the channel; longer work moves into a thread under the message. When the work takes a while, it first posts a short note on what it will do.',
+  'channel.replyPlacementThread': 'Always open a thread',
+  'channel.replyPlacementThreadHint':
+    'Every message that wakes the bot in a channel gets its own thread.',
   'channel.historyLimit': 'History Message Limit',
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
   'channel.serverId': 'Default Server ID',
-  'channel.serverIdHint': 'Default server / guild AI tools act on; not used for access control',
+  'channel.serverIdHint':
+    'When the bot uses its tools (looking up channels, reading or sending messages) without being told which server, it works in this one. It does not decide where the bot replies.',
   'channel.serverIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click the server icon → Copy Server ID.',
   'channel.serverIdHint.slack':
@@ -370,8 +891,10 @@ export default {
   'channel.userIdHint':
     'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
   'channel.userIdMissingDesc':
-    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in under Advanced Settings.",
+    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in on the Access tab.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
+  'channel.userIdHint.dingtalk':
+    'Your DingTalk user ID (staff ID). Find it in the DingTalk admin console \u2192 Contacts \u2192 member details, or send /whoami to the bot in a direct message.',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
@@ -401,6 +924,13 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'share.entry': 'Share this Agent',
+  'share.settings.autoGrant.desc':
+    'Visitors get every tool and skill turned on in this Agent, including ones you turn on later. Anything you untick below stays closed.',
+  'share.settings.autoGrant.title': 'Open new Agent tools and skills automatically',
+  'share.settings.device.desc':
+    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Local CLI Agents such as Claude Code and Codex run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
+  'share.settings.device.title': 'Device access',
+  'share.settings.device.who': 'Who can use your device',
   'share.settings.limits.desc':
     'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
   'share.settings.limits.maxFileStorageHint':
@@ -410,18 +940,14 @@ export default {
   'share.settings.limits.maxFileStorageLabel': 'File storage limit',
   'share.settings.limits.maxFileStorageWorkspaceHint':
     'Files visitors attach are stored in the Workspace. Uploads stop once they reach this total; set 0 to turn attachments off.',
-  'share.settings.limits.maxTopicsPerVisitor': 'Topics per visitor',
-  'share.settings.limits.maxTopicsPerVisitorHint':
-    'How many separate topics each signed-in visitor can start.',
-  'share.settings.limits.maxTopicsPerVisitorUnit': 'topics',
-  'share.settings.limits.maxTurnsPerTopic': 'Turns per topic',
-  'share.settings.limits.maxTurnsPerTopicHint':
-    'How many messages a visitor can send inside one topic.',
-  'share.settings.limits.maxTurnsPerTopicUnit': 'turns',
+  'share.settings.limits.maxMessagesPerVisitor': 'Messages per visitor',
+  'share.settings.limits.maxMessagesPerVisitorHint':
+    'How many messages each signed-in visitor can send to this Agent in total. The Agent’s replies don’t count.',
+  'share.settings.limits.maxMessagesPerVisitorUnit': 'messages',
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
-  'share.settings.limits.monthlySpendLimitUnit': 'M credits',
+  'share.settings.limits.monthlySpendLimitUnit': 'USD',
   'share.settings.limits.title': 'Limits',
   'share.settings.limits.workspaceDesc':
     'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
@@ -464,25 +990,63 @@ export default {
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
-  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor topics',
+  'share.settings.pendingGrants.decline': 'Don’t open',
+  'share.settings.pendingGrants.desc':
+    'Includes {{names}}. If you choose not to open them, you won’t be asked about them again.',
+  'share.settings.pendingGrants.grantAll': 'Open to visitors',
+  'share.settings.pendingGrants.title':
+    '{{count}} tools or skills turned on in this Agent aren’t open to visitors yet',
+  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
-    'Off by default: visitor topics stay private to the visitor.',
+    "Off by default: visitor conversations stay private to the visitor. When on, they appear under Share on this agent's Topics page.",
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
+  'share.settings.permissions.deviceAccessConfirm.messageLimit':
+    'The monthly spend cap does not limit that usage. Only the message limit per visitor does.',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific people from contacts',
+  'share.settings.permissions.deviceAccessConfirm.okContacts': 'Allow everyone in contacts',
+  'share.settings.permissions.deviceAccessOption.contacts': 'Everyone in contacts',
+  'share.settings.permissions.deviceAccessOption.none': 'No visitors',
+  'share.settings.permissions.deviceAccessOption.noneDesc':
+    'Visitors can chat with this Agent but never run it on your execution environment.',
+  'share.settings.permissions.deviceAccessOption.contactsDesc':
+    'Everyone in this Agent’s contacts can use it, including people added later. Removing someone from contacts also removes their access.',
+  'share.settings.permissions.deviceAccessOption.allowlistDesc':
+    'Only the people you pick below from this Agent’s contacts can use it.',
+  'share.settings.limits.saved': 'Limits saved',
+  'share.settings.permissions.deviceAccessConfirm.commands':
+    'They can run any command and read or write any file on the machine this Agent runs on, including through a local CLI Agent such as Claude Code or Codex.',
+  'share.settings.permissions.deviceAccessConfirm.contactsScope':
+    'Anyone added to this Agent’s contacts later gets this access too, not only the people there now.',
+  'share.settings.permissions.deviceAccessConfirm.intro':
+    'People you grant access will run this Agent on your execution environment:',
+  'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
+  'share.settings.permissions.deviceAccessConfirm.subscription':
+    'Local CLI Agents such as Claude Code and Codex use the model subscription or key signed in on that machine.',
+  'share.settings.permissions.deviceAccessConfirm.title':
+    'Let people use your execution environment?',
+  'share.settings.permissions.deviceAllowContactsUnavailable':
+    'Device access works through contacts, and contacts aren’t available for your account yet.',
+  'share.settings.permissions.deviceAllowHint':
+    'Only people in this Agent’s contacts can be added. Removing someone from contacts also removes their access.',
+  'share.settings.permissions.deviceAllowLimitReached': 'You can add up to {{limit}} people.',
+  'share.settings.permissions.deviceAllowLoadFailed':
+    'Couldn’t load your contacts. Refresh to try again.',
+  'share.settings.permissions.deviceAllowNoContacts':
+    'Your contacts are empty. Add people to your contacts first.',
+  'share.settings.permissions.deviceAllowPlaceholder': 'Choose people from your contacts',
+  'share.settings.permissions.deviceAllowUnlisted':
+    'No longer in contacts, so they can’t use it: {{names}}. They’re removed the next time you edit this list.',
   'share.settings.permissions.desc':
-    'What a visitor’s run may read, and what the visitor gets to see back.',
-  'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
-  'share.settings.permissions.showErrorDetailsHint':
-    'Off by default: visitors see a generic failure notice instead of raw error text.',
-  'share.settings.permissions.showModelInfo': 'Show which model is used',
-  'share.settings.permissions.showModelInfoHint':
-    'Off by default: your model and provider choice stays hidden.',
+    'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
+  'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
+  'share.settings.tools.autoGranted': 'Open automatically because it’s turned on in this Agent',
   'share.settings.usage.conversations': 'Topics',
   'share.settings.usage.conversationsHint': 'Topics created by visitors through this share.',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
@@ -497,7 +1061,7 @@ export default {
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
-  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
+  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}}',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Page views',
   'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',
@@ -514,6 +1078,9 @@ export default {
     'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
+  'share.settings.tools.agentOffDesc':
+    'This tool is not turned on in the Agent’s Tools and connectors.',
+  'share.settings.tools.agentOffLegend': 'Tools not turned on in the Agent’s Tools and connectors',
   'share.settings.tools.apiWritesOwnerDocuments':
     'Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.',
   'share.settings.tools.desc':
@@ -536,8 +1103,12 @@ export default {
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
+  /** @deprecated Unused since the on-demand filter was removed; delete after the Cloud picker stops reading it. */
   'share.settings.tools.onDemandDesc':
     'Not enabled on this Agent. Once granted, the model turns it on in a visitor run only when needed.',
+  'share.settings.tools.ownerCredentials':
+    'Visitors use MCP servers, connections and plugins with your accounts and credentials.',
+  /** @deprecated See `share.settings.tools.onDemandDesc`. */
   'share.settings.tools.showOnDemand': 'Show on-demand tools',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',
@@ -548,11 +1119,15 @@ export default {
   'share.visitor.access.signInDesc':
     'Sign in to start chatting with this shared agent. Your topics stay tied to your account.',
   'share.visitor.access.signInTitle': 'Sign in to continue',
+  'share.visitor.chat.channelsDisabled':
+    "Chatting with shared agents isn't available for your account yet.",
   'share.visitor.errors.fileUnavailable':
     'One of the attachments is no longer available. Remove it and try again.',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
+  'share.visitor.errors.heteroDeviceUnavailable':
+    "The creator's device is offline. Try again later.",
   'share.visitor.errors.heterogeneousUnsupported':
-    "This shared agent isn't available for visitor chat yet. Please contact its owner.",
+    "This agent can run for you only with its creator's permission. Ask its creator for access.",
   'share.visitor.errors.insufficientBudget':
     'This shared agent has run out of budget. Please contact its owner.',
   'share.visitor.errors.promptTooLong':
@@ -564,30 +1139,34 @@ export default {
   'share.visitor.errors.spendLimit':
     'This shared agent has reached its monthly usage limit set by its creator. It will be available again next month.',
   'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
-  'share.visitor.errors.topicLimit': 'You have reached the topic limit on this shared agent.',
-  'share.visitor.errors.turnLimit':
-    'This topic has reached its turn limit. Start a new topic to continue.',
   'share.visitor.errors.unavailable':
     'This topic is no longer available. Try switching to another topic or starting a new one.',
   'share.visitor.input.placeholder': 'Message this shared agent…',
   'share.visitor.input.send': 'Send',
   'share.visitor.input.stop': 'Stop',
   'share.visitor.privacyNotice':
-    'This topic runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+    'This topic runs on the creator’s account. Only you can see its messages.',
+  'share.visitor.privacyNoticeCreatorVisible':
+    'This topic runs on the creator’s account. The creator has turned on topic access and may read its messages, so avoid sharing sensitive information.',
   'share.visitor.privacyNoticeWorkspace':
-    'This topic is paid for by the Workspace and may be visible to the Agent creator. Avoid sharing sensitive information.',
+    'This topic runs in the owner Workspace. Only you can see its messages.',
+  'share.visitor.privacyNoticeWorkspaceCreatorVisible':
+    'This topic runs in the owner Workspace. The Agent creator has turned on topic access and may read its messages, so avoid sharing sensitive information.',
   'share.visitor.profile.about': 'About',
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
-  'share.visitor.profile.cta': 'Start a topic',
+  'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
+  'share.visitor.profile.lobotFallback.description':
+    'If Lobot is not installed yet, download it to chat with this Agent from your desktop, or keep chatting in the browser.',
+  'share.visitor.profile.lobotFallback.download': 'Download Lobot',
+  'share.visitor.profile.lobotFallback.title': 'Lobot didn’t open',
+  'share.visitor.profile.openInLobot': 'Open in Lobot',
   'share.visitor.profile.metrics.conversations': 'Topics',
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',
   'share.visitor.profile.metrics.toolsCaption': 'available to you',
-  'share.visitor.profile.metrics.turns': 'Each topic',
-  'share.visitor.profile.metrics.turnsCaption': 'turns at most',
   'share.visitor.profile.metrics.views': 'Views',
   'share.visitor.profile.metrics.viewsCaption': 'on this page',
   'share.visitor.profile.metrics.visitors': 'People who used it',
@@ -600,22 +1179,18 @@ export default {
     'It runs in the owner Workspace, and every reply is paid from the Workspace budget.',
   'share.visitor.profile.terms.desc':
     'Today these rules only show up as errors once you hit them. Here they are up front.',
+  'share.visitor.profile.terms.messages_one': 'You can send up to {{count}} message.',
+  'share.visitor.profile.terms.messages_other': 'You can send up to {{count}} messages.',
   'share.visitor.profile.terms.title': 'Before you start',
   'share.visitor.profile.terms.tools_one': '{{count}} tool is open to visitors.',
   'share.visitor.profile.terms.tools_other': '{{count}} tools are open to visitors.',
-  'share.visitor.profile.terms.topics': 'You can open up to {{count}} topics.',
-  'share.visitor.profile.terms.turns': 'Each topic allows up to {{count}} turns.',
   'share.visitor.profile.terms.uploads':
     'You can attach files; this Agent has {{size}} of file storage for visitors.',
   'share.visitor.profile.terms.uploadsOff': 'Attachments are turned off.',
   'share.visitor.profile.terms.visibilityCreator':
-    'The creator has enabled topic access, so they can read the messages in this topic.',
+    'The creator has turned on topic access and may read the messages in your topics.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
-  'share.visitor.topics.empty': 'No topics yet',
-  'share.visitor.topics.new': 'New topic',
-  'share.visitor.topics.title': 'Topics',
-  'share.visitor.topics.untitled': 'Untitled topic',
   'share.visitor.upload.creatorStorageBlocked':
     "This Agent's upload space is full. Ask its creator to free up room or raise the cap.",
   'share.visitor.upload.fileTooLarge': 'Files must be under {{max}}.',
@@ -634,7 +1209,7 @@ export default {
   'transfer.confirm.warning': "Some links won't move:",
   'transfer.confirm.plugins': 'Custom plugins may not be available in the target workspace',
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
-  'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after moving',
+  'transfer.confirm.botChannels': 'Bot connections may need to be refreshed after moving',
   'transfer.success': 'Agent moved successfully',
   'transfer.transferTo': 'Move to…',
   'transfer.transferToMember': 'Transfer to member...',
@@ -722,9 +1297,15 @@ export default {
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
   'share.visitor.profile.works.open': 'Open work',
+  'share.visitor.profile.works.type.artboard': 'Artboard',
+  'share.visitor.profile.works.type.canvas': 'Canvas',
   'share.visitor.profile.works.type.document': 'Document',
   'share.visitor.profile.works.type.task': 'Task',
   'share.visitor.profile.works.type.file': 'File',
+  'share.visitor.profile.works.images_one': '{{count}} image',
+  'share.visitor.profile.works.images_other': '{{count}} images',
+  'share.visitor.profile.works.type.collection': 'Gallery',
+  'share.visitor.profile.works.viewImages': 'View images',
   'share.visitor.profile.works.type.external': 'Linked work',
   'share.settings.profile.title': 'Public profile',
   'share.settings.profile.desc':
@@ -767,4 +1348,125 @@ export default {
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
   'share.settings.profile.upToDate': 'Visitors see the saved content.',
+  'webhook.actions.delete': 'Delete',
+  'webhook.actions.deliveries': 'Recent calls',
+  'webhook.actions.edit': 'Edit',
+  'webhook.actions.more': 'More',
+  'webhook.actions.pause': 'Pause webhook',
+  'webhook.actions.resume': 'Resume webhook',
+  'webhook.actions.rotate': 'Generate new key',
+  'webhook.actions.test': 'Send test',
+  'webhook.actions.usage': 'How to call',
+  'webhook.autoApproveTag': 'Auto-approve',
+  'webhook.untitledAgent': 'Untitled agent',
+  'webhook.wakes': 'Wakes {{agent}}',
+  'webhook.identifier': 'Identifier {{identifier}}',
+  'webhook.renamed': 'Renamed',
+  'webhook.actions.rename': 'Rename',
+  'webhook.channel.readOnly':
+    'Results are posted to this Channel. What it runs is changed with the lh CLI or by asking the Agent; here you can rename or delete it.',
+  'webhook.cancel': 'Cancel',
+  'webhook.create': 'Create webhook',
+  'webhook.created.done': 'Done',
+  'webhook.created.title': 'Webhook created',
+  'webhook.created.tryIt': 'Try it now',
+  'webhook.defaultName': 'Webhook',
+  'webhook.delete.content':
+    'The URL of "{{name}}" stops working at once, and its calls no longer wake this agent. This cannot be undone.',
+  'webhook.delete.done': 'Webhook deleted',
+  'webhook.delete.failed': "Couldn't delete the webhook. Try again",
+  'webhook.delete.ok': 'Delete',
+  'webhook.delete.title': 'Delete this webhook?',
+  'webhook.deliveries.columns.receivedAt': 'Received',
+  'webhook.deliveries.columns.request': 'Request',
+  'webhook.deliveries.columns.status': 'Result',
+  'webhook.deliveries.columns.topic': 'Topic',
+  'webhook.deliveries.empty': 'No calls yet. Send a test to see one here.',
+  'webhook.deliveries.loadMore': 'Load more',
+  'webhook.deliveries.purged': 'Content expired',
+  'webhook.deliveries.reason.agent_start_failed': "The agent couldn't start. It will be retried",
+  'webhook.deliveries.reason.feature_disabled': 'Webhooks are turned off for this account',
+  'webhook.deliveries.reason.insufficient_budget': 'Not enough credits to run the agent',
+  'webhook.deliveries.reason.target_removed': 'The agent was removed',
+  'webhook.deliveries.reason.topic_busy': 'Waiting for the topic to finish its current run',
+  'webhook.deliveries.reason.unknown': 'Not run',
+  'webhook.deliveries.reason.wake_cap': 'Skipped: over 30 runs in 10 minutes',
+  'webhook.deliveries.reason.webhook_paused': 'Skipped: the webhook was paused',
+  'webhook.deliveries.reason.webhook_removed': 'The webhook was deleted',
+  'webhook.deliveries.refresh': 'Refresh',
+  'webhook.deliveries.status.failed': 'Failed',
+  'webhook.deliveries.status.ignored': 'Skipped',
+  'webhook.deliveries.status.pending': 'Waiting',
+  'webhook.deliveries.status.processed': 'Ran',
+  'webhook.deliveries.test': 'Test',
+  'webhook.deliveries.thread': 'Thread: {{thread}}',
+  'webhook.deliveries.title': 'Recent calls',
+  'webhook.deliveries.untitledTopic': 'Untitled topic',
+  'webhook.desc':
+    'Give this agent a URL. When any system sends a request to it, the agent runs with what was sent: alerts, CI results, form submissions, anything.',
+  'webhook.empty.desc':
+    'Create a webhook, give its URL and key to the system that should notify this agent, and each call starts a run. No signing or special format needed.',
+  'webhook.empty.title': 'Let other systems wake this agent',
+  'webhook.endpoint.copy': 'Copy URL',
+  'webhook.endpoint.label': 'Webhook URL',
+  'webhook.form.autoApprove.label': 'Auto-approve tool calls',
+  'webhook.form.autoApprove.offHint':
+    'Runs follow your tool approval settings; a call that needs approval waits in the topic until you answer it.',
+  'webhook.form.autoApprove.onHint':
+    'Runs from this webhook use tools without waiting for approval, so anyone with the URL can make the agent act. Tools marked to always ask still wait.',
+  'webhook.form.create': 'Create webhook',
+  'webhook.form.createFailed': "Couldn't create the webhook. Try again",
+  'webhook.form.createTitle': 'Create webhook',
+  'webhook.form.editTitle': 'Edit webhook',
+  'webhook.form.instructions.hint':
+    "Sent with every call. The agent treats the request's content as data, never as instructions.",
+  'webhook.form.instructions.label': 'What should the agent do?',
+  'webhook.form.instructions.placeholder':
+    'For example: Summarize the failure and open an issue if it is new.',
+  'webhook.form.name.label': 'Name',
+  'webhook.form.name.placeholder': 'For example: CI alerts',
+  'webhook.form.save': 'Save',
+  'webhook.form.saveFailed': "Couldn't save the webhook. Try again",
+  'webhook.form.saved': 'Webhook saved',
+  'webhook.form.topicMode.label': 'Topic',
+  'webhook.form.topicMode.newHint':
+    'Each run starts a new topic. Calls that arrive while others are waiting are handled together in one run. A caller can add ?thread=<key> to keep related calls in one topic.',
+  'webhook.form.topicMode.reuseHint':
+    'Every call continues one shared topic, so the agent sees the earlier calls.',
+  'webhook.instructionsPreview': 'Task: {{instructions}}',
+  'webhook.lastCall': 'Last call {{time}}',
+  'webhook.noCalls': 'No calls yet',
+  'webhook.paused': 'Webhook paused. Calls are refused until you resume it',
+  'webhook.resumed': 'Webhook resumed',
+  'webhook.rotate.content':
+    'The current key stops working right away. The URL stays the same: give every system that calls it the new key.',
+  'webhook.rotate.ok': 'Generate new key',
+  'webhook.rotate.title': 'Generate a new key?',
+  'webhook.test.failed': "Couldn't send the test. Try again",
+  'webhook.test.paused': 'Resume the webhook before sending a test',
+  'webhook.test.sent': 'Test sent. The agent will run shortly',
+  'webhook.topicMode.new': 'New topic',
+  'webhook.topicMode.reuse': 'One shared topic',
+  'webhook.updateFailed': "Couldn't update the webhook. Try again",
+  'webhook.usage.json': 'Send JSON',
+  'webhook.usage.notes':
+    'Send the key as "Authorization: Bearer <key>"; it is shown once, when the webhook is created or given a new key. Any body works: JSON, a form or plain text, up to 256 KB. Retries with the same Idempotency-Key run once. Calls are limited per workspace, or per personal space: 120 a minute for each member, across all its webhooks and event subscriptions.',
+  'webhook.usage.simple': 'The simplest call',
+  'webhook.usage.thread': 'Keep a thread in one topic, safe to retry',
+  'webhook.endpoint.hint': 'Calls go to this URL. It never changes.',
+  'webhook.key.label': 'Key',
+  'webhook.key.newTitle': 'New key',
+  'webhook.key.onceHint':
+    'Copy this key now: it won\'t be shown again. Callers send it as "Authorization: Bearer <key>". Anyone with it can wake the agent; if it leaks, generate a new one.',
+  'webhook.topic.continues': 'Continues "{{title}}"',
+  'webhook.topic.pickedGone': "The picked topic was deleted · calls use the webhook's own topic",
+  'webhook.topic.empty': 'No matching topics',
+  'webhook.topic.hint':
+    'Pick one of your topics with this agent, or let the webhook keep a topic of its own.',
+  'webhook.topic.label': 'Continue in',
+  'webhook.topic.loadFailed': "Couldn't load topics",
+  'webhook.topic.own': "The webhook's own topic",
+  'webhook.topic.ownHint': 'Started on the first call',
+  'webhook.topic.searchPlaceholder': 'Search your topics with this agent',
+  'webhook.topic.untitled': 'Untitled topic',
 } as const;

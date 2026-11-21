@@ -1,48 +1,52 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, responsive } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import NavHeader from '@/features/NavHeader';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    min-height: 140px;
-    padding: 14px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  footer: css`
-    margin-block-start: auto;
-    padding-block-start: 10px;
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-    gap: 12px;
-
-    width: 100%;
-    min-width: 0;
-
-    ${responsive.md} {
-      grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    minHeight: '140px',
+    padding: '14px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  footer: {
+    marginBlockStart: 'auto',
+    paddingBlockStart: '10px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorSplit,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      default: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
+      [media.md]: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',
+    },
+    gap: '12px',
+    width: '100%',
+    minWidth: '0',
+  },
+});
 
 const TopicCardSkeleton = ({ index }: { index: number }) => (
-  <Flexbox className={styles.card} gap={10}>
+  <Flexbox className={stylex.props(styles.card).className} gap={10}>
     <Flexbox horizontal align={'center'} gap={8}>
       <SkeletonBar height={8} radius={'50%'} width={8} />
       <SkeletonBar height={16} width={`${46 + (index % 3) * 10}%`} />
     </Flexbox>
     <SkeletonBar height={12} width={`${72 + (index % 2) * 8}%`} />
     <SkeletonBar height={12} width={`${48 + (index % 3) * 6}%`} />
-    <Flexbox horizontal align={'center'} className={styles.footer} gap={12}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.footer).className} gap={12}>
       <SkeletonBar height={12} width={48} />
       <SkeletonBar height={12} width={36} />
       <SkeletonBar height={12} width={56} />
@@ -51,7 +55,7 @@ const TopicCardSkeleton = ({ index }: { index: number }) => (
 );
 
 const TopicGridSkeleton = () => (
-  <div aria-busy className={styles.grid}>
+  <div aria-busy {...stylex.props(styles.grid)}>
     {Array.from({ length: 6 }).map((_, index) => (
       <TopicCardSkeleton index={index} key={index} />
     ))}
@@ -59,6 +63,8 @@ const TopicGridSkeleton = () => (
 );
 
 const TopicsSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
+  const { controlHeight, radius } = useDensityTokens();
+
   if (chrome === 'body') return <TopicGridSkeleton />;
 
   return (
@@ -75,13 +81,13 @@ const TopicsSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
         >
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <Flexbox horizontal gap={8}>
-              <SkeletonBar height={32} radius={16} width={72} />
-              <SkeletonBar height={32} radius={16} width={88} />
-              <SkeletonBar height={32} radius={16} width={80} />
+              <SkeletonBar height={controlHeight} radius={controlHeight / 2} width={72} />
+              <SkeletonBar height={controlHeight} radius={controlHeight / 2} width={88} />
+              <SkeletonBar height={controlHeight} radius={controlHeight / 2} width={80} />
             </Flexbox>
             <Flexbox horizontal gap={8}>
-              <SkeletonBar height={32} radius={8} width={36} />
-              <SkeletonBar height={32} radius={8} width={36} />
+              <SkeletonBar height={controlHeight} radius={radius} width={36} />
+              <SkeletonBar height={controlHeight} radius={radius} width={36} />
             </Flexbox>
           </Flexbox>
           <TopicGridSkeleton />

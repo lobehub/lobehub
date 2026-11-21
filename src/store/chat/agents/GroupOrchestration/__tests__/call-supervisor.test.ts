@@ -7,6 +7,33 @@ import { type ChatStore } from '@/store/chat/store';
 
 import { createGroupOrchestrationExecutors } from '../createGroupOrchestrationExecutors';
 
+const createGroupStoreOptions = (): Partial<ChatStore> => ({
+  dbMessagesMap: {
+    [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
+      {
+        content: 'Hello',
+        createdAt: Date.now(),
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        updatedAt: Date.now(),
+      } as UIChatMessage,
+    ],
+  },
+});
+
+const createOrchestrationContext = (
+  mockStore: ChatStore,
+): Parameters<typeof createGroupOrchestrationExecutors>[0] => ({
+  get: () => mockStore,
+  messageContext: {
+    agentId: TEST_IDS.GROUP_ID,
+    scope: 'group',
+    topicId: TEST_IDS.TOPIC_ID,
+  },
+  orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
+  supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+});
+
 const TEST_IDS = {
   GROUP_ID: 'test-group-id',
   OPERATION_ID: 'test-operation-id',
@@ -81,30 +108,9 @@ const createInitialState = (overrides: Partial<AgentState> = {}): AgentState => 
 describe('createGroupOrchestrationExecutors', () => {
   describe('call_supervisor executor', () => {
     it('should NOT pass operationId to executeClientAgent (creates new child operation)', async () => {
-      const mockStore = createMockStore({
-        dbMessagesMap: {
-          [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
-            {
-              content: 'Hello',
-              createdAt: Date.now(),
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              updatedAt: Date.now(),
-            } as UIChatMessage,
-          ],
-        },
-      });
+      const mockStore = createMockStore(createGroupStoreOptions());
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createGroupOrchestrationExecutors(createOrchestrationContext(mockStore));
 
       const callSupervisorExecutor = executors.call_supervisor!;
 
@@ -135,30 +141,9 @@ describe('createGroupOrchestrationExecutors', () => {
     });
 
     it('should pass isSupervisor: true in context for supervisor messages metadata', async () => {
-      const mockStore = createMockStore({
-        dbMessagesMap: {
-          [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
-            {
-              content: 'Hello',
-              createdAt: Date.now(),
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              updatedAt: Date.now(),
-            } as UIChatMessage,
-          ],
-        },
-      });
+      const mockStore = createMockStore(createGroupStoreOptions());
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createGroupOrchestrationExecutors(createOrchestrationContext(mockStore));
 
       const callSupervisorExecutor = executors.call_supervisor!;
 
@@ -185,30 +170,9 @@ describe('createGroupOrchestrationExecutors', () => {
 
   describe('call_agent executor', () => {
     it('should NOT pass operationId to executeClientAgent (creates new child operation)', async () => {
-      const mockStore = createMockStore({
-        dbMessagesMap: {
-          [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
-            {
-              content: 'Hello',
-              createdAt: Date.now(),
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              updatedAt: Date.now(),
-            } as UIChatMessage,
-          ],
-        },
-      });
+      const mockStore = createMockStore(createGroupStoreOptions());
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createGroupOrchestrationExecutors(createOrchestrationContext(mockStore));
 
       const callAgentExecutor = executors.call_agent!;
       const targetAgentId = 'target-agent-id';
@@ -239,30 +203,9 @@ describe('createGroupOrchestrationExecutors', () => {
 
   describe('operation structure comparison', () => {
     it('call_supervisor and call_agent should both create independent child operations', async () => {
-      const mockStore = createMockStore({
-        dbMessagesMap: {
-          [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
-            {
-              content: 'Hello',
-              createdAt: Date.now(),
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              updatedAt: Date.now(),
-            } as UIChatMessage,
-          ],
-        },
-      });
+      const mockStore = createMockStore(createGroupStoreOptions());
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createGroupOrchestrationExecutors(createOrchestrationContext(mockStore));
 
       // Execute call_supervisor
       await executors.call_supervisor!(

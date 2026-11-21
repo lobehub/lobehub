@@ -11,7 +11,16 @@ import {
   users,
 } from '@/database/schemas';
 
+import {
+  EvalBatchReportResultSchema,
+  EvalReportResultSchema,
+  EvalRetryErrorsSchema,
+  EvalRunSchema,
+} from '../types/eval-response.type';
 import { EvalLifecycleService } from './eval-lifecycle.service';
+
+/** What the client receives: `c.json` serializes Dates and drops undefined keys. */
+const toJson = (value: unknown) => JSON.parse(JSON.stringify(value));
 
 vi.mock('@/server/workflows/agentEvalRun', () => ({
   AgentEvalRunWorkflow: { triggerRunBenchmark: vi.fn() },
@@ -79,7 +88,8 @@ describe('external run lifecycle', () => {
       .values(
         ['shared-topic-1', 'shared-topic-2'].map((id) => ({ id, userId: 'lifecycle-owner' })),
       );
-    await owner.claim('shared-case-run');
+    const claimed = await owner.claim('shared-case-run');
+    expect(() => EvalRunSchema.parse(toJson(claimed))).not.toThrow();
     await expect(
       owner.report('shared-case-run', 'shared-topic-1', {
         testCaseId: 'lifecycle-case',
@@ -87,13 +97,13 @@ describe('external run lifecycle', () => {
         correct: true,
       }),
     ).rejects.toMatchObject({ name: 'NotFoundError' });
-    expect(
-      await owner.report('shared-case-run', 'shared-topic-1', {
-        testCaseId: 'shared-case-1',
-        score: 1,
-        correct: true,
-      }),
-    ).toMatchObject({ runStatus: 'running' });
+    const firstReport = await owner.report('shared-case-run', 'shared-topic-1', {
+      testCaseId: 'shared-case-1',
+      score: 1,
+      correct: true,
+    });
+    expect(firstReport).toMatchObject({ runStatus: 'running' });
+    expect(() => EvalReportResultSchema.parse(toJson(firstReport))).not.toThrow();
     const first = (await db.select().from(agentEvalRuns)).find(
       (run) => run.id === 'shared-case-run',
     );
@@ -138,9 +148,12 @@ describe('external run lifecycle', () => {
     await expect(owner.setStatus('status-run', { status: 'completed' })).rejects.toMatchObject({
       name: 'ConflictError',
     });
-    expect(await owner.setStatus('status-run', { status: 'aborted' })).toMatchObject({
-      status: 'aborted',
-    });
+    const aborted = await owner.setStatus('status-run', { status: 'aborted' });
+    expect(aborted).toMatchObject({ status: 'aborted' });
+    expect(() => EvalRunSchema.parse(toJson(aborted))).not.toThrow();
+    const retried = await owner.retryErrors('status-run');
+    expect(retried).toEqual({ retryCount: 0, runId: 'status-run' });
+    expect(() => EvalRetryErrorsSchema.parse(retried)).not.toThrow();
     expect(await owner.setStatus('status-run', { status: 'aborted' })).toMatchObject({
       status: 'aborted',
     });
@@ -164,10 +177,9 @@ describe('external run lifecycle', () => {
     ).rejects.toMatchObject({ name: 'NotFoundError' });
     const row = await db.select().from(agentEvalRunTopics);
     expect(row.find((r) => r.runId === 'report-run')?.score).toBeNull();
-    expect(await owner.reportBatch('report-run', { items: [result] })).toMatchObject({
-      items: [{ idempotent: false }],
-      runStatus: 'completed',
-    });
+    const batch = await owner.reportBatch('report-run', { items: [result] });
+    expect(batch).toMatchObject({ items: [{ idempotent: false }], runStatus: 'completed' });
+    expect(() => EvalBatchReportResultSchema.parse(toJson(batch))).not.toThrow();
     expect(await owner.reportBatch('report-run', { items: [result] })).toMatchObject({
       items: [{ idempotent: true }],
     });

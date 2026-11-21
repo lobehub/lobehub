@@ -78,7 +78,15 @@ export const useCollapsible = ({
     [collapsed, collapsedProp, onCollapsedChange],
   );
 
+  // Opens without toggling: find landing on a hidden match only ever expands.
+  const expand = useCallback(() => {
+    if (!collapsed) return;
+    if (collapsedProp === undefined) setUncontrolledCollapsed(false);
+    onCollapsedChange?.(false);
+  }, [collapsed, collapsedProp, onCollapsedChange]);
+
   return {
+    expand,
     /** Whether the clamp and fade mask are actually applied right now. */
     isCollapsed: shouldCollapse && collapsed,
     maxHeight,

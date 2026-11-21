@@ -33,6 +33,7 @@ import { GoalService } from '../index';
 import * as modelConfig from '../modelConfig';
 import * as scheduler from '../scheduler';
 import { GoalSupervisorService } from './index';
+import { SUPERVISOR_DIAGNOSIS_TIMEOUT_MS } from './policy';
 import { GoalSupervisorTools } from './tools';
 
 const db = await getTestDB();
@@ -562,6 +563,84 @@ describe('Goal Supervisor integration', () => {
     expect((await taskModel.findById(taskId))?.status).toBe('paused');
     const after = (await goalModel.findById(goalId))!.config!.supervisorState!;
     expect(after.incidents.at(-1)?.status).toBe('escalated');
+  });
+
+  describe('a diagnosis left open by another Task', () => {
+    /** A second failed run on the Goal, while the first incident is still `diagnosing`. */
+    const failAgain = async (taskId: string) => {
+      const topicId = `topic-second-${++sequence}`;
+      const operationId = `op-second-${sequence}`;
+      await db.insert(topics).values({ id: topicId, userId });
+      await operationModel.recordStart({ operationId, taskId, topicId });
+      await operationModel.recordCompletion(operationId, {
+        completionReason: 'done',
+        status: 'done',
+      });
+      await db
+        .insert(taskTopics)
+        .values({ operationId, seq: 2, status: 'completed', taskId, topicId, userId });
+      return operationId;
+    };
+
+    const ageFirstIncident = async (goalId: string) => {
+      const state = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      await goalModel.updateSupervisorState(goalId, state.revision, {
+        ...state,
+        incidents: state.incidents.map((item) => ({
+          ...item,
+          createdAt: new Date(Date.now() - SUPERVISOR_DIAGNOSIS_TIMEOUT_MS - 1000).toISOString(),
+        })),
+      });
+    };
+
+    it('keeps waiting while that diagnosis is inside its window', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      await failAgain(taskId);
+      vi.mocked(scheduler.scheduleGoalAdvance).mockClear();
+
+      const result = await service().tick(goalId);
+
+      expect(result.message).toBe('Another interruption is being diagnosed');
+      expect(scheduler.scheduleGoalAdvance).toHaveBeenCalledTimes(1);
+      const { incidents } = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      expect(incidents.map((item) => item.status)).toEqual(['diagnosing']);
+    });
+
+    it('backs off the poll the longer that diagnosis has been open', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      await failAgain(taskId);
+      const state = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      await goalModel.updateSupervisorState(goalId, state.revision, {
+        ...state,
+        incidents: state.incidents.map((item) => ({
+          ...item,
+          createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+        })),
+      });
+      vi.mocked(scheduler.scheduleGoalAdvance).mockClear();
+
+      await service().tick(goalId);
+
+      const [params] = vi.mocked(scheduler.scheduleGoalAdvance).mock.calls[0];
+      expect(params.delay).toBeGreaterThanOrEqual(30);
+    });
+
+    it('escalates it once expired instead of rescheduling forever', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      const operationId = await failAgain(taskId);
+      await ageFirstIncident(goalId);
+
+      const result = await service().tick(goalId);
+
+      expect(result.message).not.toBe('Another interruption is being diagnosed');
+      const { incidents } = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      expect(incidents[0].status).toBe('escalated');
+      expect(incidents[0].resolvedAt).toBeDefined();
+      expect(incidents[1].failedOperationId).toBe(operationId);
+    });
   });
 
   it('leaves a paused transport failure alone once a person marks it failed', async () => {

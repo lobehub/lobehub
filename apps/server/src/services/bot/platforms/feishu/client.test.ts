@@ -57,6 +57,31 @@ vi.mock('./gateway', () => ({
 
 const { FeishuClientFactory, classifyLarkAuthError } = await import('./client');
 
+describe('Feishu reply opening', () => {
+  it.each([
+    ['feishu', 'webhook'],
+    ['feishu', 'websocket'],
+    ['lark', 'webhook'],
+    ['lark', 'websocket'],
+  ] as const)(
+    'lets the bot decide its acknowledgement without reply threads (%s, %s)',
+    (platform, connectionMode) => {
+      const client = new FeishuClientFactory().createClient(
+        {
+          applicationId: 'cli_test_app',
+          credentials: { appSecret: 'sec', encryptKey: 'enc' },
+          platform,
+          settings: { connectionMode },
+        },
+        { appUrl: 'https://example.com' },
+      );
+
+      expect(client.decidesReplyOpening).toBe(true);
+      expect(client.getReplyTargets).toBeUndefined();
+    },
+  );
+});
+
 describe('FeishuWebhookClient.extractFiles', () => {
   // Verifies the post-Redis re-download path: when Feishu messages
   // round-trip through the chat-sdk debounce/queue, `Message.toJSON`

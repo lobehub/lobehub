@@ -4,12 +4,13 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useImageStore } from '@/store/image';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 import {
   DEFAULT_AI_IMAGE_MODEL,
   DEFAULT_AI_IMAGE_PROVIDER,
-} from '@/store/image/slices/generationConfig/initialState';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
+  resolveImageModelSelection,
+} from '@/utils/defaultImageModel';
 
 const checkModelEnabled = (
   enabledImageModelList: ReturnType<typeof aiProviderSelectors.enabledImageModelList>,
@@ -56,28 +57,19 @@ export const useFetchAiImageConfig = () => {
       return { model: lastSelectedImageModel, provider: lastSelectedImageProvider };
     }
 
-    // 2. Try default model from any enabled provider (prefer default provider first)
+    // 2-3. Shared default rule (also applied by the server when `lh gen image` omits a model)
+    const selection = resolveImageModelSelection(enabledImageModelList);
+
+    // The default pair is already the store's initial state
     if (
-      checkModelEnabled(enabledImageModelList, DEFAULT_AI_IMAGE_PROVIDER, DEFAULT_AI_IMAGE_MODEL)
+      !selection ||
+      (selection.provider === DEFAULT_AI_IMAGE_PROVIDER &&
+        selection.model === DEFAULT_AI_IMAGE_MODEL)
     ) {
-      return { model: undefined, provider: undefined }; // Use initialState defaults
-    }
-    const providerWithDefaultModel = enabledImageModelList.find((p) =>
-      p.children.some((m) => m.id === DEFAULT_AI_IMAGE_MODEL),
-    );
-    if (providerWithDefaultModel) {
-      return { model: DEFAULT_AI_IMAGE_MODEL, provider: providerWithDefaultModel.id };
+      return { model: undefined, provider: undefined };
     }
 
-    // 3. Fallback to first enabled model
-    const firstProvider = enabledImageModelList[0];
-    const firstModel = firstProvider?.children[0];
-    if (firstProvider && firstModel) {
-      return { model: firstModel.id, provider: firstProvider.id };
-    }
-
-    // No enabled models
-    return { model: undefined, provider: undefined };
+    return selection;
   }, [lastSelectedImageModel, lastSelectedImageProvider, enabledImageModelList]);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 
 type PressureState = 'critical' | 'fair' | 'nominal' | 'serious';

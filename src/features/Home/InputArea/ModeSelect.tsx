@@ -1,11 +1,10 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Popover } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Popover } from '@lobehub/ui';
 import { ChevronDownIcon, InfinityIcon, ListTodoIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { densityVars } from '@/styles/densityVars';
 
 import type { HomeMode } from '../types';
 import { isHomeModeDisabled, resolvePermittedHomeMode } from './modePermission';
@@ -19,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
+    height: ${densityVars.controlHeight};
     padding-inline: 8px;
     border: 0;
     border-radius: ${cssVar.borderRadius};
@@ -71,7 +70,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgElevated};
   `,
   optionTitle: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 1.4;
     color: ${cssVar.colorText};

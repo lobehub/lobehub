@@ -28,6 +28,7 @@ const makeFakeRedis = () => {
       },
     ),
     get: vi.fn(async (key: string) => store.get(key) ?? null),
+    mget: vi.fn(async (keys: string[]) => keys.map((key) => store.get(key) ?? null)),
     set: vi.fn(async (key: string, value: string, ...args: unknown[]) => {
       if (args.includes('NX') && store.has(key)) return null;
       store.set(key, value);
@@ -198,6 +199,31 @@ describe('EditLockService', () => {
     ).toBe('user-1');
   });
 
+  it('getBlockingHolders reads many locks in one MGET and reports only other members', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('task', 't-1', 'owner-1');
+    await new EditLockService('user-2', redis as any).acquire('task', 't-2', 'owner-2');
+    // Legacy raw user-id payloads still count as a holder.
+    redis.store.set('editlock:task:t-3', 'user-3');
+
+    const blocking = await new EditLockService('user-2', redis as any).getBlockingHolders('task', [
+      't-1',
+      't-2',
+      't-3',
+      't-4',
+    ]);
+
+    expect(redis.mget).toHaveBeenCalledTimes(1);
+    expect(redis.get).not.toHaveBeenCalled();
+    expect([...blocking]).toEqual([
+      ['t-1', 'user-1'],
+      ['t-3', 'user-3'],
+    ]);
+    expect(
+      (await new EditLockService('user-2', redis as any).getBlockingHolders('task', [])).size,
+    ).toBe(0);
+  });
+
   it('only releases the lock for the current owner', async () => {
     const redis = makeFakeRedis();
     await new EditLockService('user-1', redis as any).acquire('document', 'doc-1', 'owner-1');
@@ -260,6 +286,7 @@ describe('EditLockService', () => {
       ownerId: null,
     });
     expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
+    expect((await svc.getBlockingHolders('document', ['doc-1'])).size).toBe(0);
     await expect(svc.release('document', 'doc-1')).resolves.toBe(false);
   });
 
@@ -270,6 +297,7 @@ describe('EditLockService', () => {
     const redis = {
       eval: vi.fn().mockRejectedValue(down),
       get: vi.fn().mockRejectedValue(down),
+      mget: vi.fn().mockRejectedValue(down),
       set: vi.fn().mockRejectedValue(down),
     };
     const svc = new EditLockService('user-1', redis as any);
@@ -282,6 +310,7 @@ describe('EditLockService', () => {
     });
     expect(await svc.getActiveHolder('document', 'doc-1')).toBeUndefined();
     expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
+    expect((await svc.getBlockingHolders('document', ['doc-1'])).size).toBe(0);
     await expect(svc.canWrite('document', 'doc-1', 'owner-1')).resolves.toBe(true);
     await expect(svc.release('document', 'doc-1')).resolves.toBe(false);
   });

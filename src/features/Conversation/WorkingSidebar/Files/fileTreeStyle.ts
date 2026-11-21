@@ -1,4 +1,17 @@
 import { FOLDER_ICON_CSS } from '@/features/ExplorerTree';
+import { sidebarRow } from '@/styles/density.stylex';
+
+// FOLDER_ICON_CSS draws folders at 18px with a 4px gap, heavier than the file
+// glyphs beside them. Folders take the file glyph's size, which ExplorerTree
+// fixes at 16px in every density, and the row gap; the CSS vars reach inside
+// pierre's shadow root because custom properties inherit through it.
+export const COMPACT_FOLDER_ICON_CSS = `
+[data-item-type="folder"] [data-item-section="content"]::before {
+  width: 16px;
+  height: 16px;
+  margin-inline-end: ${sidebarRow.gap};
+  background-size: 16px 16px;
+}`;
 
 const IGNORED_FILE_OPACITY_CSS = `
 [data-item-git-status='ignored'] > :where(
@@ -39,6 +52,7 @@ const RENAME_INPUT_FULL_WIDTH_CSS = `
 
 export const FILE_TREE_UNSAFE_CSS = [
   FOLDER_ICON_CSS,
+  COMPACT_FOLDER_ICON_CSS,
   NO_FOCUS_RING_CSS,
   IGNORED_FILE_OPACITY_CSS,
   RENAME_INPUT_FULL_WIDTH_CSS,

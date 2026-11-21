@@ -174,6 +174,22 @@ describe('nightly review source handler', () => {
     });
   });
 
+  it("asks the run to write proposals in the owner's response language", async () => {
+    const resolveResponseLanguage = vi.fn(async () => 'zh-CN');
+    const deps = createDependencies({ resolveResponseLanguage });
+
+    await createNightlyReviewSourceHandler(deps).handle(createReviewSource());
+
+    expect(resolveResponseLanguage).toHaveBeenCalledWith(deps.db, 'user-1');
+    expect(deps.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining(
+          "Write every user-visible field in the user's language (zh-CN)",
+        ),
+      }),
+    );
+  });
+
   it('still dispatches when the quota admitted some of the topics', async () => {
     const deps = createDependencies({
       collectContext: vi.fn(async () => ({

@@ -1,8 +1,11 @@
 import type { TrashResourceType } from '@lobechat/types';
 
 import { agentHandler } from './agent';
+import { channelHandler } from './channel';
+import { channelThreadHandler } from './channelThread';
 import { dashboardHandler } from './dashboard';
 import { messageHandler } from './message';
+import { taskHandler } from './task';
 import { topicHandler } from './topic';
 import type { TrashHandler } from './types';
 import { widgetHandler } from './widget';
@@ -17,8 +20,11 @@ import { widgetHandler } from './widget';
  */
 export const TRASH_HANDLERS: Partial<Record<TrashResourceType, TrashHandler>> = {
   agent: agentHandler,
+  channel: channelHandler,
+  channelThread: channelThreadHandler,
   message: messageHandler,
   dashboard: dashboardHandler,
+  task: taskHandler,
   topic: topicHandler,
   widget: widgetHandler,
 };
@@ -36,5 +42,6 @@ export const resolveTrashHandler = (resourceType: TrashResourceType): TrashHandl
 
 export { softDeleteAgent } from './agent';
 export { softDeleteMessages } from './message';
+export { softDeleteTasks, type TaskTrashTarget } from './task';
 export { topicCascades } from './topic';
 export * from './types';

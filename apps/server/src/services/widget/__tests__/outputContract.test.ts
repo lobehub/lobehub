@@ -1,6 +1,5 @@
+import { parseWidgetOutput, WIDGET_OUTPUT_LIMITS } from '@lobechat/widget-spec';
 import { describe, expect, it } from 'vitest';
-
-import { parseWidgetOutput, WIDGET_OUTPUT_LIMITS } from '../outputContract';
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -18,6 +17,13 @@ describe('parseWidgetOutput', () => {
         columns: [{ key: 'name' }, { key: 'count', type: 'number' }],
         rows: [{ count: 1, name: 'a' }],
         type: 'table',
+      },
+    ],
+    [
+      'data',
+      {
+        data: { city: 'Hangzhou', hourly: [{ t: '2026-10-31T14:00', temp: 18 }], temp: 18.4 },
+        type: 'data',
       },
     ],
   ] as const)('accepts a valid %s output', (type, output) => {
@@ -68,6 +74,13 @@ describe('parseWidgetOutput', () => {
 
     expect(result).toMatchObject({ code: 'INVALID_OUTPUT', ok: false });
     expect(!result.ok && result.message).toContain('value');
+  });
+
+  it('rejects a data output whose data is not an object', () => {
+    expect(parseWidgetOutput(json({ data: [1, 2], type: 'data' }))).toMatchObject({
+      code: 'INVALID_OUTPUT',
+      ok: false,
+    });
   });
 
   it('rejects unknown output types', () => {

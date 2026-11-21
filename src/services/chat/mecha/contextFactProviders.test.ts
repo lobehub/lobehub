@@ -17,13 +17,19 @@ vi.mock('@/libs/trpc/client', () => ({
 }));
 
 vi.mock('@/services/agent', () => ({
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: { queryAgents: vi.fn() },
 }));
 
 beforeEach(() => {
-  useAgentStore.setState({ agentDocumentsMap: {}, availableAgents: undefined } as any);
+  useAgentStore.setState({
+    agentDocumentsMap: {},
+    availableAgents: undefined,
+    availableAgentsStale: false,
+  } as any);
   useToolStore.setState({
     composioServers: [],
+    connectors: [],
     installedPlugins: [],
     lobehubSkillServers: [],
     uninstalledBuiltinTools: [],
@@ -50,6 +56,48 @@ describe('createBrowserContextFactProviders', () => {
     useAgentStore.setState({ availableAgents: undefined } as any);
     await expect(providers.listRecentAgents!(12)).resolves.toEqual([{ id: 'agent-2' }]);
     expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
+  });
+
+  it('reads a fresh agent list once the agents changed', async () => {
+    const providers = createBrowserContextFactProviders();
+    vi.mocked(agentService.queryAgents).mockResolvedValue([{ id: 'agent-new' }] as any);
+
+    useAgentStore.setState({ availableAgents: [{ id: 'agent-1' }] } as any);
+    useAgentStore.getState().invalidateAvailableAgents();
+
+    await expect(providers.listRecentAgents!(12)).resolves.toEqual([{ id: 'agent-new' }]);
+    expect(agentService.queryAgents).toHaveBeenCalledTimes(1);
+  });
+
+  // Installs now land only in user_connectors: a connector-only custom MCP
+  // must still reach the builder's inventory, once per identifier.
+  it('lists custom connectors beside legacy custom plugin rows', async () => {
+    useToolStore.setState({
+      connectors: [
+        {
+          identifier: 'repo-mcp',
+          metadata: { description: 'Repo tools' },
+          name: 'Repo',
+          sourceType: 'custom',
+        },
+        { identifier: 'my-mcp', metadata: null, name: '', sourceType: 'custom' },
+        { identifier: 'market-mcp', metadata: null, name: 'Docs', sourceType: 'marketplace' },
+      ],
+      installedPlugins: [
+        {
+          identifier: 'my-mcp',
+          manifest: { meta: { description: 'Stale', title: 'Old title' } },
+          type: 'customPlugin',
+        },
+        { identifier: 'legacy-mcp', manifest: { meta: { title: 'Legacy' } }, type: 'customPlugin' },
+      ],
+    } as any);
+
+    await expect(createBrowserContextFactProviders().listCustomPlugins!()).resolves.toEqual([
+      { description: 'Repo tools', identifier: 'repo-mcp', name: 'Repo', type: 'custom' },
+      { description: undefined, identifier: 'my-mcp', name: 'my-mcp', type: 'custom' },
+      { description: undefined, identifier: 'legacy-mcp', name: 'Legacy', type: 'custom' },
+    ]);
   });
 
   it('treats only active Composio connections and every installed LobeHub skill provider as connected', async () => {
