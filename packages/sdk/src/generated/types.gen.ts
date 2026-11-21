@@ -228,7 +228,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write' | 'bot:read' | 'bot:write'> | null;
     updatedAt: string;
 };
 
@@ -239,7 +239,7 @@ export type CreatedApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write' | 'bot:read' | 'bot:write'> | null;
     updatedAt: string;
     key: string;
 };
@@ -3526,6 +3526,63 @@ export type WebhookTestEventData = {
     webhookId: string;
 };
 
+export type Bot = {
+    agentId: string;
+    applicationId: string;
+    createdAt: string;
+    /**
+     * Platform credentials, e.g. `{ "callbackUrl": "https://…", "signingSecret": "…" }` for `webhook`. Responses mask every secret.
+     */
+    credentials: {
+        [key: string]: string;
+    };
+    enabled: boolean;
+    /**
+     * Use as `{id}` in `/bots/{id}` and as `{botId}` in the webhook URL.
+     */
+    id: string;
+    platform: string;
+    /**
+     * Connection state as last reported by the runtime.
+     */
+    runtimeStatus: 'connected' | 'disconnected' | 'dormant' | 'failed' | 'queued' | 'starting';
+    /**
+     * Platform settings (reply limits, DM / group policy, concurrency …). Omitted keys take the platform default.
+     */
+    settings: {
+        [key: string]: unknown;
+    };
+    updatedAt: string;
+    workspaceId: string | null;
+};
+
+export type BotConnectionTest = {
+    /**
+     * Why the check failed; empty when `valid`.
+     */
+    errors: Array<{
+        /**
+         * Stable error code, when the platform gives one.
+         */
+        code?: string;
+        /**
+         * The credential or setting the check failed on.
+         */
+        field: string;
+        message: string;
+    }>;
+    valid: boolean;
+};
+
+export type BotMessageSent = {
+    channelId: string;
+    /**
+     * The platform's id for the posted message.
+     */
+    messageId: string;
+    platform: string;
+};
+
 /**
  * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
  */
@@ -4862,7 +4919,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write' | 'bot:read' | 'bot:write'> | null;
     };
     headers?: {
         /**
@@ -16744,6 +16801,654 @@ export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponses = {
 };
 
 export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponse = PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponses[keyof PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponses];
+
+export type GetApiV1BotsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+        /**
+         * Only bots wired to this agent.
+         */
+        agentId?: string;
+        /**
+         * Only bots on this platform, e.g. `webhook`.
+         */
+        platform?: string;
+    };
+    url: '/api/v1/bots';
+};
+
+export type GetApiV1BotsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1BotsError = GetApiV1BotsErrors[keyof GetApiV1BotsErrors];
+
+export type GetApiV1BotsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<Bot>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1BotsResponse = GetApiV1BotsResponses[keyof GetApiV1BotsResponses];
+
+export type PostApiV1BotsData = {
+    body: {
+        /**
+         * The agent that answers on this bot.
+         */
+        agentId: string;
+        /**
+         * The platform's bot / application id; for `webhook`, the Bot ID you choose (3–64 letters, digits, `-` or `_`). Unique per platform across the deployment.
+         */
+        applicationId: string;
+        /**
+         * Platform credentials, e.g. `{ "callbackUrl": "https://…", "signingSecret": "…" }` for `webhook`. Responses mask every secret.
+         */
+        credentials: {
+            [key: string]: string;
+        };
+        /**
+         * Defaults to `true`.
+         */
+        enabled?: boolean;
+        /**
+         * Platform id, e.g. `webhook` (the custom webhook channel), `discord`, `slack`, `telegram`, `feishu`.
+         */
+        platform: string;
+        /**
+         * Platform settings (reply limits, DM / group policy, concurrency …). Omitted keys take the platform default.
+         */
+        settings?: {
+            [key: string]: unknown;
+        };
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bots';
+};
+
+export type PostApiV1BotsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1BotsError = PostApiV1BotsErrors[keyof PostApiV1BotsErrors];
+
+export type PostApiV1BotsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: Bot;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1BotsResponse = PostApiV1BotsResponses[keyof PostApiV1BotsResponses];
+
+export type DeleteApiV1BotsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}';
+};
+
+export type DeleteApiV1BotsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1BotsByIdError = DeleteApiV1BotsByIdErrors[keyof DeleteApiV1BotsByIdErrors];
+
+export type DeleteApiV1BotsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1BotsByIdResponse = DeleteApiV1BotsByIdResponses[keyof DeleteApiV1BotsByIdResponses];
+
+export type GetApiV1BotsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}';
+};
+
+export type GetApiV1BotsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1BotsByIdError = GetApiV1BotsByIdErrors[keyof GetApiV1BotsByIdErrors];
+
+export type GetApiV1BotsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Bot;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1BotsByIdResponse = GetApiV1BotsByIdResponses[keyof GetApiV1BotsByIdResponses];
+
+export type PatchApiV1BotsByIdData = {
+    body: {
+        /**
+         * The platform's bot / application id; for `webhook`, the Bot ID you choose (3–64 letters, digits, `-` or `_`). Unique per platform across the deployment.
+         */
+        applicationId?: string;
+        /**
+         * Replaces the credentials. A masked value read back from `GET` keeps the stored secret.
+         */
+        credentials?: {
+            [key: string]: string;
+        };
+        /**
+         * Platform settings (reply limits, DM / group policy, concurrency …). Omitted keys take the platform default.
+         */
+        settings?: {
+            [key: string]: unknown;
+        };
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}';
+};
+
+export type PatchApiV1BotsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1BotsByIdError = PatchApiV1BotsByIdErrors[keyof PatchApiV1BotsByIdErrors];
+
+export type PatchApiV1BotsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Bot;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1BotsByIdResponse = PatchApiV1BotsByIdResponses[keyof PatchApiV1BotsByIdResponses];
+
+export type PostApiV1BotsByIdEnableData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}/enable';
+};
+
+export type PostApiV1BotsByIdEnableErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1BotsByIdEnableError = PostApiV1BotsByIdEnableErrors[keyof PostApiV1BotsByIdEnableErrors];
+
+export type PostApiV1BotsByIdEnableResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Bot;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1BotsByIdEnableResponse = PostApiV1BotsByIdEnableResponses[keyof PostApiV1BotsByIdEnableResponses];
+
+export type PostApiV1BotsByIdDisableData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}/disable';
+};
+
+export type PostApiV1BotsByIdDisableErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1BotsByIdDisableError = PostApiV1BotsByIdDisableErrors[keyof PostApiV1BotsByIdDisableErrors];
+
+export type PostApiV1BotsByIdDisableResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Bot;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1BotsByIdDisableResponse = PostApiV1BotsByIdDisableResponses[keyof PostApiV1BotsByIdDisableResponses];
+
+export type PostApiV1BotsByIdTestData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}/test';
+};
+
+export type PostApiV1BotsByIdTestErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1BotsByIdTestError = PostApiV1BotsByIdTestErrors[keyof PostApiV1BotsByIdTestErrors];
+
+export type PostApiV1BotsByIdTestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: BotConnectionTest;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1BotsByIdTestResponse = PostApiV1BotsByIdTestResponses[keyof PostApiV1BotsByIdTestResponses];
+
+export type PostApiV1BotsByIdMessagesData = {
+    body: {
+        attachments?: Array<{
+            /**
+             * Base64 bytes, when there is no `fetchUrl`.
+             */
+            data?: string;
+            /**
+             * A public URL the platform can download.
+             */
+            fetchUrl?: string;
+            mimeType?: string;
+            name?: string;
+            type: 'image' | 'file' | 'video' | 'audio';
+        }>;
+        /**
+         * Where to post: the platform channel / chat id. For `webhook`, a conversation id, or a full `webhook:<direct|group>:<conversationId>[:<threadId>]` thread id.
+         */
+        channelId: string;
+        /**
+         * Message text (Markdown).
+         */
+        content: string;
+        /**
+         * Platform message id to reply to.
+         */
+        replyTo?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bots/{id}/messages';
+};
+
+export type PostApiV1BotsByIdMessagesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1BotsByIdMessagesError = PostApiV1BotsByIdMessagesErrors[keyof PostApiV1BotsByIdMessagesErrors];
+
+export type PostApiV1BotsByIdMessagesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: BotMessageSent;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1BotsByIdMessagesResponse = PostApiV1BotsByIdMessagesResponses[keyof PostApiV1BotsByIdMessagesResponses];
 
 export type PostRunStartedWebhookPayload = WebhookRunStartedEvent;
 

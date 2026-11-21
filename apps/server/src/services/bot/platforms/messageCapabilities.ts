@@ -182,6 +182,9 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
+  // A custom webhook bot only carries messages out (a signed POST to the callback URL):
+  // `sendMessage` works, nothing reads back from the developer's platform.
+  webhook: CHANNEL_MESSAGE_APIS.filter((api) => api !== MessageApiName.sendMessage),
   // WeCom AI bots only answer on their own long connection; the message tool has no service for
   // them (no REST API, no history), so every channel operation is unsupported.
   wecom: [...CHANNEL_MESSAGE_APIS],

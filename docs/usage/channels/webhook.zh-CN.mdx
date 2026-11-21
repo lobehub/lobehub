@@ -1,0 +1,201 @@
+---
+title: 用自定义 Webhook 把任意平台接入 LobeHub
+description: >-
+  把任意聊天平台接入 LobeHub 智能体：向入站地址 POST 签名消息，在你的回调地址接收签名后的智能体回复。包含消息格式、签名、附件与线程说明。
+tags:
+  - Webhook
+  - 消息渠道
+  - 机器人配置
+  - 集成
+  - 开发者
+---
+
+# 用自定义 Webhook 接入任意平台
+
+**自定义 Webhook** 渠道把 LobeHub 智能体接到 LobeHub 没有内置渠道的聊天平台上 —— 自研 IM、客服系统、游戏服务器、自定义应用。你的平台把每条用户消息 POST 给 LobeHub；LobeHub 把智能体的回复 POST 到你运行的 **回调地址**。两个方向都是 HTTPS 上的 JSON，用同一个共享密钥签名。
+
+## 第一步：创建渠道
+
+<Steps>
+  ### 打开渠道页
+
+  在 LobeHub 中打开你的智能体 → **渠道** → **Custom Webhook**。
+
+  ### 填写字段
+
+  - **Bot ID** —— 这个机器人的标识，在 LobeHub 内唯一（3–64 位字母、数字、`-` 或 `_`，且不能是 UUID 格式）。它是入站地址的一部分，并会在每次回调中作为 `botId` 回传。
+  - **回调地址** —— LobeHub 把回复 POST 到这里。它必须能从公网访问：私有、回环和链路本地地址都会被拒绝，也不会跟随重定向。
+  - **签名密钥** —— 至少 32 个字符。点 **生成密钥** 得到一个随机密钥，并复制到你的平台。
+
+  ### 保存并测试
+
+  点 **保存并连接**。渠道会显示 **入站地址**：
+
+  ```
+  https://<你的 LobeHub 域名>/api/agent/webhooks/custom/<Bot ID>
+  ```
+
+  **测试连接** 会向回调地址发送一个签名的 `bot.ping` 事件；你的接收端返回任意 `2xx` 即为通过。
+</Steps>
+
+也可以通过 REST API 管理这类机器人：`POST /api/v1/bots`，传 `platform: "webhook"`、`applicationId`（即 Bot ID）和 `credentials: { "callbackUrl": "…", "signingSecret": "…" }`。入站地址也接受机器人的 REST id 代替 Bot ID：`/api/agent/webhooks/custom/<id>`。
+
+## 签名
+
+两个方向的每个请求都带两个请求头：
+
+| 请求头                   | 值                                                            |
+| --------------------- | ------------------------------------------------------------ |
+| `X-LobeHub-Timestamp` | 签名时的 Unix 时间（秒）                                              |
+| `X-LobeHub-Signature` | `v1=` + 以密钥对 `"<timestamp>.<原始 body>"` 做 HMAC-SHA256 的十六进制结果 |
+
+时间戳与 LobeHub 时钟相差超过 **5 分钟** 的入站请求会被拒绝，截获的请求无法重放。你的回调接收端也应这样校验。签名和校验都基于 **原始** body 字节 —— 重新序列化 JSON 会改变它们。
+
+```ts
+import { createHmac } from 'node:crypto';
+
+const body = JSON.stringify(payload);
+const timestamp = Math.floor(Date.now() / 1000);
+const signature = `v1=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
+
+await fetch(inboundUrl, {
+  body,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-LobeHub-Signature': signature,
+    'X-LobeHub-Timestamp': String(timestamp),
+  },
+  method: 'POST',
+});
+```
+
+在回调端，`@lobehub/sdk` 的 `verifyWebhookSignature` 校验的是同一套方案：
+
+```ts
+import { verifyWebhookSignature } from '@lobehub/sdk';
+
+await verifyWebhookSignature({ headers: request.headers, payload: rawBody, secret });
+```
+
+## 入站：给智能体发消息
+
+`POST /api/agent/webhooks/custom/<Bot ID>`，JSON body（不超过 256 KB）：
+
+```json
+{
+  "message": {
+    "id": "msg-1001",
+    "conversationId": "room-42",
+    "threadId": "thread-7",
+    "isDirect": false,
+    "mentioned": true,
+    "text": "帮我总结一下这个文件？",
+    "user": { "id": "user-9", "name": "Alice" },
+    "attachments": [
+      {
+        "type": "file",
+        "url": "https://files.example.com/report.pdf",
+        "name": "report.pdf",
+        "mimeType": "application/pdf",
+        "size": 482113
+      }
+    ],
+    "timestamp": "2026-11-18T09:30:00Z"
+  },
+  "type": "message"
+}
+```
+
+| 字段                       | 必填 | 含义                                                                                                                       |
+| ------------------------ | -- | ------------------------------------------------------------------------------------------------------------------------ |
+| `message.id`             | 是  | 你这边的消息 id（≤ 255 字符），在所属会话 / 子线程内唯一。10 分钟内重复的 id 会被当作重试忽略。                                                                |
+| `message.conversationId` | 是  | 消息所在的会话、房间或频道。每个会话对应智能体的一个独立话题。                                                                                          |
+| `message.threadId`       | 否  | 会话内的子线程。对智能体来说，一个线程就是一个独立会话。                                                                                             |
+| `message.user.id`        | 是  | 发送者在你平台上的 id。访问规则（白名单）按它匹配。                                                                                              |
+| `message.user.name`      | 否  | 发送者显示名。                                                                                                                  |
+| `message.text`           | 否  | Markdown 文本，最多 32,000 字符。                                                                                                |
+| `message.isDirect`       | 否  | 与机器人一对一私聊时为 `true`。默认 `false`。                                                                                           |
+| `message.mentioned`      | 否  | 消息在叫机器人时为 `true`。群会话中智能体只在被提及时唤醒（会话已在进行中或开启了关键词监听时除外）。私聊消息总视为提及。                                                         |
+| `message.attachments`    | 否  | 最多 10 个 `{ type: image \| file \| video \| audio, url, name?, mimeType?, size? }`。LobeHub 会下载每个 `url`（仅公网地址，每个最大 20 MB）。 |
+| `message.timestamp`      | 否  | ISO 8601 或 Unix 毫秒。默认取 LobeHub 收到的时间。                                                                                    |
+
+发送 `{ "type": "ping" }` 可在不唤醒智能体的情况下检查地址和签名。
+
+响应：
+
+| 状态码   | Body                                                                           | 含义                            |
+| ----- | ------------------------------------------------------------------------------ | ----------------------------- |
+| `200` | `{ "ok": true, "threadId": "webhook:…" }`                                      | 已接收。智能体通过回调异步回复。              |
+| `400` | `{ "error": "invalid_payload", "issues": [{ "path", "message" }] }`            | body 不符合格式。                   |
+| `401` | `{ "error": "invalid_signature" \| "missing_signature" \| "stale_timestamp" }` | 签名校验失败。                       |
+| `404` | —                                                                              | 没有该 Bot ID 对应的已启用机器人。         |
+| `413` | `{ "error": "payload_too_large" }`                                             | body 超过 256 KB —— 附件请用 URL 传。 |
+
+## 出站：智能体的回复
+
+LobeHub 把每个事件 POST 到你的回调地址，按上文签名，并带 `X-LobeHub-Event-Type` 和 `X-LobeHub-Event-Id` 请求头：
+
+```json
+{
+  "botId": "support-bot",
+  "createdAt": "2026-11-18T09:30:04.512Z",
+  "data": {
+    "messageId": "out_0b8e8f3c7d2a4e5f9c1d2e3f4a5b6c7d",
+    "conversationId": "room-42",
+    "threadId": "thread-7",
+    "isDirect": false,
+    "replyTo": null,
+    "text": "这是 **report.pdf** 的总结……",
+    "attachments": [
+      {
+        "type": "image",
+        "url": "https://…/chart.png",
+        "name": "chart.png",
+        "mimeType": "image/png"
+      }
+    ]
+  },
+  "id": "evt_6c1f0e6b0d5a4f0f9a3b8a1c2d3e4f50",
+  "type": "bot.message.created"
+}
+```
+
+| 事件                    | 触发时机                                                             |
+| --------------------- | ---------------------------------------------------------------- |
+| `bot.message.created` | 智能体在 `conversationId` / `threadId` 中发了一条消息。                      |
+| `bot.message.updated` | 智能体修改了之前发的消息（`data.messageId` 相同）。                               |
+| `bot.ping`            | **测试连接** —— `data` 为 `{ "message": "LobeHub connection test" }`。 |
+
+- `text` 是 Markdown，按你平台的需要渲染或去除格式。
+- `replyTo` 只回传 `POST /api/v1/bots/{id}/messages` 调用里的 `replyTo`；Agent 对入站消息的回复中它为 `null`，请按 `conversationId` / `threadId` 归属。
+- 附件带可 GET 的 `url`（可能过期，请尽快下载），没有 URL 时带内联 base64 的 `data`。
+- 请在 10 秒内返回 `2xx`。网络错误、超时、`5xx`、`408` 或 `429` 会以相同的事件 `id` 重试两次（间隔 0.5 秒和 2 秒），请按 `id` 去重；其他状态码不再重试。
+
+## 主动发送
+
+要主动发消息（提醒、通知），用带 `bot:write` scope 的 API Key 调用 REST API：
+
+```bash
+curl -X POST "https://<你的 LobeHub 域名>/api/v1/bots/<bot id>/messages" \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "channelId": "room-42", "content": "夜间报告已生成。" }'
+```
+
+它会作为 `bot.message.created` 事件到达你的回调地址。
+
+## 通过 REST API 管理机器人
+
+| 方法与路径                             | Scope       | 作用                                                     |
+| --------------------------------- | ----------- | ------------------------------------------------------ |
+| `GET /api/v1/bots`                | `bot:read`  | 列出当前空间的机器人（支持 `agentId`、`platform`、`cursor`、`limit`）。  |
+| `POST /api/v1/bots`               | `bot:write` | 创建机器人并连接。                                              |
+| `GET /api/v1/bots/{id}`           | `bot:read`  | 读取单个机器人，密钥始终打码。                                        |
+| `PATCH /api/v1/bots/{id}`         | `bot:write` | 修改 Bot ID、凭据或设置。                                       |
+| `DELETE /api/v1/bots/{id}`        | `bot:write` | 断开并删除机器人。                                              |
+| `POST /api/v1/bots/{id}/enable`   | `bot:write` | 启用并连接机器人。                                              |
+| `POST /api/v1/bots/{id}/disable`  | `bot:write` | 停用机器人，入站消息将被忽略。                                        |
+| `POST /api/v1/bots/{id}/test`     | `bot:write` | 测试连接（Webhook 机器人发送 `bot.ping`），返回 `{ valid, errors }`。 |
+| `POST /api/v1/bots/{id}/messages` | `bot:write` | 以机器人身份发送消息。                                            |
+
+在 SDK 中对应 `client.bots.list`、`create`、`get`、`update`、`delete`、`enable`、`disable`、`test` 和 `sendMessage`。使用工作区 API Key 并带上 `X-Workspace-Id`，即可管理该工作区的机器人。

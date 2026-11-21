@@ -1,0 +1,201 @@
+---
+title: Connect any platform to LobeHub with a Custom Webhook
+description: >-
+  Connect any chat platform to a LobeHub agent: POST signed messages to the inbound URL and receive the agent's replies as signed POSTs on your callback URL. Covers the message format, signatures, attachments and threads.
+tags:
+  - Webhook
+  - Message Channels
+  - Bot Setup
+  - Integration
+  - Developers
+---
+
+# Connect any platform with a Custom Webhook
+
+The **Custom Webhook** channel connects a LobeHub agent to a chat platform LobeHub has no built-in channel for — an in-house IM, a support desk, a game server, a custom app. Your platform POSTs each user message to LobeHub; LobeHub POSTs the agent's reply to a **callback URL** you run. Both directions are JSON over HTTPS, signed with one shared secret.
+
+## Step 1: Create the channel
+
+<Steps>
+  ### Open the Channels tab
+
+  In LobeHub, open your agent → **Channels** → **Custom Webhook**.
+
+  ### Fill in the fields
+
+  - **Bot ID** — a name for this bot, unique across LobeHub (3–64 letters, digits, `-` or `_`; not shaped like a UUID). It is part of the inbound URL and comes back as `botId` in every callback.
+  - **Callback URL** — where LobeHub POSTs replies. It must be reachable from the public internet: private, loopback and link-local addresses are refused, and redirects are not followed.
+  - **Signing Secret** — at least 32 characters. Click **Generate secret** for a random one and copy it to your platform.
+
+  ### Save and test
+
+  Click **Save & Connect**. The channel shows its **Inbound URL**:
+
+  ```
+  https://<your LobeHub host>/api/agent/webhooks/custom/<Bot ID>
+  ```
+
+  **Test connection** sends a signed `bot.ping` event to your callback URL; it passes when your receiver answers any `2xx`.
+</Steps>
+
+You can also manage these bots over the REST API: `POST /api/v1/bots` with `platform: "webhook"`, `applicationId` (the Bot ID) and `credentials: { "callbackUrl": "…", "signingSecret": "…" }`. The inbound URL also accepts the bot's REST id in place of the Bot ID: `/api/agent/webhooks/custom/<id>`.
+
+## Signatures
+
+Every request in either direction carries two headers:
+
+| Header                | Value                                                                        |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `X-LobeHub-Timestamp` | Unix time in seconds when the request was signed                             |
+| `X-LobeHub-Signature` | `v1=` + hex HMAC-SHA256 of `"<timestamp>.<raw body>"`, keyed with the secret |
+
+LobeHub refuses an inbound request whose timestamp is more than **5 minutes** from its clock, so a captured request cannot be replayed. Do the same on your callback receiver. Sign and verify the **raw** body bytes — re-serializing the JSON changes them.
+
+```ts
+import { createHmac } from 'node:crypto';
+
+const body = JSON.stringify(payload);
+const timestamp = Math.floor(Date.now() / 1000);
+const signature = `v1=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
+
+await fetch(inboundUrl, {
+  body,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-LobeHub-Signature': signature,
+    'X-LobeHub-Timestamp': String(timestamp),
+  },
+  method: 'POST',
+});
+```
+
+On the callback side, `verifyWebhookSignature` from `@lobehub/sdk` checks the same scheme:
+
+```ts
+import { verifyWebhookSignature } from '@lobehub/sdk';
+
+await verifyWebhookSignature({ headers: request.headers, payload: rawBody, secret });
+```
+
+## Inbound: send a message to the agent
+
+`POST /api/agent/webhooks/custom/<Bot ID>` with a JSON body (at most 256 KB):
+
+```json
+{
+  "message": {
+    "id": "msg-1001",
+    "conversationId": "room-42",
+    "threadId": "thread-7",
+    "isDirect": false,
+    "mentioned": true,
+    "text": "Can you summarize this file?",
+    "user": { "id": "user-9", "name": "Alice" },
+    "attachments": [
+      {
+        "type": "file",
+        "url": "https://files.example.com/report.pdf",
+        "name": "report.pdf",
+        "mimeType": "application/pdf",
+        "size": 482113
+      }
+    ],
+    "timestamp": "2026-11-18T09:30:00Z"
+  },
+  "type": "message"
+}
+```
+
+| Field                    | Required | Meaning                                                                                                                                                                                                              |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `message.id`             | yes      | Your id for the message (≤ 255 chars), unique within its conversation / thread. A repeat within 10 minutes is ignored as a retry.                                                                                    |
+| `message.conversationId` | yes      | The chat, room or channel it was sent in. Each conversation keeps its own agent topic.                                                                                                                               |
+| `message.threadId`       | no       | A sub-thread inside the conversation. A thread is its own conversation for the agent.                                                                                                                                |
+| `message.user.id`        | yes      | The sender's id on your platform. Access rules (allowlists) match against it.                                                                                                                                        |
+| `message.user.name`      | no       | The sender's display name.                                                                                                                                                                                           |
+| `message.text`           | no       | Markdown text, up to 32,000 characters.                                                                                                                                                                              |
+| `message.isDirect`       | no       | `true` for a one-to-one chat with the bot. Default `false`.                                                                                                                                                          |
+| `message.mentioned`      | no       | `true` when the message addresses the bot. In group conversations the agent only wakes on mentions (unless the conversation is already active, or keyword watching is on). Direct messages always count as mentions. |
+| `message.attachments`    | no       | Up to 10 items `{ type: image \| file \| video \| audio, url, name?, mimeType?, size? }`. LobeHub downloads each `url` (public addresses only, 20 MB each).                                                          |
+| `message.timestamp`      | no       | ISO 8601 or Unix milliseconds. Defaults to the time LobeHub received it.                                                                                                                                             |
+
+Send `{ "type": "ping" }` to check the URL and signature without waking the agent.
+
+Responses:
+
+| Status | Body                                                                           | Meaning                                                      |
+| ------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `200`  | `{ "ok": true, "threadId": "webhook:…" }`                                      | Accepted. The agent replies asynchronously via the callback. |
+| `400`  | `{ "error": "invalid_payload", "issues": [{ "path", "message" }] }`            | The body does not match the format.                          |
+| `401`  | `{ "error": "invalid_signature" \| "missing_signature" \| "stale_timestamp" }` | Signature check failed.                                      |
+| `404`  | —                                                                              | No enabled bot with this Bot ID.                             |
+| `413`  | `{ "error": "payload_too_large" }`                                             | Body over 256 KB — send attachments by URL.                  |
+
+## Outbound: the agent's replies
+
+LobeHub POSTs each event to your callback URL, signed as above, with `X-LobeHub-Event-Type` and `X-LobeHub-Event-Id` headers:
+
+```json
+{
+  "botId": "support-bot",
+  "createdAt": "2026-11-18T09:30:04.512Z",
+  "data": {
+    "messageId": "out_0b8e8f3c7d2a4e5f9c1d2e3f4a5b6c7d",
+    "conversationId": "room-42",
+    "threadId": "thread-7",
+    "isDirect": false,
+    "replyTo": null,
+    "text": "Here is a summary of **report.pdf** …",
+    "attachments": [
+      {
+        "type": "image",
+        "url": "https://…/chart.png",
+        "name": "chart.png",
+        "mimeType": "image/png"
+      }
+    ]
+  },
+  "id": "evt_6c1f0e6b0d5a4f0f9a3b8a1c2d3e4f50",
+  "type": "bot.message.created"
+}
+```
+
+| Event                 | When                                                                        |
+| --------------------- | --------------------------------------------------------------------------- |
+| `bot.message.created` | The agent posted a message in `conversationId` / `threadId`.                |
+| `bot.message.updated` | The agent changed a message it posted earlier (same `data.messageId`).      |
+| `bot.ping`            | **Test connection** — `data` is `{ "message": "LobeHub connection test" }`. |
+
+- `text` is Markdown. Render or strip it as your platform needs.
+- `replyTo` carries the `replyTo` of a `POST /api/v1/bots/{id}/messages` call; agent replies to an inbound message set it to `null` — match them by `conversationId` / `threadId`.
+- An attachment has a `url` you can GET (it may expire — download it promptly), or inline base64 `data` when no URL exists.
+- Answer `2xx` within 10 seconds. A network error, timeout, `5xx`, `408` or `429` is retried twice (after 0.5 s and 2 s) with the same event `id`, so deduplicate on it; any other status is final.
+
+## Send without a user message
+
+To post proactively — a reminder, a notification — call the REST API with an API key that has the `bot:write` scope:
+
+```bash
+curl -X POST "https://<your LobeHub host>/api/v1/bots/<bot id>/messages" \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "channelId": "room-42", "content": "The nightly report is ready." }'
+```
+
+It arrives on your callback URL as a `bot.message.created` event.
+
+## Manage bots over the REST API
+
+| Method + path                     | Scope       | What it does                                                              |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------- |
+| `GET /api/v1/bots`                | `bot:read`  | List bots in the space (`agentId`, `platform`, `cursor`, `limit`).        |
+| `POST /api/v1/bots`               | `bot:write` | Create a bot and connect it.                                              |
+| `GET /api/v1/bots/{id}`           | `bot:read`  | Read one bot. Secrets are always masked.                                  |
+| `PATCH /api/v1/bots/{id}`         | `bot:write` | Change the Bot ID, credentials or settings.                               |
+| `DELETE /api/v1/bots/{id}`        | `bot:write` | Disconnect and delete the bot.                                            |
+| `POST /api/v1/bots/{id}/enable`   | `bot:write` | Turn the bot on and connect it.                                           |
+| `POST /api/v1/bots/{id}/disable`  | `bot:write` | Turn the bot off; inbound messages are ignored.                           |
+| `POST /api/v1/bots/{id}/test`     | `bot:write` | Test the connection (`bot.ping` for a webhook bot) → `{ valid, errors }`. |
+| `POST /api/v1/bots/{id}/messages` | `bot:write` | Post a message as the bot.                                                |
+
+In the SDK these are `client.bots.list`, `create`, `get`, `update`, `delete`, `enable`, `disable`, `test` and `sendMessage`. Send `X-Workspace-Id` with a workspace API key to manage the workspace's bots.

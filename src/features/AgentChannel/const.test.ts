@@ -1,4 +1,5 @@
 import * as Icons from '@lobehub/ui/icons';
+import { Webhook } from 'lucide-react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -30,5 +31,10 @@ describe('getPlatformIcon', () => {
     expect(getPlatformIcon('qq')).toBe(Icons.QQ);
     expect(getPlatformIcon('Discord')).toBe(Icons.Discord);
     expect(getPlatformIcon('unknown-platform')).toBeUndefined();
+  });
+
+  it('gives the custom webhook channel a generic webhook glyph by id and by display name', () => {
+    expect(getPlatformIcon('webhook')).toBe(Webhook);
+    expect(getPlatformIcon('Custom Webhook')).toBe(Webhook);
   });
 });

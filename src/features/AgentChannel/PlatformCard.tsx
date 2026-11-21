@@ -100,6 +100,9 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
       case 'wechat': {
         return t('channel.platform.wechat.description');
       }
+      case 'webhook': {
+        return t('channel.platform.webhook.description');
+      }
       case 'wecom': {
         return t('channel.platform.wecom.description');
       }

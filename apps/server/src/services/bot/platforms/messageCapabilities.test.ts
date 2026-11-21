@@ -27,6 +27,7 @@ const SERVICE_DIR: Record<string, string> = {
   qq: 'qq',
   slack: 'slack',
   telegram: 'telegram',
+  webhook: 'webhook',
   wechat: 'wechat',
 };
 
@@ -63,8 +64,9 @@ describe('PLATFORM_UNSUPPORTED_MESSAGE_APIS', () => {
       .sort();
     // `linq` is messenger-only (shared iMessage / SMS pool): it has no channel
     // service behind the message tool at all, so history is pre-injected. `wecom` is the same:
-    // AI bots only answer on their own long connection and have no history API.
-    expect(noHistory).toEqual(['dingtalk', 'linq', 'qq', 'telegram', 'wechat', 'wecom']);
+    // AI bots only answer on their own long connection and have no history API. A custom
+    // `webhook` bot only carries messages out, so nothing reads its history back either.
+    expect(noHistory).toEqual(['dingtalk', 'linq', 'qq', 'telegram', 'webhook', 'wechat', 'wecom']);
   });
 });
 

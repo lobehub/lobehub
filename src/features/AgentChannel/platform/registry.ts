@@ -10,6 +10,7 @@ import type {
   PlatformCredentialExtrasProps,
   PlatformSettingsFieldExtrasProps,
 } from './types';
+import WebhookCredentialExtras from './webhook/CredentialExtras';
 import WechatCredentialBody from './wechat/CredentialBody';
 
 export const platformCredentialBodyMap: Record<
@@ -32,6 +33,7 @@ export const platformCredentialExtrasMap: Record<
 > = {
   imessage: ImessageCredentialExtras,
   line: LineCredentialExtras,
+  webhook: WebhookCredentialExtras,
 };
 
 /**

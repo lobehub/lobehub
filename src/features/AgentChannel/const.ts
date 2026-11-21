@@ -1,4 +1,5 @@
 import * as Icons from '@lobehub/ui/icons';
+import { Webhook } from 'lucide-react';
 import type { FC } from 'react';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
@@ -30,6 +31,9 @@ const ICON_ALIASES: Record<string, string> = {
  * Accepts either a platform display name (e.g. "Feishu / Lark") or id (e.g. "discord").
  */
 export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
+  // The custom webhook channel is not a brand, so it takes a generic glyph.
+  if (/webhook/i.test(nameOrId)) return Webhook as FC<any>;
+
   const alias = ICON_ALIASES[nameOrId.toLowerCase()];
   if (alias) return (Icons as Record<string, any>)[alias];
 

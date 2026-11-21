@@ -3,6 +3,7 @@ import AgentsRoutes from './agents.route';
 import AnthropicRoutes from './anthropic.route';
 import ApiKeysRoutes from './api-keys.route';
 import AudioRoutes from './audio.route';
+import BotsRoutes from './bots.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
 import EvalRoutes from './eval.route';
@@ -64,4 +65,5 @@ export default {
   'users': UsersRoutes,
   'usage': UsageRoutes,
   'webhooks': WebhooksRoutes,
+  'bots': BotsRoutes,
 };

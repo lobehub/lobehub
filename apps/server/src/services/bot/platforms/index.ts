@@ -10,6 +10,7 @@ import { qq } from './qq/definition';
 import { PlatformRegistry } from './registry';
 import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
+import { webhook } from './webhook/definition';
 import { wechat } from './wechat/definition';
 import { wecom } from './wecom/definition';
 
@@ -129,6 +130,7 @@ export { line } from './line/definition';
 export { qq } from './qq/definition';
 export { slack } from './slack/definition';
 export { telegram } from './telegram/definition';
+export { webhook } from './webhook/definition';
 export { wechat } from './wechat/definition';
 export { wecom } from './wecom/definition';
 
@@ -145,3 +147,4 @@ platformRegistry.register(wechat);
 platformRegistry.register(line);
 platformRegistry.register(wecom);
 platformRegistry.register(dingtalk);
+platformRegistry.register(webhook);

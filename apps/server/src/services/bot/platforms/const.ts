@@ -114,6 +114,7 @@ const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   slack: 'en-US',
   telegram: 'en-US',
   wechat: 'zh-CN',
+  webhook: 'en-US',
   wecom: 'zh-CN',
 };
 

@@ -13,6 +13,7 @@ export const MessagePlatform = {
   qq: 'qq',
   slack: 'slack',
   telegram: 'telegram',
+  webhook: 'webhook',
   wechat: 'wechat',
 } as const;
 

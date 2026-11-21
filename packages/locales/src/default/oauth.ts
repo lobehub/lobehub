@@ -33,6 +33,8 @@ export default {
   'consent.redirecting': 'Authorization successful, redirecting...',
   'consent.scope.acceptance-review':
     'Comment on this acceptance and accept or send it back from its preview page',
+  'consent.scope.bot-read': 'View the bots connected to your agents',
+  'consent.scope.bot-write': 'Connect, configure and remove your bots, and send messages as them',
   'consent.scope.email': 'Access your email address',
   'consent.scope.offline_access': 'Allow the client to access your data',
   'consent.scope.openid': 'Authenticate using your LobeHub account',
