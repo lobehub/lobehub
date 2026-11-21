@@ -733,6 +733,12 @@ export class ChannelRepository {
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   };
 
+  /** Throws unless the caller could talk one-on-one with this person (see {@link openPeer}). */
+  requirePeer = (peerUserId: string): Promise<void> =>
+    this.db.transaction((tx) =>
+      requirePeerRelation(tx, this.workspaceId ?? null, this.userId, peerUserId),
+    );
+
   /**
    * The caller's one-on-one conversation with another person in this scope, opened by either of
    * them: with a mutual contact in the personal space, with a fellow member in a workspace. An

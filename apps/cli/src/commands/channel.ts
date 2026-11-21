@@ -114,7 +114,7 @@ export const registerChannelCommand = (program: Command) => {
   channel
     .command('dm <userId>')
     .description(
-      'Message a person for your requester, in their one-on-one conversation; the person is notified and nobody answers you there',
+      "Message a person for your requester: from you, in your own conversation with them when they can reach you, else in your requester's conversation with them",
     )
     .requiredOption('-c, --content <text>', 'The message, self-contained, written for that person')
     .option('--request-key <key>', 'Reuse to retry without posting twice')

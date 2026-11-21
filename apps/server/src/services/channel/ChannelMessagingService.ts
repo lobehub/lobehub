@@ -28,6 +28,7 @@ import { appEnv } from '@/envs/app';
 
 import { ChannelService } from './ChannelService';
 import { assertChannelEnabled } from './featureGate';
+import { notifyChannel } from './notify';
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 20;
@@ -260,11 +261,15 @@ export class ChannelMessagingService {
   };
 
   /**
-   * Messages one person for the requester, in the requester's conversation with them, opened on
-   * first use. That conversation decides who can be reached (a mutual contact, or a fellow member
-   * or paired external contact in a workspace) and notifies the person of every message. The
-   * requester stays the sender; `metadata.via` names the Agent that wrote it. No Agent answers
-   * there, so nothing comes back to the run.
+   * Messages one person for the requester. Only people the requester could message by hand are
+   * reached (`requirePeer`: a mutual contact, or a fellow member or paired external contact in a
+   * workspace).
+   *
+   * A person who can talk to the Agent themselves (a fellow member of the workspace it lives in,
+   * or its owner) gets it from the Agent, in their own direct conversation with it, opened on
+   * first use: the Agent is the sender, the person is notified, and their reply there wakes the
+   * Agent. Only a person who cannot reach the Agent gets it in the requester's conversation with
+   * them, as the requester's message with the Agent in `metadata.via`; nobody answers there.
    *
    * `requestId` (the tool call id, or the CLI's request key) makes a retried call return the
    * message it already posted.
@@ -287,8 +292,7 @@ export class ChannelMessagingService {
         'That is your requester; your final answer already reaches them',
       );
 
-    const service = new ChannelService(this.db, this.userId, this.workspaceId);
-    const access = await service.openPeer(userId).catch((error: unknown) => {
+    const unreachable = (error: unknown) => {
       if (
         error instanceof ChannelError &&
         (error.code === 'FORBIDDEN' || error.code === 'NOT_FOUND')
@@ -298,7 +302,35 @@ export class ChannelMessagingService {
           `${error.message}: your requester cannot message this person; use listPeople`,
         );
       throw error;
-    });
+    };
+    await this.channels.requirePeer(userId).catch(unreachable);
+    const person = await new ContactModel(this.db, this.userId, this.workspaceId)
+      .findUser(userId)
+      .then((user) => (user ? toPerson(user) : { name: 'Unnamed', userId, username: null }));
+
+    // Opened as the person, so it is exactly the conversation they would open with the Agent; one
+    // they moved to the trash stays there and the message takes the requester's conversation.
+    const direct = await new ChannelService(this.db, userId, this.workspaceId)
+      .openDirect(run.self.agentId)
+      .catch(() => undefined);
+    if (direct) {
+      const message = await new ChannelRepository(
+        this.db,
+        userId,
+        this.workspaceId,
+      ).postAgentMessage(direct.channel.id, {
+        agentId: run.self.agentId,
+        content,
+        metadata: { operationId: this.operationId, source: 'agent-dm' },
+        requestKey: `agent-dm:${this.operationId}:${requestId}`,
+      });
+      await notifyChannel(this.db, direct.channel.id);
+      // The requester is no member of the person's conversation, so there is nothing to link.
+      return { channelId: direct.channel.id, conversation: 'agent', messageId: message.id, person };
+    }
+
+    const service = new ChannelService(this.db, this.userId, this.workspaceId);
+    const access = await service.openPeer(userId).catch(unreachable);
     if (access.channel.isDeleted)
       throw new ChannelError(
         'FORBIDDEN',
@@ -311,12 +343,12 @@ export class ChannelMessagingService {
       },
       requestKey: `agent-dm:${this.operationId}:${requestId}`,
     });
-    const person = await new ContactModel(this.db, this.userId, this.workspaceId).findUser(userId);
 
     return {
       channelId: access.channel.id,
+      conversation: 'requester',
       messageId: message.id,
-      person: person ? toPerson(person) : { name: 'Unnamed', userId, username: null },
+      person,
       url: await this.channelUrl(access.channel.id, access.channel.projectId),
     };
   };

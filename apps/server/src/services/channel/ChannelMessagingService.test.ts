@@ -3,25 +3,48 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelMessagingService } from './ChannelMessagingService';
 
-const { directory, findUser, listPeople, openAgentPair, openPeer, relaySource, send } = vi.hoisted(
-  () => ({
-    directory: vi.fn(),
-    findUser: vi.fn(),
-    listPeople: vi.fn(),
-    openAgentPair: vi.fn(),
-    openPeer: vi.fn(),
-    relaySource: vi.fn(),
-    send: vi.fn(),
-  }),
-);
+const {
+  directory,
+  findUser,
+  listPeople,
+  notifyChannel,
+  openAgentPair,
+  openDirect,
+  openPeer,
+  postAgentMessage,
+  relaySource,
+  requirePeer,
+  send,
+  serviceUsers,
+} = vi.hoisted(() => ({
+  directory: vi.fn(),
+  findUser: vi.fn(),
+  listPeople: vi.fn(),
+  notifyChannel: vi.fn(),
+  openAgentPair: vi.fn(),
+  openDirect: vi.fn(),
+  openPeer: vi.fn(),
+  postAgentMessage: vi.fn(),
+  relaySource: vi.fn(),
+  requirePeer: vi.fn(),
+  send: vi.fn(),
+  /** Who each `ChannelService` was opened as, in order. */
+  serviceUsers: [] as string[],
+}));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelHistoryRepository: class {
     relaySource = relaySource;
   },
   ChannelRepository: class {
+    constructor(_db: unknown, userId: string) {
+      this.userId = userId;
+    }
+    userId: string;
     directory = directory;
     openAgentPair = openAgentPair;
+    postAgentMessage = (...args: unknown[]) => postAgentMessage(this.userId, ...args);
+    requirePeer = requirePeer;
   },
 }));
 vi.mock('@/database/models/contact', () => ({
@@ -37,8 +60,13 @@ vi.mock('@/database/models/workspace', () => ({
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com/' } }));
 vi.mock('./featureGate', () => ({ assertChannelEnabled: vi.fn() }));
+vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./ChannelService', () => ({
   ChannelService: class {
+    constructor(_db: unknown, userId: string) {
+      serviceUsers.push(userId);
+    }
+    openDirect = openDirect;
     openPeer = openPeer;
     send = send;
   },
@@ -91,6 +119,7 @@ const current = {
 describe('ChannelMessagingService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    serviceUsers.length = 0;
     relaySource.mockResolvedValue(run());
     directory.mockResolvedValue([current, lobehub]);
     send.mockResolvedValue({ id: 'message-sent' });
@@ -296,6 +325,9 @@ describe('ChannelMessagingService', () => {
         channel: { id: 'channel-peer', isDeleted: false, projectId: null },
       });
       findUser.mockResolvedValue(alice);
+      requirePeer.mockResolvedValue(undefined);
+      // By default the person cannot reach the Agent themselves.
+      openDirect.mockResolvedValue(undefined);
     });
 
     it('lists who the requester can message, named for the model', async () => {
@@ -319,11 +351,41 @@ describe('ChannelMessagingService', () => {
       await expect(service().listPeople({ limit: 21 })).rejects.toThrow('limit');
     });
 
-    it("posts in the requester's conversation with the person, marked as sent by the Agent", async () => {
+    it("posts as the Agent in the person's own conversation with it when they can reach it", async () => {
+      openDirect.mockResolvedValue({ channel: { id: 'channel-alice-agent', isDeleted: false } });
+      postAgentMessage.mockResolvedValue({ id: 'message-agent' });
+      expect(
+        await service().messagePerson(
+          { content: ' Please test #115 ', userId: 'user-alice' },
+          'call-1',
+        ),
+      ).toEqual({
+        channelId: 'channel-alice-agent',
+        conversation: 'agent',
+        messageId: 'message-agent',
+        person: { name: 'Alice', userId: 'user-alice', username: 'alice' },
+      });
+      expect(requirePeer).toHaveBeenCalledWith('user-alice');
+      // Opened as the person, not the requester, and written by the Agent there.
+      expect(serviceUsers).toEqual(['user-alice']);
+      expect(openDirect).toHaveBeenCalledWith('agent-self');
+      expect(postAgentMessage).toHaveBeenCalledWith('user-alice', 'channel-alice-agent', {
+        agentId: 'agent-self',
+        content: 'Please test #115',
+        metadata: { operationId: 'op-current', source: 'agent-dm' },
+        requestKey: 'agent-dm:op-current:call-1',
+      });
+      expect(notifyChannel).toHaveBeenCalledWith(db, 'channel-alice-agent');
+      expect(openPeer).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the requester's conversation, marked as sent by the Agent, for one who cannot reach it", async () => {
       expect(
         await service().messagePerson({ content: ' T-1 is done ', userId: 'user-alice' }, 'call-1'),
       ).toEqual({
         channelId: 'channel-peer',
+        conversation: 'requester',
         messageId: 'message-sent',
         person: { name: 'Alice', userId: 'user-alice', username: 'alice' },
         url: 'https://app.example.com/lobehub/channels/channel-peer',
@@ -354,13 +416,14 @@ describe('ChannelMessagingService', () => {
       ).rejects.toThrow('bounded content');
 
       const { ChannelError } = await import('@/database/repositories/channel');
-      openPeer.mockRejectedValueOnce(new ChannelError('FORBIDDEN', 'You are not contacts'));
+      requirePeer.mockRejectedValueOnce(new ChannelError('FORBIDDEN', 'You are not contacts'));
       await expect(
         service().messagePerson({ content: 'Hi', userId: 'user-stranger' }, 'call-1'),
       ).rejects.toMatchObject({
         code: 'FORBIDDEN',
         message: expect.stringContaining('You are not contacts: your requester cannot message'),
       });
+      expect(openDirect).not.toHaveBeenCalled();
 
       openPeer.mockResolvedValueOnce({
         channel: { id: 'channel-peer', isDeleted: true, projectId: null },

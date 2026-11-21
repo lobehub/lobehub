@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -271,17 +271,22 @@ chosen Agents (`ChannelMessagingService`).
 `lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
 the run's scope (`ContactModel.listPeople`): personal contacts, or in a workspace its other members
 and the external contacts paired with the requester. `lobe-channel.messagePerson` (`lh channel dm`)
-posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
-first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
+reaches that person (`ChannelMessagingService.messagePerson`) in one of two places.
 
-- **Who sends it.** The requester, with the writing Agent in `metadata.via`, like a relay: the
-  timeline shows "Relayed by". The conversation between two people decides who can be reached
-  (`requirePeerRelation`, checked on opening and on every send), so an Agent reaches exactly the
-  people its requester could message by hand. A conversation the requester trashed is refused.
-- **Notification.** It is an ordinary message there, so `notifyChannelDirectMessages` notifies the
-  person as of any message from the requester.
-- **Nothing comes back.** No Agent is in that conversation; the `via` has no `origin`, so no
-  receipt is delivered. Unlike `sendMessage` there is no hop rule: a person does not wake anyone.
+- **Who can be reached.** Exactly the people the requester could message by hand
+  (`ChannelRepository.requirePeer` → `requirePeerRelation`), checked before either path.
+- **From the Agent, when the person can reach it.** The person's own direct conversation with the
+  Agent, opened as the person (`ChannelService.openDirect`: a fellow member of the workspace the
+  Agent lives in, its owner, or someone who added its share), gets the message as the Agent's own
+  (`postAgentMessage`, `metadata.source: 'agent-dm'`), and `notifyChannel` notifies them. The
+  requester's conversation with the person is untouched, so the requester never sees a message
+  they did not write, and the person's reply there is their own request to the Agent.
+- **For the requester, otherwise.** A person who cannot reach the Agent (or trashed their
+  conversation with it) gets it in the requester's conversation with them (`ChannelService.openPeer`,
+  opened on first use) as the requester's message with the Agent in `metadata.via`: the timeline
+  shows "Relayed by", and `notifyChannelDirectMessages` notifies them. A conversation the requester
+  trashed is refused. No Agent is in that conversation and the `via` has no `origin`, so nothing
+  comes back; unlike `sendMessage` there is no hop rule: a person does not wake anyone.
 - **Retries.** The request key is `agent-dm:<operationId>:<toolCallId>` (or `cli:<requestKey>`).
 - Shared-Agent runs do not get it: the share gate allows only history reads.
 

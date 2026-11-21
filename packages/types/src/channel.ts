@@ -505,10 +505,15 @@ export interface ChannelMessagePersonParams {
 
 export interface ChannelSentPersonMessage {
   channelId: string;
+  /**
+   * `agent`: the Agent's own direct conversation with the person, where their reply wakes it.
+   * `requester`: the requester's conversation with the person, for one who cannot reach the Agent.
+   */
+  conversation: 'agent' | 'requester';
   messageId: string;
   person: ChannelPerson;
-  /** Link to the requester's conversation with the person. */
-  url: string;
+  /** Link to the requester's conversation with the person; absent when the Agent sent it. */
+  url?: string;
 }
 
 /** Threads of the current Channel, to see what runs in them and act on one. */

@@ -210,9 +210,11 @@ const MessagePersonRender = memo<
           {args.content.slice(0, 600)}
         </div>
       )}
-      <a href={pluginState.url} rel={'noreferrer'} target={'_blank'}>
-        {t('builtins.lobe-channel.openConversation')}
-      </a>
+      {pluginState.url && (
+        <a href={pluginState.url} rel={'noreferrer'} target={'_blank'}>
+          {t('builtins.lobe-channel.openConversation')}
+        </a>
+      )}
     </Flexbox>
   );
 });
