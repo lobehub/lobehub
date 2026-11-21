@@ -462,6 +462,63 @@ describe('AgentModel.transferAgent with legacy session-only rows', () => {
     expect((await messageRow()).agentId).toBeNull();
   });
 
+  it('moved rows drop a held shell, so deleting the source session cannot cascade into them', async () => {
+    await linkSession('agtg-shared-session', ownerId);
+    await serverDB.insert(topics).values([
+      {
+        id: 'agtg-stays-topic',
+        sessionId: 'agtg-shared-session',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId,
+        id: 'agtg-moves-topic',
+        sessionId: 'agtg-shared-session',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+    ]);
+    await serverDB.insert(messages).values([
+      {
+        agentId,
+        id: 'agtg-moves-in-topic',
+        role: 'user',
+        sessionId: 'agtg-shared-session',
+        topicId: 'agtg-moves-topic',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+      {
+        agentId,
+        id: 'agtg-moves-topicless',
+        role: 'user',
+        sessionId: 'agtg-shared-session',
+        userId: ownerId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    await ownerModel.transferAgent(agentId, targetWs, ownerId, 'public');
+    await serverDB.delete(sessions).where(eq(sessions.id, 'agtg-shared-session'));
+
+    const [movedTopic] = await serverDB
+      .select()
+      .from(topics)
+      .where(eq(topics.id, 'agtg-moves-topic'));
+    expect(movedTopic).toMatchObject({ sessionId: null, workspaceId: targetWs });
+    const moved = await serverDB
+      .select()
+      .from(messages)
+      .where(inArray(messages.id, ['agtg-moves-in-topic', 'agtg-moves-topicless']));
+    expect(moved).toHaveLength(2);
+    expect(moved.every((row) => row.sessionId === null && row.workspaceId === targetWs)).toBe(true);
+    // The row that stayed went with its own session, as any session delete does.
+    expect(await serverDB.select().from(topics).where(eq(topics.id, 'agtg-stays-topic'))).toEqual(
+      [],
+    );
+  });
+
   it('still moves a linked shell that holds nothing outside the agent', async () => {
     await linkSession('agtg-clean-session', ownerId);
     await serverDB.insert(topics).values({

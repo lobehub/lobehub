@@ -331,6 +331,15 @@ const transferAgents = async (
       .where(topicCondition)
       .returning({ id: topics.id, updatedAt: topics.updatedAt });
     const movedTopicIds = movedTopics.map((topic) => topic.id);
+    // A shell that stayed behind must not stay the FK parent of what moved:
+    // deleting the source scope would cascade through it into the target.
+    const detachSessionIds = [...heldSessionIds];
+    if (detachSessionIds.length > 0) {
+      await trx
+        .update(topics)
+        .set({ sessionId: null, updatedAt: topics.updatedAt })
+        .where(and(topicCondition, inArray(topics.sessionId, detachSessionIds)));
+    }
 
     // 6a. Topic comments denormalize the topic's workspaceId — move them
     // with the topic (or drop them when leaving workspace scope entirely),
@@ -361,11 +370,12 @@ const transferAgents = async (
     const targetScope = { userId: targetUserId, workspaceId: targetWorkspaceId };
     let transferJobId: string | null = null;
     if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
-      await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
-      await rewriteResidualMessageScope(trx, { agentIds }, targetScope);
+      await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope, detachSessionIds);
+      await rewriteResidualMessageScope(trx, { agentIds }, targetScope, detachSessionIds);
     } else {
       transferJobId = await AgentTransferJobModel.createJob(trx, {
         agentIds,
+        detachSessionIds,
         source: { userId: ctx.userId, workspaceId: ctx.workspaceId ?? null },
         target: targetScope,
         topics: movedTopics.map((topic) => ({ activityAt: topic.updatedAt, id: topic.id })),
