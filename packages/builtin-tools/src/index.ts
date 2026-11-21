@@ -110,13 +110,6 @@ export const getUserDisabledToolIds = (
 };
 
 /**
- * Tool IDs to exclude from defaults when in manual skill-activate mode.
- * These are the tool/skill discovery tools that should be disabled when user wants precise control.
- * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
- */
-export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
-
-/**
  * Tool IDs allowed when the agent runs in chat mode
  * (`chatConfig.enableAgentMode === false`). Each one still passes through
  * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,
@@ -281,7 +274,8 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   // (operation, topic, tool call) from the execution context only, writes under
   // the share scope pinned to the visitor topic (`resolveRunWorkAccessScope`),
   // and changes or deletes only Works this conversation created. Collection images
-  // must be generated images or run outputs (`resolveAgentWorkCollectionItems`).
+  // must be the creator's images the visitor conversation produced or showed
+  // in a tool result (`resolveAgentWorkCollectionItems`).
   // See the allowed-builtins section of `shareGate/README.md`.
   WorkManifest.identifier,
 ]);

@@ -275,9 +275,9 @@ export const createAgentToolsEngine = (
       chatConfig,
       plugins: applyAgentConnectorActivation(
         options.runAgent?.enabledPluginIds ??
-          getActivePluginIds(agent.plugins).filter(
-            (id) => resolveToolMode(chatConfig) !== 'agent' || !isOnDemandBuiltinTool(id),
-          ),
+          (resolveToolMode(chatConfig) === 'agent'
+            ? getActivePluginIds(agent.plugins).filter((id) => !isOnDemandBuiltinTool(id))
+            : getOptedInPluginIds(agent.plugins)),
         connectors,
       ),
     },

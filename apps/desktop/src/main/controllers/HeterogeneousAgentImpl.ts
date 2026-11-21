@@ -2339,11 +2339,11 @@ export default class HeterogeneousAgentCtr {
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
-    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code always is).
+    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code / Antigravity).
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
       const live = !!spawnPlan.liveInput;
-      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live);
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live, session.agentType);
     }
 
     session.process = proc;
@@ -2367,7 +2367,7 @@ export default class HeterogeneousAgentCtr {
     // file-change diff/stat tracker when `agentType === 'codex'`, so this
     // controller stays agent-agnostic.
     const pipeline = new AgentStreamPipeline({
-      ...(session.liveInput && { adapter: createLiveCliAdapter() }),
+      ...(session.liveInput && { adapter: createLiveCliAdapter(session.liveInput) }),
       agentType: session.agentType,
       cwd,
       env: spawnEnv,

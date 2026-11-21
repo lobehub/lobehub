@@ -769,25 +769,30 @@ describe('desktop router shared definition', () => {
       );
       // Discover pages: no category column layout, the Codex groups are the page.
       expect(matchRoutes(routes, '/marketplace/skill')?.at(-1)?.route.path).toBe('skill');
-      const connectorDiscover = matchRoutes(routes, '/marketplace/connector')?.at(-1)?.route;
-      expect(connectorDiscover?.path).toBe('connector');
+      const appDiscover = matchRoutes(routes, '/marketplace/app')?.at(-1)?.route;
+      expect(appDiscover?.path).toBe('app');
       expect(
-        (connectorDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
-      ).toBe('navigation.marketplaceConnectors');
+        (appDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
+      ).toBe('navigation.marketplaceApps');
     },
   );
 
   it.each(mainAreaVariants)(
-    '%s folds the MCP list into Connectors and keeps MCP detail pages',
+    '%s distinguishes Apps, their capabilities, and MCP routes',
     (_, factory) => {
       const routes = createMainAreaRoutes(factory);
 
-      for (const url of ['/marketplace/mcp', '/acme/marketplace/mcp']) {
-        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
-          ReactElement<{ to: string }> | undefined;
-
-        expect(element?.type, url).toBe(LegacyPathRedirect);
-        expect(element?.props.to, url).toBe('/marketplace/connector');
+      for (const prefix of ['', '/acme']) {
+        for (const [url, pattern] of [
+          ['app', 'app'],
+          ['app/slack', 'app/:appId'],
+          ['mcp', 'mcp'],
+          ['mcp/installed', 'mcp/installed'],
+        ]) {
+          expect(matchRoutes(routes, `${prefix}/marketplace/${url}`)?.at(-1)?.route.path).toBe(
+            pattern,
+          );
+        }
       }
 
       expect(matchRoutes(routes, '/marketplace/mcp/notion')?.at(-1)?.route.path).toBe('mcp/:slug');

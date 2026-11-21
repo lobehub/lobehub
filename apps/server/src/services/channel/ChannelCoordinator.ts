@@ -127,9 +127,9 @@ export class ChannelCoordinator {
     const share = await AgentShareModel.findByShareId(this.db, access.shareId);
     if (
       !share ||
-      share.visibility !== 'link' ||
       share.agentId !== agentId ||
-      share.ownerId !== access.ownerId
+      share.ownerId !== access.ownerId ||
+      !(await AgentShareModel.admitsVisitor(this.db, share, requesterId))
     )
       throw new Error('This Agent is no longer shared');
     if (request.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)

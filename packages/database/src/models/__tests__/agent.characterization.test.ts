@@ -182,10 +182,10 @@ describe('AgentModel - characterization', () => {
       { marketIdentifier: 'from-market' },
     ]);
 
-    // Media opt-ins keep the same representation as the picker so they also work in Chat mode.
+    // All four starter tools use the two-state on-demand representation; Chat mode accepts auto too.
     const expected = [
-      { identifier: 'lobe-image-generation', mode: 'pinned' },
-      { identifier: 'lobe-video-generation', mode: 'pinned' },
+      { identifier: 'lobe-image-generation', mode: 'auto' },
+      { identifier: 'lobe-video-generation', mode: 'auto' },
       { identifier: 'lobe-agent-documents', mode: 'auto' },
       { identifier: 'lobe-agent', mode: 'auto' },
     ];

@@ -247,6 +247,9 @@ export const useTokenBreakdown = (): TokenBreakdown => {
 
   const canUseTool = useModelSupportToolUse(model, provider);
   const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
+  const rawPlugins = useAgentStore(
+    (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
+  );
   const installedPlugins = useToolStore((s) => s.installedPlugins);
 
   // The fallback for a conversation with no recorded request yet. Once the
@@ -291,6 +294,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     model,
     pluginIds,
     provider,
+    rawPlugins,
     toolContextRefreshKey,
     toolMode,
   ]);

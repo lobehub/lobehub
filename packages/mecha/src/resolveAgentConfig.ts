@@ -14,6 +14,7 @@ import {
   type AgentModelOverride,
   type ChatCompletionTool,
   getActivePluginIds,
+  getOptedInPluginIds,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
@@ -328,12 +329,13 @@ export const resolveAgentConfig = (
       ? sharedChatConfig
       : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
 
-  // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
-  const savedPlugins = getActivePluginIds(agentConfig?.plugins);
+  // Base plugins from agent config: Agent mode loads on-demand builtins and `auto`
+  // entries through the activator; Chat and Custom modes have no activator by default,
+  // so every opted-in entry (`auto` or legacy `pinned`) joins the base toolset directly.
   const basePlugins =
     resolveToolMode(chatConfig) === 'agent'
-      ? savedPlugins.filter((id) => !isOnDemandBuiltinTool(id))
-      : savedPlugins;
+      ? getActivePluginIds(agentConfig?.plugins).filter((id) => !isOnDemandBuiltinTool(id))
+      : getOptedInPluginIds(agentConfig?.plugins);
 
   // Check if this is a builtin agent
   // Priority: supervisor check (when in group scope) > agent store slug

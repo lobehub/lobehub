@@ -37,9 +37,6 @@ const isLocalSystemEnabled = (s: AgentStoreState) =>
 const isCloudSandboxEnabled = (s: AgentStoreState) =>
   chatConfigByIdSelectors.getRuntimeModeById(s.activeAgentId || '')(s) === 'cloud';
 
-const skillActivateMode = (s: AgentStoreState) =>
-  chatConfigByIdSelectors.getSkillActivateModeById(s.activeAgentId || '')(s);
-
 const enableHistoryDivider =
   (historyLength: number, currentIndex: number) => (s: AgentStoreState) => {
     const config = currentChatConfig(s);
@@ -62,6 +59,5 @@ export const agentChatConfigSelectors = {
   isLocalSystemEnabled,
   isMemoryToolEnabled,
   searchFCModel,
-  skillActivateMode,
   useModelBuiltinSearch,
 };

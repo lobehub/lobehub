@@ -118,6 +118,10 @@ describe('Antigravity quota sampler', () => {
     [Object.assign(new Error('missing'), { code: 'ENOENT' }), 'cli_not_found'],
     [Object.assign(new Error('timeout'), { killed: true }), 'timeout'],
     [Object.assign(new Error('failed'), { stderr: 'authentication required' }), 'auth_required'],
+    [
+      Object.assign(new Error('killed'), { killed: true, stderr: 'Authentication required.' }),
+      'auth_required',
+    ],
   ])('classifies process failures without exposing raw stderr', async (error, code) => {
     respond('', error);
     expect(await fetchAntigravityQuota()).toMatchObject({ errorCode: code, groups: [] });

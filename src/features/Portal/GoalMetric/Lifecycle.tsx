@@ -399,9 +399,8 @@ Actor.displayName = 'GoalMetricLifecycleActor';
 
 const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
   if (!('key' in note)) return note.text;
-  if (note.key === 'mainAgent')
-    return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
-  return t(`goalProcess.lifecycle.note.${note.key}` as const);
+  const { key, ...params } = note;
+  return t(`goalProcess.lifecycle.note.${key}` as const, params);
 };
 
 const EventItem = memo<{

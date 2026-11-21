@@ -143,7 +143,6 @@ const AgentTool = memo<AgentToolProps>(
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
     const effectiveAgentId = agentId || activeAgentId || '';
     const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId), isEqual);
-    const isManualSkillMode = config?.chatConfig?.skillActivateMode === 'manual';
     // Workspace General access on this agent. A private agent is creator-only and
     // has no shared access row, so skip the query for it (same shape as the
     // prompt editor's gate). Only the automatic stale-plugin cleanup below reads
@@ -170,9 +169,7 @@ const AgentTool = memo<AgentToolProps>(
     );
     const profileBuiltinList = useToolStore(
       useAllMetaList
-        ? builtinToolSelectors.installedProfileConfigurableMetaList({
-            isManualMode: isManualSkillMode,
-          })
+        ? builtinToolSelectors.installedProfileConfigurableMetaList
         : builtinToolSelectors.metaList,
       isEqual,
     );
@@ -226,9 +223,7 @@ const AgentTool = memo<AgentToolProps>(
     }, [implicitToolIds, config?.plugins, disabledToolIds]);
 
     const nonProfileConfigurableBuiltinToolIds = useToolStore(
-      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
-        isManualMode: isManualSkillMode,
-      }),
+      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds,
       isEqual,
     );
     const nonProfileConfigurableBuiltinToolIdentifiers = useMemo(

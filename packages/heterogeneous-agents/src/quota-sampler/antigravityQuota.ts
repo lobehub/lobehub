@@ -87,7 +87,7 @@ export const fetchAntigravityQuota = async (
       ['-p', '/usage', '--output-format', 'json', '--print-timeout', '15s'],
       env,
     );
-    const { stdout } = await execFilePromise(plan.command, plan.args, {
+    const query = execFilePromise(plan.command, plan.args, {
       cwd: tmpdir(),
       encoding: 'utf8',
       env,
@@ -96,6 +96,13 @@ export const fetchAntigravityQuota = async (
       timeout: 20_000,
       windowsHide: true,
     });
+    // A signed-out CLI can print an OAuth URL and then wait for interactive input.
+    query.child?.stderr?.on('data', (chunk: string | Buffer) => {
+      if (String(chunk).includes('Authentication required. Please visit the URL to log in:')) {
+        query.child.kill('SIGKILL');
+      }
+    });
+    const { stdout } = await query;
     let payload: unknown;
     try {
       payload = JSON.parse(stdout);
@@ -127,10 +134,10 @@ export const fetchAntigravityQuota = async (
     return failure(
       record.code === 'ENOENT'
         ? 'cli_not_found'
-        : record.killed || record.code === 'ETIMEDOUT'
-          ? 'timeout'
-          : isHeterogeneousAgentAuthRequired('antigravity', detail)
-            ? 'auth_required'
+        : isHeterogeneousAgentAuthRequired('antigravity', detail)
+          ? 'auth_required'
+          : record.killed || record.code === 'ETIMEDOUT'
+            ? 'timeout'
             : 'command_failed',
     );
   }

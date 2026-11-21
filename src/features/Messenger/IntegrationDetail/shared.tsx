@@ -135,7 +135,7 @@ interface DetailLayoutProps {
   hasConnections: boolean;
   headerAction: ReactNode;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
   platform: MessengerPlatform;
   sectionTitle?: ReactNode;
 }
@@ -155,14 +155,16 @@ export const DetailLayout = memo<DetailLayoutProps>(
 
     return (
       <Flexbox gap={20}>
-        <Flexbox horizontal align="center" gap={8}>
-          <span className={styles.backButton} onClick={onBack}>
-            <Icon icon={ArrowLeftIcon} size="small" />
-          </span>
-          <Text strong style={{ fontSize: 20 }}>
-            {name}
-          </Text>
-        </Flexbox>
+        {onBack && (
+          <Flexbox horizontal align="center" gap={8}>
+            <span className={styles.backButton} onClick={onBack}>
+              <Icon icon={ArrowLeftIcon} size="small" />
+            </span>
+            <Text strong style={{ fontSize: 20 }}>
+              {name}
+            </Text>
+          </Flexbox>
+        )}
 
         <Block className={styles.card}>
           <Flexbox horizontal align="center" gap={16}>

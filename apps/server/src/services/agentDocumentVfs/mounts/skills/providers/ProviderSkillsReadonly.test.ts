@@ -237,16 +237,22 @@ describe('readonly skill providers', () => {
       vi.clearAllMocks();
     });
 
-    it('filters installed skills by the agent plugin identifiers', async () => {
+    it('filters installed skills by the agent plugin identifiers (auto + legacy pinned, excluding disabled)', async () => {
       agentModel.getAgentConfigById.mockResolvedValue({
-        plugins: ['skill.one'],
+        plugins: [
+          'skill.one',
+          { identifier: 'skill.auto', mode: 'auto' },
+          { identifier: 'skill.disabled', mode: 'disabled' },
+        ],
       });
       skillModel.findAll.mockResolvedValue({
         data: [
           { id: 'skill-1', identifier: 'skill.one', name: 'Skill One' },
-          { id: 'skill-2', identifier: 'skill.two', name: 'Skill Two' },
+          { id: 'skill-2', identifier: 'skill.auto', name: 'Skill Auto' },
+          { id: 'skill-3', identifier: 'skill.disabled', name: 'Skill Disabled' },
+          { id: 'skill-4', identifier: 'skill.two', name: 'Skill Two' },
         ],
-        total: 2,
+        total: 4,
       });
 
       const provider = new ProviderSkillsInstalledActive({
@@ -264,6 +270,12 @@ describe('readonly skill providers', () => {
       });
 
       expect(result).toEqual([
+        expect.objectContaining({
+          name: 'skill.auto',
+          namespace: 'installed-active',
+          path: './lobe/skills/installed/active/skills/skill.auto',
+          type: 'directory',
+        }),
         expect.objectContaining({
           name: 'skill.one',
           namespace: 'installed-active',

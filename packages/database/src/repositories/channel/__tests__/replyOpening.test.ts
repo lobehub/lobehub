@@ -649,6 +649,95 @@ describe('Channel reply opening', () => {
       expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
     });
 
+    it('leaves out a Thread the Agent never answered in', async () => {
+      const { channel, asMember, thread } = await answeredInThread();
+      const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
+      const request = await asMember.send(channel.id, {
+        content: 'Clone the repo and map its frontend',
+        mentions: [reviewer.id],
+        requestKey: 'reviewer',
+        routing: 'decision',
+      });
+      const [job] = await jobsOf(db, request.id);
+
+      expect((await execution.openingCandidate(channel.id, job.id))?.threads).toEqual([]);
+      // Nor can the opener move it there by naming the Thread.
+      await execution.open(channel.id, job.id, { ack: 'Looking.', threadId: thread.id });
+      expect((await jobById(db, job.id)).threadId).toBeNull();
+    });
+
+    it('leaves out a Thread quiet for hours before the request', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+      const longAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      await db
+        .update(channelMessages)
+        .set({ createdAt: longAgo })
+        .where(eq(channelMessages.threadId, thread.id));
+      await db
+        .update(channelThreads)
+        .set({ createdAt: longAgo })
+        .where(eq(channelThreads.id, thread.id));
+
+      expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('leaves out a Thread another Agent is answering in', async () => {
+      const { asMember, channel, followUpJob, thread } = await answeredInThread();
+      const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
+      await asMember.send(channel.id, {
+        content: 'Review this too',
+        mentions: [reviewer.id],
+        requestKey: 'in-thread',
+        routing: 'decision',
+        threadId: thread.id,
+      });
+
+      expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('offers only where a quoted request was answered, and hands the opener the quote', async () => {
+      const { agent, asMember, channel, message, thread } = await answeredInThread();
+      // A second request answered in place, on the main timeline.
+      const inPlace = await asMember.send(channel.id, {
+        content: 'Should the member list match the personal space?',
+        mentions: [agent.id],
+        requestKey: 'in-place',
+        routing: 'decision',
+      });
+      const [inPlaceJob] = await jobsOf(db, inPlace.id);
+      await execution.open(channel.id, inPlaceJob.id, {});
+
+      const quoting = await asMember.send(channel.id, {
+        content: 'Why is this UI still unchanged?',
+        mentions: [agent.id],
+        replyToId: inPlace.id,
+        requestKey: 'quoting',
+        routing: 'decision',
+      });
+      const [quotingJob] = await jobsOf(db, quoting.id);
+      const candidate = await execution.openingCandidate(channel.id, quotingJob.id);
+      expect(candidate?.threads).toEqual([]);
+      expect(candidate?.quoted).toMatchObject({
+        content: 'Should the member list match the personal space?',
+        id: inPlace.id,
+      });
+
+      // The first request, answered in the Thread.
+      const quotingRoot = await asMember.send(channel.id, {
+        content: 'Is this still failing?',
+        mentions: [agent.id],
+        replyToId: message.id,
+        requestKey: 'quoting-root',
+        routing: 'decision',
+      });
+      const [quotingRootJob] = await jobsOf(db, quotingRoot.id);
+      expect(
+        (await execution.openingCandidate(channel.id, quotingRootJob.id))?.threads.map(
+          ({ id }) => id,
+        ),
+      ).toEqual([thread.id]);
+    });
+
     it('acknowledges on the main timeline with the Thread linked and answers inside it', async () => {
       const { agent, asMember, channel, followUp, followUpJob, member, thread } =
         await answeredInThread();

@@ -1,10 +1,11 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
+  agentShareGrants,
   agentShares,
   channelMembers,
   channelMessages,
@@ -16,6 +17,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AgentShareModel } from '../agentShare';
 import { ContactModel, parseContactHandle } from '../contact';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -244,6 +246,79 @@ describe('shared Agents', () => {
     expect((await carolModel.listSharedAgentsOf(bob)).map((a) => a.agentId)).toEqual([bobAgent]);
     await serverDB.update(agentShares).set({ visibility: 'private' });
     expect(await carolModel.listSharedAgentsOf(bob)).toEqual([]);
+  });
+});
+
+describe('shared-Agent market', () => {
+  const listIn = (shareConfig: Record<string, unknown>) => ({
+    monthlySpendLimit: 1,
+    ...shareConfig,
+  });
+
+  it('lists only link shares their owners listed, without the trashed', async () => {
+    expect((await carolModel.listMarketAgents({ limit: 10 })).items).toEqual([]);
+
+    await serverDB
+      .update(agentShares)
+      .set({ shareConfig: listIn({ listedInMarket: true, slug: 'bob-helper' }) })
+      .where(eq(agentShares.agentId, bobAgent));
+    const { items, nextCursor } = await carolModel.listMarketAgents({ limit: 10 });
+    expect(items).toMatchObject([
+      { agentId: bobAgent, owner: { id: bob }, slug: 'bob-helper', title: 'Bob Helper' },
+    ]);
+    expect(nextCursor).toBeNull();
+
+    // A paused share or a trashed Agent leaves the market even while still marked listed.
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'card' })
+      .where(eq(agentShares.agentId, bobAgent));
+    expect((await carolModel.listMarketAgents({ limit: 10 })).items).toEqual([]);
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'link' })
+      .where(eq(agentShares.agentId, bobAgent));
+    await serverDB.update(agents).set({ isDeleted: true }).where(eq(agents.id, bobAgent));
+    expect((await carolModel.listMarketAgents({ limit: 10 })).items).toEqual([]);
+  });
+
+  it('pages newest first without repeating a share, and filters by title', async () => {
+    await serverDB.update(agentShares).set({ shareConfig: listIn({ listedInMarket: true }) });
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: new Date('2026-01-01') })
+      .where(eq(agentShares.agentId, bobAgent));
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: new Date('2026-02-01') })
+      .where(eq(agentShares.agentId, aliceAgent));
+
+    const first = await carolModel.listMarketAgents({ limit: 1 });
+    expect(first.items.map((a) => a.agentId)).toEqual([aliceAgent]);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await carolModel.listMarketAgents({
+      cursor: first.nextCursor!,
+      limit: 1,
+    });
+    expect(second.items.map((a) => a.agentId)).toEqual([bobAgent]);
+    expect(second.nextCursor).toBeNull();
+
+    // Two shares inside one millisecond: the cursor keeps microseconds, so none is skipped.
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: sql`'2026-03-01T00:00:00.123900Z'::timestamptz` })
+      .where(eq(agentShares.agentId, aliceAgent));
+    await serverDB
+      .update(agentShares)
+      .set({ createdAt: sql`'2026-03-01T00:00:00.123800Z'::timestamptz` })
+      .where(eq(agentShares.agentId, bobAgent));
+    const sameMs = await carolModel.listMarketAgents({ limit: 1 });
+    expect(sameMs.nextCursor?.createdAt).toBe('2026-03-01T00:00:00.123900Z');
+    const rest = await carolModel.listMarketAgents({ cursor: sameMs.nextCursor!, limit: 1 });
+    expect(rest.items.map((a) => a.agentId)).toEqual([bobAgent]);
+
+    const found = await carolModel.listMarketAgents({ limit: 10, query: 'bob' });
+    expect(found.items.map((a) => a.agentId)).toEqual([bobAgent]);
   });
 });
 
@@ -660,6 +735,14 @@ describe('contact cards', () => {
     });
   });
 
+  it('names an Agent by its personal name, as every list does, over its role title', async () => {
+    await serverDB.update(agents).set({ name: '晚诺' }).where(eq(agents.id, bobAgent));
+
+    expect(await aliceModel.resolveCard({ agentId: bobAgent, type: 'agent' })).toMatchObject({
+      name: '晚诺',
+    });
+  });
+
   it('asks the owner to turn sharing on instead of opening it', async () => {
     await serverDB
       .update(agentShares)
@@ -671,6 +754,168 @@ describe('contact cards', () => {
     await expect(bobModel.resolveCard({ agentId: aliceAgent, type: 'agent' })).rejects.toThrow(
       'Agent not found',
     );
+  });
+});
+
+describe('an Agent shared only by card', () => {
+  let channelId: string;
+  const card = { agentId: bobAgent, type: 'agent' as const };
+
+  /** A card of Bob's Agent in the Channel, sent by `sender`. */
+  const postCard = async (sender: string, sequence = 1) => {
+    const [message] = await serverDB
+      .insert(channelMessages)
+      .values({
+        channelId,
+        content: '[Contact card] Bob Helper',
+        metadata: { card: { ...(await bobModel.resolveCard(card)), name: 'Bob Helper' } },
+        requestKey: `card-${sequence}`,
+        routingStatus: 'skipped',
+        sequence,
+        userId: sender,
+      })
+      .returning();
+    return message.id;
+  };
+
+  beforeEach(async () => {
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'card' })
+      .where(eq(agentShares.agentId, bobAgent));
+    const [channel] = await serverDB
+      .insert(channels)
+      .values({ title: 'Card', userId: bob })
+      .returning();
+    channelId = channel.id;
+    await serverDB.insert(channelMembers).values([
+      { actorType: 'user', channelId, role: 'owner', userId: bob },
+      { actorType: 'user', channelId, role: 'member', userId: alice },
+    ]);
+  });
+
+  afterEach(async () => {
+    await serverDB.delete(channels);
+  });
+
+  it('is shared by its owner only, and its link adds nothing', async () => {
+    expect(await bobModel.resolveCard(card)).toMatchObject({ shareId: bobShareId });
+    await expect(aliceModel.resolveCard(card)).rejects.toThrow('Agent not found');
+    await expect(aliceModel.addAgent(bobShareId)).rejects.toThrow('Agent not found');
+  });
+
+  it("admits the person who adds it from the owner's card, and only them", async () => {
+    const messageId = await postCard(bob);
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+
+    expect(await aliceModel.addAgentFromCard(messageId)).toMatchObject({ agentId: bobAgent });
+
+    expect(await aliceModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
+    const [grant] = await serverDB.select().from(agentShareGrants);
+    expect(grant).toMatchObject({
+      shareId: bobShareId,
+      source: { channelId, messageId, type: 'card' },
+      userId: alice,
+    });
+    const item = (await aliceModel.list()).find((entry) => entry.type === 'agent');
+    expect(item).toMatchObject({ available: true });
+    expect(
+      await AgentShareModel.isRunStillAuthorized(serverDB, {
+        agentId: bobAgent,
+        shareId: bobShareId,
+        visitorUserId: alice,
+      }),
+    ).toBe(true);
+    // Neither a run that names nobody nor another person is admitted by Alice's grant.
+    for (const visitorUserId of [undefined, carol])
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, {
+          agentId: bobAgent,
+          shareId: bobShareId,
+          visitorUserId,
+        }),
+      ).toBe(false);
+  });
+
+  it('pauses with the share, and stays admitted when a link share becomes card-only', async () => {
+    await aliceModel.addAgentFromCard(await postCard(bob));
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'private' })
+      .where(eq(agentShares.agentId, bobAgent));
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'card' })
+      .where(eq(agentShares.agentId, bobAgent));
+    expect(await aliceModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
+  });
+
+  it('refuses a card someone else passed on, or one I cannot see', async () => {
+    await serverDB
+      .insert(channelMembers)
+      .values({ actorType: 'user', channelId, role: 'member', userId: carol });
+    const passedOn = await postCard(alice, 1);
+    await expect(carolModel.addAgentFromCard(passedOn)).rejects.toThrow('Agent not found');
+
+    const fromOwner = await postCard(bob, 2);
+    await serverDB
+      .update(channelMembers)
+      .set({ status: 'left' })
+      .where(eq(channelMembers.userId, carol));
+    await expect(carolModel.addAgentFromCard(fromOwner)).rejects.toThrow('Agent not found');
+    expect(await serverDB.select().from(agentShareGrants)).toEqual([]);
+  });
+
+  it('adds a link share from anyone’s card without granting it', async () => {
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'link' })
+      .where(eq(agentShares.agentId, bobAgent));
+    await serverDB
+      .insert(channelMembers)
+      .values({ actorType: 'user', channelId, role: 'member', userId: carol });
+
+    await carolModel.addAgentFromCard(await postCard(alice));
+
+    expect(await carolModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
+    expect(await serverDB.select().from(agentShareGrants)).toEqual([]);
+  });
+
+  it('lets the owner list and revoke grants', async () => {
+    await aliceModel.addAgentFromCard(await postCard(bob));
+    const shares = new AgentShareModel(serverDB, bob);
+
+    expect(await shares.listGrants(bobAgent)).toEqual([
+      expect.objectContaining({ user: expect.objectContaining({ id: alice }) }),
+    ]);
+    expect(await new AgentShareModel(serverDB, alice).listGrants(bobAgent)).toEqual([]);
+
+    expect(await shares.revokeGrant(bobAgent, alice)).toBe(true);
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+    expect(await shares.revokeGrant(bobAgent, alice)).toBe(false);
+  });
+
+  it('keeps a revoke: an earlier card cannot restore it, a later one from the owner does', async () => {
+    const earlier = await postCard(bob, 1);
+    await aliceModel.addAgentFromCard(earlier);
+    const shares = new AgentShareModel(serverDB, bob);
+    await shares.revokeGrant(bobAgent, alice);
+
+    await expect(aliceModel.addAgentFromCard(earlier)).rejects.toThrow('Agent not found');
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+    expect(await shares.listGrants(bobAgent)).toEqual([]);
+
+    const later = await postCard(bob, 2);
+    await serverDB
+      .update(channelMessages)
+      .set({ createdAt: new Date(Date.now() + 60_000) })
+      .where(eq(channelMessages.id, later));
+    await aliceModel.addAgentFromCard(later);
+    expect(await aliceModel.findAgentAccess(bobAgent)).toMatchObject({ shareId: bobShareId });
+    const [grant] = await serverDB.select().from(agentShareGrants);
+    expect(grant).toMatchObject({ revokedAt: null, source: { messageId: later } });
   });
 });
 

@@ -240,7 +240,7 @@ describe('AgentManagerRuntime', () => {
       expect(result.content).toBe('No fields to update.');
     });
 
-    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+    it('flips an existing disabled object entry back to auto, without duplicating it', async () => {
       const originalPlugins = mockAgentConfig.plugins;
       mockAgentConfig.plugins = [
         'plugin-1',
@@ -260,7 +260,30 @@ describe('AgentManagerRuntime', () => {
         expect(result.state).toMatchObject({
           config: {
             newValues: {
-              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'pinned' }],
+              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'auto' }],
+            },
+          },
+        });
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
+    });
+
+    it('writes an explicit disabled entry when togglePlugin sets enabled=false', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [{ identifier: 'plugin-2', mode: 'auto' } as any] as any;
+
+      try {
+        const result = await runtime.updateAgentConfig('agent-id', {
+          config: { model: 'gpt-4o' },
+          togglePlugin: { pluginId: 'plugin-2', enabled: false },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state).toMatchObject({
+          config: {
+            newValues: {
+              plugins: [{ identifier: 'plugin-2', mode: 'disabled' }],
             },
           },
         });
@@ -968,7 +991,7 @@ describe('AgentManagerRuntime', () => {
       expect(result.content).toContain('not found');
     });
 
-    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+    it('flips an existing disabled object entry back to auto with builtinOverride, without duplicating it', async () => {
       const originalPlugins = mockAgentConfig.plugins;
       mockAgentConfig.plugins = [
         { identifier: 'lobe-web-browsing', mode: 'disabled' } as any,
@@ -983,7 +1006,9 @@ describe('AgentManagerRuntime', () => {
         expect(result.success).toBe(true);
         expect(getLastOptimisticConfigUpdateCall()).toEqual([
           'agent-id',
-          { plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }] },
+          {
+            plugins: [{ builtinOverride: true, identifier: 'lobe-web-browsing', mode: 'auto' }],
+          },
         ]);
       } finally {
         mockAgentConfig.plugins = originalPlugins;

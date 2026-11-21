@@ -1074,9 +1074,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
     initialModel: usesHeterogeneousSessionInitialModel(options.type) ? options.model : undefined,
-    // Keep Claude Code's stdin open while it can still use input: closing it
-    // early makes print mode kill background tasks after 10 minutes.
-    liveInput: options.type === 'claude-code',
+    // Keep Claude Code's and Antigravity's stdin open while they can still use
+    // input (live steer / background tasks).
+    liveInput: options.type === 'claude-code' || options.type === 'antigravity',
     operationId,
     // Better Coding Experience: Claude Code prompts answered on the bridge's cards.
     ...(options.type === 'claude-code' &&

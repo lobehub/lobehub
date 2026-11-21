@@ -51,6 +51,7 @@ import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
+import { isOpStatusVisible } from './OpStatusTray/visibility';
 import QueueTray from './QueueTray';
 import SendErrorAlert from './SendErrorAlert';
 import { sendVoiceMessage } from './sendVoiceMessage';
@@ -305,12 +306,10 @@ const ChatInput = memo<ChatInputProps>(
     // can square the top corners of OpStatusTray when it sits flush below.
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
-    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
-    // gate) so LinkedGoalTray — which sits flush below it — can square its top corners
-    // and merge with the status strip instead of showing a seam.
-    const hasOpStatus = useChatStore(
-      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
-    );
+    // Detect whether OpStatusTray will render so LinkedGoalTray — which sits flush
+    // below it — can square its top corners and merge with the status strip instead
+    // of showing a seam, and the send area can drop its duplicate running spinner.
+    const hasOpStatus = useChatStore(isOpStatusVisible(context));
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
@@ -502,6 +501,8 @@ const ChatInput = memo<ChatInputProps>(
         // While the message is still being created there is no run to stop yet:
         // Send shows as loading, and Stop takes over once the run starts.
         generating: showStopButton && !isSendDispatchPending,
+        // Custom `children` replace the layout that mounts OpStatusTray.
+        hideRunningIndicator: !children && hasOpStatus,
         loading: isSendDispatchPending,
         onStop: stopGenerating,
         showSendWhileGenerating: showSendWhileGenerating && !isSendDispatchPending,

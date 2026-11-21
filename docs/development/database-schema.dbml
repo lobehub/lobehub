@@ -1188,6 +1188,20 @@ table agent_quota_windows {
   }
 }
 
+table agent_share_grants {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  share_id uuid [not null]
+  user_id text [not null]
+  source jsonb [not null]
+  revoked_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (share_id, user_id) [name: 'agent_share_grants_share_user_unique', unique]
+    user_id [name: 'agent_share_grants_user_id_idx']
+  }
+}
+
 table agent_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]

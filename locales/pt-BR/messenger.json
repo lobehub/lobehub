@@ -220,7 +220,6 @@
   "verify.error.generic": "Algo deu errado. Por favor, tente novamente.",
   "verify.error.missingToken": "Vínculo inválido. Abra esta página a partir do bot.",
   "verify.error.title": "Não foi possível confirmar o vínculo",
-  "verify.error.unlinkBeforeRelink": "Esta conta do LobeHub já está vinculada a outra conta do Telegram. Desconecte-a em Configurações → Messenger antes de vincular uma nova.",
   "verify.signInCta": "Faça login para continuar",
   "verify.signInRequired": "Por favor, faça login no LobeHub para confirmar o vínculo.",
   "verify.success.backToLobeHub": "Voltar para o LobeHub",
