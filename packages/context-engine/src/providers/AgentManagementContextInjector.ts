@@ -17,11 +17,20 @@ const log = debug('context-engine:provider:AgentManagementContextInjector');
  * Available model info for Agent Management context
  */
 export interface AvailableModelInfo {
-  /** Model abilities */
+  /**
+   * Effective model abilities for this user.
+   *
+   * `vision` / `video` / `audio` are always rendered as explicit booleans, and a
+   * missing key renders as `false` because the runtime will not deliver that
+   * media natively. A missing `functionCall` / `reasoning` / `files` is omitted
+   * from the output and means unknown, never "unsupported".
+   */
   abilities?: {
+    audio?: boolean;
     files?: boolean;
     functionCall?: boolean;
     reasoning?: boolean;
+    video?: boolean;
     vision?: boolean;
   };
   /** Model description */
@@ -113,6 +122,12 @@ export interface AgentManagementContextInjectorConfig {
   formatContext?: (context: AgentManagementContext) => string;
 }
 
+/** Rendered on every model, `false` included, so absence can't be misread. */
+const EXPLICIT_MEDIA_ABILITIES = ['vision', 'video', 'audio'] as const;
+
+const MODEL_ABILITIES_INSTRUCTION =
+  'In `available_models`, `vision`, `video` and `audio` are always explicit and state what this workspace will deliver to the model natively; a saved user model config overrides the catalog, so they can differ from it. Any other ability attribute that is absent (`functionCall`, `reasoning`, `files`) means unknown, not unsupported: do not tell the user a model lacks it without checking the model catalog (for example `lh model list <provider> --json`).';
+
 /**
  * Format Agent Management context as XML for injection
  */
@@ -135,12 +150,12 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
         const modelsXml = provider.models
           .map((model) => {
             const attrs: string[] = [`id="${model.id}"`];
-            if (model.abilities) {
-              if (model.abilities.functionCall) attrs.push('functionCall="true"');
-              if (model.abilities.vision) attrs.push('vision="true"');
-              if (model.abilities.files) attrs.push('files="true"');
-              if (model.abilities.reasoning) attrs.push('reasoning="true"');
+            for (const ability of EXPLICIT_MEDIA_ABILITIES) {
+              attrs.push(`${ability}="${model.abilities?.[ability] === true}"`);
             }
+            if (model.abilities?.functionCall) attrs.push('functionCall="true"');
+            if (model.abilities?.files) attrs.push('files="true"');
+            if (model.abilities?.reasoning) attrs.push('reasoning="true"');
             const desc = model.description ? ` - ${escapeXml(model.description)}` : '';
             return `      <model ${attrs.join(' ')}>${escapeXml(model.name)}${desc}</model>`;
           })
@@ -246,6 +261,9 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     instructionParts.push(
       'When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.',
     );
+  }
+  if (context.availableProviders && context.availableProviders.length > 0) {
+    instructionParts.push(MODEL_ABILITIES_INSTRUCTION);
   }
   if (hasAgents) {
     instructionParts.push(
