@@ -11,7 +11,7 @@ import { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
-import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
+import { normalizeProviderId } from '@/libs/better-auth/utils/client';
 import {
   buildOnboardingRedirectUrl,
   sanitizeRedirectPath,
@@ -301,22 +301,12 @@ export const useSignIn = () => {
         authOrigin,
       );
       const additionalData = await getAdditionalData();
-      const signInWithAdditionalData = async () =>
-        isBuiltinProvider(normalizedProvider)
-          ? await signIn.social({
-              additionalData,
-              callbackURL,
-              newUserCallbackURL,
-              provider: normalizedProvider,
-            })
-          : await signIn.oauth2({
-              additionalData,
-              callbackURL,
-              newUserCallbackURL,
-              providerId: normalizedProvider,
-            });
-
-      const result = await signInWithAdditionalData();
+      const result = await signIn.social({
+        additionalData,
+        callbackURL,
+        newUserCallbackURL,
+        provider: normalizedProvider,
+      });
 
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
