@@ -6,6 +6,7 @@ import { visibleMemoryState } from '../../../utils/memoryVisibility';
 import { notTrashed } from '../../../utils/softDelete';
 import type { FtsSearchBackendResponse, FtsSearchMemoryResult } from '../types';
 import type { PostgresFtsSearchContext } from './context';
+import { createScoredScan } from './context';
 import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, truncate } from './results';
 
@@ -23,7 +24,12 @@ export async function searchMemories(
 ): Promise<FtsSearchBackendResponse<FtsSearchMemoryResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(userMemories.id, MEMORY_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(
+    context,
+    userMemories,
+    MEMORY_FIELDS,
+    preparedQuery,
+  );
 
   // Memories are user-scoped and have no workspace column, so the ownership
   // predicate can remain in the single-table scored scan.
@@ -37,7 +43,7 @@ export async function searchMemories(
       title: userMemories.title,
       updatedAt: userMemories.updatedAt,
     })
-    .from(userMemories)
+    .from(source)
     .where(
       and(
         eq(userMemories.userId, context.userId),
@@ -45,7 +51,7 @@ export async function searchMemories(
         ne(userMemories.memoryLayer, LayersEnum.Experience),
         notTrashed(userMemories.isDeleted),
         visibleMemoryState(userMemories.state),
-        dialect.match(MEMORY_FIELDS, preparedQuery),
+        match,
       ),
     )
     .orderBy(sql`${score} DESC`)

@@ -1,12 +1,44 @@
 import type { SQL, SQLWrapper } from 'drizzle-orm';
-import { and, eq, isNull } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { and, eq, getTableColumns, getTableName, isNull, sql, Subquery } from 'drizzle-orm';
+import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import type { LobeChatDatabase } from '../../../type';
 import { notTrashed } from '../../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { FtsSearchBackendScope } from '../types';
-import type { PostgresFtsSearchDialect } from './dialect';
+import type { PostgresFtsSearchDialect, PostgresFtsSearchField } from './dialect';
+
+/**
+ * Evaluate BM25 scores before non-indexed visibility predicates and joins.
+ * OFFSET 0 is a PostgreSQL subquery boundary: without it the planner can pull
+ * score() above a join, or abandon the custom scan for a non-indexed predicate.
+ * pg_search < 0.21 then returns NULL; newer releases reject that query shape.
+ * Keep the boundary unbounded so hidden rows cannot consume the result limit.
+ */
+export function createScoredScan(
+  context: PostgresFtsSearchContext,
+  table: PgTable & { id: AnyPgColumn; userId: AnyPgColumn },
+  fields: PostgresFtsSearchField[],
+  preparedQuery: string,
+) {
+  const { db, dialect } = context;
+  const score = dialect.score(table.id, fields, preparedQuery);
+  const match = dialect.match(fields, preparedQuery);
+  if (!dialect.isolatesScoredScan) return { match, score, source: table };
+
+  const scan = db
+    .select({ ...getTableColumns(table), bm25Score: score.as('bm25_score') })
+    .from(table)
+    .where(and(context.scope.workspaceId ? undefined : eq(table.userId, context.userId), match));
+  // Drizzle omits .offset(0); preserve the boundary using its public Subquery API.
+  const source = new Subquery(sql`${scan} offset 0`, {}, getTableName(table));
+
+  return {
+    match: undefined,
+    score: sql<number>`${sql.identifier(getTableName(table))}.${sql.identifier('bm25_score')}`,
+    source,
+  };
+}
 
 /** Columns shared by the workspace-aware tables searched by the PostgreSQL providers. */
 export interface PostgresFtsSearchWorkspaceScopedColumns {
@@ -26,7 +58,7 @@ export interface PostgresFtsSearchContext {
   liftsAgentFilter: boolean;
   /**
    * Whether non-indexed exclusions (restricted knowledge bases) sit above the
-   * scored scan. ParadeDB keeps them out of its TopN scan and lets restricted
+   * candidate scan. ParadeDB retains the existing pool and lets restricted
    * rows consume pool slots; plain PostgreSQL applies them inside the exact
    * scan so a restricted top hit cannot take a slot from an authorized one.
    */
@@ -39,16 +71,9 @@ export interface PostgresFtsSearchContext {
 }
 
 /**
- * Every query here is shaped as "inner single-table BM25 scan → outer enrichment",
- * because ParadeDB only picks its TopN custom scan (`TopNScanExecState`, which
- * visits a handful of heap rows) when the scan node itself carries the whole
- * `ORDER BY paradedb.score() LIMIT n`. Joins and non-indexed ownership filters
- * therefore stay outside the scan whenever the score ordering remains valid.
- *
- * The workspace filter is currently not a fast field in the BM25 indexes. In
- * personal mode we keep the user filter in the scan and lift only the
- * `workspace_id IS NULL` half above it, using a deeper candidate pool to keep
- * personal rows from being displaced by workspace rows.
+ * Retain the existing personal-mode candidate pool and hydration contract.
+ * Scoring itself is isolated by createScoredScan before these filters run.
+ * Workspace rows can consume pool slots, so personal searches deepen the pool.
  */
 const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
 
@@ -81,9 +106,8 @@ export function createPostgresFtsSearchContext(
     userId: scope.userId,
     workspaceId: scope.workspaceId,
   };
-  // Lifting filters above the scan only pays off for ParadeDB's TopN scan. A plain
-  // PostgreSQL dialect keeps every filter inline, which collapses each query to a
-  // single exact stage with the requested limit.
+  // Preserve ParadeDB's existing candidate pools. The plain PostgreSQL dialect
+  // keeps every filter inline and needs no candidate over-fetching.
   const liftsWorkspaceFilter =
     dialect.isolatesScoredScan && !WORKSPACE_ID_IN_BM25_INDEX && !normalizedScope.workspaceId;
   const liftsAgentFilter =

@@ -1953,17 +1953,8 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
     });
   });
 
-  // The workspace-scoping tests above pin *results*, and this change is
-  // deliberately result-neutral — they pass against the pre-fix implementation
-  // too. What actually fixes the regression is the *shape* of the emitted SQL, so
-  // it needs its own guard: ParadeDB only picks `TopNScanExecState` when the
-  // scan node itself carries the whole `ORDER BY paradedb.score() LIMIT n`.
-  //
-  // Asserting the plan directly is not an option in CI: the container runs a
-  // newer pg_search than production, and its `heap_filter` keeps TopN even with
-  // a non-indexed qual — the exact regression would be invisible. So we assert
-  // the structural invariant that makes TopN reachable instead, which fails on
-  // the pre-fix single-level query regardless of engine version.
+  // Scoring must remain behind an optimizer boundary before visibility filters
+  // and enrichment joins. Real-engine regressions live in pgSearchCompatibility.test.ts.
   describe('search - BM25 scan shape', () => {
     let loggingPool: NodePool | undefined;
 
@@ -2039,9 +2030,9 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       for (const alias of SCAN_ALIASES) {
         const scan = scanOf(statements, alias);
 
-        // the scan node owns the whole ranking clause …
+        // Scoring stays behind a planner boundary; ranking limits follow filtering.
         expect(scan).toContain('@@@');
-        expect(scan).toContain('order by paradedb.score');
+        expect(scan.toLowerCase()).toContain('offset 0');
         expect(scan).toContain('limit');
 
         // … and nothing sits between it and that clause
