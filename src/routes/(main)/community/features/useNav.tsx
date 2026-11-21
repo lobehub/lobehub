@@ -29,9 +29,9 @@ export const useNav = () => {
   const items: MenuProps['items'] = useMemo(
     () => [
       {
-        icon: <Icon icon={Bot} size={ICON_SIZE} />,
-        key: DiscoverTab.Assistants,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.assistant')}</div>,
+        icon: <Icon icon={Blocks} size={ICON_SIZE} />,
+        key: MARKETPLACE_CONNECTOR_TAB,
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.connector')}</div>,
       },
       {
         icon: <Icon icon={SkillsIcon} size={ICON_SIZE} />,
@@ -39,9 +39,9 @@ export const useNav = () => {
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.skill')}</div>,
       },
       {
-        icon: <Icon icon={Blocks} size={ICON_SIZE} />,
-        key: MARKETPLACE_CONNECTOR_TAB,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.connector')}</div>,
+        icon: <Icon icon={Bot} size={ICON_SIZE} />,
+        key: DiscoverTab.Assistants,
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.assistant')}</div>,
       },
     ],
     [t],

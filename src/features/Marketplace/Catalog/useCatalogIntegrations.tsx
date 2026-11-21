@@ -56,38 +56,29 @@ export const useCatalogIntegrations = (keyword?: string) => {
     );
   });
 
-  return {
-    count: matches.length,
-    label: t('connectorMarket.section.lobehub'),
-    rows: (limit?: number) =>
-      matches.slice(0, limit).map((item) => {
-        if (item.type === 'lobehub') {
-          const id = item.provider.id;
-          return (
-            <LobehubSkillItem
-              showConnectLabel
-              key={id}
-              provider={item.provider}
-              server={lobehubById.get(id)}
-              onSelect={() =>
-                navigate(buildInstalledDetailPath('connector', id, 'lobehub-connector', visibility))
-              }
-            />
-          );
-        }
+  return matches.map((item) => {
+    if (item.type === 'lobehub') {
+      const id = item.provider.id;
+      return (
+        <LobehubSkillItem
+          key={id}
+          provider={item.provider}
+          server={lobehubById.get(id)}
+          onSelect={() =>
+            navigate(buildInstalledDetailPath('connector', id, 'lobehub-connector', visibility))
+          }
+        />
+      );
+    }
 
-        const id = item.serverType.identifier;
-        return (
-          <ComposioSkillItem
-            showConnectLabel
-            key={id}
-            server={composioById.get(id)}
-            serverType={item.serverType}
-            onSelect={() =>
-              navigate(buildInstalledDetailPath('connector', id, 'plugin', visibility))
-            }
-          />
-        );
-      }),
-  };
+    const id = item.serverType.identifier;
+    return (
+      <ComposioSkillItem
+        key={id}
+        server={composioById.get(id)}
+        serverType={item.serverType}
+        onSelect={() => navigate(buildInstalledDetailPath('connector', id, 'plugin', visibility))}
+      />
+    );
+  });
 };

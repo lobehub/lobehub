@@ -16,6 +16,10 @@ import {
 } from '@/features/Marketplace/paths';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import {
+  MOBILE_SELECTION_PARAM,
+  parseMobileSelection,
+} from '@/features/Settings/skill/mobileSelection';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -39,8 +43,13 @@ interface Item {
 // Workspace-aware: `/:slug/marketplace/skill` resolves to `skill` as well.
 // MCP detail pages (`mcp/:slug`) belong to Connectors, which absorbed the MCP list.
 const useActiveTabKey = () => {
-  const { pathname } = useActiveLocation();
+  const { pathname, search } = useActiveLocation();
   const subPath = getMarketplaceSubPath(pathname) ?? '';
+  if (
+    subPath === getMarketplaceSubPath(MARKETPLACE_INSTALLED_CONNECTORS_PATH) &&
+    parseMobileSelection(new URLSearchParams(search).get(MOBILE_SELECTION_PARAM))
+  )
+    return '';
   return subPath.startsWith(DiscoverTab.Mcp) ? CONNECTOR_TAB : subPath;
 };
 
@@ -54,11 +63,12 @@ const Nav = memo(() => {
     () =>
       [
         {
-          icon: Bot,
-          key: DiscoverTab.Assistants,
-          marketOnly: true,
-          title: t('tab.assistant'),
-          url: MARKETPLACE_AGENT_PATH,
+          icon: Blocks,
+          key: CONNECTOR_TAB,
+          title: t('tab.connector'),
+          // Connectors merges the MCP catalog (Discover) with the installed
+          // connectors; without the market only the installed view exists.
+          url: showMarket ? MARKETPLACE_CONNECTOR_PATH : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
         },
         {
           icon: SkillsIcon,
@@ -68,12 +78,11 @@ const Nav = memo(() => {
           url: showMarket ? MARKETPLACE_SKILL_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH,
         },
         {
-          icon: Blocks,
-          key: CONNECTOR_TAB,
-          title: t('tab.connector'),
-          // Connectors merges the MCP catalog (Discover) with the installed
-          // connectors; without the market only the installed view exists.
-          url: showMarket ? MARKETPLACE_CONNECTOR_PATH : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+          icon: Bot,
+          key: DiscoverTab.Assistants,
+          marketOnly: true,
+          title: t('tab.assistant'),
+          url: MARKETPLACE_AGENT_PATH,
         },
       ].filter((item: Item) => showMarket || !item.marketOnly) as Item[],
     [showMarket, t],

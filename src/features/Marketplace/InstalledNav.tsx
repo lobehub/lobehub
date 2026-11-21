@@ -1,11 +1,9 @@
 'use client';
 
 import type { ConnectorVisibility } from '@lobechat/types';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { SlidersHorizontalIcon } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
@@ -71,8 +69,8 @@ export const buildInstalledDetailPath = (
  */
 const InstalledNav = memo(() => {
   const { t } = useTranslation('discover');
-  const { pathname } = useActiveLocation();
-  const [searchParams] = useSearchParams();
+  const { pathname, search } = useActiveLocation();
+  const searchParams = new URLSearchParams(search);
   const navigate = useWorkspaceAwareNavigate();
   const sectionTriggerStyle = useSectionTriggerStyle();
 
@@ -97,21 +95,8 @@ const InstalledNav = memo(() => {
 
   return (
     <Flexbox gap={2} paddingBlock={8} paddingInline={4}>
-      <Flexbox horizontal align={'center'} justify={'space-between'} style={sectionTriggerStyle}>
+      <Flexbox style={sectionTriggerStyle}>
         <SectionTitle>{t('catalog.installed')}</SectionTitle>
-        <ActionIcon
-          active={onInstalledPage && !selectedIdentifier}
-          icon={SlidersHorizontalIcon}
-          size={'small'}
-          title={t('catalog.manageInstalledConnectors')}
-          onClick={() =>
-            navigate(
-              visibility === 'private'
-                ? `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?visibility=private`
-                : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-            )
-          }
-        />
       </Flexbox>
       <SkillListVariantProvider value={'nav'}>
         <SkillList
