@@ -65,7 +65,7 @@ export const summarizeReports = (reports: RenderReport[]): ScenarioSummary => ({
  * PR; the receipt keeps the max for investigation.
  */
 export const findBudgetViolations = (
-  scenario: ChatRenderScenario,
+  scenario: string,
   summary: ScenarioSummary,
   budget: ScenarioBudget,
 ): string[] => {
