@@ -14,6 +14,7 @@ const CHANNEL_DISPLAY_NAME: Record<string, string> = {
   bocha: 'Bocha',
   brave: 'Brave',
   browserless: 'Browserless',
+  clawifi: 'Clawifi',
   deepseek: 'DeepSeek',
   exa: 'Exa',
   firecrawl: 'Firecrawl',
