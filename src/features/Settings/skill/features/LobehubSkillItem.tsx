@@ -28,13 +28,18 @@ import { toConnectorActionError } from '@/utils/connectorActionError';
 import { renderConnectorRowDescription } from './ConnectorRowFeedback';
 import { isSettledByConnection } from './connectorRowState';
 import { RowAddAction, RowMoreMenu } from './RowActions';
-import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
+import SkillListRow, {
+  type CatalogConnectRow,
+  ConnectedStatus,
+  useSkillListVariant,
+} from './SkillListRow';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillItemProps {
+  catalogRow?: CatalogConnectRow;
   /** False where LobeHub connectors are off: the row only opens its page. Defaults to true. */
   connectable?: boolean;
   hideConnectedStatus?: boolean;
@@ -52,6 +57,7 @@ interface LobehubSkillItemProps {
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
   ({
+    catalogRow,
     connectable = true,
     hideConnectedStatus,
     provider,
@@ -358,14 +364,19 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
             onOpenDetail={onSelect}
           />
         );
+      const action = t(needsAuth ? 'tools.composio.reauthorize' : 'connectorMarket.action.connect');
       return (
         <RowAddAction
           disabled={!canCreate || !canEdit}
           disabledReason={!canCreate ? createReason : editReason}
           icon={needsAuth ? RotateCcw : undefined}
-          label={t(needsAuth ? 'tools.composio.reauthorize' : 'connectorMarket.action.connect')}
           loading={isConnecting || isWaitingAuth}
           showLabel={showConnectLabel}
+          label={
+            catalogRow
+              ? t('catalog.rowAction', { ns: 'discover', action, name: catalogRow.title })
+              : action
+          }
           onClick={handleConnect}
         />
       );
@@ -399,6 +410,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         </Tooltip>
       );
     };
+
+    if (catalogRow)
+      return <SkillListRow {...catalogRow} description={description} extra={renderPageExtra()} />;
 
     if (onSelect) {
       const renderNavIcon = () => {

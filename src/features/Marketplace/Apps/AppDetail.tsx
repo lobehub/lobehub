@@ -148,6 +148,17 @@ export default function AppDetail() {
                     ) : (
                       <ComposioSkillItem server={composioServer} serverType={tool.serverType} />
                     )}
+                    <Text as={'p'}>
+                      {tool.type === 'lobehub'
+                        ? t(`tools.lobehubSkill.providers.${tool.provider.id}.readme`, {
+                            ns: 'setting',
+                            defaultValue: tool.provider.readme,
+                          })
+                        : t(`tools.composio.servers.${tool.serverType.identifier}.readme`, {
+                            ns: 'setting',
+                            defaultValue: tool.serverType.readme,
+                          })}
+                    </Text>
                   </AsyncBoundary>
                 )}
               </>

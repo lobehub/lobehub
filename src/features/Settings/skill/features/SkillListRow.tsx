@@ -79,6 +79,8 @@ interface SkillListRowProps {
   titleColor?: string;
 }
 
+export type CatalogConnectRow = Pick<SkillListRowProps, 'icon' | 'onClick' | 'summary' | 'title'>;
+
 const SkillListRow = memo<SkillListRowProps>(
   ({
     active,

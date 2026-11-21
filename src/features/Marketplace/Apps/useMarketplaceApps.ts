@@ -80,6 +80,7 @@ export const useMarketplaceApps = () => {
     composioServers,
     error,
     lobehubServers,
+    lobehubEnabled: lobehub,
     retry,
     loading: !configReady || (messenger && !platformsSettled && !channelsSync.error),
     refreshing: linear.isValidating || syncs.some((s) => s.isValidating),

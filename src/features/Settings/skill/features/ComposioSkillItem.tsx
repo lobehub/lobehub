@@ -29,13 +29,18 @@ import {
 } from './ConnectorRowFeedback';
 import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
 import { RowAddAction, RowMoreMenu } from './RowActions';
-import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
+import SkillListRow, {
+  type CatalogConnectRow,
+  ConnectedStatus,
+  useSkillListVariant,
+} from './SkillListRow';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface ComposioSkillItemProps {
+  catalogRow?: CatalogConnectRow;
   hideConnectedStatus?: boolean;
   isSelected?: boolean;
   onDelete?: () => void;
@@ -45,7 +50,7 @@ interface ComposioSkillItemProps {
 }
 
 const ComposioSkillItem = memo<ComposioSkillItemProps>(
-  ({ hideConnectedStatus, serverType, server, isSelected, onSelect }) => {
+  ({ catalogRow, hideConnectedStatus, serverType, server, isSelected, onSelect }) => {
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
@@ -405,11 +410,11 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
           />
         );
       const needsAuth = isPending || isError;
+      const action = t(needsAuth ? 'tools.composio.reauthorize' : 'connectorMarket.action.connect');
       return (
         <RowAddAction
           disabled={!canCreate || !canEdit || !canManage}
           icon={needsAuth ? RotateCcw : undefined}
-          label={t(needsAuth ? 'tools.composio.reauthorize' : 'connectorMarket.action.connect')}
           loading={isConnecting || isWaitingAuth}
           disabledReason={
             isRestricted
@@ -417,6 +422,11 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
               : !canCreate
                 ? createReason
                 : editReason
+          }
+          label={
+            catalogRow
+              ? t('catalog.rowAction', { ns: 'discover', action, name: catalogRow.title })
+              : action
           }
           onClick={needsAuth ? handleReauthorize : handleConnect}
         />
@@ -464,6 +474,9 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         </Tooltip>
       );
     };
+
+    if (catalogRow)
+      return <SkillListRow {...catalogRow} description={description} extra={renderPageExtra()} />;
 
     if (onSelect) {
       const renderNavIcon = () => {

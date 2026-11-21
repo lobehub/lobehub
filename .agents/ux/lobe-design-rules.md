@@ -245,3 +245,7 @@ Source: user correction on the Marketplace connector list (2026-11-21).
 ## LOBE-UX-034 — Preserve app brand colors in Marketplace navigation
 
 Within each theme, show the same brand colors for an app in its sidebar link, catalog row, and detail header. Let the shared `AppIcon` select the brand mark and its light or dark appearance independently of the surrounding link color.
+
+## LOBE-UX-035 — Start Marketplace connections at the appropriate step
+
+A chat channel opens its setup page from the catalog. A tool-only app starts its connector authorization from the catalog’s plus button. Use the capabilities available on the current deployment to choose the action, including for apps such as Slack that support both.

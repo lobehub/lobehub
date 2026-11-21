@@ -5,15 +5,19 @@ import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
 import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import ComposioSkillItem from '@/features/Settings/skill/features/ComposioSkillItem';
 import {
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
 } from '@/features/Settings/skill/features/connectorSections';
+import LobehubSkillItem from '@/features/Settings/skill/features/LobehubSkillItem';
 import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
+import { useToolStore } from '@/store/tool';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import CatalogSection from '../Catalog/CatalogSection';
@@ -21,7 +25,7 @@ import DiscoverCatalogHeader from '../Catalog/DiscoverCatalogHeader';
 import { catalogStyles } from '../Catalog/styles';
 import { useCatalogDetailNavigate } from '../Catalog/useCatalogDetailNavigate';
 import { AppIcon } from './AppIcon';
-import { appCategories, getAppHome, hasAppConnection } from './catalog';
+import { appCategories, getAppHome, getInlineConnectTool, hasAppConnection } from './catalog';
 import { useMarketplaceApps } from './useMarketplaceApps';
 
 export default function AppCatalog() {
@@ -32,7 +36,22 @@ export default function AppCatalog() {
   const connected = params.get('view') === 'connected';
   const keyword = params.get('q') ?? '';
   const navigate = useCatalogDetailNavigate();
-  const { apps, loading, refreshing, error, retry } = useMarketplaceApps();
+  const {
+    apps,
+    composioServers,
+    lobehubServers,
+    lobehubEnabled,
+    loading,
+    refreshing,
+    error,
+    retry,
+  } = useMarketplaceApps();
+  const workspace = useActiveWorkspaceId();
+  const useFetchConnectors = useToolStore((s) => s.useFetchConnectors);
+  const connectorsSync = useFetchConnectors(!!workspace);
+  const connectorsReady = useToolStore((s) => s.isConnectorsInit);
+  const composioReady = useToolStore((s) => s.isComposioServersInit);
+  const lobehubReady = useToolStore((s) => s.lobehubSkillServers !== undefined);
   const rows = apps
     .filter((app) => !connected || hasAppConnection(app))
     .map((app) => {
@@ -83,9 +102,16 @@ export default function AppCatalog() {
           )
         }
       />
+      {workspace && connectorsSync.error && (
+        <AsyncError
+          error={connectorsSync.error}
+          variant={'block'}
+          onRetry={() => void connectorsSync.mutate()}
+        />
+      )}
       {Boolean(error) && <AsyncError error={error} variant={'block'} onRetry={retry} />}
       <AsyncBoundary
-        data={rows.length || undefined}
+        data={loading ? undefined : rows.length || undefined}
         isEmpty={!error && rows.length === 0}
         isLoading={loading || (connected && refreshing)}
         loading={<CatalogRowsSkeleton />}
@@ -116,12 +142,43 @@ export default function AppCatalog() {
                   name: app.name,
                 });
                 const open = () => navigate(getAppHome(app));
+                const row = {
+                  icon: () => <AppIcon app={app} size={20} />,
+                  onClick: open,
+                  summary: app.summary,
+                  title: app.name,
+                };
+                const tool = getInlineConnectTool(app, lobehubEnabled);
+                if (tool) {
+                  const ready = tool.type === 'composio' ? composioReady : lobehubReady;
+                  if (!ready || (workspace && !connectorsReady))
+                    return (
+                      <SkillListRow
+                        {...row}
+                        extra={<RowAddAction disabled label={label} onClick={open} />}
+                        key={app.id}
+                      />
+                    );
+                  return tool.type === 'composio' ? (
+                    <ComposioSkillItem
+                      catalogRow={row}
+                      key={app.id}
+                      server={composioServers.find((s) => s.identifier === app.id)}
+                      serverType={tool.serverType}
+                    />
+                  ) : (
+                    <LobehubSkillItem
+                      catalogRow={row}
+                      key={app.id}
+                      provider={tool.provider}
+                      server={lobehubServers.find((s) => s.identifier === app.id)}
+                    />
+                  );
+                }
                 return (
                   <SkillListRow
-                    icon={() => <AppIcon app={app} size={20} />}
+                    {...row}
                     key={app.id}
-                    summary={app.summary}
-                    title={app.name}
                     extra={
                       <>
                         {app.channel?.access?.requiredPlan === 'paid' && (
@@ -134,7 +191,6 @@ export default function AppCatalog() {
                         )}
                       </>
                     }
-                    onClick={open}
                   />
                 );
               })}

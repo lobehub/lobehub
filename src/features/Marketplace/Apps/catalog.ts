@@ -49,6 +49,13 @@ const categoryByTool: Record<string, AppCategory> = {
 export const hasAppConnection = (app: MarketplaceApp) =>
   app.channelLinked || app.toolConnected || app.integrationConnected;
 
+// A channel needs its own setup screen, even when the same app also provides tools.
+export const getInlineConnectTool = (app: MarketplaceApp, lobehubEnabled: boolean) => {
+  if (app.channel || hasAppConnection(app)) return;
+  if (app.tool?.type === 'lobehub' && !lobehubEnabled) return;
+  return app.tool;
+};
+
 export const getAppHome = (app: MarketplaceApp) => {
   const path = marketplaceAppPath(app.id);
   return app.channel && app.toolConnected && !app.channelLinked ? `${path}?capability=tools` : path;
