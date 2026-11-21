@@ -4,8 +4,8 @@
 
 export const LOBE_CHAT_CLOUD = 'LobeHub Cloud';
 
-export const BRANDING_NAME = 'LobeHub';
-export const BRANDING_LOGO_URL = '';
+export const BRANDING_NAME = 'LuGod AI';
+export const BRANDING_LOGO_URL = '/branding/lugod-ai.png';
 
 /**
  * Display name of the built-in default assistant (the inbox agent).

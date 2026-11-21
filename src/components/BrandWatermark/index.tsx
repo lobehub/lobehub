@@ -9,7 +9,9 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { OFFICIAL_SITE } from '@/const/url';
-import { isCustomORG } from '@/const/version';
+import { isCustomBranding, isCustomORG } from '@/const/version';
+
+import { ProductLogo } from '../Branding/ProductLogo';
 
 const styles = stylex.create({
   logoLink: { lineHeight: 1, color: { 'default': 'inherit', ':hover': cssVar.colorLink } },
@@ -29,6 +31,8 @@ const BrandWatermark = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
       <span>Powered by</span>
       {isCustomORG ? (
         <span>{ORG_NAME}</span>
+      ) : isCustomBranding ? (
+        <ProductLogo size={20} type={'text'} />
       ) : (
         <a
           {...stylex.props(styles.logoLink)}

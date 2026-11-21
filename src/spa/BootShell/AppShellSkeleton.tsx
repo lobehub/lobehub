@@ -2,12 +2,12 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { cx, Flexbox } from '@lobehub/ui';
-import { LobeHub } from '@lobehub/ui/brand';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { retainSkeleton } from '@/components/Skeleton/skeletonHandover';
 import { isDesktop } from '@/const/version';
 import {
@@ -123,7 +123,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const brand = (
     <div {...stylex.props(styles.contentBrand)}>
       <div {...stylex.props(styles.brand)}>
-        <LobeHub size={40} type={'text'} />
+        <ProductLogo size={40} type={'text'} />
         {hint && <LoadingHint enter={hint === 'enter'} />}
       </div>
     </div>
