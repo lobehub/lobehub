@@ -7,3 +7,5 @@ npm-debug.log
 .github
 *.md
 .env.example
+.env
+.env.*
