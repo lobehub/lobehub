@@ -228,6 +228,53 @@ export class WebhookEndpointModel {
     return row;
   };
 
+  /**
+   * Records a delivery only while the endpoint still matches what the publisher read.
+   *
+   * {@link findSubscribed} reads endpoints outside any transaction, so a redirect can land
+   * between that read and this insert. {@link update} settles what is queued under the old
+   * URL, but it cannot reach a row that does not exist yet — that payload would then be sent
+   * to the new destination. This insert takes the same row lock before it checks the
+   * snapshot, so the two writes cannot cross: either the redirect commits first and nothing
+   * is queued, or the row exists by the time the redirect settles it.
+   *
+   * Answers `undefined` when the endpoint has moved on: another destination, disabled, or
+   * no longer subscribed to `payload.type`.
+   */
+  createDeliveryForSubscription = async (
+    snapshot: Pick<WebhookEndpointView, 'id' | 'url'>,
+    payload: WebhookEventEnvelope,
+  ): Promise<WebhookDeliveryRow | undefined> =>
+    this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({
+          enabled: webhookEndpoints.enabled,
+          events: webhookEndpoints.events,
+          url: webhookEndpoints.url,
+        })
+        .from(webhookEndpoints)
+        .where(and(eq(webhookEndpoints.id, snapshot.id), this.ownership()))
+        .for('update')
+        .limit(1);
+
+      if (!current || !current.enabled) return undefined;
+      if (current.url !== snapshot.url) return undefined;
+      if (!current.events.includes(payload.type)) return undefined;
+
+      const [row] = await tx
+        .insert(webhookDeliveries)
+        .values({
+          endpointId: snapshot.id,
+          eventId: payload.id,
+          eventType: payload.type,
+          payload,
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning();
+      return row;
+    });
+
   /** `eventTypes` limits the log to those events (a caller that may not read the rest). */
   listDeliveries = async (
     endpointId: string,

@@ -177,6 +177,108 @@ describe('WebhookEndpointModel', () => {
     expect((await model.findDelivery(endpoint.id, delivered.id))?.status).toBe('succeeded');
   });
 
+  it('queues a delivery only while the endpoint still matches what the publisher read', async () => {
+    const model = new WebhookEndpointModel(serverDB, userId);
+    const endpoint = await model.create(endpointInput());
+    const envelope = (id: string) =>
+      ({
+        createdAt: new Date().toISOString(),
+        data: { identifier: 'T-1', previousStatus: 'todo', status: 'running', taskId: 'task_1' },
+        id,
+        type: 'task.status_changed',
+        workspaceId: null,
+      }) as const;
+
+    // Nothing moved: the delivery is recorded as usual.
+    expect(
+      await model.createDeliveryForSubscription(endpoint, envelope('evt_fresh')),
+    ).toMatchObject({
+      endpointId: endpoint.id,
+      eventType: 'task.status_changed',
+      status: 'pending',
+    });
+
+    // Redirected after the read: the queued payload would have reached the new destination.
+    await model.update(endpoint.id, { url: 'https://moved.example.com/hook' });
+    expect(
+      await model.createDeliveryForSubscription(endpoint, envelope('evt_moved')),
+    ).toBeUndefined();
+
+    // Read again, then drop the subscription the event belongs to.
+    const subscribed = (await model.findById(endpoint.id))!;
+    await model.update(endpoint.id, { events: ['message.created'] });
+    expect(
+      await model.createDeliveryForSubscription(subscribed, envelope('evt_unsubscribed')),
+    ).toBeUndefined();
+
+    // A disabled endpoint stops receiving events as well.
+    const enabled = (await model.findById(endpoint.id))!;
+    await model.update(endpoint.id, { enabled: false, events: ['task.status_changed'] });
+    expect(
+      await model.createDeliveryForSubscription(enabled, envelope('evt_disabled')),
+    ).toBeUndefined();
+
+    expect(await model.listDeliveries(endpoint.id, { limit: 10, offset: 0 })).toMatchObject({
+      total: 1,
+    });
+  });
+
+  // Two connections: PGlite serialises everything on one, so the lock cannot be observed there.
+  it.skipIf(process.env.TEST_SERVER_DB !== '1')(
+    'waits for an in-flight redirect, so a delivery cannot be created after it settled the queue',
+    async () => {
+      const model = new WebhookEndpointModel(serverDB, userId);
+      const endpoint = await model.create(endpointInput());
+
+      let release!: () => void;
+      const hold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let locked!: () => void;
+      const holding = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+
+      // The redirect holds the endpoint row while it moves the URL and settles the queue.
+      const redirect = serverDB.transaction(async (tx) => {
+        await tx
+          .select({ id: webhookEndpoints.id })
+          .from(webhookEndpoints)
+          .where(eq(webhookEndpoints.id, endpoint.id))
+          .for('update');
+        locked();
+        await hold;
+        await tx
+          .update(webhookEndpoints)
+          .set({ url: 'https://moved.example.com/hook' })
+          .where(eq(webhookEndpoints.id, endpoint.id));
+        await tx
+          .update(webhookDeliveries)
+          .set({ status: 'failed' })
+          .where(eq(webhookDeliveries.endpointId, endpoint.id));
+      });
+      await holding;
+
+      // The publisher read the endpoint before the redirect and only now tries to queue.
+      const queued = model.createDeliveryForSubscription(endpoint, {
+        createdAt: new Date().toISOString(),
+        data: { identifier: 'T-1', previousStatus: 'todo', status: 'running', taskId: 'task_1' },
+        id: 'evt_race',
+        type: 'task.status_changed',
+        workspaceId: null,
+      } as const);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await redirect;
+
+      expect(await queued).toBeUndefined();
+      expect(await model.listDeliveries(endpoint.id, { limit: 10, offset: 0 })).toMatchObject({
+        total: 0,
+      });
+    },
+  );
+
   it('lists deliveries of an endpoint newest first, only for its owner', async () => {
     const model = new WebhookEndpointModel(serverDB, userId);
     const endpoint = await model.create(endpointInput());

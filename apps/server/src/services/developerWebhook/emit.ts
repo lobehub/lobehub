@@ -97,7 +97,14 @@ export const emitWebhookEvent = async <T extends WebhookEventType>(
 
   const ids: string[] = [];
   for (const endpoint of endpoints) {
-    const delivery = await model.createDelivery(endpoint, envelope as WebhookEventEnvelope);
+    // The subscription was read outside a transaction: an endpoint that is redirected or
+    // unsubscribed before this row exists is not queued at all, and one that is redirected
+    // after it exists is settled by the same write that moved the URL.
+    const delivery = await model.createDeliveryForSubscription(
+      endpoint,
+      envelope as WebhookEventEnvelope,
+    );
+    if (!delivery) continue;
     await dispatchWebhookDelivery(db, delivery);
     ids.push(delivery.id);
   }
