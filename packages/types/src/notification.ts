@@ -2,6 +2,14 @@
 export type ApnsEnvironment = 'production' | 'sandbox';
 
 /**
+ * Service a registered push token belongs to: an Expo push token
+ * (`ExponentPushToken[...]`, sent through Expo Push Service) or a raw APNs
+ * device token from a native iOS client (sent directly to APNs).
+ */
+export const PUSH_TOKEN_PROVIDERS = ['expo', 'apns'] as const;
+export type PushTokenProvider = (typeof PUSH_TOKEN_PROVIDERS)[number];
+
+/**
  * The person who triggered a user-driven notification (member joined,
  * invitation, comment activity). Snapshotted at send time so inbox surfaces
  * can render an avatar without cross-user lookups; absent for system- or
