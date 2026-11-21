@@ -72,6 +72,8 @@ const STRANGER_KEY = 'sk-lh-whkstranger00001';
 const WORKSPACE_KEY = 'sk-lh-whkworkspace0001';
 const CHAT_EVENTS_KEY = 'sk-lh-whkchatevents001';
 const CHAT_READER_KEY = 'sk-lh-whkchatreader001';
+const FILE_EVENTS_KEY = 'sk-lh-whkfileevents001';
+const BOTH_DOMAINS_KEY = 'sk-lh-whkbothdomains01';
 
 const call = (
   path: string,
@@ -140,6 +142,9 @@ beforeEach(async () => {
     key(WORKSPACE_KEY, OWNER, ['webhook:write', 'run:read'], WORKSPACE),
     key(CHAT_EVENTS_KEY, OWNER, ['webhook:write', 'chat:read']),
     key(CHAT_READER_KEY, OWNER, ['webhook:read', 'chat:read']),
+    // May manage webhooks and read files, but not chat data.
+    key(FILE_EVENTS_KEY, OWNER, ['webhook:write', 'file:read']),
+    key(BOTH_DOMAINS_KEY, OWNER, ['webhook:write', 'chat:read', 'file:read']),
   ]);
 });
 
@@ -340,6 +345,91 @@ describe('webhook routes: the delivery log reveals only events the key may read'
       method: 'POST',
     });
     expect(allowed.status).toBe(202);
+  });
+});
+
+describe('webhook routes: a redelivery does not ride a redirect', () => {
+  const seedChatDelivery = async (endpointId: string) => {
+    await serverDB.insert(webhookDeliveries).values({
+      createdAt: new Date(Date.UTC(2026, 10, 18, 0, 0, 0)),
+      endpointId,
+      eventId: 'evt_chat',
+      eventType: 'message.created',
+      id: 'whd_chat',
+      payload: {
+        createdAt: '2026-11-18T00:00:00.000Z',
+        data: {
+          agentId: null,
+          messageId: 'msg_secret',
+          role: 'user',
+          threadId: null,
+          topicId: 'tpc_secret',
+        },
+        id: 'evt_chat',
+        type: 'message.created',
+        workspaceId: null,
+      } as never,
+      status: 'succeeded',
+      userId: OWNER,
+    });
+  };
+
+  const deliveryRows = async (endpointId: string) =>
+    (await serverDB.select().from(webhookDeliveries)).filter(
+      (row) => row.endpointId === endpointId,
+    );
+
+  it('refuses to replay a payload the endpoint no longer subscribes to', async () => {
+    const { id } = await createChatEndpoint();
+    await seedChatDelivery(id);
+
+    // BOTH_DOMAINS_KEY may read chat and file data, so this redirect is authorized…
+    const redirect = await call(`/${id}`, {
+      body: { events: ['file.parsed'], url: 'https://attacker.example.com/hook' },
+      key: BOTH_DOMAINS_KEY,
+      method: 'PATCH',
+    });
+    expect(redirect.status).toBe(200);
+    expect(await storedEndpoint(id)).toMatchObject({
+      events: ['file.parsed'],
+      url: 'https://attacker.example.com/hook',
+    });
+
+    // …but the stored chat payload no longer has a subscription to ride on.
+    const replayed = await call(`/${id}/deliveries/whd_chat/redeliver`, {
+      key: BOTH_DOMAINS_KEY,
+      method: 'POST',
+    });
+    expect(replayed.status).toBe(409);
+    expect(await deliveryRows(id)).toHaveLength(1);
+    expect(holder.triggerDeliver).not.toHaveBeenCalled();
+  });
+
+  it('refuses to queue anything to an endpoint that was turned off', async () => {
+    const { id } = await createChatEndpoint();
+    await seedChatDelivery(id);
+    await call(`/${id}`, { body: { enabled: false }, key: CHAT_EVENTS_KEY, method: 'PATCH' });
+
+    const replayed = await call(`/${id}/deliveries/whd_chat/redeliver`, {
+      key: CHAT_EVENTS_KEY,
+      method: 'POST',
+    });
+    expect(replayed.status).toBe(409);
+    expect(await deliveryRows(id)).toHaveLength(1);
+    expect(holder.triggerDeliver).not.toHaveBeenCalled();
+  });
+
+  it('still replays when the endpoint stayed put', async () => {
+    const { id } = await createChatEndpoint();
+    await seedChatDelivery(id);
+
+    const replayed = await call(`/${id}/deliveries/whd_chat/redeliver`, {
+      key: CHAT_EVENTS_KEY,
+      method: 'POST',
+    });
+    expect(replayed.status).toBe(202);
+    expect(WebhookDeliverySchema.parse(await data(replayed)).redeliveryOf).toBe('whd_chat');
+    expect(await deliveryRows(id)).toHaveLength(2);
   });
 });
 

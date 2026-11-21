@@ -24,7 +24,8 @@ export { signWebhookPayload } from './signature';
 /** Endpoints one person may register in one space. */
 export const MAX_WEBHOOK_ENDPOINTS = 20;
 
-export type DeveloperWebhookErrorCode = 'forbidden_event' | 'limit_reached' | 'not_found';
+export type DeveloperWebhookErrorCode =
+  'endpoint_moved' | 'forbidden_event' | 'limit_reached' | 'not_found';
 
 export class DeveloperWebhookError extends Error {
   constructor(
@@ -175,9 +176,17 @@ export class DeveloperWebhookService {
         `Reading ${original.eventType} events is not allowed for this caller`,
       );
 
-    const delivery = await this.model.createDelivery(endpoint, original.payload, {
-      redeliveryOf: original.id,
-    });
+    // Same lock as the publisher's insert: a redirect that lands now must not move this
+    // payload to the new destination, and one that already landed must refuse the replay.
+    const delivery = await this.model.createRedeliveryForSubscription(
+      { id: endpoint.id, url: endpoint.url },
+      original,
+    );
+    if (!delivery)
+      throw new DeveloperWebhookError(
+        'endpoint_moved',
+        'The webhook changed destination, subscriptions or enabled state since this delivery was read',
+      );
     // A refused dispatch is recorded on the delivery itself; return its final state.
     if (!(await dispatchWebhookDelivery(this.db, delivery)))
       return (await this.model.findDelivery(id, delivery.id)) ?? delivery;

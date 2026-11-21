@@ -1,5 +1,6 @@
 import {
   WEBHOOK_DELIVERY_POLICY,
+  WEBHOOK_TEST_EVENT_TYPE,
   type WebhookDeliveryEventType,
   type WebhookDeliveryStatus,
   type WebhookDisabledReason,
@@ -271,6 +272,60 @@ export class WebhookEndpointModel {
           eventId: payload.id,
           eventType: payload.type,
           payload,
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning();
+      return row;
+    });
+
+  /**
+   * Records a redelivery only while the endpoint still matches what the caller read.
+   *
+   * A redelivery re-sends a stored payload, so a redirect that lands between the caller's
+   * read and this insert must not move it: {@link update} settles the rows that already
+   * exist, but it cannot reach a row that does not exist yet. Taking the same row lock as
+   * {@link createDeliveryForSubscription} closes that gap — either the redirect commits
+   * first and the snapshot no longer matches, or this row exists by the time the redirect
+   * settles it.
+   *
+   * Answers `undefined` when the endpoint has moved on: another destination, disabled, or
+   * no longer subscribed to the delivery's type. A `webhook.test` delivery stays replayable
+   * while the endpoint stays put: it carries no product data, and the test type is never one of
+   * the subscribable events.
+   */
+  createRedeliveryForSubscription = async (
+    snapshot: Pick<WebhookEndpointView, 'id' | 'url'>,
+    original: Pick<WebhookDeliveryRow, 'eventType' | 'id' | 'payload'>,
+  ): Promise<WebhookDeliveryRow | undefined> =>
+    this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({
+          enabled: webhookEndpoints.enabled,
+          events: webhookEndpoints.events,
+          url: webhookEndpoints.url,
+        })
+        .from(webhookEndpoints)
+        .where(and(eq(webhookEndpoints.id, snapshot.id), this.ownership()))
+        .for('update')
+        .limit(1);
+
+      if (!current || !current.enabled) return undefined;
+      if (current.url !== snapshot.url) return undefined;
+      // `events` lists the subscribable types; a `webhook.test` payload matches none of them.
+      const subscribed: readonly string[] = current.events;
+      const replayable =
+        original.eventType === WEBHOOK_TEST_EVENT_TYPE || subscribed.includes(original.eventType);
+      if (!replayable) return undefined;
+
+      const [row] = await tx
+        .insert(webhookDeliveries)
+        .values({
+          endpointId: snapshot.id,
+          eventId: original.payload.id,
+          eventType: original.eventType,
+          payload: original.payload,
+          redeliveryOf: original.id,
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,
         })

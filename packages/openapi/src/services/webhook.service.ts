@@ -70,7 +70,7 @@ export class WebhookRestService extends BaseService {
     this.webhooks = new DeveloperWebhookService(db, userId ?? '', workspaceId ?? null);
   }
 
-  /** `not_found` → 404, `forbidden_event` → 403, `limit_reached` → 409; anything else is left to `handleError` (500). */
+  /** `not_found` → 404, `forbidden_event` → 403, `limit_reached` / `endpoint_moved` → 409. */
   private async run<T>(action: () => Promise<T>): Promise<T> {
     try {
       return await action();
