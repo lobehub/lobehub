@@ -81,6 +81,18 @@ describe('heterogeneous agent model discovery', () => {
     vi.resetModules();
   });
 
+  it('asks for Antigravity sign-in when the device model catalog is inaccessible', async () => {
+    rejectExecFile(
+      Object.assign(new Error('Command failed'), {
+        stderr: 'Error: Please sign in to view available models.',
+      }),
+    );
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/agy', type: 'antigravity' }),
+    ).resolves.toMatchObject({ error: { code: 'auth_required' }, status: 'error' });
+  });
+
   it('queries DeepSeek Harness through ACP instead of --list-models', async () => {
     const models = [{ id: '["gateway","model"]', modelId: 'model', providerId: 'gateway' }];
     listDshAcpModelsMock.mockResolvedValue(models);

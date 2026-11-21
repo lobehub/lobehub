@@ -53,6 +53,13 @@ export {
 } from './agentStreamPipeline';
 export { ANTIGRAVITY_BASE_ARGS, buildAntigravityArgs } from './antigravity';
 export {
+  type AntigravityLiveExit,
+  AntigravityLiveInput,
+  type AntigravityLiveInputOptions,
+  type AntigravityTurnOutcome,
+  resolveAntigravityLiveRuntimeEnd,
+} from './antigravityLiveInput';
+export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
   HETERO_WORKING_DIRECTORY_NOT_FOUND,

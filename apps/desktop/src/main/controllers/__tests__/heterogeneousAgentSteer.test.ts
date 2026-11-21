@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 
-import { ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
+import { AntigravityLiveInput, ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it, vi } from 'vitest';
 
 import { endLiveCliRun, writeCliPrompt } from '../heterogeneousAgentLiveInput';
@@ -73,6 +73,32 @@ describe('steerAgentSession', () => {
       [expect.objectContaining({ text: 'also run the tests', type: 'text' })],
       'steer-1',
     );
+  });
+
+  it('steers a live Antigravity CLI with text and rejects image attachments', async () => {
+    const stdin = new PassThrough();
+    const written = readLines(stdin);
+    const liveInput = new AntigravityLiveInput(stdin);
+    const agy = session({ agentType: 'antigravity', command: 'agy', liveInput });
+
+    await expect(steerAgentSession(agy, params, '/tmp')).resolves.toEqual({
+      status: 'accepted',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(written[0]).toEqual({
+      event: 'user',
+      message: { content: expect.stringContaining('also run the tests') },
+    });
+    expect(liveInput.takeSteerUuid()).toBe('steer-1');
+
+    await expect(
+      steerAgentSession(
+        agy,
+        { ...params, imageList: [{ id: 'img-1', url: 'https://example.com/a.png' }] },
+        '/tmp',
+      ),
+    ).resolves.toEqual({ status: 'rejected' });
   });
 
   it('steers a Pi run', async () => {

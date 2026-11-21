@@ -24,6 +24,8 @@ describe('Antigravity process input', () => {
       '--output-format',
       'stream-json',
       '--dangerously-skip-permissions',
+      '--settings',
+      '{"agentMode":"","allowNonWorkspaceAccess":true,"enableTerminalSandbox":false}',
       '--conversation',
       'conv-1',
       '--model',

@@ -1419,7 +1419,7 @@
   "groupWizard.searchTemplates": "Search templates...",
   "groupWizard.title": "Create Group",
   "groupWizard.useTemplate": "Use Template",
-  "heteroAgent.antigravityQuota.authRequired": "Run agy in a terminal to sign in, then refresh.",
+  "heteroAgent.antigravityQuota.authRequired": "Sign in with agy on the execution device, then try again.",
   "heteroAgent.antigravityQuota.cliNotFound": "Antigravity CLI was not found on this device. Install agy, then refresh.",
   "heteroAgent.antigravityQuota.disabled": "Unavailable",
   "heteroAgent.antigravityQuota.error": "Could not query Antigravity quota. Check the device and try again.",
