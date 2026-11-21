@@ -458,7 +458,7 @@ describe('useAgentDropdownMenu', () => {
       'copy-agent',
       'divider',
       'permission',
-      'makePrivate',
+      'visibility',
       'divider',
       'delete',
     ]);
