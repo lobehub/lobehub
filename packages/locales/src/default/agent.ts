@@ -1344,6 +1344,12 @@ export default {
   'share.settings.profile.featuredWorks.loadFailed': 'Could not load works. Try again.',
   'share.settings.profile.featuredWorks.reload': 'Retry',
   'share.settings.profile.featuredWorks.loadMore': 'Load more works',
+  'share.workFeatured.feature': 'Feature on share page',
+  'share.workFeatured.unfeature': 'Remove from share page',
+  'share.workFeatured.featured': 'Featured on the share page',
+  'share.workFeatured.unfeatured': 'Removed from featured works',
+  'share.workFeatured.limit': 'Up to 100 featured works',
+  'share.workFeatured.failed': 'Couldn’t update featured works. Try again.',
   'share.settings.profile.featuredWorks.unavailable': 'Unavailable work',
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
