@@ -5,8 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCanUseTopicTargets: vi.fn(),
   assertCanViewTopicTargets: vi.fn(),
-  linkTopicPullRequest: vi.fn(async () => true),
+  bindTopicPullRequestWake: vi.fn(async (): Promise<string> => 'bound'),
+  linkTopicPullRequest: vi.fn(async (): Promise<Record<string, unknown> | null> => ({
+    links: [{ identifier: 'a/b#1', linkedAt: 'x', source: 'manual', url: 'u' }],
+  })),
   listTopicsByPullRequest: vi.fn(),
+  releaseTopicPullRequestWake: vi.fn(async () => true),
   setTopicPullRequestDismissed: vi.fn(async () => true),
 }));
 
@@ -35,8 +39,10 @@ vi.mock('@/database/models/work', () => ({
 vi.mock('@/database/models/topic', () => ({ TopicModel: Model }));
 vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
   ...(await importOriginal<any>()),
+  bindTopicPullRequestWake: mocks.bindTopicPullRequestWake,
   isBetterCodingExperienceEnabled: vi.fn(async () => true),
   linkTopicPullRequest: mocks.linkTopicPullRequest,
+  releaseTopicPullRequestWake: mocks.releaseTopicPullRequestWake,
   setTopicPullRequestDismissed: mocks.setTopicPullRequestDismissed,
 }));
 
@@ -72,6 +78,8 @@ describe('workRouter — topic PR links honour conversation access', () => {
     );
     expect(mocks.linkTopicPullRequest).not.toHaveBeenCalled();
     expect(mocks.setTopicPullRequestDismissed).not.toHaveBeenCalled();
+    expect(mocks.bindTopicPullRequestWake).not.toHaveBeenCalled();
+    expect(mocks.releaseTopicPullRequestWake).not.toHaveBeenCalled();
   });
 
   it('writes once access is confirmed', async () => {
@@ -91,6 +99,86 @@ describe('workRouter — topic PR links honour conversation access', () => {
         topicId: 't1',
       }),
     ).toEqual({ updated: true });
+  });
+
+  it("binds Auto-fix in the caller's own scope once the topic lists the PR", async () => {
+    mocks.assertCanUseTopicTargets.mockResolvedValue([]);
+
+    for (const source of ['manual', 'branch'] as const) {
+      mocks.bindTopicPullRequestWake.mockClear();
+      await caller().linkTopicPullRequest({
+        source,
+        topicId: 't1',
+        url: 'https://github.com/a/b/pull/1',
+      });
+      expect(mocks.bindTopicPullRequestWake).toHaveBeenCalledWith({
+        db: {},
+        pr: expect.objectContaining({ number: 1, repoFullName: 'a/b' }),
+        scope: { userId: 'user-1', workspaceId: 'ws-1' },
+        topicId: 't1',
+        topicModel: expect.anything(),
+      });
+    }
+  });
+
+  it('binds nothing for a PR the topic keeps removed, or a link that was not saved', async () => {
+    mocks.assertCanUseTopicTargets.mockResolvedValue([]);
+    const branch = {
+      source: 'branch' as const,
+      topicId: 't1',
+      url: 'https://github.com/a/b/pull/1',
+    };
+
+    mocks.linkTopicPullRequest.mockResolvedValueOnce({ dismissed: ['a/b#1'] });
+    expect(await caller().linkTopicPullRequest(branch)).toEqual({
+      identifier: 'a/b#1',
+      linked: true,
+    });
+    mocks.linkTopicPullRequest.mockResolvedValueOnce(null);
+    expect(await caller().linkTopicPullRequest(branch)).toEqual({
+      identifier: 'a/b#1',
+      linked: false,
+    });
+    expect(mocks.bindTopicPullRequestWake).not.toHaveBeenCalled();
+  });
+
+  it('never fails the link over Auto-fix', async () => {
+    mocks.assertCanUseTopicTargets.mockResolvedValue([]);
+    mocks.bindTopicPullRequestWake.mockRejectedValueOnce(new Error('db down'));
+
+    expect(
+      await caller().linkTopicPullRequest({
+        source: 'manual',
+        topicId: 't1',
+        url: 'https://github.com/a/b/pull/1',
+      }),
+    ).toEqual({ identifier: 'a/b#1', linked: true });
+  });
+
+  it('releases the link-held conversation when the PR is removed, not when it is shown again', async () => {
+    mocks.assertCanUseTopicTargets.mockResolvedValue([]);
+    const input = { identifier: 'Owner.x/repo-y#12', topicId: 't1' };
+
+    await caller().setTopicPullRequestDismissed({ ...input, dismissed: true });
+    expect(mocks.releaseTopicPullRequestWake).toHaveBeenCalledWith({
+      db: {},
+      pr: { number: 12, repoFullName: 'Owner.x/repo-y' },
+      topicId: 't1',
+      topicModel: expect.anything(),
+    });
+
+    mocks.releaseTopicPullRequestWake.mockClear();
+    await caller().setTopicPullRequestDismissed({ ...input, dismissed: false });
+    mocks.setTopicPullRequestDismissed.mockResolvedValueOnce(false);
+    expect(await caller().setTopicPullRequestDismissed({ ...input, dismissed: true })).toEqual({
+      updated: false,
+    });
+    expect(mocks.releaseTopicPullRequestWake).not.toHaveBeenCalled();
+
+    mocks.releaseTopicPullRequestWake.mockRejectedValueOnce(new Error('db down'));
+    expect(await caller().setTopicPullRequestDismissed({ ...input, dismissed: true })).toEqual({
+      updated: true,
+    });
   });
 
   it('looks up the PR identity and omits conversations the caller cannot view', async () => {

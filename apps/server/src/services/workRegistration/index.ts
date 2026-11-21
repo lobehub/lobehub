@@ -45,6 +45,7 @@ export {
 export { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 export { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
 export {
+  isTopicPullRequestListed,
   linkTopicPullRequest,
   parsePullRequestUrl,
   setTopicPullRequestDismissed,
@@ -55,3 +56,8 @@ export {
   type LinkPushedPullRequestsResult,
   listTopicPullRequestsWithStatus,
 } from './topicPullRequests';
+export {
+  bindTopicPullRequestWake,
+  releaseTopicPullRequestWake,
+  type TopicPullRequestWakeOutcome,
+} from './topicPullRequestWake';
