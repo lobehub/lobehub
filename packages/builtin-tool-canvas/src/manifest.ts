@@ -101,12 +101,22 @@ export const CanvasManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Read a Canvas's file list and the contents of its text files. Pass paths to read only some files.",
+        "Read a Canvas's file list and the contents of its text files. Pass paths to read only some files. A file too long for one response comes back one window of lines at a time; a partial read ends with the exact readCanvas call (paths and offset) that reads the next window.",
       name: CanvasApiName.readCanvas,
       parameters: {
         additionalProperties: false,
         properties: {
           canvasId: canvasIdSchema,
+          limit: {
+            description:
+              'Maximum number of lines to return per file. Omit to read as much as fits in one response.',
+            type: 'integer',
+          },
+          offset: {
+            description:
+              '1-based line to start reading from, applied to each file read. Use it with a single path, set to the offset given at the end of a partial read.',
+            type: 'integer',
+          },
           paths: {
             description: 'Files to read. Defaults to every text file.',
             items: { type: 'string' },

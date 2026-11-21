@@ -27,6 +27,10 @@ export interface UpdateCanvasParams extends CanvasChangeSet {
 
 export interface ReadCanvasParams {
   canvasId: string;
+  /** Maximum number of lines to return per file. Providers sometimes send numbers as strings. */
+  limit?: number | string;
+  /** 1-based line to start each file from. Providers sometimes send numbers as strings. */
+  offset?: number | string;
   paths?: string[];
 }
 
@@ -56,6 +60,10 @@ export interface CanvasReadOutcome {
   canvasId: string;
   description: string | null;
   files: CanvasFileSummary[];
+  /**
+   * Full contents of the requested text files. The execution runtime decides how much of them
+   * fits in one tool result and pages the rest, so the service must not cut them.
+   */
   texts: { content: string; path: string }[];
   title: string | null;
 }

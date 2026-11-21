@@ -9,7 +9,8 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/canvas": "workspace:*"
+    "@lobechat/canvas": "workspace:*",
+    "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

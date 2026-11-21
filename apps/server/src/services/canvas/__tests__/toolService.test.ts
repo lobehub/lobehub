@@ -213,6 +213,34 @@ describe('CanvasToolServiceImpl', () => {
     expect(read?.texts).toEqual([{ content: page('<img src="a.png">'), path: 'index.html' }]);
   });
 
+  it('returns a long text file whole so the execution runtime can page it', async () => {
+    // T-14626: a 63,660-character index.html used to come back as
+    // "[N characters; read this file on its own]" even when it was the only path requested.
+    const { service, workModel } = setup();
+    const longPage = page(`<p>${'文献综述核查'.repeat(12_000)}</p>`);
+    const created = await service.create({
+      files: [
+        { content: longPage, path: 'index.html' },
+        { content: '{"checked":12}', path: 'audit.json' },
+      ],
+      title: 'Literature review',
+    });
+    await registerFromOutcome(workModel, created, 'call-long');
+    if (!created.ok) throw new Error('save failed');
+
+    const alone = await service.read({ canvasId: created.canvasId, paths: ['index.html'] });
+    const together = await service.read({ canvasId: created.canvasId });
+
+    expect(longPage.length).toBeGreaterThan(60_000);
+    expect(alone?.texts).toEqual([{ content: longPage, path: 'index.html' }]);
+    expect(together?.texts).toEqual(
+      expect.arrayContaining([
+        { content: longPage, path: 'index.html' },
+        { content: '{"checked":12}', path: 'audit.json' },
+      ]),
+    );
+  });
+
   it('lets a teammate read a shared canvas but not overwrite it', async () => {
     const workspaceId = 'canvas-tool-ws';
     const mateId = 'canvas-tool-mate';
