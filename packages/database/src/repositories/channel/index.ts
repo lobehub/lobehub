@@ -37,6 +37,8 @@ import {
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
+import type { ChannelContacts } from './contacts';
+import { noChannelContacts } from './contacts';
 import { deleteMessage } from './delete';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
@@ -44,7 +46,7 @@ import { ChannelError } from './error';
 import { channelLastMessages } from './lastMessage';
 import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
-import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
+import { openPeerConversation, peerOf } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
 import { postAgentMessage } from './post';
@@ -88,6 +90,8 @@ export type {
   ChannelRoutedDevice,
   ChannelRoutedDeviceInput,
 } from './claim';
+export type { ChannelContacts } from './contacts';
+export { noChannelContacts } from './contacts';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
@@ -134,6 +138,8 @@ export class ChannelRepository {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     workspaceId?: string | null,
+    /** Who counts as a contact for one-on-one and personal-group checks; nobody by default. */
+    private readonly contacts: ChannelContacts = noChannelContacts,
   ) {
     this.workspaceId = normalizeWorkspaceId(workspaceId);
     this.sections = new ChannelSectionRepository(db, userId, this.workspaceId);
@@ -199,7 +205,8 @@ export class ChannelRepository {
         await addAgentMember(tx, channel, member, { agentId, config: params.agentConfig });
       for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
       const access = { channel, member } satisfies ChannelAccess;
-      for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
+      for (const userId of new Set(params.userIds))
+        await addChannelUser(tx, this.contacts, access, userId);
 
       return access;
     });
@@ -246,7 +253,8 @@ export class ChannelRepository {
           name: bound.name ?? undefined,
         });
         for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
-        for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
+        for (const userId of new Set(params.userIds))
+          await addChannelUser(tx, this.contacts, access, userId);
         return access;
       },
       { minRole: 'admin' },
@@ -396,7 +404,9 @@ export class ChannelRepository {
   };
 
   addUser = async (channelId: string, userId: string) =>
-    this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
+    this.write(channelId, (tx, access) => addChannelUser(tx, this.contacts, access, userId), {
+      minRole: 'admin',
+    });
 
   /** Removes a person or an Agent; returns the writers still to stop. See {@link removeChannelMember}. */
   removeMember = async (channelId: string, memberId: string): Promise<ChannelJobItem[]> =>
@@ -423,13 +433,17 @@ export class ChannelRepository {
   /** People a new Channel in this scope can start with. */
   newChannelUserCandidates = async (search?: string) =>
     this.db.transaction((tx) =>
-      newChannelUserCandidates(tx, this.workspaceId, this.userId, search),
+      newChannelUserCandidates(tx, this.contacts, this.workspaceId, this.userId, search),
     );
 
   userCandidates = async (channelId: string, search?: string) =>
-    this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
-      minRole: 'admin',
-    });
+    this.write(
+      channelId,
+      (tx, access) => channelUserCandidates(tx, this.contacts, access, search),
+      {
+        minRole: 'admin',
+      },
+    );
 
   /** Messages in a Channel the caller can read, its live Threads included, matching `query`. */
   searchMessages = async (channelId: string, options: ChannelSearchOptions) => {
@@ -739,36 +753,14 @@ export class ChannelRepository {
    * existing conversation opens as it is, trashed or not.
    */
   openPeer = (peerUserId: string, title: string): Promise<ChannelAccess> =>
-    this.db.transaction(async (tx) => {
-      if (peerUserId === this.userId)
-        throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
-      await requirePeerRelation(tx, this.workspaceId, this.userId, peerUserId);
-      // No unique index keeps one conversation per pair: serialize opening it, so two people
-      // opening it at once (or one twice) find the first one instead of creating a second.
-      await lockPeerPair(tx, this.workspaceId, this.userId, peerUserId);
-      const existing = await findPeer(tx, this.workspaceId, this.userId, peerUserId);
-      if (existing) return existing;
-
-      const [channel] = await tx
-        .insert(channels)
-        .values({
-          peerUserId,
-          title,
-          userId: this.userId,
-          visibility: 'private',
-          workspaceId: this.workspaceId,
-        })
-        .returning();
-      const member = await this.addOwner(tx, channel.id);
-      await tx.insert(channelMembers).values({
-        actorType: 'user',
-        channelId: channel.id,
-        lastReadSequence: 0,
-        role: 'owner',
-        userId: peerUserId,
-      });
-      return { channel, member };
-    });
+    this.db.transaction((tx) =>
+      openPeerConversation(tx, this.contacts, {
+        peerUserId,
+        title,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      }),
+    );
 
   /** The conversation in which one of the caller's Agents asks another. See {@link openAgentPair}. */
   openAgentPair = (params: Parameters<typeof openAgentPair>[2]): Promise<ChannelAgentPairAccess> =>
@@ -919,7 +911,9 @@ export class ChannelRepository {
   /** Posts a message as the caller. See {@link sendMessage} for routing. */
   /** Sending into an open project Channel joins it first. */
   send = async (channelId: string, input: ChannelSendInput): Promise<ChannelMessageItem> =>
-    this.write(channelId, (tx, access) => sendMessage(tx, access, input), { joinOpen: true });
+    this.write(channelId, (tx, access) => sendMessage(tx, access, input, this.contacts), {
+      joinOpen: true,
+    });
 
   /**
    * Stops one job (its requester or an admin) or a branch: everything for admins, only the

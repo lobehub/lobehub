@@ -24,11 +24,9 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     openAgentPair = openAgentPair;
   },
 }));
-vi.mock('@/database/models/contact', () => ({
-  ContactModel: class {
-    findUser = findUser;
-    listPeople = listPeople;
-  },
+vi.mock('@/business/server/contact/addressBook', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getAddressBook: () => ({ findUser, listPeople }),
 }));
 vi.mock('@/database/models/workspace', () => ({
   WorkspaceModel: class {

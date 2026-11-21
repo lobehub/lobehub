@@ -12,8 +12,8 @@ import {
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import { AgentShareModel } from '@/database/models/agentShare';
-import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
 import { MessageModel } from '@/database/models/message';
 import type { ProjectModelOptions } from '@/database/models/project';
@@ -37,11 +37,13 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { channelContacts } from './contacts';
 import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
 import { resolveChannelRoutingConfig } from './routingConfig';
+import { parseShareHandle } from './shareHandle';
 
 /** Environment selection is a request, never trusted device ownership or canonical-path data. */
 export interface ChannelAgentSelection {
@@ -75,7 +77,7 @@ export class ChannelService {
     /** The caller's project rights, for seating a new Agent in a project Channel's project. */
     private readonly projectOptions: ProjectModelOptions = {},
   ) {
-    this.repository = new ChannelRepository(db, userId, workspaceId);
+    this.repository = new ChannelRepository(db, userId, workspaceId, channelContacts);
     this.agentService = new AgentService(db, userId, workspaceId);
     this.deviceModel = new DeviceModel(db, userId, workspaceId);
     this.projectModel = new ProjectModel(db, userId, workspaceId, projectOptions);
@@ -271,7 +273,7 @@ export class ChannelService {
    * in the scope the Agent was added in, run in the cloud as the owner.
    */
   private createSharedDirect = async (agentId: string) => {
-    const shared = await new ContactModel(this.db, this.userId, this.workspaceId).findAgentAccess(
+    const shared = await getAddressBook(this.db, this.userId, this.workspaceId).findAgentAccess(
       agentId,
     );
     if (!shared) return;
@@ -289,7 +291,7 @@ export class ChannelService {
    * signed in. Adding it to contacts stays optional. One's own Agent opens as usual.
    */
   openShared = async (share: string) => {
-    const key = parseContactHandle(share);
+    const key = parseShareHandle(share);
     const found = key ? await AgentShareModel.findBySlugOrId(this.db, key) : null;
     if (!found || found.visibility !== 'link')
       throw new ChannelError('NOT_FOUND', 'Agent not found');

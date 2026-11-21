@@ -2,14 +2,14 @@ import type { ChannelMessageMetadata, ChannelRoutingMode, ContactCardInput } fro
 import { CHANNEL_LIMITS, contactCardOf, contactCardText } from '@lobechat/types';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
-import { ContactModel } from '../../models/contact';
 import type { ChannelMessageItem } from '../../schemas';
 import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
-import type { LobeChatDatabase, Transaction } from '../../type';
+import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { sharedAgentOwner } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
+import type { ChannelContacts } from './contacts';
 import {
   activeMembers,
   appendMessage,
@@ -112,6 +112,7 @@ export const sendMessage = async (
   tx: Transaction,
   { channel, member }: ChannelAccess,
   input: ChannelSendInput,
+  contacts: ChannelContacts,
 ): Promise<ChannelMessageItem> => {
   const { fileIds, mentions } = validateSendInput(input);
   const author = await requestAuthor(tx, channel, input.authorAgentMemberId);
@@ -194,6 +195,7 @@ export const sendMessage = async (
   if (channel.peerUserId && member.userId)
     await requirePeerRelation(
       tx,
+      contacts,
       channel.workspaceId,
       member.userId,
       peerOf(channel, member.userId)!,
@@ -324,12 +326,7 @@ export const sendMessage = async (
 
   // Resolved only for a new message: a retry returns the original card as it was sent.
   const card =
-    input.card &&
-    (await new ContactModel(
-      tx as unknown as LobeChatDatabase,
-      member.userId!,
-      channel.workspaceId,
-    ).resolveCard(input.card));
+    input.card && (await contacts.resolveCard(tx, member.userId!, channel.workspaceId, input.card));
   const metadata = card ? { ...input.metadata, card } : input.metadata;
 
   const message = await appendMessage(tx, {
