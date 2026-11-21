@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 
+import { omitContextCachingTTLUnlessChat } from './contextCachingTTLState';
+
 interface CreateNewModelFooterProps {
   formRef: { current?: FormInstance };
 }
@@ -39,7 +41,9 @@ const CreateNewModelFooter = memo<CreateNewModelFooterProps>(({ formRef }) => {
               setLoading(false);
               return;
             }
-            const data = form.getValues() as Omit<CreateAiModelParams, 'providerId'>;
+            const data = omitContextCachingTTLUnlessChat(
+              form.getValues() as Omit<CreateAiModelParams, 'providerId'>,
+            );
             await createNewAiModel({ ...data, providerId: editingProvider });
             setLoading(false);
             close();

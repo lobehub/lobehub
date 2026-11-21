@@ -50,6 +50,7 @@ export {
 } from './tokenAccounting/requestPayload';
 // Processors
 export type {
+  CacheTTL,
   DocumentRead,
   PlaceholderValue,
   PlaceholderValueMap,
