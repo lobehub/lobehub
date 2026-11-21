@@ -9,6 +9,8 @@ import { and, eq } from 'drizzle-orm';
 
 import { channelMessages } from '../../schemas';
 import type { Transaction } from '../../type';
+import type { ChannelContacts } from './contacts';
+import { noChannelContacts } from './contacts';
 import { ChannelError } from './error';
 import { sendMessage } from './send';
 import { audit } from './transaction';
@@ -31,6 +33,7 @@ export const answerAsk = async (
   tx: Transaction,
   access: ChannelAccess,
   input: ChannelAskAnswerInput,
+  contacts: ChannelContacts = noChannelContacts,
 ): Promise<ChannelMessage> => {
   const { channel, member } = access;
   const [message] = await tx
@@ -68,13 +71,18 @@ export const answerAsk = async (
   if (invalid) throw new ChannelError('BAD_REQUEST', invalid);
 
   // Quoting the Agent's question without mentions asks that Agent, in the question's branch.
-  const reply = await sendMessage(tx, access, {
-    content: channelAskAnswerText(ask, answers),
-    replyToId: message.id,
-    requestKey: input.requestKey,
-    routing: 'fallback',
-    threadId: message.threadId,
-  });
+  const reply = await sendMessage(
+    tx,
+    access,
+    {
+      content: channelAskAnswerText(ask, answers),
+      replyToId: message.id,
+      requestKey: input.requestKey,
+      routing: 'fallback',
+      threadId: message.threadId,
+    },
+    contacts,
+  );
   await tx
     .update(channelMessages)
     .set({

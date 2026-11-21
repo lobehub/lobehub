@@ -700,7 +700,7 @@ export class ChannelService {
   /** Answers an Agent's question as the person it asked; the answer wakes that Agent. */
   answerAsk = async (channelId: string, input: ChannelAskAnswerInput) => {
     const message = await this.repository.write(channelId, (tx, access) =>
-      answerAsk(tx, access, input),
+      answerAsk(tx, access, input, channelContacts),
     );
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
