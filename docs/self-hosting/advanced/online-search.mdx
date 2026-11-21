@@ -46,6 +46,7 @@ Supported crawler types are listed below:
 | `exa`         | Crawler capabilities provided by [Exa](https://exa.ai/), API required.                                              | `EXA_API_KEY`                                                               |
 | `firecrawl`   | [Firecrawl](https://firecrawl.dev/) headless browser API, ideal for modern websites.                                | `FIRECRAWL_API_KEY`                                                         |
 | `jina`        | Crawler service from [Jina AI](https://jina.ai/), supports fast content summarization.                              | `JINA_READER_API_KEY`                                                       |
+| `keenable`    | Page fetch API from [Keenable](https://keenable.ai/), returns Markdown. Works without an API key.                   | `KEENABLE_API_KEY` (optional)                                               |
 | `naive`       | Built-in general-purpose crawler for standard web structures.                                                       |                                                                             |
 | `search1api`  | Page crawling capabilities from [Search1API](https://www.search1api.com), great for structured content extraction.  | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
 | `tavily`      | Web scraping and summarization API from [Tavily](https://www.tavily.com/).                                          | `TAVILY_API_KEY`                                                            |
@@ -197,6 +198,16 @@ FIRECRAWL_URL=https://api.firecrawl.dev/v2
 ```
 
 > ⚙️ Usually does not need to be changed unless you’re using a self-hosted version or a proxy service.
+
+---
+
+## `KEENABLE_API_KEY`
+
+Optional API key for the [Keenable](https://keenable.ai/) fetch API (`CRAWLER_IMPLS=keenable`). When it is not set, Keenable's keyless public endpoint is used, which is rate-limited per IP. Set a key to use the keyed tier. `KEENABLE_API_URL` overrides the base URL (default `https://api.keenable.ai`).
+
+```env
+KEENABLE_API_KEY=xxxxxx
+```
 
 ---
 

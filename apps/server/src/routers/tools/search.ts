@@ -63,6 +63,7 @@ export const searchRouter = router({
             'exa',
             'firecrawl',
             'jina',
+            'keenable',
             'naive',
             'search1api',
             'tavily',
