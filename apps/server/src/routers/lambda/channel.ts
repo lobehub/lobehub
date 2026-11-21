@@ -224,6 +224,8 @@ export const channelRouter = router({
         projectId: z.string().min(1).optional(),
         title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
         userIds: z.array(z.string().min(1)).max(100).default([]),
+        /** Defaults to private; public needs a workspace, like `updateVisibility`. */
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => ({
