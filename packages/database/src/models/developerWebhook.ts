@@ -324,7 +324,12 @@ export class WebhookDeliveryWorkerModel {
     return row?.attempts ?? null;
   };
 
-  /** Record one attempt. `status` is the delivery's state after it. */
+  /**
+   * Record one attempt. `status` is the delivery's state after it.
+   * Answers whether the attempt was settled: a row that is already terminal (`failed`
+   * or `succeeded`) keeps its outcome, so an endpoint redirect that canceled the
+   * delivery while this POST was in flight is never revived into a retry.
+   */
   recordAttempt = async (
     deliveryId: string,
     result: WebhookAttemptResult & {
@@ -332,9 +337,9 @@ export class WebhookDeliveryWorkerModel {
       nextAttemptAt: Date | null;
       status: WebhookDeliveryStatus;
     },
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const now = new Date();
-    await this.db
+    const settled = await this.db
       .update(webhookDeliveries)
       .set({
         ...result,
@@ -342,10 +347,17 @@ export class WebhookDeliveryWorkerModel {
         updatedAt: now,
       })
       // Settle the attempt this worker claimed, not whatever the row says now: a stale
-      // attempt must not overwrite the outcome a newer one already wrote.
+      // attempt must not overwrite the outcome a newer one already wrote, and a delivery
+      // canceled in between must stay canceled instead of being scheduled for a retry.
       .where(
-        and(eq(webhookDeliveries.id, deliveryId), eq(webhookDeliveries.attempts, result.attempts)),
-      );
+        and(
+          eq(webhookDeliveries.id, deliveryId),
+          eq(webhookDeliveries.attempts, result.attempts),
+          inArray(webhookDeliveries.status, ['pending', 'retrying']),
+        ),
+      )
+      .returning({ id: webhookDeliveries.id });
+    return settled.length > 0;
   };
 
   /** A delivery got through: the endpoint's failure streak ends. */

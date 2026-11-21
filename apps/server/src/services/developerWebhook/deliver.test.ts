@@ -49,14 +49,17 @@ let server: Server;
 let baseUrl: string;
 let received: Received[] = [];
 let respond: (path: string) => { delayMs?: number; status: number } = () => ({ status: 200 });
+/** Runs after the request arrives and before its response, to model a concurrent writer. */
+let beforeRespond: (path: string) => Promise<void> = async () => {};
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     let body = '';
     req.on('data', (chunk) => (body += chunk));
-    req.on('end', () => {
+    req.on('end', async () => {
       received.push({ body, headers: req.headers });
       const { delayMs = 0, status } = respond(req.url ?? '/');
+      await beforeRespond(req.url ?? '/');
       setTimeout(() => {
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: status < 300 }));
@@ -125,6 +128,7 @@ beforeEach(async () => {
   model = new WebhookEndpointModel(db, userId);
   received = [];
   respond = () => ({ status: 200 });
+  beforeRespond = async () => {};
   // The receiver listens on loopback; allow it for every test except the SSRF one.
   process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = '1';
 });
@@ -288,6 +292,38 @@ describe('attemptWebhookDelivery', () => {
     expect(results).toContainEqual({ outcome: 'skipped', reason: 'already_claimed' });
     expect(received).toHaveLength(1);
     expect(await loadDelivery(delivery.id)).toMatchObject({ attempts: 1, status: 'succeeded' });
+  });
+
+  it('keeps a delivery canceled by a redirect when the in-flight attempt fails', async () => {
+    respond = () => ({ delayMs: 20, status: 500 });
+    const endpoint = await createEndpoint('/redirected');
+    const delivery = await queueEvent(endpoint.id);
+    // The endpoint's update cancels its pending deliveries while this POST is in flight;
+    // it does not touch the attempt counter the settlement CAS matches on.
+    beforeRespond = async () => {
+      await db
+        .update(webhookDeliveries)
+        .set({
+          error: 'Endpoint destination changed',
+          nextAttemptAt: null,
+          status: 'failed',
+          updatedAt: new Date(),
+        })
+        .where(eq(webhookDeliveries.id, delivery.id));
+    };
+
+    const result = await attemptWebhookDelivery(db, delivery.id);
+
+    // Without the terminal-status guard the counter-only CAS would restore `retrying` and
+    // the retry would post this payload to the new destination.
+    expect(result).toEqual({ outcome: 'skipped', reason: 'already_settled' });
+    expect(await loadDelivery(delivery.id)).toMatchObject({
+      attempts: 1,
+      error: 'Endpoint destination changed',
+      nextAttemptAt: null,
+      status: 'failed',
+    });
+    expect((await loadEndpoint(endpoint.id)).consecutiveFailures).toBe(0);
   });
 
   it('ignores a late duplicate that arrives before the retry is due', async () => {

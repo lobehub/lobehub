@@ -187,12 +187,15 @@ export const attemptWebhookDelivery = async (
   const ok = result.responseStatus !== null && result.error === null;
 
   if (ok) {
-    await worker.recordAttempt(deliveryId, {
+    const settled = await worker.recordAttempt(deliveryId, {
       ...result,
       attempts,
       nextAttemptAt: null,
       status: 'succeeded',
     });
+    // A redirect canceled this delivery while the POST was in flight: keep its outcome
+    // and do not touch the endpoint's failure streak.
+    if (!settled) return { outcome: 'skipped', reason: 'already_settled' };
     if (!isTest) await worker.markEndpointSucceeded(endpoint.id);
     log('delivery %s succeeded on attempt %d (%d)', deliveryId, attempts, result.responseStatus);
     return {
@@ -205,12 +208,13 @@ export const attemptWebhookDelivery = async (
   if (canRetry) {
     const delaySeconds = webhookRetryDelaySeconds(attempts);
     const nextAttemptAt = new Date(Date.now() + delaySeconds * 1000);
-    await worker.recordAttempt(deliveryId, {
+    const settled = await worker.recordAttempt(deliveryId, {
       ...result,
       attempts,
       nextAttemptAt,
       status: 'retrying',
     });
+    if (!settled) return { outcome: 'skipped', reason: 'already_settled' };
     log(
       'delivery %s attempt %d failed (%s); retry in %ds',
       deliveryId,
@@ -225,12 +229,15 @@ export const attemptWebhookDelivery = async (
     };
   }
 
-  await worker.recordAttempt(deliveryId, {
+  const settled = await worker.recordAttempt(deliveryId, {
     ...result,
     attempts,
     nextAttemptAt: null,
     status: 'failed',
   });
+  // Canceled in flight: the delivery is already terminal, so its failure must not count
+  // against the endpoint either.
+  if (!settled) return { outcome: 'skipped', reason: 'already_settled' };
   const endpointDisabled = isTest
     ? false
     : await worker.markEndpointFailed(

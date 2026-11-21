@@ -263,6 +263,36 @@ describe('WebhookDeliveryWorkerModel', () => {
 
     expect(await reload(delivery.id)).toMatchObject({ attempts: 1, status: 'succeeded' });
   });
+
+  it('keeps a delivery canceled while an attempt is in flight', async () => {
+    const { delivery, worker } = await seedDelivery();
+
+    expect(await worker.claimAttempt(delivery.id, 0)).toBe(1);
+    // A redirect cancels the pending delivery without touching the attempt counter, so the
+    // settling CAS still matches on `attempts` alone.
+    await serverDB
+      .update(webhookDeliveries)
+      .set({ error: 'Endpoint destination changed', nextAttemptAt: null, status: 'failed' })
+      .where(eq(webhookDeliveries.id, delivery.id));
+
+    expect(
+      await worker.recordAttempt(delivery.id, {
+        attempts: 1,
+        durationMs: 5,
+        error: 'HTTP 500',
+        nextAttemptAt: new Date(),
+        responseBody: null,
+        responseStatus: 500,
+        status: 'retrying',
+      }),
+    ).toBe(false);
+
+    expect(await reload(delivery.id)).toMatchObject({
+      attempts: 1,
+      error: 'Endpoint destination changed',
+      status: 'failed',
+    });
+  });
 });
 
 describe('domain events announced by models', () => {
