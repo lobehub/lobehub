@@ -31,6 +31,8 @@ import type {
  * Agent service implementation class
  */
 export class AgentService extends BaseService {
+  protected readonly serviceName = 'AgentService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }

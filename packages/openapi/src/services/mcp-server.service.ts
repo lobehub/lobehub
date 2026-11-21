@@ -32,6 +32,8 @@ const isPublicMcpServer = (value: PublicConnectorRecord) =>
   !!value.mcpServerUrl;
 
 export class McpServerService extends BaseService {
+  protected readonly serviceName = 'McpServerService';
+
   private connectorModel: ConnectorModel;
   private connectorToolModel: ConnectorToolModel;
 

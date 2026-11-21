@@ -16,6 +16,8 @@ import type {
 import { ChatService } from './chat.service';
 
 export class MessageTranslateService extends BaseService {
+  protected readonly serviceName = 'MessageTranslateService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }
