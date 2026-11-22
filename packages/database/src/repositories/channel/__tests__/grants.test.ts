@@ -234,4 +234,54 @@ describe('channel device grants', () => {
       status: 'pending',
     });
   });
+
+  it("shows a request card's current status to its device owner only", async () => {
+    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(
+      channel.id,
+      'Coder',
+      deviceConfig('/repo', 'private-1', fixture.memberId),
+    );
+    const grant = await grantOf(agent.id);
+    const card = await asOwner.postAgentMessage(channel.id, {
+      agentId: agent.agentId!,
+      content: '[Device request]',
+      metadata: {
+        deviceGrant: {
+          agentName: 'Coder',
+          channelId: channel.id,
+          channelTitle: 'Team',
+          deviceId: 'private-1',
+          deviceName: 'Mia MacBook',
+          grantId: grant.id,
+          requesterName: 'Olivia Owner',
+          requesterUserId: fixture.ownerId,
+          workingDirectory: '/repo',
+        },
+      },
+      requestKey: `device-grant:${grant.id}`,
+    });
+    const cardFor = async (model: ChannelRepository) =>
+      (await model.detail(channel.id)).messages.find((message) => message.id === card.id)
+        ?.deviceGrant;
+
+    expect(await cardFor(asMember)).toMatchObject({
+      deviceName: 'Mia MacBook',
+      grantId: grant.id,
+      status: 'pending',
+    });
+    // Someone else's request is no card of theirs.
+    expect(await cardFor(asOwner)).toBeNull();
+
+    await decideDeviceGrant(db, fixture.memberId, grant.id, 'approve');
+    expect(await cardFor(asMember)).toMatchObject({ status: 'approved' });
+
+    // A new environment replaces the grant; the old card no longer decides anything.
+    await asOwner.updateAgentEnvironment(channel.id, agent.id, {
+      deviceId: 'private-1',
+      deviceOwnerId: fixture.memberId,
+      workingDirectory: '/other',
+    });
+    expect(await cardFor(asMember)).toMatchObject({ status: 'expired' });
+  });
 });

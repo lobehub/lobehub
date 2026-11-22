@@ -1,5 +1,5 @@
 import { channelMessageDeletedAt } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
 import { channelJobs, channelMessages } from '../../schemas';
@@ -26,6 +26,7 @@ export type ChannelRetryMode = 'resume' | 'retry';
  *   continues there when that topic is still usable for the same environment (see
  *   `resumableTopic`), with a short continuation prompt.
  *
+ * Requests merged into the failed run go back with it, so the next claim merges them again.
  * `requesterMemberId` limits the retry to that member's own request; admins pass none.
  */
 export const retryJob = async (
@@ -79,6 +80,20 @@ export const retryJob = async (
     })
     .where(eq(channelJobs.id, job.id))
     .returning();
+  // Requests merged into the failed run go back too, so the next claim merges them again.
+  const merged = job.manifest?.requestMessageIds?.filter((id) => id !== job.messageId) ?? [];
+  if (merged.length)
+    await tx
+      .update(channelJobs)
+      .set({ status: 'queued' })
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          eq(channelJobs.memberId, job.memberId),
+          inArray(channelJobs.messageId, merged),
+          eq(channelJobs.status, 'merged'),
+        ),
+      );
   await audit(tx, channelId, resume ? 'job_resumed' : 'job_retried', job.id, {
     operationId: job.operationId,
   });

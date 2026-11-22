@@ -30,7 +30,7 @@ import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
-import { getMessageInteractionState } from './messageInteraction';
+import { getMessageContextMenuAction, getMessageInteractionState } from './messageInteraction';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
 import TasksMessage from './Tasks';
@@ -115,7 +115,10 @@ const MessageItem = memo<MessageItemProps>(
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
-        if (shouldSuppressContextMenu) {
+        const action = getMessageContextMenuAction(event.target, shouldSuppressContextMenu);
+        if (action === 'native') return;
+
+        if (action === 'suppress') {
           event.preventDefault();
           return;
         }

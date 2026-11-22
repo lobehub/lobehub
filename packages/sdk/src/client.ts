@@ -2,13 +2,14 @@ import { DEFAULT_BASE_URL } from './constants';
 import { toLobeHubError } from './errors';
 import type { Client, Config, RequestResult } from './generated/client';
 import { createClient, createConfig } from './generated/client';
-import type { Options } from './generated/sdk.gen';
+import type { Generations, Options } from './generated/sdk.gen';
 import { Files, LobeHub, Responses } from './generated/sdk.gen';
 import type {
   PostApiV1FilesErrors,
   PostApiV1FilesResponses,
   PostApiV1ResponsesData,
 } from './generated/types.gen';
+import { GenerationsResource } from './generations';
 import type { PageItem, PageOf, PaginateOptions } from './pagination';
 import { paginate } from './pagination';
 import { ResponseStream } from './streaming';
@@ -160,11 +161,12 @@ const anySignal = (signals: AbortSignal[]) => {
 /**
  * The resource-style client returned by `createLobeHub`: every generated
  * resource (`lobehub.agents`, `lobehub.topics`, …) plus `paginate`,
- * `responses.stream` and `files.upload`.
+ * `responses.stream`, `files.upload` and `generations.wait`.
  */
 export class LobeHubClient extends LobeHub {
   readonly #client: Client;
   #files?: FilesResource;
+  #generations?: GenerationsResource;
   #responses?: ResponsesResource;
 
   constructor(args: { client: Client; key?: string }) {
@@ -174,6 +176,10 @@ export class LobeHubClient extends LobeHub {
 
   override get files(): FilesResource {
     return (this.#files ??= new FilesResource({ client: this.#client }));
+  }
+
+  override get generations(): GenerationsResource {
+    return (this.#generations ??= new GenerationsResource({ client: this.#client }));
   }
 
   override get responses(): ResponsesResource {
@@ -223,7 +229,9 @@ export type ThrowingLobeHubClient = {
               options?: UploadOptions & UploadRequestOptions<true>,
             ) => RequestResult<PostApiV1FilesResponses, PostApiV1FilesErrors, true>;
           }
-        : ThrowingResource<LobeHubClient[K]>;
+        : K extends 'generations'
+          ? ThrowingResource<Generations> & Pick<GenerationsResource, 'wait'>
+          : ThrowingResource<LobeHubClient[K]>;
 };
 
 /**

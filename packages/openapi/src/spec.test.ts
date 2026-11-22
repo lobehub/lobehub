@@ -380,6 +380,17 @@ describe('generated OpenAPI document', () => {
     expect(media('/api/v1/responses', 'post').response).toMatchObject({ object: 'response' });
   });
 
+  it('declares the JSON body of /audio/speech, which its handler validates itself', () => {
+    const op = (spec.paths as Record<string, any>)['/api/v1/audio/speech'].post;
+    const schema = op.requestBody?.content?.['application/json']?.schema;
+
+    expect(op.requestBody?.required).toBe(true);
+    expect(schema?.required).toEqual(['input', 'model']);
+    expect(Object.keys(schema?.properties ?? {})).toEqual(
+      expect.arrayContaining(['input', 'model', 'voice', 'response_format', 'params']),
+    );
+  });
+
   it('types the /responses event stream as the OpenResponses event union', () => {
     const op = (spec.paths as Record<string, any>)['/api/v1/responses'].post;
     expect(op.responses['200'].content['text/event-stream'].schema).toEqual({

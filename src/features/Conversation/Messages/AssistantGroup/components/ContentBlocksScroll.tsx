@@ -6,6 +6,8 @@ import * as stylex from '@stylexjs/stylex';
 import type { ReactNode, RefObject } from 'react';
 import { memo, useMemo } from 'react';
 
+import { useDensity } from '@/styles/density';
+
 import { resolveAssistantGroupFromMessages } from '../utils/resolveAssistantGroupFromMessages';
 import ContentBlock from './ContentBlock';
 import type { RenderableAssistantContentBlock } from './types';
@@ -51,6 +53,7 @@ export type ContentBlocksScrollProps =
 
 const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
   const { disableEditing, leading, onScroll, scroll = true, scrollRef, variant } = props;
+  const { compact } = useDensity();
 
   const messagesList = 'messages' in props ? props.messages : undefined;
   const assistantIdFromProps = 'messages' in props ? undefined : props.assistantId;
@@ -70,7 +73,7 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
   }, [assistantIdFromProps, blocksFromProps, messagesList]);
 
   const list = (
-    <Flexbox gap={variant === 'workflow' ? 8 : undefined}>
+    <Flexbox gap={variant === 'workflow' ? (compact ? 2 : 8) : undefined}>
       {leading}
       {blocks.map((block) => (
         <ContentBlock
@@ -83,7 +86,12 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
     </Flexbox>
   );
 
-  const body = variant === 'workflow' ? <Flexbox paddingBlock={'4px 8px'}>{list}</Flexbox> : list;
+  const body =
+    variant === 'workflow' ? (
+      <Flexbox paddingBlock={compact ? '0 4px' : '4px 8px'}>{list}</Flexbox>
+    ) : (
+      list
+    );
 
   if (!scroll) {
     return body;

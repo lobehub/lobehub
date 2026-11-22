@@ -68,7 +68,16 @@ const styles = stylex.create({
  *   accounts — managing the agent's accounts must not imply that.
  */
 type ScopeGroupKey =
-  'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
+  | 'agent'
+  | 'chat'
+  | 'file'
+  | 'generation'
+  | 'knowledge'
+  | 'mcp'
+  | 'model'
+  | 'usage'
+  | 'user'
+  | 'workspace';
 
 /**
  * Labels an extra scope can carry. Kept as literals (not `string`) so the
@@ -120,6 +129,12 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     },
   },
   { key: 'file', label: 'apikey.scopes.groups.file', read: 'file:read', write: 'file:write' },
+  {
+    key: 'generation',
+    label: 'apikey.scopes.groups.generation',
+    read: 'generation:read',
+    write: 'generation:write',
+  },
   {
     key: 'knowledge',
     label: 'apikey.scopes.groups.knowledge',

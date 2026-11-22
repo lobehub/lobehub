@@ -46,6 +46,7 @@ import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 import { channelContacts } from './contacts';
+import { announceDeviceGrants, refreshDeviceGrantCard } from './deviceGrantCard';
 import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
@@ -242,6 +243,7 @@ export class ChannelService {
     });
     // Invited people see the new Channel without waiting for their next poll.
     if (userIds.length) await this.changed(access.channel.id);
+    await announceDeviceGrants(this.db, access.channel.id);
     return this.withDisplayTitle(access);
   };
 
@@ -281,6 +283,7 @@ export class ChannelService {
     });
     // Invitees see the new group without waiting for their next poll.
     await this.changed(access.channel.id);
+    await announceDeviceGrants(this.db, access.channel.id);
     return this.withDisplayTitle(access);
   };
 
@@ -426,7 +429,7 @@ export class ChannelService {
       );
     }
     const member = await this.repository.addAgent(channelId, agent);
-    await this.changed(channelId);
+    await Promise.all([this.changed(channelId), announceDeviceGrants(this.db, channelId)]);
     return member;
   };
 
@@ -440,7 +443,11 @@ export class ChannelService {
     const { config = {} } = await this.resolveAgent({ ...input, agentId });
     const member = await this.repository.updateAgentEnvironment(channelId, memberId, config);
     // A job blocked on the previous device or directory may be claimable now.
-    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    await Promise.all([
+      wakeChannel(channelId),
+      this.changed(channelId),
+      announceDeviceGrants(this.db, channelId),
+    ]);
     return member;
   };
 
@@ -450,7 +457,11 @@ export class ChannelService {
   /** The device owner approves, rejects or revokes; a reply waiting on it can start at once. */
   decideDeviceGrant = async (grantId: string, decision: ChannelDeviceGrantDecision) => {
     const grant = await decideDeviceGrant(this.db, this.userId, grantId, decision);
-    await Promise.all([wakeChannel(grant.channelId), this.changed(grant.channelId)]);
+    await Promise.all([
+      wakeChannel(grant.channelId),
+      this.changed(grant.channelId),
+      refreshDeviceGrantCard(this.db, grant),
+    ]);
     return grant;
   };
 

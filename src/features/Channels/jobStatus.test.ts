@@ -162,6 +162,13 @@ describe('Channel task tone', () => {
     ];
     expect(unresolvedFailures(jobs).map((entry) => entry.id)).toEqual(['b-failed']);
   });
+  it('keeps a failed run that requests merged into it are newer than', () => {
+    const jobs = [
+      job({ id: 'a-merged', memberId: 'a', status: 'merged' }),
+      job({ id: 'a-failed', memberId: 'a', status: 'failed' }),
+    ];
+    expect(unresolvedFailures(jobs).map((entry) => entry.id)).toEqual(['a-failed']);
+  });
 });
 
 describe('mainTimelineFailures', () => {

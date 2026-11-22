@@ -6,7 +6,7 @@ import {
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
-import type { ExternalWorkSummaryItem } from './work';
+import type { WorkSummaryItem } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -395,9 +395,11 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
  * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
+ * - `merged`: queued behind an earlier request from the same person and answered in that run;
+ *   the run's manifest lists it in `requestMessageIds`.
  */
 export type ChannelJobStatus =
-  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+  'cancelled' | 'completed' | 'failed' | 'merged' | 'queued' | 'running' | 'silent';
 
 /**
  * Why a job was woken, frozen when it is delivered.
@@ -721,7 +723,15 @@ export interface ChannelInputManifest {
   primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
+  /** The last request this run answers; with a merged batch, the newest of them. */
   requestMessageId: string;
+  /**
+  /**
+   * Every request this run answers, oldest first, when the requester sent several in a row
+   * while the member was busy: their queued jobs settle as `merged` into this one. Absent for
+   * a single request.
+   */
+  requestMessageIds?: string[];
   /**
    * Set when the run resumes a failed reply in the same topic (`resumeJob`), so the run gets a
    * short continuation prompt and the runtime resumes its session.
@@ -923,6 +933,63 @@ export interface ChannelDeviceGrantItem {
   workingDirectory: string;
 }
 
+/**
+ * `metadata.deviceGrant` of the message an Agent posts in its direct conversation with a device
+ * owner when someone asks to run it on their private device in a Channel. Only `grantId` is
+ * authoritative; the rest is the server's snapshot at request time, so the card reads without
+ * the Channel.
+ */
+export interface ChannelDeviceGrantRequest {
+  agentName: string | null;
+  channelId: string;
+  channelTitle: string;
+  deviceId: string;
+  deviceName: string | null;
+  grantId: string;
+  requesterName: string | null;
+  requesterUserId: string | null;
+  workingDirectory: string;
+}
+
+/** A request card as its reader sees it: `expired` once the grant was replaced or removed. */
+export type ChannelDeviceGrantCard = ChannelDeviceGrantRequest & {
+  status: ChannelMemberGrantStatus | 'expired';
+};
+
+/** `metadata.deviceGrant` of a device request card, or undefined for anything else. */
+export const channelMessageDeviceGrant = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelDeviceGrantRequest | undefined => {
+  const request = metadata?.deviceGrant as Partial<ChannelDeviceGrantRequest> | undefined;
+  return typeof request?.grantId === 'string' &&
+    typeof request.channelId === 'string' &&
+    typeof request.deviceId === 'string' &&
+    typeof request.workingDirectory === 'string'
+    ? {
+        agentName: request.agentName ?? null,
+        channelId: request.channelId,
+        channelTitle: request.channelTitle ?? '',
+        deviceId: request.deviceId,
+        deviceName: request.deviceName ?? null,
+        grantId: request.grantId,
+        requesterName: request.requesterName ?? null,
+        requesterUserId: request.requesterUserId ?? null,
+        workingDirectory: request.workingDirectory,
+      }
+    : undefined;
+};
+
+/**
+ * The stored text of a request card, for every reader that does not render the card: list
+ * previews, notifications and the Agent itself. Clients that render cards localize their own.
+ */
+export const deviceGrantRequestText = (request: ChannelDeviceGrantRequest) =>
+  `[Device request] ${request.requesterName || 'A member'} asks to run ${
+    request.agentName || 'this Agent'
+  } in "${request.channelTitle}" on ${request.deviceName || request.deviceId} (${
+    request.workingDirectory
+  }).`;
+
 export interface ChannelPublicMember {
   actorType: ChannelMemberActorType;
   agentId: string | null;
@@ -962,6 +1029,8 @@ export interface ChannelPublicMessage {
    * attachments, so Threads, replies and jobs that point at it still resolve.
    */
   deletedAt?: Date | null;
+  /** An Agent's request card for the reader's private device, with the grant's current status. */
+  deviceGrant?: ChannelDeviceGrantCard | null;
   /** Set once the author has edited the text; shown as "(edited)". */
   editedAt?: Date | null;
   fileIds: string[];
@@ -988,10 +1057,12 @@ export interface ChannelPublicMessage {
   /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */
   via?: (ChannelMessageVia & { avatar: string | null }) | null;
   /**
-   * External Works a reply's run touched: the conversation's work summaries, for every member,
-   * without the ids that link them to the requester's Work, topic and run. Empty on requests.
+   * Works a reply's run touched, as the conversation's work summaries. Every member gets the
+   * external ones, without the ids that link them to the requester's Work, topic and run. A shared
+   * Agent's visitor also gets the internal Works of their own runs (collections, files, ...), with
+   * the Agent owner's identity and spend removed. Empty on requests.
    */
-  works?: ExternalWorkSummaryItem[];
+  works?: WorkSummaryItem[];
 }
 
 export interface ChannelPublicJob {

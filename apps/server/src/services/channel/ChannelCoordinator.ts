@@ -33,6 +33,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
+import { announceDeviceGrants } from './deviceGrantCard';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
@@ -266,12 +267,15 @@ export class ChannelCoordinator {
     } finally {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
+    // A claim that found the device made private since it was picked files a request; ask now.
+    if (pending.length) await announceDeviceGrants(this.db, channelId);
   };
 
   /**
    * A job held back only because another run uses its member's directory moves its branch into
-   * a worktree of that directory instead of waiting. Returns whether the branch got one; a
-   * directory that cannot host one (not a git repo, device too old) keeps the job waiting.
+   * a worktree of that directory instead of waiting. A directory that cannot host one (not a
+   * git repo, device too old) is shared instead: the job runs in it alongside the other run.
+   * Returns whether the claim is worth retrying.
    */
   private async moveToWorktree(
     channelId: string,
@@ -285,7 +289,7 @@ export class ChannelCoordinator {
     const created = await createChannelWorktree(candidate, workspaceId);
     if (created.path === undefined) {
       await this.executions.worktreeUnavailable(channelId, candidate, created.error);
-      return false;
+      return true;
     }
     return this.executions.assignWorktree(channelId, candidate, created.path);
   }

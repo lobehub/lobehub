@@ -32,6 +32,13 @@ export interface PermissionCheckOptions {
   errorMessage?: string;
 
   /**
+   * Scopes a route accepted before `apiKeyScope` was introduced. A restricted
+   * key holding one of them still passes, so keys issued earlier keep working;
+   * the spec documents only `apiKeyScope`. Requires `apiKeyScope`.
+   */
+  legacyApiKeyScopes?: ApiKeyScope[];
+
+  /**
    * Logic operator when checking multiple permissions
    * - 'AND': User must have ALL specified permissions
    * - 'OR': User must have AT LEAST ONE of the specified permissions
@@ -72,11 +79,13 @@ const assertApiKeyScopesAllow = (
   permissionCodes: string[],
   operator: 'AND' | 'OR',
   apiKeyScope?: ApiKeyScope,
+  legacyApiKeyScopes: ApiKeyScope[] = [],
 ) => {
   if (c.get('authType') !== 'apikey') return;
 
   const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
   if (isFullAccessApiKey(scopes)) return;
+  if (apiKeyScope && legacyApiKeyScopes.some((scope) => hasApiKeyScope(scopes, scope))) return;
 
   const requiredScopes = apiKeyScope
     ? [apiKeyScope]
@@ -222,7 +231,13 @@ const requirePermission = (options: PermissionCheckOptions) => {
       }
 
       // RBAC passed — now narrow by the API key's capability scopes
-      assertApiKeyScopesAllow(c, permissionCodes, operator, options.apiKeyScope);
+      assertApiKeyScopesAllow(
+        c,
+        permissionCodes,
+        operator,
+        options.apiKeyScope,
+        options.legacyApiKeyScopes,
+      );
 
       log('Permission check passed for user %s', userId);
 
@@ -300,10 +315,12 @@ export const requireAnyPermissionWithApiKeyScope = (
   permissionCodes: string[],
   apiKeyScope: ApiKeyScope,
   errorMessage?: string,
+  { legacyApiKeyScopes }: Pick<PermissionCheckOptions, 'legacyApiKeyScopes'> = {},
 ) => {
   return requirePermission({
     apiKeyScope,
     errorMessage,
+    legacyApiKeyScopes,
     operator: 'OR',
     permissions: permissionCodes,
   });

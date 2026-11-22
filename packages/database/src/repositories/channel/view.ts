@@ -1,6 +1,8 @@
 import {
   type AgentDeviceOverride,
+  type ChannelDeviceGrantCard,
   channelMessageDeletedAt,
+  channelMessageDeviceGrant,
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageReplyError,
@@ -40,7 +42,6 @@ import {
   channels,
   channelThreads,
   devices,
-  files as fileTable,
   topics,
   users,
   workspaceUserSettings,
@@ -48,11 +49,11 @@ import {
 import type { Transaction } from '../../type';
 import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
-import { fileIdsByMessage } from './attachments';
+import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
-import { externalWorksByMessage } from './works';
+import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
@@ -203,6 +204,44 @@ const withRelayAvatar = <
       receipt: { ...message.receipt, agent: avatarOf(message.receipt.agent) },
     }),
   };
+};
+
+/**
+ * The current status of the device requests an Agent's cards on this page carry, for the device
+ * owner reading them. A grant that is gone (its environment moved, or the member left) reads as
+ * `expired`; a card the viewer does not own reads as nothing.
+ */
+const deviceGrantCards = async (
+  tx: Transaction,
+  rows: MessageRow[],
+  viewerUserId: string | undefined,
+) => {
+  const requests = rows.flatMap((row) => {
+    const request = isAgentAuthored(row) && channelMessageDeviceGrant(row.metadata);
+    return request ? [[row.id, request] as const] : [];
+  });
+  const cards = new Map<string, ChannelDeviceGrantCard>();
+  if (!viewerUserId || !requests.length) return cards;
+  const found = await tx
+    .select({
+      deviceOwnerId: channelMemberGrants.deviceOwnerId,
+      id: channelMemberGrants.id,
+      status: channelMemberGrants.status,
+    })
+    .from(channelMemberGrants)
+    .where(
+      inArray(
+        channelMemberGrants.id,
+        requests.map(([, request]) => request.grantId),
+      ),
+    );
+  const grants = new Map(found.map((grant) => [grant.id, grant]));
+  for (const [messageId, request] of requests) {
+    const grant = grants.get(request.grantId);
+    if (grant && grant.deviceOwnerId !== viewerUserId) continue;
+    cards.set(messageId, { ...request, status: grant?.status ?? 'expired' });
+  }
+  return cards;
 };
 
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
@@ -567,7 +606,13 @@ export const viewerJobs = (
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
-  options: { before?: number; limit?: number; threadId?: string | null } = {},
+  options: {
+    before?: number;
+    /** The client renders the opt-in Work types on reply cards; see `replyWorksByMessage`. */
+    includeFileWorks?: boolean;
+    limit?: number;
+    threadId?: string | null;
+  } = {},
   viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
@@ -732,24 +777,17 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works, relayAvatars] = await Promise.all([
+  const [sourceTopics, works, relayAvatars, grantCards] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
-    externalWorksByMessage(tx, channelId, replyIds),
+    replyWorksByMessage(tx, channelId, replyIds, {
+      includeFileWorks: options.includeFileWorks,
+      userId: viewerUserId,
+    }),
     relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
+    deviceGrantCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
   ]);
   const ids = [...new Set([...files.values()].flat())];
-  const attachments = ids.length
-    ? await tx
-        .select({
-          id: fileTable.id,
-          name: fileTable.name,
-          fileType: fileTable.fileType,
-          size: fileTable.size,
-          url: fileTable.url,
-        })
-        .from(fileTable)
-        .where(inArray(fileTable.id, ids))
-    : [];
+  const attachments = await channelAttachments(tx, ids);
   return {
     attachments,
     hasMore: reversed.length > limit,
@@ -821,6 +859,7 @@ export const readChannelView = async (
             }),
             relayAvatars,
           ),
+          deviceGrant: grantCards.get(rootMessage.id) ?? null,
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
           works: works.get(rootMessage.id) ?? [],
@@ -834,6 +873,7 @@ export const readChannelView = async (
         }),
         relayAvatars,
       ),
+      deviceGrant: grantCards.get(message.id) ?? null,
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],

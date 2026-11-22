@@ -77,7 +77,10 @@ Agent owner's private devices are offered to them) waits as `pending`. Saving th
 keeps the decision; any other environment replaces it. A claim that finds no row (the device was
 made private after it was picked) files a pending request for the waiting requester. The device
 owner lists requests with `listDeviceGrants` and approves, rejects or revokes with
-`decideDeviceGrant`, which refuses a grant whose environment has since moved.
+`decideDeviceGrant`, which refuses a grant whose environment has since moved. The server also asks
+them as the Agent (`announceDeviceGrants` in the channel services): a card in their direct
+conversation with it, `metadata.deviceGrant` under request key `device-grant:<grantId>`. The view
+adds the grant's live status for the device owner, `expired` once the grant is gone.
 
 Every claim rechecks the actual requester's Agent access and reads the Agent's current settings.
 Configuration uses the same merge function as AgentService: system defaults, server defaults,
