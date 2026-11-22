@@ -1117,8 +1117,8 @@ export class ChannelRepository {
     });
 
   /**
-   * Queues a reply that could not reach its device again. Like a stop, only its requester or an
-   * admin may retry it.
+   * Queues a failed, unpublished reply again. Like a stop, only its requester or an admin may
+   * retry it.
    */
   retryJob = async (channelId: string, jobId: string): Promise<ChannelJobItem> =>
     this.write(channelId, async (tx, { member }) => {
