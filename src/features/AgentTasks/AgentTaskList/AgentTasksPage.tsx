@@ -25,13 +25,17 @@ import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors, taskListSelectors } from '@/store/task/selectors';
-import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
+import {
+  SCHEDULED_TASK_RECENT_RUNS,
+  TASK_COLLECTION_PAGE_SIZE,
+} from '@/store/task/slices/list/action';
 import { useHeaderActionSize } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { AgentGoalsAndTasksTabs } from '../AgentGoalsAndTasksTabs';
 import { createTaskModal } from '../CreateTaskModal';
 import { useTaskProjectList } from '../features/useTaskProjectList';
+import { ScheduledTaskTable } from '../ScheduledTaskTable';
 import Breadcrumb from '../shared/Breadcrumb';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { TaskListOriginContext } from '../shared/taskListOrigin';
@@ -201,9 +205,9 @@ const PAGINATED_COLLECTION_VIEW = {
 } as const;
 
 /**
- * The scheduled tab is a plain list: no group headers, since each row already
- * states its own rhythm (the schedule or heartbeat chip). A stored grouping
- * belongs to the ordinary list and is set aside here.
+ * The scheduled tab renders its own table (`ScheduledTaskTable`), sectioned by
+ * what each schedule is doing. A stored grouping belongs to the ordinary list
+ * and is set aside here.
  */
 export const getScheduledTaskViewOptions = (
   viewOptions: TaskListViewOptions,
@@ -216,8 +220,8 @@ export const getScheduledTaskViewOptions = (
 
 /**
  * Whether a collection's project groups need the project list to be told apart.
- * Judged on what the collection renders: the scheduled tab is an ungrouped
- * list, so a stored `project` must not hold it behind the project request.
+ * Judged on what the collection renders: the scheduled tab never groups by
+ * project, so a stored `project` must not hold it behind the project request.
  */
 export const collectionGroupsByProject = (
   collection: TaskCollection,
@@ -250,7 +254,8 @@ export const PAGINATED_COLLECTION_PINNED_OPTIONS = ['ordering', 'showSubTasks'] 
  * because every collection that is offered the list/board switch has to answer
  * it: "My tasks" rendered its list unconditionally while still showing the
  * switch, so picking Board did nothing at all. The scheduled tab is the one
- * collection with no switch (its config entry is hidden), so it stays a list.
+ * collection with no switch (its config entry is hidden), so it never shows a
+ * board; its 'list' is the schedule table.
  */
 export const resolveTaskCollectionView = (
   collection: TaskCollection,
@@ -400,6 +405,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     projectId,
+    recentRuns: SCHEDULED_TASK_RECENT_RUNS,
   });
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
@@ -423,10 +429,13 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // button would only duplicate it.
   const showScheduledEmptyCreate =
     isScheduledCollection && canCreateTask && isCollectionListInit && collectionTasksTotal === 0;
-  const scheduledViewOptions = useMemo(
-    () => getScheduledTaskViewOptions(viewOptions),
-    [viewOptions],
-  );
+  const collectionSelectionScope = [
+    collection,
+    isMineCollection ? myTaskScope : '',
+    collectionPage,
+    agentId ?? '',
+    projectId ?? '',
+  ].join(':');
   const myTaskViewOptions = useMemo(() => getMyTaskViewOptions(viewOptions), [viewOptions]);
   const filterKey = JSON.stringify(filter ?? null);
   useEffect(() => {
@@ -704,46 +713,56 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             paddingInline={16}
             wrapperStyle={{ flex: 1, overflowY: 'auto' }}
           >
-            <TaskList
-              data={isCollectionListInit || undefined}
-              error={collectionSWR.error ?? projectListError}
-              filter={filter}
-              hideProject={!!projectId}
-              items={collectionTasks}
-              options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
-              routeScope={routeScope}
-              emptyAction={
-                filterEmptyAction ??
-                (showScheduledEmptyCreate ? (
-                  <Button icon={Plus} onClick={handleCreateScheduledTask}>
-                    {t('createTask.submitScheduled')}
-                  </Button>
-                ) : undefined)
-              }
-              emptyDescription={
-                filterEmptyDescription ??
-                (isMineCollection
-                  ? t(
-                      myTaskScope === 'created'
-                        ? 'taskList.mine.emptyCreated'
-                        : 'taskList.mine.emptyAssigned',
-                    )
-                  : t('taskList.scheduled.empty'))
-              }
-              isLoading={
-                collectionSWR.isLoading ||
-                isProjectListPending ||
-                (!isCollectionListInit && !collectionSWR.error)
-              }
-              selectionScope={[
-                collection,
-                isMineCollection ? myTaskScope : '',
-                collectionPage,
-                agentId ?? '',
-                projectId ?? '',
-              ].join(':')}
-              onRetry={() => (projectListError ? retryProjects() : collectionSWR.mutate())}
-            />
+            {isScheduledCollection ? (
+              <ScheduledTaskTable
+                data={isCollectionListInit || undefined}
+                emptyDescription={filterEmptyDescription}
+                error={collectionSWR.error}
+                filter={filter}
+                hideProject={!!projectId}
+                routeScope={routeScope}
+                selectionScope={collectionSelectionScope}
+                tasks={collectionTasks}
+                emptyAction={
+                  filterEmptyAction ??
+                  (showScheduledEmptyCreate ? (
+                    <Button icon={Plus} onClick={handleCreateScheduledTask}>
+                      {t('createTask.submitScheduled')}
+                    </Button>
+                  ) : undefined)
+                }
+                isLoading={
+                  collectionSWR.isLoading || (!isCollectionListInit && !collectionSWR.error)
+                }
+                onRetry={() => collectionSWR.mutate()}
+              />
+            ) : (
+              <TaskList
+                data={isCollectionListInit || undefined}
+                emptyAction={filterEmptyAction}
+                error={collectionSWR.error ?? projectListError}
+                filter={filter}
+                hideProject={!!projectId}
+                items={collectionTasks}
+                options={myTaskViewOptions}
+                routeScope={routeScope}
+                selectionScope={collectionSelectionScope}
+                emptyDescription={
+                  filterEmptyDescription ??
+                  t(
+                    myTaskScope === 'created'
+                      ? 'taskList.mine.emptyCreated'
+                      : 'taskList.mine.emptyAssigned',
+                  )
+                }
+                isLoading={
+                  collectionSWR.isLoading ||
+                  isProjectListPending ||
+                  (!isCollectionListInit && !collectionSWR.error)
+                }
+                onRetry={() => (projectListError ? retryProjects() : collectionSWR.mutate())}
+              />
+            )}
             {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
               <Flexbox horizontal justify={'center'} paddingBlock={8}>
                 <Pagination

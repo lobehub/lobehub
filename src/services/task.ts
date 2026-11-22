@@ -49,6 +49,8 @@ class TaskService {
     parentTaskId?: string | null;
     priorities?: number[];
     projectId?: string;
+    /** Attach each row's latest N runs and its `awaitingHuman` flag. */
+    recentRuns?: number;
     /** "My tasks" narrowing: assigned to the caller, or created by them. */
     scope?: 'assigned' | 'created';
     statuses?: TaskStatus[];
