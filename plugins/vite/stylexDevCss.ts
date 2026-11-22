@@ -15,8 +15,12 @@ export const stylexProxiedDevCssModuleId = 'virtual:lobe-stylex-dev-css';
 /** Leading comment of the dev CSS response that carries the rule-store version it reflects. */
 export const stylexDevCssVersionMarker = 'lobe-stylex-version:';
 
-/** Upper bound a module waits for its CSS, so a broken dev CSS endpoint never blocks the app. */
-const STYLE_WAIT_TIMEOUT = 5000;
+/**
+ * Upper bound a module waits for its CSS, so a broken dev CSS endpoint never
+ * blocks the app. Each response re-collects every rule, and while a cold start
+ * is still transforming modules one request was measured at over 5 seconds.
+ */
+const STYLE_WAIT_TIMEOUT = 15_000;
 
 // One runtime for both the Vite-served SPA and the proxied SPA, whose document
 // origin is Next: a root-relative fetch of /virtual:stylex.css never reaches Vite,
@@ -93,7 +97,11 @@ async function fetchAndApply() {
     disableLink();
     return true;
   } catch (error) {
-    console.error(error);
+    if (error && error.name === 'TimeoutError') {
+      console.warn('[stylex] dev CSS took over ' + WAIT_TIMEOUT + 'ms; rendering without waiting for it');
+    } else {
+      console.error(error);
+    }
     return false;
   }
 }

@@ -107,7 +107,7 @@ describe('stylexProxiedDevCssPlugin', () => {
     try {
       const settled = vi.fn();
       runShim().waitForStylexCss(1).then(settled);
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(15_000);
 
       expect(settled).toHaveBeenCalledOnce();
     } finally {
