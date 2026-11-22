@@ -1,4 +1,4 @@
-import { Avatar, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ClockIcon } from 'lucide-react';
@@ -7,6 +7,7 @@ import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';

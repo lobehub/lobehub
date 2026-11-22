@@ -35,6 +35,7 @@ import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsMo
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { useFavoriteMenuItem } from '@/features/Favorites';
+import { usePrivateAgentLinkNotice } from '@/features/PrivateAgentLinkNotice';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
@@ -82,6 +83,7 @@ export const useTopicItemDropdownMenu = ({
   const routeTopicIdRef = useLatest(routeTopicId);
   const unmountedRef = useUnmountedRef();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const notifyPrivateAgentLink = usePrivateAgentLinkNotice();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
@@ -295,7 +297,9 @@ export const useTopicItemDropdownMenu = ({
             activeWorkspaceSlug,
           )}`;
           await copyToClipboard(url);
-          toast.success(t('actions.copyLinkSuccess'));
+          // A private agent's topic link opens for nobody else in the workspace.
+          if (!(await notifyPrivateAgentLink(activeAgentId)))
+            toast.success(t('actions.copyLinkSuccess'));
         },
       },
       {
@@ -433,6 +437,7 @@ export const useTopicItemDropdownMenu = ({
     openTopicInPortal,
     addTab,
     navigate,
+    notifyPrivateAgentLink,
     t,
     handleOpenShareModal,
   ]);

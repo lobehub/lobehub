@@ -28,6 +28,7 @@ import {
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
   TasksFlattenProcessor,
+  ToolActivationAnchorProcessor,
   ToolCallProcessor,
   ToolMessageReorder,
   VerifyMessageProcessor,
@@ -92,6 +93,7 @@ const log = debug('context-engine:MessagesEngine');
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
 const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
+const SKILLS_TOOL_ID = 'lobe-skills';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -266,6 +268,9 @@ export class MessagesEngine {
     // Same gate for referenced agent documents: only point at `readDocument` when it is sent.
     const canReadDocuments =
       toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
+    // Same gate for filesystem skills: only require `activateSkill` when it is sent. A Custom-mode
+    // agent or a goal turn that did not pin Skills still reaches them through readFile.
+    const canActivateSkill = toolIds.includes(SKILLS_TOOL_ID) && !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -370,6 +375,7 @@ export class MessagesEngine {
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
       // sees neither the manifests nor the discovery prompt.
       new SkillContextProvider({
+        canActivateSkill,
         enabled:
           isAgentMode && !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
         enabledSkills: skillsConfig?.enabledSkills,
@@ -679,6 +685,15 @@ export class MessagesEngine {
       new ToolMessageReorder(),
       // Force finish summary (when maxSteps exceeded)
       new ForceFinishSummaryInjector({ enabled: !!forceFinish }),
+      // Only paired activation results still present in the outgoing conversation can own tools.
+      ...(toolsConfig?.anchorActivatedTools
+        ? [
+            new ToolActivationAnchorProcessor({
+              manifests: injectedToolManifests,
+              variableGenerators,
+            }),
+          ]
+        : []),
       // Message cleanup (final step)
       new MessageCleanupProcessor(),
     ];

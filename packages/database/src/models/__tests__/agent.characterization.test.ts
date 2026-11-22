@@ -58,6 +58,7 @@ const PUBLIC_METHODS = [
   'delete',
   'deleteAgentFile',
   'deleteAgentKnowledgeBase',
+  'detachFromSurvivingTopics',
   'duplicate',
   'existsById',
   'existsOwnedById',

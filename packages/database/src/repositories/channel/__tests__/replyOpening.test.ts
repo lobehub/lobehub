@@ -696,7 +696,7 @@ describe('Channel reply opening', () => {
     });
 
     it('offers only where a quoted request was answered, and hands the opener the quote', async () => {
-      const { agent, asMember, channel, message, thread } = await answeredInThread();
+      const { agent, asMember, asOwner, channel, message, thread } = await answeredInThread();
       // A second request answered in place, on the main timeline.
       const inPlace = await asMember.send(channel.id, {
         content: 'Should the member list match the personal space?',
@@ -707,7 +707,9 @@ describe('Channel reply opening', () => {
       const [inPlaceJob] = await jobsOf(db, inPlace.id);
       await execution.open(channel.id, inPlaceJob.id, {});
 
-      const quoting = await asMember.send(channel.id, {
+      // From someone else: the same person's request queued right behind theirs would be merged
+      // into that run, which opens for both.
+      const quoting = await asOwner.send(channel.id, {
         content: 'Why is this UI still unchanged?',
         mentions: [agent.id],
         replyToId: inPlace.id,

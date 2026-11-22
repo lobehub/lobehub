@@ -49,6 +49,7 @@ export type WorkingSidebarTab =
   | 'review'
   | 'search'
   | 'skills'
+  | 'tools'
   | 'web'
   | (string & {});
 
@@ -78,11 +79,12 @@ export enum SettingsTabs {
   Appearance = 'appearance',
   Automations = 'automations',
   Billing = 'billing',
-  /** @deprecated Use Appearance instead */
+  /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
+  Conversation = 'conversation',
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',

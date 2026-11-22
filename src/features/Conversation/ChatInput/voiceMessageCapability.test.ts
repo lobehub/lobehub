@@ -51,6 +51,8 @@ const MultimodalServerConfigWrapper = ({ children }: PropsWithChildren) =>
       }),
   });
 
+const VOICE_MESSAGE_ENABLED = { general: { enableVoiceMessage: true } };
+
 afterEach(() => {
   useAgentStore.setState(initialAgentState, true);
   useAiInfraStore.setState(initialAiInfraState, true);
@@ -60,6 +62,30 @@ afterEach(() => {
 });
 
 describe('canSendVoiceMessage', () => {
+  it('stays disabled by default until enableVoiceMessage is turned on', () => {
+    const agentId = 'default-off-voice-agent';
+    const audioModel = {
+      abilities: { audio: true },
+      enabled: true,
+      id: 'gemini-audio',
+      providerId: ModelProvider.Google,
+      type: 'chat',
+    } as const;
+    useAgentStore.setState({
+      agentMap: {
+        [agentId]: { chatConfig: {}, model: audioModel.id, provider: ModelProvider.Google },
+      },
+    } as any);
+    useAiInfraStore.setState({ enabledAiModels: [audioModel] });
+    useUserStore.setState({ workspaceUserPreference: {} });
+
+    expect(canSendVoiceMessage({ agentId })).toBe(false);
+
+    useUserStore.setState({ settings: VOICE_MESSAGE_ENABLED } as any);
+
+    expect(canSendVoiceMessage({ agentId })).toBe(true);
+  });
+
   it('rechecks the transaction topic capability without depending on the mounted chat input', () => {
     const agentId = 'voice-agent';
     const topicId = 'voice-topic';
@@ -83,7 +109,7 @@ describe('canSendVoiceMessage', () => {
       },
     } as any);
     useAiInfraStore.setState({ enabledAiModels: [audioModel, textModel] });
-    useUserStore.setState({ workspaceUserPreference: {} });
+    useUserStore.setState({ settings: VOICE_MESSAGE_ENABLED, workspaceUserPreference: {} } as any);
     useChatStore.setState({
       activeAgentId: 'another-agent',
       activeTopicId: 'another-topic',
@@ -138,6 +164,7 @@ describe('canSendVoiceMessage', () => {
     } as any);
     useAiInfraStore.setState({ enabledAiModels: [primaryModel, fallbackModel] });
     useUserStore.setState({
+      settings: VOICE_MESSAGE_ENABLED,
       user: { id: 'user-member' },
       workspaceUserPreference: { agentModeOverrides: { [agentId]: true } },
     } as any);
@@ -187,7 +214,7 @@ describe('heterogeneous agents', () => {
 
   const setAsr = (asr: { model: string; provider: string }) =>
     useUserStore.setState({
-      settings: { systemAgent: { asr } },
+      settings: { ...VOICE_MESSAGE_ENABLED, systemAgent: { asr } },
       workspaceUserPreference: {},
     } as any);
 
@@ -198,7 +225,7 @@ describe('heterogeneous agents', () => {
       enabledAiProviders: providers,
     } as any);
   const clearUserAsr = () =>
-    useUserStore.setState({ settings: {}, workspaceUserPreference: {} } as any);
+    useUserStore.setState({ settings: VOICE_MESSAGE_ENABLED, workspaceUserPreference: {} } as any);
 
   it('allows voice messages without an audio-capable model once the STT provider is enabled', () => {
     setEnabledProviders([openaiProvider]);
@@ -279,7 +306,10 @@ describe('useCanSendVoiceMessage', () => {
         },
       } as any);
       useAiInfraStore.setState({ enabledAiModels: [primaryModel, fallbackModel] });
-      useUserStore.setState({ workspaceUserPreference: {} });
+      useUserStore.setState({
+        settings: VOICE_MESSAGE_ENABLED,
+        workspaceUserPreference: {},
+      } as any);
     });
 
     const { result } = renderHook(() => useCanSendVoiceMessage({ agentId }), {
@@ -334,6 +364,7 @@ describe('useCanSendVoiceMessage', () => {
       } as any);
       useAiInfraStore.setState({ enabledAiModels: [primaryModel, fallbackModel] });
       useUserStore.setState({
+        settings: VOICE_MESSAGE_ENABLED,
         user: { id: 'user-member' },
         workspaceUserPreference: { agentModeOverrides: { [agentId]: false } },
       } as any);
@@ -381,12 +412,27 @@ describe('useCanSendVoiceMessage', () => {
         },
       } as any);
       useAiInfraStore.setState({ enabledAiModels: [audioModel, textModel] });
-      useUserStore.setState({ workspaceUserPreference: {} });
+      useUserStore.setState({
+        settings: VOICE_MESSAGE_ENABLED,
+        workspaceUserPreference: {},
+      } as any);
     });
 
     const context = { agentId };
     const { result } = renderHook(() => useCanSendVoiceMessage(context), {
       wrapper: ServerConfigWrapper,
+    });
+
+    expect(result.current).toBe(true);
+
+    act(() => {
+      useUserStore.setState({ settings: { general: { enableVoiceMessage: false } } } as any);
+    });
+
+    expect(result.current).toBe(false);
+
+    act(() => {
+      useUserStore.setState({ settings: VOICE_MESSAGE_ENABLED } as any);
     });
 
     expect(result.current).toBe(true);

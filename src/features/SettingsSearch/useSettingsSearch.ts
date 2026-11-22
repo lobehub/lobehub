@@ -13,6 +13,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { getPlatform } from '@/utils/platform';
 
 import {
@@ -158,6 +159,7 @@ export const useSettingsSearch = (
       hideDocs: !!hideDocs,
       isDesktop,
       isLogin: !!isLogin,
+      isMobile: isMobileSurface(),
       isWindows: getPlatform() === 'Windows',
       showAiImage: !!showAiImage,
     };

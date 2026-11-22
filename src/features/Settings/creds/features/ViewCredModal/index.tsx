@@ -3,6 +3,7 @@
 import { createModal, type ModalInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 
+import CredModalTitle from '../CredModalTitle';
 import ViewCredModalContent, { type ViewCredModalContentProps } from './Content';
 
 export const createViewCredModal = (props: ViewCredModalContentProps): ModalInstance =>
@@ -13,6 +14,11 @@ export const createViewCredModal = (props: ViewCredModalContentProps): ModalInst
     styles: {
       content: { paddingBlock: 16, paddingInline: 24 },
     },
-    title: t('creds.view.title', { name: props.cred.name, ns: 'setting' }),
+    title: (
+      <CredModalTitle
+        title={t('creds.view.title', { name: props.cred.name, ns: 'setting' })}
+        type={props.cred.type}
+      />
+    ),
     width: 'min(90vw, 600px)',
   });

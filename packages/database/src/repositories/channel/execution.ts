@@ -2,7 +2,9 @@ import type {
   AgentOperationStatus,
   ChannelContextMessage,
   ChannelJobStatus,
+  ChannelReplyError,
 } from '@lobechat/types';
+import { channelMessageReplyError } from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
@@ -30,6 +32,15 @@ import {
   findOpeningCandidate,
   findOpeningReply,
 } from './opening';
+import type { ChannelReplyErrorDraft } from './replyError';
+import {
+  findReplyError,
+  readReplyErrorFacts,
+  refineReplyError,
+  replaceReplyError,
+  replyRequestKey,
+  upsertReplyError,
+} from './replyError';
 import { findTextMentions, MAX_REPLY_MENTION_HOPS, replyMentionHops } from './replyMentions';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
@@ -276,8 +287,9 @@ export class ChannelExecutionRepository {
     );
 
   /**
-   * The triggering request and its explicit quote; see `recentContext` for the rest. Reads
-   * without the channel lock, since nothing at or before the cutoff changes after the claim.
+   * The triggering requests (one, or a merged batch oldest first) and the messages they quote;
+   * see `recentContext` for the rest. Reads without the channel lock, since nothing at or
+   * before the cutoff changes after the claim.
    */
   input = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
     const [job] = await this.db
@@ -292,15 +304,19 @@ export class ChannelExecutionRepository {
       );
     if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
 
-    const request = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: job.manifest.requestMessageId,
+    const { manifest } = job;
+    const requestIds = manifest.requestMessageIds ?? [manifest.requestMessageId];
+    const requests = await readManifestMessages(this.db, channelId, manifest, {
+      messageIds: requestIds,
     });
-    const replyToId = request[0]?.replyToId;
-    if (!replyToId) return request;
-    const quoted = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: replyToId,
+    const quotedIds = [
+      ...new Set(requests.flatMap(({ replyToId }) => (replyToId ? [replyToId] : []))),
+    ].filter((id) => !requestIds.includes(id));
+    if (!quotedIds.length) return requests;
+    const quoted = await readManifestMessages(this.db, channelId, manifest, {
+      messageIds: quotedIds,
     });
-    return [...quoted, ...request];
+    return [...quoted, ...requests];
   };
 
   /**
@@ -425,9 +441,48 @@ export class ChannelExecutionRepository {
   /** The other Agents the job's request asked to answer alongside it. */
   coAddressed = (channelId: string, jobId: string) => findCoAddressed(this.db, channelId, jobId);
 
-  /** The acknowledgement the job posted before its run, if any. */
-  openingReply = async (channelId: string, jobId: string) =>
-    (await findOpeningReply(this.db, channelId, jobId))?.content;
+  /**
+   * The acknowledgement the job posted before its run, if any. One a failure turned into the job's
+   * card no longer announces the work, so a resumed run is not told it said that.
+   */
+  openingReply = async (channelId: string, jobId: string) => {
+    const opening = await findOpeningReply(this.db, channelId, jobId);
+    return opening && !channelMessageReplyError(opening.metadata) ? opening.content : undefined;
+  };
+
+  /** What a failed job's card is written from. See {@link readReplyErrorFacts}. */
+  replyErrorFacts = (channelId: string, jobId: string) =>
+    readReplyErrorFacts(this.db, channelId, jobId);
+
+  /** Writes a failed job's card into its reply slot. See {@link upsertReplyError}. */
+  postReplyError = (channelId: string, jobId: string, draft: ChannelReplyErrorDraft) =>
+    withChannelLock(this.db, channelId, (tx, channel) =>
+      upsertReplyError(tx, channel, jobId, draft),
+    );
+
+  /** Rewrites a card's explanation in place. See {@link refineReplyError}. */
+  refineReplyError = (
+    channelId: string,
+    jobId: string,
+    operationId: string | null,
+    refined: Pick<ChannelReplyError, 'actions' | 'summary'>,
+  ) =>
+    withChannelLock(this.db, channelId, (tx) =>
+      refineReplyError(tx, channelId, jobId, operationId, refined),
+    );
+
+  /** The card a failed job left in its reply slot, while it still shows. */
+  replyError = async (channelId: string, jobId: string) => {
+    const [job] = await this.db
+      .select({
+        channelId: channelJobs.channelId,
+        id: channelJobs.id,
+        threadId: channelJobs.threadId,
+      })
+      .from(channelJobs)
+      .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
+    return job ? findReplyError(this.db, job) : undefined;
+  };
 
   /** The runtime took the input; only now may the job publish. */
   accepted = async (channelId: string, jobId: string) =>
@@ -483,15 +538,18 @@ export class ChannelExecutionRepository {
         .for('share');
       if (!sender) throw new ChannelError('CONFLICT', 'The replying Agent was deleted');
 
-      const reply = await appendMessage(tx, {
-        agentId: sender.id,
-        channelId,
-        content: job.draft,
-        replyToId: job.messageId,
-        requestKey: `job:${job.id}`,
-        routingStatus: 'reply',
-        threadId: job.threadId,
-      });
+      // A card from an earlier failure of this job is replaced by the reply, in the same slot.
+      const reply =
+        (await replaceReplyError(tx, job, job.draft)) ??
+        (await appendMessage(tx, {
+          agentId: sender.id,
+          channelId,
+          content: job.draft,
+          replyToId: job.messageId,
+          requestKey: replyRequestKey(job.id),
+          routingStatus: 'reply',
+          threadId: job.threadId,
+        }));
       await tx
         .update(channelJobs)
         .set({ publishedMessageId: reply.id, status: 'completed' })

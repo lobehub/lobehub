@@ -1,11 +1,12 @@
 'use client';
 
-import { Avatar, Button, Tag } from '@lobehub/ui';
+import { Button, Tag } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import Avatar from '@/components/Avatar';
 import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { buildAssistantListQuery } from '@/features/CommunityAgentList/assistantListQuery';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';

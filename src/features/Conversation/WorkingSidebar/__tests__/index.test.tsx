@@ -1175,4 +1175,22 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     expect(screen.queryByRole('button', { name: 'topicComment.title' })).not.toBeInTheDocument();
   });
+
+  it('renders Tools tab for standard agents and hides it in chat or heterogeneous mode', async () => {
+    agentStore.activeAgentId = 'agent';
+    localStorageState.openTabsByContext = { 'draft:agent:none': ['tools', 'params'] };
+    globalStore.status.workingSidebarTab = 'tools';
+
+    const { rerender } = render(<AgentWorkingSidebar availableWidth={1000} />);
+    await waitFor(() => expect(screen.getByTestId('tools-section')).toBeInTheDocument());
+
+    agentStore.isChatMode = true;
+    rerender(<AgentWorkingSidebar availableWidth={1001} />);
+    expect(screen.queryByTestId('tools-section')).not.toBeInTheDocument();
+
+    agentStore.isChatMode = false;
+    agentStore.isHeterogeneous = true;
+    rerender(<AgentWorkingSidebar availableWidth={1002} />);
+    expect(screen.queryByTestId('tools-section')).not.toBeInTheDocument();
+  });
 });

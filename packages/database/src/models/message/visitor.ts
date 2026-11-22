@@ -288,7 +288,7 @@ const sanitizeVisitorMetadata = (
  * The identity keys are omitted rather than nulled (`userId` is non-nullable on
  * `WorkItem`); no visitor-facing Work surface reads them.
  */
-const sanitizeVisitorWorks = (
+export const sanitizeVisitorWorks = (
   works: WorkSummaryItem[] | undefined,
 ): WorkSummaryItem[] | undefined =>
   works?.map((work) => {

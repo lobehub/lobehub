@@ -51,6 +51,28 @@ describe('spawnAgent preset env', () => {
     vi.unstubAllEnvs();
   });
 
+  it.each(['antigravity', 'claude-code', 'codex', 'opencode'] as const)(
+    'only filters inherited SSH session data for Antigravity service runs (%s)',
+    async (agentType) => {
+      vi.stubEnv('LOBEHUB_CONNECT_SERVICE', '1');
+      vi.stubEnv('SSH_CONNECTION', 'test-connection');
+      vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus');
+
+      const handle = await spawnAgent({
+        agentType,
+        command: '/custom/agent-cli',
+        operationId: 'op',
+        prompt: 'ping',
+      });
+      handle.kill();
+
+      const { env } = spawnCalls.at(-1)!;
+      expect(env.SSH_CONNECTION).toBe(agentType === 'antigravity' ? undefined : 'test-connection');
+      expect(env.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/run/user/1000/bus');
+      expect(process.env.SSH_CONNECTION).toBe('test-connection');
+    },
+  );
+
   // claude.ai connectors finish connecting after the first model call.
   it('makes Claude Code wait for MCP servers before its first turn', async () => {
     vi.stubEnv('MCP_CONNECTION_NONBLOCKING', undefined);

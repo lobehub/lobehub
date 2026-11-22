@@ -94,7 +94,7 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
           className={stylex.props(!visible && styles.maskedValue).className}
           style={{
             flex: 1,
-            fontFamily: 'var(--lobe-font-family-code)',
+            fontFamily: cssVar.fontFamilyCode,
             fontSize: 13,
             wordBreak: 'break-all',
           }}

@@ -2,12 +2,13 @@
 
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Spin } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
+import Avatar from '@/components/Avatar';
 import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';

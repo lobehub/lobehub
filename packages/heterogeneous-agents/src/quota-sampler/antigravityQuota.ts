@@ -11,6 +11,7 @@ import type {
   AntigravityQuotaParams,
   AntigravityQuotaSnapshot,
 } from '../quota/antigravity';
+import { getAntigravitySpawnEnv } from '../spawn/antigravity';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 
@@ -77,11 +78,11 @@ export const fetchAntigravityQuota = async (
   });
   try {
     const resolved = await resolveHeteroSpawnCommand('antigravity', params.command);
-    const env = {
+    const env = getAntigravitySpawnEnv({
       ...process.env,
       ...(resolved.pathEnv ? { PATH: resolved.pathEnv } : {}),
       ...params.env,
-    };
+    });
     const plan = await resolveCliSpawnPlan(
       resolved.command,
       ['-p', '/usage', '--output-format', 'json', '--print-timeout', '15s'],

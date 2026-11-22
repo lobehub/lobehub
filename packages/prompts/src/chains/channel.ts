@@ -40,6 +40,10 @@ const DEFERRED_WAKE_HINT = `Another participant was asked to answer this request
 const peersHint = (names: string[]) =>
   `This request also asked ${names.join(', ')} to answer. They answer it in parallel, in the same conversation, and the person reads all the answers together, so a second walk through the whole request is noise. Do not lay out the full picture end to end, even when the request asks for it: answer only the part your own role owns, in depth, and leave the rest to them. Do not describe this division or say what the others will do.`;
 
+/** What a run answering several requests sent in a row is told. */
+const mergedHint = (count: number) =>
+  `The ${count} \`channel_request\` blocks are requests the same person sent in a row while you were busy, oldest first. Answer them together in one reply. Where a later one corrects, narrows or replaces an earlier one, follow the later one.`;
+
 /** Longest context excerpt in the request; the history tools return the rest. */
 const CONTEXT_EXCERPT_LENGTH = 2000;
 const QUOTE_EXCERPT_LENGTH = 6000;
@@ -97,12 +101,13 @@ const createBoundary = (contents: string[]) => {
 };
 
 /**
- * The run's user message: unseen recent context, the explicit quote, then the request,
- * attributed by display name. Ids appear only where a tool call is the way to read more;
+ * The run's user message: unseen recent context, the explicit quotes, then the request (or the
+ * requests one person sent in a row while the member was busy, oldest first), attributed by
+ * display name. Ids appear only where a tool call is the way to read more;
  * older history stays behind the tools.
  */
 export const buildChannelPrompt = (
-  manifest: Pick<ChannelInputManifest, 'requestMessageId' | 'self'>,
+  manifest: Pick<ChannelInputManifest, 'requestMessageId' | 'requestMessageIds' | 'self'>,
   messages: ChannelContextMessage[],
   options: {
     boundary?: string;
@@ -115,27 +120,37 @@ export const buildChannelPrompt = (
     peers?: string[];
     /** A deferred follow-up's view of the primary responder's answer to the same request. */
     primaryReply?: ChannelContextMessage | null;
+    /**
+     * The run resumes this member's failed reply to the same request in the same conversation:
+     * the request is repeated with a short note to continue, without the context it already has.
+     */
+    resume?: { reason?: string };
     wake?: ChannelJobWake | null;
   } = {},
 ) => {
-  const { context = [], omitted = 0, opening, peers = [], primaryReply, wake } = options;
+  const { omitted: omittedCount = 0, opening, peers = [], primaryReply, resume, wake } = options;
+  // A resumed run already read the context, and acknowledged or not, in its earlier turn.
+  const context = resume ? [] : (options.context ?? []);
+  const omitted = resume ? 0 : omittedCount;
   const selfAgentId = manifest.self.agentId;
-  const request = messages.find(({ id }) => id === manifest.requestMessageId);
-  const quoted = messages.find(({ id }) => id === request?.replyToId);
+  const requestIds = manifest.requestMessageIds ?? [manifest.requestMessageId];
+  const requests = requestIds.flatMap((requestId) => messages.filter(({ id }) => id === requestId));
+  const request = requests.find(({ id }) => id === manifest.requestMessageId);
+  const quotes = messages.filter(
+    ({ id }) => !requestIds.includes(id) && requests.some(({ replyToId }) => replyToId === id),
+  );
   const recent = context.filter(
-    ({ id }) => id !== quoted?.id && id !== request?.id && id !== primaryReply?.id,
+    ({ id }) =>
+      !requestIds.includes(id) &&
+      !quotes.some((quoted) => quoted.id === id) &&
+      id !== primaryReply?.id,
   );
   const boundary =
     options.boundary ??
     createBoundary(
-      [
-        ...recent,
-        ...(quoted ? [quoted] : []),
-        ...(request ? [request] : []),
-        ...(primaryReply ? [primaryReply] : []),
-      ]
+      [...recent, ...quotes, ...requests, ...(primaryReply ? [primaryReply] : [])]
         .map(({ content }) => content)
-        .concat(opening ?? [], peers),
+        .concat(opening ?? [], peers, resume?.reason ?? []),
     );
 
   return [
@@ -159,22 +174,33 @@ export const buildChannelPrompt = (
         truncated ? message.content.slice(0, CONTEXT_EXCERPT_LENGTH) : message.content,
       );
     }),
-    ...(quoted
-      ? [
-          block(
-            'channel_quote',
-            attribution(quoted, selfAgentId, quoted.content.length > QUOTE_EXCERPT_LENGTH),
-            boundary,
-            quoted.content.slice(0, QUOTE_EXCERPT_LENGTH),
-          ),
-        ]
-      : []),
+    ...quotes.map((quoted) =>
+      block(
+        'channel_quote',
+        attribution(quoted, selfAgentId, quoted.content.length > QUOTE_EXCERPT_LENGTH),
+        boundary,
+        quoted.content.slice(0, QUOTE_EXCERPT_LENGTH),
+      ),
+    ),
+    ...requests
+      .filter((earlier) => earlier !== request)
+      .map((earlier) =>
+        block(
+          'channel_request',
+          { ...attribution(earlier, selfAgentId), to: manifest.self.name },
+          boundary,
+          earlier.content,
+        ),
+      ),
     block(
       'channel_request',
       { ...(request && attribution(request, selfAgentId)), to: manifest.self.name },
       boundary,
       request?.content ?? '',
     ),
+    ...(requests.length > 1
+      ? [block('channel_merged', {}, boundary, mergedHint(requests.length))]
+      : []),
     ...(primaryReply
       ? [
           block(
@@ -189,7 +215,17 @@ export const buildChannelPrompt = (
           ),
         ]
       : []),
-    ...(opening?.trim()
+    ...(resume
+      ? [
+          block(
+            'channel_resume',
+            {},
+            boundary,
+            `Your previous run on this request stopped before you replied${resume.reason ? ` (${resume.reason})` : ''}. Continue from where you left off instead of starting over: keep the work you already did, finish what is left, and reply with the result. Do not apologize for the interruption or acknowledge again.`,
+          ),
+        ]
+      : []),
+    ...(opening?.trim() && !resume
       ? [
           block(
             'channel_opening',

@@ -17,6 +17,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 import { isOwnCredRow, isWriteOnlyCredRow, workspaceCredRowAccess } from './credAccess';
 import { credErrorKey } from './credError';
+import { type CredFilter, filterCreds } from './credFilter';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
 import { type CredsApi } from './useCredsApi';
@@ -27,6 +28,8 @@ type Visibility = 'private' | 'public';
 interface WorkspaceCredsListProps {
   /** The workspace binding (`workspaceCreds`), with `setVisibility`. */
   credsApi: CredsApi;
+  /** The vault toolbar's search and type filter; every row when omitted. */
+  filter?: CredFilter;
   /** Narrow the list to private or shared credentials; every row when omitted. */
   visibilityFilter?: VisibilityFilterValue;
 }
@@ -40,6 +43,7 @@ interface WorkspaceCredsListProps {
  */
 const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
   credsApi,
+  filter = {},
   visibilityFilter = 'all',
 }) => {
   const { t } = useTranslation(['setting', 'common']);
@@ -49,7 +53,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery();
   const credentials = data?.data ?? [];
-  const visibleCredentials = credentials.filter((cred) =>
+  const visibleCredentials = filterCreds(credentials, filter).filter((cred) =>
     matchesVisibilityFilter(cred.visibility === 'private', visibilityFilter),
   );
 

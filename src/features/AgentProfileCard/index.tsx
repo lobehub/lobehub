@@ -3,7 +3,7 @@
 import { Center, createStaticStyles, cssVar, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
-import AgentAvatar, { isDefaultAgentAvatar } from '@/components/AgentAvatar';
+import AgentAvatar, { isGeneratedAgentAvatar } from '@/components/AgentAvatar';
 import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -104,7 +104,7 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
             size={48}
             // The generated character has no tile, so a frame would box empty space.
             style={
-              isDefaultAgentAvatar(avatar)
+              isGeneratedAgentAvatar(avatar)
                 ? undefined
                 : { border: `2px solid ${cssVar.colorBgElevated}` }
             }

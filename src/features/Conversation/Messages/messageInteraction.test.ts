@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
-import { getMessageInteractionState } from './messageInteraction';
+import { getMessageContextMenuAction, getMessageInteractionState } from './messageInteraction';
 
 const createMessage = (metadata?: UIChatMessage['metadata']) =>
   ({ id: 'message-1', metadata, role: 'user' }) as UIChatMessage;
@@ -28,5 +28,19 @@ describe('getMessageInteractionState', () => {
       effectiveDisableEditing: true,
       shouldSuppressContextMenu: true,
     });
+  });
+});
+
+describe('getMessageContextMenuAction', () => {
+  it('leaves message images to the platform menu even on a local-only message', () => {
+    const image = document.createElement('img');
+    expect(getMessageContextMenuAction(image, false)).toBe('native');
+    expect(getMessageContextMenuAction(image, true)).toBe('native');
+  });
+
+  it('keeps the usual message menu and local-only restriction for non-image targets', () => {
+    const text = document.createElement('span');
+    expect(getMessageContextMenuAction(text, false)).toBe('message');
+    expect(getMessageContextMenuAction(text, true)).toBe('suppress');
   });
 });

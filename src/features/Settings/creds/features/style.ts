@@ -19,6 +19,7 @@ export const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  descriptionCompact: { lineHeight: '18px' },
   icon: {
     display: 'flex',
     flexShrink: 0,
@@ -35,15 +36,13 @@ export const styles = stylex.create({
     height: '36px',
     borderRadius: '10px',
   },
-  key: {
-    fontFamily: 'monospace',
-    fontSize: '12px',
-    color: cssVar.colorTextSecondary,
-  },
   title: {
+    overflow: 'hidden',
     fontSize: '15px',
     fontWeight: 500,
     color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   titleCompact: {
     fontSize: '14px',

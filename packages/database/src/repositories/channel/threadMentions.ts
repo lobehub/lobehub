@@ -51,3 +51,27 @@ export const channelThreadMentions = async (
   }
   return mentionsOf;
 };
+
+/**
+ * Unread messages, Threads included, that @mention each member, keyed by Channel and counted
+ * from the member's read position, as `unreadCount` is.
+ */
+export const channelMentionCounts = async (
+  db: LobeChatDatabase,
+  memberIds: string[],
+): Promise<Map<string, number>> => {
+  if (!memberIds.length) return new Map();
+  const rows = await db
+    .select({ channelId: channelMessages.channelId, count: sql<number>`count(*)::int` })
+    .from(channelMessages)
+    .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
+    .where(
+      and(
+        inArray(channelMembers.id, memberIds),
+        sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
+        sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
+      ),
+    )
+    .groupBy(channelMessages.channelId);
+  return new Map(rows.map(({ channelId, count }) => [channelId, count]));
+};
