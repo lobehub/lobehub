@@ -1,5 +1,5 @@
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import { AGENT_PERMISSION_POLICY_KEYS } from '@lobechat/types';
+import { AGENT_PERMISSION_POLICY_KEYS, AgentPluginModeSchema } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -143,6 +143,35 @@ export const configRouter = router({
       const config = await ctx.agentService.getBuiltinAgent(input.slug);
       return config?.id ? protectAgentConfig(ctx, config.id, config) : config;
     }),
+  /**
+   * Which of the caller's own agents carry a plugin or skill (`pinned` or
+   * `disabled`), in one query over `plugins` instead of a full config per agent.
+   */
+  getPluginAgentModes: agentProcedure
+    .input(z.object({ identifier: z.string().min(1) }))
+    .query(async ({ input, ctx }) => ctx.agentModel.listPluginModes(input.identifier)),
+  /**
+   * Sets a plugin or skill's mode on the caller's own agents in one atomic
+   * write. `auto` removes it; without `agentIds` it removes it from every own
+   * agent carrying it.
+   */
+  setPluginMode: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(
+      z
+        .object({
+          agentIds: z.array(z.string()).max(500).optional(),
+          identifier: z.string().min(1),
+          mode: AgentPluginModeSchema,
+        })
+        .refine((input) => input.mode === 'auto' || !!input.agentIds, {
+          message: 'agentIds is required unless removing',
+          path: ['agentIds'],
+        }),
+    )
+    .mutation(async ({ input, ctx }) =>
+      ctx.agentModel.setPluginMode(input.identifier, input.mode, input.agentIds),
+    ),
   updateAgentConfig: agentProcedure
     .use(withScopedPermission('agent:update'))
     .input(
