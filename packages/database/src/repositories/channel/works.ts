@@ -3,6 +3,7 @@ import type {
   ChannelSharedAgentAccess,
   ExternalWorkSummaryItem,
   WorkSummaryItem,
+  WorkType,
 } from '@lobechat/types';
 import { agentShareWorkAccessScope } from '@lobechat/types';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -20,12 +21,22 @@ const isCanvasWork = (item: WorkSummaryItem): item is CanvasWorkSummaryItem =>
   item.type === 'canvas' && !!item.resourceId;
 
 /**
- * The Works a Channel reply card can open for a shared Agent's visitor: a link, a file by its
+ * The Works a reply card can open for a shared Agent's visitor: a link, a file by its
  * public `/f/:id` URL, and a collection from the images its summary carries. Documents, canvases
  * and tasks only open through the owner's Work, so they stay out instead of drawing dead cards.
  */
 const isVisitorOpenableWork = (item: WorkSummaryItem) =>
   isLinkedExternalWork(item) || item.type === 'file' || item.type === 'collection';
+
+/**
+ * The Work types each card actually draws, handed to the summary read so a type that the card
+ * then drops cannot spend one of its `limit` slots. Opting into canvases also enables `file` and
+ * `collection` (see `OPT_IN_WORK_TYPES`), and a run that saved 20 newer files after its link would
+ * otherwise fill the bucket before the cards are filtered, losing the link and the canvas.
+ */
+const MEMBER_CARD_WORK_TYPES: WorkType[] = ['external', 'canvas'];
+const VISITOR_CARD_WORK_TYPES: WorkType[] = ['external', 'file', 'collection'];
+const EXTERNAL_ONLY_CARD_WORK_TYPES: WorkType[] = ['external'];
 
 /**
  * A summary as other members see it: what the card draws, without the ids that tie it to the
@@ -179,6 +190,12 @@ export const replyWorksByMessage = async (
           ? visitorSeesOwn && viewer.includeFileWorks
           : viewer.includeCanvasWorks,
         rootOperationIds: readerJobs.map((job) => job.operationId!),
+        // Read only what this card can draw, so the types it drops never take a slot.
+        types: share
+          ? visitorSeesOwn
+            ? VISITOR_CARD_WORK_TYPES
+            : EXTERNAL_ONLY_CARD_WORK_TYPES
+          : MEMBER_CARD_WORK_TYPES,
       });
       for (const job of readerJobs) {
         const runWorks = summaries[job.operationId!] ?? [];

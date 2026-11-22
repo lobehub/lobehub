@@ -19,6 +19,7 @@ import {
   type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
+  type WorkType,
   type WorkVisibility,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -336,6 +337,8 @@ export class WorkModel {
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
+    /** See {@link queries.listSummariesByRootOperations}: narrows the types the caller draws. */
+    types?: WorkType[];
   }) => queries.listSummariesByRootOperations(this.ctx, params);
 
   listByConversation = (params: {

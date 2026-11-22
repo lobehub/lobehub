@@ -50,7 +50,7 @@ interface WorkFixture {
   share?: boolean;
   tokens?: number;
   trashed?: boolean;
-  type?: 'canvas' | 'document' | 'external';
+  type?: 'canvas' | 'collection' | 'document' | 'external' | 'file';
   url?: string | null;
   visibility?: 'private' | 'public';
 }
@@ -282,6 +282,41 @@ describe('Channel reply works', () => {
       expect(await cardsOf(state, state.asOwner)).toEqual([
         expect.objectContaining({ id: shared.id, type: 'canvas' }),
       ]);
+    });
+
+    it('keeps the link and the canvas when the run saved many newer files', async () => {
+      const state = await publishedReply();
+      const link = await addWork({
+        at: new Date('2026-11-12T09:00:00Z'),
+        rootOperationId: state.operationId,
+      });
+      const canvas = await addWork({
+        at: new Date('2026-11-12T09:10:00Z'),
+        resourceType: 'canvas',
+        rootOperationId: state.operationId,
+        type: 'canvas',
+        url: null,
+      });
+      // Opting into canvases also enables `file` and `collection`: 25 newer files must not spend
+      // the card's summary slots, or the older link and canvas are dropped before the card is built.
+      for (let index = 0; index < 25; index++) {
+        await addWork({
+          at: new Date(Date.parse('2026-11-12T10:00:00Z') + index * 1000),
+          resourceType: 'file',
+          rootOperationId: state.operationId,
+          type: 'file',
+          url: null,
+        });
+      }
+
+      const cards = await cardsOf(state, state.asMember);
+      expect(cards.map((card) => card.type).sort()).toEqual(['canvas', 'external']);
+      expect(cards).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: canvas.id, type: 'canvas' }),
+          expect.objectContaining({ id: link.url, type: 'external' }),
+        ]),
+      );
     });
   });
 });
