@@ -81,6 +81,7 @@ import {
 
 export type { ChannelAddAgentInput } from './agent';
 export { memberEnvironment } from './agent';
+export { channelAttachments } from './attachments';
 export {
   CHANNEL_ROUTING_BATCH_SIZE,
   CHANNEL_ROUTING_LEASE_MS,
