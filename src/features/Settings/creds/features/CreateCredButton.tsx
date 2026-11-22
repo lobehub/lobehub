@@ -2,7 +2,7 @@
 
 import { type CredType } from '@lobechat/types';
 import { Button, DropdownMenu, Icon } from '@lobehub/ui';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,14 +15,15 @@ interface CreateCredButtonProps {
 }
 
 /**
- * "New credential" opens a menu of credential types; picking one opens that
- * type's form directly, so creating a credential takes no separate type step.
+ * "New credential" opens a compact menu of credential types (icon + name);
+ * picking one opens that type's form directly, so creating a credential takes
+ * no separate type step. Each form explains its type in its own field hints.
  */
 const CreateCredButton: FC<CreateCredButtonProps> = ({ disabled, onCreate, size }) => {
   const { t } = useTranslation('setting');
 
   const button = (
-    <Button disabled={disabled} icon={<Icon icon={Plus} />} size={size} type={'primary'}>
+    <Button disabled={disabled} size={size} type={'primary'}>
       {t('creds.create')}
       <Icon icon={ChevronDown} size={14} />
     </Button>
@@ -32,10 +33,8 @@ const CreateCredButton: FC<CreateCredButtonProps> = ({ disabled, onCreate, size 
 
   return (
     <DropdownMenu
-      iconAlign={'start'}
       placement={'bottomRight'}
       items={CRED_TYPES.map((type) => ({
-        desc: t(`creds.typeDesc.${type}`),
         icon: <Icon icon={CRED_TYPE_ICONS[type]} />,
         key: type,
         label: t(`creds.types.${type}`),
