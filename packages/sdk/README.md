@@ -39,7 +39,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 
 ## Resources
 
-33 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
+35 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
 
 | Resource              | Methods                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -64,6 +64,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 | `messages`            | `create`, `createReply`, `delete`, `deleteMany`, `get`, `getCount`, `list`                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `models`              | `create`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `notifications`       | `archive`, `archiveAll`, `getCounts`, `getUnreadCount`, `list`, `listSettings`, `markAllRead`, `markRead`, `updateSettings`                                                                                                                                                                                                                                                                                                                                                           |
+| `objects`             | `generate`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `permissions`         | `create`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `plugins`             | `list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `providers`           | `create`, `delete`, `get`, `list`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -72,6 +73,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 | `roles`               | `create`, `delete`, `deletePermissions`, `get`, `list`, `listPermissions`, `update`, `updatePermissions`                                                                                                                                                                                                                                                                                                                                                                              |
 | `signals`             | `emit`, `listReceipts`, `trigger`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `tasks`               | `create`, `delete`, `get`, `list`, `listRuns`, `run`, `update`, `updateStatus`                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `text`                | `generate`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `topics`              | `create`, `delete`, `get`, `list`, `listThreads`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `usage`               | `list`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `users`               | `create`, `delete`, `deleteRoles`, `get`, `list`, `listRoles`, `me`, `update`, `updateRoles`                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -181,6 +183,29 @@ await lobehub.files.upload(buffer, { name: 'image.png', type: 'image/png' });
 The file name defaults to the `File` name or the path's base name, and the type to the `Blob` type.
 
 ## Generations
+
+`text.generate` and `objects.generate` run one completion and answer at once — the REST twins of `lh generate text` and `lh generate json`. A reasoning model's reasoning comes back in `reasoning`, never inside `text`; `objects.generate` returns an object that matches your JSON Schema, or 422 when the model's reply does not:
+
+```ts
+const { data: text } = await lobehub.text.generate({
+  body: { model: 'deepseek-flash', provider: 'lobehub', prompt: 'Name a pegboard use.' },
+});
+console.log(text?.data.text);
+
+const { data: concept } = await lobehub.objects.generate({
+  body: {
+    prompt: 'A pegboard headphone hanger',
+    schema: {
+      additionalProperties: false,
+      properties: { name: { type: 'string' }, steps: { items: { type: 'string' }, type: 'array' } },
+      required: ['name', 'steps'],
+      type: 'object',
+    },
+    strict: true,
+  },
+});
+console.log(concept?.data.object);
+```
 
 `images.generate` and `videos.generate` start image / video generations (API keys need `generation:write`). Images wait for the result by default; videos answer at once with pending generations. `generations.wait` polls `GET /generations/{id}` until the generation is `success` or `error` and resolves with its final state; it rejects with `GenerationWaitTimeoutError` after `timeout` (10 minutes by default).
 

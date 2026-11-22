@@ -2,15 +2,17 @@ import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { GenerationRestService } from '../services/generation.service';
+import { TextGenerationRestService } from '../services/text-generation.service';
 import type {
   CreateImageGenerationRequest,
   CreateVideoGenerationRequest,
   GenerationIdParam,
   GenerationListQuery,
 } from '../types/generation.type';
+import type { ObjectGenerationRequest, TextGenerationRequest } from '../types/text-generation.type';
 
 /**
- * Image / video generation controller.
+ * Text, JSON, image and video generation controller.
  * Handles HTTP concerns only — generation rules live in the shared image / video procedures.
  */
 export class GenerationController extends BaseController {
@@ -20,6 +22,36 @@ export class GenerationController extends BaseController {
       this.getUserId(c),
       this.getWorkspaceId(c),
     );
+  }
+
+  private async textService(c: Context) {
+    return new TextGenerationRestService(
+      await this.getDatabase(),
+      this.getUserId(c),
+      this.getWorkspaceId(c),
+    );
+  }
+
+  /** POST /api/v1/text/generations */
+  async generateText(c: Context): Promise<Response> {
+    try {
+      const body = await this.getBody<TextGenerationRequest>(c);
+      const service = await this.textService(c);
+      return this.success(c, await service.generateText(body), 'Text generated');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** POST /api/v1/objects/generations */
+  async generateObject(c: Context): Promise<Response> {
+    try {
+      const body = await this.getBody<ObjectGenerationRequest>(c);
+      const service = await this.textService(c);
+      return this.success(c, await service.generateObject(body), 'Object generated');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
   }
 
   /** POST /api/v1/images/generations */

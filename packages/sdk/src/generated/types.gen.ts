@@ -15660,3 +15660,259 @@ export type PostApiV1VideosGenerationsResponses = {
 };
 
 export type PostApiV1VideosGenerationsResponse = PostApiV1VideosGenerationsResponses[keyof PostApiV1VideosGenerationsResponses];
+
+export type PostApiV1TextGenerationsData = {
+    body: {
+        /**
+         * Maximum output tokens.
+         */
+        maxTokens?: number;
+        /**
+         * Conversation to complete. Use instead of, or after, `system` + `prompt`.
+         */
+        messages?: Array<{
+            /**
+             * Plain-text message content.
+             */
+            content: string;
+            role: 'system' | 'user' | 'assistant';
+        }>;
+        /**
+         * Model id. Omit to use the platform's default chat model.
+         */
+        model?: string;
+        /**
+         * User prompt; appended after `messages` when both are given.
+         */
+        prompt?: string;
+        /**
+         * Provider id (for example `lobehub`, `openai`). Omit with `model` for the default.
+         */
+        provider?: string;
+        /**
+         * System prompt, placed first.
+         */
+        system?: string;
+        /**
+         * Sampling temperature, 0–2.
+         */
+        temperature?: number;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/text/generations';
+};
+
+export type PostApiV1TextGenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Payment required
+     */
+    402: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1TextGenerationsError = PostApiV1TextGenerationsErrors[keyof PostApiV1TextGenerationsErrors];
+
+export type PostApiV1TextGenerationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            /**
+             * Why the model stopped, as the provider reports it (`stop`, `length`, …).
+             */
+            finishReason: string | null;
+            model: string;
+            provider: string;
+            /**
+             * Reasoning of a reasoning model, kept out of `text`; `null` otherwise.
+             */
+            reasoning: string | null;
+            /**
+             * The generated text.
+             */
+            text: string;
+            usage: {
+                inputTokens: number | null;
+                outputTokens: number | null;
+                reasoningTokens: number | null;
+                totalTokens: number | null;
+            } | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TextGenerationsResponse = PostApiV1TextGenerationsResponses[keyof PostApiV1TextGenerationsResponses];
+
+export type PostApiV1ObjectsGenerationsData = {
+    body: {
+        /**
+         * Conversation to complete. Use instead of, or after, `system` + `prompt`.
+         */
+        messages?: Array<{
+            /**
+             * Plain-text message content.
+             */
+            content: string;
+            role: 'system' | 'user' | 'assistant';
+        }>;
+        /**
+         * Model id. Omit to use the platform's default chat model.
+         */
+        model?: string;
+        /**
+         * User prompt; appended after `messages` when both are given.
+         */
+        prompt?: string;
+        /**
+         * Provider id (for example `lobehub`, `openai`). Omit with `model` for the default.
+         */
+        provider?: string;
+        /**
+         * System prompt, placed first.
+         */
+        system?: string;
+        /**
+         * A JSON Schema with `type: "object"` at the root. Supported root keywords: `properties`, `required`, `additionalProperties`, `$defs`, `title`, `description`; others (such as `allOf`) are rejected rather than silently dropped.
+         */
+        schema: {
+            $defs?: {
+                [key: string]: unknown;
+            };
+            additionalProperties?: boolean;
+            description?: string;
+            properties: {
+                [key: string]: unknown;
+            };
+            required?: Array<string>;
+            title?: string;
+            type: 'object';
+        };
+        /**
+         * What the object is, sent with the schema.
+         */
+        schemaDescription?: string;
+        /**
+         * Name sent with the schema. Defaults to `response`.
+         */
+        schemaName?: string;
+        /**
+         * Ask the provider to enforce the schema strictly (every property required, no extras).
+         */
+        strict?: boolean;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/objects/generations';
+};
+
+export type PostApiV1ObjectsGenerationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Payment required
+     */
+    402: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1ObjectsGenerationsError = PostApiV1ObjectsGenerationsErrors[keyof PostApiV1ObjectsGenerationsErrors];
+
+export type PostApiV1ObjectsGenerationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            model: string;
+            /**
+             * The generated object, valid for the requested schema.
+             */
+            object: {
+                [key: string]: unknown;
+            };
+            provider: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ObjectsGenerationsResponse = PostApiV1ObjectsGenerationsResponses[keyof PostApiV1ObjectsGenerationsResponses];

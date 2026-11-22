@@ -42584,3 +42584,640 @@ paths:
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
         - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/text/generations:
+    post:
+      operationId: text.generate
+      description: >-
+        Generates text with an LLM in a single completion — no tools, nothing
+        stored as a conversation. Pass `prompt` (and optionally `system`), or a
+        `messages` list. `model` + `provider` pick the model; omit both for the
+        platform's default chat model. The answer is in `text`; a reasoning
+        model's reasoning comes back separately in `reasoning`, never spliced
+        into `text`. Provider failures answer 502 `upstream_error` with the
+        provider's reason; budget and quota refusals keep their own status (402
+        / 429).
+
+
+        **API key scopes:** `generation:write`.
+      summary: Generate text
+      tags:
+        - text
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      finishReason:
+                        description: Why the model stopped, as the provider reports it (`stop`,
+                          `length`, …).
+                        type:
+                          - string
+                          - "null"
+                      model:
+                        type: string
+                      provider:
+                        type: string
+                      reasoning:
+                        description: Reasoning of a reasoning model, kept out of `text`; `null`
+                          otherwise.
+                        type:
+                          - string
+                          - "null"
+                      text:
+                        type: string
+                        description: The generated text.
+                      usage:
+                        anyOf:
+                          - type: object
+                            properties:
+                              inputTokens:
+                                anyOf:
+                                  - type: integer
+                                    minimum: -9007199254740991
+                                    maximum: 9007199254740991
+                                  - type: "null"
+                              outputTokens:
+                                anyOf:
+                                  - type: integer
+                                    minimum: -9007199254740991
+                                    maximum: 9007199254740991
+                                  - type: "null"
+                              reasoningTokens:
+                                anyOf:
+                                  - type: integer
+                                    minimum: -9007199254740991
+                                    maximum: 9007199254740991
+                                  - type: "null"
+                              totalTokens:
+                                anyOf:
+                                  - type: integer
+                                    minimum: -9007199254740991
+                                    maximum: 9007199254740991
+                                  - type: "null"
+                            required:
+                              - inputTokens
+                              - outputTokens
+                              - reasoningTokens
+                              - totalTokens
+                          - type: "null"
+                    required:
+                      - finishReason
+                      - model
+                      - provider
+                      - reasoning
+                      - text
+                      - usage
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  finishReason: stop
+                  model: deepseek-flash
+                  provider: lobehub
+                  reasoning: null
+                  text: Hanging hand tools, organising cables and storing small parts bins.
+                  usage:
+                    inputTokens: 24
+                    outputTokens: 14
+                    reasoningTokens: null
+                    totalTokens: 38
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "402":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Payment required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Upstream error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maxTokens:
+                  description: Maximum output tokens.
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                messages:
+                  description: Conversation to complete. Use instead of, or after, `system` +
+                    `prompt`.
+                  minItems: 1
+                  maxItems: 200
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      content:
+                        type: string
+                        description: Plain-text message content.
+                      role:
+                        type: string
+                        enum:
+                          - system
+                          - user
+                          - assistant
+                    required:
+                      - content
+                      - role
+                    additionalProperties: false
+                model:
+                  description: Model id. Omit to use the platform's default chat model.
+                  type: string
+                  minLength: 1
+                prompt:
+                  description: User prompt; appended after `messages` when both are given.
+                  type: string
+                  minLength: 1
+                provider:
+                  description: Provider id (for example `lobehub`, `openai`). Omit with `model`
+                    for the default.
+                  type: string
+                  minLength: 1
+                system:
+                  description: System prompt, placed first.
+                  type: string
+                  minLength: 1
+                temperature:
+                  description: Sampling temperature, 0–2.
+                  type: number
+                  minimum: 0
+                  maximum: 2
+              additionalProperties: false
+            example:
+              model: deepseek-flash
+              prompt: Name three uses for a pegboard in a home workshop.
+              provider: lobehub
+              system: Answer in one short sentence.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/objects/generations:
+    post:
+      operationId: objects.generate
+      description: >-
+        Generates a JSON object that matches `schema` (structured output, single
+        completion) — the same path `lh generate json` uses. The root of
+        `schema` must be `type: "object"`; `strict: true` asks providers that
+        support it to enforce the schema exactly (every property required,
+        `additionalProperties: false`). `model` + `provider` pick the model;
+        omit both for the platform's default. A reply that is not a JSON object
+        for the schema answers 422 `unprocessable_entity`; provider failures
+        answer 502 `upstream_error`.
+
+
+        **API key scopes:** `generation:write`.
+      summary: Generate a JSON object
+      tags:
+        - objects
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      model:
+                        type: string
+                      object:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties: {}
+                        description: The generated object, valid for the requested schema.
+                      provider:
+                        type: string
+                    required:
+                      - model
+                      - object
+                      - provider
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  model: deepseek-flash
+                  object:
+                    name: Peg hook
+                    steps:
+                      - Sketch the side profile
+                      - Extrude 40 mm
+                      - Fillet
+                  provider: lobehub
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "402":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Payment required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Upstream error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messages:
+                  description: Conversation to complete. Use instead of, or after, `system` +
+                    `prompt`.
+                  minItems: 1
+                  maxItems: 200
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      content:
+                        type: string
+                        description: Plain-text message content.
+                      role:
+                        type: string
+                        enum:
+                          - system
+                          - user
+                          - assistant
+                    required:
+                      - content
+                      - role
+                    additionalProperties: false
+                model:
+                  description: Model id. Omit to use the platform's default chat model.
+                  type: string
+                  minLength: 1
+                prompt:
+                  description: User prompt; appended after `messages` when both are given.
+                  type: string
+                  minLength: 1
+                provider:
+                  description: Provider id (for example `lobehub`, `openai`). Omit with `model`
+                    for the default.
+                  type: string
+                  minLength: 1
+                system:
+                  description: System prompt, placed first.
+                  type: string
+                  minLength: 1
+                schema:
+                  type: object
+                  properties:
+                    $defs:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties: {}
+                    additionalProperties:
+                      type: boolean
+                    description:
+                      type: string
+                    properties:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties: {}
+                    required:
+                      type: array
+                      items:
+                        type: string
+                    title:
+                      type: string
+                    type:
+                      type: string
+                      const: object
+                  required:
+                    - properties
+                    - type
+                  additionalProperties: false
+                  description: 'A JSON Schema with `type: "object"` at the root. Supported root
+                    keywords: `properties`, `required`, `additionalProperties`,
+                    `$defs`, `title`, `description`; others (such as `allOf`)
+                    are rejected rather than silently dropped.'
+                schemaDescription:
+                  description: What the object is, sent with the schema.
+                  type: string
+                schemaName:
+                  default: response
+                  description: Name sent with the schema. Defaults to `response`.
+                  type: string
+                  pattern: ^[\w-]{1,64}$
+                strict:
+                  description: Ask the provider to enforce the schema strictly (every property
+                    required, no extras).
+                  type: boolean
+              required:
+                - schema
+              additionalProperties: false
+            example:
+              model: deepseek-flash
+              prompt: A pegboard headphone hanger, 3D printed in PETG.
+              provider: lobehub
+              schema:
+                additionalProperties: false
+                properties:
+                  name:
+                    type: string
+                  steps:
+                    items:
+                      type: string
+                    type: array
+                required:
+                  - name
+                  - steps
+                type: object
+              schemaName: concept
+              strict: true
+              system: Propose one product concept with its CAD modelling steps.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"

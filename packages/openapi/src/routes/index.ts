@@ -19,6 +19,7 @@ import MessageTranslationsRoutes from './message-translations.route';
 import MessagesRoutes from './messages.route';
 import ModelsRoutes from './models.route';
 import NotificationsRoutes from './notifications.route';
+import ObjectsRoutes from './objects.route';
 import OpenAIRoutes from './openai.route';
 import PermissionsRoutes from './permissions.route';
 import { PluginsRoutes } from './plugins.route';
@@ -28,6 +29,7 @@ import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
 import AgentSignalsRoutes from './signals.route';
 import TasksRoutes from './tasks.route';
+import TextRoutes from './text.route';
 import TopicsRoutes from './topics.route';
 import UsageRoutes from './usage.route';
 import UsersRoutes from './users.route';
@@ -68,4 +70,6 @@ export default {
   'generations': GenerationsRoutes,
   'images': ImagesRoutes,
   'videos': VideosRoutes,
+  'text': TextRoutes,
+  'objects': ObjectsRoutes,
 };
