@@ -1,4 +1,4 @@
-import type { ApnsEnvironment } from '@lobechat/types';
+import type { ApnsEnvironment, PushTokenProvider } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import type {
@@ -21,7 +21,8 @@ export class PushTokenModel {
 
   /**
    * Upsert by (userId, deviceId). Re-registering the same device replaces
-   * the previous token and refreshes lastSeenAt.
+   * the previous token and refreshes lastSeenAt. A device that switches
+   * between an Expo and a native APNs build switches provider in place.
    */
   async upsert(data: Omit<NewPushToken, 'userId'>): Promise<PushTokenItem> {
     const [result] = await this.db
@@ -31,11 +32,13 @@ export class PushTokenModel {
         set: {
           apnsEnvironment: data.apnsEnvironment,
           appVersion: data.appVersion,
+          bundleId: data.bundleId ?? null,
           expoToken: data.expoToken,
           lastSeenAt: new Date(),
           liveActivityPushToStartToken: data.liveActivityPushToStartToken,
           locale: data.locale,
           platform: data.platform,
+          provider: data.provider ?? 'expo',
         },
         target: [pushTokens.userId, pushTokens.deviceId],
       })
@@ -74,6 +77,24 @@ export class PushTokenModel {
     return this.db
       .delete(pushTokens)
       .where(and(eq(pushTokens.userId, this.userId), eq(pushTokens.deviceId, deviceId)));
+  }
+
+  /**
+   * Remove this user's tokens of one provider that the provider rejected
+   * (e.g. APNs `Unregistered`). Matching by token, not device, keeps a
+   * registration that rotated meanwhile.
+   */
+  async deleteByTokens(provider: PushTokenProvider, tokens: string[]) {
+    if (tokens.length === 0) return;
+    await this.db
+      .delete(pushTokens)
+      .where(
+        and(
+          eq(pushTokens.userId, this.userId),
+          eq(pushTokens.provider, provider),
+          inArray(pushTokens.expoToken, tokens),
+        ),
+      );
   }
 
   /** All tokens for this user — used by PushChannel to fan out a notification. */

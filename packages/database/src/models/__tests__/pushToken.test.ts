@@ -112,6 +112,67 @@ describe('PushTokenModel', () => {
         liveActivityPushToStartToken: 'start-token-2',
       });
     });
+    it('stores a native APNs token and switches the device back to Expo in place', async () => {
+      const apns = await model.upsert({
+        apnsEnvironment: 'sandbox',
+        bundleId: 'com.lobehub.lobot',
+        deviceId: 'device-1',
+        expoToken: 'a'.repeat(64),
+        platform: 'ios',
+        provider: 'apns',
+      });
+      expect(apns).toMatchObject({
+        apnsEnvironment: 'sandbox',
+        bundleId: 'com.lobehub.lobot',
+        provider: 'apns',
+      });
+
+      const expo = await model.upsert({
+        deviceId: 'device-1',
+        expoToken: 'ExponentPushToken[abc]',
+        platform: 'ios',
+      });
+      expect(expo).toMatchObject({ bundleId: null, id: apns.id, provider: 'expo' });
+    });
+
+    it('defaults provider to expo', async () => {
+      const row = await model.upsert({
+        deviceId: 'device-1',
+        expoToken: 'ExponentPushToken[abc]',
+        platform: 'android',
+      });
+      expect(row.provider).toBe('expo');
+    });
+  });
+
+  describe('deleteByTokens', () => {
+    it('removes only this user tokens of the given provider', async () => {
+      const token = 'b'.repeat(64);
+      await model.upsert({ deviceId: 'mine', expoToken: token, platform: 'ios', provider: 'apns' });
+      await model.upsert({
+        deviceId: 'keep',
+        expoToken: 'c'.repeat(64),
+        platform: 'ios',
+        provider: 'apns',
+      });
+      await new PushTokenModel(serverDB, otherUserId).upsert({
+        deviceId: 'theirs',
+        expoToken: token,
+        platform: 'ios',
+        provider: 'apns',
+      });
+
+      await model.deleteByTokens('expo', [token]);
+      expect(await model.listByUserId()).toHaveLength(2);
+
+      await model.deleteByTokens('apns', [token]);
+      expect((await model.listByUserId()).map((t) => t.deviceId)).toEqual(['keep']);
+      expect(await new PushTokenModel(serverDB, otherUserId).listByUserId()).toHaveLength(1);
+    });
+
+    it('is a no-op for an empty list', async () => {
+      await expect(model.deleteByTokens('apns', [])).resolves.toBeUndefined();
+    });
   });
 
   describe('updateLiveActivityRegistration', () => {

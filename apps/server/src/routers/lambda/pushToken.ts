@@ -1,3 +1,4 @@
+import { PUSH_TOKEN_PROVIDERS } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
@@ -20,35 +21,78 @@ const authedPushTokenProcedure = authedProcedure.use(serverDatabase).use(async (
   });
 });
 
+const apnsEnvironmentSchema = z.enum(['sandbox', 'production']);
+
+/** APNs device tokens are hex; today 32 bytes, Apple reserves the right to grow them. */
+const APNS_DEVICE_TOKEN = /^(?:[\da-f]{2}){32,100}$/i;
+
+/**
+ * `expoToken` is the original field. Native iOS clients send `token` with
+ * `provider: 'apns'` instead; `environment` picks the APNs gateway of the
+ * signing profile (falls back to `apnsEnvironment`, then `production`).
+ */
+const registerInput = z
+  .object({
+    apnsEnvironment: apnsEnvironmentSchema.optional(),
+    appVersion: z.string().optional(),
+    bundleId: z.string().min(1).max(255).optional(),
+    deviceId: z.string().min(1),
+    environment: apnsEnvironmentSchema.optional(),
+    expoToken: z.string().min(1).optional(),
+    liveActivityPushToStartToken: z.string().min(1).max(512).optional(),
+    locale: z.string().optional(),
+    platform: z.enum(['ios', 'android']),
+    provider: z.enum(PUSH_TOKEN_PROVIDERS).default('expo'),
+    token: z.string().min(1).max(512).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const token = input.token ?? input.expoToken;
+    if (!token) {
+      ctx.addIssue({ code: 'custom', message: 'token is required', path: ['token'] });
+      return;
+    }
+    if (input.provider !== 'apns') return;
+    if (input.platform !== 'ios')
+      ctx.addIssue({ code: 'custom', message: 'APNs tokens are iOS only', path: ['platform'] });
+    if (!APNS_DEVICE_TOKEN.test(token))
+      ctx.addIssue({ code: 'custom', message: 'Not an APNs device token', path: ['token'] });
+  });
+
 export const pushTokenRouter = router({
-  register: authedPushTokenProcedure
-    .input(
-      z.object({
-        apnsEnvironment: z.enum(['sandbox', 'production']).optional(),
-        appVersion: z.string().optional(),
-        deviceId: z.string().min(1),
-        expoToken: z.string().min(1),
-        liveActivityPushToStartToken: z.string().min(1).max(512).optional(),
-        locale: z.string().optional(),
-        platform: z.enum(['ios', 'android']),
+  register: authedPushTokenProcedure.input(registerInput).mutation(async ({ ctx, input }) => {
+    const {
+      apnsEnvironment,
+      bundleId,
+      environment,
+      expoToken,
+      liveActivityPushToStartToken,
+      provider,
+      token,
+      ...pushToken
+    } = input;
+    const isApns = provider === 'apns';
+    const row = await ctx.pushTokenModel.upsert({
+      ...pushToken,
+      expoToken: (token ?? expoToken)!,
+      provider,
+      ...(isApns && {
+        apnsEnvironment: environment ?? apnsEnvironment ?? 'production',
+        bundleId,
       }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { apnsEnvironment, liveActivityPushToStartToken, ...pushToken } = input;
-      const row = await ctx.pushTokenModel.upsert(pushToken);
+    });
 
-      if (apnsEnvironment && liveActivityPushToStartToken) {
-        await registerLiveActivityPushToStartToken({
-          apnsEnvironment,
-          deviceId: input.deviceId,
-          liveActivityPushToStartToken,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
-      }
+    if (apnsEnvironment && liveActivityPushToStartToken) {
+      await registerLiveActivityPushToStartToken({
+        apnsEnvironment,
+        deviceId: input.deviceId,
+        liveActivityPushToStartToken,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+    }
 
-      return row;
-    }),
+    return row;
+  }),
 
   /** Register/rotate one ActivityKit update token by durable intervention id. */
   registerLiveActivity: authedPushTokenProcedure

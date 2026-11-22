@@ -1,20 +1,31 @@
 import { sleep } from '@lobechat/utils';
 import debug from 'debug';
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
+import pMap from 'p-map';
 
 import { PushTokenModel } from '@/database/models/pushToken';
 import { serverDB } from '@/database/server';
 
+import { APNS_INVALID_TOKEN_REASONS, ApnsClient } from './apns';
 import { DEFAULT_PUSH_CHANNEL_ID } from './constants';
-import type { PushDeliveryContext, PushDeliveryResult, PushTicketRecord } from './types';
+import type {
+  PushDeliveryContext,
+  PushDeliveryResult,
+  PushTicketRecord,
+  PushTokenTarget,
+} from './types';
 
 const log = debug('lobe-notification:push');
 
 /** Expo Push Service hard rate limit (messages per second per project) */
 const SEND_CHUNK_THROTTLE_MS = 100;
 
+/** Cap on concurrent APNs requests — one token per registered device, unbounded fan-out is a risk. */
+const APNS_CONCURRENCY = 10;
+
 /**
- * Push channel implementation backed by the Expo Push Service.
+ * Push channel implementation backed by the Expo Push Service, plus direct
+ * APNs delivery for native iOS clients that register a raw device token.
  *
  * Structurally compatible with cloud's `NotificationChannel`; can be registered
  * directly into cloud's `channelInstances` map. Also usable standalone by
@@ -26,17 +37,27 @@ const SEND_CHUNK_THROTTLE_MS = 100;
  *  3. Chunks + sends with `expo.sendPushNotificationsAsync`, with throttling
  *  4. Encodes (ticketId, expoToken) pairs into `providerMessageId` so the
  *     receipt cron can identify invalid tokens later
+ *  5. Sends `provider = 'apns'` tokens straight to APNs (when `APNS_*` is
+ *     configured; otherwise they are skipped with a log). APNs answers
+ *     synchronously, so rejected tokens (`BadDeviceToken` / `Unregistered`)
+ *     are removed right away instead of by the receipt cron.
  */
 export class PushChannel {
   readonly id = 'push';
 
   private expo: Expo;
+  private apns: ApnsClient | undefined;
 
-  constructor(expoClient?: Expo) {
+  /**
+   * @param apnsClient `null` disables native APNs delivery; omitted reads the
+   *   `APNS_*` environment.
+   */
+  constructor(expoClient?: Expo, apnsClient?: ApnsClient | null) {
     // FCM v1 is the only supported FCM API for new projects — Legacy server
     // keys were retired by Google. APNs uses the .p8 auth key uploaded to EAS.
     // (`useFcmV1` is implicit in the current SDK; no constructor flag needed.)
     this.expo = expoClient ?? new Expo();
+    this.apns = apnsClient === undefined ? ApnsClient.fromEnv() : (apnsClient ?? undefined);
   }
 
   async deliver(ctx: PushDeliveryContext): Promise<PushDeliveryResult> {
@@ -52,10 +73,20 @@ export class PushChannel {
     // callers de-duplicate a system-specific delivery without weakening
     // fallback for the user's other devices.
     const excludedDeviceIds = new Set(ctx.pushPresentation?.excludeDeviceIds);
-    const validTokens = tokens.filter(
-      (t) => !excludedDeviceIds.has(t.deviceId) && Expo.isExpoPushToken(t.expoToken),
+    const included = tokens.filter((t) => !excludedDeviceIds.has(t.deviceId));
+    const apnsTokens = included.filter((t) => t.provider === 'apns');
+    const validTokens = included.filter(
+      (t) => t.provider !== 'apns' && Expo.isExpoPushToken(t.expoToken),
     );
-    if (validTokens.length === 0) {
+    if (apnsTokens.length > 0 && !this.apns)
+      log(
+        'APNs not configured (APNS_KEY_ID/APNS_TEAM_ID/APNS_KEY); skipping %d native token(s) for userId=%s',
+        apnsTokens.length,
+        ctx.userId,
+      );
+    const sendableApnsTokens = this.apns ? apnsTokens : [];
+
+    if (validTokens.length === 0 && sendableApnsTokens.length === 0) {
       if (tokens.every((token) => excludedDeviceIds.has(token.deviceId))) {
         log('All devices excluded from ordinary push for userId=%s', ctx.userId);
         // The caller excluded these devices only after another system surface
@@ -63,6 +94,9 @@ export class PushChannel {
         // ordinary-push failure.
         return { status: 'delivered' };
       }
+
+      if (apnsTokens.length > 0 && included.every((t) => t.provider === 'apns'))
+        return { failedReason: 'apns_not_configured', status: 'failed' };
 
       log('All tokens malformed for userId=%s', ctx.userId);
       return { failedReason: 'invalid_tokens', status: 'failed' };
@@ -89,8 +123,12 @@ export class PushChannel {
     }));
 
     const ticketRecords: PushTicketRecord[] = [];
-    const chunks = this.expo.chunkPushNotifications(messages);
+    const chunks = messages.length > 0 ? this.expo.chunkPushNotifications(messages) : [];
     let cursor = 0;
+    // The Expo leg records its first failure instead of returning early, so the
+    // independent APNs leg still runs; the outcome is folded in below.
+    let expoFailure: 'error' | 'rate_limited' | undefined;
+    let expoError: unknown;
 
     for (const chunk of chunks) {
       try {
@@ -118,10 +156,12 @@ export class PushChannel {
         const err = error as { statusCode?: number; message?: string };
         if (err.statusCode === 429) {
           log('Rate limited by Expo Push Service for userId=%s', ctx.userId);
-          return { failedReason: 'rate_limited', status: 'failed' };
+          expoFailure = 'rate_limited';
+          break;
         }
-        // Unrecoverable — let the caller log via Promise.allSettled in NotificationService
-        throw error;
+        expoFailure = 'error';
+        expoError = error;
+        break;
       }
 
       // Throttle between chunks to stay under Expo's 600/sec project limit
@@ -131,7 +171,18 @@ export class PushChannel {
       }
     }
 
+    // Deliver to native APNs tokens even when the Expo leg failed: the two
+    // providers are independent, so an Expo outage or project-level rate limit
+    // must not suppress delivery to devices that do not go through Expo.
+    const apnsDelivered = await this.deliverApns(ctx, sendableApnsTokens);
+
     if (ticketRecords.length === 0) {
+      // APNs accepts synchronously: there is no receipt left to wait for.
+      if (apnsDelivered > 0) return { status: 'delivered' };
+      // Unrecoverable Expo failure with nothing delivered anywhere — keep the
+      // original contract and let the caller log it via Promise.allSettled.
+      if (expoError) throw expoError;
+      if (expoFailure === 'rate_limited') return { failedReason: 'rate_limited', status: 'failed' };
       return { failedReason: 'all_send_failed', status: 'failed' };
     }
 
@@ -142,5 +193,73 @@ export class PushChannel {
       providerMessageId: JSON.stringify(ticketRecords),
       status: 'sent',
     };
+  }
+
+  /** Sends to native APNs tokens; returns how many APNs accepted. */
+  private async deliverApns(ctx: PushDeliveryContext, tokens: PushTokenTarget[]): Promise<number> {
+    const apns = this.apns;
+    if (!apns || tokens.length === 0) return 0;
+
+    const presentation = ctx.pushPresentation;
+    const payload: Record<string, unknown> = {
+      ...presentation?.data,
+      ...(presentation?.image && { image: presentation.image }),
+      aps: {
+        alert: { body: ctx.content, title: ctx.title },
+        ...(presentation?.mutableContent && { 'mutable-content': 1 }),
+        sound: 'default',
+      },
+      // Same precedence as the Expo payload: routing fields win over custom data.
+      notificationId: ctx.notificationId,
+      type: ctx.type,
+      url: ctx.actionUrl,
+    };
+
+    const results = await pMap(
+      tokens,
+      async (t) => {
+        try {
+          return await apns.send({
+            environment: t.apnsEnvironment ?? 'production',
+            payload,
+            token: t.expoToken,
+            topic: t.bundleId ?? undefined,
+          });
+        } catch (error) {
+          log('APNs request failed for deviceId=%s: %s', t.deviceId, (error as Error).message);
+          return { reason: 'network_error', status: 'error' as const, statusCode: 0 };
+        }
+      },
+      { concurrency: APNS_CONCURRENCY },
+    );
+
+    const invalid: string[] = [];
+    let delivered = 0;
+    results.forEach((result, i) => {
+      const token = tokens[i];
+      if (result.status === 'ok') {
+        delivered += 1;
+        return;
+      }
+      // Reasons are categorical; never log the device token itself.
+      log(
+        'APNs rejected deviceId=%s status=%d reason=%s',
+        token.deviceId,
+        result.statusCode,
+        result.reason,
+      );
+      if (APNS_INVALID_TOKEN_REASONS.has(result.reason)) invalid.push(token.expoToken);
+    });
+
+    if (invalid.length > 0) {
+      try {
+        await new PushTokenModel(serverDB, ctx.userId).deleteByTokens('apns', invalid);
+      } catch (error) {
+        // Cleanup is best effort; the next delivery retries it.
+        log('Failed to remove rejected APNs tokens: %O', error);
+      }
+    }
+
+    return delivered;
   }
 }

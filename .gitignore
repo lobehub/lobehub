@@ -50,7 +50,9 @@ venv/
 .venv/
 
 # Dependencies
-node_modules/
+# `node_modules/` only matches real directories; git does not treat a symlink named
+# `node_modules` as a directory, so it would slip through and get committed.
+node_modules
 *.lock
 package-lock.json
 !apps/desktop/scripts/security-policy-runtime/package-lock.json
