@@ -578,7 +578,14 @@ export const readChannelView = async (
     tx
       .select()
       .from(channelThreads)
-      .where(and(eq(channelThreads.channelId, channelId), notTrashed(channelThreads.isDeleted)))
+      .where(
+        and(
+          eq(channelThreads.channelId, channelId),
+          notTrashed(channelThreads.isDeleted),
+          // A Thread's view needs only its own entry, not every Thread in the Channel.
+          options.threadId ? eq(channelThreads.id, options.threadId) : undefined,
+        ),
+      )
       .orderBy(asc(channelThreads.createdAt)),
     readJobs(
       tx,

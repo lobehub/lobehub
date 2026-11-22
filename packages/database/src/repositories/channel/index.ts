@@ -460,28 +460,26 @@ export class ChannelRepository {
     });
   };
 
+  /** Takes no channel lock, so a busy Channel's sends and job updates never queue a read. */
   detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) => {
-    if (!(await this.findAccess(channelId)))
-      return readOpenChannel(this.db, this.userId, this.workspaceId, channelId, options);
-    return this.write(
-      channelId,
-      async (tx, access) => {
-        if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
-        const admin = hasRole(access.member.role, 'admin');
-        const notificationsMuted = access.member.metadata?.notificationsMuted === true;
-        const view = await readChannelView(tx, channelId, options, this.userId);
-        const shared = await sharedAgentView(tx, access.channel, this.userId);
-        return {
-          channel: { ...access.channel, canDelete: admin, notificationsMuted, ...shared.channel },
-          joined: true,
-          sharedAgentOwner: shared.owner,
-          ...view,
-          // Mirrors `stop`: the requester or an admin.
-          jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
-        };
-      },
-      { allowArchived: true, allowTrashed: true },
-    );
+    const view = await this.db.transaction(async (tx) => {
+      const access = await this.memberAccess(tx, channelId);
+      if (!access) return;
+      if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      const admin = hasRole(access.member.role, 'admin');
+      const notificationsMuted = access.member.metadata?.notificationsMuted === true;
+      const view = await readChannelView(tx, channelId, options, this.userId);
+      const shared = await sharedAgentView(tx, access.channel, this.userId);
+      return {
+        channel: { ...access.channel, canDelete: admin, notificationsMuted, ...shared.channel },
+        joined: true,
+        sharedAgentOwner: shared.owner,
+        ...view,
+        // Mirrors `stop`: the requester or an admin.
+        jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
+      };
+    });
+    return view ?? readOpenChannel(this.db, this.userId, this.workspaceId, channelId, options);
   };
 
   createThread = async (channelId: string, input: Parameters<typeof createChannelThread>[2]) =>
@@ -871,16 +869,7 @@ export class ChannelRepository {
 
       // Read membership only after the lock: a removal or demotion committed by the previous
       // lock holder must be visible here, not the snapshot from before the wait.
-      const [row] = await tx
-        .select({ channel: channels, member: channelMembers, role: this.callerRole() })
-        .from(channels)
-        .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
-        .where(and(eq(channels.id, channelId), this.membershipWhere()))
-        .limit(1);
-      let access: ChannelAccess | undefined = row && {
-        channel: row.channel,
-        member: { ...row.member, role: row.role },
-      };
+      let access: ChannelAccess | undefined = await this.memberAccess(tx, channelId);
       if (!access && options.joinOpen) {
         // Joining is itself a write, so a trashed or archived Channel stays closed to newcomers.
         const open = await findOpenChannel(tx, this.userId, this.workspaceId, channelId);
@@ -1165,6 +1154,17 @@ export class ChannelRepository {
       )
       .limit(1);
     return row;
+  };
+
+  /** The caller's active membership, with the role permission checks see. */
+  private memberAccess = async (tx: Transaction, channelId: string) => {
+    const [row] = await tx
+      .select({ channel: channels, member: channelMembers, role: this.callerRole() })
+      .from(channels)
+      .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .where(and(eq(channels.id, channelId), this.membershipWhere()))
+      .limit(1);
+    return row && { channel: row.channel, member: { ...row.member, role: row.role } };
   };
 
   /**
