@@ -8,37 +8,20 @@ import {
   isInternalThinkingContentPart,
   type OpenAICompatibleContentPart,
 } from '../../contextBuilders/openai';
+import { buildAnchoredToolItems, type ResponsesToolAnchors } from './toolAnchoring';
+import { collectToolCallPairing } from './toolPairing';
+
+export interface ConvertOpenAIResponseInputsOptions extends ConvertMessageContentOptions {
+  /** Tools to declare inside the conversation, at the message that introduced them. */
+  toolAnchors?: ResponsesToolAnchors;
+}
 
 export const convertOpenAIResponseInputs = async (
   messages: OpenAIChatMessage[],
-  options?: ConvertMessageContentOptions,
+  options?: ConvertOpenAIResponseInputsOptions,
 ) => {
   const strictToolPairing = options?.strictToolPairing === true;
-  // OpenAI Responses API rejects inputs that keep a function_call without its matching
-  // function_call_output. Example from production:
-  // "No tool output found for function call call_w5odMFjtXEYBBVyBUAQNMOh5."
-  const validToolCallIds = new Set<string>();
-  const pairedToolOutputIds = new Set<string>();
-  const customToolCallIds = new Set<string>();
-
-  for (const message of messages) {
-    if (message.role === 'assistant' && message.tool_calls?.length) {
-      message.tool_calls.forEach((tool) => {
-        if (tool.id) validToolCallIds.add(tool.id);
-        if (tool.id && tool.type === 'custom') customToolCallIds.add(tool.id);
-      });
-    }
-  }
-
-  for (const message of messages) {
-    if (
-      message.role === 'tool' &&
-      message.tool_call_id &&
-      validToolCallIds.has(message.tool_call_id)
-    ) {
-      pairedToolOutputIds.add(message.tool_call_id);
-    }
-  }
+  const { customToolCallIds, pairedToolOutputIds } = collectToolCallPairing(messages);
 
   const inputGroups = await Promise.all(
     messages.map(async (message) => {
@@ -224,7 +207,8 @@ export const convertOpenAIResponseInputs = async (
       }
 
       if (message.role === 'system') {
-        items.push({ ...message, role: 'developer' } as OpenAI.Responses.ResponseInputItem);
+        const { toolsAdded: _toolsAdded, ...systemMessage } = message;
+        items.push({ ...systemMessage, role: 'developer' } as OpenAI.Responses.ResponseInputItem);
         return items;
       }
 
@@ -299,6 +283,7 @@ export const convertOpenAIResponseInputs = async (
         model: _model,
         provider: _provider,
         reasoning: _reasoning,
+        toolsAdded: _toolsAdded,
         ...responseMessage
       } = message;
       const item = {
@@ -311,5 +296,34 @@ export const convertOpenAIResponseInputs = async (
     }),
   );
 
-  return inputGroups.flat();
+  const toolAnchors = options?.toolAnchors;
+  if (!toolAnchors || toolAnchors.byMessageIndex.size === 0) return inputGroups.flat();
+
+  // Declare anchored tools after the message that introduced them. A tool message waits
+  // for the rest of its batch, so the declaration never splits the outputs of one turn.
+  const input: OpenAI.Responses.ResponseInputItem[] = [];
+  let pendingAnchorItems: OpenAI.Responses.ResponseInputItem[] = [];
+
+  messages.forEach((message, index) => {
+    input.push(...inputGroups[index]);
+
+    const tools = toolAnchors.byMessageIndex.get(index);
+    if (tools?.length) {
+      pendingAnchorItems.push(
+        ...buildAnchoredToolItems(
+          toolAnchors.mode,
+          tools,
+          message.tool_call_id ?? `message_${index}`,
+        ),
+      );
+    }
+
+    const batchContinues = message.role === 'tool' && messages[index + 1]?.role === 'tool';
+    if (pendingAnchorItems.length > 0 && !batchContinues) {
+      input.push(...pendingAnchorItems);
+      pendingAnchorItems = [];
+    }
+  });
+
+  return input;
 };

@@ -53,6 +53,13 @@ export type UserMessageContentPart =
   | UserMessageContentPartVideo
   | UserMessageContentPartAudio;
 
+/** Optional prompt edits prepared from the final, paired conversation. The Responses
+ * runtime applies them only when the same request can declare all their tools inline. */
+export interface ToolActivationPlan {
+  results: { callId: string; content: string; toolNames: string[] }[];
+  system?: { original: string; replacement: string; start: number };
+}
+
 export interface OpenAIChatMessage {
   /**
    * @title Content
@@ -76,6 +83,7 @@ export interface OpenAIChatMessage {
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
+  toolActivationPlan?: ToolActivationPlan;
 }
 
 /**

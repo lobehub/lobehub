@@ -28,6 +28,7 @@ import {
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
   TasksFlattenProcessor,
+  ToolActivationAnchorProcessor,
   ToolCallProcessor,
   ToolMessageReorder,
   VerifyMessageProcessor,
@@ -679,6 +680,15 @@ export class MessagesEngine {
       new ToolMessageReorder(),
       // Force finish summary (when maxSteps exceeded)
       new ForceFinishSummaryInjector({ enabled: !!forceFinish }),
+      // Only paired activation results still present in the outgoing conversation can own tools.
+      ...(toolsConfig?.anchorActivatedTools
+        ? [
+            new ToolActivationAnchorProcessor({
+              manifests: injectedToolManifests,
+              variableGenerators,
+            }),
+          ]
+        : []),
       // Message cleanup (final step)
       new MessageCleanupProcessor(),
     ];
