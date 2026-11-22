@@ -3,6 +3,7 @@ import type { ChannelDeviceGrantRequest } from '@lobechat/types';
 import { deviceGrantRequestText } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import pMap from 'p-map';
 
 import { ChannelRepository } from '@/database/repositories/channel';
 import {
@@ -132,7 +133,7 @@ export const announceDeviceGrants = async (db: LobeChatDatabase, channelId: stri
 export const refreshDeviceGrantCard = async (db: LobeChatDatabase, grant: CardGrant) => {
   try {
     const cards = await cardChannels(db, grant);
-    await Promise.all(cards.map((card) => notifyChannel(db, card.channelId)));
+    await pMap(cards, (card) => notifyChannel(db, card.channelId), { concurrency: 5 });
   } catch (error) {
     console.error('[channel] Failed to refresh a device request card', {
       error,
