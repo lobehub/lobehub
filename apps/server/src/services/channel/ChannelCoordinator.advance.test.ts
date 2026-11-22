@@ -387,7 +387,7 @@ describe('Channel concurrent startup', () => {
       expect(execAgent).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps waiting when the directory cannot host a worktree', async () => {
+    it('retries in the shared directory when it cannot host a worktree', async () => {
       executions.claim.mockResolvedValue(null);
       executions.worktreeCandidate.mockResolvedValue(candidate);
       createChannelWorktree.mockResolvedValue({ error: 'not a git repository' });
@@ -399,7 +399,7 @@ describe('Channel concurrent startup', () => {
         candidate,
         'not a git repository',
       );
-      expect(executions.claim).toHaveBeenCalledTimes(1);
+      expect(executions.claim).toHaveBeenCalledTimes(2);
       expect(execAgent).not.toHaveBeenCalled();
     });
 

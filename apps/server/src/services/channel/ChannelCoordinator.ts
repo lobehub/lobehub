@@ -273,8 +273,9 @@ export class ChannelCoordinator {
 
   /**
    * A job held back only because another run uses its member's directory moves its branch into
-   * a worktree of that directory instead of waiting. Returns whether the branch got one; a
-   * directory that cannot host one (not a git repo, device too old) keeps the job waiting.
+   * a worktree of that directory instead of waiting. A directory that cannot host one (not a
+   * git repo, device too old) is shared instead: the job runs in it alongside the other run.
+   * Returns whether the claim is worth retrying.
    */
   private async moveToWorktree(
     channelId: string,
@@ -288,7 +289,7 @@ export class ChannelCoordinator {
     const created = await createChannelWorktree(candidate, workspaceId);
     if (created.path === undefined) {
       await this.executions.worktreeUnavailable(channelId, candidate, created.error);
-      return false;
+      return true;
     }
     return this.executions.assignWorktree(channelId, candidate, created.path);
   }
