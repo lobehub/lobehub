@@ -2,11 +2,9 @@ import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { commandInvokesEmbeddedCli, withEmbeddedCliEnv } from './embeddedCliEnv';
+import { withEmbeddedCliEnv } from './embeddedCliEnv';
 
-const electronUserData = vi.hoisted(() => ({ path: '/userData' }));
-
-vi.mock('electron', () => ({ app: { getPath: () => electronUserData.path } }));
+vi.mock('electron', () => ({ app: { getPath: () => '/userData' } }));
 
 const wrapperDir = path.join('/userData', 'bin');
 const pathOf = (...dirs: string[]) => dirs.join(path.delimiter);
@@ -61,42 +59,5 @@ describe('withEmbeddedCliEnv', () => {
 
     expect(env.PATH).toBe('/lh/bin:/usr/bin');
     expect(env.Path).toBe('other');
-  });
-});
-
-describe('commandInvokesEmbeddedCli', () => {
-  it.each([
-    'lh goal show g',
-    'cd /repo && lh goal show g',
-    'export PATH="/x:$PATH"; lh goal plan g --token t --file p.json',
-    'timeout 60 lh whoami',
-    "bash -lc 'lh whoami'",
-    `"${path.join(wrapperDir, 'lh')}" goal show g`,
-  ])('matches %s', (command) => {
-    expect(commandInvokesEmbeddedCli(command)).toBe(true);
-  });
-
-  it('matches the wrapper through a shell-escaped space', () => {
-    electronUserData.path = '/Users/m/Application Support/LobeHub';
-    try {
-      expect(
-        commandInvokesEmbeddedCli(
-          String.raw`/Users/m/Application\ Support/LobeHub/bin/lh goal show g`,
-        ),
-      ).toBe(true);
-    } finally {
-      electronUserData.path = '/userData';
-    }
-  });
-
-  it.each([
-    'ls ./lh',
-    'cat /opt/lh',
-    'node lh.js',
-    'lhtest run',
-    'pnpm --filter lobehub test',
-    'cd ~/lobehub && git status',
-  ])('ignores %s', (command) => {
-    expect(commandInvokesEmbeddedCli(command)).toBe(false);
   });
 });

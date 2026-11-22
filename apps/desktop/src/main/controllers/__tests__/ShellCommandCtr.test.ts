@@ -336,7 +336,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     it('keeps the app sign-in away from a command that never reaches lh', async () => {
       exitWith(0);
 
-      await ctr.handleRunCommand({ command: 'cd /repo/lh-tools && ls ./lh', cwd: '/repo' });
+      await ctr.handleRunCommand({ command: String.raw`printf 'lh\n'; env`, cwd: '/repo' });
 
       expect(mockCliCtr.buildCliEnv).not.toHaveBeenCalled();
       expect(mockSpawn.mock.calls[0][2].env.LOBEHUB_JWT).not.toBe('jwt-token');

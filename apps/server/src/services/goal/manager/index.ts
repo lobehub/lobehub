@@ -427,13 +427,15 @@ export class GoalManagerService {
         // A committed plan is progress whatever the run's ending; only an errored
         // turn that committed nothing gates the next dispatch.
         if (current.submitted || operation?.status !== 'error') {
-          // Only a run that really finished counts: a stopped run or a dispatch
-          // that never started says nothing about whether the Agent can plan.
-          const noPlanTurns = current.submitted
-            ? undefined
-            : operation?.status === 'done'
+          // Only a run that really finished counts, and any other ending breaks
+          // the sequence. A dispatch that never started ran nothing, so it leaves
+          // the count alone.
+          const noPlanTurns =
+            !current.submitted && operation?.status === 'done'
               ? (current.noPlanTurns ?? 0) + 1
-              : current.noPlanTurns;
+              : !current.submitted && neverStarted
+                ? current.noPlanTurns
+                : undefined;
           // An invited turn keeps its problem: `startTurn` declines the next
           // invitation, so the caller's gate carries the actual question.
           if (!current.problem && (noPlanTurns ?? 0) >= MAX_NO_PLAN_MANAGER_TURNS)
@@ -450,6 +452,7 @@ export class GoalManagerService {
         await saveManagerState(db, goal.id, {
           ...settled,
           failedTurns: decision.failedTurns || undefined,
+          noPlanTurns: undefined,
           offlineDevice:
             decision.failure.kind === 'device_unavailable'
               ? readDeviceDispatchRoute(operation.error)

@@ -118,10 +118,25 @@ describe('GoalManagerService with turns that finish without a plan', () => {
     );
   });
 
-  it('does not count a run that was stopped', async () => {
+  it('breaks the streak on a run that was stopped', async () => {
     const id = await startGoal();
+    await endTurn(id);
+    await service().tick(id);
+    expect((await managerState(id)).noPlanTurns).toBe(1);
 
     expect((await endTurn(id, 'interrupted')).outcome).toBe('advanced');
+
+    expect((await managerState(id)).noPlanTurns).toBeUndefined();
+  });
+
+  it('breaks the streak on a run that errored', async () => {
+    const id = await startGoal();
+    await endTurn(id);
+    await service().tick(id);
+    const { operationId } = await managerState(id);
+
+    await ops().recordCompletion(operationId!, { error: { message: 'boom' }, status: 'error' });
+    await service().tick(id);
 
     expect((await managerState(id)).noPlanTurns).toBeUndefined();
   });
