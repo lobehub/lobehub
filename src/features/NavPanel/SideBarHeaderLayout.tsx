@@ -43,8 +43,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface SideBarHeaderLayoutProps {
   /** `backTo` is a literal path that already carries its workspace scope. */
   backEscape?: boolean;
+  /**
+   * Where the back action sits. A panel whose header carries an entity switcher
+   * that has to start on the same column as its rows' icons puts it `trailing`:
+   * as a leading action it takes the row's icon column for itself and pushes
+   * the switcher — and the whole header — one slot right of the list below.
+   */
+  backPlacement?: 'leading' | 'trailing';
   backTo?: string;
   breadcrumb?: BreadcrumbItem[];
+  /**
+   * Inline inset of the header content, in px. Panels that lay the header out on
+   * their row grid pass what `resolveHeaderContentInset` derives, so the header
+   * content starts on the column their rows do.
+   */
+  contentInset?: number;
   /** Override the leading home breadcrumb item (defaults to home icon → `/`). */
   homeItem?: BreadcrumbItem;
   left?: ReactNode;
@@ -61,6 +74,8 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     right,
     backTo = '/',
     backEscape,
+    backPlacement = 'leading',
+    contentInset = 6,
     onBack,
     showBack = true,
     breadcrumb = [],
@@ -72,6 +87,12 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     const { headerHeight } = useDensityTokens();
     const topInset = getContainerTopInset();
     const headerActionSize = useHeaderActionSize(true);
+    const backButton = showBack ? (
+      <BackButton escape={backEscape} size={headerActionSize} to={backTo} onClick={onBack} />
+    ) : null;
+    // A trailing back action leaves the leading slot to the panel's own content,
+    // which is what lets a switcher start on the rows' icon column.
+    const leadingBack = backPlacement === 'leading';
     const leftContent = left ? (
       <Flexbox
         horizontal
@@ -82,9 +103,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           overflow: 'hidden',
         }}
       >
-        {showBack && (
-          <BackButton escape={backEscape} size={headerActionSize} to={backTo} onClick={onBack} />
-        )}
+        {leadingBack && backButton}
         {left && typeof left === 'string' ? (
           <Text ellipsis fontSize={headerTitleFontSize} weight={headerTitleWeight}>
             {left}
@@ -129,11 +148,12 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         flex={'none'}
         height={headerHeight + topInset}
         justify={'space-between'}
-        paddingInline={6}
+        paddingInline={contentInset}
         style={{ paddingBlockStart: topInset }}
       >
         {leftContent}
         <Flexbox horizontal align={'center'} flex={'none'} gap={2} justify={'flex-end'}>
+          {!leadingBack && backButton}
           {showTogglePanelButton && <ToggleLeftPanelButton />}
           {right}
         </Flexbox>

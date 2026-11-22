@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveNavItemMetrics } from './density';
+import { resolveHeaderContentInset, resolveNavItemMetrics } from './density';
 
 describe('resolveNavItemMetrics', () => {
   it('keeps 36px rows and the default radius outside the nav panel', () => {
@@ -33,5 +33,29 @@ describe('resolveNavItemMetrics', () => {
       rowHeight: 36,
       sectionTriggerPaddingBlock: 4,
     });
+  });
+});
+
+describe('resolveHeaderContentInset', () => {
+  it('lands the header avatar on the row icon column in every density', () => {
+    // Rows pad by panelPaddingInline + paddingInline; a switcher adds 2px of its
+    // own, so the header inset has to leave exactly that space for it.
+    const compact = resolveNavItemMetrics('compact');
+    const loose = resolveNavItemMetrics('loose');
+
+    expect(resolveHeaderContentInset(compact, 2) + 2).toBe(
+      compact.panelPaddingInline + compact.paddingInline,
+    );
+    expect(resolveHeaderContentInset(loose, 2) + 2).toBe(
+      loose.panelPaddingInline + loose.paddingInline,
+    );
+  });
+
+  it('gives a header without a switcher the row inset itself', () => {
+    const loose = resolveNavItemMetrics('loose');
+
+    expect(resolveHeaderContentInset(loose)).toBe(
+      loose.panelPaddingInline + loose.paddingInline,
+    );
   });
 });

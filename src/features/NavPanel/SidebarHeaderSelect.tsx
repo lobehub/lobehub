@@ -10,6 +10,13 @@ import Avatar from '@/components/Avatar';
 
 import { useNavItemMetrics } from './density';
 
+/**
+ * Inline padding the trigger wraps its avatar with. It is part of the panel's
+ * row grid: a header that aligns to the rows subtracts it from its own inset so
+ * the avatar lands where the rows' icons do.
+ */
+export const HEADER_SELECT_PADDING = 2;
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
     &[data-popup-open] {
@@ -70,7 +77,7 @@ export const SidebarHeaderSelectTrigger = memo<SidebarHeaderSelectTriggerProps>(
         align={'center'}
         className={className}
         gap={8}
-        padding={2}
+        padding={HEADER_SELECT_PADDING}
         style={{ minWidth: 32, overflow: 'hidden', ...style }}
         variant={'borderless'}
         {...rest}

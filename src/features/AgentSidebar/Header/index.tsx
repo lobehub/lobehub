@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { useBackButtonProps } from '@/features/NavPanel/backOrigin';
+import { resolveHeaderContentInset, useNavItemMetrics } from '@/features/NavPanel/density';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import { HEADER_SELECT_PADDING } from '@/features/NavPanel/SidebarHeaderSelect';
 import { isMacDesktop } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
@@ -33,6 +35,12 @@ const HeaderInfo = (_props: PropsWithChildren) => {
   const { canEditResource } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const headerActionSmallSize = useHeaderActionSize(true);
+  const metrics = useNavItemMetrics();
+  // The switcher draws the agent's identity where the rows draw their icons, so
+  // the header has to start on the row grid: rows are inset by
+  // `panelPaddingInline + paddingInline`, and the switcher pads its own avatar by
+  // HEADER_SELECT_PADDING on top of the header's inset.
+  const headerContentInset = resolveHeaderContentInset(metrics, HEADER_SELECT_PADDING);
   // Keep the entry while resource access is loading; only a confirmed denial
   // hides it. The profile page still enforces ResourceConfigAccessGate.
   const showProfile = !!agentId && !!isAgentEditable && canEditContent && canEditResource;
@@ -46,6 +54,8 @@ const HeaderInfo = (_props: PropsWithChildren) => {
     <>
       <SideBarHeaderLayout
         {...back}
+        backPlacement={'trailing'}
+        contentInset={headerContentInset}
         left={<Agent />}
         // Everywhere but the macOS app the header's right side holds the panel
         // toggle, so search stays a nav row there. The macOS app moves that

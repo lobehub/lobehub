@@ -59,6 +59,17 @@ export const resolveNavItemMetrics = (density: InterfaceDensity | null): NavItem
   };
 };
 
+/**
+ * Inline inset a panel header needs for its content to start where its rows'
+ * leading icons do. Rows sit at `panelPaddingInline + paddingInline`; a header
+ * that holds a switcher passes the padding that switcher adds itself, so the
+ * avatar inside it lands on that same column instead of a slot to the right.
+ */
+export const resolveHeaderContentInset = (
+  metrics: Pick<NavItemMetrics, 'paddingInline' | 'panelPaddingInline'>,
+  switcherPadding = 0,
+) => metrics.panelPaddingInline + metrics.paddingInline - switcherPadding;
+
 export const NavPanelDensityContext = PanelDensityContext;
 
 export const useNavItemMetrics = (): NavItemMetrics => {
