@@ -2969,6 +2969,10 @@ export default {
     'The goal-level acceptance did not pass. Decide whether to run it again, abandon it, or record the goal as failed.',
   'goalProcess.decision.summary.agentQuestion':
     'While working on the goal, the main Agent hit a call only you can make. It lays out the options and its recommendation below.',
+  'goalProcess.decision.summary.reviewErrored':
+    'The checks on {{task}} passed, but the final review could not run. Decide how to continue.',
+  'goalProcess.decision.summary.reviewUnjudgeable':
+    'The final review could not judge {{task}} from its evidence, so it needs your call.',
   'goalProcess.decision.summary.thisTask': 'this task',
   'goalProcess.decision.context.task': 'Task',
   'goalProcess.decision.context.decision': 'Your call',

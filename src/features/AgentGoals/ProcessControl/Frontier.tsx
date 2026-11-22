@@ -460,7 +460,7 @@ const GateCard = memo<{
           category={category}
           decision={view.decision!}
           evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
-          summary={gateSummary(category, subjectTitle)}
+          summary={gateSummary(category, subjectTitle, view.decision!.question)}
           footer={
             // A goal-level question (the main Agent asking about the goal itself)
             // stopped no Task, so there is no run to open.

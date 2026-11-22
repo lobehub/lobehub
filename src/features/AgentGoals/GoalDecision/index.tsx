@@ -24,6 +24,7 @@ import {
   coordinatorGateReason,
   gateOptionLabelKey,
   localizedCoordinatorReason,
+  reviewGateSummaryKey,
 } from '../ProcessControl/coordinatorCopy';
 import {
   gateAnswerProblem,
@@ -269,8 +270,8 @@ const GateContext = ({
  */
 export const useGateSummary = () => {
   const { t } = useTranslation('chat');
-  return (category: GateCategory, taskTitle?: string | null) =>
-    t(`goalProcess.decision.summary.${category}` as const, {
+  return (category: GateCategory, taskTitle?: string | null, question?: string | null) =>
+    t(reviewGateSummaryKey(question) ?? (`goalProcess.decision.summary.${category}` as const), {
       task: taskTitle || t('goalProcess.decision.summary.thisTask'),
     });
 };

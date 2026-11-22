@@ -914,6 +914,8 @@
   "goalProcess.decision.summary.goalAcceptance": "目标的整体验收没有通过，需要你决定重新验收、放弃验收，还是判定目标失败。",
   "goalProcess.decision.summary.judgment": "自动重试已经用完，仍没有通过验收，需要你决定是再试一次还是放弃。",
   "goalProcess.decision.summary.machine": "因为运行环境的问题没能执行，不是任务本身的问题；把环境修好后重试即可。",
+  "goalProcess.decision.summary.reviewErrored": "「{{task}}」的检查项都通过了，只是最终复核没能运行，需要你决定怎么继续。",
+  "goalProcess.decision.summary.reviewUnjudgeable": "最终复核无法仅凭证据判断「{{task}}」，需要你来确认。",
   "goalProcess.decision.summary.thisTask": "这项任务",
   "goalProcess.decision.system": "运行环境",
   "goalProcess.decision.viewRun": "查看任务",

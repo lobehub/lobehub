@@ -1,4 +1,5 @@
 import {
+  ACCEPTANCE_REVIEW_ERRORED_ERROR,
   GOAL_ACCEPTANCE_TASK_TITLE,
   GOAL_BATCH_ASSAY_TITLE,
   GOAL_BATCH_BREAK_OPTION,
@@ -10,6 +11,7 @@ import {
   GOAL_MACHINE_GATE_TITLE,
   GOAL_MANAGER_QUESTION_TITLE,
   GOAL_RETRY_REVIEW_OPTION,
+  VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 import { coordinatorReasonCopies } from '@lobechat/utils/goalCopy';
@@ -107,6 +109,20 @@ export const gateOptionLabelKey = (
       return undefined;
     }
   }
+};
+
+/**
+ * The one-line account of a gate that stopped on the review rather than on the
+ * work. The generic one says the retries ran out without passing, which is
+ * exactly what the owner must not conclude when the checks passed and only the
+ * review could not reach a verdict.
+ */
+export const reviewGateSummaryKey = (question?: string | null) => {
+  if (question?.startsWith(ACCEPTANCE_REVIEW_ERRORED_ERROR))
+    return 'goalProcess.decision.summary.reviewErrored' as const;
+  if (question?.startsWith(VERIFICATION_UNJUDGEABLE_ERROR))
+    return 'goalProcess.decision.summary.reviewUnjudgeable' as const;
+  return undefined;
 };
 
 /** The coordinator's terminal Task that accepts the whole Goal (matched by its fixed title). */
