@@ -13,3 +13,19 @@ export interface NotifyChannelDirectMessageParams {
 export const notifyChannelDirectMessage = (
   _params: NotifyChannelDirectMessageParams,
 ): Promise<void> => Promise.resolve();
+
+/**
+ * An Agent wrote to a person in that person's direct conversation with it, on its requester's
+ * behalf (`lobe-channel.messagePerson`). Fired once per message; the recipient owns the
+ * conversation.
+ */
+export interface NotifyChannelAgentMessageParams {
+  agentId: string;
+  channelId: string;
+  messageId: string;
+  recipientUserId: string;
+}
+
+export const notifyChannelAgentMessage = (
+  _params: NotifyChannelAgentMessageParams,
+): Promise<void> => Promise.resolve();
