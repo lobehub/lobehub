@@ -27,13 +27,12 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.ServiceModel]: 'setting:tab.serviceModel',
   [SettingsTabs.Stats]: 'auth:tab.stats',
   [SettingsTabs.SystemTools]: 'setting:tab.systemTools',
-  [SettingsTabs.Usage]: 'subscription:tab.usageAndBalance',
+  [SettingsTabs.Usage]: 'subscription:tab.usage',
 };
 
 const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
   'audit-log': 'setting:workspaceSetting.tab.auditLog',
   'budget': 'subscription:tab.budget',
-  'chat-preference': 'setting:tab.chatPreference',
   'connector': 'setting:workspaceSetting.tab.connector',
   'credential': 'setting:tab.creds',
   'general': 'setting:workspaceSetting.tab.general',

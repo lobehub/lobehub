@@ -11,6 +11,20 @@ import { usePersonalSettingsSearchScope } from './useSettingsSearchScope';
 const groups: SettingsSearchCategoryGroup[] = [
   {
     items: [
+      { key: SettingsTabs.Appearance, label: 'Appearance' },
+      { key: SettingsTabs.Conversation, label: 'Conversation' },
+      { key: SettingsTabs.Hotkey, label: 'Hotkeys' },
+    ],
+    key: 'account',
+    title: 'Account',
+  },
+  {
+    items: [{ key: SettingsTabs.ServiceModel, label: 'Service Model' }],
+    key: 'agent',
+    title: 'Agent',
+  },
+  {
+    items: [
       { key: SettingsTabs.Plans, label: 'Plans' },
       { key: SettingsTabs.Usage, label: 'Usage & Balance' },
       { key: SettingsTabs.Billing, label: 'Billing' },
@@ -42,5 +56,24 @@ describe('personal settings search scope', () => {
 
   it('still finds the page by its usage keywords', () => {
     expect(search('consumption').map((result) => result.url)).toContain('/settings/usage');
+  });
+
+  it('sends follow-up searches to the Conversation page, not Service Model', () => {
+    const urls = search('follow up').map((result) => result.url);
+
+    expect(urls).toContain('/settings/conversation#conversation-followUpAction');
+    expect(urls.some((url) => url.includes('service-model'))).toBe(false);
+  });
+
+  it('finds the moved conversation settings on the Conversation page', () => {
+    expect(search('send key').map((result) => result.url)).toContain(
+      '/settings/conversation#conversation-send-key',
+    );
+    expect(search('response language').map((result) => result.url)).toContain(
+      '/settings/conversation#conversation-response-language',
+    );
+    expect(search('response language').map((result) => result.url)).not.toContain(
+      '/settings/appearance#appearance-response-language',
+    );
   });
 });

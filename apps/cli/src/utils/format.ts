@@ -516,7 +516,23 @@ export function printKanban(columns: KanbanColumn[]) {
   console.log(bottomBorder);
 }
 
+/**
+ * Ask a `(y/N)` question on the terminal.
+ *
+ * Without a terminal there is nobody to answer: an agent's shell, a pipe or CI
+ * either never closes stdin (the command hangs until it is killed) or closes it
+ * empty (the action is silently cancelled). Fail loudly instead, so the caller
+ * learns it has to pass `--yes`.
+ */
 export function confirm(message: string): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    return Promise.reject(
+      new Error(
+        `${message}\nRefusing to continue without an interactive terminal to confirm. Re-run with --yes to skip the prompt.`,
+      ),
+    );
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((resolve) => {
     rl.question(`${message} (y/N) `, (answer: string) => {

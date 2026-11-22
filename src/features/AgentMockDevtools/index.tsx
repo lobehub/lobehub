@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { useMatches } from 'react-router';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
+import { densityVars } from '@/styles/densityVars';
 
 import { Controls } from './Controls';
 
@@ -10,7 +11,7 @@ const styles = createStaticStyles(({ css }) => ({
   notice: css`
     display: block;
     flex-shrink: 0;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

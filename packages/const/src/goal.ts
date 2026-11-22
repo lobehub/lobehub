@@ -212,6 +212,8 @@ export const GOAL_BATCH_TITLE = 'Deliver the repeated batch';
 export const GOAL_GRAPH_CAPABILITY = {
   /** The `batch` node kind (repeated-mould rollouts). */
   batch: 'batch',
+  /** The mark kinds (`pattern` / `tool` / `hazard` / `dead_end`), `template`, and their edges. */
+  marks: 'marks',
 } as const;
 
 /**
@@ -228,7 +230,7 @@ export const GOAL_BATCH_ASSAY_TITLE = 'Prove the batch runs automatically';
  */
 export const GOAL_BATCH_RELEASE_TITLE = 'Approve releasing the next wave';
 
-/** Fixed title of the Template (recipe) finding node a batch distills. */
+/** Fixed title of the Template (recipe) node a batch distills. */
 export const GOAL_BATCH_TEMPLATE_TITLE = 'Batch recipe';
 
 /** Default probe size K — representative units that run before the gate. */
@@ -310,3 +312,6 @@ export const mergeIslandDismissals = (current: string[], added: string[]): strin
   );
   return fresh.length === 0 ? current : [...current, ...fresh].slice(-MAX_ISLAND_DISMISSALS);
 };
+
+/** Node kinds that are marks: Goal-wide, left by one Task for every later one. */
+export const GOAL_MARK_KINDS = ['pattern', 'tool', 'hazard', 'dead_end'] as const;

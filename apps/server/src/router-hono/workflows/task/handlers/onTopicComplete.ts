@@ -1,6 +1,6 @@
 import type { TaskRunTrigger } from '@lobechat/types';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 
 import { tasks } from '@/database/schemas';
@@ -27,7 +27,10 @@ export interface OnTopicCompletePayload {
   taskId: string;
   taskIdentifier?: string;
   topicId?: string;
+  /** The runner's user, which is not necessarily the Task's creator. */
   userId: string;
+  /** The runner's workspace scope. Absent from hooks registered before it was added. */
+  workspaceId?: string;
 }
 
 export async function onTopicComplete(c: Context) {
@@ -61,12 +64,20 @@ export async function onTopicComplete(c: Context) {
     const db = await getServerDB();
     // System-level callback: derive workspace from the task row so the
     // lifecycle service writes briefs / status into the correct workspace.
+    //
+    // Looked up by id alone. `userId` is whoever ran the Task, and in a
+    // workspace that is often not its creator — a teammate, or a bot driving
+    // someone else's Task. Requiring the creator here dropped the workspace for
+    // those runs, so the lifecycle ran in the runner's personal scope, found
+    // neither the Task nor its run row, and acked the delivery without moving
+    // either: the Task stayed `running` after its topic had ended. The body's
+    // own `workspaceId` covers a Task that is gone by the time the run reports.
     const [taskRow] = await db
       .select({ identifier: tasks.identifier, workspaceId: tasks.workspaceId })
       .from(tasks)
-      .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+      .where(eq(tasks.id, taskId))
       .limit(1);
-    const wsId = taskRow?.workspaceId ?? undefined;
+    const wsId = (taskRow ? taskRow.workspaceId : body.workspaceId) ?? undefined;
 
     // A delivery delayed past the orphaned-run grace window can land after the
     // reconciliation sweep already settled this run. Driving the lifecycle again

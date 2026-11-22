@@ -40,14 +40,27 @@ export interface NavigationRoute {
  */
 export const NAVIGATION_ROUTES: NavigationRoute[] = [
   {
-    cmdkKey: 'cmdk.community',
-    electronKey: 'navigation.discover',
+    // Same label as the sidebar entry (common:tab.marketplace) in every locale.
+    cmdkKey: 'tab.marketplace',
+    electronKey: 'navigation.marketplace',
     icon: ShapesIcon,
     id: 'community',
-    keywords: ['discover', 'market', 'assistant', 'model', 'provider', 'mcp'],
-    keywordsKey: 'cmdk.keywords.community',
-    path: '/community',
-    pathPrefix: '/community',
+    // "community" stays searchable for people who knew the page by its old name.
+    keywords: [
+      'marketplace',
+      'market',
+      'community',
+      'discover',
+      'agent',
+      'skill',
+      'connector',
+      'model',
+      'provider',
+      'mcp',
+    ],
+    keywordsKey: 'cmdk.keywords.marketplace',
+    path: '/marketplace',
+    pathPrefix: '/marketplace',
   },
   {
     cmdkKey: 'cmdk.video',

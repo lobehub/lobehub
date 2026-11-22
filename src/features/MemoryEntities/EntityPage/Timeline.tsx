@@ -3,6 +3,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { groupByMonth } from '../derive';
 import { useEntityFormat } from '../format';
 import { type MemoryActivity } from '../types';
@@ -11,7 +13,11 @@ import TimelineEntry from './TimelineEntry';
 
 const styles = stylex.create({
   list: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  month: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  month: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-section-gap'],
+  },
   monthLabel: {
     backgroundColor: cssVar.colorBgContainer,
     color: cssVar.colorTextTertiary,
@@ -63,9 +69,7 @@ const Timeline = memo<TimelineProps>(({ entries }) => {
         title={t('entity.timeline.past')}
       >
         {past.length === 0 ? (
-          <p {...stylex.props(styles.empty)}>
-            {t('entity.timeline.empty')}
-          </p>
+          <p {...stylex.props(styles.empty)}>{t('entity.timeline.empty')}</p>
         ) : (
           <div {...stylex.props(styles.list)}>
             {groupByMonth(shown, format.month).map((group) => (

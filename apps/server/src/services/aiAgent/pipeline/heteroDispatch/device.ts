@@ -1,6 +1,6 @@
 import { claudeCodeAgentEnvPicksLogin } from '@lobechat/heterogeneous-agents/quota';
 import type { ExecAgentResult } from '@lobechat/types';
-import { getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirSessionPath } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -15,6 +15,7 @@ import {
   wakeManagedDevice,
 } from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
+import { restoreOwnedWorktreeBeforeServerRun } from '@/server/services/worktreeCleanup';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -120,10 +121,12 @@ export const dispatchToCliDevice = async (
     heteroExecArgs,
     heteroParams,
     resumeSessionId,
-    topic,
+    topic: preparedTopic,
     topicRepos,
     unansweredUserTurns,
   } = prepared;
+  // The resolved GitHub credential is for the cloud sandbox only: a device may belong to another member.
+  const { githubToken: _sandboxGithubToken, ...deviceHeteroParams } = heteroParams;
   const { agentId: resolvedAgentId, operationId, topicId } = run;
 
   const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
@@ -188,6 +191,26 @@ export const dispatchToCliDevice = async (
   }
   const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
 
+  // A turn the server starts on its own (a delegated task reporting back)
+  // never passed the composer's restore step: bring back the worktree a
+  // cleanup removed, so the CLI does not spawn in a folder that is gone.
+  const restored =
+    preparedTopic && topicId
+      ? await traceHeteroStage('device restore_owned_worktree', () =>
+          restoreOwnedWorktreeBeforeServerRun({
+            db: deps.db,
+            metadata: preparedTopic.metadata,
+            topicId,
+            userId: deps.userId,
+            workspaceId: deps.workspaceId,
+          }),
+        )
+      : undefined;
+  const topic =
+    preparedTopic && restored
+      ? { ...preparedTopic, metadata: restored.metadata ?? undefined }
+      : preparedTopic;
+
   // Resolve the working directory for the run: a topic-level override
   // wins, else the device's user-configured defaultCwd.
   const dispatchWorkspaceId = cliDeviceWorkspaceId;
@@ -212,11 +235,14 @@ export const dispatchToCliDevice = async (
   // The active worktree is a record the agent may already have deleted:
   // spawning in it would lose the session, or fail the run outright once the
   // directory is gone. The agent is told about it in the system context instead.
-  const deviceCwd = getWorkingDirSourcePath(deviceCwdConfig);
+  // A worktree the app created on the first send is where the session starts
+  // (`getWorkingDirSessionPath`), so it needs no description.
+  const deviceCwd = getWorkingDirSessionPath(deviceCwdConfig);
   const worktreePath = deviceCwdConfig?.git?.activeWorktree;
-  const worktreeContext = worktreePath
-    ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
-    : {};
+  const worktreeContext =
+    worktreePath && worktreePath !== deviceCwd
+      ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
+      : {};
 
   // An unbound topic has no pinned cwd yet: the directory was only
   // recorded at agent level (`workingDirByDevice`) when no topic existed.
@@ -278,7 +304,7 @@ export const dispatchToCliDevice = async (
     ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
     : await traceHeteroStage('device gateway_dispatch', () =>
         deviceGateway.dispatchAgentRun({
-          ...heteroParams,
+          ...deviceHeteroParams,
           agentId: resolvedAgentId,
           // Only a live client advertising the native protocol receives these wrapper flags.
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,

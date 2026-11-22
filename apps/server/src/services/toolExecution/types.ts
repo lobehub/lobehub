@@ -344,9 +344,20 @@ export interface ToolExecutionContext {
    * execution device. Used by the Skills runtime to load them on demand via the
    * device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { location: string; name: string; source?: 'device' | 'project' }[];
+  projectSkills?: {
+    description?: string;
+    location: string;
+    name: string;
+    source?: 'device' | 'project';
+  }[];
   /** Root AI runtime operation ID used to aggregate artifacts produced by one run. */
   rootOperationId?: string;
+  /**
+   * Identifiers of the skills in this operation's pool. A library skill is
+   * opt-in per agent, and the pool is where a turn's selection or a share's
+   * grant opted one in without it being turned on in the agent's own config.
+   */
+  runSkillIds?: string[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */

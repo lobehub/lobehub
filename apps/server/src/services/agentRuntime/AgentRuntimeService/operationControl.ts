@@ -2,6 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import { redisService } from '@/server/services/redis';
 
 import { hookDispatcher } from '../hooks';
@@ -13,6 +14,7 @@ import {
 import { steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
+  type DeferredMessagePatch,
   type OperationStatusResult,
   type StartExecutionParams,
   type StartExecutionResult,
@@ -23,6 +25,7 @@ import {
   STEP_LOCK_HEARTBEAT_MS,
   STEP_LOCK_TTL_SECONDS,
 } from './constants';
+import { publishDeferredMessagePatch } from './executeStep/messagePatch';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -37,7 +40,9 @@ export type OperationControlDeps = Pick<
   | 'delegate'
   | 'endExpiredClientLlmWait'
   | 'messageModel'
+  | 'queryUiMessages'
   | 'queueService'
+  | 'serverDB'
   | 'streamManager'
   | 'traceRecorder'
   | 'userId'
@@ -210,6 +215,19 @@ export async function acceptsFileWorks(
   }
 }
 
+export async function acceptsArtboardWorks(
+  deps: OperationControlDeps,
+  operationId: string,
+): Promise<boolean> {
+  try {
+    const state = await deps.coordinator.loadAgentState(operationId);
+    return state?.host?.acceptsArtboardWorks === true;
+  } catch (error) {
+    log('[%s] Failed to read the artboard Works declaration: %O', operationId, error);
+    return false;
+  }
+}
+
 /**
  * Whether the client that started this operation declared it handles
  * `member_runtime_end`. An unknown or expired operation reads as `false`, so
@@ -280,10 +298,14 @@ export async function readQueuedMessagesFlag(
   state?: AgentState,
 ): Promise<boolean> {
   try {
-    if (await deps.coordinator.hasQueuedMessages(operationId)) return true;
-
     const scope = state && steerQueueScopeOf(state, deps.userId);
-    return scope ? (await redisService.steerQueue.length(scope, operationId)) > 0 : false;
+    const pending =
+      (await deps.coordinator.hasQueuedMessages(operationId)) ||
+      (!!scope && (await redisService.steerQueue.length(scope, operationId)) > 0);
+    if (!pending) return false;
+
+    // Queue mode lets the run finish: its follow-ups start once it ends.
+    return (await readFollowUpMode(deps.serverDB, deps.userId)) !== 'queue';
   } catch (error) {
     log('[%s][%d] Queued messages flag read failed: %O', operationId, stepIndex, error);
     return false;
@@ -353,6 +375,9 @@ export async function injectQueuedFollowUp(
 
   try {
     if ((await redisService.steerQueue.length(scope, operationId)) === 0) return;
+    // A person's follow-ups wait for the run to end in Queue mode; a parent's
+    // steer of its sub-agent always joins.
+    if (topLevelScope && (await readFollowUpMode(deps.serverDB, deps.userId)) === 'queue') return;
 
     const injected = await deps.delegate.injectQueuedFollowUp({ operationId, scope, state });
     // It answers again with the steer in context, so it reads its queue again.
@@ -407,11 +432,17 @@ export async function controlCompletedToolResult(
 export async function scheduleContinuation(
   deps: OperationControlDeps,
   continuation: AgentStepContinuation,
+  /** The handing-back step's patch; published first, since no entry read here will. */
+  deferredMessagePatch?: DeferredMessagePatch,
 ): Promise<void> {
   if (!deps.queueService) {
     throw new Error(
       `Cannot schedule continuation for ${continuation.operationId}: no queue service`,
     );
+  }
+
+  if (deferredMessagePatch) {
+    await publishDeferredMessagePatch(deps, continuation.operationId, deferredMessagePatch);
   }
 
   // The steps this invocation inlined are still only in memory — the

@@ -7,17 +7,45 @@ import {
   type WorkVersionCumulativeUsage,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
-import { WorkModel } from '@/database/models/work';
-import { router } from '@/libs/trpc/lambda';
+import { TopicModel } from '@/database/models/topic';
+import { AgentWorkError, WorkModel } from '@/database/models/work';
+import type { LobeChatDatabase } from '@/database/type';
+import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { unpublishArtboardWork } from '@/server/services/artboard/publish/offline';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
 import { deleteCanvas } from '@/server/services/canvas/delete';
-import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
+import {
+  AgentWorkRunError,
+  isBetterCodingExperienceEnabled,
+  linkPushedPullRequests,
+  linkTopicPullRequest,
+  listTopicPullRequestsWithStatus,
+  parsePullRequestUrl,
+  registerShellWorksForLocalRun,
+  resolveAgentWorkFile,
+  resolveAgentWorkRun,
+  resolveShellPullRequestLinking,
+  setTopicPullRequestDismissed,
+} from '@/server/services/workRegistration';
+
+import {
+  assertCanUseTopicTargets,
+  assertCanViewTopicTargets,
+} from './_helpers/conversationResourceGuard';
+import { batchResolveAgentIdFromSessions } from './_helpers/resolveContext';
+
+const topicGuardCtx = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -26,10 +54,13 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
   return opts.next({
     ctx: {
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       workModel: new WorkModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
+
+const lookupPullRequestInput = z.object({ url: z.string().trim().min(1).max(2048) });
 
 // Task-domain write gate. Task mutations elsewhere (see the task router's
 // `taskProcedureWrite`) gate on `agent:update`, so a Work registration that
@@ -62,6 +93,7 @@ const cumulativeUsageSchema = z.object({
 // registration (see registerClientWorkFromIntent), and `z.object` strips
 // undeclared keys — omitting them here silently stores cost-less versions.
 const registerTaskSchema = z.object({
+  agentEditable: z.boolean().nullable().optional(),
   agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
@@ -117,6 +149,7 @@ const registerCanvasSchema = z.object({
 
 const registerDocumentSchema = z.object({
   agentDocumentId: z.string().nullable().optional(),
+  agentEditable: z.boolean().nullable().optional(),
   agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
@@ -132,10 +165,151 @@ const registerDocumentSchema = z.object({
   topicId: z.string().nullable().optional(),
 }) satisfies z.ZodType<RegisterDocumentWorkParams>;
 
+// `lh work create|update`: an agent registering what it produced. The run's
+// topic, agent and share scope come from `operationId`; file size, type and URL
+// come from the uploaded file row.
+const agentWorkTextSchema = {
+  description: z.string().trim().max(2000).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+};
+const agentWorkUrlSchema = z.string().trim().min(1).max(2048);
+
+const createAgentWorkSchema = z.discriminatedUnion('type', [
+  z.object({
+    ...agentWorkTextSchema,
+    fileId: z.string().min(1),
+    filePath: z.string().trim().min(1).max(1024),
+    operationId: z.string().min(1),
+    type: z.literal('file'),
+  }),
+  z.object({
+    ...agentWorkTextSchema,
+    operationId: z.string().min(1),
+    title: agentWorkTextSchema.title.unwrap(),
+    type: z.literal('link'),
+    url: agentWorkUrlSchema,
+  }),
+]);
+
+const updateAgentWorkSchema = z.object({
+  ...agentWorkTextSchema,
+  fileId: z.string().min(1).optional(),
+  operationId: z.string().min(1),
+  workId: z.string().min(1),
+});
+
+const AGENT_WORK_ERROR_STATUS = {
+  401: 'UNAUTHORIZED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+} as const;
+
+const toAgentWorkTRPCError = (error: unknown): never => {
+  if (error instanceof AgentWorkRunError) {
+    throw new TRPCError({
+      cause: error,
+      code: AGENT_WORK_ERROR_STATUS[error.status],
+      message: error.message,
+    });
+  }
+  if (error instanceof AgentWorkError) {
+    throw new TRPCError({ cause: error, code: error.code, message: error.message });
+  }
+  throw error;
+};
+
+const agentWorkProcedure = heteroAuthedProcedure.use(serverDatabase);
+
 export const workRouter = router({
+  /** Register a file or link the running agent produced (`lh work create`). */
+  createAgentWork: agentWorkProcedure
+    .input(createAgentWorkSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { run, workModel, workspaceId } = await resolveAgentWorkRun({
+          auth: ctx,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        });
+        const text = { description: input.description, title: input.title };
+        if (input.type === 'link') {
+          return await workModel.createAgentWork(run, {
+            ...text,
+            title: input.title,
+            type: 'link',
+            url: input.url,
+          });
+        }
+
+        const file = await resolveAgentWorkFile({
+          db: ctx.serverDB,
+          fileId: input.fileId,
+          userId: run.userId,
+          workspaceId,
+        });
+        return await workModel.createAgentWork(run, {
+          ...text,
+          file: { ...file, filePath: input.filePath },
+          type: 'file',
+        });
+      } catch (error) {
+        return toAgentWorkTRPCError(error);
+      }
+    }),
+
+  /** Add a version to a Work the agent created (`lh work update`). */
+  updateAgentWork: agentWorkProcedure
+    .input(updateAgentWorkSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { run, workModel, workspaceId } = await resolveAgentWorkRun({
+          auth: ctx,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        });
+        const file = input.fileId
+          ? await resolveAgentWorkFile({
+              db: ctx.serverDB,
+              fileId: input.fileId,
+              userId: run.userId,
+              workspaceId,
+            })
+          : undefined;
+        return await workModel.updateAgentWork(run, {
+          description: input.description,
+          file,
+          title: input.title,
+          workId: input.workId,
+        });
+      } catch (error) {
+        return toAgentWorkTRPCError(error);
+      }
+    }),
+
+  /** Delete a Work the agent created by mistake (`lh work delete`). */
+  deleteAgentWork: agentWorkProcedure
+    .input(z.object({ operationId: z.string().min(1), workId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { run, workModel } = await resolveAgentWorkRun({
+          auth: ctx,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        });
+        return await workModel.deleteAgentWork(run, input.workId);
+      } catch (error) {
+        return toAgentWorkTRPCError(error);
+      }
+    }),
+
   listByConversation: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         // Opt-in for the `file` work type. Absent → the legacy (pre-`file`) set,
         // so already-deployed clients whose descriptor table lacks `file` never
         // receive it (see resolveAllowedWorkTypes in the work registry).
@@ -151,11 +325,15 @@ export const workRouter = router({
     .input(
       z.object({
         cursor: z.string().nullable().optional(),
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(30),
         originAgentId: z.string().nullable().optional(),
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
-        type: z.enum(['task', 'document', 'external', 'file', 'canvas']).nullable().optional(),
+        type: z
+          .enum(['task', 'document', 'external', 'file', 'collection', 'canvas', 'artboard'])
+          .nullable()
+          .optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
@@ -164,6 +342,7 @@ export const workRouter = router({
   listByRootOperation: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationId: z.string().nullable().optional(),
@@ -171,6 +350,7 @@ export const workRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperation({
+        includeArtboardWorks: input.includeArtboardWorks,
         includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationId: input.rootOperationId,
@@ -180,6 +360,7 @@ export const workRouter = router({
   listByRootOperations: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationIds: z.array(z.string()).max(100).nullable().optional(),
@@ -187,6 +368,7 @@ export const workRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperations({
+        includeArtboardWorks: input.includeArtboardWorks,
         includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationIds: input.rootOperationIds,
@@ -226,6 +408,13 @@ export const workRouter = router({
         });
         return;
       }
+
+      const artboardWork = await ctx.workModel.findArtboardWorkByWorkId(input.id);
+      if (artboardWork?.userId === ctx.userId)
+        await unpublishArtboardWork(
+          { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          artboardWork,
+        );
 
       await ctx.workModel.deleteWork(input);
     }),
@@ -272,8 +461,181 @@ export const workRouter = router({
         anchorMessageId: input.anchorMessageId,
         messageIds: input.messageIds,
         messageModel: ctx.messageModel,
+        pullRequestLinking: await resolveShellPullRequestLinking({
+          db: ctx.serverDB,
+          topicId: input.topicId,
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId,
+        }),
         topicId: input.topicId,
         workModel: ctx.workModel,
       }),
     ),
+
+  // Better Coding Experience: the GitHub pull requests a topic's Work rows
+  // link, with the GitHub App's state where an installation tracks the repo.
+  listTopicPullRequests: workProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ ctx, input }) =>
+      listTopicPullRequestsWithStatus({
+        db: ctx.serverDB,
+        topicId: input.topicId,
+        topicModel: ctx.topicModel,
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  lookupPullRequest: workProcedure.input(lookupPullRequestInput).query(async ({ ctx, input }) => {
+    const pr = parsePullRequestUrl(input.url);
+    if (!pr) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Expected a GitHub pull request URL, e.g. https://github.com/owner/repo/pull/123',
+      });
+    }
+
+    const topics = await ctx.workModel.listTopicsByPullRequest(pr.identifier);
+    const guardCtx = topicGuardCtx(ctx);
+    const accessByTarget = new Map<string, Promise<boolean>>();
+    const canView = (topic: (typeof topics)[number]) => {
+      const key = JSON.stringify([topic.agentId, topic.groupId, topic.sessionId]);
+      const cached = accessByTarget.get(key);
+      if (cached) return cached;
+      const access = assertCanViewTopicTargets(guardCtx, [topic.topicId]).then(
+        () => true,
+        (error: unknown) => {
+          if (error instanceof TRPCError && error.code === 'FORBIDDEN') return false;
+          throw error;
+        },
+      );
+      accessByTarget.set(key, access);
+      return access;
+    };
+    const visible = ctx.workspaceId
+      ? (
+          await pMap(topics, async (topic) => ((await canView(topic)) ? [topic] : []), {
+            concurrency: 10,
+          })
+        ).flat()
+      : topics;
+
+    const legacySessionIds = visible.flatMap(({ agentId, groupId, sessionId }) =>
+      !agentId && !groupId && sessionId ? [sessionId] : [],
+    );
+    const sessionAgentIds = await batchResolveAgentIdFromSessions(
+      [...new Set(legacySessionIds)],
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    );
+    return {
+      data: visible.map(({ sessionId, ...topic }) => ({
+        ...topic,
+        agentId: topic.agentId ?? (sessionId && sessionAgentIds.get(sessionId)) ?? null,
+      })),
+      success: true,
+    };
+  }),
+
+  // Better Coding Experience: link the pull requests a `git push` tool call
+  // updated, right after it ran. The push itself is re-read from the persisted
+  // tool message; see `linkPushedPullRequests` for what the device may add.
+  linkPushedPullRequests: skillWorkProcedureWrite
+    .input(
+      z.object({
+        pullRequests: z
+          .array(
+            z.object({
+              headRefName: z.string().min(1).max(255),
+              headRepoFullName: z.string().max(255).optional(),
+              isDraft: z.boolean().optional(),
+              number: z.number().int().positive(),
+              state: z.string().max(32).optional(),
+              title: z.string().max(1024).optional(),
+              url: z.string().url().max(2048),
+            }),
+          )
+          .max(10),
+        toolCallId: z.string().min(1).max(255),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      linkPushedPullRequests({
+        db: ctx.serverDB,
+        devicePullRequests: input.pullRequests,
+        messageModel: ctx.messageModel,
+        toolCallId: input.toolCallId,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  // Better Coding Experience: keep a PR on the topic itself — found on the
+  // topic's own branch at run end (`branch`), or pasted by the person
+  // (`manual`). A topic link only drives the topic's PR lists: unlike a Work
+  // row it is never read by the SCM links, so a client-named PR cannot make a
+  // merge accept a delivery or a CI failure wake the agent.
+  linkTopicPullRequest: workProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        headRefName: z.string().max(255).optional(),
+        source: z.enum(['branch', 'manual']),
+        title: z.string().max(1024).optional(),
+        topicId: z.string().min(1),
+        url: z.string().max(2048),
+        /** Branch matches only: the PR's head lives in the repo the topic pushes to. */
+        vouched: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Same gate as topic.updateTopicMetadata: `use` access to the conversation.
+      await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
+      const parsed = parsePullRequestUrl(input.url);
+      if (!parsed) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a GitHub pull request URL' });
+      }
+      if (!(await isBetterCodingExperienceEnabled(ctx.serverDB, ctx.userId))) {
+        return { identifier: parsed.identifier, linked: false };
+      }
+      const linked = await linkTopicPullRequest(ctx.topicModel, input.topicId, {
+        ...(input.headRefName ? { headRefName: input.headRefName } : {}),
+        identifier: parsed.identifier,
+        source: input.source,
+        ...(input.title ? { title: input.title } : {}),
+        url: parsed.url,
+        // The person vouches for what they link by hand.
+        vouched: input.source === 'manual' ? true : !!input.vouched,
+      });
+      return { identifier: parsed.identifier, linked };
+    }),
+
+  // Better Coding Experience: remove a PR from the topic's lists (or bring it
+  // back). Its Work rows stay; only the topic's view of them changes.
+  setTopicPullRequestDismissed: workProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        dismissed: z.boolean(),
+        identifier: z.string().regex(/^[\w.-]+\/[\w.-]+#\d+$/),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
+      return {
+        updated: await setTopicPullRequestDismissed(
+          ctx.topicModel,
+          input.topicId,
+          input.identifier,
+          input.dismissed,
+        ),
+      };
+    }),
 });

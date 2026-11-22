@@ -30,7 +30,7 @@ Ace Data Cloud is an independent API service. Use an Ace account and API token; 
 
   Fetch the current model catalog, enable a model, and select it for the Agent. Catalog presence does not establish your token's service permissions or every model capability. Check the service documentation. Connection checks and chat can incur API charges.
 
-  This entry uses the OpenAI-compatible chat client. Model-specific rules may select Chat Completions or Responses; verify those paths separately. It does not turn asynchronous Suno/Seedance media APIs into chat models. Install individual media MCP tools separately and enable them for the Agent. Preserve the same task ID when polling an asynchronous operation; do not generate again while waiting.
+  This entry selects Chat Completions, Responses, or Messages from each model's published protocol bindings. Messages uses the native adapter with Bearer authentication. It does not turn asynchronous Suno/Seedance media APIs into chat models. Install individual media MCP tools separately and enable them for the Agent. Preserve the same task ID when polling an asynchronous operation; do not generate again while waiting.
 </Steps>
 
 ## Troubleshooting
@@ -39,6 +39,7 @@ Ace Data Cloud is an independent API service. Use an Ace account and API token; 
 - **404:** restore `https://api.acedata.cloud/v1`. Do not use `/openai/v1` or a full `/chat/completions` URL as the base URL.
 - **429:** the provider reports a rate-limit error. Wait for the service limit to recover before retrying; do not silently switch models or price tiers.
 - **Empty catalog:** inspect the model-fetch error rather than assuming historical model IDs are available.
-- **Tools or vision:** the catalog has no capability or pricing metadata, so this integration does not infer either from vendor model names. Verify the current service contract before editing model settings.
+- **Tools or vision:** the gateway model list supplies IDs; the public platform catalog supplies model types, declared capabilities, and protocol bindings. Official Ace endpoints use both, including chat models such as `gpt-4o-image`. Undeclared capabilities and limits remain unknown. Custom endpoints do not inherit official Ace metadata.
+- **Protocols and prices:** models that require Messages use the native Messages adapter with Bearer authentication. API price projections describe the ordinary-context base rate, so LobeHub does not substitute another provider's price for an unknown Ace usage estimate. Refer to the current Ace pricing and usage records.
 
 The images show real historical Ace Applications pages, not successful LobeHub installation or inference. Keep tokens in provider settings, out of chat and screenshots.

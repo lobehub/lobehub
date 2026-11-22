@@ -3,7 +3,7 @@ import {
   getLobehubSkillProviderById,
   hasCallableMcpEndpoint,
 } from '@lobechat/const';
-import { Button, confirmModal, Flexbox, Tabs, Text, toast, Tooltip } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
@@ -17,14 +17,18 @@ import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { densityTokens } from '@/styles/density.stylex';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 
 import ConnectorActionErrorText from '../ConnectorActionErrorText';
 import CustomConnectorModal from '../CustomConnectorModal';
 import { formatConnectorActionErrorToast } from '../formatConnectorActionError';
+import ConnectorAccounts from './ConnectorAccounts';
 import ConnectorDetailIcon from './ConnectorDetailIcon';
 import ConnectorOverviewInfo, { getConnectorKind } from './ConnectorOverviewInfo';
 import { getLocalizedConnectorDetail } from './localization';
+import ManageTooltip from './ManageTooltip';
+import Section from './Section';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
@@ -45,76 +49,46 @@ interface ConnectorDetailProps {
   onDelete?: () => void;
 }
 
-/**
- * Tooltip wrapper for the manage gate. Disabled native buttons swallow hover
- * events, so the tooltip needs an enabled wrapper element to anchor on; when
- * there is no gate message, render children untouched.
- */
-const ManageTooltip = ({ children, title }: { children: ReactNode; title?: string }) =>
-  title ? (
-    <Tooltip title={title}>
-      <span style={{ display: 'inline-flex' }}>{children}</span>
-    </Tooltip>
-  ) : (
-    children
-  );
-
-type ConnectorDetailTab = 'overview' | 'tools';
-
 const styles = stylex.create({
   body: {
     flex: '1',
     minHeight: 0,
     overflowY: 'auto',
-    paddingBlock: 24,
-    paddingInline: 16,
+    paddingBlockStart: 8,
+    paddingBlockEnd: 24,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   description: {
     color: cssVar.colorText,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: 1.6,
   },
+  // Identity on the left (icon, name, who made it and what it is), the
+  // connector's own actions on the right; one scrolling page below.
   header: {
     flexShrink: 0,
+    flexWrap: 'wrap',
     paddingBlockStart: '8px',
-    paddingBlockEnd: '16px',
-    paddingInline: 16,
+    paddingBlockEnd: '24px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   meta: {
     color: cssVar.colorTextSecondary,
-    fontSize: 13,
+    fontSize: densityTokens['--lobe-density-font-size'],
   },
   root: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
   },
-  sectionLabel: {
-    color: cssVar.colorTextTertiary,
-    fontSize: 12,
-    fontWeight: 500,
-  },
-  tabs: {
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
-    flexShrink: 0,
-    paddingInline: 8,
-  },
   title: {
-    fontSize: 20,
+    color: cssVar.colorText,
+    fontSize: cssVar.fontSizeHeading3,
     fontWeight: 600,
-    lineHeight: 1.4,
+    lineHeight: 1.3,
     marginBlock: 0,
   },
 });
-
-const Section = ({ children, label }: { children: ReactNode; label: string }) => (
-  <Flexbox gap={8}>
-    <span {...stylex.props(styles.sectionLabel)}>{label}</span>
-    {children}
-  </Flexbox>
-);
 
 const ConnectorDetail = memo<ConnectorDetailProps>(
   ({ agentTitle, connectorId, lifecycleActions, middleSlot, onDelete }) => {
@@ -122,7 +96,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const { t: ts } = useTranslation('setting');
 
     const [customModalOpen, setCustomModalOpen] = useState(false);
-    const [tab, setTab] = useState<ConnectorDetailTab>('overview');
 
     const connector = useToolStore(connectorSelectors.connectorById(connectorId));
     const { readTools, createTools, updateTools, deleteTools } = useToolStore(
@@ -137,7 +110,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const disconnectConnector = useToolStore((s) => s.disconnectConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const forgetComposioConnection = useToolStore((s) => s.forgetComposioConnection);
-    const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
     const uninstallMCPPlugin = useToolStore((s) => s.uninstallMCPPlugin);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const updateToolPermission = useToolStore((s) => s.updateToolPermission);
@@ -249,18 +221,16 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     ]);
 
     const handleUninstall = () => {
-      if (!connector) return;
+      if (!connector || !isMarketplace) return;
       confirmModal({
+        // The modal's built-in label is not localized.
+        cancelText: t('cancel', { ns: 'common' }),
         content: deleteConfirmContent,
         okButtonProps: { danger: true },
         onOk: async () => {
           setRemoveError(undefined);
           try {
-            if (isBuiltin) {
-              await uninstallBuiltinTool(connector.identifier);
-            } else if (isMarketplace) {
-              await uninstallMCPPlugin(connector.identifier);
-            }
+            await uninstallMCPPlugin(connector.identifier);
             await deleteConnector(connectorId);
             // The Composio list does not watch these writes; without this the
             // uninstalled row keeps showing as connected until a reload.
@@ -378,6 +348,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                     size="small"
                     onClick={() => {
                       confirmModal({
+                        cancelText: t('cancel', { ns: 'common' }),
                         content: deleteConfirmContent,
                         okButtonProps: { danger: true },
                         onOk: async () => {
@@ -398,8 +369,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 </ManageTooltip>
               </>
             )}
-            {/* Uninstall for builtin and marketplace tools */}
-            {(isBuiltin || isMarketplace) && (
+            {isMarketplace && (
               <ManageTooltip title={credentialsTooltip}>
                 <Button
                   danger
@@ -429,19 +399,27 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           </Section>
         )}
 
-        <Section label={t('connector.overview.connection')}>
+        <Section label={ts('connectorMarket.detail.information')}>
           <ConnectorOverviewInfo connector={connector} />
-          <Flexbox horizontal gap={8} paddingBlock={'4px 0'} wrap={'wrap'}>
-            {actions}
-          </Flexbox>
         </Section>
+
+        {/* Accounts are their own section: removing one account is not the
+            connector-level Disconnect / Delete above. */}
+        {connector.authKind === 'oauth2' && (
+          <ConnectorAccounts
+            canManage={canManage}
+            connector={connector}
+            disabledReason={manageTooltip}
+            key={connectorId}
+          />
+        )}
 
         {middleSlot}
       </Flexbox>
     );
 
     const tools = hasTools ? (
-      <Flexbox gap={16}>
+      <Flexbox gap={12}>
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           {/* The count already sits under the title; say what the controls decide instead. */}
           <Text fontSize={13} type={'secondary'}>
@@ -501,53 +479,63 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       </div>
     );
 
+    // Built-in tools ship with LobeHub; other sources name no single author.
+    const author = isBuiltin ? 'LobeHub' : undefined;
+
     return (
       <div {...stylex.props(styles.root)}>
-        <Flexbox horizontal align={'center'} gap={16} {...stylex.props(styles.header)}>
-          <ConnectorDetailIcon connector={connector} />
-          <Flexbox gap={2} style={{ minWidth: 0 }}>
-            <h2 {...stylex.props(styles.title)}>{connectorName}</h2>
-            <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.meta)}>
-              <span>{t(`connector.kind.${getConnectorKind(connector)}`)}</span>
-              {hasTools && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>{t('connector.toolCount', { count: toolCount })}</span>
-                </>
-              )}
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={16}
+          justify={'space-between'}
+          {...stylex.props(styles.header)}
+        >
+          <Flexbox horizontal align={'center'} gap={16} style={{ minWidth: 0 }}>
+            <ConnectorDetailIcon connector={connector} size={'large'} />
+            <Flexbox gap={4} style={{ minWidth: 0 }}>
+              <h2 {...stylex.props(styles.title)}>{connectorName}</h2>
+              <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.meta)}>
+                {author && (
+                  <>
+                    <span>{ts('connectorMarket.detail.byAuthor', { author })}</span>
+                    <span aria-hidden>·</span>
+                  </>
+                )}
+                <span>{t(`connector.kind.${getConnectorKind(connector)}`)}</span>
+                {hasTools && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>{t('connector.toolCount', { count: toolCount })}</span>
+                  </>
+                )}
+              </Flexbox>
             </Flexbox>
+          </Flexbox>
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8} wrap={'wrap'}>
+            {actions}
           </Flexbox>
         </Flexbox>
 
-        {/* Overview (authorization / lifecycle) and Tools (permissions) are two separate jobs */}
-        <div {...stylex.props(styles.tabs)}>
-          <Tabs
-            activeKey={tab}
-            size={'middle'}
-            variant={'point'}
-            items={[
-              { key: 'overview', label: t('connector.tab.overview') },
-              {
-                key: 'tools',
-                label: (
-                  <Flexbox horizontal align={'center'} gap={6}>
-                    {t('connector.tab.tools')}
-                    {toolCount > 0 && (
-                      <Text fontSize={12} type={'secondary'}>
-                        {toolCount}
-                      </Text>
-                    )}
-                  </Flexbox>
-                ),
-              },
-            ]}
-            onChange={(key) => setTab(key as ConnectorDetailTab)}
-          />
-        </div>
-
-        {/* Body */}
+        {/* One page: what it is and who authorized it, then what its tools may do. */}
         <div {...stylex.props(styles.body)}>
-          {tab === 'tools' ? tools : overview}
+          <Flexbox gap={32}>
+            {overview}
+            <Section
+              label={
+                <Flexbox horizontal align={'baseline'} as={'span'} gap={8}>
+                  {ts('connectorMarket.detail.tools')}
+                  {toolCount > 0 && (
+                    <Text as={'span'} fontSize={14} type={'secondary'} weight={400}>
+                      {toolCount}
+                    </Text>
+                  )}
+                </Flexbox>
+              }
+            >
+              {tools}
+            </Section>
+          </Flexbox>
 
           {/* Edit modal for an http or stdio custom connector */}
           {isEditable && (

@@ -1,9 +1,15 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/const';
+import {
+  DEFAULT_MODEL,
+  DEFAUTT_AGENT_TTS_CONFIG,
+  isAgentShareModelRestrictionExempt,
+  isDesktop,
+} from '@lobechat/const';
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import {
   type AgentMode,
   getActivePluginIds,
+  getOptedInPluginIds,
   getWorkingDirEffectivePath,
   type LobeAgentAgencyConfig,
   type LobeAgentTTSConfig,
@@ -179,9 +185,8 @@ const getAgentBuilderContextById =
         openingMessage: config?.openingMessage,
         openingQuestions: config?.openingQuestions,
         params: config?.params,
-        // Pinned identifiers only — AgentBuilderContext.config.plugins is a
-        // display DTO (still string[]); a disabled plugin isn't "enabled".
-        plugins: getActivePluginIds(config?.plugins),
+        // Opted-in identifiers (`auto` + legacy `pinned`) — excludes explicitly disabled plugins.
+        plugins: getOptedInPluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: config?.systemRole,
       },
@@ -205,6 +210,18 @@ const isAgentHeterogeneousById =
   (agentId: string) =>
   (s: AgentStoreState): boolean =>
     !!getAgencyConfigById(agentId)(s)?.heterogeneousProvider;
+
+/**
+ * Whether a shared agent is exempt from the share model-provider restriction
+ * (a Claude Code / Codex agent) — by agentId. Mirrors the server check.
+ */
+const isAgentShareModelRestrictionExemptById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    isAgentShareModelRestrictionExempt({
+      agencyConfig: getAgencyConfigById(agentId)(s),
+      provider: agentSelectors.getAgentConfigById(agentId)(s)?.provider,
+    });
 
 /**
  * Get full agent data by agentId
@@ -244,5 +261,6 @@ export const agentByIdSelectors = {
   isAgentConfigLoadingById,
   isAgentHeterogeneousById,
   isAgentNotFoundById,
+  isAgentShareModelRestrictionExemptById,
   isWorkspaceAgentById,
 };

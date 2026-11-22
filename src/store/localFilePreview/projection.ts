@@ -15,6 +15,8 @@ export interface LocalFilePreviewTarget {
   filePath: string;
   /** Read live from this topic's cloud sandbox instead of a filesystem. */
   sandboxTopicId?: string;
+  /** Authorize a remote checkout using this topic’s working directory. */
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -47,6 +49,7 @@ export const localFilePreviewKey = ({
   deviceId,
   filePath,
   sandboxTopicId,
+  topicId,
   workingDirectory,
 }: LocalFilePreviewTarget): string =>
   JSON.stringify([
@@ -58,18 +61,23 @@ export const localFilePreviewKey = ({
     workingDirectory,
     filePath,
     allowExternalFile ? 'external' : 'workspace',
-    ...(accept ? [accept] : []),
+    ...(deviceId && topicId && !sandboxTopicId
+      ? [accept ?? null, topicId]
+      : accept
+        ? [accept]
+        : []),
   ]);
 
 /** The target a {@link localFilePreviewKey} was built from (fetcher side). */
 export const localFilePreviewTargetFromKey = (key: string): LocalFilePreviewTarget => {
-  const [kind, id, workingDirectory, filePath, access, accept] = JSON.parse(key) as [
+  const [kind, id, workingDirectory, filePath, access, accept, topicId] = JSON.parse(key) as [
     'device' | 'local' | 'sandbox',
     string | null,
     string,
     string,
     string,
-    'image' | undefined,
+    'image' | null | undefined,
+    (string | undefined)?,
   ];
   return {
     accept: accept === 'image' ? accept : undefined,
@@ -77,6 +85,7 @@ export const localFilePreviewTargetFromKey = (key: string): LocalFilePreviewTarg
     deviceId: kind === 'device' ? (id ?? undefined) : undefined,
     filePath,
     sandboxTopicId: kind === 'sandbox' ? (id ?? undefined) : undefined,
+    ...(kind === 'device' && topicId && { topicId }),
     workingDirectory,
   };
 };

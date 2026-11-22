@@ -4,7 +4,7 @@ import type { AcceptanceChecklistItem } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,13 +25,10 @@ const phone = '@media (width <= 767px)';
 // ('visible') and acceptanceFocusedLayout.contentPaddingBlock ('32px 24px') from
 // ../layout: StyleX cannot read constants from another module.
 const styles = stylex.create({
-  mobileNavigation: {
-    position: 'sticky',
-    zIndex: 2,
-    insetBlockStart: '-16px',
+  phoneStep: {
     flex: 'none',
-    paddingBlock: '8px',
-    backgroundColor: cssVar.colorBgContainer,
+    minWidth: '44px',
+    minHeight: '44px',
   },
   countBadge: {
     paddingBlock: '1px',
@@ -73,8 +70,8 @@ const styles = stylex.create({
     paddingInline: { default: '32px', [phone]: '16px' },
   },
   content: {
-    flex: 'none',
-    width: 'min(880px, 100%)',
+    flex: { default: 'none', [phone]: '1 0 auto' },
+    width: 'min(1120px, 100%)',
     marginInline: 'auto',
   },
 });
@@ -124,10 +121,6 @@ const AcceptanceFocusReview = ({
   return (
     <div {...stylex.props(styles.layout)}>
       <Flexbox {...stylex.props(styles.outline)}>
-        {/* The phone top line is a breadcrumb, not a nav bar: it introduces the
-            check and hands off to the outline. The row below it already owns
-            44px targets for stepping between checks, so stacking another
-            44px band here just pushed the check itself down the screen. */}
         <Flexbox
           align={md ? undefined : 'center'}
           flex={'none'}
@@ -142,9 +135,9 @@ const AcceptanceFocusReview = ({
             size={'small'}
             type={'text'}
             style={{
-              alignSelf: 'flex-start',
-              minHeight: md ? undefined : 30,
-              minWidth: md ? undefined : 30,
+              alignSelf: md ? 'flex-start' : undefined,
+              minHeight: md ? undefined : 44,
+              minWidth: md ? undefined : 44,
             }}
             onClick={onBack}
           >
@@ -153,19 +146,41 @@ const AcceptanceFocusReview = ({
           {!md && (
             <Button
               aria-expanded={outlineOpen}
-              icon={<Icon icon={outlineOpen ? ChevronDown : ChevronRight} size={14} />}
-              size={'small'}
+              icon={<Icon icon={outlineOpen ? ChevronUp : ChevronDown} size={16} />}
+              iconPosition={'end'}
               type={'text'}
               style={{
-                fontSize: 13,
-                minHeight: 30,
-                paddingInline: 6,
-                textAlign: 'start',
+                flex: 1,
+                fontSize: 14,
+                justifyContent: 'flex-start',
+                minHeight: 44,
+                minWidth: 0,
+                paddingInline: 8,
               }}
               onClick={() => setOutlineOpen((open) => !open)}
             >
               {t('acceptance.checks.title')} · {currentIndex + 1} / {orderedChecks.length}
             </Button>
+          )}
+          {!md && (
+            <Button
+              aria-label={t('acceptance.focus.previous')}
+              className={stylex.props(styles.phoneStep).className}
+              disabled={currentIndex <= 0}
+              icon={<Icon icon={ChevronLeft} size={20} />}
+              type={'text'}
+              onClick={() => onSelectCheck(orderedChecks[currentIndex - 1].id)}
+            />
+          )}
+          {!md && (
+            <Button
+              aria-label={t('acceptance.focus.next')}
+              className={stylex.props(styles.phoneStep).className}
+              disabled={currentIndex >= orderedChecks.length - 1}
+              icon={<Icon icon={ChevronRight} size={20} />}
+              type={'text'}
+              onClick={() => onSelectCheck(orderedChecks[currentIndex + 1].id)}
+            />
           )}
           {md && (
             <Flexbox gap={4} paddingInline={4}>
@@ -174,7 +189,7 @@ const AcceptanceFocusReview = ({
               </Text>
               <Flexbox horizontal align={'center'} gap={6}>
                 <AcceptanceStatusPill size={12} status={status} />
-                <Text fontSize={11} type={'secondary'}>
+                <Text fontSize={12} type={'secondary'}>
                   {t('acceptance.roundCount', { count: roundCount })}
                 </Text>
               </Flexbox>
@@ -182,7 +197,7 @@ const AcceptanceFocusReview = ({
           )}
           {md && (
             <Flexbox horizontal align={'center'} gap={8} paddingInline={4}>
-              <Text strong style={{ fontSize: 13 }}>
+              <Text strong style={{ fontSize: 14 }}>
                 {t('acceptance.checks.title')}
               </Text>
               <span {...stylex.props(styles.countBadge)}>
@@ -219,27 +234,6 @@ const AcceptanceFocusReview = ({
       </Flexbox>
 
       <Flexbox key={focusedCheck.id} {...stylex.props(styles.main)}>
-        {!md && (
-          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.mobileNavigation)}>
-            <Button
-              aria-label={t('acceptance.focus.previous')}
-              disabled={currentIndex <= 0}
-              icon={<Icon icon={ChevronLeft} />}
-              style={{ minHeight: 44, minWidth: 44 }}
-              onClick={() => onSelectCheck(orderedChecks[currentIndex - 1].id)}
-            />
-            <Text style={{ flex: 1, textAlign: 'center' }}>
-              {currentIndex + 1} / {orderedChecks.length}
-            </Text>
-            <Button
-              aria-label={t('acceptance.focus.next')}
-              disabled={currentIndex >= orderedChecks.length - 1}
-              icon={<Icon icon={ChevronRight} />}
-              style={{ minHeight: 44, minWidth: 44 }}
-              onClick={() => onSelectCheck(orderedChecks[currentIndex + 1].id)}
-            />
-          </Flexbox>
-        )}
         <Flexbox gap={16} {...stylex.props(styles.content)}>
           <FocusCheckHeading
             check={focusedCheck}

@@ -27,6 +27,7 @@ import { isBuiltInRow } from '@/features/LobeBench/lobeBench';
 import { agentEvalService } from '@/services/agentEval';
 import { useEvalStore } from '@/store/eval';
 import type { EvalEnvironmentRow } from '@/store/eval/slices/lobeBench/projection';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { saveEnvironment } from './saveEnvironment';
 
@@ -40,19 +41,19 @@ const styles = stylex.create({
   table: {
     display: 'grid',
     gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 2fr) 120px',
-    columnGap: 12,
+    columnGap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
   },
   head: {
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: 12,
     color: cssVar.colorTextSecondary,
   },
   row: {
     cursor: 'pointer',
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
   },

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
@@ -15,7 +15,9 @@ import {
   Share2Icon,
   SparklesIcon,
   UserRoundIcon,
+  WebhookIcon,
   WrenchIcon,
+  ZapIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -27,14 +29,15 @@ import {
 } from '@/features/AgentProfileTabs/tabOptions';
 import { useAgentProfileTabOptions } from '@/features/AgentProfileTabs/useAgentProfileTabOptions';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
 import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
+  'automations': ZapIcon,
   'channel': RadioTowerIcon,
   'engine': CpuIcon,
   'environment': MonitorSmartphoneIcon,
@@ -47,6 +50,7 @@ const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
   'skills': SparklesIcon,
   'statistics': ChartColumnBigIcon,
   'tools': WrenchIcon,
+  'webhook': WebhookIcon,
 };
 
 interface ProfileNavProps {
@@ -92,19 +96,17 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
       }
       header={
         <>
-          <SideBarHeaderLayout
-            showBack={false}
-            left={
-              <Button
-                icon={ChevronLeftIcon}
-                size={'small'}
-                type={'text'}
-                onClick={() => navigate(urlJoin('/agent', agentId))}
-              >
-                {t('tab.backToChat')}
-              </Button>
-            }
-          />
+          <Flexbox horizontal align={'center'} paddingBlock={8} paddingInline={4}>
+            <NavItem
+              as={'button'}
+              flex={1}
+              icon={ChevronLeftIcon}
+              style={{ textAlign: 'start' }}
+              title={t('tab.backToChat')}
+              onClick={() => navigate(urlJoin('/agent', agentId))}
+            />
+            <ToggleLeftPanelButton />
+          </Flexbox>
           <Flexbox paddingBlock={'0 8px'} paddingInline={6}>
             <Agent />
           </Flexbox>

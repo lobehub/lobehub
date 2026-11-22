@@ -209,6 +209,11 @@ const linkOptions = {
     const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
     Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
 
+    // Mutation responses carry message lists too; without this they would drop
+    // the Work types this client renders and wipe their cards from the store.
+    const { workTypeOptInHeaders } = await import('@/services/workTypeOptIn');
+    Object.assign(headers as Record<string, string>, workTypeOptInHeaders());
+
     log('Headers: %O', headers);
     return headers;
   },
@@ -279,6 +284,10 @@ const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   // the supported 100-topic page can hold ~100 distinct agent ids, far past
   // the batched GET's 2083-char budget.
   'device.getAgentDeviceBindings',
+  // Takes every document id a topic's history read; a read-heavy topic can pass
+  // dozens of ids, and a dropped lookup would let deleted documents back into
+  // the model context.
+  'agentDocument.listRevokedDocumentReads',
 ]);
 
 /**

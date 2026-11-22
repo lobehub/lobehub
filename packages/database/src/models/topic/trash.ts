@@ -120,17 +120,16 @@ export const softDeleteByAgentId = async (
 
 /**
  * Cascade helper for trashing an agent / group / session: stamps every live
- * topic that hangs off any of the given parents (by `agent_id`, `session_id`
- * or `group_id`) in one statement.
+ * topic that hangs off any of the given parents (by `agent_id` or `group_id`)
+ * in one statement.
  */
 export const softDeleteByParents = async (
   ctx: TopicModelContext,
-  parents: { agentIds?: string[]; groupIds?: string[]; sessionIds?: string[] },
+  parents: { agentIds?: string[]; groupIds?: string[] },
   options: SoftDeleteOptions,
 ): Promise<TopicItem[]> => {
   const conditions: SQL[] = [];
   if (parents.agentIds?.length) conditions.push(inArray(topics.agentId, parents.agentIds));
-  if (parents.sessionIds?.length) conditions.push(inArray(topics.sessionId, parents.sessionIds));
   if (parents.groupIds?.length) conditions.push(inArray(topics.groupId, parents.groupIds));
   if (conditions.length === 0) return [];
 

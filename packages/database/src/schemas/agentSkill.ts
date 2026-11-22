@@ -1,4 +1,4 @@
-import type { SkillManifest, SkillResourceMeta } from '@lobechat/types';
+import type { GitHubSkillUpstream, SkillManifest, SkillResourceMeta } from '@lobechat/types';
 import { isNotNull, isNull, relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
@@ -22,6 +22,8 @@ export const agentSkills = pgTable(
 
     // Source control
     source: text('source', { enum: ['builtin', 'market', 'user'] }).notNull(),
+
+    upstream: jsonb('upstream').$type<GitHubSkillUpstream>(),
 
     // Manifest (version, author, repository, etc.)
     manifest: jsonb('manifest')

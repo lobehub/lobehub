@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const styles = stylex.create({
   badge: {
     paddingBlock: '4px',
@@ -17,7 +19,7 @@ export const styles = stylex.create({
     width: 'fit-content',
     paddingBlock: '6px',
     paddingInlineStart: '8px',
-    paddingInlineEnd: '12px',
+    paddingInlineEnd: densityTokens['--lobe-density-content-gap'],
     borderRadius: '8px',
     color: cssVar.colorText,
     backgroundImage: 'none',

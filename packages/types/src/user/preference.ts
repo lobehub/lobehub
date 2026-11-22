@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
 import type { AgentModelOverride } from '../agent/modelSelection';
+import type { HeteroPermissionModeDir } from '../heteroPermissionMode';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -68,6 +69,12 @@ export interface WorkspaceUserPreference {
   agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
   /** Per-member Agent/Chat runtime mode for shared workspace agents. */
   agentModeOverrides?: Record<string /* agentId */, boolean>;
+  /**
+   * The Claude Code permission mode this member last picked per directory (see
+   * `HeteroPermissionModeDir`), which a new topic there starts in. Written only
+   * through `workspaceUserSettings.setHeteroPermissionModeDir`.
+   */
+  heteroPermissionModeDirs?: HeteroPermissionModeDir[];
   /**
    * This member's notification preferences for workspace-scoped scenarios
    * (the `workspace` category of the scenario registry). Same shape as the
@@ -138,6 +145,13 @@ export interface WorkspaceUserPreference {
    *   nothing reads or writes this key.
    */
   topicOnlyMine?: boolean;
+  /**
+   * Directories (`<deviceId>::<path>`, see `getWorktreeModeKey`) where this
+   * member keeps the composer's "New worktree" switch on, most recent first and
+   * capped. Written only through `workspaceUserSettings.setWorktreeModeDir`,
+   * which applies the cap server-side.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export interface LobeUser {
@@ -176,6 +190,11 @@ export const UserGuideSchema = z.object({
 export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
+  /**
+   * one switch for the experiments that improve how agents write and work with
+   * code; every coding-experience improvement reads this flag
+   */
+  enableBetterCodingExperience: z.boolean().optional(),
   /**
    * enable agent identity: give an agent its own mail address
    */
@@ -256,15 +275,9 @@ export const UserLabSchema = z.object({
    * (its ids and the client environment) to the support team
    */
   enableTopicBugReport: z.boolean().optional(),
-  /**
-   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
-   */
+  /** @deprecated Legacy client preference. Goals are available to everyone. */
   enableGoals: z.boolean().optional(),
-  /**
-   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
-   * while older clients that only know this key are still around: their writes
-   * touch only this key, so it carries the latest choice.
-   */
+  /** @deprecated Legacy alias for the Goals lab preference. */
   enableTopicAcceptance: z.boolean().optional(),
   /**
    * expose a port on the working device through a tunnel link, so a dev server
@@ -305,6 +318,21 @@ export const UserIntegrationPreferenceSchema = z.object({
   github: GithubIntegrationPreferenceSchema.optional(),
 });
 
+/**
+ * Per-user preferences across all of the user's workspaces — the user-level
+ * counterpart to {@link WorkspaceUserPreference}, which holds preferences inside
+ * one workspace. Workspaces are shared; how a user arranges them is not.
+ */
+export interface UserWorkspacePreference {
+  /**
+   * The user's own order of the workspace rail, as workspace ids. The personal
+   * space is pinned on top and never listed. Workspaces missing here (newly
+   * joined or created) follow in the server's order; ids of workspaces the user
+   * left are skipped on read and dropped on the next write.
+   */
+  order?: string[];
+}
+
 export interface UserPreference {
   /** Last-used app for "Open working directory in…" split button. Empty/unknown values fall back to platform default. */
   defaultOpenInApp?: string;
@@ -319,6 +347,12 @@ export interface UserPreference {
    */
   fontFamily?: string;
   guide?: UserGuide;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.heteroPermissionModeDirs};
+   * written only through `user.setHeteroPermissionModeDir`, absent from the
+   * schema for the same reason as `worktreeModeDirs`.
+   */
+  heteroPermissionModeDirs?: HeteroPermissionModeDir[];
   hideSyncAlert?: boolean;
   /**
    * lab experimental features
@@ -364,6 +398,13 @@ export interface UserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
+   * Personal-mode order of the pinned Agents / chat groups at the top of the
+   * sidebar, set by drag and drop. Written only through
+   * `home.updatePinnedOrder`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals`.
+   */
+  sidebarPinnedOrder?: string[];
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
@@ -382,6 +423,15 @@ export interface UserPreference {
    * whether to use cmd + enter to send message
    */
   useCmdEnterToSend?: boolean;
+  /** This user's own view over the workspaces they belong to. */
+  workspace?: UserWorkspacePreference;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.worktreeModeDirs}.
+   * Written only through `user.setWorktreeModeDir`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals` —
+   * `updatePreference` deep-merges arrays by index, which would scramble it.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export type ReferralStatusString =
@@ -451,5 +501,6 @@ export const UserPreferenceSchema = z
     topicIncludeCompleted: z.boolean().optional(),
     topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),
+    workspace: z.object({ order: z.array(z.string()).optional() }).optional(),
   })
   .partial();

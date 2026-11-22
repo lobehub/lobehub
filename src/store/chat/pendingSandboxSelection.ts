@@ -66,6 +66,10 @@ export const setPendingSandboxSelection = (agentId: string, selection?: SandboxS
  */
 const seeded = new WeakSet<SandboxSelection>();
 
+/** Whether a selection is the composer's default rather than anyone's pick. */
+export const isSeededSandboxSelection = (selection: SandboxSelection): boolean =>
+  seeded.has(selection);
+
 /** Fill an agent's empty slot with the default placement, marked as not chosen by anyone. */
 export const seedPendingSandboxSelection = (agentId: string, selection: SandboxSelection): void => {
   seeded.add(selection);
@@ -90,6 +94,24 @@ export const setSandboxDefaultSelection = (agentId: string, selection?: SandboxS
 };
 
 /**
+ * Where an agent's next conversation starts when it runs in the temporary
+ * sandbox — the repository its last temporary sandbox used. Registered beside
+ * the drive default so a first send made before the entitlement is known
+ * still carries it once the plan turns out to have no drive.
+ */
+const temporaryDefaults = new Map<string, SandboxSelection>();
+
+/** Register an agent's temporary-sandbox default; `undefined` clears it. */
+export const setSandboxTemporaryDefaultSelection = (
+  agentId: string,
+  selection?: SandboxSelection,
+): void => {
+  if (selection) seeded.add(selection);
+  if (selection) temporaryDefaults.set(agentId, selection);
+  else temporaryDefaults.delete(agentId);
+};
+
+/**
  * Whether the active workspace's plan includes a drive. A cached yes is taken
  * as is; a cached no is confirmed with the server first, because the cache is
  * persisted — an account that has just upgraded still reads no until its
@@ -111,8 +133,9 @@ const isDriveEntitled = async (): Promise<boolean> => {
 
 /**
  * The selection the first send carries: the pick, if one was made; otherwise
- * the registered default, once the plan is confirmed to include a drive. The
- * default then becomes the pick, so every later reader of this send sees it.
+ * the registered drive default, once the plan is confirmed to include a drive;
+ * otherwise the registered temporary-sandbox default. That default then
+ * becomes the pick, so every later reader of this send sees it.
  */
 export const resolvePendingSandboxSelection = async (
   agentId: string,
@@ -120,8 +143,9 @@ export const resolvePendingSandboxSelection = async (
   const picked = map.get(agentId);
   if (picked) return picked;
 
-  const fallback = defaults.get(agentId);
-  if (!fallback || !(await isDriveEntitled())) return undefined;
+  const drive = defaults.get(agentId);
+  const fallback = drive && (await isDriveEntitled()) ? drive : temporaryDefaults.get(agentId);
+  if (!fallback) return map.get(agentId);
 
   // A pick made while the entitlement was in flight wins over the default.
   if (!map.has(agentId)) setPendingSandboxSelection(agentId, fallback);

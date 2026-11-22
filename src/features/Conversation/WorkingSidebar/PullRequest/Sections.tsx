@@ -3,44 +3,42 @@ import type {
   DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetail,
 } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Markdown,
-  Skeleton,
-} from '@lobehub/ui';
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  FolderOpenIcon,
-  GitCommitHorizontalIcon,
-} from 'lucide-react';
-import { memo, type ReactNode, useState } from 'react';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { createStaticStyles, Flexbox, Markdown } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { FolderOpenIcon, GitCommitHorizontalIcon } from 'lucide-react';
+import { memo, type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import type { GitReplicaReadResult } from '@/store/device';
+import { useDensityTokens } from '@/styles/density';
+import { sx } from '@/styles/sx';
 
+import { SidebarRowSkeleton } from '../DeferredSkeleton';
 import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
-import { sectionStyles } from '../Overview/sectionStyles';
+import { SectionHeader } from '../Overview/SectionHeader';
+import { sectionProps } from '../Overview/sectionStyles';
 import ActivityTimeline from './ActivityTimeline';
 import ChecksList from './ChecksList';
 import { timeAgo } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = stylex.create({
+  body: {
+    overflow: 'hidden',
+    minWidth: 0,
+    paddingBlockStart: '2px',
+    paddingBlockEnd: '6px',
+    paddingInline: '6px',
+    overflowWrap: 'anywhere',
+  },
+  sha: { fontFamily: cssVar.fontFamilyCode },
+});
+
+const fallback = createStaticStyles(({ css }) => ({
   body: css`
-    overflow: hidden;
-
-    min-width: 0;
-    padding-block: 2px 6px;
-    padding-inline: 8px;
-
-    overflow-wrap: anywhere;
-
     table {
       overflow-x: auto;
       display: block;
@@ -57,14 +55,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       max-width: 100%;
     }
   `,
-  header: css`
-    cursor: pointer;
-    user-select: none;
-    gap: 6px;
-  `,
-  sha: css`
-    font-family: ${cssVar.fontFamilyCode};
-  `,
 }));
 
 interface SectionProps {
@@ -75,26 +65,25 @@ interface SectionProps {
   title: string;
 }
 
-const Section = memo<SectionProps>(({ children, count, onToggle, open = true, title }) => (
-  <Flexbox className={sectionStyles.section}>
-    <Flexbox
-      horizontal
-      align={'center'}
-      role={onToggle ? 'button' : undefined}
-      className={cx(
-        sectionStyles.sectionHeader,
-        sectionStyles.sectionTitle,
-        onToggle && styles.header,
+const Section = memo<SectionProps>(({ children, count, onToggle, open = true, title }) => {
+  const bodyId = useId();
+  return (
+    <Flexbox {...sectionProps(true)}>
+      <SectionHeader
+        collapsed={!open}
+        controls={onToggle ? bodyId : undefined}
+        count={count}
+        title={title}
+        onToggle={onToggle}
+      />
+      {open && (
+        <Flexbox gap={1} id={bodyId}>
+          {children}
+        </Flexbox>
       )}
-      onClick={onToggle}
-    >
-      {onToggle && <Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size={12} />}
-      {title}
-      {count !== undefined && <span className={sectionStyles.count}>{count}</span>}
     </Flexbox>
-    {open && children}
-  </Flexbox>
-));
+  );
+});
 
 Section.displayName = 'PullRequestSection';
 
@@ -113,16 +102,18 @@ interface SectionsProps {
 const Sections = memo<SectionsProps>(
   ({ actionsDisabled, activity, busy, detail, onAction, onOpenTab }) => {
     const { t } = useTranslation('chat');
-    const { t: tCommon } = useTranslation('common');
+    const density = useDensityTokens();
     const activityPlaceholder = activity.error ? (
-      <Flexbox gap={8}>
-        <span>{t('workingPanel.pr.error.load')}</span>
-        <Button loading={activity.isValidating} onClick={() => void activity.mutate()}>
-          {tCommon('retry')}
-        </Button>
-      </Flexbox>
+      <AsyncError
+        align={'start'}
+        error={activity.error}
+        retrying={activity.isValidating}
+        title={t('workingPanel.pr.error.load')}
+        variant={'inline'}
+        onRetry={() => void activity.mutate()}
+      />
     ) : (
-      <Skeleton.Text rows={3} />
+      <SidebarRowSkeleton rows={3} />
     );
     const [open, setOpen] = useState({
       activity: true,
@@ -160,7 +151,11 @@ const Sections = memo<SectionsProps>(
             title={t('workingPanel.pr.section.description')}
             onToggle={toggle('description')}
           >
-            <Markdown className={styles.body} fontSize={13} variant={'chat'}>
+            <Markdown
+              fontSize={density.fontSize}
+              variant={'chat'}
+              {...sx(styles.body, fallback.body)}
+            >
               {detail.body}
             </Markdown>
           </Section>
@@ -171,8 +166,8 @@ const Sections = memo<SectionsProps>(
             value={t('workingPanel.pr.files.openReview')}
             trailing={
               <>
-                <span className={rowStyles.changeAdditions}>+{detail.additions}</span>
-                <span className={rowStyles.changeDeletions}>−{detail.deletions}</span>
+                <span {...stylex.props(rowStyles.changeAdditions)}>+{detail.additions}</span>
+                <span {...stylex.props(rowStyles.changeDeletions)}>−{detail.deletions}</span>
                 <ChevronRight />
               </>
             }
@@ -199,14 +194,13 @@ const Sections = memo<SectionsProps>(
             ? activityPlaceholder
             : commits.map((commit) => (
                 <OverviewRow
-                  weak
                   icon={GitCommitHorizontalIcon}
                   key={commit.sha}
                   title={commit.message}
                   value={commit.message.split('\n')[0]}
                   trailing={
                     <>
-                      <span className={styles.sha}>{commit.sha.slice(0, 7)}</span>
+                      <span {...stylex.props(styles.sha)}>{commit.sha.slice(0, 7)}</span>
                       {timeAgo(commit.committedAt)}
                     </>
                   }

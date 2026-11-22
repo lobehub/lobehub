@@ -1,6 +1,8 @@
 import { API_KEY_FULL_ACCESS_SCOPE, API_KEY_SCOPES } from '@lobechat/const';
 import { z } from 'zod';
 
+import { dateTimeSchema } from './common.type';
+
 const ApiKeyScopesSchema = z
   .array(z.enum(API_KEY_SCOPES, { error: 'Unknown API key scope' }))
   .min(1)
@@ -54,3 +56,26 @@ export interface CreatedApiKeyResponse extends ApiKeyResponse {
   /** Plaintext is returned only by the create operation. */
   key: string;
 }
+
+// ==================== Response Schemas ====================
+
+export const ApiKeySchema = z
+  .object({
+    createdAt: dateTimeSchema,
+    enabled: z.boolean().nullable(),
+    expiresAt: dateTimeSchema.nullable(),
+    id: z.string(),
+    lastUsedAt: dateTimeSchema.nullable(),
+    name: z.string(),
+    scopes: z.array(z.enum(API_KEY_SCOPES)).nullable(),
+    updatedAt: dateTimeSchema,
+  })
+  .strict()
+  .meta({ id: 'ApiKey' });
+
+export const CreatedApiKeySchema = ApiKeySchema.extend({
+  /** Plaintext is returned only by the create operation. */
+  key: z.string(),
+})
+  .strict()
+  .meta({ id: 'CreatedApiKey' });

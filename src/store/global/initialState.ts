@@ -49,6 +49,7 @@ export type WorkingSidebarTab =
   | 'review'
   | 'search'
   | 'skills'
+  | 'tools'
   | 'web'
   | (string & {});
 
@@ -56,6 +57,11 @@ export const CANVAS_TAB_PREFIX = 'canvas:';
 export const canvasTabKey = (canvasId: string) => `${CANVAS_TAB_PREFIX}${canvasId}`;
 export const canvasIdOfTab = (tab: string) =>
   tab.startsWith(CANVAS_TAB_PREFIX) ? tab.slice(CANVAS_TAB_PREFIX.length) : undefined;
+
+export const ARTBOARD_TAB_PREFIX = 'artboard:';
+export const artboardTabKey = (artboardId: string) => `${ARTBOARD_TAB_PREFIX}${artboardId}`;
+export const artboardIdOfTab = (tab: string) =>
+  tab.startsWith(ARTBOARD_TAB_PREFIX) ? tab.slice(ARTBOARD_TAB_PREFIX.length) : undefined;
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
@@ -71,12 +77,14 @@ export enum SettingsTabs {
   Agent = 'agent',
   APIKey = 'apikey',
   Appearance = 'appearance',
+  Automations = 'automations',
   Billing = 'billing',
-  /** @deprecated Use Appearance instead */
+  /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
+  Conversation = 'conversation',
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
@@ -84,12 +92,10 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
-  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
-  Messenger = 'messenger',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',
   // business
@@ -101,15 +107,17 @@ export enum SettingsTabs {
   Security = 'security',
   ServiceModel = 'service-model',
   Skill = 'skill',
-
   Stats = 'stats',
+
   Storage = 'storage',
+  SubscriptionAccounts = 'subscription-accounts',
   SystemTools = 'system-tools',
   Tools = 'tools',
   Trash = 'trash',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
+  Webhooks = 'webhooks',
 }
 
 /**
@@ -184,9 +192,6 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
   type: 'all',
 };
 
-/** How the Contacts list is ordered: by name, or most recently updated first. */
-export type ContactListSortBy = 'title' | 'updatedAt';
-
 /** How a sidebar Channel section orders its Channels. */
 export interface ChannelListSort {
   /** `updatedAt` follows the latest message, so it orders by activity. */
@@ -257,8 +262,6 @@ export interface SystemStatus {
    * match and every group would render collapsed.
    */
   collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
-  /** Order of the Contacts list; absent means by name. Device-local view setting. */
-  contactListSortBy?: ContactListSortBy;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**

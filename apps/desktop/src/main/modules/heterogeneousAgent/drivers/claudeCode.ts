@@ -1,3 +1,4 @@
+import { buildClaudeCodePermissionArgs } from '@lobechat/heterogeneous-agents/claudeCodePermission';
 import {
   buildClaudeCodeDirectEnv,
   CLAUDE_CODE_BASE_ARGS,
@@ -9,16 +10,10 @@ import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
-// Desktop runs CC as the user (never root, so bypassPermissions is fine) and
-// renders the chat bubble live, so it always wants partial deltas. Compose
-// the shared invariant base args (`@lobechat/heterogeneous-agents/spawn`)
-// with those caller-specific flags.
-const DESKTOP_CLAUDE_CODE_ARGS = [
-  ...CLAUDE_CODE_BASE_ARGS,
-  '--include-partial-messages',
-  '--permission-mode',
-  'bypassPermissions',
-] as const;
+// Desktop renders the chat bubble live, so it always wants partial deltas.
+// Compose the shared invariant base args (`@lobechat/heterogeneous-agents/spawn`)
+// with that caller-specific flag; permission flags depend on the run's mode.
+const DESKTOP_CLAUDE_CODE_ARGS = [...CLAUDE_CODE_BASE_ARGS, '--include-partial-messages'] as const;
 
 export const claudeCodeDriver: HeterogeneousAgentDriver = {
   async buildSpawnPlan({
@@ -26,6 +21,8 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     cliVersion,
     helpers,
     mcpConfigPath,
+    permissionMode,
+    permissionPrompts,
     promptInput,
     resumeSessionId,
   }: HeterogeneousAgentBuildPlanParams) {
@@ -39,14 +36,28 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     return {
       args: [
         ...DESKTOP_CLAUDE_CODE_ARGS,
+        // Lab off (no mode): every action allowed, as before. With a mode the
+        // host answers Claude Code's prompts over stdio.
+        ...buildClaudeCodePermissionArgs({
+          hostPrompts: permissionPrompts ?? true,
+          mode: permissionMode,
+        }),
         // Wire the controller-managed temp mcp.json (AskUserQuestion server,
         // see ) when present. Path-based config is required — CC
         // does not accept inline JSON for `--mcp-config`.
         ...(mcpConfigPath ? ['--mcp-config', mcpConfigPath] : []),
         ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+        // Input stays open (see `liveInput` below), and a live session replays
+        // each message it reads: how a delivered message is known to be picked up.
+        '--replay-user-messages',
         ...lobeHubCli.args,
         ...args,
       ],
+      // Like `lh hetero exec`, Claude Code always keeps its input open: it is
+      // the control channel (stop one background task, deliver a steer) and
+      // what keeps background tasks alive past the turn. Whether queued
+      // messages are written mid-run is the Follow-up mode's call, not this.
+      liveInput: true,
       stdinPayload,
     };
   },

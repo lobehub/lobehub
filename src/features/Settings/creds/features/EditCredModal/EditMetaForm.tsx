@@ -3,18 +3,14 @@
 import { type UserCredSummary } from '@lobechat/types';
 import { Button, Input, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 
+import CredFormFooter from '../CredFormFooter';
 import { type CredsApi } from '../useCredsApi';
-
-const styles = stylex.create({
-  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
-});
 
 interface EditMetaFormProps {
   cred: UserCredSummary;
@@ -74,7 +70,7 @@ const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSucce
         />
       </Form.Field>
 
-      <div {...stylex.props(styles.footer)}>
+      <CredFormFooter>
         <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
         <Button
           disabled={!canManageCredentials}
@@ -84,7 +80,7 @@ const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSucce
         >
           {t('creds.form.save')}
         </Button>
-      </div>
+      </CredFormFooter>
     </Form>
   );
 };

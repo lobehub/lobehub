@@ -10,11 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import CommandLine from '@/components/CommandLine';
 import ImperativeModal from '@/components/ImperativeModal';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
     margin-block-start: 4px;
-    padding-block-start: 16px;
+    padding-block-start: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   index: css`
@@ -120,7 +121,11 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(
           title={t('devices.connectWizard.cli.connectTitle')}
           desc={
             isWorkspace
-              ? t('workspaceSetting.devices.enrollDesc')
+              ? t(
+                  visibility === 'private'
+                    ? 'workspaceSetting.devices.enrollPrivateDesc'
+                    : 'workspaceSetting.devices.enrollDesc',
+                )
               : t('devices.connectWizard.cli.connectDesc')
           }
         >

@@ -182,6 +182,7 @@ const buildQoderInput = async (
  * extra CLI args required to attach images. The single source of truth for
  * how each external agent CLI receives multimodal input.
  *
+ * - `antigravity`: stream-json text on stdin with local paths for the built-in image reader
  * - `amp` / `claude-code` / `codebuddy`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
  * - `kimi-code`: `--prompt <text>` with materialized image paths referenced in the text
@@ -200,6 +201,21 @@ export const buildAgentInput = async (
   const blocks = toBlocks(prompt);
 
   switch (agentType) {
+    case 'antigravity': {
+      // agy rejects image blocks in stream-json, but its built-in file reader accepts images.
+      const imagePaths = await resolvePathInputImagePaths(blocks, options);
+      const attachments = imagePaths.length
+        ? [
+            'Use your built-in image-reading tool to inspect the attached images before answering:',
+            ...imagePaths.map((imagePath) => `- ${JSON.stringify(path.resolve(imagePath))}`),
+          ].join('\n')
+        : '';
+      const content = [collectText(blocks), attachments].filter(Boolean).join('\n\n');
+      return {
+        args: [],
+        stdin: `${JSON.stringify({ event: 'user', message: { content } })}\n`,
+      };
+    }
     case 'amp':
     case 'claude-code':
     case 'codebuddy': {

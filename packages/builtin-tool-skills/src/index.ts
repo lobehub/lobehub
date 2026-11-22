@@ -4,7 +4,7 @@ export {
   agentShareSystemPrompt,
   resolveSkillsRestrictedManifest,
 } from './resolveRestrictedManifest';
-export { systemPrompt } from './systemRole';
+export { deviceSystemPrompt, systemPrompt } from './systemRole';
 export {
   type ActivateSkillParams,
   type ActivateSkillSource,

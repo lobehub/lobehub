@@ -66,13 +66,14 @@ export const FeatureFlagsSchema = z.object({
   agent_deferred_hetero_dispatch: FeatureFlagValue.optional(),
 
   /**
-   * Keep the immutable per-operation tool set out of the agent state blob that
-   * is rewritten at every step; it is written once to its own Redis key and
-   * re-attached on load. Off: the blob keeps its inline copy. Server only;
-   * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0|1` overrides it. Array values are
-   * user ids (the operation's owner).
+   * Keep copies the per-operation tool set already holds out of the agent state
+   * blob rewritten at every step (`initialContext.payload.tools`, the manifests
+   * of `activatedStepTools`, the deprecated top-level `expertise` mirror); they
+   * are restored on load. Off: the blob keeps them inline. Server only;
+   * `AGENT_RUNTIME_SLIM_STATE=0|1` overrides it. Array values are user ids (the
+   * operation's owner).
    */
-  agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
+  agent_runtime_slim_state: FeatureFlagValue.optional(),
 
   /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
@@ -92,20 +93,27 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
+   * Artboard: the agent's builtin-artboard tool in project conversations, the
+   * board card and side panel, and the Artboard Works tab. Off: the tool is
+   * never offered and artboard Works are not requested. Array values are user
+   * ids.
+   */
+  artboard: FeatureFlagValue.optional(),
+
+  /**
+   * Inbound webhooks wake Agents: MCP Events subscriptions, generic webhooks (the Agent Profile
+   * Webhook tab) and the Automations lists. Off: deliveries are still verified, stored and
+   * acknowledged, but run nothing, and the subscription tools, the Webhook and Automations
+   * entries are hidden. Array values are user ids.
+   */
+  webhook: FeatureFlagValue.optional(),
+
+  /**
    * Rollout gate for moving an agent's documents into its dedicated knowledge
    * base at runtime, and for showing those spaces in the library. Off: no space
    * is created and existing ones stay hidden. Array values are user ids.
    */
   agent_knowledge_space: FeatureFlagValue.optional(),
-
-  /**
-   * Trial gate for the rail layout: icon rail + one wrapped list column and
-   * content, the IM-style Messages list (Lobe AI opens by default), Contacts,
-   * the Tasks scope list and the agent profile side panel. Off keeps the
-   * current sidebar layout untouched. Array values are user ids, so it can be
-   * tried by an allowlist before anyone else sees it.
-   */
-  im_layout: FeatureFlagValue.optional(),
 
   /**
    * Multi-agent Channels: the sidebar section, Channel pages and every Channel API, including
@@ -220,16 +228,17 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_llm_relay: false,
   agent_deferred_init: false,
   agent_deferred_hetero_dispatch: false,
-  agent_runtime_strip_operation_toolset: false,
+  agent_runtime_slim_state: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
-  // Off: a personal-trial layout, enabled per user id.
-  im_layout: false,
+  // On in development only; production needs an explicit allowlist.
+  artboard: isDev,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
+  webhook: false,
   agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -278,6 +287,7 @@ export const mapFeatureFlagsEnvToState = (
     // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
     enableGatewayMuxMobile: ENABLE_BUSINESS_FEATURES,
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableArtboard: evaluateFeatureFlag(config.artboard, userId, 'artboard'),
     enableDeferredInit: evaluateFeatureFlag(
       config.agent_deferred_init,
       userId,
@@ -288,19 +298,19 @@ export const mapFeatureFlagsEnvToState = (
       userId,
       'agent_deferred_hetero_dispatch',
     ),
-    enableStripOperationToolset: evaluateFeatureFlag(
-      config.agent_runtime_strip_operation_toolset,
+    enableSlimAgentState: evaluateFeatureFlag(
+      config.agent_runtime_slim_state,
       userId,
-      'agent_runtime_strip_operation_toolset',
+      'agent_runtime_slim_state',
     ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableWebhook: evaluateFeatureFlag(config.webhook, userId, 'webhook'),
     enableAgentKnowledgeSpace: evaluateFeatureFlag(
       config.agent_knowledge_space,
       userId,
       'agent_knowledge_space',
     ),
-    enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
     enableManagedCloudDevice: evaluateFeatureFlag(
       config.managed_cloud_device,

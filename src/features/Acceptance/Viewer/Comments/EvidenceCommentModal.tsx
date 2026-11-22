@@ -11,6 +11,7 @@ import {
   Text,
   toast,
   useModalContext,
+  useResponsive,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -26,6 +27,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotationCanvas } from '../Evidence/Annotation';
 import { isCommentableEvidence } from '../Evidence/evidence';
+import { EvidenceStage } from '../Evidence/EvidenceStage';
 import {
   CommentWorkspace,
   DraftEmpty,
@@ -121,7 +123,7 @@ const styles = stylex.create({
     height: '16px',
     paddingInline: '4px',
     borderRadius: '8px',
-    fontSize: '11px',
+    fontSize: '12px',
     fontWeight: 600,
     lineHeight: '16px',
     color: cssVar.colorBgContainer,
@@ -194,6 +196,7 @@ const ImageCommentEditor = ({
 }: EditorProps) => {
   const { t } = useTranslation('verify');
   const { close, setCanDismissByClickOutside } = useModalContext();
+  const { md = true } = useResponsive();
   const key = evidenceCommentDraftKey(userId, acceptanceId, active.id);
   const [draft, setDraft] = useState<EvidenceCommentDraft>(
     () =>
@@ -245,10 +248,18 @@ const ImageCommentEditor = ({
   if (!rect) status = t('acceptance.comments.draftNeedsRegion');
   else if (!trimmed) status = t('acceptance.comments.draftNeedsText', { index: 1 });
 
+  const canvas = {
+    annotations: rect ? [{ comment: '', rect }] : [],
+    onDraw: (next: AcceptanceReviewAnnotation['rect']) => update({ rect: next }),
+    onRemove: () => update({ rect: null }),
+    onUpdate: (_index: number, next: AcceptanceReviewAnnotation['rect']) => update({ rect: next }),
+    src: active.fileUrl!,
+  };
+
   return (
     <CommentWorkspace
       inert={submitting}
-      stageMode={'scroll'}
+      stageMode={md ? 'fit' : 'scroll'}
       strip={strip}
       footer={
         <DraftFooter
@@ -284,13 +295,13 @@ const ImageCommentEditor = ({
         </>
       }
       stage={
-        <AnnotationCanvas
-          annotations={rect ? [{ comment: '', rect }] : []}
-          src={active.fileUrl!}
-          onDraw={(next) => update({ rect: next })}
-          onRemove={() => update({ rect: null })}
-          onUpdate={(_index, next) => update({ rect: next })}
-        />
+        // A phone gives the stage no height of its own to fit into, so the
+        // picture keeps the full width there and the page scrolls.
+        md ? (
+          <EvidenceStage contain drawing zoom={1} {...canvas} />
+        ) : (
+          <AnnotationCanvas {...canvas} />
+        )
       }
     />
   );

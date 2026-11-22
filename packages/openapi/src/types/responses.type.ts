@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { jsonObjectSchema } from './common.type';
+
 // ==================== Content Types ====================
 
 export const InputTextContentSchema = z.object({
@@ -209,6 +211,7 @@ export interface ResponseObject {
   incomplete_details?: { reason: string } | null;
   instructions?: string | null;
   max_output_tokens?: number | null;
+  max_tool_calls?: number | null;
   metadata?: Record<string, string> | null;
   model: string;
   object: 'response';
@@ -217,7 +220,9 @@ export interface ResponseObject {
   parallel_tool_calls?: boolean | null;
   presence_penalty?: number | null;
   previous_response_id?: string | null;
+  prompt_cache_key?: string | null;
   reasoning?: ReasoningConfig | null;
+  safety_identifier?: string | null;
   service_tier?: string | null;
   status: ResponseStatus;
   store?: boolean | null;
@@ -225,6 +230,7 @@ export interface ResponseObject {
   text?: { format?: { type: string } };
   tool_choice?: CreateResponseRequest['tool_choice'];
   tools?: Tool[];
+  top_logprobs?: number;
   top_p?: number | null;
   truncation?: string | null;
   usage?: ResponseUsage | null;
@@ -377,3 +383,184 @@ export type ResponseStreamEvent =
   | ResponseFailedEvent
   | ResponseInProgressEvent
   | ResponseIncompleteEvent;
+
+// ==================== Response Schemas ====================
+//
+// The non-streaming `POST /responses` body, typed after the OpenResponses
+// `response` object and narrowed to what `ResponsesService.buildResponseObject`
+// actually emits. Streaming sends the same object inside the SSE events.
+
+const UrlCitationAnnotationSchema = z
+  .object({
+    end_index: z.number().int(),
+    start_index: z.number().int(),
+    title: z.string(),
+    type: z.literal('url_citation'),
+    url: z.string(),
+  })
+  .strict();
+
+const FileCitationAnnotationSchema = z
+  .object({
+    file_id: z.string(),
+    filename: z.string(),
+    index: z.number().int(),
+    type: z.literal('file_citation'),
+  })
+  .strict();
+
+const TokenLogprobSchema = z
+  .object({ bytes: z.array(z.number().int()), logprob: z.number(), token: z.string() })
+  .strict();
+
+export const ResponseOutputTextSchema = z
+  .object({
+    /** Always empty today: the agent runtime does not surface citations here. */
+    annotations: z.array(z.union([UrlCitationAnnotationSchema, FileCitationAnnotationSchema])),
+    /** Always empty today: token log probabilities are not reported. */
+    logprobs: z.array(
+      TokenLogprobSchema.extend({ top_logprobs: z.array(TokenLogprobSchema) }).strict(),
+    ),
+    text: z.string(),
+    type: z.literal('output_text'),
+  })
+  .strict()
+  .meta({ id: 'ResponseOutputText' });
+
+const outputItemStatusSchema = z.enum(['completed', 'in_progress']);
+
+export const ResponseOutputMessageSchema = z
+  .object({
+    content: z.array(ResponseOutputTextSchema),
+    id: z.string(),
+    role: z.literal('assistant'),
+    status: outputItemStatusSchema,
+    type: z.literal('message'),
+  })
+  .strict()
+  .meta({ id: 'ResponseOutputMessage' });
+
+export const ResponseFunctionCallSchema = z
+  .object({
+    /** JSON-encoded arguments. */
+    arguments: z.string(),
+    /** Answer it with a `function_call_output` item carrying the same `call_id`. */
+    call_id: z.string(),
+    id: z.string(),
+    name: z.string(),
+    status: outputItemStatusSchema,
+    type: z.literal('function_call'),
+  })
+  .strict()
+  .meta({ id: 'ResponseFunctionCall' });
+
+export const ResponseFunctionCallOutputSchema = z
+  .object({
+    call_id: z.string(),
+    id: z.string(),
+    output: z.string(),
+    status: outputItemStatusSchema,
+    type: z.literal('function_call_output'),
+  })
+  .strict()
+  .meta({ id: 'ResponseFunctionCallOutput' });
+
+export const ResponseOutputItemSchema = z
+  .discriminatedUnion('type', [
+    ResponseOutputMessageSchema,
+    ResponseFunctionCallSchema,
+    ResponseFunctionCallOutputSchema,
+  ])
+  .meta({ id: 'ResponseOutputItem' });
+
+export const ResponseUsageSchema = z
+  .object({
+    input_tokens: z.number().int().min(0),
+    input_tokens_details: z.object({ cached_tokens: z.number().int().min(0) }).strict(),
+    output_tokens: z.number().int().min(0),
+    output_tokens_details: z.object({ reasoning_tokens: z.number().int().min(0) }).strict(),
+    total_tokens: z.number().int().min(0),
+  })
+  .strict()
+  .meta({ id: 'ResponseUsage' });
+
+export const ResponseErrorSchema = z
+  .object({
+    code: z.enum([
+      'server_error',
+      'invalid_request_error',
+      'not_found',
+      'model_error',
+      'rate_limit_error',
+    ]),
+    message: z.string(),
+  })
+  .strict()
+  .meta({ id: 'ResponseError' });
+
+const ResponseFunctionToolSchema = z
+  .object({
+    description: z.string().optional(),
+    name: z.string(),
+    /** JSON Schema of the function arguments, as the caller declared it. */
+    parameters: jsonObjectSchema.optional(),
+    strict: z.boolean().nullable(),
+    type: z.literal('function'),
+  })
+  .strict();
+
+const ResponseHostedToolSchema = z
+  .object({
+    strict: z.null(),
+    /** A LobeHub hosted tool id (`lobe-…`). */
+    type: z.string(),
+  })
+  .strict();
+
+export const ResponseObjectSchema = z
+  .object({
+    background: z.boolean(),
+    /** Unix seconds; null while the run is parked on the caller's tools or failed. */
+    completed_at: z.number().int().nullable(),
+    /** Unix seconds. */
+    created_at: z.number().int(),
+    error: ResponseErrorSchema.nullable(),
+    frequency_penalty: z.number(),
+    /** The topic id; pass it as `previous_response_id` to continue the conversation. */
+    id: z.string(),
+    /** Set when `status` is `incomplete`, e.g. `client_tool_execution`. */
+    incomplete_details: z.object({ reason: z.string() }).strict().nullable(),
+    instructions: z.string().nullable(),
+    max_output_tokens: z.number().int().nullable(),
+    max_tool_calls: z.number().int().nullable(),
+    metadata: z.record(z.string(), z.string()),
+    /** The agent id the request named. */
+    model: z.string(),
+    object: z.literal('response'),
+    output: z.array(ResponseOutputItemSchema),
+    /** Text of the last assistant message. */
+    output_text: z.string(),
+    parallel_tool_calls: z.boolean(),
+    presence_penalty: z.number(),
+    previous_response_id: z.string().nullable(),
+    prompt_cache_key: z.string().nullable(),
+    reasoning: ReasoningConfigSchema.strict().nullable(),
+    safety_identifier: z.string().nullable(),
+    service_tier: z.string(),
+    status: z.enum(['completed', 'failed', 'in_progress', 'incomplete', 'queued']),
+    store: z.boolean(),
+    temperature: z.number(),
+    text: z.object({ format: z.object({ type: z.literal('text') }).strict() }).strict(),
+    tool_choice: z.union([
+      z.enum(['auto', 'required', 'none']),
+      z.object({ name: z.string(), type: z.literal('function') }).strict(),
+    ]),
+    tools: z.array(z.union([ResponseFunctionToolSchema, ResponseHostedToolSchema])),
+    top_logprobs: z.number().int(),
+    top_p: z.number(),
+    truncation: z.enum(['auto', 'disabled']),
+    usage: ResponseUsageSchema,
+    user: z.string().nullable(),
+  })
+  .strict()
+  .meta({ id: 'ResponseObject' });

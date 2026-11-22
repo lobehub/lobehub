@@ -185,6 +185,7 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client that started this run renders `file` Works, so the pushed
    * `uiMessages` snapshots and `message_patch` revisions may carry them.
@@ -309,6 +310,12 @@ export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
 export interface AgentWorldSnapshot {
   /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
   agent?: RunAgentSnapshot;
+  /**
+   * Library skills the agent set to `auto` (explicit tri-state entries). A
+   * library skill is opt-in per agent and `agent.plugins` is already collapsed
+   * to pinned ids, so the skill pool reads the opted-in ones from here.
+   */
+  autoSkillIds?: string[];
   /** Channel-specific facts the model should know (bot platform, Discord …). */
   channel?: {
     botPlatform?: BotPlatformContext;

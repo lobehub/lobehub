@@ -37,6 +37,10 @@ const findModelCard = async (
     if (exactMatch && hasProperty(exactMatch)) return exactMatch;
   }
 
+  // Ace prices must come from its own catalog/configuration, including when
+  // the caller supplies a custom endpoint. Same-named vendor cards can differ.
+  if (provider === 'acedatacloud') return undefined;
+
   const fallbackMatch = models.find((m) => m.id === model);
   return fallbackMatch && hasProperty(fallbackMatch) ? fallbackMatch : undefined;
 };

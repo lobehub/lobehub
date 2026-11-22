@@ -14,6 +14,7 @@ import {
   resolveMyTaskScope,
   resolveTaskCollection,
   resolveTaskCollectionView,
+  taskCollectionParam,
 } from './AgentTasksPage';
 import {
   collapseSubTasks,
@@ -81,12 +82,23 @@ describe('AgentTasksPage', () => {
         }),
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
-        groupBy: 'automationMode',
+        groupBy: 'none',
+        subGroupBy: 'none',
         completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
       });
+    });
+
+    it('lists scheduled tasks without group headers, whatever grouping is stored', () => {
+      const options = getScheduledTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        groupBy: 'status',
+        subGroupBy: 'priority',
+      });
+      expect(options.groupBy).toBe('none');
+      expect(options.subGroupBy).toBe('none');
     });
 
     it('renders a page newest-first, like the server paginates it', () => {
@@ -100,17 +112,14 @@ describe('AgentTasksPage', () => {
   describe('collectionGroupsByProject', () => {
     const project = { ...DEFAULT_TASK_LIST_VIEW_OPTIONS, groupBy: 'project' as const };
 
-    it('ignores a stored project grouping on the scheduled tab, which replaces it', () => {
+    it('ignores a stored project grouping on the scheduled tab, which is ungrouped', () => {
       expect(collectionGroupsByProject('scheduled', project)).toBe(false);
-    });
-
-    it('still counts a project sub-grouping on the scheduled tab, which keeps it', () => {
       expect(
         collectionGroupsByProject('scheduled', {
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
           subGroupBy: 'project',
         }),
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('counts it on the tabs that render the stored grouping', () => {
@@ -229,6 +238,33 @@ describe('AgentTasksPage', () => {
     it('falls back to ordinary tasks for absent or unknown values', () => {
       expect(resolveTaskCollection(new URLSearchParams())).toBe('tasks');
       expect(resolveTaskCollection(new URLSearchParams('collection=unknown'))).toBe('tasks');
+    });
+
+    it('lands on "My tasks" where the tab is offered', () => {
+      expect(resolveTaskCollection(new URLSearchParams(), { allowMine: true })).toBe('mine');
+      expect(
+        resolveTaskCollection(new URLSearchParams('collection=all'), { allowMine: true }),
+      ).toBe('tasks');
+      // Links written before "My tasks" became the default still open the ordinary list.
+      expect(
+        resolveTaskCollection(new URLSearchParams('collection=tasks'), { allowMine: true }),
+      ).toBe('tasks');
+      expect(
+        resolveTaskCollection(new URLSearchParams('collection=scheduled'), { allowMine: true }),
+      ).toBe('scheduled');
+    });
+
+    it('round-trips every tab through its URL param', () => {
+      for (const allowMine of [true, false]) {
+        const tabs = allowMine
+          ? (['mine', 'tasks', 'scheduled'] as const)
+          : (['tasks', 'scheduled'] as const);
+        for (const tab of tabs) {
+          const param = taskCollectionParam(tab, { allowMine });
+          const params = new URLSearchParams(param ? { collection: param } : {});
+          expect(resolveTaskCollection(params, { allowMine })).toBe(tab);
+        }
+      }
     });
 
     it('opens "My tasks" only where the tab is offered', () => {

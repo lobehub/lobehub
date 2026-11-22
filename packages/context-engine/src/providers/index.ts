@@ -64,7 +64,11 @@ export { SystemRoleInjector } from './SystemRoleInjector';
 export { TaskManagerContextInjector } from './TaskManagerContextInjector';
 export { TodoInjector } from './TodoInjector';
 export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
-export { selectToolPromptManifests, ToolSystemRoleProvider } from './ToolSystemRole';
+export {
+  renderToolInstructions,
+  selectToolPromptManifests,
+  ToolSystemRoleProvider,
+} from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
 export { UserMemoryInjector } from './UserMemoryInjector';
 export { WorkspaceContextInjector } from './WorkspaceContextInjector';

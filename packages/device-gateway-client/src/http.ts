@@ -1,4 +1,4 @@
-import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
+import type { DeviceClient, DeviceMetricSample, HeteroPermissionMode } from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -11,6 +11,7 @@ import type {
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
+  GatewayToolCallCompletion,
   GatewayToolCallType,
   GatewayTunnelRegistration,
 } from './types';
@@ -151,6 +152,12 @@ export class GatewayHttpClient {
        * knows; otherwise `resolveClientKinds` decides from the tool identifier.
        */
       clientKinds?: DeviceClient[];
+      /**
+       * Lets the device deliver this call's final result later. The gateway
+       * keeps `callbackUrl` for `ttlMs` and posts the device's
+       * `tool_call_completion` there; the device only learns `toolCallId`.
+       */
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -174,6 +181,8 @@ export class GatewayHttpClient {
   async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
+    /** The device's client that runs the call; omitted, `resolveClientKinds` decides. */
+    clientKinds?: DeviceClient[];
     deviceId?: string;
     identifier: string;
     params: GatewayMcpParams;
@@ -181,9 +190,9 @@ export class GatewayHttpClient {
     userId: string;
     workspaceId?: string;
   }): Promise<DeviceToolCallResult> {
-    const { deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
+    const { clientKinds, deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
     return this.postToolCall(
-      { deviceId, timeout, userId, workspaceId },
+      { clientKinds, deviceId, timeout, userId, workspaceId },
       { ...toolCall, type: 'mcp' },
     );
   }
@@ -191,6 +200,7 @@ export class GatewayHttpClient {
   private async postToolCall(
     params: {
       clientKinds?: DeviceClient[];
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -221,6 +231,7 @@ export class GatewayHttpClient {
                 kind: 'tool',
                 type: toolCall.type ?? 'tool',
               }),
+          completion: params.completion,
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,
@@ -328,6 +339,8 @@ export class GatewayHttpClient {
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    /** Claude Code permission mode; see `AgentRunRequestMessage.permissionMode`. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;

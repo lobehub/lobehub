@@ -47,6 +47,11 @@ const styles = stylex.create({
     insetBlockEnd: { default: 0, [compact]: '8px' },
     insetInlineEnd: { default: '-40px', [compact]: '8px' },
   },
+  railInside: {
+    insetBlockStart: { default: '12px', [compact]: '8px' },
+    insetBlockEnd: { default: '12px', [compact]: '8px' },
+    insetInlineEnd: { default: '12px', [compact]: '8px' },
+  },
 });
 
 /**
@@ -57,9 +62,13 @@ const styles = stylex.create({
  *
  * Render inside a positioned box carrying {@link floatingActionHostMarker}.
  */
-const FloatingCommentAction = memo<{ onClick: () => void; title: string }>(({ onClick, title }) => {
+const FloatingCommentAction = memo<{
+  inside?: boolean;
+  onClick: () => void;
+  title: string;
+}>(({ inside, onClick, title }) => {
   return (
-    <div {...stylex.props(styles.rail)}>
+    <div {...stylex.props(styles.rail, inside && styles.railInside)}>
       <ActionIcon
         aria-label={title}
         icon={MessageSquarePlus}

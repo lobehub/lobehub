@@ -163,6 +163,55 @@ describe('resolveWorkRegistration', () => {
     });
   });
 
+  it('carries agentEditable only when the API work config declares it', () => {
+    const editable = [
+      {
+        identifier: 'lobe-task',
+        manifest: {
+          api: [
+            {
+              name: 'createTask',
+              work: { action: 'create', agentEditable: true, resourceType: 'task' },
+            },
+          ],
+        },
+      },
+      {
+        identifier: 'lobe-agent-documents',
+        manifest: {
+          api: [
+            {
+              name: 'createDocument',
+              work: { action: 'create', agentEditable: true, resourceType: 'document' },
+            },
+          ],
+        },
+      },
+    ] as unknown as LobeBuiltinTool[];
+    const taskCall = {
+      args: {},
+      result: { state: { taskId: 'task_1', success: true }, success: true },
+    };
+    const documentCall = {
+      args: {},
+      result: {
+        state: { agentId: 'agt_1', documentId: 'doc_1', success: true },
+        success: true,
+      },
+    };
+
+    expect(resolveWorkRegistration(editable, 'lobe-task', 'createTask', taskCall)).toMatchObject({
+      agentEditable: true,
+    });
+    expect(
+      resolveWorkRegistration(editable, 'lobe-agent-documents', 'createDocument', documentCall),
+    ).toMatchObject({ document: { agentEditable: true } });
+    // Undeclared stays off the intent, so Works default to system-owned.
+    expect(
+      resolveWorkRegistration(registry, 'lobe-task', 'createTask', taskCall),
+    ).not.toHaveProperty('agentEditable');
+  });
+
   it('resolves delete into a changeType-less plan keyed off state.taskId', () => {
     expect(
       resolveWorkRegistration(registry, 'lobe-task', 'deleteTask', {
@@ -380,6 +429,28 @@ describe('dispatchWorkRegistrationIntent', () => {
       expect(ports.registerTask).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ taskId: 'task_2', taskIdentifier: 'T-2' }),
+      );
+      expect(ports.registerTask).not.toHaveBeenCalledWith(
+        expect.objectContaining({ agentEditable: expect.anything() }),
+      );
+    });
+
+    it('passes agentEditable through to every registered task', async () => {
+      const ports = buildPorts();
+      await dispatchWorkRegistrationIntent(
+        {
+          action: 'create',
+          agentEditable: true,
+          changeType: 'created',
+          targets: [{ taskId: 'task_1' }],
+          type: 'task',
+        },
+        ports,
+        provenance,
+      );
+
+      expect(ports.registerTask).toHaveBeenCalledWith(
+        expect.objectContaining({ agentEditable: true, taskId: 'task_1' }),
       );
     });
 
@@ -632,5 +703,53 @@ describe('dispatchWorkRegistrationIntent · canvas', () => {
         provenance,
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('dispatchWorkRegistrationIntent · artboard', () => {
+  it('registers the artboard version with provenance and its project', async () => {
+    const registerArtboard = vi.fn().mockResolvedValue(undefined);
+    await dispatchWorkRegistrationIntent(
+      {
+        action: 'register',
+        artboard: {
+          artboardId: 'art_1',
+          changeType: 'created',
+          description: '3 组 · 10 个画面',
+          projectId: 'prj_1',
+          title: '新用户首次进入项目',
+          toolName: 'createArtboard',
+        },
+        type: 'artboard',
+      },
+      {
+        deleteTaskWork: vi.fn(),
+        handleSkillToolResult: vi.fn(),
+        registerArtboard,
+        registerDocument: vi.fn(),
+        registerTask: vi.fn(),
+      },
+      {
+        agentId: 'agent-1',
+        messageId: 'msg-1',
+        rootOperationId: 'op-root',
+        toolCallId: 'call-1',
+        toolIdentifier: 'builtin-artboard',
+        toolName: 'createArtboard',
+        topicId: 'topic-1',
+      },
+    );
+
+    expect(registerArtboard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artboardId: 'art_1',
+        changeType: 'created',
+        projectId: 'prj_1',
+        rootOperationId: 'op-root',
+        toolCallId: 'call-1',
+        toolIdentifier: 'builtin-artboard',
+        toolName: 'createArtboard',
+      }),
+    );
   });
 });

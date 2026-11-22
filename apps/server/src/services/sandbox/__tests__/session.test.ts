@@ -19,6 +19,11 @@ const { findById, findInstanceById, getAgentVisibility, resolveSandboxStorageCla
 
 vi.mock('@/server/services/scm/cloneCredential', () => ({
   resolveScmCloneCredential: mocks.resolveScmCloneCredential,
+  // One repository: the single host-wide credential, as a list.
+  resolveScmCloneCredentials: async (params: unknown) => {
+    const credential = await mocks.resolveScmCloneCredential(params);
+    return credential ? [credential] : [];
+  },
 }));
 
 vi.mock('../entitlement', () => ({

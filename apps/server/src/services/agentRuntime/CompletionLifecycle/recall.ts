@@ -23,6 +23,8 @@ const USER_RECALLABLE_TRIGGERS = new Set<string>([
   RequestTrigger.Chat,
   RequestTrigger.Cron,
   RequestTrigger.Scheduled,
+  RequestTrigger.McpEvent,
+  RequestTrigger.Webhook,
 ]);
 
 /**

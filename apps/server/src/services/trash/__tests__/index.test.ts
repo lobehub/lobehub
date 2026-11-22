@@ -14,9 +14,11 @@ import { WidgetModel } from '@/database/models/widget';
 import { HomeRepository } from '@/database/repositories/home';
 import {
   agents,
+  agentsToSessions,
   dashboards,
   messages,
   sessions,
+  threads,
   topics,
   trashItems,
   users,
@@ -26,6 +28,10 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TrashService } from '../index';
+
+// Trashing a topic starts the cleanup of the worktree the app created for it.
+const scheduleWorktreeCleanup = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/worktreeCleanup', () => ({ scheduleWorktreeCleanup }));
 
 // Lets a test land a concurrent purge between a restore handler's reads and its
 // write: the handlers check the owning agent right before restoring, inside the
@@ -157,12 +163,76 @@ describe('TrashService', () => {
       expect(outcome.failed).toEqual([{ code: 'notFound', id: root.id }]);
     });
 
+    it('keeps a topic in the bin while its worktree cleanup waits for an offline device', async () => {
+      const WT = '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill';
+      const pending = (at: string) => ({
+        ownedWorktrees: [
+          {
+            branch: 'lobehub/quiet-hill',
+            cleanup: { at, state: 'pending' as const, trigger: 'trashed' as const },
+            createdAt: 'y',
+            deviceId: 'dev-1',
+            path: WT,
+            sourcePath: '/code/repo',
+          },
+        ],
+      });
+      const topic = await topicModel.create({ title: 'Worktree topic' });
+      const [root] = await service.trashTopics([topic.id]);
+      await serverDB
+        .update(topics)
+        .set({ metadata: pending(new Date().toISOString()) })
+        .where(eq(topics.id, topic.id));
+
+      // Purging now would lose the only record of the folder to delete.
+      expect(await service.purge([root.id])).toEqual({ blocked: [root.id], purged: 0 });
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(1);
+
+      // A device gone for longer than the hold no longer keeps it.
+      await serverDB
+        .update(topics)
+        .set({ metadata: pending(new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()) })
+        .where(eq(topics.id, topic.id));
+      expect(await service.purge([root.id])).toEqual({ blocked: [], purged: 1 });
+    });
+
+    it("holds an agent's purge while one of its topics still has a worktree cleanup waiting", async () => {
+      const agent = await agentModel.create({ title: 'Bot' });
+      const topic = await topicModel.create({ agentId: agent.id, title: 'Worktree topic' });
+      const root = await service.trashAgent(agent.id);
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            ownedWorktrees: [
+              {
+                cleanup: { at: new Date().toISOString(), state: 'pending', trigger: 'trashed' },
+                createdAt: 'y',
+                deviceId: 'dev-1',
+                path: '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill',
+                sourcePath: '/code/repo',
+              },
+            ],
+          },
+        })
+        .where(eq(topics.id, topic.id));
+
+      expect(await service.purge([root!.id])).toEqual({ blocked: [root!.id], purged: 0 });
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(1);
+    });
+
     it('bulk sweeps become one restorable root per topic', async () => {
       const agent = await agentModel.create({ title: 'Bot' });
       await topicModel.create({ agentId: agent.id, title: 'a' });
       await topicModel.create({ agentId: agent.id, title: 'b' });
       const roots = await service.trashTopicsByAgent(agent.id);
       expect(roots).toHaveLength(2);
+      expect(scheduleWorktreeCleanup).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          topicIds: expect.arrayContaining(roots.map((root) => root.resourceId)),
+          trigger: 'trashed',
+        }),
+      );
       expect((await topicModel.query({ agentId: agent.id })).items).toHaveLength(0);
       expect((await service.list()).items).toHaveLength(2);
     });
@@ -179,7 +249,7 @@ describe('TrashService', () => {
       expect((await service.trashAgent(unnamed.id))?.title).toBe('Bot');
     });
 
-    it('cascades to topics (incl. legacy session-scoped ones), hides the session shell, and restores the whole unit', async () => {
+    it("cascades to the agent's topics, hides the session shell, and restores the whole unit", async () => {
       const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
       const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
       const t1 = await topicModel.create({ agentId: agent.id, title: 'via agent' });
@@ -243,11 +313,6 @@ describe('TrashService', () => {
         content: 'topic-less via agent',
         role: 'user',
       });
-      const bySession = await messageModel.create({
-        content: 'topic-less via session',
-        role: 'user',
-        sessionId: session.id,
-      });
       const other = await agentModel.create({ title: 'Other' });
       const bystander = await messageModel.create({
         agentId: other.id,
@@ -256,14 +321,165 @@ describe('TrashService', () => {
       });
 
       const root = await service.trashAgent(agent.id);
-      expect(root?.meta?.childCount).toBe(2);
+      expect(root?.meta?.childCount).toBe(1);
       expect(await messageModel.findById(byAgent.id)).toBeUndefined();
-      expect(await messageModel.findById(bySession.id)).toBeUndefined();
       expect(await messageModel.findById(bystander.id)).toBeTruthy();
 
       await service.restore([root!.id]);
       expect(await messageModel.findById(byAgent.id)).toBeTruthy();
-      expect(await messageModel.findById(bySession.id)).toBeTruthy();
+    });
+
+    it('deletes exactly what the impact reports and never destroys session-only rows', async () => {
+      const workspaceId = 'trash-impact-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      const wsService = new TrashService(serverDB, userId, workspaceId);
+      const wsAgents = new AgentModel(serverDB, userId, workspaceId);
+      const agent = await wsAgents.create({ title: 'Shared bot' });
+      const sessionId = 'trash-impact-session';
+      await serverDB
+        .insert(sessions)
+        .values({ id: sessionId, slug: sessionId, userId, workspaceId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: agent.id, sessionId, userId, workspaceId });
+      const foreignTopic = 'trash-impact-foreign-topic';
+      const legacyTopic = 'trash-impact-legacy-topic';
+      const legacyMessage = 'trash-impact-legacy-message';
+      await serverDB.insert(topics).values([
+        { agentId: agent.id, id: foreignTopic, userId: otherUserId, workspaceId },
+        { id: legacyTopic, sessionId, userId: otherUserId, workspaceId },
+      ]);
+      await serverDB.insert(messages).values({
+        id: legacyMessage,
+        role: 'user',
+        sessionId,
+        userId: otherUserId,
+        workspaceId,
+      });
+      const legacyState = async () => ({
+        message: (await serverDB.select().from(messages).where(eq(messages.id, legacyMessage)))[0]
+          ?.isDeleted,
+        topic: (await serverDB.select().from(topics).where(eq(topics.id, legacyTopic)))[0]
+          ?.isDeleted,
+      });
+
+      // The dialog counts the agent's topic and nothing that only has the session.
+      expect(await wsAgents.getDeleteImpact(agent.id)).toEqual({
+        foreignTopicCount: 1,
+        hasForeignContent: true,
+      });
+
+      const root = await wsService.trashAgent(agent.id);
+      const wsTrash = new TrashModel(serverDB, userId, workspaceId);
+      expect((await wsTrash.findChildren(root!.id)).map((c) => c.resourceId)).toEqual([
+        foreignTopic,
+      ]);
+      expect(await legacyState()).toEqual({ message: null, topic: null });
+
+      await wsService.purge([root!.id]);
+      expect(await serverDB.select().from(topics).where(eq(topics.id, foreignTopic))).toEqual([]);
+      expect(await legacyState()).toEqual({ message: null, topic: null });
+      // The shell stays because it still holds them.
+      expect(await serverDB.select().from(sessions).where(eq(sessions.id, sessionId))).toHaveLength(
+        1,
+      );
+    });
+
+    it('keeps messages and threads carrying the agent inside a surviving legacy topic', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const legacy = await topicModel.create({ sessionId: session.id, title: 'old chat' });
+      const tagged = await messageModel.create({
+        agentId: agent.id,
+        content: 'continued later',
+        role: 'user',
+        topicId: legacy.id,
+      });
+      await serverDB.insert(threads).values({
+        agentId: agent.id,
+        id: 'trash-legacy-thread',
+        topicId: legacy.id,
+        type: 'standalone',
+        userId,
+      });
+
+      const root = await service.trashAgent(agent.id);
+      await service.purge([root!.id]);
+
+      const [message] = await serverDB.select().from(messages).where(eq(messages.id, tagged.id));
+      const [thread] = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.id, 'trash-legacy-thread'));
+      expect(message.agentId).toBeNull();
+      expect(thread.agentId).toBeNull();
+      expect(await serverDB.select().from(topics).where(eq(topics.id, legacy.id))).toHaveLength(1);
+    });
+
+    it('keeps the bin entry of a message trashed on its own inside a surviving topic', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const legacy = await topicModel.create({ sessionId: session.id, title: 'old chat' });
+      const tagged = await messageModel.create({
+        agentId: agent.id,
+        content: 'trashed alone',
+        role: 'user',
+        topicId: legacy.id,
+      });
+      const [messageRoot] = await service.trashMessages([tagged.id]);
+
+      const root = await service.trashAgent(agent.id);
+      await service.purge([root!.id]);
+
+      expect((await service.list()).items.map((item) => item.id)).toEqual([messageRoot.id]);
+      expect((await service.restore([messageRoot.id])).failed).toEqual([]);
+      expect(await messageModel.findById(tagged.id)).toBeTruthy();
+    });
+
+    it('purges session-only children an earlier cascade already put in the bin', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const deletedAt = new Date();
+      await serverDB.insert(topics).values({
+        deletedAt,
+        id: 'trash-old-topic',
+        isDeleted: true,
+        sessionId: session.id,
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        deletedAt,
+        id: 'trash-old-message',
+        isDeleted: true,
+        role: 'user',
+        sessionId: session.id,
+        userId,
+      });
+      const root = await service.trashAgent(agent.id);
+      await serverDB.insert(trashItems).values(
+        (['topic', 'message'] as const).map((resourceType) => ({
+          deletedAt,
+          expiresAt: root!.expiresAt,
+          resourceId: resourceType === 'topic' ? 'trash-old-topic' : 'trash-old-message',
+          resourceType,
+          rootId: root!.id,
+          userId,
+        })),
+      );
+
+      await service.purge([root!.id]);
+
+      expect(await serverDB.select().from(topics).where(eq(topics.id, 'trash-old-topic'))).toEqual(
+        [],
+      );
+      expect(
+        await serverDB.select().from(messages).where(eq(messages.id, 'trash-old-message')),
+      ).toEqual([]);
+      expect(
+        await serverDB.select().from(sessions).where(eq(sessions.id, session.id)),
+      ).toHaveLength(0);
     });
 
     it('refuses to restore a topic-less message whose agent is still in the bin', async () => {
@@ -292,17 +508,21 @@ describe('TrashService', () => {
         role: 'user',
       });
       // each trashed on its own first, so each keeps a separate root
-      await service.trashTopics([viaAgent.id, viaSession.id]);
+      const [, viaSessionRoot] = await service.trashTopics([viaAgent.id, viaSession.id]);
       await service.trashMessages([loose.id]);
       const root = await service.trashAgent(agent.id);
       expect((await service.list()).items).toHaveLength(4);
 
       await service.purge([root!.id]);
 
-      // the cascade deleted all three resources, so none of their rows may linger
-      expect((await service.list()).items).toEqual([]);
-      expect(await service.countByType()).toEqual({});
-      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+      // The cascade deleted the agent's rows. The session-only topic survives,
+      // so its own bin entry stays valid and can still be restored.
+      expect((await service.list()).items.map((item) => item.id)).toEqual([viaSessionRoot.id]);
+      expect(await serverDB.select().from(topics).where(eq(topics.id, viaSession.id))).toHaveLength(
+        1,
+      );
+      expect((await service.restore([viaSessionRoot.id])).failed).toEqual([]);
+      expect(await topicModel.findById(viaSession.id)).toBeTruthy();
     });
 
     it('rolls the whole agent purge back when grant cleanup fails, so a retry still cleans up', async () => {

@@ -1,4 +1,5 @@
-import type { WorkspaceUserPreference } from '@lobechat/types';
+import type { HeteroPermissionMode, WorkspaceUserPreference } from '@lobechat/types';
+import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import isEqual from 'fast-deep-equal';
 import type { ReplicaSlice } from 'local-replica/zustand';
@@ -9,6 +10,7 @@ import {
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createReplicaSlice, type ReplicaLens, revalidateReplica } from '@/libs/replica';
+import { userService } from '@/services/user';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
 import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
 import { type StoreSetter } from '@/store/types';
@@ -22,6 +24,12 @@ import {
 } from './projection';
 
 const n = setNamespace('workspaceUserSettings');
+
+/** Per-directory habits stored the same way in both preference buckets. */
+type DirectoryPreference = Pick<
+  WorkspaceUserPreference,
+  'heteroPermissionModeDirs' | 'worktreeModeDirs'
+>;
 
 type Setter = StoreSetter<UserStore>;
 
@@ -260,6 +268,102 @@ export class WorkspaceUserSettingsActionImpl {
     // them, which the sidebar presence dots cache per agent. (Personal mode
     // has no overrides, so the early return above needs no refresh.)
     if (patch.agentDeviceOverrides) void refreshAgentDeviceBindings();
+  };
+
+  /**
+   * Turn the composer's "New worktree" switch on or off for one directory
+   * (`getWorktreeModeKey`). See `#setDirectoryPreference` for where it lives.
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<void> =>
+    this.#setDirectoryPreference({
+      apply: (preference) => ({
+        worktreeModeDirs: applyWorktreeModeDir(preference.worktreeModeDirs, key, enabled),
+      }),
+      name: 'setWorktreeModeDir',
+      writePersonal: async () => ({
+        worktreeModeDirs: await userService.setWorktreeModeDir(key, enabled),
+      }),
+      writeWorkspace: () => workspaceUserSettingsService.setWorktreeModeDir(key, enabled),
+    });
+
+  /**
+   * Remember the Claude Code permission mode picked for one directory (same key
+   * as the worktree switch), which a new topic there starts in.
+   */
+  setHeteroPermissionModeDir = async (key: string, mode: HeteroPermissionMode): Promise<void> =>
+    this.#setDirectoryPreference({
+      apply: (preference) => ({
+        heteroPermissionModeDirs: applyHeteroPermissionModeDir(
+          preference.heteroPermissionModeDirs,
+          key,
+          mode,
+        ),
+      }),
+      name: 'setHeteroPermissionModeDir',
+      writePersonal: async () => ({
+        heteroPermissionModeDirs: await userService.setHeteroPermissionModeDir(key, mode),
+      }),
+      writeWorkspace: () => workspaceUserSettingsService.setHeteroPermissionModeDir(key, mode),
+    });
+
+  /**
+   * One per-directory habit of whoever is acting now: inside a workspace it
+   * lives in this member's workspace bucket, in personal mode in
+   * `users.preference`. Applied optimistically so the control changes at once,
+   * rolled back if the write fails (rethrown, so the caller can say so); the
+   * server applies the list's cap.
+   */
+  #setDirectoryPreference = async ({
+    apply,
+    name,
+    writePersonal,
+    writeWorkspace,
+  }: {
+    apply: (preference: DirectoryPreference) => DirectoryPreference;
+    name: string;
+    writePersonal: () => Promise<DirectoryPreference>;
+    writeWorkspace: () => Promise<unknown>;
+  }): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
+
+    if (!workspaceId) {
+      const previous = this.#get().preference;
+      const optimistic = apply(previous);
+      this.#set({ preference: { ...previous, ...optimistic } }, false, n(name));
+      try {
+        const stored = await writePersonal();
+        this.#set(
+          { preference: { ...this.#get().preference, ...stored } },
+          false,
+          n(`${name}/confirmed`),
+        );
+      } catch (error) {
+        const rollback = Object.fromEntries(
+          Object.keys(optimistic).map((field) => [
+            field,
+            previous[field as keyof DirectoryPreference],
+          ]),
+        );
+        this.#set(
+          { preference: { ...this.#get().preference, ...rollback } },
+          false,
+          n(`${name}/rollback`),
+        );
+        throw error;
+      }
+      return;
+    }
+
+    const replica = this.#replica();
+    if (replica.getConfirmed(workspaceId) === undefined) {
+      await replica.hydrate({ workspaceId });
+      if (getActiveWorkspaceId() !== workspaceId) return;
+    }
+    const previous = this.#get().workspaceUserPreference;
+    replica.update(workspaceId, (data) => data ?? previous, { persist: false });
+    await replica.optimistic(workspaceId, (data) => ({ ...data, ...apply(data) }), writeWorkspace, {
+      revalidate: true,
+    });
   };
 }
 

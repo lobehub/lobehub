@@ -11,7 +11,7 @@ const { mcpClientMocks } = vi.hoisted(() => ({
   mcpClientMocks: vi.fn(),
 }));
 
-vi.mock('../libs/mcp/client', () => ({
+vi.mock('@lobechat/device-mcp/client', () => ({
   MCPClient: class {
     constructor(
       public params: unknown,
@@ -94,7 +94,7 @@ describe('McpCtr MCP Apps', () => {
       toolName: 'show_weather',
     } as any);
 
-    expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: true });
+    expect(mcpClientMocks).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: true }));
     // With the server the view may be read back from
     expect((result.state as any).mcpApp).toEqual({
       preferredModelDisplayMode: 'fullscreen',
@@ -114,7 +114,7 @@ describe('McpCtr MCP Apps', () => {
       toolName: 'show_weather',
     } as any);
 
-    expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: false });
+    expect(mcpClientMocks).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: false }));
     expect(client.getToolUiResourceUri).not.toHaveBeenCalled();
     expect(client.getToolUiMeta).not.toHaveBeenCalled();
     expect((result.state as any).mcpApp).toBeUndefined();
@@ -135,7 +135,7 @@ describe('McpCtr MCP Apps', () => {
     await run(true);
     await run(true);
 
-    expect(mcpClientMocks.mock.calls).toEqual([[{ mcpApps: false }], [{ mcpApps: true }]]);
+    expect(mcpClientMocks.mock.calls.map(([options]) => options.mcpApps)).toEqual([false, true]);
   });
 
   it("returns a view the tool's own media, not the chat's uploaded copies", async () => {

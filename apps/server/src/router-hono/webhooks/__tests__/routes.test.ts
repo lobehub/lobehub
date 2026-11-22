@@ -37,6 +37,10 @@ vi.mock('../handlers/memoryUserMemoryPersonaUpdateWriting', () => ({
   memoryUserMemoryPersonaUpdateWriting: memoryHandler,
 }));
 vi.mock('../handlers/video', () => ({ videoWebhook: vi.fn() }));
+vi.mock('../handlers/inbound', () => ({
+  inboundWebhook: vi.fn(),
+  inboundWebhookBodyLimit: vi.fn(),
+}));
 
 describe('webhooks hono routes', () => {
   beforeEach(() => {
@@ -102,6 +106,7 @@ describe('webhooks hono routes', () => {
     expect([...new Set(paths)].sort()).toEqual([
       '/api/webhooks/casdoor',
       '/api/webhooks/github',
+      '/api/webhooks/inbound/:id',
       '/api/webhooks/logto',
       '/api/webhooks/memory-extraction',
       '/api/webhooks/memory-extraction/benchmark-locomo',

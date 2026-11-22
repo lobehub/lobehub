@@ -1,12 +1,13 @@
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { resolveTopicTriggerTime, RunningElapsedTime } from './RunningElapsedTime';
 import { type InboxTopic } from './useHomeInboxTopics';
@@ -24,6 +25,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+  `,
+  // 6px + 20px content + 6px = the 32px compact row height.
+  rowCompact: css`
+    padding-block: 6px;
   `,
 }));
 
@@ -51,6 +56,7 @@ interface TopicRowProps {
 const TopicRow = memo<TopicRowProps>(({ action, topic, leading, trailing }) => {
   const navigate = useWorkspaceAwareNavigate();
   const agent = useAgentDisplayMeta(topic.agentId);
+  const compact = useInterfaceDensity() === 'compact';
 
   const open = () => {
     const url = getTopicChatUrl(topic);
@@ -58,7 +64,13 @@ const TopicRow = memo<TopicRowProps>(({ action, topic, leading, trailing }) => {
   };
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.row} gap={10} onClick={open}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={cx(styles.row, compact && styles.rowCompact)}
+      gap={compact ? 8 : 10}
+      onClick={open}
+    >
       {leading}
       {agent && (
         <AgentAvatar
@@ -66,7 +78,7 @@ const TopicRow = memo<TopicRowProps>(({ action, topic, leading, trailing }) => {
           avatar={agent.avatar}
           background={agent.backgroundColor}
           shape={'circle'}
-          size={22}
+          size={compact ? 20 : 22}
           style={{ flex: 'none' }}
           title={agentDisplayName(agent)}
         />

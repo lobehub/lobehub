@@ -44,13 +44,29 @@ const shortHash = (input: string): string => {
 export interface DeriveWorktreePathOptions {
   /** Home directory of the machine that owns the repo; omitted → sibling layout. */
   homeDir?: string;
+  /**
+   * A branch namespace (e.g. `lobehub`) to leave out of the folder name:
+   * `lobehub/quiet-hill` lands in `…/quiet-hill` instead of
+   * `…/lobehub-quiet-hill`. Only a leading `<prefix>/` segment is dropped, so any
+   * other name (`feat/foo` → `feat-foo`) folds exactly as before.
+   */
+  stripBranchPrefix?: string;
 }
+
+const stripNamespace = (branch: string, prefix: string | undefined): string => {
+  const namespace = prefix?.trim();
+  if (!namespace) return branch;
+  const trimmed = branch.trim();
+  const head = `${namespace}/`;
+  return trimmed.startsWith(head) ? trimmed.slice(head.length) : trimmed;
+};
 
 export const deriveWorktreePath = (
   sourcePath: string,
-  branch: string,
-  { homeDir }: DeriveWorktreePathOptions = {},
+  rawBranch: string,
+  { homeDir, stripBranchPrefix }: DeriveWorktreePathOptions = {},
 ): string => {
+  const branch = stripNamespace(rawBranch, stripBranchPrefix);
   const sep = sourcePath.includes('\\') && !sourcePath.includes('/') ? '\\' : '/';
   // Strip trailing path separators, then the leading/trailing '-' of the folded
   // branch, both with linear scans rather than anchored /[…]+$/ quantifiers —

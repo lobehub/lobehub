@@ -24,6 +24,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { usePrivateAgentLinkNotice } from '@/features/PrivateAgentLinkNotice';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -53,6 +54,7 @@ export const useDropdownMenu = ({
   topicTitle,
 }: UseDropdownMenuProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['common', 'topic', 'chat']);
+  const notifyPrivateAgentLink = usePrivateAgentLinkNotice();
 
   const appOrigin = useAppOrigin();
   const navigate = useWorkspaceAwareNavigate();
@@ -199,14 +201,16 @@ export const useDropdownMenu = ({
           icon: <Icon icon={Link2} />,
           key: 'copyLink',
           label: t('actions.copyLink', { ns: 'topic' }),
-          onClick: () => {
+          onClick: async () => {
             if (!agentId) return;
             const url = `${appOrigin}${buildWorkspaceAwarePath(
               AGENT_CHAT_TOPIC_URL(agentId, topicId),
               activeWorkspaceSlug,
             )}`;
             void navigator.clipboard.writeText(url);
-            toast.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
+            // A private agent's topic link opens for nobody else in the workspace.
+            if (!(await notifyPrivateAgentLink(agentId)))
+              toast.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
           },
         },
         {
@@ -266,6 +270,7 @@ export const useDropdownMenu = ({
       isCompleted,
       markTopicCompleted,
       navigate,
+      notifyPrivateAgentLink,
       onClose,
       onDelete,
       openTopicInNewWindow,

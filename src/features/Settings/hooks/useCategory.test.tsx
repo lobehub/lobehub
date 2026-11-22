@@ -70,7 +70,6 @@ describe('settings useCategory', () => {
       SettingsGroupKey.Account,
       SettingsGroupKey.Subscription,
       SettingsGroupKey.Agent,
-      SettingsGroupKey.Connection,
       SettingsGroupKey.Resource,
       SettingsGroupKey.System,
     ]);
@@ -78,31 +77,30 @@ describe('settings useCategory', () => {
     expect(groupKeys(SettingsGroupKey.Account)).toEqual([
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
+      SettingsTabs.Conversation,
       SettingsTabs.Hotkey,
       SettingsTabs.Notification,
       SettingsTabs.Stats,
     ]);
 
-    expect(groupKeys(SettingsGroupKey.Connection)).toEqual([
-      SettingsTabs.Messenger,
-      SettingsTabs.Integrations,
-      SettingsTabs.Connector,
-      SettingsTabs.Creds,
-    ]);
+    expect(groupKeys(SettingsGroupKey.Connection)).toBeUndefined();
+    expect(getItemKeys()).not.toContain(SettingsTabs.Skill);
+    expect(getItemKeys()).not.toContain(SettingsTabs.Connector);
 
     // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
     // environment definitions.
     const keys = groupKeys(SettingsGroupKey.Resource);
     expect(keys).toContain(SettingsTabs.Environments);
+    // Credentials share the Environments page: one entry for what a run starts
+    // from and the secrets it reads.
+    expect(keys).not.toContain(SettingsTabs.Creds);
     expect(keys).not.toContain('drive');
   });
 
-  // Messenger bots are LobeHub-operated and only configurable from the cloud
-  // admin, so the tab is a dead end on self-hosted deployments.
   it('keeps Provider and hides Messenger and OAuth Apps by default', () => {
     const keys = getItemKeys();
 
-    expect(keys).not.toContain(SettingsTabs.Messenger);
+    expect(keys).not.toContain('messenger');
     expect(keys).toContain(SettingsTabs.Provider);
     expect(keys).not.toContain(SettingsTabs.OAuthApps);
   });
@@ -158,5 +156,40 @@ describe('settings useCategory', () => {
     const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
 
     expect(systemGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
+  });
+});
+
+describe('settings useCategory automations', () => {
+  const connectionKeys = (enableWebhook: boolean) => {
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider
+        createStore={() =>
+          initServerConfigStore({
+            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableWebhook },
+            serverConfig: { aiProvider: {}, telemetry: {} },
+          })
+        }
+      >
+        {children}
+      </Provider>
+    );
+    const { result } = renderHook(() => useCategory(), { wrapper: Wrapper });
+
+    return result.current
+      .find((group) => group.key === SettingsGroupKey.Connection)
+      ?.items.map((item) => item.key);
+  };
+
+  // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
+  it('hides Automations while MCP Events is off', () => {
+    expect(connectionKeys(false) ?? []).not.toContain(SettingsTabs.Automations);
+  });
+
+  it('keeps Automations and Webhooks now that connectors live in the Marketplace', () => {
+    const keys = connectionKeys(true) ?? [];
+
+    expect(keys).not.toContain(SettingsTabs.Connector);
+    expect(keys).not.toContain('integrations');
+    expect(keys.indexOf(SettingsTabs.Webhooks)).toBe(keys.indexOf(SettingsTabs.Automations) + 1);
   });
 });

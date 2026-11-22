@@ -16,6 +16,10 @@ export const styles = stylex.create({
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadiusLG,
   },
+  listFill: {
+    flex: '1',
+    minHeight: 0,
+  },
   evidenceText: {
     overflow: 'auto',
     maxHeight: '200px',

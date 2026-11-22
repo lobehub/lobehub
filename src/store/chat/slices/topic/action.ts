@@ -1202,20 +1202,9 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Re-read a `scheduled` topic from the server and fold any dispatch back into
-   * the store. The cron dispatcher (`scheduledTopicDispatch`) mutates only the
-   * DB when `runAt` passes — status → 'running', `scheduledRun` cleared,
-   * `runningOperation` seeded, the parked error card cleared off the failed
-   * message — and no push channel tells a client that is already sitting on the
-   * topic. This is the pull side: `useScheduledRunWatch` calls it on topic entry
-   * and on a short poll around `runAt`.
-   *
-   * When the server has moved past `scheduled`, the fresh row is patched into
-   * the topic map (so `useGatewayReconnect` sees `runningOperation` and attaches
-   * to the live stream) and the message list is refetched (so the stale
-   * rate-limit card drops and the continuation's assistant row appears).
-   *
-   * Returns whether a dispatch was observed and folded in.
+   * Fold scheduled work's server-side transition into the topic map. The watcher
+   * calls this on entry and while the schedule is due. A dispatch also refreshes
+   * the transcript so gateway reconnect can anchor to the new assistant row.
    */
   syncScheduledTopicRun = async (topicId: string): Promise<boolean> => {
     const stored = topicSelectors.getTopicById(topicId)(this.#get());
@@ -1237,8 +1226,18 @@ export class ChatTopicActionImpl {
     const fresh = this.#pendingTopicStatusWrites.apply(fetched, 'server');
     if (fresh.status !== fetched.status) return false;
 
-    // Server still parked — nothing to fold in.
-    if (fresh.status === 'scheduled' && fresh.metadata?.scheduledRun) return false;
+    // A first send can wait for its device before it starts creating the checkout.
+    const stillScheduled = fresh.status === 'scheduled' && !!fresh.metadata?.scheduledRun;
+    if (stillScheduled) {
+      const pending = fresh.metadata?.scheduledRun;
+      const previous = stored.metadata?.scheduledRun;
+      if (
+        pending?.kind !== 'worktree_start' ||
+        previous?.kind !== 'worktree_start' ||
+        !!pending.waitingForDevice === !!previous.waitingForDevice
+      )
+        return false;
+    }
 
     // Re-check after the await: a topic/agent switch mid-flight means the
     // active bucket no longer holds this row — don't patch a foreign bucket.
@@ -1256,7 +1255,7 @@ export class ChatTopicActionImpl {
     // The dispatcher also rewrote messages before handing off (cleared/deleted
     // the failed step, created the continuation's placeholder), so the list
     // must be refetched before the gateway reconnect anchors on it.
-    await this.#get().refreshMessages();
+    if (!stillScheduled) await this.#get().refreshMessages();
 
     return true;
   };

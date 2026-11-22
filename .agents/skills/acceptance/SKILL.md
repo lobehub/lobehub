@@ -2,7 +2,7 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.10.0"
+  version: "0.10.3"
 description: >
   Verify delivery outcomes on the real product, capture inspected evidence,
   and deliver an acceptance report with the lh CLI: published to LobeHub when
@@ -80,7 +80,9 @@ The primary resolves findings and tells the runner when execution or publication
 may proceed. There is no per-case approval loop or repeated full review after fixes.
 
 Follow-up rounds have no independent checker gate. Assign new artifact inspection
-to one capable owner and re-run only affected cases. If delegation is unavailable,
+to one capable owner and re-run only affected cases; before recapturing a visual
+case, write its fixture data into the round's review notes
+([report.md](references/report.md#workflow)). If delegation is unavailable,
 use one bounded execution context and disclose missing independent review.
 If model selection is unavailable, record the actual or inherited model rather
 than claiming lower cost. Retain all evidence requirements in either fallback.

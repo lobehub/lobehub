@@ -216,6 +216,68 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  describe('steer', () => {
+    const input = [{ text: 'also run the tests', text_elements: [], type: 'text' as const }];
+    const startTurn = async () => {
+      const harness = createClientHarness({ autoComplete: false });
+      const ctx = createSession(harness);
+      const running = ctx.run('op-1', 'Fix it');
+      await vi.waitFor(() =>
+        expect(harness.requests.some((r) => r.method === 'turn/start')).toBe(true),
+      );
+      const finish = async () => {
+        await harness.notify('turn/completed', {
+          threadId: 'thread-1',
+          turn: turn('turn-1', 'completed'),
+        });
+        await running;
+        ctx.session.close();
+      };
+      return { ...ctx, finish, harness };
+    };
+
+    it('adds the message to the running turn it started', async () => {
+      const { finish, harness, session } = await startTurn();
+
+      await expect(session.steer(input, 'steer-1')).resolves.toBe('accepted');
+
+      expect(harness.requests.at(-1)).toEqual({
+        method: 'turn/steer',
+        params: {
+          clientUserMessageId: 'steer-1',
+          expectedTurnId: 'turn-1',
+          input,
+          threadId: 'thread-1',
+        },
+      });
+      await finish();
+    });
+
+    it('leaves the message to a turn of its own when the turn refuses it', async () => {
+      const { finish, harness, session } = await startTurn();
+      const request = harness.client.request.getMockImplementation();
+      harness.client.request.mockImplementation(async (method: string, params: unknown) => {
+        if (method === 'turn/steer') {
+          throw new CodexAppServerRpcError('not steerable', -32600, {
+            codexErrorInfo: { activeTurnNotSteerable: { turnKind: 'review' } },
+          });
+        }
+        return request!(method, params);
+      });
+
+      await expect(session.steer(input, 'steer-1')).resolves.toBe('rejected');
+      await finish();
+    });
+
+    it('refuses with no turn running', async () => {
+      const harness = createClientHarness();
+      const { session } = createSession(harness);
+
+      await expect(session.steer(input, 'steer-1')).resolves.toBe('rejected');
+      expect(harness.requests).toEqual([]);
+    });
+  });
+
   describe('native user input', () => {
     const contexts: Array<{ bridge: AskUserBridge; session: CodexThreadSession }> = [];
     afterEach(() => {
@@ -264,6 +326,97 @@ describe('CodexThreadSession', () => {
       await ctx.running;
       ctx.session.close();
     };
+
+    const announceAsyncQuestion = (ctx: Awaited<ReturnType<typeof start>>) =>
+      ctx.harness.notify('item/completed', {
+        item: {
+          delivery: 'async',
+          id: 'async-1',
+          questions: [{ options: ['Staging', 'Production'], title: 'Which environment?' }],
+          text: 'Which environment?\n- Staging\n- Production',
+          type: 'agentMessage',
+        },
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+      });
+
+    it('keeps an async question actionable after completion and continues the original thread', async () => {
+      const ctx = await start();
+      await announceAsyncQuestion(ctx);
+      expect(ctx.bridge.pendingCount).toBe(1);
+      expect((await ctx.bridge.events()[Symbol.asyncIterator]().next()).value).toMatchObject({
+        data: { apiName: 'askUserQuestion', identifier: 'codex', toolCallId: 'async-1' },
+        type: 'agent_intervention_request',
+      });
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      expect(ctx.bridge.pendingCount).toBe(1);
+      expect(ctx.events.some(({ type }) => type === 'agent_runtime_end')).toBe(false);
+
+      ctx.bridge.resolve('async-1', { result: { 'Which environment?': 'Staging' } });
+      await vi.waitFor(() => {
+        expect(ctx.harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(
+          2,
+        );
+      });
+      expect(ctx.harness.requests.at(-1)).toMatchObject({
+        method: 'turn/start',
+        params: {
+          input: [{ text: expect.stringContaining('"answer":"Staging"'), type: 'text' }],
+          threadId: 'thread-1',
+        },
+      });
+      expect(JSON.stringify(ctx.harness.requests.at(-1))).toContain('request_user_input_async');
+      await ctx.harness.notify('turn/started', {
+        threadId: 'thread-1',
+        turn: turn('turn-2', 'inProgress'),
+      });
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-2', 'completed'),
+      });
+      await ctx.running;
+      expect(ctx.events.filter(({ type }) => type === 'agent_runtime_end')).toHaveLength(1);
+      expect(ctx.events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ newStep: true }),
+          type: 'stream_start',
+        }),
+      );
+    });
+
+    it('stops waiting on an async question without starting another native turn when skipped', async () => {
+      const ctx = await start();
+      await announceAsyncQuestion(ctx);
+      expect(ctx.bridge.pendingCount).toBe(1);
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      ctx.bridge.resolve('async-1', { cancelled: true, cancelReason: 'user_cancelled' });
+      await ctx.running;
+      expect(ctx.harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(1);
+      expect(ctx.events.filter(({ type }) => type === 'agent_runtime_end')).toHaveLength(1);
+      ctx.session.close();
+    });
+
+    it('stops waiting without interrupting a native turn that has already completed', async () => {
+      const ctx = await start();
+      await announceAsyncQuestion(ctx);
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await ctx.session.interrupt();
+      await ctx.running;
+      expect(ctx.bridge.pendingCount).toBe(0);
+      expect(ctx.harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(1);
+      expect(ctx.harness.requests.some(({ method }) => method === 'turn/interrupt')).toBe(false);
+      expect(ctx.events.filter(({ type }) => type === 'agent_runtime_end')).toHaveLength(1);
+      ctx.session.close();
+    });
 
     it('presents native questions and returns selected/custom answers by their original ids', async () => {
       const ctx = await start();

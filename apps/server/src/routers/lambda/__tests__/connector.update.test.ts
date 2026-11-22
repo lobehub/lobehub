@@ -9,6 +9,22 @@ vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
+const findPersonalByDeviceId = vi.hoisted(() => vi.fn());
+vi.mock('@/database/models/device', () => ({
+  DeviceModel: vi.fn(function DeviceModel() {
+    return { findPersonalByDeviceId, findWorkspaceDeviceById: vi.fn() };
+  }),
+}));
+const lifecycle = vi.hoisted(() => ({
+  // A connector server that never answers: nothing on the save path may wait for it.
+  refresh: vi.fn(() => new Promise<void>(() => {})),
+  schedule: vi.fn(),
+}));
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
+  refreshByConnector: lifecycle.refresh,
+  removeByConnector: vi.fn(),
+  scheduleRefreshByConnector: lifecycle.schedule,
+}));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));
@@ -84,5 +100,35 @@ describe('connectorRouter.update', () => {
     await update({ name: 'Renamed' });
 
     expect(connectorModelMock.update.mock.calls[0][1]).not.toHaveProperty('status');
+  });
+
+  it("binds one of the caller's own devices, and refuses any other", async () => {
+    findPersonalByDeviceId.mockImplementation(async (id: string) =>
+      id === 'my-laptop' ? { deviceId: id } : undefined,
+    );
+
+    await update({ metadata: { boundDeviceId: 'my-laptop' } });
+    expect(connectorModelMock.update).toHaveBeenCalledWith(
+      CONNECTOR_ID,
+      expect.objectContaining({ metadata: { boundDeviceId: 'my-laptop' } }),
+    );
+
+    connectorModelMock.update.mockClear();
+    await expect(update({ metadata: { boundDeviceId: 'not-mine' } })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+  });
+
+  it('saves new credentials without waiting to renew the event subscriptions', async () => {
+    await update({ credentials: { token: 'new-token', type: 'bearer' } });
+
+    expect(connectorModelMock.update).toHaveBeenCalled();
+    expect(lifecycle.schedule).toHaveBeenCalledWith(
+      {},
+      { userId: 'me', workspaceId: undefined },
+      CONNECTOR_ID,
+    );
+    expect(lifecycle.refresh).not.toHaveBeenCalled();
   });
 });

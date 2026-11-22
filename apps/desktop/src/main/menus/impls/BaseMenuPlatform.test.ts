@@ -15,6 +15,10 @@ class TestNewWindowMenuPlatform extends BaseMenuPlatform {
   triggerNewWindow(targetWindow?: ElectronBrowserWindow | null) {
     this.openNewWindow(targetWindow);
   }
+
+  triggerReopenClosedTab(targetWindow?: ElectronBrowserWindow | null) {
+    this.reopenClosedTab(targetWindow);
+  }
 }
 class TestDevToolsMenuPlatform extends BaseMenuPlatform {
   buildDevToolsItem(label = 'Developer Tools', accelerator = 'F12') {
@@ -326,6 +330,57 @@ describe('BaseMenuPlatform', () => {
       newWindowMenuPlatform.triggerNewWindow(null);
 
       expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+    });
+  });
+
+  // Each app-shell window keeps its own closed-tab history, so the reopen must reach the
+  // window the user is working in rather than always the main window.
+  describe('reopenClosedTab', () => {
+    let menuPlatform: TestNewWindowMenuPlatform;
+    let mainWindow: { broadcast: ReturnType<typeof vi.fn>; show: ReturnType<typeof vi.fn> };
+
+    const registerBrowser = (identifier: string, path: string, target: ElectronBrowserWindow) => {
+      const browser = {
+        broadcast: vi.fn(),
+        options: { path },
+        show: vi.fn(),
+        webContents: target.webContents,
+      };
+      mockApp.browserManager.browsers.set(identifier, browser as any);
+      return browser;
+    };
+
+    beforeEach(() => {
+      mainWindow = { broadcast: vi.fn(), show: vi.fn() };
+      vi.mocked(mockApp.browserManager.getMainWindow).mockReturnValue(mainWindow as any);
+      menuPlatform = new TestNewWindowMenuPlatform(mockApp);
+    });
+
+    afterEach(() => {
+      mockApp.browserManager.browsers.clear();
+    });
+
+    it('reopens the tab in the focused workspace window, not the main window', () => {
+      const target = createBrowserWindow({});
+      const workspaceWindow = registerBrowser('workspace_ws1', '/acme', target);
+
+      menuPlatform.triggerReopenClosedTab(target);
+
+      expect(workspaceWindow.broadcast).toHaveBeenCalledWith('reopenClosedTab');
+      expect(mainWindow.broadcast).not.toHaveBeenCalled();
+      expect(mainWindow.show).not.toHaveBeenCalled();
+    });
+
+    it('falls back to showing the main window from a popup or with nothing focused', () => {
+      const target = createBrowserWindow({});
+      const popup = registerBrowser('popup', '/popup/agent/a/t', target);
+
+      menuPlatform.triggerReopenClosedTab(target);
+      menuPlatform.triggerReopenClosedTab(null);
+
+      expect(popup.broadcast).not.toHaveBeenCalled();
+      expect(mainWindow.show).toHaveBeenCalledTimes(2);
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('reopenClosedTab');
     });
   });
 });

@@ -37,6 +37,7 @@ describe('TaskModel public surface', () => {
   it('keeps the module exports', () => {
     expect(Object.keys(taskModule).sort()).toEqual([
       'TaskModel',
+      'TaskTreeProjectMoveError',
       'isTaskIdentifierUniqueViolation',
       'taskActivityActor',
     ]);
@@ -86,6 +87,7 @@ describe('TaskModel public surface', () => {
       'list',
       'lockForStatusChange',
       'lockForUpdate',
+      'moveUnfiledTreeToProject',
       'pinDocument',
       'removeDependency',
       'reorder',

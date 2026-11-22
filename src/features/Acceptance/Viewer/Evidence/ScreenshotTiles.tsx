@@ -1,16 +1,16 @@
 'use client';
 
-import { Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Image } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Check, MessageSquare, X } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { comparisonMedia } from '../../Report/EvidenceComparisonCard';
 import { useOptionalAcceptanceScope } from '../AcceptanceScope';
 import { commentAnchorId } from '../Comments/anchor';
 import { floatingActionHostMarker } from '../markers.stylex';
+import { AnnotationFace, OverlayNoteContent, OverlayRect } from './EvidenceOverlays';
 import { type EvidenceOverlay, overlayColor } from './overlay';
 import {
   annotationInSlice,
@@ -22,21 +22,6 @@ import {
 import { useImageThreads } from './useImageThreads';
 
 const styles = stylex.create({
-  badge: {
-    position: 'absolute',
-    insetBlockStart: '-9px',
-    insetInlineStart: '-9px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '18px',
-    height: '18px',
-    borderRadius: '50%',
-    fontSize: '11px',
-    fontWeight: 600,
-    lineHeight: 1,
-    color: cssVar.colorTextLightSolid,
-  },
   frame: {
     position: 'relative',
     overflow: 'hidden',
@@ -48,31 +33,6 @@ const styles = stylex.create({
     borderRadius: cssVar.borderRadiusLG,
   },
   frameFlat: { borderStyle: 'none', borderRadius: '0' },
-  marker: {
-    pointerEvents: 'auto',
-    cursor: 'pointer',
-    position: 'absolute',
-    insetBlockStart: '-10px',
-    insetInlineEnd: '-10px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '18px',
-    height: '18px',
-    borderStyle: 'none',
-    borderRadius: '50%',
-    fontSize: '10px',
-    fontWeight: 600,
-    lineHeight: 1,
-    color: cssVar.colorTextLightSolid,
-    boxShadow: cssVar.boxShadowTertiary,
-    filter: { 'default': null, ':hover': 'brightness(1.12)' },
-  },
-  markerActive: {
-    outlineWidth: '2px',
-    outlineStyle: 'solid',
-    outlineColor: cssVar.colorTextLightSolid,
-  },
   note: {
     position: 'absolute',
     zIndex: 5,
@@ -86,25 +46,6 @@ const styles = stylex.create({
     boxShadow: cssVar.boxShadowSecondary,
     insetInlineStart: { 'default': null, '@media (width >= 1440px)': 'calc(100% + 12px)' },
   },
-  noteClose: {
-    cursor: 'pointer',
-    position: 'absolute',
-    insetBlockStart: '8px',
-    insetInlineEnd: '8px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '20px',
-    height: '20px',
-    padding: '0',
-    borderStyle: 'none',
-    borderRadius: cssVar.borderRadius,
-    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
-    backgroundImage: { 'default': 'none', ':hover': 'none' },
-    transition: `all ${cssVar.motionDurationFast}`,
-  },
-  noteFallbackHead: { paddingBlockEnd: '4px' },
   pin: {
     cursor: 'pointer',
     position: 'absolute',
@@ -125,112 +66,8 @@ const styles = stylex.create({
     filter: { 'default': null, ':hover': 'brightness(1.12)' },
     insetInlineStart: { 'default': null, '@media (width >= 1440px)': 'calc(100% + 12px)' },
   },
-  pinFace: { width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' },
-  pinInitial: { fontSize: '11px', fontWeight: 600, lineHeight: 1 },
   stage: { position: 'relative' },
-  noteBody: { fontSize: '13px', lineHeight: 1.6, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' },
-  rect: {
-    pointerEvents: 'none',
-    position: 'absolute',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorError,
-    borderRadius: cssVar.borderRadiusXS,
-    boxShadow: '0 0 0 1px rgb(0 0 0 / 45%),\n      inset 0 0 0 1px rgb(255 255 255 / 45%)',
-  },
-  swatch: { flex: 'none', width: '8px', height: '8px', borderRadius: '50%' },
 });
-
-interface OverlayRectProps {
-  annotation: EvidenceOverlay;
-  /** Index within the whole image, so the marker and the note agree. */
-  index: number;
-  numbered: boolean;
-  onToggle: (index: number) => void;
-  opened: boolean;
-  /** Region geometry for THIS tile — a sliced screenshot clips it per tile. */
-  rect: EvidenceOverlay['rect'];
-}
-
-const OverlayRect = memo<OverlayRectProps>(
-  ({ annotation, index, numbered, onToggle, opened, rect }) => {
-    // A settled region keeps its place but drops its author's colour: an
-    // answered note should not compete with an open one for attention.
-    const color = overlayColor(annotation);
-    const label = annotation.label ?? index + 1;
-    return (
-      <div
-        className={stylex.props(styles.rect).className}
-        style={{
-          borderColor: color,
-          height: `${rect.height * 100}%`,
-          left: `${rect.x * 100}%`,
-          top: `${rect.y * 100}%`,
-          width: `${rect.width * 100}%`,
-        }}
-      >
-        {numbered && (
-          <span className={stylex.props(styles.badge).className} style={{ background: color }}>
-            {label}
-          </span>
-        )}
-        {annotation.comment && (
-          <button
-            className={stylex.props(styles.marker, opened && styles.markerActive).className}
-            style={{ background: color }}
-            title={annotation.authorName}
-            type={'button'}
-            onClick={() => onToggle(index)}
-          >
-            {annotation.resolved ? (
-              <Icon icon={Check} size={10} />
-            ) : (
-              <AnnotationFace
-                name={annotation.authorName}
-                size={14}
-                src={annotation.authorAvatar}
-              />
-            )}
-          </button>
-        )}
-      </div>
-    );
-  },
-);
-
-OverlayRect.displayName = 'AcceptanceOverlayRect';
-
-/**
- * The author inside a pin. An avatar when we have one, their initial when we
- * do not, and the speech bubble only when the author is unknown — a pin with
- * no face is indistinguishable from the next pin along.
- */
-const AnnotationFace = memo<{ name?: string; size?: number; src?: string | null }>(
-  ({ name, size = 18, src }) => {
-    if (src)
-      return (
-        <img
-          alt={name ?? ''}
-          className={stylex.props(styles.pinFace).className}
-          src={src}
-          style={{ height: size, width: size }}
-        />
-      );
-    const initial = name?.trim().slice(0, 1);
-    if (initial)
-      return (
-        <span
-          className={stylex.props(styles.pinInitial).className}
-          style={{ fontSize: size < 16 ? 9 : 11 }}
-        >
-          {initial.toUpperCase()}
-        </span>
-      );
-    return <Icon icon={MessageSquare} size={size < 16 ? 10 : 12} />;
-  },
-);
-
-AnnotationFace.displayName = 'AcceptanceAnnotationFace';
 
 interface ScreenshotTilesProps {
   /** Floats over the picture (see `FloatingCommentAction`). */
@@ -247,7 +84,6 @@ interface ScreenshotTilesProps {
 
 export const ScreenshotTiles = memo<ScreenshotTilesProps>(
   ({ action, alt, annotations, caption, fileHeight, fileWidth, flat = false, src }) => {
-    const { t } = useTranslation('verify');
     const [natural, setNatural] = useState(
       fileWidth && fileHeight ? { height: fileHeight, width: fileWidth } : undefined,
     );
@@ -275,40 +111,11 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
         id={opened.threadId ? commentAnchorId(opened.threadId) : undefined}
         style={{ insetBlockStart: `${Math.min(Math.max(opened.rect.y, 0), 0.62) * 100}%` }}
       >
-        {/*
-         * Opening a note hides every pin, including the one that opened it, so
-         * without this the only way back is the small marker on the box itself
-         * — findable if you know it is there, and nowhere near where the reader
-         * is looking.
-         */}
-        <button
-          {...stylex.props(styles.noteClose)}
-          title={t('acceptance.comments.collapseThread')}
-          type={'button'}
-          onClick={close}
-        >
-          <Icon icon={X} size={12} />
-        </button>
-        {opened.panel ?? (
-          <Flexbox gap={4}>
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={stylex.props(styles.noteFallbackHead).className}
-              gap={6}
-            >
-              <span
-                className={stylex.props(styles.swatch).className}
-                style={{ background: opened.color ?? cssVar.colorError }}
-              />
-              <Text fontSize={12} type={'secondary'}>
-                {numbered ? `${opened.label ?? openedNote! + 1} · ` : ''}
-                {opened.authorName}
-              </Text>
-            </Flexbox>
-            <div {...stylex.props(styles.noteBody)}>{opened.comment}</div>
-          </Flexbox>
-        )}
+        <OverlayNoteContent
+          label={numbered ? (opened.label ?? openedNote! + 1) : undefined}
+          opened={opened}
+          onClose={close}
+        />
       </div>
     );
 

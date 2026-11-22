@@ -6,14 +6,14 @@ import type { LobeChatDatabase } from '@/database/type';
 import { BaseService } from '../common/base.service';
 import { removeSystemContext } from '../helpers/translate';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   MessageTranslateInfoUpdate,
   MessageTranslateResponse,
   MessageTranslateTriggerRequest,
+  MessageTranslateWriteResponse,
 } from '../types/message-translations.type';
 import { ChatService } from './chat.service';
-
-type MessageTranslateItem = typeof messageTranslates.$inferSelect;
 
 export class MessageTranslateService extends BaseService {
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
@@ -66,7 +66,7 @@ export class MessageTranslateService extends BaseService {
    */
   async translateMessage(
     translateData: MessageTranslateTriggerRequest,
-  ): ServiceResult<Partial<MessageTranslateItem>> {
+  ): ServiceResult<MessageTranslateWriteResponse> {
     // Permission check is already done in the route layer (MESSAGE_READ + TRANSLATION_CREATE)
 
     this.log('info', '开始翻译消息', {
@@ -113,7 +113,7 @@ export class MessageTranslateService extends BaseService {
    */
   async updateTranslateInfo(
     data: MessageTranslateInfoUpdate,
-  ): ServiceResult<Partial<MessageTranslateItem>> {
+  ): ServiceResult<MessageTranslateWriteResponse> {
     // Permission check is already done in the route layer (MESSAGE_UPDATE + TRANSLATION_UPDATE)
 
     try {
@@ -163,9 +163,7 @@ export class MessageTranslateService extends BaseService {
    * @param messageId Message ID
    * @returns Deletion result
    */
-  async deleteTranslateByMessageId(
-    messageId: string,
-  ): ServiceResult<{ deleted: boolean; messageId: string }> {
+  async deleteTranslateByMessageId(messageId: string): ServiceResult<DeletedResource> {
     // Permission check is already done in the route layer (TRANSLATION_DELETE)
 
     try {
@@ -187,7 +185,7 @@ export class MessageTranslateService extends BaseService {
           and(eq(messageTranslates.id, messageId), this.buildWorkspaceWhere(messageTranslates)),
         );
 
-      return { deleted: true, messageId };
+      return { deleted: true, id: messageId };
     } catch (error) {
       this.handleServiceError(error, '删除翻译信息');
     }

@@ -7,6 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 
 import NavHeader from '@/features/NavHeader';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
@@ -62,6 +63,8 @@ const TopicGridSkeleton = () => (
 );
 
 const TopicsSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
+  const { controlHeight, radius } = useDensityTokens();
+
   if (chrome === 'body') return <TopicGridSkeleton />;
 
   return (
@@ -78,13 +81,13 @@ const TopicsSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
         >
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <Flexbox horizontal gap={8}>
-              <SkeletonBar height={32} radius={16} width={72} />
-              <SkeletonBar height={32} radius={16} width={88} />
-              <SkeletonBar height={32} radius={16} width={80} />
+              <SkeletonBar height={controlHeight} radius={controlHeight / 2} width={72} />
+              <SkeletonBar height={controlHeight} radius={controlHeight / 2} width={88} />
+              <SkeletonBar height={controlHeight} radius={controlHeight / 2} width={80} />
             </Flexbox>
             <Flexbox horizontal gap={8}>
-              <SkeletonBar height={32} radius={8} width={36} />
-              <SkeletonBar height={32} radius={8} width={36} />
+              <SkeletonBar height={controlHeight} radius={radius} width={36} />
+              <SkeletonBar height={controlHeight} radius={radius} width={36} />
             </Flexbox>
           </Flexbox>
           <TopicGridSkeleton />

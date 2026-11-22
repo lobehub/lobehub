@@ -5,6 +5,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
 
+import { hasCatalogPageHeader } from '@/features/Marketplace/paths';
 import NavHeader from '@/features/NavHeader';
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
 import UserAvatar from '@/routes/(main)/community/features/UserAvatar';
@@ -14,6 +15,7 @@ import { styles } from './Header/style';
 
 const Header = memo(() => {
   const location = useLocation();
+  if (hasCatalogPageHeader(location.pathname)) return <NavHeader />;
   const isHome = location.pathname === '/';
 
   const cssVariables: Record<string, string> = {

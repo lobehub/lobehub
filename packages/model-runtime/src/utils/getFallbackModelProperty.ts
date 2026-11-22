@@ -45,6 +45,12 @@ export const getModelPropertyWithFallback = async <T>(
     }
   }
 
+  // Ace publishes its own model metadata. A shared model ID is not evidence
+  // that another provider's limits, capabilities or commercial terms apply.
+  if (providerId === 'acedatacloud') {
+    return (propertyName === 'type' ? getDefaultModelType(modelId) : undefined) as T;
+  }
+
   // Step 2: Fallback to a match ignoring the provider (match id only)
   const fallbackMatch = models.find((m) => m.id === modelId);
 

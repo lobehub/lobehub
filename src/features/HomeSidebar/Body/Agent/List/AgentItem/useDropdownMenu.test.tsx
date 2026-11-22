@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   canManageSettings: false,
   myPinnedIds: [] as string[],
   confirmModal: vi.fn(),
+  confirmRemoveAgent: vi.fn(),
   copyToClipboard: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
@@ -104,6 +105,9 @@ vi.mock('@/hooks/useResourceManageable', () => ({
 }));
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
+vi.mock('@/features/AgentDeleteConfirm', () => ({
+  confirmRemoveAgent: mocks.confirmRemoveAgent,
+}));
 
 vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   useOptionalAgentModal: () => null,
@@ -176,10 +180,7 @@ const getMenuItem = (
 };
 
 type PublicAgentMenuOptions = Partial<
-  Pick<
-    Parameters<typeof useAgentDropdownMenu>[0],
-    'id' | 'labelsEnabled' | 'pinned' | 'sidebarVisibilityEnabled' | 'visibility'
-  >
+  Pick<Parameters<typeof useAgentDropdownMenu>[0], 'id' | 'labelsEnabled' | 'pinned' | 'visibility'>
 >;
 
 const renderPublicAgentMenu = (
@@ -188,7 +189,6 @@ const renderPublicAgentMenu = (
     id = 'agent-1',
     labelsEnabled,
     pinned = false,
-    sidebarVisibilityEnabled,
     visibility = 'public',
   }: PublicAgentMenuOptions = {},
 ) =>
@@ -199,7 +199,6 @@ const renderPublicAgentMenu = (
       ...(labelsEnabled === undefined ? {} : { labelsEnabled }),
       openCreateGroupModal: vi.fn(),
       pinned,
-      ...(sidebarVisibilityEnabled === undefined ? {} : { sidebarVisibilityEnabled }),
       title: 'Public Agent',
       userId,
       visibility,
@@ -371,15 +370,6 @@ describe('useAgentDropdownMenu', () => {
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
   });
 
-  it('omits the hide action for lists that ignore the sidebar preference', () => {
-    const { result } = renderPublicAgentMenu('member-1', { sidebarVisibilityEnabled: false });
-
-    const keys = (result.current() ?? []).map((item) =>
-      item && typeof item === 'object' && 'key' in item ? item.key : undefined,
-    );
-    expect(keys).not.toContain('hideFromSidebar');
-  });
-
   it('tells the user to wait when delete is refused by a pending history migration', async () => {
     // Regression: a 409 TRANSFER_IN_PROGRESS used to fall through to the
     // generic "operation failed, please try again", which invited immediate
@@ -400,10 +390,44 @@ describe('useAgentDropdownMenu', () => {
     if (!deleteItem) throw new Error('Expected delete menu item');
 
     deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
-    const { onOk } = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
-    await onOk();
+    const { agentId, onConfirm } = mocks.confirmRemoveAgent.mock.calls[0][0] as {
+      agentId: string;
+      onConfirm: (options: { acknowledgeForeignContent: boolean }) => Promise<void>;
+    };
+    expect(agentId).toBe('agent-1');
+    await onConfirm({ acknowledgeForeignContent: true });
 
+    expect(mocks.home.removeAgent).toHaveBeenCalledWith('agent-1', {
+      acknowledgeForeignContent: true,
+    });
     expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
+  });
+
+  const findDeleteItem = (items: unknown[]) =>
+    items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
+    );
+
+  it("offers delete to a workspace Admin on another member's shared agent", () => {
+    // Admin: not the creator and not the Owner (client `canManage` false), but
+    // the server's `canManage` (AGENT_UPDATE:all) is true.
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = true;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeDefined();
+  });
+
+  it("hides delete from a member on another member's agent", () => {
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = false;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeUndefined();
   });
 
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
@@ -434,7 +458,7 @@ describe('useAgentDropdownMenu', () => {
       'copy-agent',
       'divider',
       'permission',
-      'makePrivate',
+      'visibility',
       'divider',
       'delete',
     ]);

@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
+import { ACE_CATALOG_URL } from './catalog';
 import { LobeAceDataCloudAI } from './index';
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
@@ -29,6 +30,39 @@ const completion = {
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' }, status });
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async () =>
+      jsonResponse({
+        items: [
+          'example-chat-model',
+          'gpt-6-astra',
+          'gemini-2.5-pro',
+          'claude-sonnet-4-5',
+          'gpt-4o-image',
+          'messages-only-model',
+        ].map((id) => ({
+          id,
+          modality: 'chat',
+          capabilities: [],
+          endpoints: [
+            {
+              auth: 'bearer',
+              base_url:
+                id === 'messages-only-model'
+                  ? 'https://api.acedata.cloud'
+                  : 'https://api.acedata.cloud/v1',
+              path: id === 'messages-only-model' ? '/v1/messages' : '/v1/chat/completions',
+              protocol: id === 'messages-only-model' ? 'messages' : 'chat_completions',
+            },
+          ],
+        })),
+      }),
+    ),
+  );
+});
 
 describe('Ace Data Cloud endpoint contract', () => {
   it('fetches models with Bearer auth, excludes media endpoints and avoids vendor price guesses', async () => {
@@ -56,13 +90,58 @@ describe('Ace Data Cloud endpoint contract', () => {
     expect(String(url)).toBe('https://api.acedata.cloud/v1/models');
     expect(new Headers(options.headers).get('Authorization')).toBe('Bearer dummy-token');
     expect(models).toEqual(
-      ['example-chat-model', 'gpt-6-astra', 'gemini-2.5-pro', 'claude-sonnet-4-5'].map((id) => ({
+      [
+        'example-chat-model',
+        'gpt-6-astra',
+        'gemini-2.5-pro',
+        'claude-sonnet-4-5',
+        'gpt-4o-image',
+      ].map((id) => ({
+        abilities: {},
         displayName: id,
         id,
         type: 'chat',
       })),
     );
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      ACE_CATALOG_URL,
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
   });
+
+  it.each(['messages-only-model', 'friendly-alias'])(
+    'uses Messages and Bearer for a model without Chat Completions (%s)',
+    async (model) => {
+      const fetch = vi.fn().mockResolvedValue(
+        jsonResponse({
+          content: [{ type: 'text', text: 'Messages reply' }],
+          id: 'msg_test',
+          model: 'messages-only-model',
+          role: 'assistant',
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          type: 'message',
+          usage: { input_tokens: 1, output_tokens: 2 },
+        }),
+      );
+      const runtime = new LobeAceDataCloudAI({
+        apiKey: 'dummy-token',
+        fetch,
+        modelIdMapping: { 'friendly-alias': 'messages-only-model' },
+      });
+      const response = await runtime.chat({
+        model,
+        messages: [{ role: 'user', content: 'Hello' }],
+        stream: false,
+      });
+      const [url, options] = fetch.mock.calls[0];
+      expect(String(url)).toBe('https://api.acedata.cloud/v1/messages');
+      expect(new Headers(options.headers).get('Authorization')).toBe('Bearer dummy-token');
+      expect(new Headers(options.headers).has('x-api-key')).toBe(false);
+      expect(JSON.parse(options.body).model).toBe('messages-only-model');
+      expect(await response.text()).toContain('Messages reply');
+    },
+  );
 
   it('preserves a user-supplied endpoint and surfaces model-fetch authorization failure', async () => {
     const fetch = vi

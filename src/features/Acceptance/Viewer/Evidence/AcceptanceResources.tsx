@@ -1,164 +1,190 @@
 'use client';
 
-import { Empty, Flexbox, Icon, Image, Text, useResponsive } from '@lobehub/ui';
+import { isDraftVerifyRun } from '@lobechat/const/verify';
+import { Button, Select } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import { FileText, Film, Paperclip, SquareTerminal } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
-import { checksForTurn } from '../turnChecks';
+import QuietState from '../QuietState';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useAcceptanceTurn } from '../useAcceptanceTurn';
+import {
+  collectResources,
+  countResources,
+  filterResources,
+  RESOURCE_FILTERS,
+  type ResourceFilter,
+  type ResourceItem,
+} from './resources';
+import ResourceTile from './ResourceTile';
+
+const narrow = '@container (width < 720px)';
+const single = '@container (width < 440px)';
 
 const styles = stylex.create({
-  column: { display: 'flex', flex: '1', flexDirection: 'column', gap: '12px', minInlineSize: '0' },
-  grid: { display: 'flex', gap: '12px', alignItems: 'flex-start' },
-  item: {
-    cursor: 'pointer',
-    overflow: 'hidden',
-    inlineSize: '100%',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
-    borderRadius: cssVar.borderRadiusLG,
-    backgroundColor: cssVar.colorBgContainer,
-    backgroundImage: 'none',
-  },
-  meta: { paddingBlock: '8px', paddingInline: '10px' },
-  nonVisual: {
+  root: { containerType: 'inline-size', display: 'flex', flexDirection: 'column', gap: '16px' },
+  toolbar: {
     display: 'flex',
+    flexWrap: 'wrap',
     gap: '8px',
     alignItems: 'center',
-    paddingBlock: '18px',
+    minHeight: '28px',
+  },
+  filters: { display: 'flex', flex: '1', gap: '4px', alignItems: 'center', minWidth: 0 },
+  filter: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    height: '28px',
+    margin: '0',
+    paddingBlock: 0,
     paddingInline: '12px',
-    backgroundColor: cssVar.colorFillQuaternary,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderRadius: '6px',
+    font: 'inherit',
+    fontSize: '12px',
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    appearance: 'none',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
     backgroundImage: 'none',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  filterOn: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+  },
+  filterCount: { fontWeight: 400, color: cssVar.colorTextTertiary },
+  roundSelect: { width: '128px' },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      default: 'repeat(3, minmax(0, 1fr))',
+      [narrow]: 'repeat(2, minmax(0, 1fr))',
+      [single]: 'minmax(0, 1fr)',
+    },
+    gap: '16px',
   },
 });
 
-const isVisual = (type: string) => type === 'screenshot' || type === 'gif';
+const FILTER_LABEL_KEY = {
+  all: 'acceptance.resources.filter.all',
+  other: 'acceptance.resources.filter.other',
+  recording: 'acceptance.resources.filter.recording',
+  screenshot: 'acceptance.resources.filter.screenshot',
+} as const satisfies Record<ResourceFilter, string>;
 
-/**
- * Everything this acceptance produced, in one place.
- *
- * The artefacts exist already — every round attaches them to the check whose
- * verdict they back — but reaching one meant knowing which check owned it and
- * expanding that row. The same artefact is also what you want when you are NOT
- * auditing a verdict ("where is that screenshot"), so it earns an inventory of
- * its own. Deduped by file: a carried-forward check re-attaches the same
- * artefact to every round it survives.
- */
 const AcceptanceResources = () => {
   const { t } = useTranslation('verify');
-  const { lg = true, md = true } = useResponsive();
   const hydrated = useIsHydrated();
   const { acceptanceId, embedded } = useAcceptanceScope();
-  const { turn } = useAcceptanceTurn(embedded);
+  const { setTurn, turn } = useAcceptanceTurn(embedded);
   const { data } = useAcceptanceBundle(acceptanceId);
+  const [kind, setKind] = useState<ResourceFilter>('all');
   if (!data) return null;
 
-  const seen = new Set<string>();
-  const items = checksForTurn(data, turn)
-    .flatMap((check) =>
-      (check.evidence ?? []).map((evidence) => ({ check: check.title, evidence })),
-    )
-    .filter(({ evidence }) => {
-      const key = evidence.fileId ?? evidence.documentId ?? evidence.id;
-      if (!key || seen.has(key)) return false;
-      // Text captured inline is the check's own body, not a file someone can
-      // open — listing it here would pad the inventory with dead tiles.
-      if (!evidence.fileUrl && !evidence.documentId) return false;
-      seen.add(key);
-      return true;
-    });
-
-  if (items.length === 0)
+  const rounds = data.rounds ?? [];
+  const all = collectResources(data.checks ?? []);
+  if (all.length === 0)
     return (
-      <Flexbox paddingBlock={32}>
-        <Empty description={t('acceptance.resources.empty')} icon={Paperclip} />
-      </Flexbox>
+      <QuietState
+        description={t('acceptance.resources.emptyDescription')}
+        icon={Paperclip}
+        title={t('acceptance.resources.emptyTitle')}
+      />
     );
 
-  const columnCount = lg ? 3 : md ? 2 : 1;
-  const columns: (typeof items)[] = Array.from({ length: columnCount }, () => []);
-  items.forEach((entry, index) => columns[index % columnCount]!.push(entry));
+  const counts = countResources(filterResources(all, { kind: 'all', round: turn }));
+  const visible = filterResources(all, { kind, round: turn });
+
+  const detailOf = (item: ResourceItem) =>
+    [
+      `C${item.checkSeq}`,
+      item.roundIndex === null ? null : t('acceptance.round', { round: item.roundIndex }),
+      hydrated && item.evidence.capturedAt
+        ? dayjs(item.evidence.capturedAt).format('MM-DD HH:mm')
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
   return (
-    <div {...stylex.props(styles.grid)}>
-      {columns.map((column, columnIndex) => (
-        <div {...stylex.props(styles.column)} key={columnIndex}>
-          {column.map(({ check, evidence }) => {
-            const href = evidence.fileUrl ?? undefined;
-            const name = evidence.fileName ?? evidence.description ?? check;
-            const captured =
-              hydrated && evidence.capturedAt
-                ? dayjs(evidence.capturedAt).format('MM-DD HH:mm')
-                : undefined;
-            const visual = isVisual(evidence.type) && Boolean(evidence.fileUrl);
-
-            return (
-              <div
-                {...stylex.props(styles.item)}
-                key={evidence.id}
-                onClick={href ? () => window.open(href, '_blank', 'noreferrer') : undefined}
-              >
-                {visual ? (
-                  /* The ratio is reserved from the stored dimensions, not left to
-                 the image's own load: CSS columns balance once, at layout, and
-                 an image that arrives afterwards has already lost its place —
-                 every tile piles into the first column. */
-                  <div
-                    style={{
-                      aspectRatio:
-                        evidence.fileWidth && evidence.fileHeight
-                          ? `${evidence.fileWidth} / ${evidence.fileHeight}`
-                          : '16 / 10',
-                      background: cssVar.colorFillQuaternary,
-                      width: '100%',
-                    }}
-                  >
-                    <Image
-                      alt={name}
-                      preview={false}
-                      src={evidence.fileUrl!}
-                      style={{ height: '100%', objectFit: 'cover', width: '100%' }}
-                    />
-                  </div>
-                ) : (
-                  <div {...stylex.props(styles.nonVisual)}>
-                    <Icon
-                      size={16}
-                      style={{ color: cssVar.colorTextTertiary }}
-                      icon={
-                        evidence.type === 'video'
-                          ? Film
-                          : evidence.type === 'terminal'
-                            ? SquareTerminal
-                            : FileText
-                      }
-                    />
-                    <Text ellipsis fontSize={13}>
-                      {name}
-                    </Text>
-                  </div>
-                )}
-                <Flexbox className={stylex.props(styles.meta).className} gap={2}>
-                  <Text ellipsis fontSize={12}>
-                    {name}
-                  </Text>
-                  <Text ellipsis fontSize={11} type={'secondary'}>
-                    {[check, captured].filter(Boolean).join(' · ')}
-                  </Text>
-                </Flexbox>
-              </div>
-            );
-          })}
+    <div {...stylex.props(styles.root)}>
+      <div {...stylex.props(styles.toolbar)}>
+        <div
+          aria-label={t('acceptance.resources.filterLabel')}
+          role={'group'}
+          {...stylex.props(styles.filters)}
+        >
+          {RESOURCE_FILTERS.map((filter) => (
+            <button
+              aria-pressed={kind === filter}
+              key={filter}
+              type={'button'}
+              {...stylex.props(styles.filter, kind === filter && styles.filterOn)}
+              onClick={() => setKind(filter)}
+            >
+              {t(FILTER_LABEL_KEY[filter])}
+              <span {...stylex.props(styles.filterCount)}>{counts[filter]}</span>
+            </button>
+          ))}
         </div>
-      ))}
+        {rounds.length > 1 && (
+          <Select
+            aria-label={t('acceptance.resources.roundLabel')}
+            className={stylex.props(styles.roundSelect).className}
+            value={turn === null ? 'all' : String(turn)}
+            variant={'filled'}
+            options={[
+              { label: t('acceptance.filter.roundAll'), value: 'all' },
+              ...[...rounds].reverse().map((round) => ({
+                label: isDraftVerifyRun(round.run)
+                  ? t('flow.pendingPlan')
+                  : t('acceptance.round', { round: round.run.roundIndex }),
+                value: String(round.run.roundIndex),
+              })),
+            ]}
+            onChange={(value) => setTurn(value === 'all' ? null : Number(value))}
+          />
+        )}
+      </div>
+      {visible.length === 0 ? (
+        <QuietState
+          icon={Paperclip}
+          title={t('acceptance.resources.noMatch')}
+          action={
+            <Button
+              onClick={() => {
+                setKind('all');
+                if (turn !== null) setTurn(null);
+              }}
+            >
+              {t('acceptance.resources.showAll', { count: all.length })}
+            </Button>
+          }
+        />
+      ) : (
+        <div {...stylex.props(styles.grid)}>
+          {visible.map((item) => (
+            <ResourceTile detail={detailOf(item)} item={item} key={item.key} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

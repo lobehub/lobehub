@@ -188,8 +188,8 @@ describe('MCPService MCP Apps sessions', () => {
 
     // One session per capability set, each reused
     expect(MCPClient).toHaveBeenCalledTimes(2);
-    expect(MCPClient).toHaveBeenNthCalledWith(1, httpParams, { mcpApps: false });
-    expect(MCPClient).toHaveBeenNthCalledWith(2, httpParams, { mcpApps: true });
+    expect(MCPClient).toHaveBeenNthCalledWith(1, httpParams, { mcpApps: false, mcpEvents: false });
+    expect(MCPClient).toHaveBeenNthCalledWith(2, httpParams, { mcpApps: true, mcpEvents: false });
     expect(MCPClient.prototype.getToolUiResourceUri).toHaveBeenCalledTimes(2);
   });
 });
@@ -266,6 +266,7 @@ describe('MCPService log redaction', () => {
     ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
     ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
     ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
+    ['SSRF_BLOCKED', 'BAD_REQUEST'],
   ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
     // The module is auto-mocked in this suite; retain the actual error contract.
     const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
@@ -367,7 +368,10 @@ describe('MCPService', () => {
         mcpApps: true,
       });
 
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, expect.anything(), false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, expect.anything(), false, {
+        mcpApps: true,
+        mcpEvents: false,
+      });
       expect(getClientSpy).toHaveBeenNthCalledWith(2, expect.anything(), false, { mcpApps: true });
     });
   });
@@ -584,7 +588,10 @@ describe('MCPService', () => {
         argsStr: '{}',
       });
 
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, {
+        mcpApps: true,
+        mcpEvents: false,
+      });
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
       // With the server it may be read back from
       expect(result.state.mcpApp).toEqual({
@@ -691,7 +698,10 @@ describe('MCPService', () => {
       });
 
       // A session without the MCP Apps capability, and no listTools round trip
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, {
+        mcpApps: false,
+        mcpEvents: false,
+      });
       expect(mockClient.getToolUiResourceUri).not.toHaveBeenCalled();
       expect(mockClient.getToolUiMeta).not.toHaveBeenCalled();
       expect(result.state.mcpApp).toBeUndefined();
@@ -712,6 +722,20 @@ describe('MCPService', () => {
       });
 
       expect(result.state.mcpApp).toBeUndefined();
+    });
+
+    it('exposes an SSRF block on a cached session as BAD_REQUEST, not a 500', async () => {
+      // The host may resolve elsewhere after the session was initialized
+      const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+      const blocked = actual.createMCPError('SSRF_BLOCKED', 'refused by the SSRF policy');
+      mockClient.callTool.mockRejectedValue(blocked);
+
+      await expect(mcpService.callTool(testToolInput(mockParams))).rejects.toMatchObject({
+        cause: blocked,
+        code: 'BAD_REQUEST',
+        message: 'refused by the SSRF policy',
+      });
+      expect(mockClient.callTool).toHaveBeenCalledOnce();
     });
 
     it('should throw TRPCError when client throws error', async () => {
@@ -760,8 +784,14 @@ describe('MCPService', () => {
       expect(result.success).toBe(true);
       expect(mockClient.callTool).toHaveBeenCalledTimes(2);
       // Retry must drop the cached client: first attempt skipCache=false, retry skipCache=true
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApps: false });
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, {
+        mcpApps: false,
+        mcpEvents: false,
+      });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, {
+        mcpApps: false,
+        mcpEvents: false,
+      });
     });
 
     it('should retry up to 3 times for NoValidSessionId error', async () => {
@@ -830,7 +860,10 @@ describe('MCPService', () => {
       await expect(mcpService.readUiResource(mockParams, 'ui://app')).resolves.toEqual(resource);
       expect(mockClient.readResource).toHaveBeenCalledWith('ui://app');
       // The session that advertised MCP Apps, like the call that stored the view
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, {
+        mcpApps: true,
+        mcpEvents: false,
+      });
     });
 
     it("falls back to the resource's listing entry for the view's metadata", async () => {
@@ -1013,7 +1046,10 @@ describe('MCPService', () => {
 
       expect(result).toEqual(resources);
       expect(mockClient.listResources).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, {
+        mcpApps: false,
+        mcpEvents: false,
+      });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {
@@ -1036,7 +1072,10 @@ describe('MCPService', () => {
 
       expect(result).toEqual(prompts);
       expect(mockClient.listPrompts).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, {
+        mcpApps: false,
+        mcpEvents: false,
+      });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {

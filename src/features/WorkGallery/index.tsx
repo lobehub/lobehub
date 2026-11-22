@@ -13,7 +13,10 @@ import {
   summarizeCanvasStorage,
   useFetchCanvasStorage,
 } from '@/features/CanvasStorage/useCanvasStorage';
+import NavHeader from '@/features/NavHeader';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { densityVars } from '@/styles/densityVars';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import type { WorkGalleryKey } from './const';
@@ -45,7 +48,7 @@ const styles = createStaticStyles(({ css }) => ({
   cardList: css`
     display: grid;
     grid-template-columns: repeat(3, minmax(280px, 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     width: 100%;
 
     @media (width >= 1600px) {
@@ -73,7 +76,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: auto hidden;
     flex: none;
 
-    padding-block: 12px 10px;
+    padding-block: ${densityVars.contentGap} 10px;
     padding-inline: 24px;
 
     &::-webkit-scrollbar {
@@ -92,7 +95,7 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-end: 12px;
   `,
   groupTitle: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,
@@ -103,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
 
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
@@ -112,7 +115,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorder};
     border-radius: 6px;
 
@@ -128,7 +131,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   typeBar: css`
     flex: none;
-    padding-block: 12px 0;
+    padding-block: ${densityVars.contentGap} 0;
     padding-inline: 24px;
   `,
   scroll: css`
@@ -338,42 +341,62 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     );
   };
 
-  const typeTabs = (
-    <Flexbox className={styles.typeBar} gap={12}>
-      <WorksTypeTabs activeKey={galleryKey} />
-      {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
-    </Flexbox>
-  );
+  // The type switch lives in the page header, right next to the panel toggle. A
+  // header that only hosted the toggle left a blank band above a floating row.
+  // Mobile keeps the switch on its own row: there the header is the back +
+  // drawer pair, which a five-item switch would crowd.
+  const mobile = isMobileSurface();
 
-  return isLoadingInitial && items.length === 0 ? (
+  const typeTabs = <WorksTypeTabs activeKey={galleryKey} />;
+
+  const typeBar =
+    mobile || galleryKey === 'canvas' ? (
+      <Flexbox className={styles.typeBar} gap={12}>
+        {mobile ? typeTabs : null}
+        {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
+      </Flexbox>
+    ) : null;
+
+  const body =
+    isLoadingInitial && items.length === 0 ? (
+      <>
+        {typeBar}
+        <WorkGallerySkeleton />
+      </>
+    ) : (
+      <>
+        {typeBar}
+        {agentIds.length > 0 && (
+          <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
+            <Button
+              className={cx(styles.agentFilter, !activeAgentId && styles.agentFilterActive)}
+              size={'small'}
+              type={'text'}
+              onClick={() => setActiveAgentId(null)}
+            >
+              {t('work.agentFilter.all')}
+            </Button>
+            {agentIds.map((agentId) => (
+              <AgentFilter
+                active={activeAgentId === agentId}
+                agentId={agentId}
+                key={agentId}
+                onSelect={setActiveAgentId}
+              />
+            ))}
+          </Flexbox>
+        )}
+        <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
+      </>
+    );
+
+  return (
     <Flexbox className={styles.container}>
-      {typeTabs}
-      <WorkGallerySkeleton />
-    </Flexbox>
-  ) : (
-    <Flexbox className={styles.container}>
-      {typeTabs}
-      {agentIds.length > 0 && (
-        <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
-          <Button
-            className={cx(styles.agentFilter, !activeAgentId && styles.agentFilterActive)}
-            size={'small'}
-            type={'text'}
-            onClick={() => setActiveAgentId(null)}
-          >
-            {t('work.agentFilter.all')}
-          </Button>
-          {agentIds.map((agentId) => (
-            <AgentFilter
-              active={activeAgentId === agentId}
-              agentId={agentId}
-              key={agentId}
-              onSelect={setActiveAgentId}
-            />
-          ))}
-        </Flexbox>
-      )}
-      <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
+      <NavHeader
+        left={mobile ? undefined : typeTabs}
+        styles={mobile ? undefined : { left: { paddingInlineStart: 16 } }}
+      />
+      {body}
     </Flexbox>
   );
 });

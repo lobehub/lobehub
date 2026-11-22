@@ -49,6 +49,7 @@ export enum RequestTrigger {
   Inbox = 'inbox',
   /** Chat input inline completion suggestions while the user is typing. */
   InputCompletion = 'input_completion',
+  McpEvent = 'mcp_event',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
   /** Text-to-music generation from a music generation topic. */
@@ -95,13 +96,14 @@ export enum RequestTrigger {
   /** Acceptance verification: plan generation, judging, review prediction and reports. */
   Verify = 'verify',
   Video = 'video',
+  /** An Agent run a generic inbound webhook call started. */
+  Webhook = 'webhook',
 }
 
 /**
  * Everything one shared-agent visitor run carries: WHO the run belongs to
  * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
- * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`), and HOW
- * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
+ * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`).
  *
  * Single source of truth for the runtime-side share marker: it is stamped once
  * at operation creation onto `state.metadata.agentShareVisitor` and read back
@@ -126,6 +128,13 @@ export interface AgentShareVisitorContext {
    */
   allowReadMemory?: boolean;
   /**
+   * Whether this visitor may run on the agent's execution environment, as
+   * resolved from `shareConfig.deviceAccess` when the run started. Lets the
+   * dispatch-time gates (device builtins, device-only MCP) re-apply the same
+   * decision the assembled tool set was built with.
+   */
+  canUseDevice?: boolean;
+  /**
    * The agent's OWN persisted knowledge-base assignment, never derived from
    * visitor input, so `isShareBlockedDataToolCall` can id-scope
    * `viewKnowledgeBase`'s `id` argument. Always empty today (a share grants no
@@ -138,10 +147,6 @@ export interface AgentShareVisitorContext {
    * `AgentShareModel.isRunStillAuthorized`).
    */
   shareId: string;
-  /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
-  showErrorDetails?: boolean;
-  /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
-  showModelInfo?: boolean;
   /**
    * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
    * per-skill allowlist the operation's skill pool was built from. Absent or

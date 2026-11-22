@@ -267,11 +267,66 @@ jobs:
             echo "complete_matrix=$([ "$count" -eq 4 ] && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
+  overlay-type-check:
+    name: Overlay type check
+    needs: [check-stable]
+    if: needs.check-stable.outputs.build_required == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Preserve release tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/desktop-release-tooling"
+          cp -R .github "$RUNNER_TEMP/desktop-release-tooling/"
+          tooling_sha="$(git rev-parse HEAD)"
+          echo "DESKTOP_TOOLING_SHA=$tooling_sha" >> "$GITHUB_ENV"
+
+      - name: Checkout product sources
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.check-stable.outputs.oss_sha }}
+
+      - name: Verify product sources and restore tooling
+        shell: bash
+        env:
+          RELEASE_OSS_SHA: ${{ needs.check-stable.outputs.oss_sha }}
+          CLOUD_REF: ${{ needs.check-stable.outputs.cloud_ref }}
+          SOURCES_HASH: ${{ needs.check-stable.outputs.sources_hash }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$RELEASE_OSS_SHA" ] || { echo '::error::Product source SHA mismatch'; exit 1; }
+          mkdir -p .github
+          cp -R "$RUNNER_TEMP/desktop-release-tooling/.github/." .github/
+          node .github/scripts/desktopReleaseCli.mjs verify-checkout
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
+      - name: Type check overlaid sources
+        if: steps.overlay-token.outputs.token != ''
+        uses: ./.github/actions/overlay-type-check
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          overlay-ref: ${{ needs.check-stable.outputs.cloud_ref }}
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
+
   # ============================================
   # 多平台构建
   # ============================================
   build:
-    needs: [check-stable, configure-build]
+    needs: [check-stable, configure-build, overlay-type-check]
     if: needs.check-stable.outputs.build_required == 'true'
     name: Build Desktop App
     runs-on: ${{ matrix.os }}

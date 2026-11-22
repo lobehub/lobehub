@@ -16,6 +16,11 @@
  */
 export const RedisKeyNamespace = {
   /**
+   * Whether Agents can take work: device presence per principal pool and each agent's quota
+   * verdict per caller, read by the dispatch layer and the contact card's status.
+   */
+  AGENT_AVAILABILITY: 'agent-availability',
+  /**
    * Agent Signal keys — the same `agent-signal` keyspace the Agent Signal runtime
    * stores (receipts, dedupe, policy state) already use.
    */
@@ -34,23 +39,46 @@ export const RedisKeyNamespace = {
    * shared by every instance that may receive a delivery.
    */
   AGENT_IDENTITY: 'agent-identity',
+  INBOUND_WEBHOOK: 'inbound-webhook',
   /**
    * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
    * silent-wake budget and the per-channel wake scheduler.
    */
   BOT_WAKE: 'bot-wake',
   /**
+   * Replay bookkeeping for bot messages parked while their topic was busy: how many times each
+   * parked message reached a run, so one that keeps coming back stops looping.
+   */
+  BOT_DEFERRED: 'bot-deferred',
+  /**
+   * Short-lived reply routes an IM platform hands out with an inbound message
+   * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
+   * can use them even when another one received the message.
+   */
+  BOT_REPLY: 'bot-reply',
+  /**
+   * QQ passive-reply windows: the inbound message a bot may answer, the replies spent, and the
+   * text a closed window could not carry.
+   */
+  QQ_PASSIVE: 'qq-passive',
+  /**
    * AI generation related keys (agent welcome, placeholders, etc.)
    */
   AI_GENERATION: 'aiGeneration',
   /**
-   * Third-party integrations (Linear, …): OAuth hand-off state.
+   * Third-party integrations (Linear, GitHub, …): OAuth hand-off state and
+   * short-lived answers from their APIs.
    */
   INTEGRATIONS: 'integrations',
   /**
    * Core LOBEHUB application keys (sessions, cache, etc.)
    */
   LOBEHUB: 'lobechat',
+  /**
+   * Public REST API (`packages/openapi`): per-API-key rate-limit windows and
+   * the first response stored for each `Idempotency-Key`.
+   */
+  OPENAPI: 'openapi',
   /**
    * Short-lived derived answers the send path would otherwise re-fetch per
    * turn (device system info, a skill's live tool list) and the one-shot
@@ -74,6 +102,30 @@ export const RedisKeyNamespace = {
  * ```
  */
 export const RedisKeys = {
+  /** Agent availability scope — see {@link RedisKeyNamespace.AGENT_AVAILABILITY}. */
+  agentAvailability: {
+    /**
+     * One device's presence (connected, managed phase) as one principal pool sees it.
+     * Full key: agent-availability:device:v1:{pool}:{deviceId}
+     */
+    device: (pool: string, deviceId: string): string => `device:v1:${pool}:${deviceId}`,
+    /**
+     * Whether one agent's quota is spent where it runs, as one caller sees its accounts.
+     * Full key: agent-availability:quota:v1:{userId}:{pool}:{agentId}:{deviceId|none}
+     */
+    quota: (userId: string, pool: string, agentId: string, deviceId?: string): string =>
+      `quota:v1:${userId}:${pool}:${agentId}:${deviceId ?? 'none'}`,
+  },
+  inboundWebhook: {
+    wake: (id: string) => `wake:v1:${id}`,
+    check: (id: string) => `check:v1:${id}`,
+    maintenance: (id: string) => `maintenance:v1:${id}`,
+    sweep: () => 'sweep:v1:slot',
+    /** Ingress counter of a scope (workspace or personal space) for the current minute, all kinds. */
+    deliveries: (scope: string, minute: number) => `deliveries:v2:${scope}:${minute}`,
+    /** Active member count of a workspace, cached for the per-scope delivery limit. */
+    members: (workspaceId: string) => `members:v1:${workspaceId}`,
+  },
   /**
    * Agent Signal spend bounds — see {@link RedisKeyNamespace.AGENT_SIGNAL}. Per-user
    * counters and quotas that keep background self-iteration work within its limits.
@@ -101,6 +153,24 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot deferred-replay scope — see {@link RedisKeyNamespace.BOT_DEFERRED}. */
+  botDeferred: {
+    /**
+     * Times one parked message (by its origin platform id) was replayed into a run.
+     * Full key: bot-deferred:replays:v1:{applicationId}:{threadId}:{messageId}
+     */
+    replays: (applicationId: string, threadId: string, messageId: string): string =>
+      `replays:v1:${applicationId}:${threadId}:${messageId}`,
+  },
+  /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
+  botReply: {
+    /**
+     * Latest DingTalk `sessionWebhook` for one conversation of one bot.
+     * Full key: bot-reply:dingtalk_session_webhook:v1:{applicationId}:{threadId}
+     */
+    dingtalkSessionWebhook: (applicationId: string, threadId: string): string =>
+      `dingtalk_session_webhook:v1:${applicationId}:${threadId}`,
   },
   /**
    * Bot-wake scope — see {@link RedisKeyNamespace.BOT_WAKE}. `{key}` is a channel or thread key
@@ -178,6 +248,11 @@ export const RedisKeys = {
     followUps: (userId: string, topicId: string, threadId?: string | null): string =>
       `follow_ups:v1:${userId}:${topicId}:${threadId || 'main'}`,
     /**
+     * Set when a Channel Thread watch (`lobe-channel.watchThreads`) is stopped, so its next
+     * scheduled report is dropped. Full key: agentSteer:channel_watch_stopped:v1:{watchId}
+     */
+    channelWatchStopped: (watchId: string): string => `channel_watch_stopped:v1:${watchId}`,
+    /**
      * Ids of follow-ups a drain already took from that queue, so a retried
      * append of the same id is recognized instead of queued again.
      * Full key: agentSteer:follow_ups_taken:v1:{userId}:{topicId}:{threadId|main}
@@ -206,6 +281,18 @@ export const RedisKeys = {
      * Full key: agentSteer:hetero_deliveries:v1:{operationId}
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Control messages waiting for a heterogeneous run's poller, oldest first.
+     * Each one is popped exactly once, when a poller claims it.
+     * Full key: agentSteer:hetero_control:v1:{operationId}
+     */
+    heteroControl: (operationId: string): string => `hetero_control:v1:${operationId}`,
+    /**
+     * Where each control message of that run stands (field = control id):
+     * pending, claimed, expired, or the result the run reported.
+     * Full key: agentSteer:hetero_control_state:v1:{operationId}
+     */
+    heteroControlState: (operationId: string): string => `hetero_control_state:v1:${operationId}`,
     /**
      * Marks a sub-agent run whose final queue read came back empty: it ends
      * without reading again, so a steer appended behind it must be taken back.
@@ -243,6 +330,17 @@ export const RedisKeys = {
    * Integrations scope — see {@link RedisKeyNamespace.INTEGRATIONS}.
    */
   integrations: {
+    /**
+     * How one connector OAuth flow ended, read back by the window that started it.
+     * Full key: integrations:connector_oauth_completion:v1:{flowId}
+     */
+    connectorOAuthCompletion: (flowId: string): string => `connector_oauth_completion:v1:${flowId}`,
+    /**
+     * The commit a public GitHub ref pointed at when it was last resolved.
+     * Full key: integrations:github_ref_commit:v1:{owner}/{repo}:{ref}
+     */
+    gitHubRefCommit: (owner: string, repo: string, ref: string): string =>
+      `github_ref_commit:v1:${owner}/${repo}:${ref}`,
     /**
      * Single-use state of one "Connect Linear" OAuth hand-off.
      * Full key: integrations:linear_oauth_state:v1:{state}
@@ -290,6 +388,39 @@ export const RedisKeys = {
     workspaceRescanClaim: (userId: string, pool: string, deviceId: string, cwd: string): string =>
       `workspace_rescan_claim:v1:${userId}:${pool}:${deviceId}:${cwd}`,
   },
+  /**
+   * Public REST API scope — see {@link RedisKeyNamespace.OPENAPI}.
+   */
+  openapi: {
+    /**
+     * Requests one caller identity sent to one rate-limit bucket in one fixed window.
+     * Full key: openapi:rate_limit:v1:{identity}:{bucket}:{windowStart}
+     */
+    rateLimit: (identity: string, bucket: string, windowStart: number): string =>
+      `rate_limit:v1:${identity}:${bucket}:${windowStart}`,
+    /**
+     * The claim, then the stored first response, of one user's `Idempotency-Key`.
+     * `{keyHash}` hashes the client key so arbitrary header bytes never reach the key.
+     * Full key: openapi:idempotency:v1:{userId}:{keyHash}
+     */
+    idempotency: (userId: string, keyHash: string): string => `idempotency:v1:${userId}:${keyHash}`,
+  },
+  /**
+   * QQ passive-reply scope — see {@link RedisKeyNamespace.QQ_PASSIVE}. `{key}` is
+   * `{applicationId}:{threadId}`.
+   */
+  qqPassive: {
+    /**
+     * The inbound message that opened the current window, the replies spent in it.
+     * Full key: qq-passive:window:v1:{applicationId}:{threadId}
+     */
+    window: (key: string): string => `window:v1:${key}`,
+    /**
+     * The reply a closed window could not carry, waiting for the next inbound message.
+     * Full key: qq-passive:pending:v1:{applicationId}:{threadId}
+     */
+    pending: (key: string): string => `pending:v1:${key}`,
+  },
 } as const;
 
 /**
@@ -298,14 +429,20 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentAvailability: RedisKeyNamespace.AGENT_AVAILABILITY,
+  inboundWebhook: RedisKeyNamespace.INBOUND_WEBHOOK,
   agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentRun: RedisKeyNamespace.AGENT_RUN,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botDeferred: RedisKeyNamespace.BOT_DEFERRED,
+  botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
+  openapi: RedisKeyNamespace.OPENAPI,
+  qqPassive: RedisKeyNamespace.QQ_PASSIVE,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,
 } as const satisfies Record<
   keyof typeof RedisKeys,

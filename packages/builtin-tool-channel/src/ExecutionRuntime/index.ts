@@ -1,14 +1,29 @@
 import { projectChannelHistory } from '@lobechat/prompts/channel';
 import type {
   BuiltinServerRuntimeOutput,
+  ChannelCreatedThread,
+  ChannelCreateThreadParams,
   ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
   ChannelListChannelsParams,
+  ChannelListPeopleParams,
+  ChannelListThreadsParams,
+  ChannelMessagePersonParams,
+  ChannelPeoplePage,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
   ChannelSendMessageParams,
   ChannelSentMessage,
+  ChannelSentPersonMessage,
+  ChannelSteeredThread,
+  ChannelSteerThreadParams,
+  ChannelStoppedThread,
+  ChannelStopThreadParams,
+  ChannelThreadPage,
+  ChannelUnwatchThreadsParams,
+  ChannelWatchedThreads,
+  ChannelWatchThreadsParams,
 } from '@lobechat/types';
 
 export interface ChannelHistoryService {
@@ -16,17 +31,49 @@ export interface ChannelHistoryService {
   readMessages: (params: ChannelReadMessagesParams) => Promise<ChannelHistoryPage>;
 }
 
-/** Reaching Agents in the requester's other Channels; the runtime binds the run and tool call. */
+/**
+ * Reaching Agents in the requester's other Channels, and people in the requester's one-on-one
+ * conversations; the runtime binds the run and tool call.
+ */
 export interface ChannelMessagingService {
   listChannels: (params: ChannelListChannelsParams) => Promise<ChannelDirectoryPage>;
+  listPeople: (params: ChannelListPeopleParams) => Promise<ChannelPeoplePage>;
+  messagePerson: (params: ChannelMessagePersonParams) => Promise<ChannelSentPersonMessage>;
   sendMessage: (params: ChannelSendMessageParams) => Promise<ChannelSentMessage>;
+}
+
+/**
+ * The calling Agent's own replies in the other Threads of its Channel; the runtime binds the run
+ * and tool call.
+ */
+export interface ChannelThreadService {
+  createThread: (params: ChannelCreateThreadParams) => Promise<ChannelCreatedThread>;
+  listThreads: (params: ChannelListThreadsParams) => Promise<ChannelThreadPage>;
+  steerThread: (params: ChannelSteerThreadParams) => Promise<ChannelSteeredThread>;
+  stopThread: (params: ChannelStopThreadParams) => Promise<ChannelStoppedThread>;
+  unwatchThreads: (params: ChannelUnwatchThreadsParams) => Promise<{ watchId: string }>;
+  watchThreads: (params: ChannelWatchThreadsParams) => Promise<ChannelWatchedThreads>;
 }
 
 export class ChannelExecutionRuntime {
   constructor(
     private readonly service: ChannelHistoryService,
     private readonly messaging?: ChannelMessagingService,
+    private readonly threads?: ChannelThreadService,
   ) {}
+
+  private async thread(
+    run: (threads: ChannelThreadService) => Promise<unknown>,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.threads) throw new Error('Channel Threads are not available in this run');
+      const state = await run(this.threads);
+      return { content: JSON.stringify(state), state, success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not act on that Thread';
+      return { content: message, error: { type: 'ChannelThreadError', message }, success: false };
+    }
+  }
 
   private async result(
     read: () => Promise<ChannelHistoryMessageDetail | ChannelHistoryPage>,
@@ -41,7 +88,11 @@ export class ChannelExecutionRuntime {
   }
 
   private async message(
-    run: (messaging: ChannelMessagingService) => Promise<ChannelDirectoryPage | ChannelSentMessage>,
+    run: (
+      messaging: ChannelMessagingService,
+    ) => Promise<
+      ChannelDirectoryPage | ChannelPeoplePage | ChannelSentMessage | ChannelSentPersonMessage
+    >,
   ): Promise<BuiltinServerRuntimeOutput> {
     try {
       if (!this.messaging) throw new Error('Channel messaging is not available in this run');
@@ -63,6 +114,22 @@ export class ChannelExecutionRuntime {
     this.result(() => this.service.readMessage(params));
   listChannels = (params: ChannelListChannelsParams = {}) =>
     this.message((messaging) => messaging.listChannels(params));
+  listPeople = (params: ChannelListPeopleParams = {}) =>
+    this.message((messaging) => messaging.listPeople(params));
+  messagePerson = (params: ChannelMessagePersonParams) =>
+    this.message((messaging) => messaging.messagePerson(params));
   sendMessage = (params: ChannelSendMessageParams) =>
     this.message((messaging) => messaging.sendMessage(params));
+  listThreads = (params: ChannelListThreadsParams = {}) =>
+    this.thread((threads) => threads.listThreads(params));
+  createThread = (params: ChannelCreateThreadParams) =>
+    this.thread((threads) => threads.createThread(params));
+  stopThread = (params: ChannelStopThreadParams) =>
+    this.thread((threads) => threads.stopThread(params));
+  steerThread = (params: ChannelSteerThreadParams) =>
+    this.thread((threads) => threads.steerThread(params));
+  watchThreads = (params: ChannelWatchThreadsParams) =>
+    this.thread((threads) => threads.watchThreads(params));
+  unwatchThreads = (params: ChannelUnwatchThreadsParams) =>
+    this.thread((threads) => threads.unwatchThreads(params));
 }

@@ -22,4 +22,9 @@ describe('isOfficial model cards', () => {
       expect.arrayContaining(['meta/muse-wonder-1.0', 'meta/muse-spark-1.3']),
     );
   });
+
+  it("mark TypeSafe's own Jev card, the only vendor-priced listing of the decision model", () => {
+    const jev = officialCards.filter((card) => card.id === 'jev-1.14.0');
+    expect(jev.map((card) => `${card.providerId}/${card.type}`)).toEqual(['typesafe/decision']);
+  });
 });

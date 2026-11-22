@@ -17,12 +17,12 @@ type LabFeatureI18nKey =
   | 'agentGraphConfig'
   | 'agentIdentity'
   | 'artifactDeployment'
+  | 'betterCodingExperience'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
   | 'deviceTunnel'
   | 'evalCapture'
-  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
   | 'messageTextSelectionActions'
@@ -107,15 +107,15 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableGoals',
-    i18nKey: 'goals',
-    searchKeywords: ['goal', 'goals', 'objective'],
-    stage: 'beta',
-  },
-  {
     flag: 'enableDeviceTunnel',
     i18nKey: 'deviceTunnel',
     searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
+    stage: 'alpha',
+  },
+  {
+    flag: 'enableBetterCodingExperience',
+    i18nKey: 'betterCodingExperience',
+    searchKeywords: ['coding', 'code', 'developer', 'programming', 'IDE'],
     stage: 'alpha',
   },
   {
@@ -166,7 +166,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    desktopOnly: true,
     flag: 'enableCodexAppServer',
     i18nKey: 'codexAppServer',
     searchKeywords: ['codex', 'app server'],

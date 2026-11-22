@@ -1,10 +1,12 @@
 'use client';
 
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import Avatar from '@/components/Avatar';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { acceptanceCodingScope } from '../History/codingScope';
@@ -41,7 +43,7 @@ const styles = stylex.create({
     transition: 'opacity 150ms ease',
   },
   metaRow: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: cssVar.colorTextSecondary,
   },
 });

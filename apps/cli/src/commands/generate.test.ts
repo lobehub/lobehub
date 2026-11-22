@@ -1119,6 +1119,9 @@ describe('generate command', () => {
 
       expect(consoleSpy).toHaveBeenCalledTimes(2);
       expect(consoleSpy.mock.calls[0][0]).toContain('ID');
+      expect(consoleSpy.mock.calls[1][0]).toContain('t1');
+      expect(consoleSpy.mock.calls[1][0]).toContain('My Images');
+      expect(consoleSpy.mock.calls[1][0]).toContain('image');
     });
 
     it('should show message when empty', async () => {

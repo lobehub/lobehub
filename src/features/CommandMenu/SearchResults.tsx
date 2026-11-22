@@ -16,6 +16,7 @@ import {
   Plug,
   Puzzle,
   Sparkles,
+  Target,
   Users,
 } from 'lucide-react';
 import { memo, type ReactNode, useLayoutEffect } from 'react';
@@ -23,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
+import { goalItemPath } from '@/features/AgentGoals/goalItemPath';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
@@ -37,6 +39,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import type { CommandMenuResultClick } from './analytics';
 import { CommandItem } from './components';
 import { styles } from './styles';
+import { goalResultStatusKey } from './utils/goalResults';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
 import { createVisibleResultPositionMap } from './utils/visibleResultPosition';
@@ -148,15 +151,15 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'mcp': {
-          navigate(`/community/mcp/${result.identifier}`);
+          navigate(`/marketplace/mcp/${result.identifier}`);
           break;
         }
         case 'plugin': {
-          navigate(`/community/mcp/${result.identifier}`);
+          navigate(`/marketplace/mcp/${result.identifier}`);
           break;
         }
         case 'communityAgent': {
-          navigate(`/community/agent/${result.identifier}`);
+          navigate(`/marketplace/agent/${result.identifier}`);
           break;
         }
         case 'memory': {
@@ -169,6 +172,12 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'task': {
           navigate(taskDetailPath(result.identifier ?? result.id, undefined, result.title));
+          break;
+        }
+        case 'goal': {
+          // Under its agent when it has one, like an agent's Goals page row;
+          // an agent-less (project) goal opens on the bare route.
+          navigate(goalItemPath({ agentId: result.agentId, goalId: result.id }));
           break;
         }
       }
@@ -216,6 +225,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'task': {
           return <ListTodo size={16} />;
         }
+        case 'goal': {
+          return <Target size={16} />;
+        }
       }
     };
 
@@ -259,6 +271,9 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'task': {
           return t('cmdk.search.task');
+        }
+        case 'goal': {
+          return t('cmdk.search.goal');
         }
       }
     };
@@ -328,6 +343,13 @@ const SearchResults = memo<SearchResultsProps>(
           defaultValue: result.status,
         });
         return [result.identifier, status, description].filter(Boolean).join(' · ');
+      }
+
+      // Goal results: lifecycle first, then the requirement the query may have matched.
+      if (result.type === 'goal') {
+        const statusKey = goalResultStatusKey(result.status);
+        const status = statusKey ? tChat(statusKey) : result.status;
+        return [status, description].filter(Boolean).join(' · ');
       }
 
       // For message results, append creation date
@@ -406,11 +428,13 @@ const SearchResults = memo<SearchResultsProps>(
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const taskResults = results.filter((r) => r.type === 'task');
+    const goalResults = results.filter((r) => r.type === 'goal');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
     const localResultCount = localImageTopicResults.length + localVideoTopicResults.length;
     const visibleResultPositions = createVisibleResultPositionMap<FtsSearchResult>(
       [
         taskResults,
+        goalResults,
         messageResults,
         agentResults,
         chatGroupResults,
@@ -601,6 +625,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {taskResults.map((result) => renderResultItem(result))}
             {renderSearchMore('task', taskResults.length)}
+          </Command.Group>
+        )}
+
+        {goalResults.length > 0 && (
+          <Command.Group forceMount>
+            {goalResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('goal', goalResults.length)}
           </Command.Group>
         )}
 

@@ -32,6 +32,7 @@ import { styles } from './styles';
 import { useVideoRegionGesture } from './useVideoRegionGesture';
 import { DraftRegion, type FrameRegion, FrameRegions } from './VideoChrome';
 import { VideoClaimList } from './VideoClaimList';
+import { VideoLoadFailed } from './VideoLoadFailed';
 import { frameOf } from './videoTime';
 
 const MAX_HEIGHT = 360;
@@ -107,6 +108,7 @@ interface VideoEvidencePlayerProps {
   /** The description stays at content width even when the frame is portrait. */
   caption?: ReactNode;
   chapters?: VerifyEvidenceChapter[];
+  claimList?: boolean;
   frameMaxHeight?: string;
   handleRef?: RefObject<VideoEvidencePlayerHandle | null>;
   initialTime?: number;
@@ -160,6 +162,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
     activeMark,
     caption,
     chapters = [],
+    claimList = true,
     frameMaxHeight,
     handleRef,
     initialTime = 0,
@@ -284,7 +287,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
                 )}
                 <Video.Caption />
                 {!onRegion && <Video.CenterPlay />}
-                <Video.LoadError />
+                <VideoLoadFailed player={player} src={src} onRetry={onRefreshSource} />
               </Video.Frame>
             </div>
             <Video.Controls frameStep className={stylex.props(playerStyles.controls).className} />
@@ -300,14 +303,16 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
           )}
         </div>
         {caption && <div style={{ overflowWrap: 'anywhere' }}>{caption}</div>}
-        <VideoClaimList
-          chapters={chapters}
-          onSeek={(seconds) => {
-            player.pause();
-            player.seek(seconds);
-            player.setCaptions(true);
-          }}
-        />
+        {claimList && (
+          <VideoClaimList
+            chapters={chapters}
+            onSeek={(seconds) => {
+              player.pause();
+              player.seek(seconds);
+              player.setCaptions(true);
+            }}
+          />
+        )}
       </Flexbox>
     );
   },

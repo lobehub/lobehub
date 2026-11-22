@@ -55,6 +55,15 @@ export const isImageOutputTool = (tool: ChatToolPayloadWithResult): boolean => {
   );
 };
 
+const deliverableTools = new Set<string>();
+
+export const registerDeliverableTool = (identifier: string) => {
+  deliverableTools.add(identifier);
+};
+
+export const isDeliverableTool = (tool: ChatToolPayloadWithResult): boolean =>
+  isImageOutputTool(tool) || deliverableTools.has(tool.identifier);
+
 /**
  * Any tool whose result carries an image, output or read. Drives the workflow
  * breakout only: a read image still surfaces as its own row once the process is
@@ -74,3 +83,33 @@ export const isMcpAppTool = (tool: ChatToolPayloadWithResult): boolean =>
 /** Tools that surface on their own between collapsed workflow runs. */
 export const isBreakoutTool = (tool: ChatToolPayloadWithResult): boolean =>
   isImageBearingTool(tool) || isMcpAppTool(tool);
+
+/**
+ * A tool that only READ an image (Claude Code `Read`, `readFile`, a browser
+ * `screenshot`) without producing one. The user setting
+ * `showImageReadPreview` decides whether these break out of the workflow
+ * collapse and open their image by default, or fold in like any other call.
+ */
+export const isImageReadTool = (tool: ChatToolPayloadWithResult): boolean =>
+  !isImageOutputTool(tool) && hasUploadedImages(tool.result?.state);
+
+export interface BreakoutToolOptions {
+  /** Runtime flag `mcp_apps`: MCP App views break out of collapsed runs too. */
+  enableMcpApps?: boolean;
+  /**
+   * User setting `showImageReadPreview`. Off folds image reads into the run;
+   * produced images and MCP App views still break out.
+   * @default true
+   */
+  showImageReads?: boolean;
+}
+
+/** Picks the breakout predicate for the current flags and user setting. */
+export const getBreakoutPredicate = ({
+  enableMcpApps,
+  showImageReads = true,
+}: BreakoutToolOptions): ((tool: ChatToolPayloadWithResult) => boolean) => {
+  const isImageBreakout = showImageReads ? isImageBearingTool : isImageOutputTool;
+
+  return enableMcpApps ? (tool) => isImageBreakout(tool) || isMcpAppTool(tool) : isImageBreakout;
+};

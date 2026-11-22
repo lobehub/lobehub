@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
@@ -39,11 +40,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   noteContent: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-height: 120px;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorFillQuaternary};
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: ${cssVar.fontWeightStrong};
     line-height: 1.4;
     color: ${cssVar.colorText};

@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { getIntegrationEndpoints, resolveIssuer } from '../../integrationEndpoints';
 import { integrationPromptKey, integrationPromptValues } from '../../integrationPrompt';
@@ -20,7 +21,7 @@ const styles = stylex.create({
     overflow: 'auto',
     maxHeight: '180px',
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     fontSize: '13px',
     lineHeight: 1.6,

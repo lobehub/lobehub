@@ -10,7 +10,15 @@ export interface McpAppEntrypointCall {
   /** The tab instance: one per topic and entrypoint. */
   id: string;
   identifier: string;
+  /** The account to open as, on a connector holding several. */
+  linkId?: string;
   toolName: string;
+  /**
+   * The conversation the app opens in. A private connector resolves only in
+   * its owner's private-agent topic, so the approval and the call need it to
+   * reach the row the open menu listed.
+   */
+  topicId?: string;
 }
 
 /** Call an entrypoint's tool with `{}`, as MCP Apps opens one, and require a view in the result. */
@@ -18,18 +26,21 @@ export const callMcpAppEntrypoint = async ({
   agentId,
   id,
   identifier,
+  linkId,
   toolName,
+  topicId,
 }: McpAppEntrypointCall): Promise<MCPToolCallResult> => {
   // Entrypoints ignore `_meta.ui.visibility`; the agent's tool rules still apply
   const policy = await getAppToolCallPolicy(identifier, toolName, {
     agentId,
     fromEntrypoint: true,
+    topicId,
   });
   if (policy === 'deny') throw new Error('This tool is unavailable');
 
   const response = await mcpService.invokeMcpToolCall(
     { apiName: toolName, arguments: '{}', id, identifier, type: 'mcp' },
-    { agentId, fromEntrypoint: true },
+    { agentId, fromEntrypoint: true, linkId, topicId },
   );
   if (!response?.success || !getMcpAppFromState(response.state)) {
     throw new Error('The entrypoint returned no app view');

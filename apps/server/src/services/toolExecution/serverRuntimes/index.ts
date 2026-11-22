@@ -21,6 +21,7 @@ import { agentSignalFeedbackIntentRuntime } from './agentSignalFeedbackIntent';
 import { agentSignalReflectionRuntime } from './agentSignalReflection';
 import { agentSignalReviewRuntime } from './agentSignalReview';
 import { agentSignalSkillManagementRuntime } from './agentSignalSkillManagement';
+import { artboardRuntime } from './artboard';
 import { attachmentsRuntime } from './attachments';
 import { auvRuntime } from './auv';
 import { briefRuntime } from './brief';
@@ -40,6 +41,7 @@ import { imageGenerationRuntime } from './imageGeneration';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
+import { mcpEventsRuntime } from './mcpEvents';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
@@ -55,7 +57,9 @@ import { userInteractionRuntime } from './userInteraction';
 import { verifyResultRuntime } from './verifyResult';
 import { videoGenerationRuntime } from './videoGeneration';
 import { webBrowsingRuntime } from './webBrowsing';
+import { webhookRuntime } from './webhook';
 import { webOnboardingRuntime } from './webOnboarding';
+import { workRuntime } from './work';
 
 /**
  * Registry of server runtime factories by identifier
@@ -73,6 +77,9 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  mcpEventsRuntime,
+  webhookRuntime,
+  workRuntime,
   channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,
@@ -97,6 +104,7 @@ registerRuntimes([
   taskRuntime,
   userInteractionRuntime,
   credsRuntime,
+  artboardRuntime,
   canvasRuntime,
   dashboardRuntime,
   groupAgentBuilderRuntime,

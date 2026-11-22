@@ -10,7 +10,6 @@ import {
   mockAssistantDetails,
   mockAssistantItems,
   mockAssistantList,
-  mockMcpCategories,
   mockMcpDetails,
   mockMcpItems,
   mockMcpList,
@@ -130,53 +129,78 @@ const paginate = <T>(items: T[], input: unknown, fallbackTotal = items.length) =
   };
 };
 
+const searchAssistantItems = (input: unknown) => {
+  const query = getStringInput(input, 'q');
+  if (!query) return mockAssistantItems;
+
+  return mockAssistantItems.filter(
+    (item) =>
+      matchesText(item.title, query) ||
+      matchesText(item.description, query) ||
+      matchesText(item.identifier, query) ||
+      matchesText(item.tags?.join(' '), query),
+  );
+};
+
+const getAssistantCategories = (input: unknown) => {
+  if (!getStringInput(input, 'q')) return mockAssistantCategories;
+
+  const items = searchAssistantItems(input);
+  return mockAssistantCategories.map((group) => ({
+    ...group,
+    count: items.filter((item) => item.category === group.category).length,
+  }));
+};
+
 const getAssistantList = (input: unknown) => {
   const category = getStringInput(input, 'category');
   const query = getStringInput(input, 'q');
+  const scoped = !!category && !['all', 'discover'].includes(category);
+  let items = searchAssistantItems(input);
+  const categoryCounts = getAssistantCategories(input);
 
-  let items = mockAssistantItems;
-
-  if (category && !['all', 'discover'].includes(category)) {
-    const filtered = items.filter((item) => item.category === category);
-    if (filtered.length > 0) items = filtered;
+  if (scoped) {
+    items = items.filter((item) => item.category === category);
+  } else if (!query) {
+    // Keep the synthetic second page distinct from the first.
+    const page = getNumberInput(input, 'page') ?? 1;
+    items = page === 1 ? items.slice(0, -1) : items.slice(-1);
   }
 
-  if (query) {
-    const filtered = items.filter(
-      (item) =>
-        matchesText(item.title, query) ||
-        matchesText(item.description, query) ||
-        matchesText(item.identifier, query) ||
-        matchesText(item.tags?.join(' '), query),
-    );
-    if (filtered.length > 0) items = filtered;
-  }
+  const total = query
+    ? items.length
+    : scoped
+      ? categoryCounts.find((group) => group.category === category)?.count
+      : mockAssistantList.totalCount;
+  const paging = paginate(items, input, total);
+  return { ...mockAssistantList, ...paging, categoryCounts };
+};
 
-  return { ...mockAssistantList, ...paginate(items, input, 42) };
+const searchMcpItems = (input: unknown) => {
+  const query = getStringInput(input, 'q');
+  if (!query) return mockMcpItems;
+
+  return mockMcpItems.filter(
+    (item) =>
+      matchesText(item.name, query) ||
+      matchesText(item.description, query) ||
+      matchesText(item.identifier, query),
+  );
 };
 
 const getMcpList = (input: unknown) => {
   const category = getStringInput(input, 'category');
-  const query = getStringInput(input, 'q');
+  const items = searchMcpItems(input).filter(
+    (item) => !category || ['all', 'discover'].includes(category) || item.category === category,
+  );
+  const paging = paginate(items, input);
+  const offset = (paging.currentPage - 1) * paging.pageSize;
 
-  let items = mockMcpItems;
-
-  if (category && !['all', 'discover'].includes(category)) {
-    const filtered = items.filter((item) => item.category === category);
-    if (filtered.length > 0) items = filtered;
-  }
-
-  if (query) {
-    const filtered = items.filter(
-      (item) =>
-        matchesText(item.name, query) ||
-        matchesText(item.description, query) ||
-        matchesText(item.identifier, query),
-    );
-    if (filtered.length > 0) items = filtered;
-  }
-
-  return { ...mockMcpList, ...paginate(items, input), categories: mockMcpList.categories };
+  return {
+    ...mockMcpList,
+    ...paging,
+    items: items.slice(offset, offset + paging.pageSize),
+  };
 };
 
 const getModelList = (input: unknown) => {
@@ -221,7 +245,7 @@ const findByIdentifier = <T extends { identifier: string }>(items: T[], input: u
 const getMockResponse = (procedure: string, input: unknown): unknown => {
   switch (procedure) {
     case 'market.getAssistantCategories': {
-      return mockAssistantCategories;
+      return getAssistantCategories(input);
     }
 
     case 'market.getAssistantDetail': {
@@ -237,7 +261,11 @@ const getMockResponse = (procedure: string, input: unknown): unknown => {
     }
 
     case 'market.getMcpCategories': {
-      return mockMcpCategories;
+      const items = searchMcpItems(input);
+      return mockMcpList.categories.map((category) => ({
+        category,
+        count: items.filter((item) => item.category === category).length,
+      }));
     }
 
     case 'market.getMcpDetail': {
@@ -294,6 +322,7 @@ const getMockResponse = (procedure: string, input: unknown): unknown => {
       return SUCCESS_RESPONSE;
     }
 
+    case 'connector.list':
     case 'plugin.getPlugins': {
       return [];
     }
@@ -319,9 +348,9 @@ const marketHandler: MockHandler = {
     const inputs = getProcedureInputs(request, url, procedures.length);
 
     // Keep tRPC batch positions intact. Community pages can batch mocked
-    // market.* calls with normal app calls, such as plugin.getPlugins on the MCP
-    // detail page; returning only market responses would make the batch client
-    // read the wrong result for subsequent procedures.
+    // market.* calls with normal app calls, such as connector.list on Discover
+    // or plugin.getPlugins on the MCP detail page. Preserve the response for
+    // each procedure so the client can match results to calls.
     const responses = procedures.map((procedure, index) =>
       getMockResponse(procedure, inputs[index]),
     );

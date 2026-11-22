@@ -2,27 +2,51 @@
 
 import { isFullFrameRect } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
-import { useVideo, useVideoPlayer, useVideoState, Video, type VideoPlayer } from '@lobehub/ui';
+import { useVideoPlayer, useVideoState, Video } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
-import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DraftAnnotationEntry } from '../../Review/rejectDraft';
-import { type ClaimMarker, noteKeyOf, toClaimMarkers, toNoteMarkers, toSections } from './chapters';
+import { toSections } from './chapters';
+import { ChapterScrubber } from './ChapterScrubber';
 import { readStoredRate, storeRate } from './playbackRate';
-import { RangeLane, type VideoLoop } from './RangeLane';
-import { ReviewTools } from './ReviewTools';
+import { AddNoteRow, ReviewControls } from './ReviewControls';
+import { buildVideoStory, spanFromFrame, storyNoteId } from './story';
 import { styles } from './styles';
+import { useReviewKeys, type VideoLoop } from './useReviewKeys';
+import { useVideoRegionGesture } from './useVideoRegionGesture';
 import { DraftRegion, FrameRegions } from './VideoChrome';
-import { disputesClaim, formatVideoTime, frameOf } from './videoTime';
+import { VideoLoadFailed } from './VideoLoadFailed';
+import { storyEntryDomId, toReviewStoryNotes, VideoReviewStory } from './VideoReviewStory';
+import { VideoStoryCaption } from './VideoStoryCaption';
 
 type Rect = AcceptanceReviewAnnotation['rect'];
-
-const RATES = [0.5, 1, 1.5, 2];
+type NoteTime = NonNullable<AcceptanceReviewAnnotation['time']>;
 
 const local = stylex.create({
+  layout: {
+    display: 'grid',
+    flex: '1',
+    gridTemplateRows: 'minmax(0, 1fr)',
+    gridTemplateColumns: 'minmax(0, 1fr) 360px',
+    gap: '24px',
+    minWidth: 0,
+    minHeight: 0,
+  },
+  player: {
+    overflow: 'visible',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    minHeight: 0,
+    padding: { 'default': 0, ':fullscreen': '24px' },
+    borderRadius: 0,
+    lineHeight: 'inherit',
+    color: 'inherit',
+    backgroundColor: { 'default': 'transparent', ':fullscreen': cssVar.colorBgContainer },
+    backgroundImage: 'none',
+  },
   fit: {
     display: 'flex',
     flex: '1',
@@ -30,108 +54,46 @@ const local = stylex.create({
     justifyContent: 'center',
     minHeight: '0',
   },
+  story: {
+    overflowY: 'auto',
+    minHeight: 0,
+    paddingInline: '8px',
+  },
 });
 
-export interface VideoReviewStageHandle {
-  /** Pause on a note's frame (and select its span) — the notes panel's "go there". */
-  focusNote: (note: DraftAnnotationEntry) => void;
-}
-
 interface VideoReviewStageProps {
+  activeNoteKey?: number;
   chapters: VerifyEvidenceChapter[];
-  handleRef?: RefObject<VideoReviewStageHandle | null>;
   notes: DraftAnnotationEntry[];
   onAddNote: (note: {
     disputes?: AcceptanceReviewAnnotation['disputes'];
     rect?: Rect;
-    time: NonNullable<AcceptanceReviewAnnotation['time']>;
-  }) => void;
+    time: NoteTime;
+  }) => number;
+  onChangeNote: (key: number, comment: string) => void;
   /** Re-sign the file link; resolves to the fresh URL, if the evidence still exists. */
   onRefreshSource?: () => Promise<string | undefined>;
+  onRemoveNote: (key: number) => void;
   onSelectNote: (key: number) => void;
   src: string;
 }
 
-const isTyping = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
-
-const playbackKey = (event: KeyboardEvent, player: VideoPlayer) => {
-  // A focused button owns Space and Enter — they must activate it, not play.
-  if (event.target instanceof HTMLButtonElement && (event.key === ' ' || event.key === 'Enter'))
-    return false;
-  const { rate, time } = player.getState();
-  const nextRate = (direction: 1 | -1) => {
-    const index = RATES.indexOf(rate);
-    player.setRate(
-      RATES[Math.min(Math.max((index === -1 ? 1 : index) + direction, 0), RATES.length - 1)],
-    );
-  };
-  switch (event.key.toLowerCase()) {
-    case ' ':
-    case 'k': {
-      player.toggle();
-      return true;
-    }
-    case ',': {
-      player.step(-1);
-      return true;
-    }
-    case '.': {
-      player.step(1);
-      return true;
-    }
-    case 'arrowleft': {
-      player.seek(time - (event.shiftKey ? 5 : 1));
-      return true;
-    }
-    case 'arrowright': {
-      player.seek(time + (event.shiftKey ? 5 : 1));
-      return true;
-    }
-    case 'j': {
-      nextRate(-1);
-      return true;
-    }
-    case 'l': {
-      nextRate(1);
-      return true;
-    }
-    default: {
-      return false;
-    }
-  }
-};
-
-const Hint = ({ drafting, flash }: { drafting: boolean; flash: string | null }) => {
-  const { t } = useTranslation('verify');
-  const paused = useVideo((state) => state.paused);
-  const frame = useVideo((state) => (state.paused ? frameOf(state.time) : -1));
-  const hint =
-    flash ??
-    (drafting
-      ? null
-      : paused
-        ? t('acceptance.video.hintPaused', { frame })
-        : t('acceptance.video.hintPlaying'));
-  return hint ? <div {...stylex.props(styles.hint)}>{hint}</div> : null;
-};
-
-/**
- * Where a video is rejected. Pressing on the picture pauses on the frame being
- * shown and draws a region on it; M marks the frame without a region; the lane
- * under the timeline (or I / O) selects a span that loops while it is judged;
- * and an agent claim captioned on screen can be disputed in one click.
- */
 export const VideoReviewStage = memo<VideoReviewStageProps>(
-  ({ chapters, handleRef, notes, onAddNote, onRefreshSource, onSelectNote, src: initialSrc }) => {
-    const { t } = useTranslation('verify');
+  ({
+    activeNoteKey,
+    chapters,
+    notes,
+    onAddNote,
+    onChangeNote,
+    onRefreshSource,
+    onRemoveNote,
+    onSelectNote,
+    src: initialSrc,
+  }) => {
     const player = useVideoPlayer();
     // The modal holds the link it opened with; a re-signed one replaces it here.
     const [src, setSrc] = useState(initialSrc);
     const [range, setRange] = useState<VideoLoop | null>(null);
-    const [loop, setLoop] = useState(true);
-    const [draft, setDraft] = useState<Rect | null>(null);
     const [flash, setFlash] = useState<string | null>(null);
     const [defaultRate] = useState(readStoredRate);
     const ready = useVideoState(player, (state) => state.status === 'ready');
@@ -144,59 +106,52 @@ export const VideoReviewStage = memo<VideoReviewStageProps>(
     };
     useEffect(() => () => clearTimeout(flashTimer.current), []);
 
-    const loopRange = loop ? range : null;
     useEffect(() => {
-      if (!loopRange) return;
+      if (!range) return;
       return player.subscribe((state) => {
-        if (!state.paused && state.time >= loopRange.end) player.seek(loopRange.start);
+        if (!state.paused && state.time >= range.end) player.seek(range.start);
       });
-    }, [player, loopRange]);
+    }, [player, range]);
 
-    const timed = useMemo(() => notes.filter((note) => note.time), [notes]);
-    const timedNotes = useMemo(
-      () =>
-        timed.map((note) => ({
-          comment: note.comment,
-          end: note.time!.end,
-          key: note.key,
-          start: note.time!.start,
-        })),
-      [timed],
-    );
     const sections = useMemo(() => toSections(chapters), [chapters]);
-    const markers = useMemo(
-      () => [
-        ...toClaimMarkers(chapters, (kind) => t(`acceptance.video.claim.${kind}`)),
-        ...toNoteMarkers(timedNotes),
-      ],
-      [chapters, t, timedNotes],
+    const story = useMemo(
+      () => buildVideoStory(chapters, toReviewStoryNotes(notes)),
+      [chapters, notes],
     );
-    const regions = useMemo(
-      () =>
-        timed
-          .filter((note) => !isFullFrameRect(note.rect))
-          .map((note) => ({
-            comment: note.comment,
-            key: note.key,
-            rect: note.rect,
-            start: note.time!.start,
-          })),
-      [timed],
+    const regions = story.flatMap((entry) =>
+      entry.type === 'note' && !isFullFrameRect(entry.note.source.rect)
+        ? [
+            {
+              key: String(entry.note.key),
+              label: entry.index,
+              rect: entry.note.source.rect,
+              start: entry.time,
+            },
+          ]
+        : [],
     );
+
+    const seek = (seconds: number) => {
+      player.pause();
+      player.seek(seconds);
+    };
 
     const focusNote = (note: DraftAnnotationEntry) => {
       if (!note.time) return;
-      player.pause();
-      player.seek(note.time.start);
+      seek(note.time.start);
       setRange(note.time.end === undefined ? null : { end: note.time.end, start: note.time.start });
       onSelectNote(note.key);
     };
-    useImperativeHandle(handleRef, () => ({ focusNote }));
+
+    const revealEntry = (id: string) =>
+      requestAnimationFrame(() =>
+        document.getElementById(storyEntryDomId(id))?.scrollIntoView({ block: 'nearest' }),
+      );
 
     const markFrame = () => {
       const start = player.getState().time;
       player.pause();
-      onAddNote({ time: { start } });
+      revealEntry(storyNoteId(onAddNote({ time: { start } })));
     };
 
     const commentRange = () => {
@@ -205,191 +160,108 @@ export const VideoReviewStage = memo<VideoReviewStageProps>(
       setRange(null);
     };
 
-    // The modal is the review: keys act whenever the reviewer is not typing.
-    const keyStateRef = useRef({ markFrame, range });
-    keyStateRef.current = { markFrame, range };
-    useEffect(() => {
-      const onKey = (event: KeyboardEvent) => {
-        if (isTyping(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
-        const state = player.getState();
-        if (state.status !== 'ready') return;
-        const { range: current } = keyStateRef.current;
-        const now = state.time;
-        let handled = true;
-        switch (event.key.toLowerCase()) {
-          case 'm': {
-            keyStateRef.current.markFrame();
-            break;
-          }
-          case 'i': {
-            // Open-ended until O: a provisional end would loop playback short
-            // of the moment the reviewer is waiting for.
-            const end = current && current.end > now ? current.end : state.duration;
-            setRange({ end, start: now });
-            showFlash(t('acceptance.video.inPoint', { time: formatVideoTime(now) }));
-            break;
-          }
-          case 'o': {
-            const start = current?.start ?? Math.max(0, now - 1);
-            if (now > start) {
-              setRange({ end: now, start });
-              showFlash(t('acceptance.video.outPoint', { time: formatVideoTime(now) }));
-            }
-            break;
-          }
-          case 'escape': {
-            if (!current) return;
-            setRange(null);
-            break;
-          }
-          default: {
-            handled = playbackKey(event, player);
-          }
-        }
-        if (handled) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      };
-      window.addEventListener('keydown', onKey, true);
-      return () => window.removeEventListener('keydown', onKey, true);
-    }, [player, t]);
-
-    /** Press pauses on the frame on screen; a drag circles a region on it; a click plays. */
-    const onStageDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-      const element = event.currentTarget;
-      const box = element.getBoundingClientRect();
-      const origin = {
-        x: (event.clientX - box.left) / box.width,
-        y: (event.clientY - box.top) / box.height,
-      };
-      const wasPlaying = !player.getState().paused;
-      // The frame on screen at the press is the one being circled.
-      const start = player.getState().time;
-      player.pause();
-      element.setPointerCapture(event.pointerId);
-      let current: Rect | null = null;
-      const clamp = (value: number) => Math.min(Math.max(value, 0), 1);
-      const move = (next: PointerEvent) => {
-        const x = clamp((next.clientX - box.left) / box.width);
-        const y = clamp((next.clientY - box.top) / box.height);
-        current = {
-          height: Math.abs(y - origin.y),
-          width: Math.abs(x - origin.x),
-          x: Math.min(x, origin.x),
-          y: Math.min(y, origin.y),
-        };
-        setDraft(current);
-      };
-      const up = () => {
-        element.removeEventListener('pointermove', move);
-        element.removeEventListener('pointerup', up);
-        setDraft(null);
-        const rect = current as Rect | null;
-        if (rect && rect.width > 0.02 && rect.height > 0.02) {
-          onAddNote({ rect, time: { start } });
-        } else if (!wasPlaying) {
-          player.toggle();
-        }
-      };
-      element.addEventListener('pointermove', move);
-      element.addEventListener('pointerup', up);
+    const retime = (note: DraftAnnotationEntry, time: NoteTime) => {
+      onRemoveNote(note.key);
+      onChangeNote(onAddNote({ disputes: note.disputes, rect: note.rect, time }), note.comment);
+      setRange(time.end === undefined ? null : { end: time.end, start: time.start });
     };
 
-    const dispute = (marker: ClaimMarker) => {
-      const { claim } = marker;
-      const disputed = notes.some((note) => disputesClaim(note.disputes, claim));
-      return (
-        <button
-          {...stylex.props(styles.dispute)}
-          disabled={disputed}
-          type={'button'}
-          onClick={() => {
-            player.pause();
-            player.seek(claim.t);
-            onAddNote({
-              disputes: { kind: claim.kind, note: claim.note, t: claim.t },
-              time: { start: claim.t },
-            });
-          }}
-        >
-          {disputed ? t('acceptance.video.disputed') : t('acceptance.video.dispute')}
-        </button>
-      );
-    };
+    useReviewKeys(player, {
+      onFlash: showFlash,
+      onMarkFrame: markFrame,
+      onRange: setRange,
+      range,
+    });
+
+    const gesture = useVideoRegionGesture(player, onAddNote);
 
     return (
-      <Video.Root
-        defaultPlaybackRate={defaultRate}
-        markers={markers}
-        player={player}
-        preload={'auto'}
-        sections={sections}
-        src={src}
-        style={{
-          background: 'transparent',
-          borderRadius: 0,
-          color: 'inherit',
-          display: 'flex',
-          flex: 1,
-          flexDirection: 'column',
-          gap: 10,
-          lineHeight: 'inherit',
-          minHeight: 0,
-          minWidth: 0,
-          overflow: 'visible',
-        }}
-        onRateChange={storeRate}
-        onMarkerClick={(marker) => {
-          const key = noteKeyOf(marker);
-          const entry =
-            key === undefined ? undefined : notes.find((note) => String(note.key) === key);
-          if (entry) focusNote(entry);
-        }}
-        onRetry={async () => {
-          const fresh = await onRefreshSource?.();
-          if (fresh && fresh !== src) setSrc(fresh);
-        }}
-      >
-        <div {...stylex.props(local.fit)}>
-          <Video.Frame
-            style={{
-              borderRadius: cssVar.borderRadiusLG,
-              height: '100%',
-              maxWidth: '100%',
-              width: 'auto',
-            }}
-          >
-            {ready && (
-              <div {...stylex.props(styles.overlay, styles.drawable)} onPointerDown={onStageDown}>
-                <FrameRegions regions={regions} />
-                {draft && <DraftRegion rect={draft} />}
-                <Hint drafting={Boolean(draft)} flash={flash} />
-              </div>
-            )}
-            {!draft && (
-              <Video.Caption
-                action={(marker) => ('claim' in marker ? dispute(marker as ClaimMarker) : null)}
+      <div {...stylex.props(local.layout)}>
+        <Video.Root
+          className={stylex.props(local.player).className}
+          defaultPlaybackRate={defaultRate}
+          player={player}
+          preload={'auto'}
+          sections={sections}
+          src={src}
+          onRateChange={storeRate}
+        >
+          <div {...stylex.props(local.fit)}>
+            <Video.Frame
+              style={{
+                borderRadius: cssVar.borderRadiusLG,
+                height: '100%',
+                maxWidth: '100%',
+                width: 'auto',
+              }}
+            >
+              {ready && (
+                <div
+                  {...stylex.props(styles.overlay, styles.drawable)}
+                  onPointerDown={gesture.onPointerDown}
+                >
+                  <FrameRegions
+                    active={activeNoteKey === undefined ? undefined : String(activeNoteKey)}
+                    regions={regions}
+                  />
+                  {gesture.draft && <DraftRegion rect={gesture.draft} />}
+                  {flash && !gesture.draft && <div {...stylex.props(styles.hint)}>{flash}</div>}
+                  {!gesture.draft && <VideoStoryCaption player={player} story={story} />}
+                </div>
+              )}
+              <VideoLoadFailed
+                player={player}
+                src={src}
+                onRetry={async () => {
+                  const fresh = await onRefreshSource?.();
+                  if (fresh && fresh !== src) setSrc(fresh);
+                }}
               />
-            )}
-            <Video.LoadError />
-          </Video.Frame>
+            </Video.Frame>
+          </div>
+          <ChapterScrubber
+            chapters={chapters}
+            player={player}
+            range={range}
+            story={story}
+            onPin={(entry) => {
+              if (entry.type === 'note') focusNote(entry.note.source);
+              else seek(entry.time);
+              revealEntry(entry.id);
+            }}
+          />
+          <ReviewControls captions={story.length > 0} player={player} />
+          <AddNoteRow
+            player={player}
+            range={range}
+            onAdd={range ? commentRange : markFrame}
+            onClearRange={() => setRange(null)}
+          />
+        </Video.Root>
+        <div {...stylex.props(local.story)}>
+          <VideoReviewStory
+            activeNoteKey={activeNoteKey}
+            player={player}
+            story={story}
+            onChangeNote={onChangeNote}
+            onFocusNote={focusNote}
+            onRemoveNote={onRemoveNote}
+            onSeek={seek}
+            onSingleFrame={(note) => retime(note, { start: note.time!.start })}
+            onCoverSpan={(note) => {
+              const { duration, time } = player.getState();
+              retime(note, spanFromFrame(note.time!.start, time, duration));
+            }}
+            onDispute={(claim) => {
+              seek(claim.t);
+              onAddNote({
+                disputes: { kind: claim.kind, note: claim.note, t: claim.t },
+                time: { start: claim.t },
+              });
+            }}
+          />
         </div>
-        <Video.Controls frameStep style={{ borderRadius: cssVar.borderRadiusLG }}>
-          <Video.Timeline>
-            <RangeLane notes={timedNotes} range={range} onRange={setRange} onSeek={player.seek} />
-          </Video.Timeline>
-        </Video.Controls>
-        <ReviewTools
-          loop={loop}
-          range={range}
-          ready={ready}
-          onClearRange={() => setRange(null)}
-          onCommentRange={commentRange}
-          onMarkFrame={markFrame}
-          onToggleLoop={() => setLoop((value) => !value)}
-        />
-      </Video.Root>
+      </div>
     );
   },
 );

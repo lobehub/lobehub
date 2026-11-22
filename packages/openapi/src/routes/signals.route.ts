@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { AgentSignalController } from '../controllers/agent-signal.controller';
 import { requireAuth } from '../middleware/auth';
@@ -11,6 +11,8 @@ import {
   requireApiKeyScope,
 } from '../middleware/permission-check';
 import {
+  AgentSignalEmissionSchema,
+  AgentSignalReceiptListSchema,
   EmitSourceEventRequestSchema,
   ListReceiptsQuerySchema,
   TriggerSourceEventRequestSchema,
@@ -44,7 +46,15 @@ const signalRead = requireApiKeyScope('agent:read');
 /** POST /api/v1/signals/source-events — emit a client-side event. */
 AgentSignalRoutes.post(
   '/source-events',
-  describeRoute({ operationId: 'emitSourceEvent', tags: ['signals'] }),
+  routeDoc({
+    data: AgentSignalEmissionSchema,
+    // 404: the agent named in the payload is not usable by the caller.
+    errors: [404],
+    operationId: 'signals.emit',
+    status: 202,
+    summary: 'Emit an agent signal source event',
+    tags: ['signals'],
+  }),
   requireAuth,
   signalWrite,
   signalRun,
@@ -55,7 +65,16 @@ AgentSignalRoutes.post(
 /** POST /api/v1/signals/trigger — synthesise and enqueue a trigger event. */
 AgentSignalRoutes.post(
   '/trigger',
-  describeRoute({ operationId: 'triggerSourceEvent', tags: ['signals'] }),
+  routeDoc({
+    data: AgentSignalEmissionSchema,
+    // 404: the target agent is not usable by the caller; 429: the hourly
+    // manual-trigger budget is spent.
+    errors: [404, 429],
+    operationId: 'signals.trigger',
+    status: 202,
+    summary: 'Trigger a synthesized agent signal source event',
+    tags: ['signals'],
+  }),
   requireAuth,
   signalWrite,
   signalRun,
@@ -66,7 +85,11 @@ AgentSignalRoutes.post(
 /** GET /api/v1/signals/receipts — processed-event receipts for a topic. */
 AgentSignalRoutes.get(
   '/receipts',
-  describeRoute({ operationId: 'listSignalReceipts', tags: ['signals'] }),
+  routeDoc({
+    data: AgentSignalReceiptListSchema,
+    summary: 'List agent signal receipts for a topic',
+    tags: ['signals'],
+  }),
   requireAuth,
   signalRead,
   zValidator('query', ListReceiptsQuerySchema),

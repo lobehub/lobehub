@@ -50,7 +50,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
       callTool: { mutate: connectorCall },
-      getForEdit: { query: connectorEdit },
+      getForRun: { query: connectorEdit },
       readUiResource: { query: connectorRead },
     },
   },
@@ -176,6 +176,34 @@ describe('mcpService.readMcpAppResource on desktop', () => {
 
     expect(ipcRead).not.toHaveBeenCalled();
     expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
+  });
+
+  it("hands the conversation's topic to the server, so a private connector's view resolves as its call did", async () => {
+    connectors.set('agt_1:remote', {
+      id: 'conn_1',
+      identifier: 'remote',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      visibility: 'private',
+    });
+    connectorRead.mockResolvedValue(view);
+
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', {
+        agentId: 'agt_1',
+        server: REMOTE,
+        topicId: 'tpc_own',
+      }),
+    ).resolves.toEqual(view);
+
+    expect(connectorRead).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      identifier: 'remote',
+      server: REMOTE,
+      topicId: 'tpc_own',
+      uri: 'ui://app',
+    });
   });
 
   it('reads no view once only the plugin headers changed, which may route to another server', async () => {
@@ -334,7 +362,12 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
       mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
     ).resolves.toEqual(view);
 
-    expect(connectorEdit).toHaveBeenCalledWith({ id: 'conn_1' });
+    // The row the server resolves for this conversation, as the tool call did
+    expect(connectorEdit).toHaveBeenCalledWith({
+      agentId: undefined,
+      identifier: 'files',
+      topicId: undefined,
+    });
     expect(deserializeMcpIpcPayload(ipcRead.mock.calls[0][0])).toEqual({
       env: { TOKEN: 'fresh-secret' },
       params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },
@@ -443,6 +476,22 @@ describe('mcpService MCP App calls for agents', () => {
     connectors.clear();
     connectorRead.mockResolvedValue(view);
     connectorCall.mockResolvedValue({ content: 'ok', success: true });
+  });
+
+  it('resolves the originating account after loading cold agent connector schemas', async () => {
+    toolState.ensureConfirmedConnectors.mockImplementationOnce(async () => {
+      connectors.set('agt_1:cold', {
+        isEnabled: true,
+        mcpServerUrl: 'https://mcp.example.com/mcp',
+        tools: [{ inputSchema: { properties: { link_id: {} } } }],
+      });
+    });
+    await mcpService.readMcpAppResource('cold', 'ui://app', {
+      agentId: 'agt_1',
+      server: REMOTE,
+      toolArguments: '{"connector_link_id":"lnk_bob","link_id":"business"}',
+    });
+    expect(connectorRead).toHaveBeenCalledWith(expect.objectContaining({ linkId: 'lnk_bob' }));
   });
 
   it("reads an agent's connector view on the server, which checks the result's server", async () => {
@@ -653,17 +702,16 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     expect(result?.state).toEqual({ content: [] });
   });
 
-  it('keeps conversation calls to localhost / LAN http servers on their existing route', async () => {
+  // Its tool list was read here over IPC; the server relay connects from the
+  // server, which can't reach this machine's localhost / LAN
+  it('runs conversation calls to localhost / LAN http servers here, where their tools were listed', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
-    relayCall.mockResolvedValue({ content: 'ok', success: true });
+    ipcCall.mockResolvedValueOnce(serializeMcpIpcPayload({ content: 'ok', success: true }));
 
     await mcpService.invokeMcpToolCall(refresh, {});
 
-    expect(ipcCall).not.toHaveBeenCalled();
-    expect(relayCall).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: 'refresh' }),
-      expect.anything(),
-    );
+    expect(relayCall).not.toHaveBeenCalled();
+    expect(ipcCall).toHaveBeenCalledOnce();
   });
 });
 

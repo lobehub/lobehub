@@ -29,6 +29,7 @@ const rightPanel = vi.hoisted(() => ({
 const agentStore = vi.hoisted(() => ({
   activeAgentId: undefined as string | undefined,
   heterogeneousType: undefined as string | undefined,
+  isChatMode: false,
   isHeterogeneous: false,
   rawAgencyConfig: undefined as
     { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
@@ -130,6 +131,8 @@ const chatStore = vi.hoisted(() => ({
   activeGroupId: undefined as string | undefined,
   activeThreadId: undefined as string | undefined,
   activeTopicId: undefined as string | undefined,
+  // useSandboxPlacement reads the topics a first send is creating
+  creatingTopicIds: [] as string[],
   openTopicComments: vi.fn(),
   // useSandboxPlacement reads an unlisted topic by id and reads it back after a pick
   refreshTopicDetail: vi.fn(),
@@ -212,6 +215,7 @@ vi.mock('../ParamsSection', () => ({
     return <div data-testid="params-section" />;
   },
 }));
+vi.mock('../ToolsSection', () => ({ default: () => <div data-testid="tools-section" /> }));
 vi.mock('../WorksSection', () => ({ default: () => <div /> }));
 vi.mock('../Search', () => ({
   TopicSearchPane: ({ topicId }: { topicId: string }) => (
@@ -269,7 +273,7 @@ vi.mock('@/store/agent/selectors', () => ({
     isCurrentAgentHeterogeneous: () => agentStore.isHeterogeneous,
   },
   chatConfigByIdSelectors: {
-    isChatModeById: () => () => false,
+    isChatModeById: () => () => agentStore.isChatMode,
   },
 }));
 vi.mock('@/store/global', () => ({
@@ -486,6 +490,7 @@ beforeEach(() => {
   chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
   agentStore.heterogeneousType = undefined;
+  agentStore.isChatMode = false;
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
   effectiveConfig.agencyConfig = undefined;

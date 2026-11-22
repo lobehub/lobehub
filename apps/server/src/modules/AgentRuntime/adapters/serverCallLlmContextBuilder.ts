@@ -14,7 +14,7 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import type { UIChatMessage } from '@lobechat/types';
+import { type ResolveToolActivationContext, type UIChatMessage } from '@lobechat/types';
 
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import {
@@ -30,6 +30,7 @@ import {
   type ServerCallLlmContextHints,
 } from './serverCallLlmContextHints';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
+import { createToolActivationResolver } from './serverToolActivationContext';
 
 interface BuildServerCallLlmContextInput {
   ctx: RuntimeExecutorContext;
@@ -60,6 +61,7 @@ const hasTrailingTodoMutation = (messages: UIChatMessage[]) => {
 };
 
 export interface ServerCallLlmContextBuildResult {
+  getToolActivationContext?: ResolveToolActivationContext;
   preserveThinkingForPayload?: boolean;
   processedMessages: ChatStreamPayload['messages'];
   resolvedExtendParams?: ServerCallLlmContextHints['resolvedExtendParams'];
@@ -135,6 +137,7 @@ export const buildServerCallLlmContext = async ({
       },
       agentId,
       disabledPluginIds: state.world?.disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       editingAgentId: state.origin?.editingAgentId,
       editingGroupId,
       enabledToolIds: resolved.enabledToolIds,
@@ -170,6 +173,7 @@ export const buildServerCallLlmContext = async ({
     attachmentPreviewFileIds: llmPayload.attachmentPreviewFileIds,
     agentDocumentChanges: facts.agentDocumentChanges,
     agentDocuments: facts.agentDocuments,
+    revokedDocumentReads: facts.revokedDocumentReads,
     // Identity lives on the agent row, not in the prompt text — inject it so
     // the model introduces itself by the user-given name.
     agentIdentity: { name: agentConfig.name ?? undefined, title: agentConfig.title ?? undefined },
@@ -319,6 +323,12 @@ export const buildServerCallLlmContext = async ({
   );
 
   return {
+    getToolActivationContext: createToolActivationResolver(
+      state,
+      resolved,
+      contextEngineInput,
+      processedMessages,
+    ),
     preserveThinkingForPayload,
     processedMessages,
     resolvedExtendParams,

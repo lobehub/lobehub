@@ -5,7 +5,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TaskListOriginContext } from '../shared/taskListOrigin';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
+
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
+// No router is mounted here; the task-list origin reads the history state.
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useLocation: () => ({ state: locationMock.state }),
+}));
 
 const permissionMock = vi.hoisted(() => ({
   allowed: true,
@@ -162,13 +171,9 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
-const userStateMock = vi.hoisted(() => ({
-  lab: {} as Record<string, boolean>,
-}));
-
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ preference: { lab: userStateMock.lab }, user: { id: 'self-user' } }),
+    selector({ preference: { lab: {} }, user: { id: 'self-user' } }),
 }));
 
 // The label picker reads the label registry; its own behavior is covered by
@@ -287,11 +292,6 @@ vi.mock('../shared/useAgentVisibility', () => ({
   useAgentVisibility: (agentId?: string) => (agentId === 'agent-private' ? 'private' : undefined),
 }));
 
-/** Flips the Labs toggles the composer still reads. */
-const setLabs = (lab: { enableGoals?: boolean }) => {
-  userStateMock.lab = lab as Record<string, boolean>;
-};
-
 const clearReading = {
   clarifications: [],
   confidence: 'high' as const,
@@ -304,7 +304,6 @@ const clearReading = {
 describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
-    setLabs({});
     analyzeIntentMock.mockReset();
     synthesizeInstructionMock.mockReset();
     // The second reading is the normal path: it rewrites the brief with the
@@ -314,6 +313,7 @@ describe('CreateTaskInlineEntry', () => {
       title: 'Write the Q3 project plan',
     });
     navigateMock.mockReset();
+    locationMock.state = undefined;
     toastSuccessMock.mockReset();
     createGoalModalMock.mockReset();
     activeWorkspaceMock.id = 'workspace-1';
@@ -673,7 +673,35 @@ describe('CreateTaskInlineEntry', () => {
 
     render(description as ReactNode);
     fireEvent.click(screen.getByText('taskIntent.openCreated'));
-    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'));
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'), {
+      state: undefined,
+    });
+  });
+
+  it('opens the created task with the list it was created from as its origin', async () => {
+    editorMarkdownMock.value = 'Write a project plan';
+    analyzeIntentMock.mockResolvedValue(clearReading);
+    createTaskMock.mockResolvedValue({
+      id: 'task_9',
+      identifier: 'TASK-9',
+      name: 'Write the Q3 project plan',
+    });
+
+    render(
+      <TaskListOriginContext value={'/tasks?collection=mine'}>
+        <CreateTaskInlineEntry variant="hero" />
+      </TaskListOriginContext>,
+    );
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledTimes(1));
+
+    // The toast renders outside the list, so the origin rides in the closure.
+    const { description } = toastSuccessMock.mock.calls[0][0];
+    render(description as ReactNode);
+    fireEvent.click(screen.getByText('taskIntent.openCreated'));
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'), {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
   });
 
   it('confirms every creation path, not only the straight-through one', async () => {
@@ -703,7 +731,6 @@ describe('CreateTaskInlineEntry', () => {
 
   describe('intent recognition', () => {
     beforeEach(() => {
-      setLabs({ enableGoals: true });
       editorMarkdownMock.value = 'Write a project plan';
     });
 

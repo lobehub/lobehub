@@ -59,6 +59,15 @@ describe('channel reading groups', () => {
     expect(midnight[1]).toMatchObject({ continuation: false, startsDay: true });
   });
 
+  it('starts a fresh group after a row shown between two messages', () => {
+    const request = message(at, { id: 'request' });
+    const rows = presentChannelTimeline(
+      [request, message(later(1), { id: 'next' })],
+      new Set(['request']),
+    );
+    expect(rows.map((row) => row.continuation)).toEqual([false, false]);
+  });
+
   it('does not group out-of-order messages or a first message on an older page', () => {
     expect(presentChannelTimeline([message(later(1)), message(at)])[1].continuation).toBe(false);
     expect(presentChannelTimeline([message(at)])[0].continuation).toBe(false);

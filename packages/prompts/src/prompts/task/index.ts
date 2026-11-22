@@ -1,5 +1,8 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode, TaskStatus } from '@lobechat/types';
 
+import { buildGoalMarksSection, type TaskRunPromptGoalMarks } from './goalMarks';
+import { buildGoalObjectiveSection, type TaskRunPromptGoalObjective } from './goalObjective';
+
 // ── Formatting helpers for Task tool responses ──
 
 const priorityLabel = (p?: number | null): string => {
@@ -595,6 +598,10 @@ export interface TaskRunPromptInput {
   extraPrompt?: string;
   /** Present only for rounds spawned by the goal outer loop. */
   goalLoop?: TaskRunPromptGoalLoop;
+  /** Present only for runs of a Task that works for a Goal. */
+  goalMarks?: TaskRunPromptGoalMarks;
+  /** Present only for runs of a Task whose Goal has an objective. */
+  goalObjective?: TaskRunPromptGoalObjective;
   /** Parent task context (when current task is a subtask) */
   parentTask?: {
     id?: string;
@@ -700,7 +707,16 @@ const briefIcon = (type: string): string => {
  * 4. Original Task (instruction + description) — the base requirement
  */
 export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): string => {
-  const { task, activities, extraPrompt, goalLoop, workspace, parentTask } = input;
+  const {
+    task,
+    activities,
+    extraPrompt,
+    goalLoop,
+    goalMarks,
+    goalObjective,
+    workspace,
+    parentTask,
+  } = input;
   const sections: string[] = [];
 
   // ── 1. High Priority Instruction ──
@@ -728,6 +744,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   const taskLines = [
     `<task>`,
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,
+    `Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.`,
     `${taskIdentity(task)} ${task.name || task.identifier}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
   ];
@@ -739,7 +756,11 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
           ? `cron "${task.schedulePattern}" (${task.scheduleTimezone || 'UTC'})`
           : task.automationMode;
     taskLines.push(
-      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, mark this task completed as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, request completion (\`lh task complete <id>\` with a shell) as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+    );
+  } else if (!task.verify?.enabled && !task.review?.enabled) {
+    taskLines.push(
+      'When all deliverables are ready, request completion of this task (`lh task complete <id>` with a shell).',
     );
   }
   taskLines.push(`Instruction: ${task.instruction}`);
@@ -1038,6 +1059,8 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
 
   taskLines.push('</task>');
   sections.push(taskLines.join('\n'));
+  if (goalObjective) sections.push(buildGoalObjectiveSection(goalObjective));
+  if (goalMarks) sections.push(buildGoalMarksSection(goalMarks));
 
   return sections.join('\n\n');
 };
@@ -1048,5 +1071,7 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
+export type { TaskRunPromptGoalMark, TaskRunPromptGoalMarks } from './goalMarks';
+export type { TaskRunPromptGoalObjective, TaskRunPromptObjectiveLane } from './goalObjective';
 export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';

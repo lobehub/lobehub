@@ -6,7 +6,7 @@ import { useAgentStore } from '@/store/agent';
 import { useChannelStore } from '@/store/channel';
 import { channelViewKey } from '@/store/channel/projection';
 
-import ChannelDynamicMeta from './ChannelDynamicMeta';
+import ChannelDynamicMeta, { ChannelSettingsDynamicMeta } from './ChannelDynamicMeta';
 
 vi.mock('@/features/RouteMeta/workspaceScope', () => ({
   matchesRouteWorkspace: () => true,
@@ -93,5 +93,23 @@ describe('ChannelDynamicMeta', () => {
     expect(render()).toHaveBeenLastCalledWith(
       expect.objectContaining({ avatar: '🌟', avatarKind: 'agent', avatarSeed: 'agt_c' }),
     );
+  });
+});
+
+describe('ChannelSettingsDynamicMeta', () => {
+  beforeEach(() => {
+    useAgentStore.setState({ agentMap: {} });
+    useChannelStore.setState({ detailMap: {}, listMap: {} });
+  });
+
+  it('names the channel it configures next to the settings label', () => {
+    useChannelStore.setState({ listMap: { all: [listItem({})] } });
+    const onResolve = vi.fn();
+
+    renderHook(() =>
+      ChannelSettingsDynamicMeta({ onResolve, params: { channelId: 'chn_000000000001' } }),
+    );
+
+    expect(onResolve).toHaveBeenLastCalledWith({ title: 'settings.title · Design' });
   });
 });

@@ -16,7 +16,7 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  meta: { flex: 'none', fontSize: '11px', color: cssVar.colorTextQuaternary, whiteSpace: 'nowrap' },
+  meta: { flex: 'none', fontSize: '12px', color: cssVar.colorTextQuaternary, whiteSpace: 'nowrap' },
   row: {
     paddingBlock: '20px',
     paddingInline: '8px',
@@ -34,7 +34,7 @@ const styles = stylex.create({
   seq: {
     flex: 'none',
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: '11px',
+    fontSize: '12px',
     color: cssVar.colorTextSecondary,
   },
 });
@@ -105,12 +105,12 @@ const EntryRow = memo<{
         {isCheck ? (
           <>
             <span {...stylex.props(styles.seq)}>C{entry.checkSeq}</span>
-            <Text ellipsis style={{ fontSize: 13, minWidth: 0 }}>
+            <Text ellipsis style={{ fontSize: 14, minWidth: 0 }}>
               {entry.title}
             </Text>
           </>
         ) : (
-          <Text ellipsis style={{ fontSize: 13, minWidth: 0 }}>
+          <Text ellipsis style={{ fontSize: 14, minWidth: 0 }}>
             {entry.groupLabel
               ? t('acceptance.feedback.group', { label: entry.groupLabel })
               : t('acceptance.feedback.global')}

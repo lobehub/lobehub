@@ -18,7 +18,7 @@ import { useSettingsTabTitle } from './tabTitles';
 
 const REDIRECT_MAP: Record<string, string> = {
   [SettingsTabs.Common]: SettingsTabs.Appearance,
-  [SettingsTabs.ChatAppearance]: SettingsTabs.Appearance,
+  [SettingsTabs.ChatAppearance]: SettingsTabs.Conversation,
   [SettingsTabs.Agent]: SettingsTabs.ServiceModel,
   [SettingsTabs.TTS]: SettingsTabs.ServiceModel,
   [SettingsTabs.Image]: SettingsTabs.ServiceModel,

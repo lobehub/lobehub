@@ -14,7 +14,7 @@ export interface SearchResultItem {
  * Say so explicitly: models otherwise re-issue the identical (billed) query.
  */
 export const EMPTY_SEARCH_RESULTS_PROMPT =
-  '<searchResults>No results found. The search completed successfully and this is the final answer for this exact query — do not resend the same query. To find something, rewrite it: drop or reduce quoted phrases, remove site:/language modifiers, widen the time range, or use fewer, more general keywords.</searchResults>';
+  '<searchResults>No results found. The search completed successfully and this is the final answer for this exact query — do not resend the same query. To find something, rewrite it: drop or reduce quoted phrases, remove site:/language modifiers, widen the time range, try another category, use fewer/more general keywords, or retry in English for technical/scientific queries. Stop after 2–3 rewrites and tell the user.</searchResults>';
 
 /**
  * Convert search results array to compact XML format for token efficiency

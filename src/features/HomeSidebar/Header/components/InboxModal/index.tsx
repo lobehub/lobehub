@@ -30,21 +30,24 @@ import {
   MoreHorizontalIcon,
   SparklesIcon,
   TagIcon,
+  XIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import dynamic from '@/libs/next/dynamic';
 import { mutate } from '@/libs/swr';
 import { inboxKeys } from '@/libs/swr/keys';
 import { useHomeStore } from '@/store/home';
 import { homeNotificationSelectors } from '@/store/home/selectors';
 import type { InboxNavigationCount } from '@/store/home/slices/notification/projection';
+import { useHeaderActionSize, useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useNavigationCounts } from './useNavigationCounts';
 
@@ -68,12 +71,18 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorFillSecondary,
   },
-  headerMain: { minWidth: '0', paddingBlock: '12px', paddingInline: '16px' },
+  headerMain: {
+    minWidth: '0',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+  },
+  // Small tabs/actions are 28px tall, so 6px block padding lands on the 40px compact header.
+  headerMainCompact: { paddingBlock: '6px' },
   headerTitle: {
     flex: 'none',
     boxSizing: 'border-box',
     width: 'clamp(160px, 22vw, 220px)',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     whiteSpace: 'nowrap',
   },
   main: { overflow: 'hidden', minWidth: '0' },
@@ -124,6 +133,9 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 const InboxModalContent = memo(() => {
+  const headerActionSize = useHeaderActionSize(true);
+  const interfaceDensity = useInterfaceDensity();
+  const compact = interfaceDensity === 'compact';
   const { i18n, t } = useTranslation('notification');
   const workspaceId = useActiveWorkspaceId();
   const [navigationFilter, setNavigationFilter] = useState(ALL_FILTER);
@@ -280,7 +292,7 @@ const InboxModalContent = memo(() => {
         <Flexbox
           horizontal
           align="center"
-          className={stylex.props(styles.headerMain).className}
+          className={stylex.props(styles.headerMain, compact && styles.headerMainCompact).className}
           flex={1}
           justify="space-between"
         >
@@ -332,75 +344,84 @@ const InboxModalContent = memo(() => {
               <ActionIcon
                 icon={MoreHorizontalIcon}
                 loading={bulkAction === 'archive'}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                size={headerActionSize}
                 title={t('more', { ns: 'common' })}
               />
             </DropdownMenu>
-            <ModalClose style={{ position: 'static' }} />
+            <ModalClose
+              render={<ActionIcon icon={XIcon} size={headerActionSize} />}
+              style={{ position: 'static' }}
+            />
           </Flexbox>
         </Flexbox>
       </ModalHeader>
       <Flexbox horizontal className={stylex.props(styles.body).className} flex={1}>
-        <Flexbox className={stylex.props(styles.sidebar).className} gap={4}>
-          <NavItem
-            active={navigationFilter === ALL_FILTER}
-            icon={BellIcon}
-            title={t('inbox.all')}
-            extra={
-              allCount > 0 ? (
-                <Text style={{ marginInlineEnd: 6 }} type="secondary">
-                  {allCount}
-                </Text>
-              ) : undefined
-            }
-            onClick={() => setNavigationFilter(ALL_FILTER)}
-          />
-          <Flexbox className={stylex.props(styles.categoryList).className} gap={4}>
-            {isNavigationCountsLoading ? (
-              <SkeletonList rows={4} />
-            ) : (
-              <>
-                {navigationCountsError && (
-                  <AsyncError
-                    error={navigationCountsError}
-                    retrying={isNavigationCountsValidating}
-                    variant="inline"
-                    onRetry={() => void refreshNavigationCounts()}
-                  />
-                )}
-                {visibleCategoryCounts.map((item) => {
-                  const count = countForStatus(item);
-
-                  return (
-                    <NavItem
-                      active={navigationFilter === item.category}
-                      icon={CATEGORY_ICONS[item.category] ?? TagIcon}
-                      key={item.category}
-                      title={categoryLabel(item.category)}
-                      extra={
-                        count > 0 ? (
-                          <Text style={{ marginInlineEnd: 6 }} type="secondary">
-                            {count}
-                          </Text>
-                        ) : undefined
-                      }
-                      onClick={() => setNavigationFilter(item.category)}
+        <NavPanelDensityContext value={interfaceDensity}>
+          <Flexbox className={stylex.props(styles.sidebar).className} gap={4}>
+            <NavItem
+              active={navigationFilter === ALL_FILTER}
+              icon={BellIcon}
+              title={t('inbox.all')}
+              extra={
+                allCount > 0 ? (
+                  <Text style={{ marginInlineEnd: 6 }} type="secondary">
+                    {allCount}
+                  </Text>
+                ) : undefined
+              }
+              onClick={() => setNavigationFilter(ALL_FILTER)}
+            />
+            <Flexbox className={stylex.props(styles.categoryList).className} gap={4}>
+              {isNavigationCountsLoading ? (
+                <SkeletonList rows={4} />
+              ) : (
+                <>
+                  {navigationCountsError && (
+                    <AsyncError
+                      error={navigationCountsError}
+                      retrying={isNavigationCountsValidating}
+                      variant="inline"
+                      onRetry={() => void refreshNavigationCounts()}
                     />
-                  );
-                })}
-              </>
-            )}
+                  )}
+                  {visibleCategoryCounts.map((item) => {
+                    const count = countForStatus(item);
+
+                    return (
+                      <NavItem
+                        active={navigationFilter === item.category}
+                        icon={CATEGORY_ICONS[item.category] ?? TagIcon}
+                        key={item.category}
+                        title={categoryLabel(item.category)}
+                        extra={
+                          count > 0 ? (
+                            <Text style={{ marginInlineEnd: 6 }} type="secondary">
+                              {count}
+                            </Text>
+                          ) : undefined
+                        }
+                        onClick={() => setNavigationFilter(item.category)}
+                      />
+                    );
+                  })}
+                </>
+              )}
+            </Flexbox>
           </Flexbox>
-        </Flexbox>
+        </NavPanelDensityContext>
         <Flexbox className={stylex.props(styles.main).className} flex={1}>
           <Flexbox flex={1} style={{ minHeight: 0 }}>
-            <Content
-              category={category}
-              isRead={isRead}
-              onArchive={handleArchive}
-              onMarkAsRead={handleMarkAsRead}
-              onRefreshInbox={refreshInbox}
-            />
+            {/* Compact only: loose skeletons keep their context-free metrics. The dynamic
+                loading fallback renders inside this provider, so it follows density too. */}
+            <NavPanelDensityContext value={compact ? interfaceDensity : undefined}>
+              <Content
+                category={category}
+                isRead={isRead}
+                onArchive={handleArchive}
+                onMarkAsRead={handleMarkAsRead}
+                onRefreshInbox={refreshInbox}
+              />
+            </NavPanelDensityContext>
           </Flexbox>
         </Flexbox>
       </Flexbox>

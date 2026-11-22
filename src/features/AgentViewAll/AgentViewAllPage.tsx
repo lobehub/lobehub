@@ -38,7 +38,6 @@ import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvi
 import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import NavHeader from '@/features/NavHeader';
-import { useImLayout } from '@/features/NavRail/useImLayout';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -48,6 +47,8 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -81,7 +82,7 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 100%;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     transition: background 0.15s;
@@ -104,43 +105,48 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const GroupHeader = memo<GroupHeaderProps>(
-  ({ avatar, collapsed, color, count, index, label, onToggle }) => (
-    <Flexbox
-      horizontal
-      align={'center'}
-      gap={8}
-      className={cx(
-        groupHeaderStyles.bar,
-        index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
-      )}
-      onClick={onToggle}
-    >
-      <Icon
-        color={cssVar.colorTextSecondary}
-        icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
-        size={14}
-      />
-      {avatar ? (
-        <Avatar avatar={avatar} size={20} />
-      ) : color ? (
-        <span
-          style={{
-            background: color,
-            borderRadius: '50%',
-            display: 'inline-block',
-            height: 9,
-            width: 9,
-          }}
+  ({ avatar, collapsed, color, count, index, label, onToggle }) => {
+    const compact = useInterfaceDensity() === 'compact';
+
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={8}
+        paddingBlock={compact ? 6 : undefined}
+        className={cx(
+          groupHeaderStyles.bar,
+          index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
+        )}
+        onClick={onToggle}
+      >
+        <Icon
+          color={cssVar.colorTextSecondary}
+          icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
+          size={14}
         />
-      ) : null}
-      <Text fontSize={13} weight={500}>
-        {label}
-      </Text>
-      <Text fontSize={12} type={'secondary'}>
-        {count}
-      </Text>
-    </Flexbox>
-  ),
+        {avatar ? (
+          <Avatar avatar={avatar} size={20} />
+        ) : color ? (
+          <span
+            style={{
+              background: color,
+              borderRadius: '50%',
+              display: 'inline-block',
+              height: 9,
+              width: 9,
+            }}
+          />
+        ) : null}
+        <Text fontSize={13} weight={500}>
+          {label}
+        </Text>
+        <Text fontSize={12} type={'secondary'}>
+          {count}
+        </Text>
+      </Flexbox>
+    );
+  },
 );
 
 GroupHeader.displayName = 'AgentViewAllGroupHeader';
@@ -500,10 +506,6 @@ const AgentViewAllPage = memo(() => {
     },
     [isListed, setSidebarItemVisible, t],
   );
-  // The `im_layout` rail has no agent sidebar, so its "in sidebar" curation
-  // (the section and every per-item toggle) does not apply there.
-  const imLayout = useImLayout();
-  const toggleSidebar = imLayout ? undefined : handleToggleSidebar;
 
   const renderCard = useCallback(
     (item: SidebarAgentItem) => (
@@ -512,10 +514,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isListed(item)}
-        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : toggleSidebar}
+        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, toggleSidebar, isListed, workspaceSidebarIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isListed, workspaceSidebarIds],
   );
 
   const renderRow = useCallback(
@@ -526,10 +528,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         showAuthor={showAuthor}
         sidebarHidden={!isListed(item)}
-        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : toggleSidebar}
+        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, toggleSidebar, isListed, workspaceSidebarIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isListed, workspaceSidebarIds],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -540,11 +542,14 @@ const AgentViewAllPage = memo(() => {
     createMarketAgentMenuItem,
   } = useCreateMenuItems();
 
-  // Creating from the Private tab lands the item in the private bucket, so
-  // the new row appears in the list the user is currently looking at.
+  // Each tab starts creation in its own bucket, so the new row appears in the
+  // list the user is currently looking at. The create dialogs still show the
+  // choice and let the user change it.
   const createOptions = useMemo(
     () =>
-      activeWorkspaceId && segment === 'private' ? { visibility: 'private' as const } : undefined,
+      activeWorkspaceId
+        ? { visibility: segment === 'private' ? ('private' as const) : ('public' as const) }
+        : undefined,
     [activeWorkspaceId, segment],
   );
 
@@ -594,8 +599,8 @@ const AgentViewAllPage = memo(() => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {!imLayout && !isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
-        {!imLayout && isInit && !keyword.trim() && sidebarItems.length > 0 && (
+        {!isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
+        {isInit && !keyword.trim() && sidebarItems.length > 0 && (
           <SidebarAgentsSection
             fixedIds={workspaceSidebarIds?.fixed}
             items={sidebarItems}

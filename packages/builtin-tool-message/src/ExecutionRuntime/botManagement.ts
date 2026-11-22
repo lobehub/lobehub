@@ -239,7 +239,7 @@ export class MessageExecutionRuntime extends ChannelMessageRuntime {
       if (installations.length === 0) {
         return {
           content:
-            'No System Bot connections found. Tell the user to connect one via Settings → Messenger; `listMessengerPlatforms` shows what platforms are available.',
+            'No System Bot connections found. Tell the user to connect one via Marketplace → Apps; `listMessengerPlatforms` shows what platforms are available.',
           state: { installations } satisfies ListMessengersState,
           success: true,
         };
@@ -342,7 +342,7 @@ export class MessageExecutionRuntime extends ChannelMessageRuntime {
         return `- ${parts.join(' ')}`;
       });
       return {
-        content: `${platforms.length} platform(s) available for System Bot install:\n${lines.join('\n')}\n\nInstalls are initiated via Settings → Messenger (OAuth requires a browser).`,
+        content: `${platforms.length} platform(s) available for System Bot install:\n${lines.join('\n')}\n\nInstalls are initiated via Marketplace → Apps (OAuth requires a browser).`,
         state: { platforms } satisfies ListMessengerPlatformsState,
         success: true,
       };
@@ -524,7 +524,7 @@ export class MessageExecutionRuntime extends ChannelMessageRuntime {
         }
         case 'unlinked': {
           return {
-            content: `The user has no linked ${platform} account for the LobeHub System Bot. Ask them to open Settings → Messenger and connect ${platform} first.`,
+            content: `The user has no linked ${platform} account for the LobeHub System Bot. Ask them to open Marketplace → Apps and connect ${platform} first.`,
             state,
             success: false,
           };

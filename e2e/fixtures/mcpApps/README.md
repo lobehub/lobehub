@@ -9,7 +9,7 @@ bun e2e/fixtures/mcpApps/server.mts
 bun e2e/fixtures/mcpApps/smoke.mts
 ```
 
-The default endpoint is `http://localhost:39742/mcp` (`MCP_APP_FIXTURE_PORT` overrides the port); readiness is at `/health`. Register the endpoint as a Streamable HTTP MCP server in the acceptance environment.
+The default endpoint is `http://localhost:39742/mcp` (`MCP_APP_FIXTURE_PORT` overrides the port); readiness is at `/health`. Register the endpoint as a Streamable HTTP MCP server in the acceptance environment. A web server without a device gateway connects to it directly, and its SSRF policy refuses loopback addresses by default: start that server with `SSRF_ALLOW_IP_ADDRESS_LIST=127.0.0.1` (or `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`).
 
 The fixture provides inline/fullscreen tool preferences, a resource with both display modes and no tool preference, an empty thread entrypoint, the legacy `openai/outputTemplate`, conflicting `openai/ui` and `lobehub/ui` metadata, an app-only tool, and a model tool for disabled-tool coverage. Its HTML uses the MCP Apps JSON-RPC `postMessage` bridge directly. The teardown button sends the SDK-supported `ui/notifications/request-teardown`; the host's `ui/resource-teardown` request is acknowledged before removal.
 

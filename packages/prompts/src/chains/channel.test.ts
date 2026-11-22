@@ -37,6 +37,40 @@ describe('Channel request prompt', () => {
   const caller = { id: 'caller', name: 'Mia', type: 'user' } as const;
   const coder = { id: 'coder', name: 'Coder', type: 'agent' } as const;
 
+  it('asks for one answer to requests the same person sent in a row', () => {
+    const prompt = buildChannelPrompt(
+      { ...manifest, requestMessageIds: ['first', 'current'] },
+      [
+        message('quoted', 'The plan', coder),
+        message('first', 'Fix the list', caller, { replyToId: 'quoted' }),
+        message('current', 'Only the queued items', caller),
+      ],
+      {
+        boundary: 'b0',
+        // The earlier request is also unseen context; it is shown once, as a request.
+        context: [message('first', 'Fix the list', caller), message('theirs', 'Ok', coder)],
+      },
+    );
+
+    expect(prompt.split('\n')).toEqual([
+      '<channel_message from="Coder" type="agent" boundary="b0">',
+      'Ok',
+      '</channel_message boundary="b0">',
+      '<channel_quote from="Coder" type="agent" boundary="b0">',
+      'The plan',
+      '</channel_quote boundary="b0">',
+      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      'Fix the list',
+      '</channel_request boundary="b0">',
+      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      'Only the queued items',
+      '</channel_request boundary="b0">',
+      '<channel_merged boundary="b0">',
+      'The 2 `channel_request` blocks are requests the same person sent in a row while you were busy, oldest first. Answer them together in one reply. Where a later one corrects, narrows or replaces an earlier one, follow the later one.',
+      '</channel_merged boundary="b0">',
+    ]);
+  });
+
   it('marks the member’s own earlier replies and says how much unseen history is left out', () => {
     const self = { id: 'agent', name: 'Codex', type: 'agent' } as const;
     const prompt = buildChannelPrompt(manifest, [message('current', 'And now?', caller)], {
@@ -118,6 +152,44 @@ describe('Channel request prompt', () => {
     expect(prompt).toContain('Do not acknowledge again');
     expect(buildChannelPrompt(manifest, request, { boundary: 'b0' })).not.toContain(
       '<channel_opening',
+    );
+  });
+
+  it('tells a resumed run to continue its stopped turn, without context it already read', () => {
+    const request = [message('current', 'Why did the deploy fail?', caller)];
+    const prompt = buildChannelPrompt(manifest, request, {
+      boundary: 'b0',
+      context: [message('earlier', 'Deploy is red again', caller)],
+      omitted: 4,
+      opening: 'Got it, checking the deploy logs first.',
+      resume: { reason: 'Coder stopped making progress' },
+    });
+
+    expect(prompt.split('\n')[0]).toBe(
+      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+    );
+    expect(prompt).toContain('<channel_resume boundary="b0">');
+    expect(prompt).toContain('(Coder stopped making progress)');
+    expect(prompt).toContain('Continue from where you left off');
+    expect(prompt).not.toContain('Deploy is red again');
+    expect(prompt).not.toContain('<channel_gap');
+    expect(prompt).not.toContain('<channel_opening');
+  });
+
+  it('tells a run which other Agents the request asked, so the answers divide the work', () => {
+    const request = [message('current', 'How do we close the SEO-to-revenue loop?', caller)];
+    const prompt = buildChannelPrompt(manifest, request, {
+      boundary: 'b0',
+      peers: ['Analyst (Data analyst)'],
+    });
+
+    expect(prompt).toMatch(
+      /<\/channel_request boundary="b0">\n<channel_peers boundary="b0">\nThis request also asked Analyst \(Data analyst\) to answer\./,
+    );
+    expect(prompt).toContain('answer only the part your own role owns');
+    expect(CHANNEL_INSTRUCTIONS).toContain('channel_peers');
+    expect(buildChannelPrompt(manifest, request, { boundary: 'b0' })).not.toContain(
+      '<channel_peers',
     );
   });
 

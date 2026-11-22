@@ -1,3 +1,5 @@
+import type { HeteroPermissionMode } from '@lobechat/types';
+
 import { buildHeterogeneousPrompt } from './promptEngine';
 
 /**
@@ -32,10 +34,15 @@ export interface HeteroExecImageRef {
  * always a new session by definition — it exists precisely because native
  * resume failed and the CLI is starting the agent from scratch — so it carries
  * session-scoped context regardless of what the primary attempt got.
+ *
+ * `permissionMode` (Claude Code, Better Coding Experience lab) rides the same
+ * envelope for the same reason: an `lh` that predates it unwraps `content` and
+ * keeps allowing everything, rather than failing on an unknown flag.
  */
 export const buildHeteroExecStdinPayload = (params: {
   imageList?: HeteroExecImageRef[];
   isNewSession?: boolean;
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   resumeFallbackSystemContext?: string;
   systemContext?: string;
@@ -43,21 +50,26 @@ export const buildHeteroExecStdinPayload = (params: {
   const {
     imageList = [],
     isNewSession,
+    permissionMode,
     prompt,
     resumeFallbackSystemContext,
     systemContext,
   } = params;
   const blocks = buildHeterogeneousPrompt({ imageList, isNewSession, prompt, systemContext });
 
-  if (resumeFallbackSystemContext !== undefined) {
+  if (resumeFallbackSystemContext !== undefined || permissionMode) {
     return JSON.stringify({
       content: blocks,
-      resumeFallback: buildHeterogeneousPrompt({
-        imageList,
-        isNewSession: true,
-        prompt,
-        systemContext: resumeFallbackSystemContext,
-      }),
+      ...(permissionMode && { permissionMode }),
+      resumeFallback:
+        resumeFallbackSystemContext === undefined
+          ? undefined
+          : buildHeterogeneousPrompt({
+              imageList,
+              isNewSession: true,
+              prompt,
+              systemContext: resumeFallbackSystemContext,
+            }),
     });
   }
 

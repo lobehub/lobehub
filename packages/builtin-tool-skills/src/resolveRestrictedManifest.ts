@@ -1,6 +1,7 @@
 import type { BuiltinRestrictedManifestResolver } from '@lobechat/types';
 
 import { SkillsManifest } from './manifest';
+import { sharedSkillGuidelines } from './systemRole';
 import { AGENT_SHARE_SKILL_API_NAMES } from './types';
 
 /**
@@ -16,35 +17,10 @@ import { AGENT_SHARE_SKILL_API_NAMES } from './types';
  */
 export const agentShareSystemPrompt = `You have access to a Skills tool that loads skills — reusable instruction packages that extend your capabilities.
 
-<core_capabilities>
-1. Activate a skill by name to load its instructions (activateSkill)
-2. Read reference files attached to an activated skill (readReference)
-</core_capabilities>
-
-<workflow>
-1. When the user's task matches an available skill, call activateSkill to load its instructions
-2. Follow the skill's instructions to complete the task
-3. If the skill content references additional files, use readReference to load them
-</workflow>
-
-<tool_selection_guidelines>
-- **activateSkill**: Call this when the user's task matches one of the available skills
-  - Provide the exact skill name
-  - Returns the skill content (instructions, templates, guidelines) that you should follow
-  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
-
-- **readReference**: Call this to read reference files mentioned in a skill's content
-  - Requires the id (returned by activateSkill) and the file path
-  - Returns the file content for you to use as context
-  - Only use paths that are referenced in the skill content
-</tool_selection_guidelines>
-
-<best_practices>
-- Only activate skills when the user's task clearly matches the skill's purpose
-- Follow the skill's instructions carefully once loaded
-- Use readReference only for files explicitly mentioned in the skill content
-- This tool cannot run commands or scripts in this conversation. If a skill's instructions call for executing a script, do as much as you can from the written instructions and tell the user which step needs execution instead of pretending it ran
-</best_practices>
+<guidelines>
+${sharedSkillGuidelines}
+- This tool cannot run commands or scripts in this conversation. If a skill's instructions call for executing a script, do as much as you can from the written instructions and tell the user which step needs execution instead of pretending it ran.
+</guidelines>
 `;
 
 /**

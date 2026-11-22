@@ -39,6 +39,7 @@ interface LocalFilePreviewKeyParams {
   resourceScope?: 'workspace';
   /** Topic scope when the previewed file lives in the topic's cloud sandbox. */
   sandboxTopicId?: string;
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -432,10 +433,30 @@ export const mcpAppKeys = {
       uri: string,
       {
         agentId,
+        linkId,
         onThisDevice = false,
         server,
-      }: { agentId?: string; onThisDevice?: boolean; server?: string },
-    ) => ['mcpApp:resource', identifier, uri, agentId ?? null, onThisDevice, server ?? null],
+        toolArguments,
+        topicId,
+      }: {
+        agentId?: string;
+        linkId?: string;
+        onThisDevice?: boolean;
+        server?: string;
+        toolArguments?: string;
+        topicId?: string;
+      },
+    ) => [
+      'mcpApp:resource',
+      identifier,
+      uri,
+      agentId ?? null,
+      onThisDevice,
+      server ?? null,
+      toolArguments ?? null,
+      linkId ?? null,
+      topicId ?? null,
+    ],
   ),
 };
 
@@ -534,6 +555,7 @@ export const localFileKeys = {
       filePath,
       resourceScope,
       sandboxTopicId,
+      topicId,
       workingDirectory,
     }: LocalFilePreviewKeyParams) => [
       'localFile:preview',
@@ -543,6 +565,7 @@ export const localFileKeys = {
       accept ?? 'any',
       allowExternalFile ? 'external' : 'workspace',
       resourceScope ?? 'single-file',
+      ...(deviceId && topicId ? [topicId] : []),
     ],
   ),
   projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [

@@ -14,10 +14,10 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.listEnvironments.query({ projectId });
   saveEnvironment = (input: Parameters<Client['saveEnvironment']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.saveEnvironment.mutate(input);
-  attachEnvironment = (projectId: string, environmentId: string) =>
-    lambdaClient.projectWorkingDirectory.attachEnvironment.mutate({ projectId, environmentId });
-  attachRepository = (input: Parameters<Client['attachRepository']['mutate']>[0]) =>
-    lambdaClient.projectWorkingDirectory.attachRepository.mutate(input);
+  getEnvironment = (projectId: string) =>
+    lambdaClient.projectWorkingDirectory.getEnvironment.query({ projectId });
+  updateEnvironment = (input: Parameters<Client['updateEnvironment']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.updateEnvironment.mutate(input);
   bind = (input: BindProjectDirectoryInput) =>
     lambdaClient.projectWorkingDirectory.bind.mutate(input);
   list = (projectId?: string) => lambdaClient.projectWorkingDirectory.list.query({ projectId });

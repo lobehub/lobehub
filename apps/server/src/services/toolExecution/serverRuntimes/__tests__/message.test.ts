@@ -955,7 +955,7 @@ describe('messageRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('No System Bot connections found');
-      expect(result.content).toContain('Settings → Messenger');
+      expect(result.content).toContain('Marketplace → Apps');
     });
 
     // Telegram is env-backed (no installation row); the runtime synthesizes a
@@ -1491,7 +1491,7 @@ describe('messageRuntime', () => {
       expect(result.content).toContain('send any message to the LobeHub WeChat bot');
     });
 
-    it('directs the user to Settings → Messenger when the platform is unlinked', async () => {
+    it('directs the user to Marketplace → Apps when the platform is unlinked', async () => {
       mockSendMessengerPush.mockResolvedValueOnce({ status: 'unlinked' });
 
       const runtime = await messageRuntime.factory(validContext);
@@ -1499,7 +1499,7 @@ describe('messageRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.state.status).toBe('unlinked');
-      expect(result.content).toContain('Settings → Messenger');
+      expect(result.content).toContain('Marketplace → Apps');
     });
 
     it('reports unavailable without retrying', async () => {

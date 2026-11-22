@@ -1,7 +1,5 @@
-import { isDesktop } from '@lobechat/const';
-import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Button, confirmModal, Drawer, Flexbox, toast, useResponsive } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Modal, toast } from '@lobehub/ui';
 import { useForm, useWatch } from '@lobehub/ui/form';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { openConnectorOAuthPopup } from '@/utils/connectorOAuth';
 
 import MCPManifestForm from './MCPManifestForm';
-import PluginPreview from './PluginPreview';
+import {
+  AUTHORIZE_ALWAYS,
+  type DevModalOAuthFields,
+  type DevModalOAuthPlan,
+  planOAuthSave,
+} from './oauthSavePlan';
 import { pruneHiddenFields } from './pruneHiddenFields';
 import { getSaveErrorToast } from './saveErrorToast';
 
@@ -17,9 +20,19 @@ const INITIAL_VALUES = {
   customParams: { mcp: { auth: { type: 'none' }, type: 'http' } },
 } as LobeToolCustomPlugin;
 
+export type { DevModalOAuthFields, DevModalOAuthPlan } from './oauthSavePlan';
+
 interface DevModalProps {
+  /** Let a device-run server be bound to one device (connectors only, see MCPManifestForm). */
+  enableDeviceBinding?: boolean;
   /** Enable the connector-backed OAuth auth type in the MCP form (see MCPManifestForm). */
   enableOAuth?: boolean;
+  /**
+   * For the OAuth fields as they stand: whether saving authorizes, and what to
+   * tell the user about the connected accounts. Without it every OAuth save
+   * authorizes (creating a connector has nothing to keep).
+   */
+  getOAuthPlan?: (fields: DevModalOAuthFields) => DevModalOAuthPlan;
   mode?: 'edit' | 'create';
   onDelete?: () => void;
   onOpenChange: (open: boolean) => void;
@@ -29,6 +42,8 @@ interface DevModalProps {
   ) => Promise<void> | void;
   onValueChange?: (value: Partial<LobeToolCustomPlugin>) => void;
   open?: boolean;
+  /** The edited connector is private to its creator (see MCPManifestForm). */
+  privateConnector?: boolean;
   value?: LobeToolCustomPlugin;
 }
 
@@ -41,14 +56,16 @@ const DevModal = memo<DevModalProps>(
     onSave,
     onOpenChange,
     onDelete,
+    enableDeviceBinding,
     enableOAuth,
+    getOAuthPlan,
+    privateConnector,
   }) => {
     const isEditMode = mode === 'edit';
     const { t } = useTranslation('plugin');
 
     const [submitting, setSubmitting] = useState(false);
 
-    const { mobile } = useResponsive();
     const form = useForm<LobeToolCustomPlugin>({
       initialValues: INITIAL_VALUES,
       onSubmit: async (values) => {
@@ -58,7 +75,11 @@ const DevModal = memo<DevModalProps>(
         onValueChange?.(values);
       },
     });
-    const authType = useWatch(form, 'customParams.mcp.auth.type');
+    const serverUrl = useWatch(form, 'customParams.mcp.url');
+    const clientId = useWatch(form, 'customParams.mcp.auth.clientId');
+    const clientSecret = useWatch(form, 'customParams.mcp.auth.clientSecret');
+    const oauthPlan =
+      getOAuthPlan?.({ clientId, clientSecret, url: serverUrl }) ?? AUTHORIZE_ALWAYS;
 
     // Seed the form once per modal open, waiting for `value` to arrive (it may
     // be undefined initially while edit-mode credentials are being fetched).
@@ -122,7 +143,10 @@ const DevModal = memo<DevModalProps>(
     };
 
     const handlePrimaryClick = () => {
-      if (enableOAuth && authType === 'oauth2') return runOAuthFlow();
+      // Decided on the values being saved, so the popup opens exactly when the
+      // save handler will authorize (it applies the same plan).
+      if (planOAuthSave({ enableOAuth, getOAuthPlan, values: form.getValues() }).authorize)
+        return runOAuthFlow();
       form.submit();
     };
 
@@ -130,14 +154,11 @@ const DevModal = memo<DevModalProps>(
       if (mode === 'create' && !open) form.reset(INITIAL_VALUES);
     }, [open]);
 
-    const buttonStyle = mobile ? { flex: 1 } : { margin: 0 };
-
     const footer = (
       <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
         {isEditMode ? (
           <Button
             danger
-            style={buttonStyle}
             onClick={() =>
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
@@ -159,64 +180,56 @@ const DevModal = memo<DevModalProps>(
         )}
         <Flexbox horizontal gap={12}>
           <Button
-            style={buttonStyle}
             onClick={() => {
               onOpenChange(false);
             }}
           >
             {t('cancel', { ns: 'common' })}
           </Button>
-          <Button
-            loading={submitting}
-            style={buttonStyle}
-            type={'primary'}
-            onClick={handlePrimaryClick}
-          >
-            {t(isEditMode ? 'dev.update' : 'dev.save')}
+          <Button loading={submitting} type={'primary'} onClick={handlePrimaryClick}>
+            {t(isEditMode ? 'dev.update' : 'dev.addConnector')}
           </Button>
         </Flexbox>
       </Flexbox>
     );
 
+    // A centered dialog, not a full-height sheet: the form is a handful of
+    // fields with the advanced ones folded, so it keeps the page it was opened
+    // from in view. The body scrolls; the footer stays put.
     return (
-      <Drawer
-        containerMaxWidth={'auto'}
+      <Modal
         footer={footer}
-        height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
+        keyboard={!submitting}
+        maskClosable={!submitting}
         open={open}
-        placement={'bottom'}
-        push={false}
-        title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
-        width={mobile ? '100%' : 800}
+        title={t(isEditMode ? 'dev.title.connectorSettings' : 'dev.title.createConnector')}
+        width={640}
         styles={{
-          bodyContent: {
-            height: '100%',
-            padding: 0,
-          },
+          body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' },
         }}
-        onClose={() => {
+        onCancel={() => {
           onOpenChange(false);
         }}
       >
+        {/* React events bubble through the portal: keep form clicks away from
+            the row or menu that opened the dialog. */}
         <Flexbox
-          horizontal
-          gap={0}
-          height={'100%'}
+          gap={16}
           onClick={(e) => {
             e.stopPropagation();
           }}
         >
-          <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
-            <MCPManifestForm
-              enableOAuth={enableOAuth}
-              form={form}
-              isEditMode={isEditMode}
-              onAuthorizeOAuth={runOAuthFlow}
-            />
-          </Flexbox>
-          <PluginPreview form={form} />
+          <MCPManifestForm
+            enableDeviceBinding={enableDeviceBinding}
+            enableOAuth={enableOAuth}
+            form={form}
+            isEditMode={isEditMode}
+            oauthNotice={oauthPlan.notice}
+            privateConnector={privateConnector}
+            onAuthorizeOAuth={oauthPlan.authorize ? runOAuthFlow : undefined}
+          />
         </Flexbox>
-      </Drawer>
+      </Modal>
     );
   },
 );

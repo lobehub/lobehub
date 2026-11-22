@@ -1,5 +1,7 @@
 import { mergeIslandDismissals } from '@lobechat/const/goal';
 import type {
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
   NotificationSettings,
   SSOProvider,
   SystemAgentItem,
@@ -10,6 +12,7 @@ import type {
   UserSettings,
   WidgetDryRunGrant,
 } from '@lobechat/types';
+import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
@@ -37,6 +40,7 @@ import type { LobeChatDatabase } from '../type';
 import { notTrashed } from '../utils/softDelete';
 import { hasLiveParentTopic } from '../utils/topicVisibility';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
+import { releaseProjectEnvironments } from './utils/projectEnvironmentCleanup';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -79,6 +83,9 @@ export type ListUsersForMemoryExtractorOptions = {
 export type ListUsersForHourlyMemoryExtractorOptions = ListUsersForMemoryExtractorOptions;
 
 export interface UserInfoForAIGeneration {
+  /** Only a saved user choice may become a chat instruction. */
+  preferredReplyLanguage?: string;
+  /** Resolved locale for generators that require a concrete output language. */
   responseLanguage: string;
   userName: string;
 }
@@ -576,6 +583,34 @@ export class UserModel {
     })) ?? [];
 
   /**
+   * Personal-mode "New worktree" switch for one directory; returns the stored
+   * list. Same row lock as every other preference writer, and the cap is
+   * applied here (see `applyWorktreeModeDir`).
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const worktreeModeDirs = applyWorktreeModeDir(prev.worktreeModeDirs, key, enabled);
+      return { next: { ...prev, worktreeModeDirs }, result: worktreeModeDirs };
+    })) ?? [];
+
+  /**
+   * Personal-mode Claude Code permission mode remembered for one directory;
+   * returns the stored list. The cap is applied here (`applyHeteroPermissionModeDir`).
+   */
+  setHeteroPermissionModeDir = async (
+    key: string,
+    mode: HeteroPermissionMode,
+  ): Promise<HeteroPermissionModeDir[]> =>
+    (await this.mutatePreference((prev) => {
+      const heteroPermissionModeDirs = applyHeteroPermissionModeDir(
+        prev.heteroPermissionModeDirs,
+        key,
+        mode,
+      );
+      return { next: { ...prev, heteroPermissionModeDirs }, result: heteroPermissionModeDirs };
+    })) ?? [];
+
+  /**
    * Normalize unique user fields so empty strings become null, keeping unique constraints safe.
    */
   private static normalizeUniqueUserFields = <
@@ -694,6 +729,10 @@ export class UserModel {
       await tx
         .delete(taskLabels)
         .where(and(eq(taskLabels.userId, id), isNull(taskLabels.workspaceId)));
+      await applyRemainingTimeout();
+      // The projects cascade away with the account; their environments would
+      // otherwise hold it back through `environments.user_id`.
+      await releaseProjectEnvironments(tx as unknown as LobeChatDatabase, { userId: id });
       await applyRemainingTimeout();
       const result = await tx.delete(users).where(eq(users.id, id));
       if (deadline !== undefined && Date.now() >= deadline)
@@ -1045,6 +1084,7 @@ export class UserModel {
     const general = user?.general as UserGeneralConfig | undefined;
 
     return {
+      preferredReplyLanguage: general?.responseLanguage || undefined,
       responseLanguage: general?.responseLanguage || 'en-US',
       userName: user?.fullName || user?.firstName || 'User',
     };

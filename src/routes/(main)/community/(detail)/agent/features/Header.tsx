@@ -3,7 +3,6 @@
 import { MCP } from '@lobehub/icons';
 import {
   ActionIcon,
-  Avatar,
   Button,
   Flexbox,
   Icon,
@@ -28,6 +27,7 @@ import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import PublishedTime from '@/components/PublishedTime';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
@@ -103,7 +103,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     <WorkspaceLink
       to={qs.stringifyUrl({
         query: { category: cate?.key },
-        url: '/community/agent',
+        url: '/marketplace/agent',
       })}
     >
       <Button icon={cate?.icon} size={'middle'}>

@@ -9,6 +9,7 @@ import { projectDirectoryDeviceName } from '@/features/ChatInput/ControlBar/proj
 import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { useDeviceList } from '@/store/device';
+import { densityVars } from '@/styles/densityVars';
 
 import { useStagedNewTopicDirectory } from './useStagedNewTopicDirectory';
 
@@ -17,8 +18,8 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
 
     width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

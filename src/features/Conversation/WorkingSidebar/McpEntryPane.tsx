@@ -15,11 +15,14 @@ export const McpEntryPane = ({
   tab,
   scope,
   agentId,
+  topicId,
   onClose,
 }: {
   tab: string;
   scope: string;
   agentId?: string;
+  /** The conversation the app runs in: its calls and resources resolve there. */
+  topicId?: string;
   onClose: (tab: string) => void;
 }) => {
   const { t } = useTranslation('plugin');
@@ -29,6 +32,7 @@ export const McpEntryPane = ({
   const entry = parseMcpEntryTab(tab);
   const identifier = entry?.identifier;
   const toolName = entry?.toolName;
+  const linkId = entry?.linkId;
   const [title] = useMcpAppIdentity(identifier ?? '', agentId);
   const id = mcpEntryInstanceId(scope, tab);
   useEffect(() => {
@@ -38,7 +42,8 @@ export const McpEntryPane = ({
   const state = useMcpAppStore(mcpAppSelectors.entry(id));
   const open = () => {
     setUnsupported(false);
-    if (identifier && toolName) void openMcpAppEntrypoint({ agentId, id, identifier, toolName });
+    if (identifier && toolName)
+      void openMcpAppEntrypoint({ agentId, id, identifier, linkId, toolName, topicId });
   };
   // Context the view reported belongs to this instance only
   useEffect(() => () => mcpAppContext.clear(id), [id]);
@@ -71,12 +76,14 @@ export const McpEntryPane = ({
       arguments={'{}'}
       fallback={<Text>{t('mcpApp.entrypoint.error')}</Text>}
       identifier={entry.identifier}
+      linkId={linkId}
       resourceUri={app.resourceUri}
       result={{ content: result.content, state: unwrapMcpToolState(result.state) }}
       server={app.server}
       toolCallId={id}
       host={{
         agentId,
+        topicId,
         canSendMessage: !!host,
         sendMessage: async (params) => {
           if (host) await host.sendMessage(params);

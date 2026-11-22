@@ -18,20 +18,20 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.About,
   WorkspaceSettingsTabs.APIKey,
   WorkspaceSettingsTabs.Appearance,
+  WorkspaceSettingsTabs.Automations,
+  WorkspaceSettingsTabs.Webhooks,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Budget,
-  WorkspaceSettingsTabs.ChatPreference,
+  WorkspaceSettingsTabs.Conversation,
   WorkspaceSettingsTabs.Creds,
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
   WorkspaceSettingsTabs.Environments,
   WorkspaceSettingsTabs.General,
   WorkspaceSettingsTabs.Hotkey,
-  WorkspaceSettingsTabs.Integrations,
   WorkspaceSettingsTabs.Labels,
   WorkspaceSettingsTabs.Labs,
   WorkspaceSettingsTabs.Members,
-  WorkspaceSettingsTabs.Messenger,
   WorkspaceSettingsTabs.Notification,
   WorkspaceSettingsTabs.Plans,
   WorkspaceSettingsTabs.Profile,
@@ -45,14 +45,10 @@ const COMPACT_HEADER_TABS = new Set<string>([
 ]);
 
 /**
- * Tabs whose content spans the full pane instead of the centered 1024 column —
- * card grids that add columns as the pane widens (Devices), and the
- * subscription account list, whose usage columns need the room.
+ * Tabs whose content spans the full pane instead of the centered 1024 column:
+ * the subscription account list, whose usage columns need the room.
  */
-const FULL_WIDTH_TABS = new Set<string>([
-  WorkspaceSettingsTabs.Devices,
-  WorkspaceSettingsTabs.SubscriptionAccounts,
-]);
+const FULL_WIDTH_TABS = new Set<string>([WorkspaceSettingsTabs.SubscriptionAccounts]);
 
 const outletContainerStyle: CSSProperties = { overflow: 'hidden', position: 'relative' };
 

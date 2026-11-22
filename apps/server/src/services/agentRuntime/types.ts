@@ -21,6 +21,7 @@ import type {
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   FrozenCredentialFacts,
+  UIChatMessage,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
@@ -143,6 +144,23 @@ export type StepCompletionReason =
 
 // ==================== Execution Params ====================
 
+/**
+ * The protocol v2 message patch of a step that continues inline, left
+ * unpublished so the next step's entry read can be its "after" side. Lives
+ * only in the invocation's memory; whoever ends up holding it must publish it
+ * before the client hears of the next step.
+ */
+export interface DeferredMessagePatch {
+  /** The step's entry read: the patch's "before" side. */
+  before: UIChatMessage[];
+  /** Conversation the step read; see `stepMessagesScopeKey`. */
+  scopeKey: string;
+  /** State the step ended with, to read the "after" side when no entry read takes over. */
+  state: AgentState;
+  /** Step the patch belongs to. */
+  stepIndex: number;
+}
+
 export interface AgentExecutionParams {
   approvedToolCall?: any;
   /**
@@ -158,6 +176,11 @@ export interface AgentExecutionParams {
    */
   clientLlmWaitExpired?: string;
   context?: AgentRuntimeContext;
+  /**
+   * The previous inline step's message patch. This step publishes it from its
+   * own entry read, before `step_start`. Set only by the inline step loop.
+   */
+  deferredMessagePatch?: DeferredMessagePatch;
   externalRetryCount?: number;
   /**
    * Finish (rather than resume) a `waiting_for_async_tool` supervisor op after
@@ -263,6 +286,12 @@ export interface AgentExecutionResult {
    * inline loop can simply stop when it is missing.
    */
   continuation?: AgentStepContinuation;
+  /**
+   * This step's unpublished message patch, present only alongside
+   * `continuation`. The inline loop passes it to the next step, or to
+   * `scheduleContinuation` when it hands the step back to the queue.
+   */
+  deferredMessagePatch?: DeferredMessagePatch;
   /**
    * When true, the step was already being executed by another instance (lock conflict).
    * Stale duplicates are handled before returning this; callers should keep
@@ -422,6 +451,7 @@ export interface ExecGroupMemberResult {
 }
 
 export interface OperationCreationParams {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client starting this run renders `file` Works (declared via
    * `aiAgent.execAgent`'s `streamFeatures`). Stored on
@@ -520,6 +550,8 @@ export interface OperationCreationParams {
      */
     userAgent?: string;
   };
+  /** Library skills the agent set to `auto`, kept on `state.world` for the skill pool. */
+  autoSkillIds?: string[];
   autoStart?: boolean;
   /**
    * Sender/owner identity for bot-originated runs. Forwarded into

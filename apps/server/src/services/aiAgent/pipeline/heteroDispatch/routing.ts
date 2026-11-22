@@ -15,7 +15,7 @@ import type { HeteroDispatchDeps, HeteroDispatchInput } from './types';
  */
 export const resolveHeteroRouting = async (
   deps: HeteroDispatchDeps,
-  ctx: Pick<ExecRunContext, 'agentConfig' | 'canUseDevice'>,
+  ctx: Pick<ExecRunContext, 'agentConfig' | 'canUseDevice' | 'shareGate'>,
   input: Pick<
     HeteroDispatchInput,
     | 'canManageAgent'
@@ -28,7 +28,7 @@ export const resolveHeteroRouting = async (
     | 'requestedDeviceId'
   >,
 ) => {
-  const { agentConfig, canUseDevice } = ctx;
+  const { agentConfig, canUseDevice, shareGate } = ctx;
   const {
     canManageAgent,
     effectiveRequestedDeviceId,
@@ -89,7 +89,9 @@ export const resolveHeteroRouting = async (
     clientExecutionAvailable: false,
     isHetero: true,
     requestedDeviceId,
-    sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
+    // A share visitor's run never falls back to the cloud sandbox: it would
+    // hold the creator's credentials in a box the visitor's prompt controls.
+    sandboxExecutionAvailable: !shareGate && supportsCloudHeterogeneousSandbox(heteroType),
     trigger: requestTrigger,
     wakeableDeviceIds: wakeableCliDevices.map((device) => device.deviceId),
   };

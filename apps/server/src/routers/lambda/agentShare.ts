@@ -1,33 +1,36 @@
-import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
+  AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
 } from '@lobechat/const';
-import { assembleSkillPool } from '@lobechat/mecha';
-import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
-import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
+import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
-import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
+import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
+
+const shareVisibilitySchema = z.enum(['private', 'card', 'link']);
 
 /**
  * One `toolGrants` entry: a tool identifier, optionally narrowed to specific
@@ -54,6 +57,7 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
+    autoGrantAgentTools: z.boolean().optional(),
     demoCases: z
       .array(
         z
@@ -65,29 +69,32 @@ export const agentShareConfigSchema = z
       )
       .max(20)
       .optional(),
+    /** Presentation-only review state; see `AgentShareConfig.declinedGrantIds`. */
+    declinedGrantIds: z
+      .array(z.string().trim().min(1))
+      .max(500)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate declined identifier')
+      .optional(),
+    deviceAccess: z.enum(['none', 'contacts', 'allowlist']).optional(),
+    /** Each id must also be in the scope's address book; `updateShareConfig` checks that. */
+    deviceAllowUserIds: z
+      .array(z.string().trim().min(1).max(64))
+      .max(AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate user')
+      .optional(),
     featuredWorkIds: z
       .array(z.string().trim().min(1))
       .max(100)
       .refine((ids) => new Set(ids).size === ids.length, 'Duplicate featured Work')
       .optional(),
+    /** Lists the share in the shared-Agent market; see `AgentShareConfig.listedInMarket`. */
+    listedInMarket: z.boolean().optional(),
     /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
     maxFileStorage: z.number().int().nonnegative().optional(),
-    /**
-     * The visitor topic list (`TopicModel.queryBySender`) is not paginated
-     * and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT`, so a cap
-     * above that constant would let visitors create topics they can never
-     * reopen.
-     */
-    maxTopicsPerVisitor: z
-      .number()
-      .int()
-      .positive()
-      .max(AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT)
-      .optional(),
-    maxTurnsPerTopic: z.number().int().positive().optional(),
+    maxMessagesPerVisitor: z.number().int().positive().optional(),
     monthlySpendLimit: z.number().nonnegative().optional(),
-    showErrorDetails: z.boolean().optional(),
-    showModelInfo: z.boolean().optional(),
+    /** Only clearable: the marker is set by `AgentShareModel.create` alone. */
+    seedDefaultGrants: z.literal(false).optional(),
     /**
      * Skill identifiers the creator opened to visitors. An empty array is
      * accepted rather than rejected: unticking the last skill is a normal
@@ -184,6 +191,27 @@ const assertCanManageAgentShare = async (
   });
 };
 
+/**
+ * The address book a share's device grant draws from: the owner's personal
+ * contacts for a personal Agent, the workspace's members and external
+ * contacts for a workspace Agent. Keyed by the Agent's owner, exactly as the
+ * runtime re-check (`resolveShareVisitorDeviceAccess`) is, so a workspace
+ * manager other than the owner lists and saves the same people the run then
+ * accepts. `enabled` mirrors the runtime's Channels gate on the same owner.
+ */
+const shareAddressBook = async (ctx: AgentSharePermissionContext, agentId: string) => {
+  const [agent] = await ctx.serverDB
+    .select({ userId: agents.userId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+  const ownerId = agent?.userId ?? ctx.userId;
+  return {
+    book: getAddressBook(ctx.serverDB, ownerId, ctx.workspaceId),
+    enabled: await isChannelEnabled(ownerId),
+  };
+};
+
 /** `updateConfig` / `updateVisibility` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
 const requireShare = <T>(share: T | null): T => {
   if (!share) {
@@ -206,20 +234,53 @@ export const agentShareRouter = router({
     return requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private'));
   }),
 
+  /**
+   * Let the Agent be shared by card, in one step from a card's send: a missing share is created
+   * as `card`, a paused one resumes as `card`, a live one is left as it is. A `card` share admits
+   * only the people who add the Agent from its owner's card; its link page stays closed. Same
+   * preconditions as publishing a link.
+   */
+  enableCardShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    await assertAgentShareCreationEnabled(ctx.userId);
+
+    return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
+      await service.prepareShareModel(input.agentId);
+      const share = await shares.create(input.agentId, 'card');
+      if (share.visibility !== 'private') return share;
+      return requireShare(await shares.updateVisibility(input.agentId, 'card'));
+    });
+  }),
+
   enableShare: agentShareProcedure
-    .input(agentIdInput.extend({ visibility: z.enum(['private', 'link']).optional() }).strict())
+    .input(agentIdInput.extend({ visibility: shareVisibilitySchema.optional() }).strict())
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
 
-      if (input.visibility === 'link') {
+      const visibility = input.visibility;
+      if (visibility === 'link' || visibility === 'card') {
         return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
           await service.prepareShareModel(input.agentId);
-          return shares.create(input.agentId, 'link');
+          return shares.create(input.agentId, visibility);
         });
       }
 
-      return ctx.agentShareModel.create(input.agentId, input.visibility);
+      return ctx.agentShareModel.create(input.agentId, visibility);
+    }),
+
+  /** The people this Agent's share admits by card, for its owner's share settings. */
+  listCardGrants: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    return ctx.agentShareModel.listGrants(input.agentId);
+  }),
+
+  /** Withdraw one person's card grant; a run of theirs stops at its next step. */
+  revokeCardGrant: agentShareProcedure
+    .input(agentIdInput.extend({ userId: z.string().trim().min(1) }).strict())
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return { revoked: await ctx.agentShareModel.revokeGrant(input.agentId, input.userId) };
     }),
 
   /**
@@ -352,22 +413,7 @@ export const agentShareRouter = router({
     }),
   /**
    * Skills this agent could offer a visitor — the candidate list behind the
-   * share settings skill picker, and the set `shareConfig.skillGrants` entries
-   * are chosen from.
-   *
-   * Built through the SAME `assembleSkillPool` a real run uses, on the same
-   * server-side sources, so the picker cannot offer a skill the run would never
-   * assemble (nor hide one it would). Three deliberate differences from a run:
-   *
-   * - no `shareAllowedIds` — the whole point is to list what COULD be granted;
-   * - no project/device skills — those are discovered on the execution device's
-   *   filesystem, and a visitor run never routes a device;
-   * - `canExecuteOnDevice: false`, for the same reason.
-   *
-   * Skills are NOT filtered to the agent's pinned set: a skill is on-demand by
-   * default, so an unpinned skill is exactly the normal case. `manual` mode is
-   * the one exception, and `assembleSkillPool` applies it from
-   * `enabledPluginIds` on its own.
+   * share settings skill picker (see `listShareGrantableSkills`).
    *
    * Authorization matches the other share reads: `assertCanManageAgentShare`
    * for the workspace case, then `requireShare` on the ownership-scoped
@@ -386,50 +432,41 @@ export const agentShareRouter = router({
       workspaceId,
     ).getAgentConfigById(input.agentId);
 
-    const [dbSkills, agentSkills] = await Promise.all([
-      new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId)
-        .findAll()
-        .then((result) => result.data),
-      // A bundle-less agent is the common case and throws nothing; a genuine
-      // failure here must not take the whole picker down with it — the DB and
-      // builtin skills are still grantable.
-      new AgentDocumentsService(ctx.serverDB, ctx.userId, workspaceId)
-        .getAgentSkills(input.agentId)
-        .catch(() => []),
-    ]);
-
-    const { skills } = assembleSkillPool(
-      {
-        agentSkills: agentSkills.map((skill) => ({
-          description: skill.description,
-          identifier: skill.identifier,
-          name: skill.name,
-        })),
-        builtin: builtinSkills.map((skill) => ({
-          description: skill.description,
-          identifier: skill.identifier,
-          name: skill.name,
-        })),
-        db: dbSkills.map((skill) => ({
-          description: skill.description ?? '',
-          identifier: skill.identifier,
-          name: skill.name,
-        })),
-      },
-      {
-        canExecuteOnDevice: false,
-        disabledIds: getDisabledPluginIds(agentConfig?.plugins ?? undefined),
-        enabledPluginIds: getActivePluginIds(agentConfig?.plugins ?? undefined),
-        skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,
-      },
-    );
-
-    return skills.map((skill) => ({
-      description: skill.description,
-      identifier: skill.identifier,
-      name: skill.name,
-    }));
+    return listShareGrantableSkills({
+      agentConfig,
+      agentId: input.agentId,
+      db: ctx.serverDB,
+      includeLegacyBuiltinSkills: true,
+      userId: ctx.userId,
+      workspaceId,
+    });
   }),
+
+  /**
+   * Who the execution-environment grant can name: the address book of the
+   * share's scope (`AddressBook.listAddressBookPeople`). `unlisted` resolves
+   * the profiles of already-granted people who have since left that book, so
+   * the settings page can show them as no longer authorized instead of an id.
+   * `enabled` is false while the address book itself is off for the caller
+   * (Channels flag): nobody can be added then, and runtime grants nothing.
+   */
+  listDeviceGrantablePeople: agentShareProcedure
+    .input(agentIdInput)
+    .query(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      const share = requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+
+      const { book, enabled } = await shareAddressBook(ctx, input.agentId);
+      const people = enabled ? await book.listAddressBookPeople() : [];
+      const inBook = new Set(people.map((person) => person.id));
+      const unlisted = await pMap(
+        (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id)),
+        (id) => book.findUser(id),
+        { concurrency: 5 },
+      );
+
+      return { enabled, people, unlisted: unlisted.filter((user) => !!user) };
+    }),
 
   updateShareConfig: agentShareProcedure
     .input(
@@ -442,6 +479,31 @@ export const agentShareRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
+
+      const { deviceAccess, deviceAllowUserIds } = input.config;
+      if (
+        deviceAccess === 'allowlist' ||
+        deviceAccess === 'contacts' ||
+        deviceAllowUserIds?.length
+      ) {
+        const { book, enabled } = await shareAddressBook(ctx, input.agentId);
+        // The runtime grants nothing while contacts are off, so refuse to store
+        // a grant that would silently do nothing (or wake up when they turn on).
+        if (!enabled)
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Device access needs contacts, which are not available',
+          });
+        const inBook = new Set(
+          deviceAllowUserIds?.length ? await book.filterAddressBookPeople(deviceAllowUserIds) : [],
+        );
+        if (deviceAllowUserIds?.some((id) => !inBook.has(id)))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Device access can only be granted to people in your contacts',
+          });
+      }
+
       return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
     }),
 
@@ -471,19 +533,20 @@ export const agentShareRouter = router({
       z
         .object({
           agentId: z.string().trim().min(1),
-          visibility: z.enum(['private', 'link']),
+          visibility: shareVisibilitySchema,
         })
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
-      // Flipping to `link` publishes the share, so it is the same capability
+      // Flipping to `link` or `card` admits others, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
-      if (input.visibility === 'link') {
+      const visibility = input.visibility;
+      if (visibility === 'link' || visibility === 'card') {
         await assertAgentShareCreationEnabled(ctx.userId);
         return ctx.agentService.withShareModelLock(input.agentId, async (service, shares) => {
           await service.prepareShareModel(input.agentId);
-          return requireShare(await shares.updateVisibility(input.agentId, 'link'));
+          return requireShare(await shares.updateVisibility(input.agentId, visibility));
         });
       }
 

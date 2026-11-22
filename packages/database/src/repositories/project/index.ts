@@ -1,14 +1,18 @@
-import { EnvironmentModel } from '../../models/environment';
-import type { CreateProjectInput } from '../../models/project';
+import { layoutRepositorySources } from '@lobechat/types';
+import { eq, max } from 'drizzle-orm';
+
+import { AgentModel } from '../../models/agent';
+import { normalizeProjectRepository } from '../../models/environment';
+import type { CreateProjectInput, ProjectModelOptions } from '../../models/project';
 import {
   normalizeProjectIdentifier,
   ProjectIdentifierTakenError,
   ProjectModel,
 } from '../../models/project';
 import { createProjectMainAgent } from '../../models/projectMainAgent';
-import { projectAgents } from '../../schemas/project';
-import { projectEnvironments } from '../../schemas/projectEnvironment';
+import { projectAgents, projectCompletionReviews } from '../../schemas/project';
 import type { LobeChatDatabase } from '../../type';
+import { ProjectEnvironmentRepository } from '../projectEnvironment';
 
 /**
  * Cross-aggregate write flow for projects. Creating a project also creates (or
@@ -22,9 +26,19 @@ export class ProjectRepository {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    private readonly options: ProjectModelOptions = {},
   ) {}
 
-  async create({ dedicatedAgentId, repository, ...input }: CreateProjectInput) {
+  private model(db: LobeChatDatabase) {
+    return new ProjectModel(db, this.userId, this.workspaceId, this.options);
+  }
+
+  async create({
+    additionalRepositories,
+    dedicatedAgentId,
+    repository,
+    ...input
+  }: CreateProjectInput) {
     const identifier = normalizeProjectIdentifier(input.identifier);
 
     return this.db.transaction(async (tx) => {
@@ -67,35 +81,82 @@ export class ProjectRepository {
       });
       await this.linkCoordinator(db, project.id, mainAgent.id);
 
-      // The environment belongs to another aggregate too, and a repository the
-      // environment cannot accept must not leave a half-made project behind, so
-      // it is created in the same transaction.
-      //
-      // A workspace-public main agent applies published environments only, so
-      // its repository is published too; reusing the creator's private one
-      // would link a repository the project's conversations never check out.
-      if (repository) {
-        const publish =
-          !!this.workspaceId && (mainAgent as { visibility?: string }).visibility === 'public';
-        const environment = await new EnvironmentModel(
-          db,
-          this.userId,
-          this.workspaceId,
-        ).ensureForRepository({
-          defaultBranch: repository.defaultBranch,
-          name: repository.name,
-          repositoryUrl: repository.url,
-          ...(publish && { visibility: 'public' as const }),
-        });
-        await db.insert(projectEnvironments).values({
-          addedByUserId: this.userId,
-          environmentId: environment.id,
-          projectId: project.id,
-          workspaceId: this.workspaceId,
-        });
-      }
+      // Every project has its own environment, made with it in the same
+      // transaction so a repository it cannot accept leaves no half-made
+      // project behind. One made from a repository checks it out; any other
+      // starts with nothing to check out and is filled in from the project's
+      // settings.
+      const repositories = [...(repository ? [repository] : []), ...(additionalRepositories ?? [])];
+      const seen = new Set<string>();
+      const sources = repositories.flatMap((item) => {
+        const url = normalizeProjectRepository(item.url);
+        if (seen.has(url)) return [];
+        seen.add(url);
+        const ref = item.defaultBranch?.trim();
+        return [{ kind: 'git' as const, url, ...(ref && { ref }) }];
+      });
+      await ProjectEnvironmentRepository.createForProject(
+        db,
+        project,
+        sources.length > 0 ? { sources: layoutRepositorySources(sources) } : {},
+      );
 
       return project;
+    });
+  }
+
+  /**
+   * Deletes a project and retires a coordinator provisioned for it: a virtual,
+   * non-builtin agent no other project still uses. Reusable agents (user agents,
+   * LobeAI) stay with their sessions intact.
+   */
+  async delete(id: string) {
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const projectModel = this.model(db);
+      const project = await projectModel.findManageableById(id);
+      if (!project) return null;
+
+      // Also releases the project's environment (see `ProjectModel.delete`).
+      const deleted = await projectModel.delete(id);
+      // Asked after the delete, so this project no longer counts as one still using it.
+      const agentId = project.coordinatorAgentId;
+      if (agentId && (await projectModel.isDedicatedCoordinator(agentId, { db }))) {
+        await new AgentModel(db, this.userId, this.workspaceId).delete(agentId);
+      }
+      return deleted;
+    });
+  }
+
+  /**
+   * Records the next round of a completion review and settles the project by it,
+   * holding the project row so concurrent reviews number their rounds in turn.
+   */
+  async reviewCompletion(id: string, decision: 'accepted' | 'rejected', comment?: string) {
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const projectModel = this.model(db);
+      const project = await projectModel.findManageableById(id, { lock: true });
+      if (!project) return null;
+      if (project.status !== 'reviewing') throw new Error('Project is not awaiting review');
+
+      const [{ value: lastRound }] = await db
+        .select({ value: max(projectCompletionReviews.round) })
+        .from(projectCompletionReviews)
+        .where(eq(projectCompletionReviews.projectId, id));
+      const [review] = await db
+        .insert(projectCompletionReviews)
+        .values({
+          comment,
+          decision,
+          projectId: id,
+          reviewerUserId: this.userId,
+          round: (lastRound ?? 0) + 1,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning();
+      const updated = await projectModel.applyCompletionReview(id, decision, review.id);
+      return { project: updated, review };
     });
   }
 

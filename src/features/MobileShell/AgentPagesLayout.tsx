@@ -10,7 +10,7 @@ import MobilePageLayout from './PageLayout';
 /** Full-screen agent sub-pages (profile, docs, …) with the agent 404 fallback. */
 const MobileAgentPagesLayout: FC = () => (
   <MobilePageLayout>
-    <AgentNotFoundGuard>
+    <AgentNotFoundGuard showAgentList>
       <Outlet />
     </AgentNotFoundGuard>
   </MobilePageLayout>

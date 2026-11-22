@@ -20,7 +20,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed, TargetIcon } from 'lucide-react';
-import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,7 +65,6 @@ import {
   PR_STATE_VISUAL,
 } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
-import { openTopicInNewTab, recordTopicClickOrigin } from './openTopicTab';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
 // CSS vars on the positioner. Zero them so the meta hover card appears instantly
@@ -275,7 +274,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
-    const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
@@ -337,34 +335,14 @@ const TopicItemRow = memo<TopicItemRowProps>(
       [id, title],
     );
 
-    const handleClick = useCallback(
-      (event?: MouseEvent) => {
-        if (event && event.detail > 1) return;
-        if (id) markSidebarTopicActivation(id);
-        if (isDesktop && id) recordTopicClickOrigin(id);
-        void navRef.current.navigateToTopic(id);
-      },
-      [id, navRef],
-    );
-
-    const handleDoubleClick = useCallback(async () => {
-      if (!id || !activeAgentId || !isDesktop) return;
-      markSidebarTopicActivation(id);
-      if (scope && href) {
-        openTopicInNewTab(id, href);
-        void navRef.current.navigateToTopic(id);
-        return;
-      }
-      if (await navRef.current.focusTopicPopup(id)) {
-        void navRef.current.navigateToTopic(id, { skipPopupFocus: true });
-        return;
-      }
-      openTopicInNewTab(
-        id,
-        buildWorkspaceAwarePath(AGENT_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug),
-      );
+    // A plain click only switches the topic. Opening a new tab takes an explicit
+    // gesture (Cmd/Ctrl+click, middle click, or the context menu): a double
+    // click used to open one, and a lagging UI turned repeated clicks into
+    // unwanted tabs.
+    const handleClick = useCallback(() => {
+      if (id) markSidebarTopicActivation(id);
       void navRef.current.navigateToTopic(id);
-    }, [id, activeAgentId, activeWorkspaceSlug, navRef, scope, href]);
+    }, [id, navRef]);
 
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
@@ -443,7 +421,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
     // keeping the row itself clean.
-    const metaCard = useMemo(() => getTopicMetaCard(metadata), [metadata]);
+    const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+    const metaCard = useMemo(
+      () => getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding }),
+      [betterCoding, metadata],
+    );
 
     // For default topic (no id)
     if (!id) {
@@ -543,7 +525,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // The conversation a goal was planned in says more about the row than
       // the PR it produced, so it outranks the PR marker (which stays in the
       // meta hover card).
-      if (hasGoal && goalsEnabled) {
+      if (hasGoal) {
         return (
           <Tooltip title={t('metaCard.goal')}>
             <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
@@ -631,6 +613,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
         <NavItem
           draggable
+          titleMarquee
           active={isTopicActive}
           description={workingDirectoryNode}
           href={href}
@@ -671,7 +654,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
             workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
           }
           onClick={handleClick}
-          onDoubleClick={() => void handleDoubleClick()}
           onDragStart={handleDragStart}
         />
       </TopicItemContextMenu>

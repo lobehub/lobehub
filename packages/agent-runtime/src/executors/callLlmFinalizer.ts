@@ -1,5 +1,6 @@
 import type {
   ChatToolPayload,
+  MessageContextAccounting,
   MessageMetadata,
   MessageToolCall,
   ModelPerformance,
@@ -48,6 +49,8 @@ interface FinalizeCallLlmTurnInput {
   assistantMessageId: string;
   /** Provider attempts spent on this call, including retries. */
   attempts?: number;
+  /** Estimated accounting of the request this turn sent; persisted on the message. */
+  contextAccounting?: MessageContextAccounting;
   events: AgentEvent[];
   host: AgentRuntimeHost;
   model: string;
@@ -61,12 +64,14 @@ interface FinalizeCallLlmTurnInput {
 
 interface PersistInterruptedCallLlmResultInput {
   assistantMessageId: string;
+  contextAccounting?: MessageContextAccounting;
   host: AgentRuntimeHost;
   output: LLMAttemptOutput;
 }
 
 const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
+  contextAccounting,
   currentStepSpeed,
   currentStepUsage,
   executionSite,
@@ -76,6 +81,7 @@ const buildMessageMetadata = ({
   usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
+  contextAccounting?: MessageContextAccounting;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
   executionSite?: LLMAttemptOutput['executionSite'];
@@ -87,6 +93,7 @@ const buildMessageMetadata = ({
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
     ...(currentStepSpeed && { ...currentStepSpeed, performance: currentStepSpeed }),
+    ...(contextAccounting && { contextAccounting }),
     ...(finishType && { finishType }),
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
@@ -165,10 +172,23 @@ const buildWorkAnchor = ({
       : -1;
   const currentOperationMessages =
     sourceMessageIndex >= 0 ? state.messages.slice(sourceMessageIndex + 1) : [];
+  // Tool interaction also hides inside the conversation-flow `assistantGroup`
+  // virtual message: the server runtime hydrates `state.messages` from
+  // `parse(...).flatList`, where a turn's tool calls and results are nested
+  // under `children[].tools` rather than a `role: 'tool'` row or a top-level
+  // `tool_calls` array. Missing that shape dropped the Work display anchor —
+  // and so the card under the reply — for every server-side run.
+  const hasToolInteraction = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') return false;
+    if ('tool_calls' in value && Array.isArray(value.tool_calls) && value.tool_calls.length > 0)
+      return true;
+    if ('tools' in value && Array.isArray(value.tools) && value.tools.length > 0) return true;
+    if ('children' in value && Array.isArray(value.children))
+      return value.children.some((child) => hasToolInteraction(child));
+    return false;
+  };
   const hasPriorToolInteraction = currentOperationMessages.some(
-    (message) =>
-      message.role === 'tool' ||
-      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0),
+    (message) => message?.role === 'tool' || hasToolInteraction(message),
   );
   if (!hasPriorToolInteraction) return undefined;
 
@@ -180,10 +200,14 @@ const buildWorkAnchor = ({
 
 const persistFinalMessage = async ({
   assistantMessageId,
+  contextAccounting,
   host,
   output,
   state,
-}: Pick<FinalizeCallLlmTurnInput, 'assistantMessageId' | 'host' | 'output' | 'state'>) => {
+}: Pick<
+  FinalizeCallLlmTurnInput,
+  'assistantMessageId' | 'contextAccounting' | 'host' | 'output' | 'state'
+>) => {
   const finalContent = output.hasContentImages
     ? serializePartsForStorage(output.contentParts)
     : output.content;
@@ -193,6 +217,7 @@ const persistFinalMessage = async ({
   const aborted = output.finishReason === 'abort';
   const metadata = buildMessageMetadata({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
+    contextAccounting,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
     executionSite: output.executionSite,
@@ -300,6 +325,7 @@ const buildFinalState = ({
 export const finalizeCallLlmTurn = async ({
   assistantMessageId,
   attempts,
+  contextAccounting,
   events,
   host,
   model,
@@ -388,6 +414,7 @@ export const finalizeCallLlmTurn = async ({
 
   const finalReasoning = await persistFinalMessage({
     assistantMessageId,
+    contextAccounting,
     host,
     output: finalizedOutput,
     state,
@@ -458,6 +485,7 @@ export const finalizeCallLlmTurn = async ({
 
 export const persistInterruptedCallLlmResult = async ({
   assistantMessageId,
+  contextAccounting,
   host,
   output,
 }: PersistInterruptedCallLlmResultInput): Promise<void> => {
@@ -467,6 +495,7 @@ export const persistInterruptedCallLlmResult = async ({
     await host.transports.messages.update(assistantMessageId, {
       content: output.content,
       metadata: buildMessageMetadata({
+        contextAccounting,
         currentStepSpeed: output.speed,
         currentStepUsage: output.usage,
         executionSite: output.executionSite,

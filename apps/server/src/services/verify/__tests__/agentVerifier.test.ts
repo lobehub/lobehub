@@ -1,6 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
-import type { VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger, type VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createVerifierAgentRunner } from '../agentVerifier';
@@ -110,6 +110,17 @@ describe('createVerifierAgentRunner', () => {
     expect(params.provider).toBe('openai');
     // The builtin verify agent already declares the tool — not re-injected.
     expect(params.additionalPluginIds).toBeUndefined();
+  });
+
+  it('attributes the verifier run to the verify trigger', async () => {
+    getBuiltinAgentMock.mockResolvedValue({ id: 'builtin-verify' });
+
+    const runner = createVerifierAgentRunner(baseParams)!;
+    await runner(runnerArgs);
+
+    // Without a trigger, LobeHub-routed model calls throw RouteAttemptMissingContext
+    // in development and record trigger=null in production spend logs.
+    expect(execParams().trigger).toBe(RequestTrigger.Verify);
   });
 
   it('registers a verifier-terminal hook for local and queued completion handling', async () => {

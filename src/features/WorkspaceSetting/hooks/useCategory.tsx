@@ -1,10 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
-  Blocks,
   Brain,
   Building2,
   ChartColumnBigIcon,
@@ -20,19 +18,18 @@ import {
   Info,
   KeyboardIcon,
   KeyIcon,
-  KeyRound,
   Map,
-  MessageCircleIcon,
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   ScrollText,
   Sparkles,
   TagIcon,
   Trash2,
   Users,
   UsersRound,
+  WebhookIcon,
+  ZapIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +37,11 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -82,6 +83,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
+  const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -99,7 +101,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   return useMemo(
     () =>
       [
-        // Account-level settings (profile / appearance / hotkeys / messenger)
+        // Account-level settings (profile / appearance / hotkeys)
         // follow the user, not the workspace. They are mirrored here so members
         // can reach them without leaving the workspace; the pages are the
         // personal ones.
@@ -124,21 +126,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Hotkey,
               label: t('tab.hotkey'),
             },
-            // Follow-up chips / input completion act on the member's own chat
-            // surface, so every role configures them here — the workspace
-            // Service Model page stays admin-only.
+            // Conversation preferences (reply language, chat assist, send key…)
+            // act on the member's own chat surface, so every role configures
+            // them here — the workspace Service Model page stays admin-only.
             {
               icon: MessagesSquareIcon,
-              key: WorkspaceSettingsTabs.ChatPreference,
-              label: t('tab.chatPreference'),
-            },
-            // The System Bot binding is a per-user identity (owned by userId,
-            // not the workspace); reaching a workspace's agents happens via the
-            // scope selector on the page itself.
-            {
-              icon: MessageCircleIcon,
-              key: WorkspaceSettingsTabs.Messenger,
-              label: t('tab.messenger'),
+              key: WorkspaceSettingsTabs.Conversation,
+              label: t('tab.conversation'),
             },
           ],
           key: WorkspaceSettingsGroupKey.Account,
@@ -227,11 +221,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
             },
-            {
-              icon: SkillsIcon,
-              key: WorkspaceSettingsTabs.Skill,
-              label: t('workspaceSetting.tab.skill'),
-            },
             // Label registry is readable by everyone; the page itself keeps
             // management actions behind the admin gate (disabled, not hidden).
             {
@@ -243,29 +232,22 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // Outside services the workspace's agents can reach. These bindings
-        // belong to the workspace; Messenger stays in Account because it is a
-        // per-user binding.
-        {
+        enableWebhook && {
           items: [
-            // An installation connected here belongs to the workspace, so
-            // every member sees the same one.
+            // Every member sees the workspace's event subscriptions, so it is
+            // clear what fires the shared agents; managing one is per row.
             {
-              icon: PlugIcon,
-              key: WorkspaceSettingsTabs.Integrations,
-              label: t('tab.integrations'),
+              icon: ZapIcon,
+              key: WorkspaceSettingsTabs.Automations,
+              label: t('tab.automations'),
             },
+            // The workspace's agents' webhooks; made on each agent's page, managed here too.
             {
-              icon: Blocks,
-              key: WorkspaceSettingsTabs.Connector,
-              label: t('workspaceSetting.tab.connector'),
+              icon: WebhookIcon,
+              key: WorkspaceSettingsTabs.Webhooks,
+              label: t('tab.webhooks'),
             },
-            {
-              icon: KeyRound,
-              key: WorkspaceSettingsTabs.Creds,
-              label: t('tab.creds'),
-            },
-          ],
+          ] as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
           title: t('group.connection'),
         },
@@ -286,12 +268,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.SubscriptionAccounts,
               label: t('tab.subscriptionAccounts'),
             },
-            // Always there: a code environment is a definition, written down before
-            // anything runs it, and useful with or without a drive to run it on.
+            // Environments & Vault, always there: what a run starts from and
+            // the secrets it reads, in one place. An environment is a definition,
+            // written down before anything runs it, so it needs no drive.
             {
               icon: ContainerIcon,
               key: WorkspaceSettingsTabs.Environments,
-              label: t('tab.environments'),
+              label: t('tab.environmentsAndCreds'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,
@@ -367,6 +350,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       canViewBilling,
       canCreateContent,
       hideDocs,
+      enableWebhook,
       avatarUrl,
       username,
     ],

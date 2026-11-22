@@ -24,6 +24,7 @@ import { ProductLogo } from '@/components/Branding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useInterfaceDensity } from '@/styles/density';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
@@ -43,6 +44,8 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorInfo,
     backgroundImage: 'none',
   },
+  // Centers the dot on the first 20px compact text line.
+  unreadDotCompact: { marginBlockStart: '6px' },
 });
 
 const TYPE_ICON_MAP: Record<string, typeof BellIcon> = {
@@ -80,6 +83,8 @@ const NotificationItem = memo<NotificationItemProps>(
     onArchive,
   }) => {
     const { i18n, t } = useTranslation('notification');
+    const compact = useInterfaceDensity() === 'compact';
+    const avatarSize = compact ? 24 : 32;
     const { close } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
     const appOrigin = useAppOrigin();
@@ -150,20 +155,22 @@ const NotificationItem = memo<NotificationItemProps>(
         <Block
           aria-label={title}
           gap={4}
-          paddingBlock={12}
-          paddingInline={20}
+          paddingBlock={compact ? 8 : 12}
+          paddingInline={compact ? 16 : 20}
           style={{ cursor: 'pointer' }}
           variant="borderless"
           onClick={handleOpenDetail}
         >
-          <Flexbox horizontal align="flex-start" gap={12}>
-            {!isRead && <span {...stylex.props(styles.unreadDot)} />}
+          <Flexbox horizontal align="flex-start" gap={compact ? 8 : 12}>
+            {!isRead && (
+              <span {...stylex.props(styles.unreadDot, compact && styles.unreadDotCompact)} />
+            )}
             {actor ? (
               <Avatar
                 alt={actor.name}
                 avatar={actor.avatar || DEFAULT_USER_AVATAR_URL}
                 shape="circle"
-                size={32}
+                size={avatarSize}
                 style={{ flex: 'none' }}
               />
             ) : agent ? (
@@ -174,14 +181,18 @@ const NotificationItem = memo<NotificationItemProps>(
                 background={agent.backgroundColor}
                 name={agent.title}
                 shape="circle"
-                size={32}
+                size={avatarSize}
                 style={{ flex: 'none' }}
               />
             ) : (
-              <ProductLogo size={32} style={{ flex: 'none' }} />
+              <ProductLogo size={avatarSize} style={{ flex: 'none' }} />
             )}
-            <Flexbox flex={1} gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
-              <Text ellipsis={{ rows: 2 }} wordBreak="break-word">
+            <Flexbox flex={1} gap={compact ? 2 : 6} style={{ minWidth: 0, overflow: 'hidden' }}>
+              <Text
+                ellipsis={{ rows: 2 }}
+                fontSize={compact ? 13 : undefined}
+                wordBreak="break-word"
+              >
                 {preview}
               </Text>
               <Flexbox horizontal align="center" gap={6}>

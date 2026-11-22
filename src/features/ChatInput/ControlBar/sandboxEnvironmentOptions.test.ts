@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   environmentChipState,
+  environmentSettingsPath,
   pickableEnvironments,
+  projectStartEnvironmentId,
   repositorySelection,
   repositorySlug,
 } from './sandboxEnvironmentOptions';
@@ -72,32 +74,38 @@ describe('repositorySlug', () => {
   });
 });
 
+describe('environmentSettingsPath', () => {
+  it("manages a project conversation's environment on the project's settings", () => {
+    expect(environmentSettingsPath('project-1')).toBe('/project/project-1/settings/environments');
+  });
+
+  it("manages any other conversation's environments in the workspace's list", () => {
+    expect(environmentSettingsPath()).toBe('/settings/environments');
+  });
+});
+
 describe('repositorySelection', () => {
   const repo = { id: 'env-repo', name: 'lobehub-biz/agent-mail' };
 
-  it('starts a repository outside a project in a temporary sandbox', () => {
-    expect(repositorySelection(repo, { published: false, workspace: true })).toEqual({
-      environmentId: 'env-repo',
-    });
+  it('clones a repository into a temporary sandbox', () => {
+    expect(repositorySelection(repo)).toEqual({ environmentId: 'env-repo' });
+  });
+});
+
+describe('projectStartEnvironmentId', () => {
+  const git = { sources: [{ kind: 'git' as const, url: 'https://github.com/lobehub/lobe-write' }] };
+
+  it('is the project environment that checks out a repository', () => {
+    expect(projectStartEnvironmentId([{ configuration: git, id: 'env-project' }])).toBe(
+      'env-project',
+    );
   });
 
-  // A pick in a project conversation used to drop the project's shared
-  // checkout and start over in a temporary sandbox.
-  it("keeps a project conversation in the project's checkout of the repository", () => {
-    expect(
-      repositorySelection(repo, { projectId: 'proj_1', published: false, workspace: false }),
-    ).toEqual({
-      environmentId: 'env-repo',
-      workingDirectory: 'projects/proj_1/env-repo',
-    });
-  });
-
-  it('puts a private checkout on the personal drive and a published one on the public drive', () => {
-    expect(
-      repositorySelection(repo, { projectId: 'proj_1', published: false, workspace: true }),
-    ).toMatchObject({ drive: 'personal' });
-    expect(
-      repositorySelection(repo, { projectId: 'proj_1', published: true, workspace: true }),
-    ).toMatchObject({ drive: 'public' });
+  // The server applies no environment without a repository (see `resolveProjectTopicSandbox`).
+  it('is none when the project environment checks out no repository', () => {
+    expect(projectStartEnvironmentId([{ configuration: { sources: [] }, id: 'env-project' }])).toBe(
+      undefined,
+    );
+    expect(projectStartEnvironmentId([])).toBeUndefined();
   });
 });
