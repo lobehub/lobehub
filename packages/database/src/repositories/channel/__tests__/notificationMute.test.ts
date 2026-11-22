@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { channelMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
+import { setNotificationsMuted } from '../notificationMute';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
@@ -71,6 +72,22 @@ describe('Channel notification mute', () => {
     const [row] = await db.select().from(channelMembers).where(eq(channelMembers.id, agent.id));
     expect(row.config?.muted).toBeUndefined();
     expect(row.metadata).not.toHaveProperty('notificationsMuted');
+  });
+
+  it("fails closed instead of muting a row that is not the caller's own", async () => {
+    const { member, owner } = await fixture.createTeamChannel();
+
+    // A caller holding somebody else's member id cannot rewrite that row: the predicate carries
+    // the caller's own user id, so no row matches and the helper refuses rather than reporting a
+    // mute it never wrote.
+    await expect(
+      db.transaction((tx) =>
+        setNotificationsMuted(tx, { memberId: owner.id, userId: member.userId! }, true),
+      ),
+    ).rejects.toThrow('Channel member not found for this person');
+
+    expect(await metadataOf(owner.id)).toEqual({});
+    expect(await metadataOf(member.id)).toEqual({});
   });
 
   it('works in an archived conversation and refuses a non-member', async () => {

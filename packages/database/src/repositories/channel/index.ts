@@ -504,10 +504,12 @@ export class ChannelRepository {
 
   /** Turns the caller's own push notifications for the conversation off or on. */
   setNotificationsMuted = async (channelId: string, muted: boolean) =>
-    this.write(channelId, (tx, { member }) => setNotificationsMuted(tx, member.id, muted), {
-      allowArchived: true,
-      allowTrashed: true,
-    });
+    this.write(
+      channelId,
+      (tx, { member }) =>
+        setNotificationsMuted(tx, { memberId: member.id, userId: this.userId }, muted),
+      { allowArchived: true, allowTrashed: true },
+    );
 
   /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
