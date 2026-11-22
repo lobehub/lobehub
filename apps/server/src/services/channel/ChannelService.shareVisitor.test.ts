@@ -36,9 +36,14 @@ describe('reading a visitor’s conversation with a shared Agent', () => {
 
   it('opens it read-only for the creator when the caller is not a member', async () => {
     detail.mockRejectedValue(notFound);
-    readShareVisitorChannel.mockResolvedValue({ attachments: [], readOnly: true });
+    readShareVisitorChannel.mockResolvedValue({
+      attachments: [],
+      channel: { id: 'chn_visitor', metadata: {}, projectId: null, title: 'Visitor' },
+      readOnly: true,
+    });
 
     await expect(service().detail('chn_visitor', undefined)).resolves.toMatchObject({
+      channel: { displayTitle: 'Visitor' },
       readOnly: true,
     });
     expect(readShareVisitorChannel).toHaveBeenCalledWith(

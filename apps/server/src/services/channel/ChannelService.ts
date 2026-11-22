@@ -25,6 +25,10 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import {
+  projectDefaultChannelMetadata,
+  withDisplayTitle,
+} from '@/database/repositories/channel/displayTitle';
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
@@ -34,6 +38,7 @@ import {
   listShareVisitorTopics,
   readShareVisitorChannel,
 } from '@/database/repositories/channel/shareVisitors';
+import type { ChannelItem } from '@/database/schemas';
 import { agents, users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -237,17 +242,19 @@ export class ChannelService {
     });
     // Invited people see the new Channel without waiting for their next poll.
     if (userIds.length) await this.changed(access.channel.id);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
    * The Channel a new workspace or project starts with. Callers pass a project they just created
-   * in this scope, so its readability is not checked again.
+   * in this scope, so its readability is not checked again. A project's is marked so clients show
+   * it under the project's name (`displayTitle`); a workspace's carries no mark.
    */
   createDefault = async (input: { agentId: string; projectId?: string; title: string }) => {
     const agentId = await this.defaultChannelAgent(input.agentId);
     return this.repository.create({
       agents: [{ agentId }],
+      ...(input.projectId && { metadata: projectDefaultChannelMetadata() }),
       projectId: input.projectId,
       title: input.title,
     });
@@ -274,7 +281,7 @@ export class ChannelService {
     });
     // Invitees see the new group without waiting for their next poll.
     await this.changed(access.channel.id);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
@@ -447,10 +454,11 @@ export class ChannelService {
     return grant;
   };
 
+  /** Edits `title` only: a project's default Channel keeps its mark and its project's name. */
   rename = async (channelId: string, title: string) => {
     const channel = await this.repository.rename(channelId, title);
     await this.changed(channelId);
-    return channel;
+    return withDisplayTitle(this.db, channel);
   };
 
   editMessage = async (channelId: string, messageId: string, content: string) => {
@@ -475,7 +483,7 @@ export class ChannelService {
   updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
     const channel = await this.repository.updateVisibility(channelId, visibility);
     await this.changed(channelId);
-    return channel;
+    return withDisplayTitle(this.db, channel);
   };
 
   /** The coordinator physically stops a removed Agent's runs. */
@@ -498,7 +506,7 @@ export class ChannelService {
   join = async (channelId: string) => {
     const access = await this.repository.join(channelId);
     await this.changed(channelId);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
@@ -515,6 +523,12 @@ export class ChannelService {
     );
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);
+
+  /** Adds `displayTitle` to a Channel handed back to a client; see `withDisplayTitle`. */
+  private withDisplayTitle = async <T extends { channel: ChannelItem }>(access: T) => ({
+    ...access,
+    channel: await withDisplayTitle(this.db, access.channel),
+  });
 
   /** A personal list write that joins an open Channel first; members hear only about a join. */
   private writeMayJoin = async <T>(
@@ -585,10 +599,12 @@ export class ChannelService {
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
     const view = await this.readView(channelId, options);
     const files = new FileService(this.db, this.userId, this.workspaceId);
+    const channel = await withDisplayTitle(this.db, view.channel);
     // The public message's attachment relation grants this read after membership authorization.
     // Do not return private storage keys or route through an unrelated ordinary-chat ACL.
     return {
       ...view,
+      channel,
       attachments: await pMap(
         view.attachments,
         async (file) => ({ ...file, url: await files.getFullFileUrl(file.url, 300) }),

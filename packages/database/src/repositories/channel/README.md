@@ -37,6 +37,11 @@ which then follows the Thread. Deleting a bound Agent cascades its direct conver
 While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
 name, with the Agent on the device and directory a new Channel would give it
 (`createAgentDirectChannel`).
+A project's default Channel (`createDefaultChannel`, titled `General`) carries
+`metadata.projectDefault`. Every Channel the router hands a client gets `displayTitle`
+(`withDisplayTitles`): the project's name for that marked Channel while the project is live and
+named, else `title`. It is read each time, so a project rename shows at once, and renaming the
+Channel edits only `title`, keeping the mark.
 Inviting from a direct conversation leaves it as it is and starts a group instead
 (`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
 plus the invited Agents and people. `userCandidates` lists those people from a direct

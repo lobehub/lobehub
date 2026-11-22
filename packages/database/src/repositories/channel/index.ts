@@ -41,6 +41,7 @@ import type { ChannelContacts } from './contacts';
 import { noChannelContacts } from './contacts';
 import { deleteMessage } from './delete';
 import { findThread } from './delivery';
+import { withDisplayTitles } from './displayTitle';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { syncMemberGrant } from './grants';
@@ -94,6 +95,7 @@ export type {
 } from './claim';
 export type { ChannelContacts } from './contacts';
 export { noChannelContacts } from './contacts';
+export * from './displayTitle';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
@@ -155,6 +157,7 @@ export class ChannelRepository {
     /** The direct conversation's Agent environment; the caller resolved and checked it. */
     agentConfig?: ChannelMemberConfig;
     agents?: ChannelAddAgentInput[];
+    metadata?: ChannelItem['metadata'];
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
@@ -188,6 +191,7 @@ export class ChannelRepository {
       }
       const insert = tx.insert(channels).values({
         agentId,
+        metadata: params.metadata,
         projectId: params.projectId,
         userId: this.userId,
         title: params.title,
@@ -578,6 +582,7 @@ export class ChannelRepository {
         sharedAgentHandle: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
+        displayTitle: string;
       }
     >
   > => {
@@ -722,7 +727,7 @@ export class ChannelRepository {
         };
       },
     );
-    return [
+    const items = [
       ...joined,
       // Not joined: nothing is unread or pending for the caller yet.
       ...open.map((channel) => ({
@@ -746,6 +751,7 @@ export class ChannelRepository {
         unreadCount: 0,
       })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return withDisplayTitles(this.db, items);
   };
 
   /**
