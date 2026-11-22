@@ -4779,8 +4779,8 @@ When I am ___, I need ___
   'tools.privateConnector.tooltip':
     'Your private connector: only you can see it, and only your private agents load it.',
   'tools.search': 'Search skills...',
-  'tools.loading.onDemand': 'Load on demand',
-  'tools.loading.never': 'Never load',
+  'tools.status.disabled': 'Disabled',
+  'tools.status.enabled': 'Enabled',
   'tools.skillActivateMode.title': 'Activate Mode',
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',

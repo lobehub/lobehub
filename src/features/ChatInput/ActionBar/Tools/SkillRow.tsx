@@ -9,6 +9,7 @@ interface SkillRowProps {
   /** Rich detail card shown while hovering the label cell. */
   detailContent?: ReactNode;
   detailDisabled?: boolean;
+  detailPlacement?: 'leftTop' | 'rightTop';
   label: ReactNode;
   labelClassName?: string;
   onContextMenu?: () => void;
@@ -29,6 +30,7 @@ const SkillRow = memo<SkillRowProps>(
     className,
     detailContent,
     detailDisabled,
+    detailPlacement = 'rightTop',
     label,
     labelClassName,
     onContextMenu,
@@ -60,7 +62,7 @@ const SkillRow = memo<SkillRowProps>(
             disabled={detailDisabled}
             mouseEnterDelay={0.3}
             open={open}
-            placement={'rightTop'}
+            placement={detailPlacement}
             positionerProps={{ anchor: rowRef, sideOffset: 8 }}
             styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
             onOpenChange={onOpenChange}

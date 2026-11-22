@@ -139,7 +139,15 @@ type SkillMenuItem = NonNullable<ItemType> & {
   detailContent?: ReactNode;
 };
 
-export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
+export const useControls = ({
+  closeDropdown,
+  detailPlacement,
+  headerAction,
+}: {
+  closeDropdown?: () => void;
+  detailPlacement?: 'leftTop' | 'rightTop';
+  headerAction?: ReactNode;
+} = {}) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const navigate = useWorkspaceAwareNavigate();
@@ -260,8 +268,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // status readout — group headers still use the state labels below.
       // `as const` keeps literal keys so `t()` stays typed against setting resources.
       const policyActionKey = {
-        auto: 'tools.loading.onDemand',
-        disabled: 'tools.loading.never',
+        auto: 'tools.status.enabled',
+        disabled: 'tools.status.disabled',
       } as const satisfies Record<SkillPolicyMode, string>;
 
       const renderPolicyItem = (value: SkillPolicyMode, icon: ReactNode) => (
@@ -424,6 +432,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         className={stylex.props(styles.toolRow, stylex.defaultMarker()).className}
         detailContent={detailContent}
         detailDisabled={policyOpenId !== null}
+        detailPlacement={detailPlacement}
         labelClassName={stylex.props(styles.toolLabel).className}
         label={
           <>
@@ -447,7 +456,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         onContextMenu={() => openSkillPolicyMenu(id)}
       />
     ),
-    [openSkillPolicyMenu, policyOpenId],
+    [detailPlacement, openSkillPolicyMenu, policyOpenId],
   );
 
   const createManagedSkillItem = useCallback(
@@ -1033,13 +1042,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     {
       children: autoItems,
       key: 'auto',
-      label: t('tools.loading.onDemand'),
+      label: t('tools.status.enabled'),
       type: 'group' as const,
     },
     {
       children: disabledItems,
       key: 'disabled',
-      label: t('tools.loading.never'),
+      label: t('tools.status.disabled'),
       type: 'group' as const,
     },
   ];
@@ -1051,6 +1060,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   const marketHeader = (
     <ToolPickerHeader
+      action={headerAction}
       empty={!marketItems.length}
       filter={filter}
       query={searchKeyword}

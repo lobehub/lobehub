@@ -186,8 +186,8 @@ describe('chat input tool picker', () => {
     render(createElement(Row));
     fireEvent.contextMenu(screen.getByRole('button', { name: 'tools.skillActivateMode.title' }));
 
-    expect(await screen.findByRole('button', { name: 'tools.loading.onDemand' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'tools.loading.never' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'tools.status.enabled' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'tools.status.disabled' })).toBeTruthy();
     expect(!!screen.queryByRole('button', { name: 'tools.activation.action.pin' })).toBe(pin);
   });
 

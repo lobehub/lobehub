@@ -1,10 +1,11 @@
 import { Flexbox, SearchBar, Segmented, Text } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type Filter = 'auto' | 'disabled';
 
 interface ToolPickerHeaderProps {
+  action?: ReactNode;
   empty: boolean;
   filter: Filter;
   onFilterChange: (filter: Filter) => void;
@@ -13,32 +14,44 @@ interface ToolPickerHeaderProps {
 }
 
 export const ToolPickerHeader = memo<ToolPickerHeaderProps>(
-  ({ empty, filter, query, onFilterChange, onSearchChange }) => {
+  ({ action, empty, filter, query, onFilterChange, onSearchChange }) => {
     const { t } = useTranslation('setting');
     const searching = Boolean(query.trim());
 
+    const searchInput = (
+      <SearchBar
+        allowClear
+        aria-label={t('tools.picker.search')}
+        placeholder={t('tools.picker.search')}
+        size="small"
+        style={action ? { flex: 1, minWidth: 0 } : undefined}
+        value={query}
+        variant="borderless"
+        onChange={(event) => onSearchChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (!['Escape', 'Tab', 'ArrowDown'].includes(event.key)) event.stopPropagation();
+        }}
+      />
+    );
+
     return (
       <Flexbox className="lobe-tool-picker-header" gap={6}>
-        <SearchBar
-          allowClear
-          aria-label={t('tools.picker.search')}
-          placeholder={t('tools.picker.search')}
-          size="small"
-          value={query}
-          variant="borderless"
-          onChange={(event) => onSearchChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (!['Escape', 'Tab', 'ArrowDown'].includes(event.key)) event.stopPropagation();
-          }}
-        />
+        {action ? (
+          <Flexbox horizontal align="center" gap={4}>
+            {searchInput}
+            {action}
+          </Flexbox>
+        ) : (
+          searchInput
+        )}
         {!searching && (
           <Segmented
             block
             size="small"
             value={filter}
             options={[
-              { label: t('tools.loading.onDemand'), value: 'auto' },
-              { label: t('tools.loading.never'), value: 'disabled' },
+              { label: t('tools.status.enabled'), value: 'auto' },
+              { label: t('tools.status.disabled'), value: 'disabled' },
             ]}
             onChange={(value) => onFilterChange(value === 'disabled' ? 'disabled' : 'auto')}
           />
