@@ -1,38 +1,25 @@
-import { builtinSkills } from '@lobechat/builtin-skills';
 import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
-// Note: only `readFile` is wired through deviceGateway. Directory enumeration is
-// left to the model via `local-system.globFiles` so we don't double-fetch.
 import {
   type CommandResult,
   type ExecScriptActivatedSkill,
   SkillsIdentifier,
 } from '@lobechat/builtin-tool-skills';
 import {
-  type DeviceFileAccess,
   type ExportFileResult,
   getDirname,
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { resolveShareAllowedSkillIds } from '@lobechat/const';
-import {
-  type BuiltinSkill,
-  type SkillItem,
-  type SkillListItem,
-  type SkillResourceContent,
-} from '@lobechat/types';
+import { type SkillItem, type SkillListItem, type SkillResourceContent } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
-import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
-import { filterBuiltinSkills } from '@/helpers/skillFilters';
-import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
@@ -51,16 +38,13 @@ import {
   isLhCommand,
   preprocessLhCommand,
 } from '@/server/services/toolExecution/preprocessLhCommand';
-import {
-  canonicalUserSkillIdentifier,
-  readTaskSkillIds,
-  UserSkillService,
-} from '@/server/services/userSkill';
+import { canonicalUserSkillIdentifier } from '@/server/services/userSkill';
 
-import { readSkillUserSettings, resolveAgentSkillGates } from './librarySkillGate';
+import { readSkillUserSettings } from './librarySkillGate';
 import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
-import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
+import { resolveSkillActivationResources } from './skillActivation';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -272,12 +256,15 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
   findAll = async (): Promise<{ data: SkillListItem[]; total: number }> => {
     const result = await this.skillModel.findAll();
-    if (!this.isSkillGranted && !this.isLibrarySkillEnabled) return result;
+    if (!this.isSkillGranted && !this.isLibrarySkillEnabled && this.disabledSkillIds.size === 0) {
+      return result;
+    }
 
     // A share visitor must not learn the creator's catalog, and no run should be
-    // offered a skill its agent never turned on. This list is not just an
-    // internal lookup: `activateSkill` echoes it back in its not-found message
-    // ("Available skills: ..."), handing every name and description to the model.
+    // offered a skill its agent never turned on or explicitly disabled. This list
+    // is not just an internal lookup: `activateSkill` echoes it back in its
+    // not-found message ("Available skills: ..."), handing every name and
+    // description to the model.
     const data = result.data.filter((skill) => this.isSkillReachable(skill.identifier));
     return { data, total: data.length };
   };
@@ -896,53 +883,23 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     );
     const marketAccessToken = userSettings?.market?.accessToken;
 
-    // This runtime resolves skills fresh by name/id, so the agent's own
-    // tri-state is enforced here too (see `resolveAgentSkillGates`).
-    const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(
-      context,
-      userSettings,
+    const activation = await resolveSkillActivationResources(
+      { ...context, serverDB: context.serverDB, userId: context.userId },
+      { userSettings },
     );
-
-    // The share's own opt-out, for the same reason: the creator named the
-    // skills a visitor may load (`shareConfig.skillGrants`), and the
-    // operation's skill pool was already intersected with that grant at
-    // assembly (`filterSkillsByShareGate`) — but `activateSkill` /
-    // `readReference` / `execScript` all resolve a MODEL-SUPPLIED name, so a
-    // name the pool never offered still arrives here. This predicate is that
-    // second, authoritative check.
-    //
-    // `resolveShareAllowedSkillIds` intersects candidates with the grant, so
-    // passing the single id under test makes each call exactly the membership
-    // question this predicate asks.
-    const shareVisitor = context.agentShareVisitor;
-    const isSkillGranted = shareVisitor
-      ? (identifier: string) => resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0
-      : undefined;
-
-    /**
-     * The same two opt-outs `SkillServerRuntimeService.isSkillReachable`
-     * applies to DB lookups, for the sources that reach the runtime as plain
-     * LISTS instead of being resolved through the service.
-     *
-     * Filtering here — not inside a per-call check — is what closes the
-     * fall-through: `activateSkill` tries the DB first and, on a miss, walks on
-     * to the builtin / agent-document / filesystem branches, which do no lookup
-     * at all. A skill refused by the service would otherwise simply be found
-     * one branch later.
-     */
-    const isSkillReachable = (identifier: string) =>
-      !disabledSkillIds.has(identifier) && (isSkillGranted?.(identifier) ?? true);
-
-    /**
-     * The workspace everything this runtime touches belongs to — the skills it
-     * can see, the files it writes, and the sandbox session it reaches.
-     *
-     * Recovered rather than read off the context: the dispatch and resume paths
-     * do not carry it, and there a workspace topic resolved in the personal
-     * scope, came back "no such topic", and ran ephemeral — `pwd` answered
-     * `/workspace` while the conversation showed a persistent instance.
-     */
-    const workspaceId = await resolveContentWorkspaceId(context);
+    const {
+      builtinSkills: resolvedBuiltinSkills,
+      deviceFileAccess,
+      disabledSkillIds,
+      isLibrarySkillEnabled,
+      isSkillGranted,
+      listAvailableSkills,
+      loadUserSkill,
+      projectSkills: resolvedProjectSkills,
+      resolveDeviceWorkspaceId,
+      resolveSkill,
+      workspaceId,
+    } = activation;
 
     const skillModel = new AgentSkillModel(context.serverDB, context.userId, workspaceId);
     const resourceService = new SkillResourceService(context.serverDB, context.userId, workspaceId);
@@ -979,7 +936,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // route execution onto a device the resolved plan didn't authorize;
     // `device-unrouted` runs keep the sandbox path (with the unrouted
     // disclosure in the manifest).
-    let workspaceIdPromise: Promise<string | undefined> | undefined;
     const device: SkillDeviceExecution | undefined = context.activeDeviceId
       ? {
           deviceId: context.activeDeviceId,
@@ -987,47 +943,13 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           localSandbox: context.localSandbox,
           localSandboxNetwork: context.localSandboxNetwork,
           operationId: context.operationId,
-          projectSkills: context.projectSkills,
+          projectSkills: resolvedProjectSkills,
           // Same lazy workspace-principal recovery as the local-system runtime,
           // so workspace devices are addressed under the right gateway pool.
-          resolveWorkspaceId: () => (workspaceIdPromise ??= resolveRunWorkspaceId(context)),
+          resolveWorkspaceId: resolveDeviceWorkspaceId,
           workingDirectory: context.workingDirectory,
         }
       : undefined;
-
-    // The user's own skill library is read per call, for the one name asked
-    // for — it grows with every goal batch, and this factory runs per tool
-    // call. Read under the recovered workspace (a dispatched or resumed run may
-    // not carry it on the context).
-    const loadUserSkill = async (requested: string) => {
-      // Models vary the casing of a name, as the preloaded lookup tolerates.
-      const name = canonicalUserSkillIdentifier(requested);
-      if (!name || !isSkillReachable(name)) return undefined;
-      const [skill] = await new UserSkillService(
-        context.serverDB!,
-        context.userId!,
-        workspaceId,
-        context.agentVisibility,
-      )
-        .loadRuntimeSkills([name], {
-          // Only the generated skills this run's own Task names are trusted
-          // past a public agent's visibility — never a name the model chose.
-          trustedGenerated: context.taskId
-            ? readTaskSkillIds(
-                (
-                  await new TaskModel(context.serverDB!, context.userId!, workspaceId).findById(
-                    context.taskId,
-                  )
-                )?.config,
-              )
-            : [],
-        })
-        .catch((error) => {
-          log('failed to load user skill %s: %O', name, error);
-          return [];
-        });
-      return skill;
-    };
 
     const service = new SkillServerRuntimeService({
       wrapSandbox: pageSandboxWrapper(context, workspaceId),
@@ -1054,7 +976,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       sandboxSpecification: sandbox.specification,
       sandboxWorkingDir: sandbox.workingDir,
       serverDB: context.serverDB,
-      shareVisitorBlocked: !!shareVisitor,
+      shareVisitorBlocked: !!context.agentShareVisitor,
       skillModel,
       topicId: context.topicId,
       userId: context.userId,
@@ -1063,149 +985,16 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       workspaceId,
     });
 
-    // Surface this agent's skill-bundle documents as `BuiltinSkill`-shaped
-    // entries so `activateSkill('agent-skills:<filename>')` resolves on the
-    // existing no-DB-lookup path — no `SkillRuntimeService` extension needed.
-    // `AgentDocumentsService.getAgentSkills` is the single source of truth for
-    // the identifier prefix and the bundle → index-child content resolution
-    // (also used by `aiAgent/index.ts` when building `<available_skills>`).
-    // `source: 'builtin'` is the type-system carrier shape required by
-    // `BuiltinSkill`; the runtime re-tags `source: 'agent'` in the activateSkill
-    // result based on the identifier prefix so the inspector can show
-    // "Activate Agent Skill" + the friendly `title`.
-    const agentSkillBuiltins: BuiltinSkill[] = context.agentId
-      ? await new AgentDocumentsService(context.serverDB, context.userId, context.workspaceId)
-          .getAgentSkills(context.agentId)
-          .then((skills) =>
-            skills
-              .filter((skill) => isSkillReachable(skill.identifier))
-              .map((skill) => ({
-                content: skill.content,
-                description: skill.description,
-                identifier: skill.identifier,
-                name: skill.name,
-                source: 'builtin' as const,
-                ...(skill.title && { title: skill.title }),
-              })),
-          )
-          .catch((error) => {
-            log('failed to load agent skills for agent %s: %O', context.agentId, error);
-            return [];
-          })
-      : [];
-
-    // Project/device skills live on the execution device filesystem. Read them through the
-    // device gateway by reusing the local-system tools — no special
-    // file-read primitive, just the existing capabilities over deviceGateway.
-    //   - `readFile`  loads SKILL.md and validated reference files.
-    //   - `globFiles` enumerates the skill directory so `readReference` can
-    //     reject paths the model guessed (e.g. `.env`) instead of trusting
-    //     the raw string. The discovery payload no longer carries the file
-    //     tree (see commit 8e8f3aed14), so we enumerate live at read time.
-    const { activeDeviceId, projectSkills } = context;
-    let deviceFileAccess: DeviceFileAccess | undefined;
-    if (activeDeviceId && context.userId) {
-      const userId = context.userId;
-      deviceFileAccess = {
-        listFiles: async (dir: string) => {
-          const result = await executeAuthorizedDeviceToolCall(
-            context.serverDB,
-            {
-              deviceId: activeDeviceId,
-              userId,
-              workspaceId: await resolveRunWorkspaceId(context),
-            },
-            {
-              apiName: LocalSystemApiName.globFiles,
-              // `**/*` matches every regular file recursively under `dir`.
-              // The device-side enumerator already skips hidden files; the
-              // runtime re-checks segments as defense in depth.
-              arguments: JSON.stringify({ pattern: '**/*', scope: dir }),
-              identifier: LocalSystemIdentifier,
-            },
-          );
-          if (!result.success) {
-            throw new Error(result.error || result.content || `globFiles failed: ${dir}`);
-          }
-          let payload: { files?: unknown };
-          try {
-            payload = JSON.parse(result.content) as { files?: unknown };
-          } catch {
-            throw new Error(`globFiles returned a non-JSON payload for ${dir}`);
-          }
-          if (!Array.isArray(payload.files)) return [];
-          // Files come back as paths relative to `scope` (POSIX). Strip any
-          // absolute path the engine may have emitted so the runtime can
-          // compare against normalized user-supplied relative paths.
-          return payload.files
-            .filter((f): f is string => typeof f === 'string')
-            .map((f) => (f.startsWith(dir) ? f.slice(dir.length).replace(/^[/\\]+/, '') : f));
-        },
-        readFile: async (filePath: string) => {
-          const result = await executeAuthorizedDeviceToolCall(
-            context.serverDB,
-            {
-              deviceId: activeDeviceId,
-              userId,
-              workspaceId: await resolveRunWorkspaceId(context),
-            },
-            {
-              apiName: LocalSystemApiName.readFile,
-              // Read the whole file; SKILL.md and references are small.
-              arguments: JSON.stringify({ loc: [0, 5000], path: filePath }),
-              identifier: LocalSystemIdentifier,
-            },
-          );
-          if (!result.success) {
-            throw new Error(result.error || result.content || `readFile failed: ${filePath}`);
-          }
-          return result.content;
-        },
-      };
-    }
-
     return new SkillsExecutionRuntime({
       // Resolved by the runtime executors from the operation's message
       // history (the server-side stepContext equivalent); execScript falls
       // back to these because the raw LLM args never carry activatedSkills.
       activatedSkills: context.activatedSkills,
-      builtinSkills: [
-        // Match the device and opt-in gates of the operation's skill catalog.
-        ...filterBuiltinSkills(builtinSkills, {
-          canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
-        }).filter(
-          (skill) =>
-            isSkillReachable(skill.identifier) &&
-            (isLibrarySkillEnabled?.(skill.identifier) ?? true),
-        ),
-        ...agentSkillBuiltins,
-      ],
+      builtinSkills: resolvedBuiltinSkills,
       deviceFileAccess,
-      // Filesystem skills carry no identifier of their own; the skill pool
-      // derives one as `<source>:<name>` (see `operationPrep`'s `projectMetas`)
-      // and that is what a `skillGrants` entry names, so rebuild it the same
-      // way rather than matching on the bare name.
-      projectSkills: projectSkills?.filter((skill) =>
-        isSkillReachable(`${skill.source ?? 'project'}:${skill.name}`),
-      ),
-      // The user's own skill library is read per call, for the one name asked
-      // for — it grows with every goal batch, and this factory runs per tool
-      // call. Same carrier shape as above, under the recovered workspace (a
-      // dispatched or resumed run may not carry it on the context).
-      resolveSkill: async (requested) => {
-        const skill = await loadUserSkill(requested);
-        return (
-          skill && {
-            content: skill.body,
-            description: skill.description,
-            identifier: skill.identifier,
-            name: skill.name,
-            resources: skill.resources,
-            source: 'builtin' as const,
-            title: skill.title,
-          }
-        );
-      },
+      listAvailableSkills,
+      projectSkills: resolvedProjectSkills,
+      resolveSkill,
       service,
     });
   },

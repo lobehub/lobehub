@@ -1,1 +1,5 @@
-export { deviceSystemPrompt, deviceSystemPrompt as systemPrompt } from './systemRole';
+export {
+  deviceSystemPrompt,
+  sharedSkillGuidelines,
+  deviceSystemPrompt as systemPrompt,
+} from './systemRole';
