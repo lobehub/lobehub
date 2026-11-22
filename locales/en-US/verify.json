@@ -109,6 +109,8 @@
   "acceptance.checks.notRequiredHint": "Optional — a failure here doesn’t block acceptance.",
   "acceptance.checks.rerun": "Verified in {{count}} rounds",
   "acceptance.checks.rerunHint": "This check ran in {{count}} rounds; the latest result counts.",
+  "acceptance.checks.reviewSentBack": "Sent back by review",
+  "acceptance.checks.reviewSentBackHint": "The verifier passed this check, but the final review sent it back.",
   "acceptance.checks.showAll": "Show all {{count}}",
   "acceptance.checks.title": "Acceptance checks",
   "acceptance.checks.viewTrace": "View verification run",

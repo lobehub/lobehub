@@ -3344,6 +3344,22 @@ export default {
   'goalProcess.manager.turns': 'Planning rounds: {{count}}',
   'goalProcess.manager.pending': 'Waiting for the first run',
   'goalProcess.manager.viewTrace': 'View supervision progress',
+  'goalProcess.gate.reason.reviewErrored':
+    'The checks passed, but the final review could not run, so this delivery has not been reviewed',
+  'goalProcess.gate.reason.reviewUnjudgeable':
+    'The final review could not judge this delivery from its evidence; a person needs to check it or restate the criterion',
+  'goalProcess.gate.option.retryReview': 'Run the review again',
+  'goalProcess.decision.effect.retryReview':
+    'Review the same delivery again. The task is not redone.',
+  'goalProcess.pauseHint': 'No new work will start. Runs already in progress keep going.',
+  'goalProcess.stopRuns': 'Stop current runs',
+  'goalProcess.stopRunsConfirm.title': 'Stop current runs?',
+  'goalProcess.stopRunsConfirm.content':
+    'Runs in progress are interrupted and the goal stays paused. When you resume, the interrupted tasks start again.',
+  'goalProcess.stopRunsConfirm.ok': 'Stop runs',
+  'goalProcess.stopRunsConfirm.failed':
+    'Some runs could not be stopped. No new work will start. Try again in a moment.',
+  'goalProcess.result.criteria.state.sentBack': 'Sent back by review',
   'goalProcess.pause': 'Pause',
   'goalProcess.resume': 'Resume',
   'goalProcess.paused': 'Paused — no new work will start',

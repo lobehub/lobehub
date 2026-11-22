@@ -5,14 +5,26 @@ import { carriedRunPolicy, VerifyRepairService } from '../repairService';
 
 const m = vi.hoisted(() => ({
   findVerifyMessage: vi.fn(),
+  goal: vi.fn(),
   listResults: vi.fn(),
   markRepairing: vi.fn(),
+  operation: vi.fn(),
   recordAutoRepair: vi.fn(),
   rounds: vi.fn(),
   run: vi.fn(),
   settleFailedRepair: vi.fn(),
   updateMessage: vi.fn(),
   updateResult: vi.fn(),
+}));
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn(function () {
+    return { findById: m.operation };
+  }),
+}));
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(function () {
+    return { findByGraphTask: m.goal };
+  }),
 }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(function () {
@@ -84,6 +96,61 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
 
     expect(spawned).toEqual({ repairOperationId: 'repair-op' });
     expect(spawner).toHaveBeenCalledWith(expect.objectContaining({ failedItemIds: ['gif-check'] }));
+  });
+
+  describe('on a Goal that was stopped', () => {
+    beforeEach(() => {
+      m.listResults.mockResolvedValue([gateFailure('gif-check')]);
+      m.operation.mockResolvedValue({ id: 'op-3', taskId: 'task-1' });
+    });
+
+    it.each(['paused', 'canceled', 'failed', 'achieved'])(
+      'starts no repair run while the Goal is %s',
+      async (status) => {
+        m.goal.mockResolvedValue({ status });
+        const spawner = vi.fn();
+
+        const spawned = await new VerifyRepairService({} as any, 'user').triggerAutoRepair(
+          'op-3',
+          spawner,
+        );
+
+        expect(spawned).toBeNull();
+        expect(spawner).not.toHaveBeenCalled();
+        expect(m.recordAutoRepair).toHaveBeenCalledWith('round-3', 'declined');
+      },
+    );
+
+    it('finds the Goal through the parent of a nested repair round', async () => {
+      m.operation.mockImplementation(async (id: string) =>
+        id === 'op-3' ? { id, parentOperationId: 'root' } : { id, taskId: 'task-1' },
+      );
+      m.goal.mockResolvedValue({ status: 'paused' });
+      const spawner = vi.fn();
+
+      await new VerifyRepairService({} as any, 'user').triggerAutoRepair('op-3', spawner);
+
+      expect(m.goal).toHaveBeenCalledWith('task-1');
+      expect(spawner).not.toHaveBeenCalled();
+    });
+
+    it('keeps repairing a running Goal', async () => {
+      m.goal.mockResolvedValue({ status: 'running' });
+      const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'repair-op' });
+
+      await new VerifyRepairService({} as any, 'user').triggerAutoRepair('op-3', spawner);
+
+      expect(spawner).toHaveBeenCalledOnce();
+    });
+
+    it('does not drop a repair because the Goal could not be read', async () => {
+      m.goal.mockRejectedValue(new Error('connection lost'));
+      const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'repair-op' });
+
+      await new VerifyRepairService({} as any, 'user').triggerAutoRepair('op-3', spawner);
+
+      expect(spawner).toHaveBeenCalledOnce();
+    });
   });
 
   it('does not spend a repair round on an optional check', async () => {

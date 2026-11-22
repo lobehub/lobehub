@@ -79,6 +79,7 @@ const METHODS = [
   'openFailureDecisionLocked',
   'openPatternBreakGate',
   'pause',
+  'stopRuns',
   'pendingClarifications',
   'pendingForIsland',
   'planDecomposition',

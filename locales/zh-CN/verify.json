@@ -109,6 +109,8 @@
   "acceptance.checks.notRequiredHint": "非必需：失败不阻止验收",
   "acceptance.checks.rerun": "验证 {{count}} 轮",
   "acceptance.checks.rerunHint": "同一检查项在 {{count}} 轮各验证一次，以最后一轮为准",
+  "acceptance.checks.reviewSentBack": "复核退回",
+  "acceptance.checks.reviewSentBackHint": "验证已通过，但最终复核把这一项退回了",
   "acceptance.checks.showAll": "显示全部 {{count}} 项",
   "acceptance.checks.title": "验收检查清单",
   "acceptance.checks.viewTrace": "查看验证过程",

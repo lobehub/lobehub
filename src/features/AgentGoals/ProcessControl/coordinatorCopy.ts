@@ -9,6 +9,7 @@ import {
   GOAL_CLARIFICATION_OPTION,
   GOAL_MACHINE_GATE_TITLE,
   GOAL_MANAGER_QUESTION_TITLE,
+  GOAL_RETRY_REVIEW_OPTION,
 } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 import { coordinatorReasonCopies } from '@lobechat/utils/goalCopy';
@@ -86,6 +87,9 @@ export const gateOptionLabelKey = (
       return kind === 'fixSetup'
         ? 'goalProcess.gate.option.fixedRetry'
         : 'goalProcess.gate.option.retry';
+    }
+    case GOAL_RETRY_REVIEW_OPTION: {
+      return 'goalProcess.gate.option.retryReview';
     }
     // The release gate shares the id, but sends the plan back without re-probing.
     case GOAL_BATCH_BREAK_OPTION.revise: {

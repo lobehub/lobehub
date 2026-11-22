@@ -324,6 +324,14 @@ export class TaskService {
     await this.taskModel.updateStatus(target.taskId, 'paused');
   }
 
+  /** Interrupt one operation of a task, refusing when the stop is not confirmed. */
+  async interruptOperation(operationId: string): Promise<void> {
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
+    await this.interruptTaskOperation(aiAgentService, operationId);
+  }
+
   /**
    * Delete a topic: interrupt if still running, then remove the task-topic
    * link and delete the underlying topic.

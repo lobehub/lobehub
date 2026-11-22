@@ -459,6 +459,20 @@ export class GoalActionImpl {
     if (refused) throw refused;
   };
 
+  stopGoalRuns = async (goalId: string): Promise<void> => {
+    let refused: unknown;
+    try {
+      await goalService.stopRuns(goalId);
+    } catch (error) {
+      refused = error;
+    }
+    // A refused stop has still paused the goal on the server, so refresh either way.
+    await this.refreshGoalGraph(goalId).catch((error) =>
+      console.error('[goal:stopRuns] refresh failed after stopping', error),
+    );
+    if (refused) throw refused;
+  };
+
   refreshGoalGraph = async (goalId: string): Promise<void> => {
     await this.#goalGraph.revalidate(goalId);
   };

@@ -32,6 +32,19 @@ describe('machine gate reasons', () => {
     });
   });
 
+  it('names a review that could not run and one that could not judge', () => {
+    expect(
+      reasonOf(
+        'Acceptance review could not run; the delivery passed its verifiers but was never reviewed. Retry or retire this task node?',
+      ),
+    ).toEqual({ key: 'goalProcess.gate.reason.reviewErrored' });
+    expect(
+      reasonOf(
+        'Acceptance review could not judge the delivery from evidence alone; the criterion needs a judge that can act on the system. Retry Goal acceptance, abandon it, or fail this Goal?',
+      ),
+    ).toEqual({ key: 'goalProcess.gate.reason.reviewUnjudgeable' });
+  });
+
   it('still reads the single-parameter templates', () => {
     expect(reasonOf('Task T-3 did not pass verification. Retry or retire this task node?')).toEqual(
       { key: 'goalProcess.gate.reason.verifyFailed', params: { id: 'T-3' } },

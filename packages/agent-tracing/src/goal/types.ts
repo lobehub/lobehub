@@ -61,6 +61,8 @@ export type GoalTickBranch =
   /** Its operation outlived the lease / failed verification — automatic recovery. */
   | 'recover_lease'
   | 'recover_verification'
+  /** A person asked for the Acceptance review to run again on the same delivery. */
+  | 'retry_review'
   /** Recovery is exhausted or the failure is not recoverable; open a gate. */
   | 'failure_decision'
   /** Task is parked or already in flight. */

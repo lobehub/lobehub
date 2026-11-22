@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Tag, Text, toast } from '@lobehub/ui';
-import { ArchiveIcon, ArchiveRestoreIcon, PauseIcon, PlayIcon } from 'lucide-react';
+import { Button, confirmModal, createStaticStyles, Flexbox, Tag, Text, toast } from '@lobehub/ui';
+import { ArchiveIcon, ArchiveRestoreIcon, PauseIcon, PlayIcon, SquareIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -34,6 +34,7 @@ import { GoalConversationContext } from './goalConversation';
 import GoalDetailActions from './GoalDetailActions';
 import GoalDetailTitle from './GoalDetailTitle';
 import GoalHeaderMetrics from './GoalHeaderMetrics';
+import { hasLiveGoalRuns } from './goalLiveRuns';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';
@@ -82,6 +83,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const startGoal = useGoalStore((s) => s.startGoal);
+  const stopGoalRuns = useGoalStore((s) => s.stopGoalRuns);
   const archiveGoal = useGoalStore((s) => s.archiveGoal);
   const [restoring, setRestoring] = useState(false);
   // The server lets only a draft's creator or a workspace owner launch it.
@@ -261,6 +263,25 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
     canEdit &&
     nodes.length > 0 &&
     ['paused', 'planning', 'running', 'verifying'].includes(goal.status);
+  const canStopRuns = canPause && canStart && hasLiveGoalRuns(snapshot);
+
+  // Interrupting throws away the attempt in progress, so it asks first.
+  const confirmStopRuns = () =>
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('goalProcess.stopRunsConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('goalProcess.stopRunsConfirm.ok'),
+      onOk: async () => {
+        try {
+          await stopGoalRuns(goal.id);
+        } catch (error) {
+          console.error('[goal:stopRuns] failed to stop runs', error);
+          toast.error(t('goalProcess.stopRunsConfirm.failed'));
+        }
+      },
+      title: t('goalProcess.stopRunsConfirm.title'),
+    });
 
   return (
     <GoalConversationContext value={panelTarget ? revealConversation : undefined}>
@@ -380,13 +401,21 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                       </Button>
                     )
                   ) : canPause ? (
-                    <Button
-                      icon={paused ? PlayIcon : PauseIcon}
-                      type={paused ? 'primary' : 'default'}
-                      onClick={() => void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id))}
-                    >
-                      {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-                    </Button>
+                    <>
+                      <Button
+                        icon={paused ? PlayIcon : PauseIcon}
+                        title={paused ? undefined : t('goalProcess.pauseHint')}
+                        type={paused ? 'primary' : 'default'}
+                        onClick={() => void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id))}
+                      >
+                        {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
+                      </Button>
+                      {canStopRuns && (
+                        <Button icon={SquareIcon} onClick={confirmStopRuns}>
+                          {t('goalProcess.stopRuns')}
+                        </Button>
+                      )}
+                    </>
                   ) : null}
                   {/* Who plans the goal and who does its Tasks, next to the control
                       that starts or pauses that work. Also the way to give an

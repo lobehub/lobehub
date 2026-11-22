@@ -432,11 +432,16 @@ export const bundleRouter = router({
           // hid the proposal on exactly the repair round where the reviewer has
           // to judge again.
           const settled = Boolean(userReview && !userReview.stale);
+          const proposal =
+            prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null;
           return {
             ...check,
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
-            prediction:
-              prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
+            prediction: proposal,
+            // The verifier passed this check and the Goal's automatic review sent
+            // it back. Kept apart from a proposal someone asked the model for,
+            // and inherits its reviewer-only scope through `predictions`.
+            reviewSentBack: !!proposal && automaticPredictionIds.has(proposal.id),
             // The card above is gated to actionable rejects, but the FACT that
             // the predictor finished with this check must stay visible: an
             // `accept`, a skip and an error all render no card, and without

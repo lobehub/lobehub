@@ -82,6 +82,7 @@ function expected(): Array<
     ['setVisibility', 'mutation', 13],
     ['start', 'mutation', 13],
     ['startOperation', 'mutation', 8],
+    ['stopRuns', 'mutation', 13],
     ['submitOperationPlan', 'mutation', 8],
     ['submitOperationReport', 'mutation', 8],
     ['submitPlan', 'mutation', 13],

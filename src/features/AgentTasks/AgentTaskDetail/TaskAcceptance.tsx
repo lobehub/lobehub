@@ -9,6 +9,7 @@ import {
   Flexbox,
   Icon,
   Spin,
+  Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -113,7 +114,15 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
       seq={check.seq}
       title={checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}
       onOpen={onOpen}
-    />
+    >
+      {check.reviewSentBack && check.state === 'passed' && (
+        <Tooltip title={check.prediction?.comment || t('acceptance.checks.reviewSentBackHint')}>
+          <Tag color={'warning'} size={'small'} style={{ flex: 'none' }}>
+            {t('acceptance.checks.reviewSentBack')}
+          </Tag>
+        </Tooltip>
+      )}
+    </CriterionRow>
   );
 });
 

@@ -87,7 +87,7 @@ interface CriterionRowProps {
 
 const CriterionRow = ({ active, index, onOpen, outcome }: CriterionRowProps) => {
   const { t } = useTranslation('chat');
-  const { criterion, evidence, reason, state } = outcome;
+  const { criterion, evidence, reason, sentBack, state } = outcome;
   const color = STATE_COLOR[state];
 
   return (
@@ -112,7 +112,11 @@ const CriterionRow = ({ active, index, onOpen, outcome }: CriterionRowProps) => 
               {index + 1}. {criterion.title}
             </Text>
             <Text fontSize={12} style={{ color, flex: 'none' }} weight={500}>
-              {t(`goalProcess.result.criteria.state.${state}`)}
+              {t(
+                sentBack
+                  ? 'goalProcess.result.criteria.state.sentBack'
+                  : `goalProcess.result.criteria.state.${state}`,
+              )}
             </Text>
           </Flexbox>
           {state === 'failed' && reason && (

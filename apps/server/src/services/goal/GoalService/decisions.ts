@@ -1,10 +1,12 @@
 import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
 import {
+  ACCEPTANCE_REVIEW_RETRY_REQUESTED_ERROR,
   GOAL_BATCH_BREAK_OPTION,
   GOAL_BATCH_RELEASE_OPTION,
   GOAL_CLARIFICATION_OPTION,
   GOAL_COORDINATOR_ACTOR_ID,
   GOAL_MACHINE_GATE_TITLE,
+  GOAL_RETRY_REVIEW_OPTION,
 } from '@lobechat/const/goal';
 import type {
   GoalDecisionOption,
@@ -40,9 +42,10 @@ const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const decisionOptionEffect = (
   option: GoalDecisionOption | undefined,
   sourceTitle?: string,
-): 'fail' | 'retire' | 'retry' | 'retry_after_reset' | undefined => {
+): 'fail' | 'retire' | 'retry' | 'retry_after_reset' | 'retry_review' | undefined => {
   if (!option) return undefined;
   if (option.effect) return option.effect;
+  if (option.id === GOAL_RETRY_REVIEW_OPTION) return 'retry_review';
   if (option.id === 'retry' || option.id === 'retire') return option.id;
   if (option.id === 'fail' && sourceTitle === GOAL_ACCEPTANCE_TASK_TITLE) return 'fail';
   return undefined;
@@ -100,11 +103,15 @@ const decisionGuidance = (
 interface FailureGateOptions {
   /** The main Agent's own question for this gate, asked as written with its diagnosis. */
   ask?: GoalManagerAsk & { diagnosis: string };
+  /** What the gate stands on beyond its fixed reason, e.g. why a review could not run. */
+  detail?: string;
   /**
    * The gate is about a machine problem (broken setup, spent retry schedule), not
    * the work: it opens as a machine gate that asks for a fix, not a judgment.
    */
   machine?: boolean;
+  /** The delivery is fine to keep: offer running only the Acceptance review again. */
+  retryReview?: boolean;
 }
 
 export const decide = async (
@@ -237,6 +244,20 @@ export const decide = async (
       // On the node status alone it was recorded and never read again.
       const guidance = decisionGuidance(decision.question, chosen, resolution);
       if (guidance)
+        await ctx.taskModel.addComment({
+          authorUserId: ctx.userId,
+          content: guidance,
+          taskId: source.taskId,
+          userId: ctx.userId,
+        });
+    } else if (effect === 'retry_review' && source.taskId) {
+      // The next advance re-judges the delivery; the builder is not sent back.
+      await ctx.taskModel.updateStatus(source.taskId, 'paused', {
+        error: ACCEPTANCE_REVIEW_RETRY_REQUESTED_ERROR,
+      });
+      await ctx.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
+      const guidance = decisionGuidance(decision.question, chosen, resolution);
+      if (resolution?.trim() && guidance)
         await ctx.taskModel.addComment({
           authorUserId: ctx.userId,
           content: guidance,
@@ -520,10 +541,14 @@ export const openFailureDecisionLocked = async (
       source?.title,
       stranded,
     )[0];
+    const retryReviewOption =
+      gate.retryReview && !machine
+        ? [{ id: GOAL_RETRY_REVIEW_OPTION, label: 'Run the review again' }]
+        : [];
     const node = await ctx.coordinatorGraph.createNode(graph.goal.id, {
       // What the gate stands on: the main Agent's diagnosis when it asked,
       // else the coordinator's own reason for stopping.
-      description: ask ? `${reason}\n\n${ask.diagnosis}` : reason,
+      description: ask ? `${reason}\n\n${ask.diagnosis}` : (gate.detail ?? reason),
       kind: 'decision',
       status: 'waiting',
       title: machine ? GOAL_MACHINE_GATE_TITLE : 'Choose how to recover failed task',
@@ -549,19 +574,20 @@ export const openFailureDecisionLocked = async (
                 ? [{ id: 'retry', label: 'I fixed it — retry' }, retireTask]
                 : terminalAcceptance
                   ? [
+                      ...retryReviewOption,
                       { id: 'retry', label: 'Retry goal acceptance' },
                       // Drop the acceptance Task and end the Goal without a verdict —
                       // unlike `fail`, which records that the Goal was judged failed.
                       { id: 'retire', label: 'Abandon goal acceptance' },
                       { id: 'fail', label: 'Fail goal' },
                     ]
-                  : [{ id: 'retry', label: 'Retry task' }, retireTask],
+                  : [...retryReviewOption, { id: 'retry', label: 'Retry task' }, retireTask],
               question: machine
                 ? `${reason}. Fix it, then retry or retire this task node?`
                 : terminalAcceptance
                   ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
                   : `${reason}. Retry or retire this task node?`,
-              recommendedOptionId: 'retry',
+              recommendedOptionId: retryReviewOption.length ? GOAL_RETRY_REVIEW_OPTION : 'retry',
               requestedUserId: ctx.userId,
             },
       );

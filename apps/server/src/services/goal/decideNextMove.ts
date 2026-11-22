@@ -7,6 +7,7 @@ import type {
 } from '@lobechat/agent-tracing';
 import {
   ABANDONED_OPERATION_ERROR_PREFIX,
+  ACCEPTANCE_REVIEW_RETRY_REQUESTED_ERROR,
   GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   VERIFICATION_ERRORED_ERROR,
@@ -625,6 +626,17 @@ const decideForTask = (
         ...base,
         branch: 'recover_lease',
         message: `Task ${task.identifier} outlived its operation lease`,
+        outcome: 'waiting_external',
+      };
+    }
+    // The owner asked for the review to run again. Nothing about the delivery
+    // changed, so this re-judges it instead of starting another attempt.
+    if (task.status === 'paused' && task.error === ACCEPTANCE_REVIEW_RETRY_REQUESTED_ERROR) {
+      if (!capacity) return 'needs-capacity';
+      return {
+        ...base,
+        branch: 'retry_review',
+        message: `Acceptance review of Task ${task.identifier} is running again`,
         outcome: 'waiting_external',
       };
     }

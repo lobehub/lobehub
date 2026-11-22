@@ -291,6 +291,9 @@ export default {
   'acceptance.checks.showAll': 'Show all {{count}}',
   'acceptance.checks.rerunHint': 'This check ran in {{count}} rounds; the latest result counts.',
   'acceptance.checks.title': 'Acceptance checks',
+  'acceptance.checks.reviewSentBack': 'Sent back by review',
+  'acceptance.checks.reviewSentBackHint':
+    'The verifier passed this check, but the final review sent it back.',
   'acceptance.checks.waived': 'Waived',
   'acceptance.checks.waivedHint':
     'A review panel agreed this check is invalid, so it no longer blocks acceptance.',

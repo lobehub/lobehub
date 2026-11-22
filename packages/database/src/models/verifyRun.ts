@@ -626,6 +626,20 @@ export class VerifyRunModel {
     return claimed.length > 0;
   };
 
+  /**
+   * Reopen a settled round's task drive so its Acceptance review can run again.
+   * Only the drive claim and that review's outcome go; the rest of `metadata`
+   * (policy, provenance, repair history) stays.
+   */
+  releaseTaskDrive = async (runId: string): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) - 'taskDrivenAt' - 'goalReview'`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
   /** Record the auto-repair decision without clobbering the rest of `metadata`. */
   recordAutoRepair = async (runId: string, outcome: VerifyAutoRepairOutcome): Promise<void> => {
     await this.db
