@@ -1080,6 +1080,7 @@ export type GoalGraph = {
                 unjudged: number;
             };
             id: string;
+            repairing?: boolean;
             status: 'pending' | 'planned' | 'verifying' | 'repairing' | 'delivered' | 'accepted' | 'closed' | 'rejected' | 'errored';
         };
     };
@@ -2559,6 +2560,7 @@ export type TaskDetailActivity = {
     verify?: {
         acceptanceId: string | null;
         passed: number;
+        reviewStatus?: 'errored' | 'rejected' | 'unjudgeable';
         roundIndex: number | null;
         runId: string;
         status: string | null;
