@@ -80,20 +80,23 @@ export const activatorRuntime: ServerRuntimeRegistration = {
     // Share the full skill-activation runtime with `lobe-skills` so the
     // `activateTools` skill fallback resolves agent-document, filesystem
     // (project/device), and user-library skills under the exact same gates.
-    let skillsRuntime: SkillsExecutionRuntime | undefined;
-    if (context.serverDB && context.userId) {
-      skillsRuntime = await createSkillActivationRuntime({
-        ...context,
-        serverDB: context.serverDB,
-        userId: context.userId,
-      });
-    }
+    //
+    // Opened on the first skill activation, not here: this factory runs for
+    // every tool call, and most `activateTools` calls name only tools. Opening
+    // it reads the agent's config, its workspace and every skill document it
+    // owns, none of which a tool activation uses.
+    const { serverDB, userId } = context;
+    let skillsRuntime: Promise<SkillsExecutionRuntime> | undefined;
+    const getSkillsRuntime =
+      serverDB && userId
+        ? () => (skillsRuntime ??= createSkillActivationRuntime({ ...context, serverDB, userId }))
+        : undefined;
 
     const service: ActivatorRuntimeService = {
-      activateSkill: skillsRuntime
+      activateSkill: getSkillsRuntime
         ? async (args) => {
             try {
-              const result = await skillsRuntime!.activateSkill(args);
+              const result = await (await getSkillsRuntime()).activateSkill(args);
               await emitActivationOutcome({
                 identifiers: [args.name],
                 kind: 'skill',

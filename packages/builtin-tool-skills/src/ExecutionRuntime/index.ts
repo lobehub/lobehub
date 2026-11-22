@@ -185,6 +185,36 @@ const findByNameCI = <T extends { name: string }>(items: T[], target: string): T
   return items.find((s) => s.name.toLowerCase() === lower);
 };
 
+/** How many skills an `activateSkill` miss lists, and how much of each description. */
+const MAX_MISS_CANDIDATES = 30;
+const MAX_MISS_DESCRIPTION_LENGTH = 160;
+
+const truncate = (text: string, max: number): string =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/** A skill name without its source prefix (`user-skills:`, `agent-skills:`). */
+const bareName = (name: string): string => name.toLowerCase().slice(name.lastIndexOf(':') + 1);
+
+/**
+ * Skills whose name shares a word with the requested one, then the rest, each
+ * group keeping its order. A missed name is usually a near miss: a dropped
+ * prefix (`weekly-report` for `user-skills:weekly-report`) or a reworded one.
+ * Prefixes and the word "skill" say nothing about which skill was meant, so
+ * neither counts as a shared word.
+ */
+const rankByResemblance = <T extends { name: string }>(items: T[], requested: string): T[] => {
+  const words = bareName(requested)
+    .split(/[^\da-z]+/)
+    .filter((word) => word.length > 2 && word !== 'skill' && word !== 'skills');
+  if (words.length === 0) return items;
+
+  const resembles = (item: T) => {
+    const bare = bareName(item.name);
+    return words.some((word) => bare.includes(word));
+  };
+  return [...items.filter((item) => resembles(item)), ...items.filter((item) => !resembles(item))];
+};
+
 /**
  * Hint appended to activated filesystem-skill content so the model knows how to
  * discover the rest of the skill's directory. We deliberately don't enumerate
@@ -607,7 +637,9 @@ export class SkillsExecutionRuntime {
       if (seen.has(key)) return;
       seen.add(key);
       availableSkills.push({
-        ...(candidate.description ? { description: candidate.description } : {}),
+        ...(candidate.description
+          ? { description: truncate(candidate.description, MAX_MISS_DESCRIPTION_LENGTH) }
+          : {}),
         name: candidate.name,
       });
     };
@@ -617,8 +649,16 @@ export class SkillsExecutionRuntime {
     for (const builtin of this.builtinSkills) addCandidate(builtin);
     for (const extra of extraSkills) addCandidate(extra);
 
+    // A skill library has no size limit and a miss is paid for in tokens, so
+    // the list is capped. Names that resemble the request go first: a cap in
+    // source order alone could cut off the very skill a typo was aiming at.
+    const listed = rankByResemblance(availableSkills, name).slice(0, MAX_MISS_CANDIDATES);
+    const omitted = availableSkills.length - listed.length;
+
     return {
-      content: `Skill not found: "${name}". Available skills: ${JSON.stringify(availableSkills)}`,
+      content:
+        `Skill not found: "${name}". Available skills: ${JSON.stringify(listed)}` +
+        (omitted > 0 ? ` (${omitted} more not listed)` : ''),
       success: false,
     };
   }

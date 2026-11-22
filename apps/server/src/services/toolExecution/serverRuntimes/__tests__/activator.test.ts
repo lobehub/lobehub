@@ -274,6 +274,42 @@ describe('activatorRuntime', () => {
       expect(outcome.domainKey).toBeUndefined();
     }, 20_000);
 
+    it('activates a tool without opening the skill sources', async () => {
+      // The factory runs for every tool call. Opening the skill runtime there
+      // read the agent config, its workspace and all its skill documents for
+      // a call that names only tools.
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-web-browsing'] });
+
+      expect(result.state.activatedTools).toHaveLength(1);
+      expect(mocks.getAgentConfigById).not.toHaveBeenCalled();
+      expect(mocks.resolveContentWorkspaceId).not.toHaveBeenCalled();
+      expect(mocks.getAgentSkills).not.toHaveBeenCalled();
+    }, 20_000);
+
+    it('opens the skill sources once for several identifiers that are not tools', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['no-such-a', 'no-such-b'] });
+
+      expect(result.state.notFound).toEqual(['no-such-a', 'no-such-b']);
+      expect(mocks.getAgentSkills).toHaveBeenCalledTimes(1);
+      expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledTimes(1);
+    }, 20_000);
+
     it('still reports a skill opened through the activateTools fallback as a skill', async () => {
       mocks.findByName.mockImplementation(async (name: string) =>
         name === 'user-skill' ? userSkillRow() : undefined,

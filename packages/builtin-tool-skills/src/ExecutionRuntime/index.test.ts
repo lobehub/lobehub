@@ -657,6 +657,69 @@ describe('SkillsExecutionRuntime', () => {
       ]);
     });
 
+    it('caps the list and says how many skills it left out', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        listAvailableSkills: vi.fn().mockResolvedValue(
+          Array.from({ length: 45 }, (_, index) => ({
+            description: 'd'.repeat(400),
+            name: `user-skills:plan-${index}`,
+          })),
+        ),
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'nonexistent' });
+
+      expect(result.content).toMatch(/ \(15 more not listed\)$/);
+      const candidates = JSON.parse(
+        result.content.slice(result.content.indexOf('['), result.content.lastIndexOf(']') + 1),
+      ) as Array<{ description: string; name: string }>;
+      expect(candidates).toHaveLength(30);
+      expect(candidates[0].name).toBe('user-skills:plan-0');
+      expect(candidates[0].description).toHaveLength(160);
+    });
+
+    it('lists the skills that resemble the request first, so the cap cannot drop them', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        listAvailableSkills: vi
+          .fn()
+          .mockResolvedValue([
+            ...Array.from({ length: 40 }, (_, index) => ({ name: `user-skills:plan-${index}` })),
+            { name: 'user-skills:weekly-report' },
+          ]),
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'weekly-report' });
+
+      const candidates = JSON.parse(
+        result.content.slice(result.content.indexOf('['), result.content.lastIndexOf(']') + 1),
+      ) as Array<{ name: string }>;
+      expect(candidates[0].name).toBe('user-skills:weekly-report');
+      expect(candidates[1].name).toBe('user-skills:plan-0');
+    });
+
+    it('does not treat a source prefix or the word "skill" as a resemblance', async () => {
+      const runtime = new SkillsExecutionRuntime({
+        listAvailableSkills: vi
+          .fn()
+          .mockResolvedValue([{ name: 'user-skills:plan' }, { name: 'user-skills:report' }]),
+        projectSkills: [{ location: '/repo/.agents/skills/deploy/SKILL.md', name: 'deploy' }],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skills:typo-skill' });
+
+      const candidates = JSON.parse(result.content.slice(result.content.indexOf('['))) as Array<{
+        name: string;
+      }>;
+      expect(candidates.map((skill) => skill.name)).toEqual([
+        'deploy',
+        'user-skills:plan',
+        'user-skills:report',
+      ]);
+    });
+
     it('returns a clear validation error when name is missing', async () => {
       const runtime = new SkillsExecutionRuntime({ service: createMockService() });
 

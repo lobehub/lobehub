@@ -274,7 +274,6 @@ export const resolveSkillActivationResources = async (
         workspaceId,
         context.agentVisibility,
       );
-      if (typeof userSkillService.listCatalog !== 'function') return [];
       const catalog = await userSkillService.listCatalog({ includeGenerated: false });
       return catalog
         .filter((skill) => isSkillReachable(skill.identifier))
