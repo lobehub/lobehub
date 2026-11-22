@@ -1,6 +1,6 @@
 import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
 import { channelMessageDeletedAt } from '@lobechat/types';
-import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem, TopicItem } from '../../schemas';
@@ -224,7 +224,30 @@ const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string
         eq(channelJobs.memberId, memberId),
       ),
     );
-  return primary;
+  // The request was queued right behind an earlier one of the same person and answered by that
+  // earlier request's run, which settles it as `merged`. Its answer is the batch's answer, so the
+  // follow-up waits for, and reads the reply of, the run that merged it.
+  if (primary?.status !== 'merged') return primary;
+
+  const [owner] = await tx
+    .select({
+      blockedCode: channelJobs.blockedCode,
+      publishedMessageId: channelJobs.publishedMessageId,
+      status: channelJobs.status,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, job.channelId),
+        eq(channelJobs.memberId, memberId),
+        inArray(channelJobs.status, ['queued', 'running', 'completed']),
+        sql`${channelJobs.manifest} -> 'requestMessageIds' @> ${JSON.stringify([job.messageId])}::jsonb`,
+      ),
+    )
+    .orderBy(desc(channelJobs.claimedAt))
+    .limit(1);
+
+  return owner ?? primary;
 };
 
 /**

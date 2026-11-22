@@ -67,6 +67,11 @@ export const buildManifest = (params: {
 /** The branch messages a manifest covers; see {@link buildManifest}. */
 const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
   const { threadId, threadRootSequence } = manifest;
+  // Every request the run answers: a batch merges later requests into the first one's run, and
+  // what each of them quotes is part of what it was asked.
+  const requestIds = manifest.requestMessageIds?.length
+    ? manifest.requestMessageIds
+    : [manifest.requestMessageId];
   const mainPrefix =
     threadRootSequence === null
       ? undefined
@@ -84,14 +89,17 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
         or(
           eq(channelMessages.threadId, threadId),
           mainPrefix,
-          eq(channelMessages.id, manifest.requestMessageId),
+          inArray(channelMessages.id, requestIds),
           and(
             isNull(channelMessages.threadId),
             sql`${channelMessages.id} IN (SELECT ${channelJobs.messageId} FROM ${channelJobs} WHERE ${channelJobs.channelId} = ${channelId} AND ${channelJobs.threadId} = ${threadId})`,
           ),
           and(
             isNull(channelMessages.threadId),
-            sql`${channelMessages.id} = (SELECT request.reply_to_id FROM channel_messages AS request WHERE request.id = ${manifest.requestMessageId} AND request.thread_id IS NULL)`,
+            sql`${channelMessages.id} IN (SELECT request.reply_to_id FROM channel_messages AS request WHERE request.id IN (${sql.join(
+              requestIds.map((id) => sql`${id}`),
+              sql`, `,
+            )}) AND request.thread_id IS NULL AND request.reply_to_id IS NOT NULL)`,
           ),
         )
       : isNull(channelMessages.threadId),

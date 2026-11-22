@@ -1,11 +1,13 @@
 // @vitest-environment node
+import type { ChannelInputManifest } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations } from '../../../schemas';
+import { agentOperations, workspaceMembers } from '../../../schemas';
 import type { ChannelRepository } from '..';
-import { ChannelExecutionRepository } from '..';
+import { ChannelExecutionRepository, ChannelRoutingRepository } from '..';
+import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobById, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -14,9 +16,20 @@ beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
 const execution = new ChannelExecutionRepository(db);
+const routing = new ChannelRoutingRepository(db);
 
-const send = async (as: ChannelRepository, channelId: string, content: string) => {
-  const message = await as.send(channelId, { content, requestKey: content, routing: 'fallback' });
+const send = async (
+  as: ChannelRepository,
+  channelId: string,
+  content: string,
+  extra: { replyToId?: string } = {},
+) => {
+  const message = await as.send(channelId, {
+    content,
+    requestKey: content,
+    routing: 'fallback',
+    ...extra,
+  });
   const [job] = await jobsOf(db, message.id);
   return { job, message };
 };
@@ -110,5 +123,102 @@ describe('Requests one person sends in a row while the Agent is busy', () => {
     expect((await jobById(db, second.job.id)).status).toBe('queued');
     const again = await execution.claim(team.channel.id, first.job.id, lease);
     expect(again?.job.manifest?.requestMessageIds).toEqual([first.message.id, second.message.id]);
+  });
+});
+
+describe('a deferred follow-up whose request an earlier run answers', () => {
+  it('waits for the merged answer and then reads it', async () => {
+    const team = await fixture.createTeamChannel();
+    // Routing asks the workspace who the sender is.
+    await db.insert(workspaceMembers).values({
+      role: 'owner',
+      userId: fixture.ownerId,
+      workspaceId: fixture.workspaceId,
+    });
+    const coder = await fixture.addAgent(team.channel.id, 'Coder');
+    const reviewer = await fixture.addAgent(team.channel.id, 'Reviewer');
+
+    /** One request routed by decision, with the reviewers it wakes. */
+    const ask = async (content: string, deferredBehind?: string) => {
+      const message = await team.asOwner.send(team.channel.id, {
+        content,
+        requestKey: content,
+        routing: 'decision',
+      });
+      const input = await routing.claim(team.channel.id, message.id);
+      await execution.resolveRouting(team.channel.id, message.id, input!.attempt, {
+        memberIds: deferredBehind ? [coder.id, reviewer.id] : [coder.id],
+        reason: 'test',
+        status: 'assigned',
+        ...(deferredBehind && {
+          wakes: {
+            [reviewer.id]: {
+              afterMemberId: deferredBehind,
+              kind: 'followup',
+              reason: 'routing-deferred',
+            },
+          },
+        }),
+      });
+      return message;
+    };
+
+    const first = await ask('first');
+    // The reviewer is deferred behind the coder only for this later request.
+    const second = await ask('second', coder.id);
+    const secondJobs = await jobsOf(db, second.id);
+    const secondPrimary = secondJobs.find((job) => job.memberId === coder.id)!;
+    const secondFollowUp = secondJobs.find((job) => job.memberId === reviewer.id)!;
+
+    const firstJob = (await jobsOf(db, first.id)).find((job) => job.memberId === coder.id)!;
+    const claim = await execution.claim(team.channel.id, firstJob.id, lease);
+    // The earlier run answers both requests, so the later primary settles as merged.
+    expect(claim?.job.manifest?.requestMessageIds).toEqual([first.id, second.id]);
+    expect((await jobById(db, secondPrimary.id)).status).toBe('merged');
+
+    // Its request is still owed an answer — the batch's — so the follow-up keeps waiting.
+    expect(await execution.claim(team.channel.id, secondFollowUp.id, lease)).toBeNull();
+    expect((await jobById(db, secondFollowUp.id)).blockedCode).toBe('awaiting_primary');
+
+    await finish(team.channel.id, claim!.job.id);
+
+    // Then it runs, with the batch's answer in view.
+    expect(await execution.claim(team.channel.id, secondFollowUp.id, lease)).not.toBeNull();
+    expect(await execution.primaryReply(team.channel.id, secondFollowUp.id)).toMatchObject({
+      content: 'Answer',
+    });
+  });
+});
+
+describe('the scope of a batch continued into a Thread', () => {
+  it('keeps what an earlier request of the batch quotes', async () => {
+    const team = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(team.channel.id, 'Agent');
+    const root = await send(team.asOwner, team.channel.id, 'thread root');
+    // Quoted by the first request; posted on the main timeline after the Thread's root.
+    const quote = await send(team.asOwner, team.channel.id, 'the log I mean');
+    const first = await send(team.asOwner, team.channel.id, 'first request', {
+      replyToId: quote.message.id,
+    });
+    const last = await send(team.asOwner, team.channel.id, 'last request');
+
+    // The branch the two requests were continued into, as the merged run freezes it.
+    const manifest: ChannelInputManifest = {
+      cutoffSequence: last.message.sequence,
+      requestMessageId: last.message.id,
+      requestMessageIds: [first.message.id, last.message.id],
+      requesterMemberId: agent.id,
+      self: { agentId: agent.agentId!, memberId: agent.id, name: 'Agent' },
+      threadId: 'thread-the-requests-were-continued-in',
+      threadRootSequence: root.message.sequence,
+    };
+
+    expect(
+      (
+        await readManifestMessages(db, team.channel.id, manifest, {
+          messageIds: [quote.message.id],
+        })
+      ).map(({ content }) => content),
+    ).toEqual(['the log I mean']);
   });
 });
