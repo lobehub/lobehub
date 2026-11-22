@@ -577,7 +577,7 @@ export class Documents extends HeyApiClient {
     /**
      * Create a document
      *
-     * Creates a page from Markdown, or a folder with `fileType: "custom/folder"`.
+     * Creates a page from Markdown or Lexical `editorData`, or a folder with `fileType: "custom/folder"`.
      *
      * **API key scopes:** `knowledge:write`.
      */
@@ -593,6 +593,8 @@ export class Documents extends HeyApiClient {
     /**
      * Get a document
      *
+     * Returns the Markdown `content` and the Lexical `editorData` of the body.
+     *
      * **API key scopes:** `knowledge:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1DocumentsByIdData, ThrowOnError>): RequestResult<GetApiV1DocumentsByIdResponses, GetApiV1DocumentsByIdErrors, ThrowOnError> {
@@ -606,7 +608,7 @@ export class Documents extends HeyApiClient {
     /**
      * Update a document
      *
-     * Replaces the title and/or the whole Markdown body. A page open in the editor receives the write through its live room.
+     * Replaces the title and/or the whole body, sent as Markdown `content` or Lexical `editorData`. A page open in the editor receives the write through its live room. Send `ifUpdatedAt` to get 409 instead of overwriting an edit made since the client last read the page; a page someone else is editing also answers 409.
      *
      * **API key scopes:** `knowledge:write`.
      */

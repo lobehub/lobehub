@@ -6,9 +6,17 @@ import * as Y from 'yjs';
 import { updateDocumentThroughRoom, writePageBodyThroughRoom } from '../bodyWriter';
 import { openPageFork, projectPageState } from '../fork';
 
-const room = vi.hoisted(() => ({ bootstrapped: true, doc: null as any, pushes: [] as any[] }));
+const room = vi.hoisted(() => ({
+  bootstrapped: true,
+  doc: null as any,
+  pushes: [] as any[],
+  serverWriteSeq: undefined as number | undefined,
+}));
 const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true, ENABLE_WORKSPACE_PAGE_COLLAB: false }));
-const stored = vi.hoisted(() => ({ workspaceId: undefined as string | undefined }));
+const stored = vi.hoisted(() => ({
+  updatedAt: new Date('2026-11-23T10:00:00.000Z'),
+  workspaceId: undefined as string | undefined,
+}));
 const persisted = vi.hoisted(() => [] as any[]);
 const lock = vi.hoisted(() => ({ heldByOther: false }));
 
@@ -23,6 +31,7 @@ vi.mock('@/server/services/pageCollab/roomClient', async (importOriginal) => {
       getState: async () => ({
         bootstrapped: room.bootstrapped,
         epoch: 'e1',
+        serverWriteSeq: room.serverWriteSeq,
         update: Yjs.encodeStateAsUpdate(room.doc),
       }),
       pushUpdate: async (_id: string, update: Uint8Array, options: any) => {
@@ -42,8 +51,17 @@ vi.mock('@/server/services/pageCollab/persist', () => ({
 
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
-    getDocumentById = async () => ({ title: 'Page', workspaceId: stored.workspaceId });
+    getDocumentById = async () => ({
+      title: 'Page',
+      updatedAt: stored.updatedAt,
+      workspaceId: stored.workspaceId,
+    });
   },
+}));
+
+// Without Redis the stored version alone decides; conditionalWrites.test covers the room state.
+vi.mock('@/server/services/redis', () => ({
+  redisService: { pageCollab: { lastPersistedRoomState: async () => undefined } },
 }));
 
 const writer = { saveSource: 'system' as const, userId: 'u1', writeSource: 'system' as const };
@@ -73,6 +91,7 @@ describe('writePageBodyThroughRoom', () => {
     stored.workspaceId = undefined;
     room.bootstrapped = true;
     room.pushes = [];
+    room.serverWriteSeq = undefined;
     persisted.length = 0;
     await seedRoom('para one\n\npara two\n');
   });
@@ -194,6 +213,7 @@ describe('updateDocumentThroughRoom', () => {
     lock.heldByOther = false;
     room.bootstrapped = true;
     room.pushes = [];
+    room.serverWriteSeq = undefined;
     await seedRoom('para one\n');
   });
 
@@ -237,7 +257,8 @@ describe('updateDocumentThroughRoom', () => {
     updateDocument: vi.fn(async (id: string) => ({ id }) as any),
   });
 
-  it('keeps the body off the row when the room took it', async () => {
+  it('keeps the body and its version off the row when the room took it', async () => {
+    room.serverWriteSeq = 0;
     const documents = service();
 
     await updateDocumentThroughRoom(
@@ -246,7 +267,7 @@ describe('updateDocumentThroughRoom', () => {
       'doc_1',
       {
         content: 'para ONE\n',
-        expectedUpdatedAt: new Date(),
+        expectedUpdatedAt: new Date(stored.updatedAt),
         metadata: { tag: 'x' },
         saveSource: 'restore',
         title: 'T',
