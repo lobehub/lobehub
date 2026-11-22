@@ -575,6 +575,7 @@ export default {
   'plans.cloud.sync': 'Global cloud sync',
   'plans.cloud.title': 'Cloud service',
   'plans.compare.agentMemory': 'Agent memory',
+  'plans.compare.agentRunCredit.runs': '{{runs}} free agent tasks',
   'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
@@ -628,7 +629,7 @@ export default {
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
-  'plans.limits.agentRunCredit.runs': 'About {{runs}} agent tasks a month',
+  'plans.limits.agentRunCredit.runs': '{{runs}} free agent tasks a month',
   'plans.limits.agentRunCredit.tooltip':
     'Pays only the per-task fee of agent tasks. Models on your own API key cost nothing more; LobeHub-hosted models draw on your free allowance and top-ups.',
   'plans.limits.agentRunFee': '{{value}} per agent task',
