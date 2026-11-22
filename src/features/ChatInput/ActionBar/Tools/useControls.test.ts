@@ -434,4 +434,27 @@ describe('chat input tool picker', () => {
       expect(leafKeys(result.current.marketItems)).toEqual([]);
     },
   );
+
+  it('hides the status filter, row controls, and extra tags and groups enabled tools by category when enabledOnly is true', () => {
+    mocks.plugins = [{ identifier: 'alpha', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls({ enabledOnly: true }));
+
+    expect(result.current.marketHeader.props.showFilter).toBe(false);
+    expect(leafKeys(result.current.marketItems)).not.toContain('alpha');
+    expect(leafKeys(result.current.marketItems)).not.toContain('lobe-web-browsing');
+    expect(result.current.enabledSections.map((section) => section.key)).toEqual([
+      'builtin',
+      'community',
+      'custom',
+    ]);
+    const firstRow = result.current.enabledSections[0].items[0] as {
+      label?: { props?: Record<string, unknown> };
+    };
+    expect(firstRow.label?.props?.trailing).toBeUndefined();
+    expect(firstRow.label?.props?.onContextMenu).toBeUndefined();
+
+    act(() => result.current.marketHeader.props.onSearchChange('alpha'));
+    expect(result.current.marketItems).toEqual([]);
+    expect(result.current.enabledSections).toEqual([]);
+  });
 });

@@ -4769,6 +4769,8 @@ When I am ___, I need ___
   'tools.picker.emptyGroup': 'No tools in this group',
   'tools.picker.noMatches': 'No matching tools',
   'tools.picker.search': 'Search tools…',
+  'tools.picker.section.builtin': 'Built-in',
+  'tools.picker.section.connected': 'Connected apps',
   'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
   'tools.plugins.groupName': 'Skills',

@@ -13,7 +13,7 @@ interface SkillRowProps {
   label: ReactNode;
   labelClassName?: string;
   onContextMenu?: () => void;
-  trailing: ReactNode;
+  trailing?: ReactNode;
   trailingClassName?: string;
 }
 
@@ -72,9 +72,11 @@ const SkillRow = memo<SkillRowProps>(
         ) : (
           labelCell
         )}
-        <span data-tool-trailing className={trailingClassName}>
-          {trailing}
-        </span>
+        {trailing && (
+          <span data-tool-trailing className={trailingClassName}>
+            {trailing}
+          </span>
+        )}
       </span>
     );
   },

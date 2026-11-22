@@ -11,10 +11,11 @@ interface ToolPickerHeaderProps {
   onFilterChange: (filter: Filter) => void;
   onSearchChange: (query: string) => void;
   query: string;
+  showFilter?: boolean;
 }
 
 export const ToolPickerHeader = memo<ToolPickerHeaderProps>(
-  ({ action, empty, filter, query, onFilterChange, onSearchChange }) => {
+  ({ action, empty, filter, query, showFilter = true, onFilterChange, onSearchChange }) => {
     const { t } = useTranslation('setting');
     const searching = Boolean(query.trim());
 
@@ -44,7 +45,7 @@ export const ToolPickerHeader = memo<ToolPickerHeaderProps>(
         ) : (
           searchInput
         )}
-        {!searching && (
+        {showFilter && !searching && (
           <Segmented
             block
             size="small"

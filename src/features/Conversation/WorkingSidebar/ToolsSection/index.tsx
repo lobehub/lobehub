@@ -10,6 +10,7 @@ import ToolsList from '@/features/ChatInput/ActionBar/Tools/ToolsList';
 import { useControls } from '@/features/ChatInput/ActionBar/Tools/useControls';
 import { useEffectiveModel } from '@/features/ChatInput/hooks/useEffectiveModel';
 import { createStore, Provider } from '@/features/ChatInput/store';
+import { SkillSection } from '@/features/SkillsList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
@@ -20,6 +21,7 @@ const styles = stylex.create({
     overflowY: 'auto',
     flex: '1',
     minHeight: '0',
+    paddingBlock: '8px',
     paddingInline: '4px',
   },
   header: {
@@ -56,8 +58,9 @@ const ToolsSidebarContent = ({ agentId }: { agentId: string }) => {
     />
   ) : undefined;
 
-  const { isPolicyMenuOpen, marketHeader, marketItems } = useControls({
+  const { enabledSections, isPolicyMenuOpen, marketHeader } = useControls({
     detailPlacement: 'leftTop',
+    enabledOnly: true,
     headerAction: manageAction,
   });
 
@@ -73,11 +76,21 @@ const ToolsSidebarContent = ({ agentId }: { agentId: string }) => {
     <Flexbox className={stylex.props(styles.root).className} gap={0}>
       <div {...stylex.props(styles.header)}>{marketHeader}</div>
       <ScrollSignalProvider className={stylex.props(styles.body).className}>
-        <ToolsList
-          detailPlacement="leftTop"
-          detailPopoverDisabled={isPolicyMenuOpen}
-          items={marketItems}
-        />
+        <Flexbox gap={12}>
+          {enabledSections.map((section) => (
+            <SkillSection
+              compact
+              key={section.key}
+              sectionHeader={{ count: section.items.length, title: section.title }}
+            >
+              <ToolsList
+                detailPlacement="leftTop"
+                detailPopoverDisabled={isPolicyMenuOpen}
+                items={section.items}
+              />
+            </SkillSection>
+          ))}
+        </Flexbox>
       </ScrollSignalProvider>
     </Flexbox>
   );

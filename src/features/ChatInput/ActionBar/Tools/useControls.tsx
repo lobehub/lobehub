@@ -142,10 +142,12 @@ type SkillMenuItem = NonNullable<ItemType> & {
 export const useControls = ({
   closeDropdown,
   detailPlacement,
+  enabledOnly = false,
   headerAction,
 }: {
   closeDropdown?: () => void;
   detailPlacement?: 'leftTop' | 'rightTop';
+  enabledOnly?: boolean;
   headerAction?: ReactNode;
 } = {}) => {
   const { t } = useTranslation('setting');
@@ -384,7 +386,7 @@ export const useControls = ({
           arrow={false}
           content={content}
           open={policyOpenId === id}
-          placement="rightTop"
+          placement={detailPlacement ?? 'rightTop'}
           positionerProps={{ sideOffset: 8 }}
           styles={{ content: { padding: 0 } }}
           trigger="click"
@@ -415,7 +417,15 @@ export const useControls = ({
         </Popover>
       );
     },
-    [canEdit, disabledIdSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
+    [
+      canEdit,
+      detailPlacement,
+      disabledIdSet,
+      openSkillPolicyMenu,
+      policyOpenId,
+      t,
+      updateSkillPolicy,
+    ],
   );
 
   const renderToolLabel = useCallback(
@@ -444,19 +454,21 @@ export const useControls = ({
           </>
         }
         trailing={
-          <>
-            {badge && <span {...stylex.props(styles.typeTag)}>{badge}</span>}
-            {action}
-          </>
+          enabledOnly || (!badge && !action) ? undefined : (
+            <>
+              {badge && <span {...stylex.props(styles.typeTag)}>{badge}</span>}
+              {action}
+            </>
+          )
         }
         trailingClassName={
           stylex.props(styles.toolTrailing, policyOpenId === id && styles.toolTrailingVisible)
             .className
         }
-        onContextMenu={() => openSkillPolicyMenu(id)}
+        onContextMenu={enabledOnly ? undefined : () => openSkillPolicyMenu(id)}
       />
     ),
-    [detailPlacement, openSkillPolicyMenu, policyOpenId],
+    [detailPlacement, enabledOnly, openSkillPolicyMenu, policyOpenId],
   );
 
   const createManagedSkillItem = useCallback(
@@ -499,22 +511,24 @@ export const useControls = ({
         label: renderToolLabel(
           id,
           title,
-          renderPolicyMenu(id, {
-            configureConfig,
-            defaultMode,
-            deleteConfig,
-            modeOverride,
-            panelExtra,
-            supportedModes,
-          }),
-          badge,
+          enabledOnly
+            ? undefined
+            : renderPolicyMenu(id, {
+                configureConfig,
+                defaultMode,
+                deleteConfig,
+                modeOverride,
+                panelExtra,
+                supportedModes,
+              }),
+          enabledOnly ? undefined : badge,
           icon,
-          extraTag,
+          enabledOnly ? undefined : extraTag,
           popoverContent,
         ),
         searchText: searchText || String(title || id),
       }) as SkillMenuItem,
-    [renderPolicyMenu, renderToolLabel],
+    [enabledOnly, renderPolicyMenu, renderToolLabel],
   );
 
   // Composio-related state
@@ -1052,11 +1066,13 @@ export const useControls = ({
       type: 'group' as const,
     },
   ];
-  const marketItems: ItemType[] = normalizedSearchKeyword
-    ? groups.filter((group) => group.children.length > 0)
-    : filter === 'auto'
-      ? autoItems
-      : disabledItems;
+  const marketItems: ItemType[] = enabledOnly
+    ? autoItems
+    : normalizedSearchKeyword
+      ? groups.filter((group) => group.children.length > 0)
+      : filter === 'auto'
+        ? autoItems
+        : disabledItems;
 
   const marketHeader = (
     <ToolPickerHeader
@@ -1064,6 +1080,7 @@ export const useControls = ({
       empty={!marketItems.length}
       filter={filter}
       query={searchKeyword}
+      showFilter={!enabledOnly}
       onFilterChange={setFilter}
       onSearchChange={setSearchKeyword}
     />
@@ -1088,8 +1105,48 @@ export const useControls = ({
       </button>
     ) : undefined;
 
+  const activeSkillSet = new Set(activeSkillItems);
+  const enabledSections = [
+    {
+      items: filterBySearch([
+        ...capabilityAutoItems,
+        ...builtinItems.filter((item) => activeSkillSet.has(item)),
+      ]),
+      key: 'builtin' as const,
+      title: t('tools.picker.section.builtin'),
+    },
+    {
+      items: filterBySearch(
+        [...lobehubSkillItems, ...composioServerItems].filter((item): item is SkillMenuItem =>
+          activeSkillSet.has(item as SkillMenuItem),
+        ),
+      ),
+      key: 'connected' as const,
+      title: t('tools.picker.section.connected'),
+    },
+    {
+      items: filterBySearch(
+        communityGroupChildren.filter((item): item is SkillMenuItem =>
+          activeSkillSet.has(item as SkillMenuItem),
+        ),
+      ),
+      key: 'community' as const,
+      title: t('skillStore.tabs.community'),
+    },
+    {
+      items: filterBySearch(
+        customGroupChildren.filter((item): item is SkillMenuItem =>
+          activeSkillSet.has(item as SkillMenuItem),
+        ),
+      ),
+      key: 'custom' as const,
+      title: t('skillStore.tabs.custom'),
+    },
+  ].filter((section) => section.items.length > 0);
+
   return {
     autoCount: allAutoItems.length,
+    enabledSections,
     // Stable inventory order: toggling a checkbox must not move its row.
     toolOptions: [...capabilityItems, ...allSkillItems].map((item) => ({
       canDisable: !!item.canDisable,
