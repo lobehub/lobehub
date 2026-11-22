@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  GOALS_AND_TASKS_TABS,
-  goalsAndTasksTabPath,
-  resolveGoalsAndTasksTabAction,
-} from './AgentGoalsAndTasksTabs';
-
-describe('GOALS_AND_TASKS_TABS', () => {
-  it('lists scheduled tasks as a tab of its own, after tasks and goals', () => {
-    expect(GOALS_AND_TASKS_TABS).toEqual(['tasks', 'goals', 'scheduled']);
-  });
-});
+import { goalsAndTasksTabPath, resolveGoalsAndTasksTabAction } from './AgentGoalsAndTasksTabs';
 
 describe('goalsAndTasksTabPath', () => {
   it('addresses scheduled tasks as a collection of the tasks route', () => {

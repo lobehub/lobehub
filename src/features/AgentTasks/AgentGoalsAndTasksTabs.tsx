@@ -9,7 +9,7 @@ export type GoalsAndTasksCollection = 'scheduled' | 'tasks';
 export type GoalsAndTasksView = 'goals' | GoalsAndTasksCollection;
 
 /** Tab order: the two existing tabs keep their place, scheduled tasks join after them. */
-export const GOALS_AND_TASKS_TABS: readonly GoalsAndTasksView[] = ['tasks', 'goals', 'scheduled'];
+const GOALS_AND_TASKS_TABS: readonly GoalsAndTasksView[] = ['tasks', 'goals', 'scheduled'];
 
 const TAB_LABEL_KEYS = {
   goals: 'goalList.title',
