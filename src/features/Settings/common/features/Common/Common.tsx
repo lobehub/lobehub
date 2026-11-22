@@ -180,32 +180,6 @@ const Common = memo(() => {
         name: 'interfaceDensity',
         valueProp: 'activeKey',
       },
-      {
-        children: (
-          <Flexbox horizontal justify={'flex-end'}>
-            <Select
-              value={general?.responseLanguage || 'auto'}
-              options={[
-                { label: t('settingCommon.responseLanguage.auto'), value: 'auto' },
-                ...localeOptions,
-              ]}
-              style={{
-                width: '50%',
-              }}
-              onChange={(value) => {
-                save(() =>
-                  setSettings({ general: { responseLanguage: value === 'auto' ? '' : value } }),
-                );
-              }}
-            />
-          </Flexbox>
-        ),
-        label: (
-          <SettingsSearchAnchor id={'appearance-response-language'}>
-            {t('settingCommon.responseLanguage.title')}
-          </SettingsSearchAnchor>
-        ),
-      },
     ],
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
     title: t('settingCommon.title'),

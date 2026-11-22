@@ -1670,7 +1670,6 @@ export default {
   'settingChatAppearance.autoScrollOnStreaming.desc':
     'Automatically scroll to bottom when AI is generating response',
   'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
-  'settingChatAppearance.chatBehavior.title': 'Chat Behavior',
   'settingChatAppearance.workflowStreamingExpand.title': 'Expand Tool Steps While Running',
   'settingChatAppearance.followUpBehavior.desc':
     'Queue follow-ups while the agent runs, or steer the current run',
@@ -1716,6 +1715,12 @@ export default {
   'settingCommon.themeMode.light': 'Light',
   'settingCommon.themeMode.title': 'Theme',
   'settingCommon.title': 'General Settings',
+  'settingConversation.display.title': 'Message Display',
+  'settingConversation.input.title': 'Input & Sending',
+  'settingConversation.reply.title': 'Replies',
+  'settingConversation.voiceMessage.desc':
+    'Show the voice message button in the chat input to record and send voice messages.',
+  'settingConversation.voiceMessage.title': 'Voice Message',
   'settingGroup.description.placeholder': 'Enter Group description',
   'settingGroup.description.title': 'Group description',
   'settingGroup.name.placeholder': 'Enter Group name',
@@ -1868,9 +1873,9 @@ export default {
   'settingsSearch.tabKeywords.appearance':
     'appearance, theme, dark mode, light mode, font, language, color, background',
   'settingsSearch.tabKeywords.billing': 'billing, payment, invoice, card, transaction',
-  'settingsSearch.tabKeywords.chatPreference':
-    'chat preferences, follow-up suggestions, input suggestions, autocomplete',
   'settingsSearch.tabKeywords.connector': 'connectors, integrations, mcp',
+  'settingsSearch.tabKeywords.conversation':
+    'conversation, chat, reply language, send key, enter to send, voice message, follow-up suggestions, input suggestions, autocomplete, font size, code highlight, mermaid',
   'settingsSearch.tabKeywords.credits': 'usage, balance, top up, recharge, buy top-up pack',
   'settingsSearch.tabKeywords.creds': 'credentials, secrets, oauth',
   'settingsSearch.tabKeywords.devices': 'devices, sessions, logged in devices',
@@ -2308,9 +2313,9 @@ When I am ___, I need ___
   'tab.apikey': 'API Keys',
   'tab.appearance': 'Appearance',
   'tab.chatAppearance': 'Chat Appearance',
-  'tab.chatPreference': 'Chat Preferences',
   'tab.common': 'Appearance',
   'tab.connector': 'Connectors',
+  'tab.conversation': 'Conversation',
   'tab.creds': 'Vault',
   'tab.devices': 'Devices',
   'tab.experiment': 'Experiment',

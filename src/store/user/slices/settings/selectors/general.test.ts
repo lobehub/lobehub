@@ -135,6 +135,30 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('enableVoiceMessage', () => {
+    it('should default to false when unset', () => {
+      expect(userGeneralSettingsSelectors.enableVoiceMessage(initialState as UserStore)).toBe(
+        false,
+      );
+    });
+
+    it('should return true when turned on', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { enableVoiceMessage: true } },
+      });
+
+      expect(userGeneralSettingsSelectors.enableVoiceMessage(s as UserStore)).toBe(true);
+    });
+
+    it('should return false when explicitly turned off', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { enableVoiceMessage: false } },
+      });
+
+      expect(userGeneralSettingsSelectors.enableVoiceMessage(s as UserStore)).toBe(false);
+    });
+  });
+
   describe('currentResponseLanguage', () => {
     it('should prefer the saved response language', () => {
       const s: UserState = merge(initialState, {

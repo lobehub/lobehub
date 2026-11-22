@@ -43,6 +43,11 @@ export interface UserGeneralConfig {
    */
   enablePasteAutoConvert?: boolean;
   /**
+   * Whether to show the voice message button in the chat input bar.
+   * @default false
+   */
+  enableVoiceMessage?: boolean;
+  /**
    * Whether a turn's tool workflow starts expanded while the agent is still
    * running. Off keeps the running turn to a single live headline row.
    * @default false

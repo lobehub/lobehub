@@ -12,6 +12,7 @@ import {
   KeyboardIcon,
   KeyIcon,
   Map,
+  MessagesSquareIcon,
   Palette as PaletteIcon,
   PieChart,
   UserCircle,
@@ -124,6 +125,15 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
       labelNamespace: 'setting',
       path: '/settings/provider',
       subPath: 'provider',
+    },
+    {
+      icon: MessagesSquareIcon,
+      keywords: ['conversation', 'chat', 'reply language', 'send key', 'font size'],
+      label: 'Conversation',
+      labelKey: 'tab.conversation',
+      labelNamespace: 'setting',
+      path: '/settings/conversation',
+      subPath: 'conversation',
     },
     {
       icon: KeyboardIcon,
