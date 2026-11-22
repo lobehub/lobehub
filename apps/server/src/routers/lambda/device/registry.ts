@@ -21,6 +21,7 @@ import { managedDeviceProvider } from '@/business/server/managedDevice';
 import { getTopicDeviceId, TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
+import { probeAgentRunRuntimes } from '@/server/services/aiAgent/pipeline/codexDeviceRuntime';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
 
@@ -199,6 +200,22 @@ export const registryRouter = router({
     .input(z.object({ deviceId: z.string() }))
     .query(async ({ ctx, input }) => {
       return deviceGateway.queryDeviceSystemInfo(ctx.userId, input.deviceId, ctx.workspaceId);
+    }),
+  /**
+   * The native runtimes of the connection an agent run on this device would
+   * reach (`lh connect` before the Desktop app, as the dispatch routes it),
+   * for controls that depend on them — e.g. the Codex Plan switch needs
+   * `codex-collaboration-mode-v1`. Empty when nothing answered.
+   */
+  getAgentRunRuntimes: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const probe = await probeAgentRunRuntimes((clientKinds) =>
+        deviceGateway.readDeviceSystemInfo(ctx.userId, input.deviceId, ctx.workspaceId, {
+          clientKinds,
+        }),
+      );
+      return { runtimes: [...(probe.runtimes ?? [])] };
     }),
   /**
    * All devices the user has ever registered (incl. offline). A device is keyed

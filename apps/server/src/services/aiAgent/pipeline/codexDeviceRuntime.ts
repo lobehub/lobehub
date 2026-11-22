@@ -1,6 +1,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { getCodexAppServerUnsupportedArgs } from '@lobechat/heterogeneous-agents/codexAppServerParams';
 import type { DeviceClient, LobeAgentAgencyConfig } from '@lobechat/types';
+import { CODEX_COLLABORATION_MODE_RUNTIME } from '@lobechat/types';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
@@ -67,6 +68,8 @@ export type CodexDeviceRuntime =
       /** Extra `lh hetero exec` wrapper flags. */
       args: string[];
       kind: 'native';
+      /** The `lh` also takes the Codex Plan switch (`codex-collaboration-mode-v1`). */
+      supportsCollaborationMode: boolean;
     };
 
 export interface ResolveCodexDeviceRuntimeParams {
@@ -117,7 +120,11 @@ export const resolveCodexDeviceRuntime = async (
   if (unsupported.length > 0) return { kind: 'exec' };
   const runtimes = await params.querySupportedRuntimes();
   if (!runtimes?.includes(CODEX_APP_SERVER_RUNTIME)) return { kind: 'exec' };
-  return { args: ['--codex-app-server'], kind: 'native' };
+  return {
+    args: ['--codex-app-server'],
+    kind: 'native',
+    supportsCollaborationMode: runtimes.includes(CODEX_COLLABORATION_MODE_RUNTIME),
+  };
 };
 
 /** A {@link CodexDeviceRuntime} whose native variant names the connection to pin. */

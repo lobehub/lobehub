@@ -1,4 +1,8 @@
-import type { DeviceMetricSample, HeteroPermissionMode } from '@lobechat/types';
+import type {
+  CodexCollaborationMode,
+  DeviceMetricSample,
+  HeteroPermissionMode,
+} from '@lobechat/types';
 
 // ─── Device Info ───
 
@@ -345,6 +349,11 @@ export interface AgentRunRequestMessage {
    * set it; an older device ignores it.
    */
   claudeCodeEntrypoint?: string;
+  /**
+   * Codex Plan switch (Better Coding Experience lab), forwarded into the same
+   * envelope. Sent only to a device advertising `codex-collaboration-mode-v1`.
+   */
+  collaborationMode?: CodexCollaborationMode;
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch
