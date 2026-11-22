@@ -38,8 +38,8 @@ const needsGrant = async (
  * Keeps a member's grant in step with the environment just written to it, inside the same
  * channel lock. A private device gets a grant for exactly its device, owner and directory: approved
  * at once when the device owner picked it themselves, else pending until they decide. The same
- * environment saved again keeps its grant and decision; any other environment drops it, so a
- * switch never inherits an approval given for somewhere else.
+ * environment saved again keeps its grant and decision; any other environment replaces it with a
+ * fresh grant, so neither the approval nor the request ID carries over to somewhere else.
  */
 export const syncMemberGrant = async (
   tx: Transaction,
@@ -66,24 +66,27 @@ export const syncMemberGrant = async (
   )
     return current;
 
+  // The grant is the device owner's answer to one environment, and the ID is what they answer
+  // about. Replacing the row instead of updating it in place keeps that true: a request the owner
+  // was looking at cannot be approved into effect for a directory or device that arrived after
+  // they saw it, because the old ID no longer exists.
+  if (current) await tx.delete(channelMemberGrants).where(eq(channelMemberGrants.id, current.id));
+
   const approved = requester.userId === deviceOwnerId;
   const now = new Date();
-  const values = {
-    decidedAt: approved ? now : null,
-    deviceId,
-    deviceOwnerId,
-    requestedByMemberId: requester.id,
-    revokeReason: null,
-    revokedAt: null,
-    status: (approved ? 'approved' : 'pending') as ChannelMemberGrantStatus,
-    workingDirectory,
-  };
   const [grant] = await tx
     .insert(channelMemberGrants)
-    .values({ ...values, channelId: channel.id, memberId: member.id })
-    .onConflictDoUpdate({
-      set: { ...values, updatedAt: now },
-      target: channelMemberGrants.memberId,
+    .values({
+      channelId: channel.id,
+      decidedAt: approved ? now : null,
+      deviceId,
+      deviceOwnerId,
+      memberId: member.id,
+      requestedByMemberId: requester.id,
+      revokeReason: null,
+      revokedAt: null,
+      status: (approved ? 'approved' : 'pending') as ChannelMemberGrantStatus,
+      workingDirectory,
     })
     .returning();
   await audit(tx, channel.id, approved ? 'grant_approved' : 'grant_requested', grant.id);

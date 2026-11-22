@@ -180,6 +180,38 @@ describe('channel device grants', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('never lets the owner approve an environment that changed under the request', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(
+      channel.id,
+      'Coder',
+      deviceConfig('/repo', 'private-1', fixture.memberId),
+    );
+    const pending = await grantOf(agent.id);
+    expect(pending).toMatchObject({ status: 'pending', workingDirectory: '/repo' });
+
+    // An admin moves the member to another directory on the same device before the owner answers.
+    await asOwner.updateAgentEnvironment(channel.id, agent.id, {
+      deviceId: 'private-1',
+      deviceOwnerId: fixture.memberId,
+      workingDirectory: '/elsewhere',
+    });
+
+    const rotated = await grantOf(agent.id);
+    expect(rotated).toMatchObject({ status: 'pending', workingDirectory: '/elsewhere' });
+    expect(rotated.id).not.toBe(pending.id);
+
+    // The request the owner was looking at cannot be approved into effect for the new directory.
+    await expect(
+      decideDeviceGrant(db, fixture.memberId, pending.id, 'approve'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    // Only the environment they are shown now can be decided.
+    expect((await decideDeviceGrant(db, fixture.memberId, rotated.id, 'approve')).status).toBe(
+      'approved',
+    );
+  });
+
   it('asks the owner when a device turns private after it was picked', async () => {
     const { asOwner, channel } = await fixture.createTeamChannel();
     await db.update(devices).set({ visibility: 'public' }).where(eq(devices.deviceId, 'private-1'));
