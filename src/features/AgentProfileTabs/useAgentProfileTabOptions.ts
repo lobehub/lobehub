@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { useShowAgentIdentity } from '@/features/AgentMail/useShowAgentIdentity';
+import { useAgentGraphSupported } from '@/features/AgentSettingsPage/useAgentGraphSupported';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { usePermission } from '@/hooks/usePermission';
@@ -42,26 +43,29 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
   // The mobile Segmented has no room for another segment, so mobile keeps the
   // drawer entry in `AgentSidebar/Header/Nav`.
   const selfLearningSupported = enableSelfLearning && !isMobileSurface();
-  // Mobile reaches these two from the profile header menu instead.
-  const advancedSupported = !isMobileSurface();
+  // Mobile reaches these from the profile header menu instead.
+  const agentGraphSupported = useAgentGraphSupported();
+  const graphSupported = agentGraphSupported && !isMobileSurface();
+  const openingSupported = !isMobileSurface();
   const permissionSupported = hasActiveWorkspace && !isMobileSurface();
 
   return useMemo(
     () =>
       buildAgentProfileTabOptions({
         active,
-        advancedSupported,
         automationsSupported: webhookSupported,
         canConfigure,
+        graphSupported,
         labels: {
-          'advanced': t('advancedSettings', { ns: 'setting' }),
           'automations': t('tab.automations'),
           'channel': t('tab.integration'),
           'engine': t('tab.engine'),
           'environment': t('tab.environment'),
+          'graph': t('agentTab.graph', { ns: 'setting' }),
           'instruction': t('tab.instruction'),
           'knowledge': t('tab.knowledge'),
           'mail': t('tab.mail'),
+          'opening': t('agentTab.opening', { ns: 'setting' }),
           'permission': t('permission.page.entry', { ns: 'setting' }),
           // Inside the profile group the whole surface *is* the agent profile,
           // so the first entry is the "basic" tab, not "Agent Profile" again —
@@ -75,6 +79,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
           'webhook': t('tab.webhook'),
         },
         mailSupported,
+        openingSupported,
         permissionSupported,
         selfLearningSupported,
         shareSupported: shareVisible === true && canManageShare,
@@ -83,11 +88,12 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
       }),
     [
       active,
-      advancedSupported,
       canConfigure,
       canManageShare,
+      graphSupported,
       isHeterogeneous,
       mailSupported,
+      openingSupported,
       permissionSupported,
       selfLearningSupported,
       shareVisible,

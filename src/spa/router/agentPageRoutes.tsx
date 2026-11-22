@@ -4,7 +4,6 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
-  agentAdvancedRouteMeta,
   agentAutomationsRouteMeta,
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
@@ -12,9 +11,11 @@ import {
   agentEngineRouteMeta,
   agentEnvironmentRouteMeta,
   agentGoalsRouteMeta,
+  agentGraphRouteMeta,
   agentInstructionRouteMeta,
   agentKnowledgeRouteMeta,
   agentMailRouteMeta,
+  agentOpeningRouteMeta,
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
@@ -282,11 +283,19 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(
-      () => import('@/routes/(main)/agent/advanced'),
-      'Desktop > Chat > Advanced Settings',
+      () => import('@/routes/(main)/agent/opening'),
+      'Desktop > Chat > Opening Settings',
     ),
-    handle: { meta: agentAdvancedRouteMeta },
-    path: 'advanced',
+    handle: { meta: agentOpeningRouteMeta },
+    path: 'opening',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/graph'),
+      'Desktop > Chat > Graph Runtime',
+    ),
+    handle: { meta: agentGraphRouteMeta },
+    path: 'graph',
   },
   {
     element: dynamicElement(

@@ -282,7 +282,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
 
-    // Desktop lists these two in the profile sidebar; mobile has no sidebar there.
+    // Desktop reaches these from the profile sidebar; mobile has no sidebar there.
     const showConfigEntries = isMobileSurface();
 
     return [

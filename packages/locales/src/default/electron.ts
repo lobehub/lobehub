@@ -10,7 +10,6 @@ export default {
   'startupUpdate.retry': 'Retry',
   'startupUpdate.quit': 'Quit',
 
-  'navigation.advancedSettings': 'Advanced Settings',
   'navigation.agentShare': 'Share',
   'navigation.agents': 'Agents',
   'navigation.channels': 'IM Bots',
@@ -30,6 +29,7 @@ export default {
   'navigation.group': 'Group',
   'navigation.groupChat': 'Group Chat',
   'navigation.groupProfile': 'Group Profile',
+  'navigation.graph': 'Graph Runtime',
   'navigation.home': 'Home',
   'navigation.image': 'Image',
   'navigation.knowledgeBase': 'Knowledge Base',
@@ -53,6 +53,7 @@ export default {
   'navigation.newChat': 'New Chat',
   'navigation.noPages': 'No pages yet',
   'navigation.onboarding': 'Onboarding',
+  'navigation.opening': 'Opening Settings',
   'navigation.page': 'Page',
   'navigation.pages': 'Pages',
   'navigation.permission': 'Permissions',

@@ -16,7 +16,7 @@ export const useOpenChatSettings = () => {
     navigate(
       isMobileSurface()
         ? `/agent/${activeAgentId}/settings?showMobileWorkspace=true`
-        : buildAgentProfileTabPath(activeAgentId, 'advanced'),
+        : buildAgentProfileTabPath(activeAgentId, 'opening'),
     );
   }, [activeAgentId, navigate]);
 };

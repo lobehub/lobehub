@@ -9,14 +9,15 @@ import {
 } from './tabOptions';
 
 const labels = {
-  'advanced': 'advancedSettings',
   'automations': 'tab.automations',
   'channel': 'tab.integration',
   'engine': 'tab.engine',
   'environment': 'tab.environment',
+  'graph': 'agentTab.graph',
   'instruction': 'tab.instruction',
   'knowledge': 'tab.knowledge',
   'mail': 'tab.mail',
+  'opening': 'agentTab.opening',
   'permission': 'permission.page.entry',
   'profile': 'tab.profile',
   'self-evolving': 'title',
@@ -46,7 +47,8 @@ describe('getAgentProfileTab', () => {
     ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
     ['/agent/agt_1/self-evolving', 'self-evolving'],
     ['/agent/agt_1/webhook', 'webhook'],
-    ['/acme/agent/agt_1/advanced', 'advanced'],
+    ['/acme/agent/agt_1/opening', 'opening'],
+    ['/agent/agt_1/graph', 'graph'],
     ['/acme/agent/agt_1/permission', 'permission'],
     ['/acme/agent/agt_1/automations', 'automations'],
     ['/agent/agt_1/self-evolving/new', 'self-evolving'],
@@ -454,7 +456,7 @@ describe('permission tab', () => {
   });
 });
 
-describe('advanced tab', () => {
+describe('opening and graph tabs', () => {
   const base = {
     labels,
     mailSupported: false,
@@ -463,38 +465,71 @@ describe('advanced tab', () => {
     heterogeneous: false,
   };
 
-  it('closes the setup section for a member who can configure', () => {
+  it('lists opening under Shape and graph under its own Advanced section', () => {
+    const groups = groupAgentProfileTabOptions(
+      buildAgentProfileTabOptions({
+        ...base,
+        active: 'profile',
+        canConfigure: true,
+        graphSupported: true,
+        openingSupported: true,
+      }),
+    );
+    const tabsOf = (key: string) =>
+      groups.find((group) => group.key === key)?.options.map((option) => option.value);
+
+    expect(tabsOf('shape')).toEqual(['instruction', 'knowledge', 'opening']);
+    expect(tabsOf('setup')).toEqual(['engine', 'tools', 'skills']);
+    expect(tabsOf('advanced')).toEqual(['graph']);
+    expect(groups.map((group) => group.key)).toEqual([
+      'profile',
+      'shape',
+      'setup',
+      'identity',
+      'advanced',
+      'general',
+    ]);
+  });
+
+  it('drops the Advanced section when the graph option does not apply', () => {
+    const groups = groupAgentProfileTabOptions(
+      buildAgentProfileTabOptions({
+        ...base,
+        active: 'profile',
+        canConfigure: true,
+        openingSupported: true,
+      }),
+    );
+
+    expect(groups.map((group) => group.key)).not.toContain('advanced');
+  });
+
+  it('keeps opening for a heterogeneous agent', () => {
     const options = buildAgentProfileTabOptions({
       ...base,
       active: 'profile',
-      advancedSupported: true,
       canConfigure: true,
+      heterogeneous: true,
+      openingSupported: true,
     });
 
-    expect(
-      groupAgentProfileTabOptions(options)
-        .find((group) => group.key === 'setup')
-        ?.options.map((option) => option.value),
-    ).toEqual(['engine', 'tools', 'skills', 'advanced']);
+    expect(options.map((option) => option.value)).toContain('opening');
   });
 
-  it('leaves the tab out on mobile or without edit access', () => {
-    for (const gate of [
-      { advancedSupported: false, canConfigure: true },
-      { advancedSupported: true, canConfigure: false },
-    ])
-      expect(
-        buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate }).map((o) => o.value),
-      ).not.toContain('advanced');
+  it.each([
+    ['opening', { canConfigure: false, openingSupported: true }],
+    ['opening', { canConfigure: true, openingSupported: false }],
+    ['graph', { canConfigure: false, graphSupported: true }],
+    ['graph', { canConfigure: true, graphSupported: false }],
+  ] as const)('leaves %s out when its gate is closed', (tab, gate) => {
+    const options = buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate });
+
+    expect(options.map((option) => option.value)).not.toContain(tab);
   });
 
-  it('keeps the tab of the current page even when gated off', () => {
-    const options = buildAgentProfileTabOptions({
-      ...base,
-      active: 'advanced',
-      canConfigure: false,
-    });
+  it.each(['opening', 'graph'] as const)('keeps %s on its own page when gated off', (active) => {
+    const options = buildAgentProfileTabOptions({ ...base, active, canConfigure: false });
 
-    expect(options.map((option) => option.value)).toContain('advanced');
+    expect(options.map((option) => option.value)).toContain(active);
   });
 });

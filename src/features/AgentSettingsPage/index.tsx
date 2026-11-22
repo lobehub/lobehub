@@ -1,35 +1,21 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
-import AgentGraphRuntime from '@/features/AgentSetting/AgentGraphRuntime';
-import AgentOpening from '@/features/AgentSetting/AgentOpening';
 import { AgentSettingsProvider } from '@/features/AgentSetting/AgentSettingsProvider';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import { useAgentAdvancedSettings } from './useAgentAdvancedSettings';
+import { useAgentSettingsPage } from './useAgentSettingsPage';
 
-const Section = ({ children, title }: { children: ReactNode; title: string }) => (
-  <Flexbox gap={8}>
-    <Text as={'h2'} fontSize={16} style={{ margin: 0 }} weight={600}>
-      {title}
-    </Text>
-    {children}
-  </Flexbox>
-);
-
-const AdvancedSettingsSections = () => {
-  const { t } = useTranslation('setting');
-  const { agentId, canEdit, config, meta, showGraph, updateConfig, updateMeta } =
-    useAgentAdvancedSettings();
+const SettingsProvider = ({ children }: { children: ReactNode }) => {
+  const { agentId, canEdit, config, meta, updateConfig, updateMeta } = useAgentSettingsPage();
 
   return (
     <AgentSettingsProvider
@@ -41,22 +27,18 @@ const AdvancedSettingsSections = () => {
       onConfigChange={updateConfig}
       onMetaChange={updateMeta}
     >
-      <Flexbox gap={32}>
-        <Section title={t('agentTab.opening')}>
-          <AgentOpening />
-        </Section>
-        {showGraph && (
-          <Section title={t('agentTab.graph')}>
-            <AgentGraphRuntime />
-          </Section>
-        )}
-      </Flexbox>
+      {children}
     </AgentSettingsProvider>
   );
 };
 
-const AgentAdvancedSettings = () => {
-  const { t } = useTranslation('setting');
+interface AgentSettingsPageProps {
+  children: ReactNode;
+  title: string;
+}
+
+/** Shell for a profile-group page whose body edits the agent through the settings store. */
+const AgentSettingsPage = ({ children, title }: AgentSettingsPageProps) => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   // Data-presence loading stays true on failure, so read the recorded fetch
   // error too; otherwise a failed config load would show an empty form.
@@ -67,12 +49,8 @@ const AgentAdvancedSettings = () => {
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader
+        left={activeAgentId ? <AgentBreadcrumb agentId={activeAgentId} title={title} /> : null}
         styles={{ left: { paddingInlineStart: 24 } }}
-        left={
-          activeAgentId ? (
-            <AgentBreadcrumb agentId={activeAgentId} title={t('advancedSettings')} />
-          ) : null
-        }
       />
       <Flexbox flex={1} style={{ overflowY: 'auto', position: 'relative' }} width={'100%'}>
         <WideScreenContainer>
@@ -85,7 +63,7 @@ const AgentAdvancedSettings = () => {
               loading={<SurfaceSkeleton header={false} variant={'form'} />}
               onRetry={() => retryAgentConfigFetch()}
             >
-              <AdvancedSettingsSections />
+              <SettingsProvider>{children}</SettingsProvider>
             </AsyncBoundary>
           </Flexbox>
         </WideScreenContainer>
@@ -94,4 +72,4 @@ const AgentAdvancedSettings = () => {
   );
 };
 
-export default AgentAdvancedSettings;
+export default AgentSettingsPage;

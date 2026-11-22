@@ -38,7 +38,7 @@ describe('useOpenChatSettings', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/agent/123/settings?showMobileWorkspace=true');
   });
 
-  it('navigates to the advanced settings page on desktop and web', () => {
+  it('navigates to the opening settings page on desktop and web', () => {
     vi.stubGlobal('__MOBILE__', false);
     useAgentStore.setState({ activeAgentId: '456' });
     const { result } = renderHook(() => useOpenChatSettings());
@@ -47,7 +47,7 @@ describe('useOpenChatSettings', () => {
       result.current();
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('/agent/456/advanced');
+    expect(mockNavigate).toHaveBeenCalledWith('/agent/456/opening');
   });
 
   it('does nothing without an active agent', () => {

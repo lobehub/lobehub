@@ -3,15 +3,16 @@ import {
   CpuIcon,
   FileTextIcon,
   FileUserIcon,
+  GitBranchIcon,
   GraduationCapIcon,
   LibraryBigIcon,
   MailIcon,
   MessageSquare,
+  MessageSquareHeartIcon,
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   RadioTowerIcon,
   ScrollTextIcon,
-  Settings2Icon,
   Share2Icon,
   SparklesIcon,
   UsersIcon,
@@ -43,9 +44,14 @@ const TopicsDynamicMeta = lazy(() =>
     default: module.TopicsDynamicMeta,
   })),
 );
-const AdvancedSettingsDynamicMeta = lazy(() =>
+const OpeningDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
-    default: module.AdvancedSettingsDynamicMeta,
+    default: module.OpeningDynamicMeta,
+  })),
+);
+const GraphDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.GraphDynamicMeta,
   })),
 );
 const EngineDynamicMeta = lazy(() =>
@@ -274,11 +280,18 @@ export const agentSelfLearningRouteMeta = routeMeta({
   titleKey: 'navigation.selfLearning',
 });
 
-export const agentAdvancedRouteMeta = routeMeta({
-  DynamicMeta: AdvancedSettingsDynamicMeta,
-  icon: Settings2Icon,
+export const agentOpeningRouteMeta = routeMeta({
+  DynamicMeta: OpeningDynamicMeta,
+  icon: MessageSquareHeartIcon,
   Skeleton: createSurfaceSkeleton('form'),
-  titleKey: 'navigation.advancedSettings',
+  titleKey: 'navigation.opening',
+});
+
+export const agentGraphRouteMeta = routeMeta({
+  DynamicMeta: GraphDynamicMeta,
+  icon: GitBranchIcon,
+  Skeleton: createSurfaceSkeleton('form'),
+  titleKey: 'navigation.graph',
 });
 
 export const agentPermissionRouteMeta = routeMeta({
