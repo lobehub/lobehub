@@ -2,6 +2,7 @@ import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
 import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
   ClientLlmWaitItem,
+  CodexCollaborationMode,
   ComposerUserMessage,
   ContextSelection,
   ExecAgentAppContext,
@@ -496,6 +497,11 @@ class AiAgentService {
    */
   async setHeteroPermissionMode(params: { mode: HeteroPermissionMode; operationId: string }) {
     return await lambdaClient.aiAgent.setHeteroPermissionMode.mutate(params);
+  }
+
+  /** Flip the Codex Plan switch of a run hosted by `lh hetero exec`; it applies next turn. */
+  async setHeteroCollaborationMode(params: { mode: CodexCollaborationMode; operationId: string }) {
+    return await lambdaClient.aiAgent.setHeteroCollaborationMode.mutate(params);
   }
 
   /**

@@ -153,6 +153,11 @@ class DeviceService {
     return lambdaClient.device.getDeviceSystemInfo.query(input);
   }
 
+  /** Native runtimes of the connection an agent run on the device reaches. */
+  getAgentRunRuntimes(input: Parameters<DeviceClient['getAgentRunRuntimes']['query']>[0]) {
+    return lambdaClient.device.getAgentRunRuntimes.query(input);
+  }
+
   /** Where the device's desktop app update stands; never starts a check. */
   getAppUpdateState(input: Parameters<DeviceClient['getAppUpdateState']['query']>[0]) {
     return lambdaClient.device.getAppUpdateState.query(input);
