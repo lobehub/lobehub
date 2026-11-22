@@ -89,6 +89,14 @@ class AcceptanceEvidenceExecutionRuntime {
       await new Promise((resolve) => setTimeout(resolve, PLAN_WAIT_INTERVAL_MS));
       run = await runModel.findByOperation(runOperationId);
     }
+    // No round of its own: a builder resumed in the same topic with the user's
+    // feedback, an intervention or a retry answers to the round an earlier run
+    // there started (T-730). Only after the wait, so a run whose own plan is
+    // still landing is never handed its predecessor's criteria.
+    if (!run?.plan?.length) {
+      const inherited = await runModel.findRoundForOperation(runOperationId);
+      if (inherited?.plan?.length) run = inherited;
+    }
     if (!run?.plan?.length) {
       return {
         content:
@@ -218,9 +226,12 @@ class AcceptanceEvidenceExecutionRuntime {
     const runOperationId = await this.resolveRunOperationId();
     if (!runOperationId) return { error: 'NO_OPERATION', success: false };
 
-    const run = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
-      runOperationId,
-    );
+    // Its own round, else the topic round it answers to (see listCriteria).
+    const run = await new VerifyRunModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findRoundForOperation(runOperationId);
     const item = run?.plan?.find((candidate) => candidate.id === params.checkItemId);
     if (!run || !item) return { error: 'UNKNOWN_CRITERION', success: false };
 
@@ -269,7 +280,8 @@ class AcceptanceEvidenceExecutionRuntime {
       checkItemId: item.id,
       checkItemIndex: item.index,
       checkItemTitle: item.title,
-      operationId: runOperationId,
+      // The round's own operation — an inherited round stays addressed by it.
+      operationId: run.operationId ?? runOperationId,
       required: item.required,
       verifierType: item.verifierType,
       verifyRunId: run.id,
@@ -312,8 +324,15 @@ class AcceptanceEvidenceExecutionRuntime {
       };
     }
 
-    const runOperationId = await this.resolveRunOperationId();
-    if (!runOperationId) return { error: 'NO_OPERATION', success: false };
+    const callerRunOperationId = await this.resolveRunOperationId();
+    if (!callerRunOperationId) return { error: 'NO_OPERATION', success: false };
+    // A run with no round of its own disputes the topic round it answers to.
+    const round = await new VerifyRunModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findRoundForOperation(callerRunOperationId);
+    const runOperationId = round?.operationId ?? callerRunOperationId;
     const operation = await new AgentOperationModel(
       this.db,
       this.userId,
