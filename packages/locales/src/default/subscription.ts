@@ -432,6 +432,11 @@ export default {
   'limitation.insufficientBudget.exactDesc':
     'This request needs more balance. Top up or upgrade your plan.',
   'limitation.insufficientBudget.required': 'Required amount',
+  'limitation.insufficientBudget.rescue.basic.configApi': 'Set up API key',
+  'limitation.insufficientBudget.rescue.basic.desc':
+    "Basic doesn't include LobeHub-hosted model usage, and your free allowance is used up",
+  'limitation.insufficientBudget.rescue.basic.ownKeyHint':
+    'Models on your own API key keep working.',
   'limitation.insufficientBudget.rescue.desc': 'This request needs {{shortfall}} more to continue',
   'limitation.insufficientBudget.rescue.referral.badge': 'Free',
   'limitation.insufficientBudget.rescue.referral.benefit':
@@ -737,7 +742,8 @@ export default {
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
   'plans.plan.free.title': 'Free',
-  'plans.plan.basic.desc': 'For running agents with your own model API keys',
+  'plans.plan.basic.desc':
+    'Run agents with your own model API keys. LobeHub-hosted model usage not included',
   'plans.plan.basic.title': 'Basic',
   'plans.plan.hobby.desc': 'For users with their own API who pay as they go',
   'plans.plan.hobby.title': 'Hobby',
