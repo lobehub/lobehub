@@ -21,6 +21,7 @@ import { agentShareAdmits } from '../../utils/agentShareAdmits';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
+import { syncMemberGrant } from './grants';
 
 /**
  * Whether a direct conversation is with an Agent reached through its share: someone else's Agent
@@ -292,6 +293,7 @@ export const addAgentMember = async (
       name: input.name?.trim() || agentDisplayName(agent, 'Agent'),
     })
     .returning();
+  await syncMemberGrant(tx, channel, member, inviter);
   return member;
 };
 

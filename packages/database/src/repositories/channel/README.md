@@ -64,6 +64,16 @@ nullable reference exists for deletion history, not for creating an unbound Agen
 member's `config` contains only the Channel device, device owner and working directory. Its name
 and description are Channel routing/execution labels; message author names come from the actual sender.
 
+In a workspace Channel, an Agent member may run on a device that is not shared with the workspace
+only under a `channel_member_grants` row for exactly its device, owner and directory
+(`grants.ts`). Writing the environment (`addAgent`, `updateAgentEnvironment`) keeps the row in
+step: the device owner picking their own device approves it at once; anyone else's pick (only the
+Agent owner's private devices are offered to them) waits as `pending`. Saving the same environment
+keeps the decision; any other environment replaces it. A claim that finds no row (the device was
+made private after it was picked) files a pending request for the waiting requester. The device
+owner lists requests with `listDeviceGrants` and approves, rejects or revokes with
+`decideDeviceGrant`, which refuses a grant whose environment has since moved.
+
 Every claim rechecks the actual requester's Agent access and reads the Agent's current settings.
 Configuration uses the same merge function as AgentService: system defaults, server defaults,
 personal defaults (personal scope only), then the Agent. Workers must supply trusted
