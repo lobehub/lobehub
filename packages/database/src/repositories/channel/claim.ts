@@ -16,6 +16,7 @@ import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
+import { requestMissingGrant } from './grants';
 import { buildManifest } from './manifest';
 import type { ChannelTopicScope } from './topic';
 import { continuationTopic, resolveTopic } from './topic';
@@ -123,6 +124,7 @@ const deviceBlock = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
+  job: Pick<ChannelJobItem, 'requesterMemberId'>,
 ): Promise<Block | undefined> => {
   const { deviceId, deviceOwnerId, workingDirectory } = member.config ?? {};
   if (workingDirectory && !deviceId)
@@ -152,6 +154,11 @@ const deviceBlock = async (
     .select()
     .from(channelMemberGrants)
     .where(eq(channelMemberGrants.memberId, member.id));
+  // Picked while the device was public, then made private: ask its owner now.
+  if (!grant) {
+    await requestMissingGrant(tx, channel, member, job.requesterMemberId);
+    return APPROVAL_PENDING;
+  }
   if (
     !grant ||
     grant.deviceId !== deviceId ||
@@ -417,7 +424,7 @@ export const claimJob = async (
   }
 
   const blocked =
-    (await deviceBlock(tx, channel, member)) ??
+    (await deviceBlock(tx, channel, member, job)) ??
     (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);

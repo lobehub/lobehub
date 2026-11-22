@@ -32,6 +32,7 @@ import {
   agentOperations,
   agents,
   channelJobs,
+  channelMemberGrants,
   channelMembers,
   channelMessages,
   channels,
@@ -542,6 +543,11 @@ export const readChannelView = async (
         deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
         deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
         workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
+        grantDeviceId: channelMemberGrants.deviceId,
+        grantDeviceOwnerId: channelMemberGrants.deviceOwnerId,
+        grantId: channelMemberGrants.id,
+        grantStatus: channelMemberGrants.status,
+        grantWorkingDirectory: channelMemberGrants.workingDirectory,
         agencyConfig: agents.agencyConfig,
         agentUserId: agents.userId,
         agentVisibility: agents.visibility,
@@ -550,6 +556,7 @@ export const readChannelView = async (
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
       .leftJoin(agents, eq(agents.id, channelMembers.agentId))
+      .leftJoin(channelMemberGrants, eq(channelMemberGrants.memberId, channelMembers.id))
       .where(eq(channelMembers.channelId, channelId))
       .orderBy(asc(channelMembers.createdAt)),
     tx
@@ -690,11 +697,27 @@ export const readChannelView = async (
         agentVisibility: _agentVisibility,
         agentWorkspaceId: _agentWorkspaceId,
         deviceId,
-        deviceOwnerId: _deviceOwnerId,
+        deviceOwnerId,
+        grantDeviceId,
+        grantDeviceOwnerId,
+        grantId,
+        grantStatus,
+        grantWorkingDirectory,
         inheritedConfig,
         workingDirectory: channelDirectory,
         ...member
       } = row;
+      // Only a grant for exactly the Channel's current pick speaks for it; a stale one is moot.
+      const grant =
+        grantId &&
+        grantStatus &&
+        grantDeviceOwnerId &&
+        !inheritedConfig &&
+        grantDeviceId === deviceId &&
+        grantDeviceOwnerId === deviceOwnerId &&
+        grantWorkingDirectory === channelDirectory
+          ? { deviceOwnerId: grantDeviceOwnerId, id: grantId, status: grantStatus }
+          : null;
       const device = deviceInfos.get(row);
       // An inherited device works in the Agent's own folder there, else the device's default.
       const workingDirectory =
@@ -705,7 +728,12 @@ export const readChannelView = async (
         ...member,
         environment:
           member.agentId && (deviceId || workingDirectory)
-            ? { deviceId, deviceName: device?.name ?? null, workingDirectory }
+            ? {
+                deviceId,
+                deviceName: device?.name ?? null,
+                ...(grant ? { grant } : {}),
+                workingDirectory,
+              }
             : null,
       };
     }),

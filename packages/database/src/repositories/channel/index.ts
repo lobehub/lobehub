@@ -43,6 +43,7 @@ import { deleteMessage } from './delete';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
+import { syncMemberGrant } from './grants';
 import { channelLastMessages } from './lastMessage';
 import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
@@ -290,7 +291,7 @@ export class ChannelRepository {
   ) =>
     this.write(
       channelId,
-      async (tx) => {
+      async (tx, access) => {
         const current = await requireAgentMember(tx, channelId, memberId);
         const [member] = await tx
           .update(channelMembers)
@@ -305,6 +306,7 @@ export class ChannelRepository {
           .where(eq(channelMembers.id, memberId))
           .returning();
         await audit(tx, channelId, 'member_environment_changed', memberId);
+        await syncMemberGrant(tx, access.channel, member, access.member);
         return member;
       },
       { minRole: 'admin' },
