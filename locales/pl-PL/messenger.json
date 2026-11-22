@@ -220,7 +220,6 @@
   "verify.error.generic": "Coś poszło nie tak. Spróbuj ponownie.",
   "verify.error.missingToken": "Nieprawidłowe połączenie. Otwórz tę stronę z poziomu bota.",
   "verify.error.title": "Nie można potwierdzić połączenia",
-  "verify.error.unlinkBeforeRelink": "To konto LobeHub jest już powiązane z innym kontem Telegram. Odłącz je w Ustawieniach → Messenger przed powiązaniem nowego.",
   "verify.signInCta": "Zaloguj się, aby kontynuować",
   "verify.signInRequired": "Zaloguj się do LobeHub, aby potwierdzić połączenie.",
   "verify.success.backToLobeHub": "Powrót do LobeHub",

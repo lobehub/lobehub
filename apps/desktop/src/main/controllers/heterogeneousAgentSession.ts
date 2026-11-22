@@ -7,6 +7,7 @@ import type { AskUserBridge, AskUserBridgeOptions } from '@lobechat/heterogeneou
 import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protocol';
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
+  AntigravityLiveInput,
   ClaudeAgentSdkSession,
   ClaudeCodeLiveInput,
   CodexThreadSession,
@@ -150,8 +151,8 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
-  /** Open input of a Claude Code CLI run (kept open for every run, like `lh hetero exec`). */
-  liveInput?: ClaudeCodeLiveInput;
+  /** Open input of a live CLI run (Claude Code or Antigravity). */
+  liveInput?: AntigravityLiveInput | ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;

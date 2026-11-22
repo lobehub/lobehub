@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { RESERVED_AGENT_SLUGS } from '../../models/agent/constants';
 import { type AgentModelContext, createAgentModelContext } from '../../models/agent/context';
+import { detachFromSurvivingTopics } from '../../models/agent/delete';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from '../../models/agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../../models/agentTransferJob';
 import { agents, agentsToSessions, sessions } from '../../schemas';
@@ -86,7 +87,8 @@ const deleteAgent = async (ctx: AgentModelContext, agentId: string) => {
         .where(and(inArray(sessions.id, sessionIds), ctx.sessionsOwnership()));
     }
 
-    // 4. Delete the agent itself
+    // 4. Delete the agent itself, keeping what sits in topics that outlive it
+    await detachFromSurvivingTopics({ db: trx as unknown as LobeChatDatabase }, [agentId]);
     return trx.delete(agents).where(and(eq(agents.id, agentId), ctx.ownership()));
   });
 };

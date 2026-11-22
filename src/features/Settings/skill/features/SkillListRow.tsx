@@ -79,6 +79,8 @@ interface SkillListRowProps {
   titleColor?: string;
 }
 
+export type CatalogConnectRow = Pick<SkillListRowProps, 'icon' | 'onClick' | 'summary' | 'title'>;
+
 const SkillListRow = memo<SkillListRowProps>(
   ({
     active,
@@ -164,36 +166,14 @@ const SkillListRow = memo<SkillListRowProps>(
 
 SkillListRow.displayName = 'SkillListRow';
 
-/**
- * The nav row only has room for a check with a tooltip; the page row spells
- * the state out so a scan down the list reads without hovering.
- */
-export const ConnectedStatus = memo<{ label: string }>(({ label }) => {
-  const variant = useSkillListVariant();
-  const check = (
-    <Icon
-      icon={CircleCheck}
-      size={variant === 'page' ? 14 : 16}
-      style={{ color: cssVar.colorSuccess }}
-    />
-  );
-
-  if (variant === 'page')
-    return (
-      <Flexbox horizontal align={'center'} gap={4}>
-        {check}
-        <Text fontSize={12} type={'secondary'}>
-          {label}
-        </Text>
-      </Flexbox>
-    );
-
-  return (
-    <Tooltip title={label}>
-      <Center width={20}>{check}</Center>
-    </Tooltip>
-  );
-});
+/** Connection indicator for the compact sidebar row. */
+export const ConnectedStatus = memo<{ label: string }>(({ label }) => (
+  <Tooltip title={label}>
+    <Center width={20}>
+      <Icon icon={CircleCheck} size={16} style={{ color: cssVar.colorSuccess }} />
+    </Center>
+  </Tooltip>
+));
 
 ConnectedStatus.displayName = 'ConnectedStatus';
 

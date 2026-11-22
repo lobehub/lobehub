@@ -211,6 +211,8 @@ export interface AgentRuntimeDelegate {
   verifyShareRunStillAuthorized?: (params: {
     agentId: string;
     shareId: string;
+    /** The visitor the run serves: a `card` share admits only its grantees. */
+    visitorUserId?: string;
   }) => Promise<boolean>;
 }
 

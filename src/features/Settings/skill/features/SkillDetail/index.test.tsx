@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import ConnectorGate from '@/features/Integrations/ConnectorGate';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import SkillDetail from './index';
@@ -63,6 +64,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     confirmModal: vi.fn(),
+    githubLocaleReady: true,
     permissions: {
       create_content: true,
       edit_own_content: true,
@@ -90,7 +92,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
+  useTranslation: (namespace: string) => ({
+    ready: namespace !== 'integration' || mocks.githubLocaleReady,
     t: (key: string, options?: { defaultValue?: string; name?: string } | string) => {
       const translations: Record<string, string> = {
         'tools.lobehubSkill.connect': 'Connect',
@@ -111,6 +114,14 @@ vi.mock('react-i18next', () => ({
     },
   }),
 }));
+
+vi.mock('@/features/Integrations/useConnectorConnection', () => ({
+  useConnectorConnection: () => ({ available: false }),
+}));
+vi.mock('@/features/Integrations/Github/RepositoryAccess', () => ({
+  default: () => <div>Repository access</div>,
+}));
+vi.mock('@/features/Settings/skill/features/LobehubSkillItem', () => ({ default: () => null }));
 
 vi.mock('@/features/AgentSkillDetail', () => ({
   default: () => <div data-testid="agent-skill-detail" />,
@@ -238,6 +249,17 @@ describe('SkillDetail', () => {
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
     },
   );
+
+  it('waits for translations before showing GitHub repository access on a cold load', () => {
+    mocks.githubLocaleReady = false;
+    const cold = render(<ConnectorGate identifier="github">{null}</ConnectorGate>);
+    expect(screen.queryByText('Repository access')).toBeNull();
+    cold.unmount();
+
+    mocks.githubLocaleReady = true;
+    render(<ConnectorGate identifier="github">{null}</ConnectorGate>);
+    expect(screen.getByText('Repository access')).toBeTruthy();
+  });
 
   it('offers a Configure migration action for an un-migrated legacy custom MCP', async () => {
     // Legacy `user_installed_plugins` custom MCP with an mcp config but no

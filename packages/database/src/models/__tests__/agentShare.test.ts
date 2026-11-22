@@ -770,6 +770,24 @@ describe('AgentShareModel', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Share not found' });
     });
 
+    // A card share admits its grantees in their Channels, never through the link page.
+    it('hides a card share page from non-owners, grantees included', async () => {
+      const created = await agentShareModel.create(agentId, 'card');
+      await AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(),
+        shareId: created!.id,
+        source: { channelId: 'channel', messageId: 'message', type: 'card' },
+        userId: otherUserId,
+      });
+
+      await expect(
+        AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, otherUserId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(
+        (await AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, userId)).shareId,
+      ).toBe(created!.id);
+    });
+
     it('allows authenticated access to a link share', async () => {
       const created = await agentShareModel.create(agentId, 'link');
 

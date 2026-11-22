@@ -113,20 +113,53 @@ vi.mock('@/business/server/agent-share/spendGate', () => ({
 const mockFilterAddressBookPeople = vi.fn();
 const mockListAddressBookPeople = vi.fn();
 const mockFindUser = vi.fn();
-vi.mock('@/database/models/contact', () => ({
-  ContactModel: vi.fn(function () {
-    return {
-      filterAddressBookPeople: mockFilterAddressBookPeople,
-      findUser: mockFindUser,
-      listAddressBookPeople: mockListAddressBookPeople,
-    };
-  }),
+vi.mock('@/business/server/contact/addressBook', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getAddressBook: vi.fn(() => ({
+    filterAddressBookPeople: mockFilterAddressBookPeople,
+    findUser: mockFindUser,
+    listAddressBookPeople: mockListAddressBookPeople,
+  })),
 }));
 
 const mockGetFeatureFlagsState = vi.fn();
 vi.mock('@/server/featureFlags', () => ({
   getServerFeatureFlagsStateFromRuntimeConfig: (...args: unknown[]) =>
     mockGetFeatureFlagsState(...args),
+}));
+
+const mockGetAgentConfigById = vi.fn();
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(function () {
+    return { getAgentConfigById: mockGetAgentConfigById };
+  }),
+}));
+
+const mockFindAllAgentSkills = vi.fn(async () => ({ data: [], total: 0 }));
+vi.mock('@/database/models/agentSkill', () => ({
+  AgentSkillModel: vi.fn(function () {
+    return { findAll: mockFindAllAgentSkills };
+  }),
+}));
+
+const mockGetAgentSkills = vi.fn(async () => []);
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn(function () {
+    return { getAgentSkills: mockGetAgentSkills };
+  }),
+}));
+
+const mockGetUserSettings = vi.fn(async () => ({}));
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return { getUserSettings: mockGetUserSettings };
+  }),
+}));
+
+vi.mock('@/server/services/userSkill', () => ({
+  UserSkillService: vi.fn(function () {
+    return { listCatalog: async () => [] };
+  }),
 }));
 
 const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
@@ -217,6 +250,33 @@ describe('agentShareRouter', () => {
 
     await caller.enableShare({ agentId: 'agent-1', visibility: 'link' });
     expect(mockCreate).toHaveBeenCalledWith('agent-1', 'link');
+  });
+
+  describe('enableCardShare', () => {
+    it.each([
+      ['creates a missing share as card-only', { ...share, visibility: 'card' }, 0],
+      ['resumes a paused share as card-only', { ...share, visibility: 'private' }, 1],
+    ])('%s', async (_label, existing, updates) => {
+      mockCreate.mockResolvedValue(existing);
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.enableCardShare({ agentId: 'agent-1' });
+
+      expect(mockAssertShareModelAllowed).toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalledWith('agent-1', 'card');
+      expect(mockUpdateVisibility).toHaveBeenCalledTimes(updates);
+      if (updates) expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'card');
+    });
+
+    it('leaves a live link share as it is', async () => {
+      mockCreate.mockResolvedValue({ ...share, visibility: 'link' });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.enableCardShare({ agentId: 'agent-1' })).resolves.toMatchObject({
+        visibility: 'link',
+      });
+      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+    });
   });
 
   it.each(['enableShare', 'updateVisibility'] as const)(
@@ -420,14 +480,14 @@ describe('agentShareRouter', () => {
     // A workspace manager other than the owner must see and save the same
     // people the run accepts: the runtime keys the book by the Agent owner.
     it('keys the address book by the Agent owner, not the calling manager', async () => {
-      const { ContactModel } = await import('@/database/models/contact');
+      const { getAddressBook } = await import('@/business/server/contact/addressBook');
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
       mockAgentOwnerRows.mockResolvedValue([{ userId: 'owner-9' }]);
       mockListAddressBookPeople.mockResolvedValue([]);
 
       await caller.listDeviceGrantablePeople({ agentId: 'agent-1' });
 
-      expect(ContactModel).toHaveBeenCalledWith(expect.anything(), 'owner-9', undefined);
+      expect(getAddressBook).toHaveBeenCalledWith(expect.anything(), 'owner-9', undefined);
       expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('owner-9');
     });
 
@@ -733,6 +793,55 @@ describe('agentShareRouter', () => {
       await expect(caller.getShareStats({ agentId: 'agent-1' })).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
       });
+    });
+  });
+
+  describe('listGrantableSkills', () => {
+    beforeEach(() => {
+      mockGetByAgentId.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'share-1',
+        shareConfig: {},
+      });
+      mockFindAllAgentSkills.mockResolvedValue({ data: [], total: 0 });
+      mockGetAgentSkills.mockResolvedValue([]);
+      mockGetUserSettings.mockResolvedValue({});
+    });
+
+    it('includes implicit builtin skills for legacy agents and honors legacy library uninstalls', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        chatConfig: {},
+        createdAt: new Date('2026-11-01T00:00:00Z'),
+        plugins: [],
+      });
+      mockGetUserSettings.mockResolvedValue({
+        tool: { uninstalledBuiltinTools: ['lobe-artifacts'] },
+      });
+
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      const skills = await caller.listGrantableSkills({ agentId: 'agent-1' });
+      const ids = skills.map((s) => s.identifier);
+
+      expect(ids).toContain('lobehub');
+      expect(ids).not.toContain('lobe-artifacts');
+    });
+
+    it('omits implicit builtin skills for post-opt-in agents unless explicitly enabled', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        chatConfig: {},
+        createdAt: new Date('2026-11-20T00:00:00Z'),
+        plugins: [{ builtinOverride: true, identifier: 'lobe-artifacts', mode: 'auto' }],
+      });
+      mockGetUserSettings.mockResolvedValue({
+        tool: { uninstalledBuiltinTools: ['lobe-artifacts'] },
+      });
+
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      const skills = await caller.listGrantableSkills({ agentId: 'agent-1' });
+      const ids = skills.map((s) => s.identifier);
+
+      expect(ids).toContain('lobe-artifacts');
+      expect(ids).not.toContain('lobehub');
     });
   });
 });

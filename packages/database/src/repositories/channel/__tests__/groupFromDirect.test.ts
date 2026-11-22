@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, channelMembers, channels, userContacts, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
+import { tableContacts } from './tableContacts';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
-const fixture = createChannelFixture(db, 'channel-group-from-direct');
+const fixture = createChannelFixture(db, 'channel-group-from-direct', tableContacts);
 beforeEach(async () => {
   await fixture.setup();
   await db.insert(workspaceMembers).values([
@@ -37,7 +38,7 @@ const createAgent = async (name: string, workspaceId: string | null) => {
 
 const createDirect = async (workspaceId: string | null = fixture.workspaceId) => {
   const agent = await createAgent('Ada', workspaceId);
-  const owner = new ChannelRepository(db, fixture.ownerId, workspaceId);
+  const owner = new ChannelRepository(db, fixture.ownerId, workspaceId, tableContacts);
   const { channel } = await owner.create({
     agentConfig: environment(),
     agentId: agent.id,
@@ -82,7 +83,7 @@ describe('inviting from a direct conversation', () => {
     );
     // The direct conversation stays one person and one Agent, and the invitee only sees the group.
     expect(await membersOf(direct.id)).toHaveLength(2);
-    const invitee = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const invitee = new ChannelRepository(db, fixture.memberId, fixture.workspaceId, tableContacts);
     expect((await invitee.list()).map(({ id }) => id)).toEqual([channel.id]);
   });
 

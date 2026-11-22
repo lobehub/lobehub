@@ -1,5 +1,10 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
+import {
+  CLASSIC_ONBOARDING_MAX_STEP,
+  parsePluginEntry,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
+} from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { type StoreSetter } from '@/store/types';
@@ -96,23 +101,36 @@ export class OnboardingActionImpl {
   };
 
   toggleInboxAgentDefaultPlugin = async (id: string, open?: boolean): Promise<void> => {
-    /** Break the user → agent → cache-scope → user initialization cycle. */
-    const { getAgentStoreState } = await import('@/store/agent');
+    /**
+     * The agent store breaks the user → agent → cache-scope → user initialization
+     * cycle; the builtin-tools entry carries every tool manifest and stays off the
+     * first screen.
+     */
+    const [{ getAgentStoreState }, { isOnDemandBuiltinTool }, { legacyBuiltinSkillIds }] =
+      await Promise.all([
+        import('@/store/agent'),
+        import('@lobechat/builtin-tools'),
+        import('@lobechat/mecha/builtinSkillGate'),
+      ]);
     const currentSettings = settingsSelectors.currentSettings(this.#get());
-    const isDefaultPinned =
-      getPluginMode(currentSettings.defaultAgent?.config?.plugins, id) === 'pinned';
-    const shouldOpen = open !== undefined ? open : !isDefaultPinned;
+    const defaultEntry = currentSettings.defaultAgent?.config?.plugins?.find(
+      (entry) => parsePluginEntry(entry).identifier === id,
+    );
+    const isDefaultEnabled = defaultEntry
+      ? parsePluginEntry(defaultEntry).mode !== 'disabled'
+      : false;
+    const shouldOpen = open !== undefined ? open : !isDefaultEnabled;
 
     const agentStore = getAgentStoreState();
     const inboxAgentId = agentStore.builtinAgentIdMap[INBOX_SESSION_ID];
     if (!inboxAgentId) return;
 
-    // upsertPluginMode preserves an already-matching entry as-is and flips a
-    // disabled entry back to pinned in place, instead of blindly pushing a
-    // duplicate bare-string identifier.
     const inboxRawPlugins = agentStore.agentMap[inboxAgentId]?.plugins;
     await agentStore.updateAgentConfigById(inboxAgentId, {
-      plugins: upsertPluginMode(inboxRawPlugins, id, shouldOpen ? 'pinned' : 'auto'),
+      plugins:
+        isOnDemandBuiltinTool(id) || legacyBuiltinSkillIds.includes(id)
+          ? setBuiltinPluginMode(inboxRawPlugins, id, shouldOpen ? 'auto' : 'disabled')
+          : upsertConnectorEnabled(inboxRawPlugins, id, shouldOpen),
     });
   };
 }

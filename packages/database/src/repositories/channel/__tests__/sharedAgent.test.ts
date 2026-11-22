@@ -16,17 +16,18 @@ import {
   userSettings,
 } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
+import { tableContacts } from './tableContacts';
 import { createChannelFixture, jobsOf, lease, operationById } from './testUtils';
 
 const db = await getTestDB();
-const fixture = createChannelFixture(db, 'channel-shared-agent');
+const fixture = createChannelFixture(db, 'channel-shared-agent', tableContacts);
 const execution = new ChannelExecutionRepository(db);
 
 // The fixture's member is the visitor; its owner shares an Agent.
 const visitorId = fixture.memberId;
 const ownerId = fixture.ownerId;
 const agentId = 'agt_channel_shared';
-const visitor = new ChannelRepository(db, visitorId);
+const visitor = new ChannelRepository(db, visitorId, undefined, tableContacts);
 
 let shareId: string;
 
@@ -195,15 +196,22 @@ describe('a contact’s shared Agent in a direct conversation', () => {
           },
         })
         .where(eq(agents.id, agentId));
-      const { channel } = await new ChannelRepository(db, visitorId, fixture.workspaceId).create({
+      const { channel } = await new ChannelRepository(
+        db,
+        visitorId,
+        fixture.workspaceId,
+        tableContacts,
+      ).create({
         agentId,
         sharedAgent: true,
         title: 'Shared Helper',
       });
-      const message = await new ChannelRepository(db, visitorId, fixture.workspaceId).send(
-        channel.id,
-        { content: 'Hello', requestKey: 'routed', routing: 'fallback' },
-      );
+      const message = await new ChannelRepository(
+        db,
+        visitorId,
+        fixture.workspaceId,
+        tableContacts,
+      ).send(channel.id, { content: 'Hello', requestKey: 'routed', routing: 'fallback' });
       const [job] = await jobsOf(db, message.id);
       const routedDevice = vi.fn(async () => ({ deviceId: 'owner-device', online: true }));
 
@@ -526,7 +534,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
 });
 
 describe('a shared Agent in the visitor’s workspace', () => {
-  const inWorkspace = new ChannelRepository(db, visitorId, fixture.workspaceId);
+  const inWorkspace = new ChannelRepository(db, visitorId, fixture.workspaceId, tableContacts);
 
   const open = async () => {
     const { channel } = await inWorkspace.create({

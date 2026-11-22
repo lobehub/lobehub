@@ -2,6 +2,12 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
+import {
+  AGENT_EXAMPLE,
+  AGENT_LIST_EXAMPLE,
+  CREATE_AGENT_EXAMPLE,
+  example,
+} from '../common/examples';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { AgentController } from '../controllers/agent.controller';
@@ -41,7 +47,12 @@ const AgentRoutes = new Hono();
  */
 AgentRoutes.get(
   '/',
-  routeDoc({ data: AgentListSchema, summary: 'List agents', tags: ['agents'] }),
+  routeDoc({
+    data: AgentListSchema,
+    responseExample: AGENT_LIST_EXAMPLE,
+    summary: 'List agents',
+    tags: ['agents'],
+  }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('AGENT_READ', ['ALL', 'OWNER']),
@@ -61,7 +72,13 @@ AgentRoutes.get(
  */
 AgentRoutes.post(
   '/',
-  routeDoc({ data: AgentSchema, summary: 'Create an agent', tags: ['agents'] }),
+  routeDoc({
+    data: AgentSchema,
+    requestExample: example(CreateAgentRequestSchema, CREATE_AGENT_EXAMPLE),
+    responseExample: AGENT_EXAMPLE,
+    summary: 'Create an agent',
+    tags: ['agents'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_CREATE'),
@@ -188,7 +205,6 @@ AgentRoutes.get(
   routeDoc({
     data: AgentAccountListSchema,
     errors: [404],
-    operationId: 'listAgentAccounts',
     summary: "List an agent's accounts",
     tags: ['agents'],
   }),
@@ -205,7 +221,7 @@ AgentRoutes.post(
   routeDoc({
     data: AgentAccountSchema,
     errors: [404, 409],
-    operationId: 'createAgentAccount',
+    operationId: 'agents.createAccount',
     status: 201,
     summary: 'Mount or provision an agent account',
     tags: ['agents'],
@@ -223,7 +239,7 @@ AgentRoutes.get(
   routeDoc({
     data: AgentAccountSchema,
     errors: [404],
-    operationId: 'getAgentAccount',
+    operationId: 'agents.getAccount',
     summary: 'Get an agent account',
     tags: ['agents'],
   }),
@@ -239,7 +255,7 @@ AgentRoutes.patch(
   routeDoc({
     data: AgentAccountSchema,
     errors: [404, 409],
-    operationId: 'updateAgentAccount',
+    operationId: 'agents.updateAccount',
     summary: 'Update an agent account',
     tags: ['agents'],
   }),
@@ -263,7 +279,7 @@ AgentRoutes.put(
     description:
       'Write-only: the response carries the non-secret hint and `hasCredential`, never the secret.',
     errors: [404],
-    operationId: 'setAgentAccountCredential',
+    operationId: 'agents.updateAccountCredential',
     summary: 'Write an agent account credential',
     tags: ['agents'],
   }),
@@ -283,7 +299,7 @@ AgentRoutes.delete(
     description:
       'Releases the account and marks it revoked. The row is kept for audit, so the response is the revoked account.',
     errors: [404],
-    operationId: 'revokeAgentAccount',
+    operationId: 'agents.deleteAccount',
     summary: 'Revoke an agent account',
     tags: ['agents'],
   }),

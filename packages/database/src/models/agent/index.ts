@@ -110,6 +110,7 @@ export class AgentModel {
       agentId,
     );
   assertDeletable = this.withContext(remove.assertDeletable);
+  detachFromSurvivingTopics = this.withContext(remove.detachFromSurvivingTopics);
   findSessionIdsByAgentIds = this.withContext(remove.findSessionIdsByAgentIds);
   findAgentIdsBySessionIds = this.withContext(remove.findAgentIdsBySessionIds);
   batchDelete = this.withContext(remove.batchDelete);

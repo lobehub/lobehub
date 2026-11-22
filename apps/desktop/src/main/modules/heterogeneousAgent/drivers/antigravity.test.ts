@@ -19,11 +19,14 @@ describe('antigravityDriver', () => {
       '--output-format',
       'stream-json',
       '--dangerously-skip-permissions',
+      '--settings',
+      '{"agentMode":"","allowNonWorkspaceAccess":true,"enableTerminalSandbox":false}',
       '--conversation',
       'conv-1',
       '--effort',
       'high',
     ]);
+    expect(plan.liveInput).toBe(true);
     expect(JSON.parse(plan.stdinPayload!)).toEqual({
       event: 'user',
       message: { content: 'hello\nworld' },

@@ -3,11 +3,19 @@ import { generateSpecs } from 'hono-openapi';
 import { z } from 'zod';
 
 import { API_ERROR_CODES, ApiErrorCodeSchema } from './common/errors';
-import { ApiErrorSchema, errorResponse } from './common/openapi';
+import {
+  ApiErrorSchema,
+  errorResponse,
+  REQUEST_EXAMPLE_EXTENSION,
+  SPEC_ERROR_EXTENSION,
+} from './common/openapi';
+import { OPERATION_ID_PATTERN, resolveOperationId } from './common/operation-id';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './helpers/pagination';
 import { IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER } from './middleware/idempotency';
+import { REQUIRED_SCOPES_EXTENSION } from './middleware/permission-check';
 import { RATE_LIMIT_HEADERS } from './middleware/rate-limit';
 import { REQUEST_ID_HEADER } from './middleware/request-id';
+import { OPENAPI_WORKSPACE_HEADER } from './middleware/workspace';
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
@@ -28,10 +36,16 @@ interface ResponseObject {
 }
 
 interface OperationObject {
+  description?: string;
   operationId?: string;
   parameters?: ParameterObject[];
+  [REQUEST_EXAMPLE_EXTENSION]?: unknown;
+  requestBody?: { content?: Record<string, { example?: unknown }> };
+  [REQUIRED_SCOPES_EXTENSION]?: string[];
   responses?: Record<string, ResponseObject>;
   security?: unknown[];
+  [SPEC_ERROR_EXTENSION]?: string[];
+  summary?: string;
   tags?: string[];
 }
 
@@ -102,6 +116,21 @@ const IDEMPOTENCY_KEY_PARAMETER = {
   schema: { maxLength: 255, minLength: 1, type: 'string' as const },
 };
 
+const WORKSPACE_ID_PARAMETER = {
+  description: `Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 \`workspace_mismatch\`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 \`workspace_mismatch\` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 \`workspace_mismatch\`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.`,
+  in: 'header',
+  name: OPENAPI_WORKSPACE_HEADER,
+  required: false,
+  schema: { minLength: 1, type: 'string' as const },
+};
+
+const formatScopes = (scopes: string[]) =>
+  scopes.length === 0
+    ? 'any API key (no scope needed)'
+    : scopes.includes('*')
+      ? 'a full-access API key (`*`)'
+      : scopes.map((scope) => `\`${scope}\``).join(' + ');
+
 const API_DESCRIPTION = `LobeHub platform REST API. Generated from \`packages/openapi\` routes — do not edit openapi.yml by hand; run \`bun generate:openapi\` instead.
 
 ## Errors
@@ -120,7 +149,15 @@ Requests authenticated with an API key are limited per key (default 600 per minu
 
 ## Idempotency
 
-\`POST\` operations accept an \`${IDEMPOTENCY_KEY_HEADER}\` header; see the parameter description.`;
+\`POST\` operations accept an \`${IDEMPOTENCY_KEY_HEADER}\` header; see the parameter description.
+
+## Scopes
+
+A restricted API key only reaches operations whose scopes it holds; \`x:write\` implies \`x:read\`. Each operation lists the scopes it needs (all of them) in \`${REQUIRED_SCOPES_EXTENSION}\`; \`*\` means only a full-access key, and an empty list means any key. OIDC tokens and full-access keys are not narrowed by scopes. The caller's own role still applies on top.
+
+## Workspaces
+
+Send \`${OPENAPI_WORKSPACE_HEADER}\` to act inside a workspace; see the parameter description for how it combines with personal and workspace API keys.`;
 
 /**
  * Build the OpenAPI 3.1 document from the live Hono app.
@@ -135,21 +172,24 @@ Requests authenticated with an API key are limited per key (default 600 per minu
  * instead of being documented with a guessed or open-ended shape.
  */
 export const buildSpecDocument = async (app: GenerateSpecsApp) => {
-  const { spec, undocumented } = await collectSpecDocument(app);
+  const { invalid, spec, undocumented } = await collectSpecDocument(app);
 
   if (undocumented.length > 0) {
     throw new Error(
       `Routes without a declared success response (attach routeDoc() from src/common/openapi.ts):\n${undocumented.map((op) => `  - ${op}`).join('\n')}`,
     );
   }
+  if (invalid.length > 0) {
+    throw new Error(`Invalid route documentation:\n${invalid.map((op) => `  - ${op}`).join('\n')}`);
+  }
 
   return spec;
 };
 
 /**
- * The document plus every operation that lacks a typed success response.
- * `buildSpecDocument` refuses to emit a document with any; tests and tooling
- * use this to report them.
+ * The document plus every operation that lacks a typed success response or
+ * carries invalid documentation (`x-spec-error`). `buildSpecDocument` refuses
+ * to emit a document with either; tests and tooling use this to report them.
  */
 export const collectSpecDocument = async (app: GenerateSpecsApp) => {
   const spec = await generateSpecs(app, {
@@ -159,7 +199,10 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
     documentation: {
       components: {
         headers: SHARED_HEADERS,
-        parameters: { IdempotencyKey: IDEMPOTENCY_KEY_PARAMETER },
+        parameters: {
+          IdempotencyKey: IDEMPOTENCY_KEY_PARAMETER,
+          WorkspaceId: WORKSPACE_ID_PARAMETER,
+        },
         schemas: { ApiError: apiErrorJsonSchema, ApiErrorCode: apiErrorCodeJsonSchema },
         securitySchemes: {
           bearerAuth: {
@@ -181,18 +224,40 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
 
   const paths = (spec.paths ?? {}) as Record<string, Record<string, OperationObject>>;
   const undocumented: string[] = [];
+  const invalid: string[] = [];
+  const operationIds = new Map<string, string>();
 
   for (const [path, item] of Object.entries(paths)) {
-    // '/api/v1/agent-groups/{id}' -> group 'agent-groups', rest '{id}'
-    const segments = path.replace(/^\/api\/v1\/?/, '').split('/');
-    const group = segments[0] || 'root';
-    const rest = segments.slice(1).join('/');
+    // '/api/v1/agent-groups/{id}' -> tag 'agent-groups'
+    const group = path.replace(/^\/api\/v1\/?/, '').split('/')[0] || 'root';
 
     for (const [method, op] of Object.entries(item)) {
       if (!HTTP_METHODS.has(method.toUpperCase())) continue;
 
       op.tags ??= [group];
-      op.operationId ??= `${group}.${method}${rest ? `_${rest.replaceAll(/[{}]/g, '').replaceAll('/', '_')}` : ''}`;
+
+      // The operationId doubles as the SDK method (`agents.list`); see common/operation-id.ts.
+      const endpoint = `${method.toUpperCase()} ${path}`;
+      op.operationId = resolveOperationId(method, path, op.operationId);
+      if (!OPERATION_ID_PATTERN.test(op.operationId)) {
+        throw new Error(`${endpoint}: operationId "${op.operationId}" is not <resource>.<method>`);
+      }
+      const clash = operationIds.get(op.operationId);
+      if (clash) {
+        throw new Error(`${endpoint}: operationId "${op.operationId}" is already used by ${clash}`);
+      }
+      operationIds.set(op.operationId, endpoint);
+
+      for (const error of op[SPEC_ERROR_EXTENSION] ?? []) invalid.push(`${endpoint}: ${error}`);
+      delete op[SPEC_ERROR_EXTENSION];
+
+      const requestExample = op[REQUEST_EXAMPLE_EXTENSION];
+      delete op[REQUEST_EXAMPLE_EXTENSION];
+      if (requestExample !== undefined) {
+        const media = op.requestBody?.content?.['application/json'];
+        if (!media) throw new Error(`${endpoint}: requestExample needs a JSON request body`);
+        media.example = requestExample;
+      }
 
       const responses = op.responses ?? {};
       const hasTypedSuccess = Object.entries(responses).some(
@@ -207,11 +272,32 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
       for (const parameter of op.parameters ?? []) {
         if (parameter.schema?.deprecated) parameter.deprecated = true;
       }
-      if (authenticated && method === 'post') {
+      if (authenticated) {
         op.parameters = [
           ...(op.parameters ?? []),
-          { $ref: '#/components/parameters/IdempotencyKey' },
+          { $ref: '#/components/parameters/WorkspaceId' },
+          ...(method === 'post' ? [{ $ref: '#/components/parameters/IdempotencyKey' }] : []),
         ];
+
+        // Stacked gates all have to pass, so their scopes are one all-of list;
+        // `x:write` already implies `x:read`.
+        const scopes = new Set(op[REQUIRED_SCOPES_EXTENSION] ?? []);
+        op[REQUIRED_SCOPES_EXTENSION] = scopes.has('*')
+          ? ['*']
+          : [...scopes]
+              .filter(
+                (scope) =>
+                  !(scope.endsWith(':read') && scopes.has(scope.replace(/:read$/, ':write'))),
+              )
+              .sort();
+        op.description = [
+          op.description,
+          `**API key scopes:** ${formatScopes(op[REQUIRED_SCOPES_EXTENSION])}.`,
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+      } else {
+        delete op[REQUIRED_SCOPES_EXTENSION];
       }
 
       for (const [status, response] of Object.entries(responses)) {
@@ -229,5 +315,5 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
     }
   }
 
-  return { spec, undocumented };
+  return { invalid, spec, undocumented };
 };

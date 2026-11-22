@@ -10,6 +10,7 @@ import type {
 } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
+import { isHeterogeneousAgentAuthRequired } from '../config';
 import { getHeterogeneousTypeLabel } from '../labels';
 import { AcpRpcResponseError } from '../spawn/acpStdioClient';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
@@ -314,6 +315,7 @@ const getCatalogErrorMessage = (
   type: ListHeterogeneousAgentModelsParams['type'],
 ): string => {
   const name = getHeterogeneousTypeLabel(type) ?? type;
+  if (code === 'auth_required') return `Sign in to the ${name} CLI on the execution device`;
   if (code === 'cli_not_found') return `${name} CLI was not found`;
   if (code === 'timeout') return `${name} model discovery timed out`;
 
@@ -447,7 +449,7 @@ export const listHeterogeneousAgentModels = async (
               : params.type === 'pi'
                 ? buildPiCatalogArgs(params.args)
                 : ['--list-models'];
-    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
+    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args, env as NodeJS.ProcessEnv);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd,
       encoding: 'utf8',
@@ -496,7 +498,12 @@ export const listHeterogeneousAgentModels = async (
       updatedAt,
     };
   } catch (error) {
-    const code = classifyCatalogError(error);
+    const { stderr } = getErrorRecord(error);
+    const code =
+      params.type === 'antigravity' &&
+      isHeterogeneousAgentAuthRequired(params.type, String(stderr ?? ''))
+        ? 'auth_required'
+        : classifyCatalogError(error);
     return {
       error: { code, message: getCatalogErrorMessage(code, params.type) },
       status: 'error',

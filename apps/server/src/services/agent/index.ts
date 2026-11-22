@@ -6,6 +6,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentItem,
   type CreateAgentConfig,
+  isLiveAgentShareVisibility,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
 } from '@lobechat/types';
@@ -432,7 +433,7 @@ export class AgentService {
       const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
         agentId,
       );
-      if (share?.visibility === 'link') {
+      if (isLiveAgentShareVisibility(share?.visibility)) {
         const selection = await this.assertShareModelAllowed(agentId, value);
         value = { ...value, ...selection };
       }

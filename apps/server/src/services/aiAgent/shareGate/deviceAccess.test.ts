@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ContactModel } from '@/database/models/contact';
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { resolveShareVisitorDeviceAccess, type ShareDeviceAccessSubject } from './deviceAccess';
@@ -10,10 +10,9 @@ const { filterAddressBookPeople, isChannelEnabled } = vi.hoisted(() => ({
   isChannelEnabled: vi.fn(),
 }));
 vi.mock('@/server/services/channel/featureGate', () => ({ isChannelEnabled }));
-vi.mock('@/database/models/contact', () => ({
-  ContactModel: vi.fn(function () {
-    return { filterAddressBookPeople };
-  }),
+vi.mock('@/business/server/contact/addressBook', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getAddressBook: vi.fn(() => ({ filterAddressBookPeople })),
 }));
 
 const db = {} as LobeChatDatabase;
@@ -27,7 +26,7 @@ describe('resolveShareVisitorDeviceAccess', () => {
   beforeEach(() => {
     filterAddressBookPeople.mockReset();
     isChannelEnabled.mockReset().mockResolvedValue(true);
-    vi.mocked(ContactModel).mockClear();
+    vi.mocked(getAddressBook).mockClear();
   });
 
   it('denies by default, under `none`, and for a stored legacy `all`', async () => {
@@ -58,7 +57,7 @@ describe('resolveShareVisitorDeviceAccess', () => {
       true,
     );
     // The book is the share owner's scope, not the visitor's.
-    expect(ContactModel).toHaveBeenCalledWith(db, 'owner', 'ws-1');
+    expect(getAddressBook).toHaveBeenCalledWith(db, 'owner', 'ws-1');
     expect(filterAddressBookPeople).toHaveBeenCalledWith(['visitor-1']);
 
     // Removed from contacts (or left the workspace) after being listed.
@@ -73,7 +72,7 @@ describe('resolveShareVisitorDeviceAccess', () => {
     expect(await resolveShareVisitorDeviceAccess(db, share(config, 'ws-1'), 'visitor-1')).toBe(
       true,
     );
-    expect(ContactModel).toHaveBeenCalledWith(db, 'owner', 'ws-1');
+    expect(getAddressBook).toHaveBeenCalledWith(db, 'owner', 'ws-1');
     expect(filterAddressBookPeople).toHaveBeenCalledWith(['visitor-1']);
 
     // A stranger, or someone removed from contacts, gets nothing.
