@@ -136,13 +136,20 @@ export const buildRequestCredsInputCheckFailure = (
     ? `Could not confirm credential "${args.key}": the credential store refused the lookup (${details}; upstream message: ${message}). This is an account- or permission-level refusal, so retrying will fail the same way. Tell the user the credential could not be confirmed and quote the code and reason. Do not ask for the secret in the chat.${requestIdLine(requestId)}`
     : `Could not confirm credential "${args.key}": the credential lookup failed (${details}; message: ${message}). The secure form may still have saved it. Do not ask for the secret in the chat; tell the user the save could not be confirmed.${requestIdLine(requestId)}`;
 
+  const diagnostics = {
+    code,
+    ...(reason && { reason }),
+    ...(status && { httpStatus: status }),
+  };
+
   return {
     content,
     error: {
-      code,
+      ...diagnostics,
+      // Client persistence keeps only `body`/`message`/`type` of a tool error,
+      // so the diagnostics ride in `body` too to survive into rebuilt history.
+      body: diagnostics,
       message,
-      ...(reason && { reason }),
-      ...(status && { httpStatus: status }),
       type: 'CheckCredentialFailed',
     },
     state,

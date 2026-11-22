@@ -524,6 +524,8 @@ export interface HeartbeatMessage {
 export interface ToolResultMessage {
   content: string | null;
   error?: {
+    /** Structured diagnostics (error codes, upstream status), kept opaque like `state`. */
+    body?: any;
     message: string;
     type?: string;
   };

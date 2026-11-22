@@ -117,6 +117,13 @@ describe('requestCredsInput — diagnosable outcomes (T-14098)', () => {
       message: 'Request blocked.',
       reason: 'not_onboarded',
     });
+    // Client persistence keeps only body/message/type, so the diagnostics must
+    // also live in the body.
+    expect(result.error?.body).toEqual({
+      code: RequestCredsInputErrorCode.AccessDenied,
+      httpStatus: 403,
+      reason: 'not_onboarded',
+    });
     expect(result.state).toEqual({
       key: 'openai',
       requestId: 'call_creds_3',
@@ -149,6 +156,7 @@ describe('requestCredsInput — diagnosable outcomes (T-14098)', () => {
       type: 'CheckCredentialFailed',
     });
     expect(result.error).not.toHaveProperty('httpStatus');
+    expect(result.error?.body).toEqual({ code: RequestCredsInputErrorCode.CheckFailed });
     expect(result.content).toContain(RequestCredsInputErrorCode.CheckFailed);
     expect(result.content.trim()).not.toBe('');
   });

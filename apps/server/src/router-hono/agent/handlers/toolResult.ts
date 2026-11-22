@@ -12,6 +12,8 @@ const ToolResultBodySchema = z.object({
   content: z.string().nullable(),
   error: z
     .object({
+      /** Structured diagnostics (error codes, upstream status); persisted as `pluginError.body`. */
+      body: z.any().optional(),
       message: z.string(),
       type: z.string().optional(),
     })

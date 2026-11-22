@@ -227,7 +227,11 @@ export class ClientToolExecutionActionImpl {
         if (result.error) {
           send({
             content: result.content ?? result.error.message ?? null,
-            error: { message: result.error.message, type: result.error.type },
+            error: {
+              body: result.error.body,
+              message: result.error.message,
+              type: result.error.type,
+            },
             state: result.state,
             success: false,
             toolCallId,

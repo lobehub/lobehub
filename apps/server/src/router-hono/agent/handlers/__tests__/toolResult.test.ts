@@ -109,6 +109,23 @@ describe('toolResult handler', () => {
     expect(persisted.state).toEqual({ cwd: '/Users/x', cursor: 12 });
   });
 
+  it('keeps the structured error body through validation', async () => {
+    const body = { code: 'CREDS_INPUT_CHECK_FAILED' };
+    const { ctx } = buildContext({
+      ...validBody,
+      error: { body, message: 'socket hang up', type: 'CheckCredentialFailed' },
+      success: false,
+    });
+    const res = await toolResult(ctx);
+    expect(res.status).toBe(204);
+    const args = mockLpush.mock.calls[0] as unknown as [string, string];
+    expect(JSON.parse(args[1]).error).toEqual({
+      body,
+      message: 'socket hang up',
+      type: 'CheckCredentialFailed',
+    });
+  });
+
   it('returns 503 when Redis pipeline exec throws', async () => {
     mockPipelineExec.mockRejectedValueOnce(new Error('redis down'));
     const { ctx } = buildContext(validBody);
