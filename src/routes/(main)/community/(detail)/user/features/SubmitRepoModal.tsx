@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Input, Text, toast } from '@lobehub/ui';
+import { Alert, Flexbox, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,8 +24,11 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
     const form = useForm<{ gitUrl?: string }>();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    /** Submit failure, shown above the modal buttons: the modal stays open with the typed URL. */
+    const [error, setError] = useState('');
 
     const handleSubmit = useCallback(async () => {
+      setError('');
       try {
         const { valid } = await form.validate();
         if (!valid) return;
@@ -49,15 +52,16 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
         onSuccess?.();
         onClose();
         form.reset();
-      } catch (error) {
-        console.error('[SubmitRepoModal] Failed to submit:', error);
-        toast.error(error instanceof Error ? error.message : t('user.submitRepoError'));
+      } catch (err) {
+        console.error('[SubmitRepoModal] Failed to submit:', err);
+        setError(t('user.submitRepoError'));
       } finally {
         setIsSubmitting(false);
       }
     }, [beforeSubmit, form, t, onSuccess, onClose]);
 
     const handleCancel = useCallback(() => {
+      setError('');
       form.reset();
       onClose();
     }, [form, onClose]);
@@ -99,6 +103,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
             {t('user.submitRepoHint')}
           </Text>
         </Flexbox>
+        {error && <Alert showIcon style={{ marginTop: 12 }} title={error} type="error" />}
       </ImperativeModal>
     );
   },

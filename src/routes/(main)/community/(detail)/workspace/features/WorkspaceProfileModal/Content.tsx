@@ -3,6 +3,7 @@
 import { OFFICIAL_URL } from '@lobechat/const';
 import {
   Accordion,
+  Alert,
   Button,
   Center,
   cssVar,
@@ -83,6 +84,13 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
   const [bannerUrl, setBannerUrl] = useState<string | null>(user.bannerUrl ?? null);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  /**
+   * Upload and save failures render beside the control that caused them: the modal stays
+   * open, so a corner toast would sit far from the avatar / banner / Save button.
+   */
+  const [avatarError, setAvatarError] = useState('');
+  const [bannerError, setBannerError] = useState('');
+  const [saveError, setSaveError] = useState('');
   const isSetup = !user.namespace;
 
   // Live namespace-availability check (setup only — the handle is immutable once
@@ -133,8 +141,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
 
   const handleAvatarUpload = useCallback(
     async (file: File) => {
+      setAvatarError('');
       if (file.size > MAX_FILE_SIZE) {
-        toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
+        setAvatarError(t('user.workspaceProfile.errors.fileTooLarge'));
         return;
       }
 
@@ -142,7 +151,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          toast.error(t('user.workspaceProfile.errors.uploadFailed'));
+          setAvatarError(t('user.workspaceProfile.errors.uploadFailedRetry'));
           return;
         }
         setAvatarUrl(
@@ -150,7 +159,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         );
       } catch (error) {
         console.error('[WorkspaceProfileModal] Avatar upload failed:', error);
-        toast.error(t('user.workspaceProfile.errors.uploadFailed'));
+        setAvatarError(t('user.workspaceProfile.errors.uploadFailedRetry'));
       } finally {
         setAvatarUploading(false);
       }
@@ -160,8 +169,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
 
   const handleBannerUpload = useCallback(
     async (file: File) => {
+      setBannerError('');
       if (file.size > MAX_FILE_SIZE) {
-        toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
+        setBannerError(t('user.workspaceProfile.errors.fileTooLarge'));
         return;
       }
 
@@ -169,7 +179,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          toast.error(t('user.workspaceProfile.errors.uploadFailed'));
+          setBannerError(t('user.workspaceProfile.errors.uploadFailedRetry'));
           return;
         }
         const url = result.url.startsWith('/')
@@ -178,7 +188,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         setBannerUrl(url);
       } catch (error) {
         console.error('[WorkspaceProfileModal] Banner upload failed:', error);
-        toast.error(t('user.workspaceProfile.errors.uploadFailed'));
+        setBannerError(t('user.workspaceProfile.errors.uploadFailedRetry'));
       } finally {
         setBannerUploading(false);
       }
@@ -193,11 +203,10 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     if (!valid) return;
     const values = form.getValues();
 
-    if (isSetup && namespaceAvailability === 'taken') {
-      toast.error(t('user.workspaceProfile.fields.namespace.taken'));
-      return;
-    }
+    // The namespace field already shows the red "taken" status and the Save button is disabled.
+    if (isSetup && namespaceAvailability === 'taken') return;
 
+    setSaveError('');
     setLoading(true);
     try {
       const profile = {
@@ -227,12 +236,10 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       // Surface a namespace conflict (e.g. the handle was claimed between the
       // live check and submit) as a taken-handle message instead of a generic one.
       if (isSetup && isCommunityWorkspaceNamespaceTakenError(error)) {
+        // Rendered as the red status under the namespace field (namespaceStatusNode)
         setNamespaceAvailability('taken');
-        toast.error(t('user.workspaceProfile.fields.namespace.taken'));
       } else {
-        toast.error(
-          t(isSetup ? 'user.workspaceProfile.setup.failed' : 'user.workspaceProfile.failed'),
-        );
+        setSaveError(t('user.workspaceProfile.errors.saveFailed'));
       }
     } finally {
       setLoading(false);
@@ -320,6 +327,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
                 </Center>
               </div>
             </Upload>
+            {bannerError && <Alert showIcon title={bannerError} type="error" />}
             {bannerUrl && (
               <Flexbox horizontal align="center" gap={8} justify="flex-end">
                 <Text
@@ -344,7 +352,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         </Form.Field>
       </>
     ),
-    [bannerUploading, bannerUrl, handleBannerUpload, t],
+    [bannerError, bannerUploading, bannerUrl, handleBannerUpload, t],
   );
 
   return (
@@ -370,15 +378,22 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
             </Form.Field>
           </Flexbox>
 
-          <AvatarUpload
-            allowDelete={!!avatarUrl}
-            loading={avatarUploading}
-            shape="square"
-            size={80}
-            value={avatarUrl || undefined}
-            onDelete={() => setAvatarUrl(null)}
-            onUpload={handleAvatarUpload}
-          />
+          <Flexbox align="center" gap={6} style={{ maxWidth: 120 }}>
+            <AvatarUpload
+              allowDelete={!!avatarUrl}
+              loading={avatarUploading}
+              shape="square"
+              size={80}
+              value={avatarUrl || undefined}
+              onDelete={() => setAvatarUrl(null)}
+              onUpload={handleAvatarUpload}
+            />
+            {avatarError && (
+              <Text style={{ color: cssVar.colorError, fontSize: 12, textAlign: 'center' }}>
+                {avatarError}
+              </Text>
+            )}
+          </Flexbox>
         </Flexbox>
 
         {isSetup && (
@@ -435,6 +450,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         />
       </Form>
 
+      {saveError && <Alert showIcon title={saveError} type="error" />}
       <Flexbox horizontal gap={8} justify="flex-end">
         <Button disabled={loading} onClick={close}>
           {t('user.workspaceProfile.cancel')}

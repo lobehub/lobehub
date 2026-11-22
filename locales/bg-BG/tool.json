@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Добави елемент",
   "updateArgs.form.key": "Ключ на полето",
   "updateArgs.form.value": "Стойност на полето",
-  "updateArgs.formValidationFailed": "Валидирането на формата не бе успешно, моля проверете формата на параметрите",
   "updateArgs.keyRequired": "Ключът на полето не може да бъде празен",
   "updateArgs.stringifyError": "Неуспешно сериализиране на параметрите, моля проверете формата на параметрите"
 }

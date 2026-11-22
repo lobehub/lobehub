@@ -2,6 +2,7 @@
 
 import {
   ActionIcon,
+  Alert,
   Button,
   createModal,
   createStaticStyles,
@@ -132,6 +133,8 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
   // Ingestion reads this literally when deciding which rejections belong, so it is kept.
   const [outOfScope, setOutOfScope] = useState(group?.domain.outOfScope ?? '');
   const [busy, setBusy] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's input. */
+  const [error, setError] = useState('');
   const ready = Boolean(title.trim() && gate.trim());
 
   const draft = async () => {
@@ -143,8 +146,8 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
       setTitle(drafted.title);
       setGate(drafted.gate);
       setOutOfScope(drafted.outOfScope ?? '');
-    } catch (error) {
-      console.error('[MemoryRules] group draft failed:', error);
+    } catch (err) {
+      console.error('[MemoryRules] group draft failed:', err);
       setTitle(text.slice(0, 40));
       toast.warning(t('rules.group.generateFailed'));
     }
@@ -153,6 +156,7 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
 
   const submit = async () => {
     if (!ready || busy) return;
+    setError('');
     setBusy(true);
     try {
       if (group) {
@@ -171,9 +175,9 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
         onDone(id ? { gate: gate.trim(), id, title: title.trim() } : undefined);
       }
       close();
-    } catch (error) {
-      console.error('[MemoryRules] group save failed:', error);
-      toast.error(t('rules.saveFailed'));
+    } catch (err) {
+      console.error('[MemoryRules] group save failed:', err);
+      setError(t('rules.saveFailedRetry'));
     } finally {
       setBusy(false);
     }
@@ -256,6 +260,12 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
             />
           </Flexbox>
         </Flexbox>
+      )}
+
+      {error && (
+        <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
+          <Alert showIcon title={error} type="error" />
+        </div>
       )}
 
       <Flexbox horizontal align={'center'} className={composeStyles.footer} justify={'flex-end'}>

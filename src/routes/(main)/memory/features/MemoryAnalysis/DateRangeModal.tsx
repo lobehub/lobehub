@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Button,
   createModal,
   DayjsDateRangePicker as DateRangePicker,
@@ -26,6 +27,8 @@ const DateRangeContent = memo(() => {
   const { refresh } = useMemoryAnalysisAsyncTask();
   const [range, setRange] = useState<DayjsDateRangeValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** Request failure, shown above the buttons: the modal stays open with the chosen range. */
+  const [error, setError] = useState('');
 
   const disabledDate = useCallback((current: Dayjs) => current.isAfter(dayjs(), 'day'), []);
 
@@ -41,6 +44,7 @@ const DateRangeContent = memo(() => {
   );
 
   const handleSubmit = async () => {
+    setError('');
     setSubmitting(true);
     try {
       const [from, to] = range ?? [null, null];
@@ -52,9 +56,9 @@ const DateRangeContent = memo(() => {
       await refresh();
       toast.success(result.deduped ? t('analysis.toast.deduped') : t('analysis.toast.started'));
       close();
-    } catch (error) {
-      console.error(error);
-      toast.error(t('analysis.toast.failed'));
+    } catch (err) {
+      console.error(err);
+      setError(t('analysis.toast.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -70,12 +74,16 @@ const DateRangeContent = memo(() => {
           format={'YYYY/MM/DD'}
           style={{ width: '100%' }}
           value={range}
-          onChange={setRange}
+          onChange={(value) => {
+            setRange(value);
+            setError('');
+          }}
         />
         <Text fontSize={12} type={'secondary'}>
           {footerNote}
         </Text>
       </Flexbox>
+      {error && <Alert showIcon title={error} type="error" />}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={submitting} onClick={close}>
           {t('analysis.modal.cancel')}

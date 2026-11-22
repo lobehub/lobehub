@@ -1,7 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Button, Icon, Input, InputPassword, Text } from '@lobehub/ui';
+import { Alert, Button, Icon, Input, InputPassword, Text } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { Lock, Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
@@ -18,7 +18,8 @@ import { useSignUp } from './useSignUp';
 const FIELD_STYLE: CSSProperties = { gap: 0, paddingBlock: '0 24px' };
 
 const BetterAuthSignUpForm = () => {
-  const { agreementChecked, businessElement, form, loading, setAgreementChecked } = useSignUp();
+  const { agreementChecked, businessElement, form, formError, loading, setAgreementChecked } =
+    useSignUp();
 
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
@@ -62,7 +63,7 @@ const BetterAuthSignUpForm = () => {
           style={FIELD_STYLE}
           validate={(value: string) => {
             if (!value) return t('betterAuth.errors.emailRequired');
-            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.emailInvalid');
+            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.signupEmailInvalid');
           }}
         >
           <Input
@@ -135,6 +136,9 @@ const BetterAuthSignUpForm = () => {
         {businessElement && <div style={{ paddingBlockEnd: 24 }}>{businessElement}</div>}
 
         <AuthAgreement checked={agreementChecked} onChange={setAgreementChecked} />
+        {formError && (
+          <Alert showIcon style={{ marginBlockEnd: 12 }} title={formError} type="error" />
+        )}
         <Button block htmlType="submit" loading={loading} size="large" type="primary">
           {t('betterAuth.signup.submit')}
         </Button>

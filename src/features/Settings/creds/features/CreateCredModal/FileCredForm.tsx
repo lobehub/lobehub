@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
+import { Alert, Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
@@ -29,6 +29,13 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
   const [fileHashId, setFileHashId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  /**
+   * Upload failures render under the upload control, create failures (including Market's 409
+   * slot conflicts) above the submit row: the modal stays open, so the user fixes things
+   * here rather than reading a corner toast.
+   */
+  const [uploadError, setUploadError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -48,7 +55,8 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
       });
     },
     onError: (error) => {
-      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
+      console.error('[FileCredForm] Create failed:', error);
+      setSubmitError(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();
@@ -59,6 +67,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
     if (disabled) return;
 
     setIsUploading(true);
+    setUploadError('');
 
     try {
       // Convert file to base64
@@ -82,7 +91,8 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
       toast.success(t('creds.file.uploadSuccess'));
     } catch (error) {
       console.error('[FileCredForm] Upload failed:', error);
-      toast.error(error instanceof Error ? error.message : t('creds.file.uploadFailed'));
+      // The server message is untranslated; the console keeps it
+      setUploadError(t('creds.file.uploadFailedRetry'));
     } finally {
       setIsUploading(false);
     }
@@ -92,9 +102,10 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
     if (disabled) return;
 
     if (!fileHashId) {
-      toast.error(t('creds.form.fileRequired'));
+      setUploadError(t('creds.form.fileRequired'));
       return;
     }
+    setSubmitError('');
     createMutation.mutate(values);
   };
 
@@ -109,6 +120,9 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
           title={isUploading ? t('creds.file.uploading') : t('creds.form.uploadHint')}
           onFiles={([file]) => handleUpload(file)}
         />
+        {uploadError && (
+          <Alert showIcon style={{ marginTop: 8 }} title={uploadError} type="error" />
+        )}
         {fileName && (
           <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 8 }}>
             <span>
@@ -151,6 +165,8 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
           rows={2}
         />
       </Form.Field>
+
+      {submitError && <Alert showIcon title={submitError} type="error" />}
 
       <CredFormFooter>
         <Button type="fill" onClick={onCancel}>

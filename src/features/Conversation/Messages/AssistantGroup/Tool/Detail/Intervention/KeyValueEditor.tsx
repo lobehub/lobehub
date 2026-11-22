@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Flexbox, Icon, Input, toast } from '@lobehub/ui';
+import { ActionIcon, Alert, Button, Flexbox, Icon, Input } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -67,19 +67,24 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
   }, [initialValue, form]);
 
   const [updating, setUpdating] = useState(false);
+  /** Failure of the save itself, shown above the buttons; validation errors show on their own fields. */
+  const [saveError, setSaveError] = useState('');
   const handleFinish = async () => {
     setUpdating(true);
+    setSaveError('');
     try {
-      const { errors, valid } = await form.validate();
-      if (!valid) throw errors;
+      // Invalid fields (empty / duplicate key) render their own error, so nothing else is shown.
+      const { valid } = await form.validate();
+      if (!valid) return;
       const values = form.getValues();
       const record = formListToRecord(values.items || []);
       await onFinish?.(record);
-    } catch (errorInfo) {
-      console.error('Validation Failed:', errorInfo);
-      toast.error(t('updateArgs.formValidationFailed') || 'Please check the form for errors.');
+    } catch (error) {
+      console.error('Failed to save tool arguments:', error);
+      setSaveError(t('updateArgs.saveFailed'));
+    } finally {
+      setUpdating(false);
     }
-    setUpdating(false);
   };
 
   const handleCancel = () => {
@@ -153,6 +158,9 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                 />
               </Flexbox>
             ))}
+            {saveError && (
+              <Alert showIcon style={{ marginTop: 8 }} title={saveError} type="error" />
+            )}
             <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginTop: 8 }}>
               <Button
                 icon={<Icon icon={LucidePlus} />}

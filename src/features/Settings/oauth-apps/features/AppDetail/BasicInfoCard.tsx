@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Input, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Input, Text, TextArea } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +37,7 @@ const BasicInfoCard: FC<BasicInfoCardProps> = ({ canEdit, detail, onSubmit }) =>
   // inline `data:` logo the server no longer accepts, and renaming such an app
   // must not fail on a field nobody edited.
   const [logoChanged, setLogoChanged] = useState(false);
-  const { upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
+  const { error: logoError, upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
 
   const saved = { description: detail.description ?? '', name: detail.name };
 
@@ -111,6 +111,11 @@ const BasicInfoCard: FC<BasicInfoCardProps> = ({ canEdit, detail, onSubmit }) =>
               />
             </Form.Field>
           </Flexbox>
+          {logoError && (
+            <Text fontSize={12} role={'alert'} type={'danger'}>
+              {logoError}
+            </Text>
+          )}
 
           <Form.Field
             label={t('oauthApp.form.description.label')}

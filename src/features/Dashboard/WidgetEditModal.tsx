@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
@@ -33,6 +34,8 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
   const [title, setTitle] = useState(widget.title);
   const [description, setDescription] = useState(widget.description ?? '');
   const [saving, setSaving] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's edits. */
+  const [error, setError] = useState('');
   const trimmedTitle = title.trim();
 
   const handleSave = async () => {
@@ -46,14 +49,15 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
       close();
       return;
     }
+    setError('');
     setSaving(true);
     try {
       await updateWidget(widget.id, patch);
       toast.success(t('widgetEdit.saved'));
       close();
-    } catch (error) {
-      console.error('[dashboard] widget edit failed', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+    } catch (err) {
+      console.error('[dashboard] widget edit failed', err);
+      setError(t('operationFailed', { ns: 'common' }));
     } finally {
       setSaving(false);
     }
@@ -71,8 +75,11 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             data-widget-edit-title
             maxLength={TITLE_MAX_LENGTH}
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
             onPressEnter={() => void handleSave()}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setError('');
+            }}
           />
         </Flexbox>
         <Flexbox gap={6}>
@@ -88,6 +95,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
+        {error && <Alert showIcon title={error} type="error" />}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

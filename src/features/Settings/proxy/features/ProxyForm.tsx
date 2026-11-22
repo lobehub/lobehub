@@ -1,7 +1,16 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Button, Flexbox, Input, InputPassword, RadioGroup, Switch, toast } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  Flexbox,
+  Input,
+  InputPassword,
+  RadioGroup,
+  Switch,
+  toast,
+} from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/form';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +58,13 @@ const ProxyForm = () => {
   const [testUrl, setTestUrl] = useState('https://www.google.com');
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  /**
+   * Failures render on the surface that caused them instead of a toast: a failed Save shows
+   * above the Save bar, a failed connection test under the Test button. (A failed enable-switch
+   * autosave shows on the switch through `form.setErrors`.)
+   */
+  const [saveError, setSaveError] = useState('');
+  const [testError, setTestError] = useState<{ detail?: string }>();
 
   const [setProxySettings, useGetProxySettings] = useElectronStore((s) => [
     s.setProxySettings,
@@ -128,6 +144,8 @@ const ProxyForm = () => {
 
   const handleValuesChange = useCallback(
     (changed: Partial<NetworkProxySettings>, allValues: NetworkProxySettings) => {
+      // An edit after a failed save makes that failure stale; the next save reports afresh.
+      setSaveError('');
       if ('enableProxy' in changed) {
         const next = changed.enableProxy;
 
@@ -136,8 +154,8 @@ const ProxyForm = () => {
         const valuesToSave = next ? allValues : { enableProxy: false };
         setProxySettings(valuesToSave).catch((error) => {
           form.setValue('enableProxy', !next);
-          const message = error instanceof Error ? error.message : String(error);
-          toast.error(t('proxy.saveFailed', { error: message }));
+          console.error('[ProxyForm] Failed to auto-save proxy switch:', error);
+          form.setErrors({ enableProxy: t('proxy.saveFailedRetry') });
         });
       }
     },
@@ -152,23 +170,26 @@ const ProxyForm = () => {
 
     try {
       setIsSaving(true);
+      setSaveError('');
       await setProxySettings(values);
       toast.success(t('proxy.saveSuccess'));
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t('proxy.saveFailed', { error: message }));
+      console.error('[ProxyForm] Failed to save proxy settings:', error);
+      setSaveError(t('proxy.saveFailedRetry'));
     } finally {
       setIsSaving(false);
     }
   }, [form, setProxySettings, t]);
 
   const handleReset = useCallback(() => {
+    setSaveError('');
     if (proxySettings) form.reset(proxySettings);
   }, [form, proxySettings]);
 
   const handleTest = useCallback(async () => {
     try {
       setIsTesting(true);
+      setTestError(undefined);
 
       const { valid } = await form.validate();
       if (!valid) return;
@@ -182,11 +203,11 @@ const ProxyForm = () => {
       if (result.success) {
         toast.success(t('proxy.testSuccessWithTime', { time: result.responseTime }));
       } else {
-        toast.error(`${t('proxy.testFailed')}: ${result.message ?? ''}`);
+        setTestError({ detail: result.message });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`${t('proxy.testFailed')}: ${errorMessage}`);
+      console.error('[ProxyForm] Proxy connection test crashed:', error);
+      setTestError({});
     } finally {
       setIsTesting(false);
     }
@@ -280,16 +301,29 @@ const ProxyForm = () => {
     children: [
       {
         children: (
-          <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
-            <Input
-              placeholder={t('proxy.testUrlPlaceholder')}
-              style={{ flex: 1 }}
-              value={testUrl}
-              onChange={(e) => setTestUrl(e.target.value)}
-            />
-            <Button loading={isTesting} type="default" onClick={handleTest}>
-              {t('proxy.testButton')}
-            </Button>
+          <Flexbox gap={8} width={'100%'}>
+            <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
+              <Input
+                placeholder={t('proxy.testUrlPlaceholder')}
+                style={{ flex: 1 }}
+                value={testUrl}
+                onChange={(e) => {
+                  setTestUrl(e.target.value);
+                  setTestError(undefined);
+                }}
+              />
+              <Button loading={isTesting} type="default" onClick={handleTest}>
+                {t('proxy.testButton')}
+              </Button>
+            </Flexbox>
+            {testError && (
+              <Alert
+                showIcon
+                description={testError.detail}
+                title={`${t('proxy.testFailed')}. ${t('proxy.testFailedHint')}`}
+                type="error"
+              />
+            )}
           </Flexbox>
         ),
         desc: t('proxy.testDescription'),
@@ -310,7 +344,13 @@ const ProxyForm = () => {
         variant={'filled'}
         {...FORM_STYLE}
       />
-      <SaveBar isDirty={isDirty} isSaving={isSaving} onReset={handleReset} onSave={handleSave} />
+      <SaveBar
+        error={saveError}
+        isDirty={isDirty}
+        isSaving={isSaving}
+        onReset={handleReset}
+        onSave={handleSave}
+      />
     </>
   );
 };

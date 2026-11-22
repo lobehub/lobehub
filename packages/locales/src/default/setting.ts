@@ -120,7 +120,6 @@ export default {
   'accountDeletion.confirmContent':
     'After submission, you will enter a <0>72-hour</0> cooling-off period during which you can cancel at any time. Once the period ends, your account data will be permanently deleted, unpaid invoices will be canceled immediately, and paid fees will not be refunded. Your registration and deletion records will be retained for compliance purposes.',
   'accountDeletion.confirmOk': 'Delete Account',
-  'accountDeletion.confirmRequired': 'Please confirm you understand the consequences',
   'accountDeletion.confirmTitle': 'Delete Account?',
   'accountDeletion.desc':
     'Permanently delete your account and all associated data. This action cannot be undone.',
@@ -154,6 +153,8 @@ export default {
     'After deletion completes, the same email cannot be used to sign up again for {{days}} days.',
   'accountDeletion.requestButton': 'Request Account Deletion',
   'accountDeletion.requestFailed': 'Failed to request account deletion',
+  'accountDeletion.requestFailedRetry':
+    "Couldn't submit your deletion request. Check your connection and try again.",
   'accountDeletion.requestSuccess': 'Deletion request submitted',
   'accountDeletion.sectionTitle': 'Account Deletion',
   'accountDeletion.title': 'Delete Account',
@@ -783,7 +784,6 @@ export default {
   'creds.errors.publicCredExists':
     'This workspace already shares a credential with this key. Remove it before publishing this one.',
   'creds.file.authRequired': 'Please sign in to the Market first',
-  'creds.file.uploadFailed': 'File upload failed',
   'creds.file.uploadSuccess': 'File uploaded successfully',
   'creds.file.uploading': 'Uploading...',
   'creds.form.addEnvVar': 'Add variable',
@@ -1163,7 +1163,6 @@ export default {
   'hotkey.sendMessage.desc': 'The other key combination inserts a line break',
   'hotkey.sendMessage.title': 'Send Message',
   'hotkey.title': 'Hotkeys',
-  'hotkey.updateError': 'Failed to update hotkey: Network or system error',
   'hotkey.updateSuccess': 'Hotkey updated successfully',
   'llm.aesGcm':
     'Your keys and proxy address will be encrypted using the <1>AES-GCM</1> encryption algorithm',
@@ -2141,7 +2140,6 @@ When I am ___, I need ___
   'storage.used': 'Storage Usage',
   'storageOverage.addPaymentMethod': 'Add payment method',
   'storageOverage.capped': 'Monthly spending cap reached. Overage uploads are paused.',
-  'storageOverage.capUpdateFailed': 'Failed to update monthly cap.',
   'storageOverage.capUpdated': 'Monthly cap updated.',
   'storageOverage.consent.billedMonthlyForYearly':
     'Storage overage is billed monthly, separate from your yearly plan renewal',
@@ -2169,9 +2167,7 @@ When I am ___, I need ___
   'storageOverage.disableConfirm.existingCharges':
     'Charges already incurred in this billing cycle will still be included on your subscription invoice.',
   'storageOverage.disableConfirm.title': 'Disable storage pay-as-you-go?',
-  'storageOverage.disableFailed': 'Failed to disable storage pay-as-you-go.',
   'storageOverage.disabled': 'Storage pay-as-you-go disabled.',
-  'storageOverage.enableFailed': 'Failed to enable storage pay-as-you-go.',
   'storageOverage.enabled': 'Storage pay-as-you-go enabled.',
   'storageOverage.monthlyCap': 'Monthly spending cap',
   'storageOverage.monthlyCapDesc':
@@ -2680,7 +2676,6 @@ When I am ___, I need ___
     'Type the workspace name "{{name}}" to confirm:',
   'workspace.billingPage.billing.downgrade.confirmInputPlaceholder': 'Workspace name',
   'workspace.billingPage.billing.downgrade.confirmTitle': 'Downgrade to Free?',
-  'workspace.billingPage.billing.downgrade.failedToast': 'Failed to downgrade.',
   'workspace.billingPage.billing.downgrade.successToast': 'Workspace downgraded to Free.',
   'workspace.billingPage.billing.basic.subtitle':
     'Basic workspace · shared monthly pool · no paid seats',
@@ -3848,7 +3843,6 @@ When I am ___, I need ___
   'workspace.upgradeModal.freeTag': 'Free',
   'workspace.upgradeModal.noBasicHint': "You don't own any Basic workspaces to upgrade.",
   'workspace.upgradeModal.noFreeHint': "You don't own any Free workspaces to upgrade.",
-  'workspace.upgradeModal.payFailed': 'Failed to start checkout',
   'workspace.upgradeModal.pickerLabel': 'Select a workspace',
   'workspace.upgradeModal.proTag': 'Pro',
   'workspace.upgradeModal.subtitle': 'Unlock collaboration, more usage, and higher rate limits.',
@@ -3926,7 +3920,6 @@ When I am ___, I need ___
   'workspace.wizard.step2.chargeDisclosurePayOnce':
     'Confirming creates this workspace on {{plan}} and charges a one-time fee of ${{fee}} for {{duration}}, plus any applicable taxes. It does not auto-renew — you can upgrade or add seats at any time, while downgrades wait until the period ends.',
   'workspace.wizard.step2.confirmPurchase': 'Confirm purchase',
-  'workspace.wizard.step2.createFailed': 'Failed to create workspace',
   'workspace.wizard.step2.details.description': "See what's included in your selected plan.",
   'workspace.wizard.step2.details.title': 'Plan details',
   'workspace.wizard.step2.createBasic': 'Create workspace',
@@ -3974,7 +3967,6 @@ When I am ___, I need ___
   'workspace.wizard.step2.left.proTagline': '${{fee}}/seat/month. Extra usage is billed on demand.',
   'workspace.wizard.step2.left.proTopUpHint':
     'Top up when balance runs low: ${{price}} per $1 ({{percent}}% off the standard rate)',
-  'workspace.wizard.step2.payFailed': 'Failed to start checkout',
   'workspace.wizard.step2.pill.basic': 'Basic',
   'workspace.wizard.step2.pill.basicUsed': '{{used}}/{{limit}} used',
   'workspace.wizard.step2.pill.free': 'Free',
@@ -4820,7 +4812,6 @@ When I am ___, I need ___
   'environments.namePlaceholder': 'Environment name',
   'environments.empty': 'No environments yet',
   'environments.removeFailed': 'Could not delete this environment',
-  'environments.saveFailed': 'Could not save this change',
   'environments.instances.removeFailed': 'Could not delete this copy',
   'environments.instances.removing': 'Deleting — removing its folder and everything in it',
   'environments.instances.removeConfirmTitle': 'Delete copy {{name}}?',
@@ -5457,6 +5448,7 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
+  'creds.file.uploadFailedRetry': 'File upload failed. Check the file and try again.',
   'environments.form.addRepository': 'Add repository',
   'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
   'environments.form.noVariables': 'No variables',
@@ -5477,6 +5469,27 @@ When I am ___, I need ___
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',
+  'environments.saveFailedRetry': 'Could not save this change. Check your network and try again.',
+  'hotkey.updateErrorRetry': "Couldn't save this hotkey. Try recording it again.",
+  'settingAgent.avatar.uploadFailed':
+    "Couldn't upload the image. Check your network and choose it again.",
+  'storageOverage.capUpdateFailedRetry':
+    "Couldn't save the monthly cap. Check the amount and try again.",
+  'storageOverage.disableFailedRetry': "Couldn't disable storage pay-as-you-go. Try again.",
+  'storageOverage.enableFailedRetry': "Couldn't enable storage pay-as-you-go. Try again.",
+  'workspace.billingPage.billing.changeFailedRetry':
+    "Couldn't update the subscription. Check your connection and try again.",
+  'workspace.billingPage.credits.autoTopUp.saveFailed':
+    "Couldn't save auto top-up settings. Check your connection and try again.",
+  'workspace.billingPage.credits.autoTopUp.toggleFailed': "Couldn't change auto top-up. Try again.",
+  'workspace.billingPage.credits.topUp.purchaseFailed':
+    "Couldn't complete the top-up. Check your connection and try again.",
+  'workspace.upgradeModal.payFailedRetry':
+    "Couldn't start checkout. Check your connection and try again.",
+  'workspace.wizard.step2.createFailedRetry':
+    "Couldn't create the workspace. Check your connection and try again.",
+  'workspace.wizard.step2.payFailedRetry':
+    "Couldn't start checkout. Check your connection and try again.",
   'workspaceSetting.devices.enrollPrivateDesc':
     'Run this on the machine you want to connect. It starts private to you; publish it to the workspace from its card menu.',
   'market.apps.viewAll': 'View all',

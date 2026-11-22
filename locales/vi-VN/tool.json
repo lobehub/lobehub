@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Thêm mục",
   "updateArgs.form.key": "Khóa trường",
   "updateArgs.form.value": "Giá trị trường",
-  "updateArgs.formValidationFailed": "Xác thực biểu mẫu thất bại, vui lòng kiểm tra định dạng tham số",
   "updateArgs.keyRequired": "Khóa trường không được để trống",
   "updateArgs.stringifyError": "Không thể chuyển đổi tham số thành chuỗi, vui lòng kiểm tra định dạng tham số"
 }

@@ -1,9 +1,11 @@
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
   Input,
   ModalFooter,
+  Text,
   toast,
   useModalContext,
 } from '@lobehub/ui';
@@ -34,6 +36,10 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  /** Name validation, shown under the input it is about. */
+  const [nameError, setNameError] = useState('');
+  /** Create failure, shown above the footer buttons: the modal stays open with the typed name. */
+  const [error, setError] = useState('');
 
   const handleCreate = async () => {
     // Enter fires as fast as the user repeats it — a second pass while `addGroup`
@@ -41,8 +47,9 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
     // request settles last.
     if (!canCreate || loading) return;
     if (input.length === 0 || input.length > 20 || input.trim() === '')
-      return toast.warning(t('sessionGroup.tooLong'));
+      return setNameError(t('sessionGroup.tooLong'));
 
+    setError('');
     setLoading(true);
     try {
       const groupId = await addGroup(input, visibility);
@@ -50,11 +57,11 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
       toggleExpandSessionGroup(groupId, true);
       toast.success(t('sessionGroup.createSuccess'));
       close();
-    } catch (error) {
+    } catch (err) {
       // Without this, a rejected create/move leaves the button stuck
       // on loading and the modal open with no explanation.
-      console.error('Failed to create category:', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+      console.error('Failed to create category:', err);
+      setError(t('operationFailed', { ns: 'common' }));
     } finally {
       setLoading(false);
     }
@@ -62,15 +69,26 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
 
   return (
     <>
-      <Flexbox paddingBlock={16} paddingInline={16}>
+      <Flexbox gap={8} paddingBlock={16} paddingInline={16}>
         <Input
           autoFocus
+          aria-invalid={!!nameError || undefined}
           disabled={!canCreate || loading}
           placeholder={t('sessionGroup.inputPlaceholder')}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
           onPressEnter={handleCreate}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setNameError('');
+            setError('');
+          }}
         />
+        {nameError && (
+          <Text fontSize={12} role="alert" type="danger">
+            {nameError}
+          </Text>
+        )}
+        {error && <Alert showIcon title={error} type="error" />}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

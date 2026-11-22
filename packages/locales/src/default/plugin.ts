@@ -1302,9 +1302,11 @@ export default {
   'settings.httpTypeNotice': 'HTTP MCP has no env vars to configure',
   'settings.indexUrl.title': 'Community index',
   'settings.indexUrl.tooltip': 'Edit via deployment env vars',
-  'settings.messages.connectionUpdateFailed': 'Failed to update connection',
+  'settings.messages.connectionUpdateFailedRetry':
+    "Couldn't update the connection. Check the URL or command, then try again.",
   'settings.messages.connectionUpdateSuccess': 'Connection updated',
-  'settings.messages.envUpdateFailed': 'Failed to save env vars',
+  'settings.messages.envUpdateFailedRetry':
+    "Couldn't save the environment variables. Check your connection and try again.",
   'settings.messages.envUpdateSuccess': 'Env vars saved',
   'settings.modalDesc': 'Configure community URL to use custom Skill community.',
   'settings.rules.argsRequired': 'Enter arguments',

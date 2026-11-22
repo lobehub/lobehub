@@ -5,6 +5,7 @@ import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
+  Alert,
   Block,
   Button,
   confirmModal,
@@ -12,7 +13,6 @@ import {
   Flexbox,
   Icon,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { Minimize2, Paperclip, TagIcon, X } from 'lucide-react';
@@ -110,6 +110,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const activeWorkspaceId = useActiveWorkspaceId();
 
     const [title, setTitle] = useState('');
+    /** Create failure, shown above the footer buttons: the modal stays open with the user's draft. */
+    const [submitError, setSubmitError] = useState('');
     const [priority, setPriority] = useState(defaultPriority);
     const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
     const labelRegistry = useTaskStore(taskLabelSelectors.labels);
@@ -213,6 +215,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
       if (!instruction && !title.trim() && !hasFiles) return;
 
+      setSubmitError('');
       const editorJson = editor?.getDocument?.('json') as unknown;
 
       // Only present when the user pinned a run location / directory —
@@ -245,8 +248,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             name: result.name ?? undefined,
           });
         }
-      } catch {
-        toast.error(t('createTask.createFailed'));
+      } catch (error) {
+        console.error(error);
+        setSubmitError(t('createTask.createFailedRetry'));
       }
     }, [
       activeWorkspaceId,
@@ -335,9 +339,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               outline: 'none',
               padding: '4px 0',
             }}
-            onChange={(e) => setTitle(e.target.value)}
             onFocus={handleTitleFocus}
             onKeyDown={handleTitleKeyDown}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setSubmitError('');
+            }}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
             {showInlineToggle && (
@@ -368,6 +375,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             />
           </div>
         </div>
+
+        {submitError && (
+          <div style={{ flexShrink: 0, padding: '0 16px 8px' }}>
+            <Alert showIcon title={submitError} type="error" />
+          </div>
+        )}
 
         <Flexbox
           horizontal

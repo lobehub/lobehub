@@ -210,6 +210,24 @@ describe('useCreateAgentIdentityForm', () => {
     expect(result.current.uploading).toBe(false);
   });
 
+  it('reports a failed upload and keeps the previous avatar', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.uploadWithProgress.mockRejectedValueOnce(new Error('network'));
+    mocks.uploadWithProgress.mockResolvedValueOnce(undefined);
+    const { result } = setup();
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+
+    const outcomes: unknown[] = [];
+    await act(async () => {
+      outcomes.push(await result.current.uploadAvatar(file));
+      outcomes.push(await result.current.uploadAvatar(file));
+    });
+
+    expect(outcomes).toEqual(['failed', 'failed']);
+    expect(result.current.avatar).toBeUndefined();
+    expect(result.current.uploading).toBe(false);
+  });
+
   it('refuses an image over the upload limit without uploading it', async () => {
     const { result } = setup();
     const file = new File([new Uint8Array(MAX_AVATAR_SIZE + 1)], 'big.png');

@@ -38,6 +38,7 @@ import { ChannelHero } from './ChannelHero';
 import { ChannelTabBar } from './ChannelTabBar';
 import {
   type ChannelTab,
+  type ChannelValues,
   defaultTab,
   footerSaveHidden,
   isRecordTab,
@@ -60,6 +61,7 @@ import { QuickView } from './QuickView';
 import { hasPendingChanges, pickKeys, replyDiffers } from './replySettings';
 import { createSaveCoordinator } from './saveCoordinator';
 import {
+  clearEditedModuleErrors,
   dirtyModuleIds,
   discardPatch,
   resolveSaveModules,
@@ -245,6 +247,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
       [platformDef.schema],
     );
     const valuesChangedRef = useRef<() => void>(undefined);
+    /** Form values seen by the last change, to tell which module an edit touched */
+    const lastValuesRef = useRef<ChannelValues>(undefined);
     const autoSavingRef = useRef(false);
     // Reply autosaves and the Save button both write the whole settings column;
     // this keeps them from overlapping (see `createSaveCoordinator`).
@@ -344,6 +348,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const [showConnected, setShowConnected] = useState(false);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<TestResult>();
+    // A block's failed Save is shown beside that block's Save button, not as a toast: the page stays open.
+    const [moduleErrors, setModuleErrors] = useState<Partial<Record<SaveModuleId, string>>>({});
 
     // Platform-specific extras (e.g. iMessage's BlueBubbles bridge) register a
     // side-effect here so it runs as part of the single "Save Configuration"
@@ -518,7 +524,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
         storedRef.current = { ...stored, settings: settings as ChannelFormValues['settings'] };
         toast.success(t('channel.saved'));
       } catch {
-        toast.error(t('channel.updateFailed'));
+        // Autosaved switches have no Save button; the top notice is where save failures show
+        setSaveResult({ hint: t('channel.updateFailedRetry'), type: 'error' });
         form.setValues({
           settings: {
             ...form.getValues().settings,
@@ -546,6 +553,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
       const values = form.getValues();
       setIsDirty(hasPendingChanges(values, storedRef.current, replyKeys));
       setDirtyModules(dirtyModuleIds(saveModules, values, storedRef.current));
+      // An edit after a failed save makes that failure stale; the next save reports afresh.
+      const previous = lastValuesRef.current;
+      lastValuesRef.current = values;
+      setSaveResult((current) => (current?.type === 'error' ? undefined : current));
+      setModuleErrors((prev) => clearEditedModuleErrors(prev, saveModules, values, previous));
 
       if (!currentConfig || writeDisabled || replyKeys.length === 0) return;
       if (!replyDiffers(values.settings, storedRef.current.settings, replyKeys)) return;
@@ -620,7 +632,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
         const overLimit = findOverLimitSettings(platformDef.schema, settings);
         if (overLimit.length > 0) {
           const max = Math.min(...overLimit.map((entry) => entry.max));
-          toast.error(t('channel.channelListLimit').replace('{{max}}', String(max)));
+          setSaveResult({
+            hint: t('channel.channelListLimit').replace('{{max}}', String(max)),
+            type: 'error',
+          });
           setSaving(false);
           return;
         }
@@ -833,6 +848,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       (id: SaveModuleId) => {
         const block = saveModules.find((m) => m.id === id);
         if (!block) return;
+        setModuleErrors((prev) => ({ ...prev, [id]: undefined }));
         const stored = storedRef.current;
 
         if (block.kind === 'credentials') {
@@ -864,9 +880,13 @@ const PlatformDetail = memo<PlatformDetailProps>(
         const block = saveModules.find((m) => m.id === id);
         if (!block || !currentConfig || writeDisabled) return Promise.resolve();
 
+        const setModuleError = (message?: string) =>
+          setModuleErrors((prev) => ({ ...prev, [id]: message }));
+
         const run = async () => {
           await saveCoordinator.beginExplicit();
           setSavingModule(id);
+          setModuleError();
 
           try {
             const paths =
@@ -916,7 +936,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             const overLimit = findOverLimitSettings(platformDef.schema, settings);
             if (overLimit.length > 0) {
               const max = Math.min(...overLimit.map((entry) => entry.max));
-              toast.error(t('channel.channelListLimit').replace('{{max}}', String(max)));
+              setModuleError(t('channel.channelListLimit').replace('{{max}}', String(max)));
               return;
             }
 
@@ -929,7 +949,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
               setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
               setSaving(false);
             } else {
-              toast.error(t('channel.updateFailed'));
+              setModuleError(t('channel.updateFailedRetry'));
             }
           } finally {
             saveCoordinator.endExplicit();
@@ -964,13 +984,22 @@ const PlatformDetail = memo<PlatformDetailProps>(
         currentConfig
           ? {
               dirty: dirtyModules,
+              errors: moduleErrors,
               ids: saveModules.map((module) => module.id),
               onDiscard: discardModule,
               onSave: (id) => void saveModule(id),
               saving: savingModule,
             }
           : undefined,
-      [currentConfig, dirtyModules, discardModule, saveModule, saveModules, savingModule],
+      [
+        currentConfig,
+        dirtyModules,
+        discardModule,
+        moduleErrors,
+        saveModule,
+        saveModules,
+        savingModule,
+      ],
     );
 
     const handlePaidFeatureUpgrade = useCallback(() => {

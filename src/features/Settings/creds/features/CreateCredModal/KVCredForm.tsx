@@ -1,9 +1,9 @@
 'use client';
 
-import { Button, Input, TextArea, toast } from '@lobehub/ui';
+import { Alert, Button, Input, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { useMutation } from '@tanstack/react-query';
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { credErrorKey } from '../credError';
@@ -57,6 +57,12 @@ const KVCredForm: FC<KVCredFormProps> = ({
     onSubmit: (values) => handleSubmit(values),
   });
 
+  /**
+   * Create failures (including Market's 409 slot conflicts) render above the submit row: the
+   * modal stays open and the user's next move is on this form, not behind a corner toast.
+   */
+  const [submitError, setSubmitError] = useState('');
+
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (disabled) return;
@@ -82,7 +88,8 @@ const KVCredForm: FC<KVCredFormProps> = ({
       });
     },
     onError: (error) => {
-      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
+      console.error('[KVCredForm] Create failed:', error);
+      setSubmitError(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();
@@ -92,6 +99,7 @@ const KVCredForm: FC<KVCredFormProps> = ({
   const handleSubmit = (values: FormValues) => {
     if (disabled) return;
 
+    setSubmitError('');
     createMutation.mutate(values);
   };
 
@@ -125,6 +133,8 @@ const KVCredForm: FC<KVCredFormProps> = ({
           rows={2}
         />
       </Form.Field>
+
+      {submitError && <Alert showIcon title={submitError} type="error" />}
 
       <CredFormFooter>
         <Button type="fill" onClick={onCancel}>

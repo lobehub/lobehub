@@ -7,6 +7,7 @@ import {
 } from '@lobechat/types';
 import {
   ActionIcon,
+  Alert,
   Button,
   createModal,
   createStaticStyles,
@@ -123,6 +124,8 @@ const ComposeContent = ({
   const [direction, setDirection] = useState<ExpertiseRuleDirection>();
   const [compilability, setCompilability] = useState<Compilability>('not-compilable');
   const [busy, setBusy] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's input. */
+  const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
 
   const group = groups.find((g) => g.id === groupId);
@@ -162,8 +165,8 @@ const ComposeContent = ({
         setGroupId(undefined);
         setNewGroup(drafted.newGroup);
       }
-    } catch (error) {
-      console.error('[MemoryRules] rule draft failed:', error);
+    } catch (err) {
+      console.error('[MemoryRules] rule draft failed:', err);
       setTitle(text.split('\n')[0].slice(0, 120));
       toast.warning(t('rules.compose.generateFailed'));
     }
@@ -182,8 +185,9 @@ const ComposeContent = ({
 
   const submit = async () => {
     if (!title.trim() || busy) return;
+    setError('');
     if (!groupId && !newGroup) {
-      toast.warning(t('rules.compose.needGroup'));
+      setError(t('rules.compose.needGroup'));
       return;
     }
     setBusy(true);
@@ -204,9 +208,9 @@ const ComposeContent = ({
       });
       if (created) onCreated(created.id);
       close();
-    } catch (error) {
-      console.error('[MemoryRules] rule save failed:', error);
-      toast.error(t('rules.saveFailed'));
+    } catch (err) {
+      console.error('[MemoryRules] rule save failed:', err);
+      setError(t('rules.saveFailedRetry'));
     } finally {
       setBusy(false);
     }
@@ -313,6 +317,12 @@ const ComposeContent = ({
             />
           </Flexbox>
         </Flexbox>
+      )}
+
+      {error && (
+        <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
+          <Alert showIcon title={error} type="error" />
+        </div>
       )}
 
       <Flexbox

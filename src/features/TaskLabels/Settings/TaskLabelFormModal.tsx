@@ -5,13 +5,13 @@ import {
   type TaskLabelWithUsage,
 } from '@lobechat/types';
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
   Input,
   ModalFooter,
   Select,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -66,12 +66,22 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
   const [color, setColor] = useState<string>(label?.color ?? DEFAULT_TASK_LABEL_COLOR);
   const [group, setGroup] = useState<string>(label?.parentId ?? parentId ?? NO_GROUP);
   const [loading, setLoading] = useState(false);
+  /**
+   * Save failures stay in the modal: a name clash shows under the name input, a regroup
+   * conflict under the group select, any other failure above the footer buttons.
+   */
+  const [nameError, setNameError] = useState('');
+  const [groupError, setGroupError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed || loading) return;
     const nextParentId = editingGroup || group === NO_GROUP ? null : group;
 
+    setNameError('');
+    setGroupError('');
+    setSaveError('');
     setLoading(true);
     try {
       if (label) {
@@ -93,7 +103,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
       close();
     } catch (error) {
       if (isDuplicateLabelNameError(error)) {
-        toast.error(t('taskLabels.form.duplicateName'));
+        setNameError(t('taskLabels.form.duplicateName'));
         return;
       }
       // Server messages are English (they also serve the CLI and agents), so
@@ -101,11 +111,12 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
       // collides with tasks already carrying a sibling.
       const code = (error as { data?: { code?: string } })?.data?.code;
       const isRegroup = !!label && !!nextParentId && nextParentId !== (label.parentId ?? null);
-      toast.error(
-        code === 'BAD_REQUEST' && isRegroup
-          ? t('taskLabels.form.groupConflict')
-          : t('operationFailed', { ns: 'common' }),
-      );
+      if (code === 'BAD_REQUEST' && isRegroup) {
+        setGroupError(t('taskLabels.form.groupConflict'));
+      } else {
+        console.error('Failed to save task label:', error);
+        setSaveError(t('operationFailed', { ns: 'common' }));
+      }
     } finally {
       setLoading(false);
     }
@@ -118,6 +129,8 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
           <span>{t('taskLabels.form.name')}</span>
           <Input
             autoFocus
+            aria-invalid={!!nameError}
+            data-invalid={nameError ? '' : undefined}
             maxLength={TASK_LABEL_NAME_MAX_LENGTH}
             value={name}
             placeholder={t(
@@ -125,9 +138,17 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
                 ? 'taskLabels.form.groupNamePlaceholder'
                 : 'taskLabels.form.namePlaceholder',
             )}
-            onChange={(e) => setName(e.target.value)}
             onPressEnter={handleSave}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError('');
+            }}
           />
+          {nameError && (
+            <span role={'alert'} style={{ color: cssVar.colorError, fontSize: 12 }}>
+              {nameError}
+            </span>
+          )}
         </Flexbox>
         {!editingGroup && groups.length > 0 && (
           <Flexbox gap={8}>
@@ -138,8 +159,16 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
                 { label: t('taskLabels.form.noGroup'), value: NO_GROUP },
                 ...groups.map((item) => ({ label: item.name, value: item.id })),
               ]}
-              onChange={(value: string) => setGroup(value)}
+              onChange={(value: string) => {
+                setGroup(value);
+                setGroupError('');
+              }}
             />
+            {groupError && (
+              <span role={'alert'} style={{ color: cssVar.colorError, fontSize: 12 }}>
+                {groupError}
+              </span>
+            )}
           </Flexbox>
         )}
         <Flexbox gap={8}>
@@ -158,6 +187,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
             ))}
           </Flexbox>
         </Flexbox>
+        {saveError && <Alert showIcon title={saveError} type={'error'} />}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

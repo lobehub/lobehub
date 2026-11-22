@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Il materiale è lungo; è stato letto solo l'inizio.",
   "rules.distill.untitled": "Senza titolo",
   "rules.distill.upload": "Carica un file",
-  "rules.distill.uploadFailed": "Impossibile caricare il file.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint o testo semplice",
   "rules.enforcement.block": "Blocca",
   "rules.enforcement.blockDesc": "Tratterrà la consegna fino a quando non la autorizzi. Non ancora in vigore: per ora avvisa solo",

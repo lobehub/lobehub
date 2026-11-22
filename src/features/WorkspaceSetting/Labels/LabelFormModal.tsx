@@ -1,11 +1,11 @@
 import { type AgentLabelListItem } from '@lobechat/types';
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
   Input,
   ModalFooter,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -64,11 +64,19 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
   const [description, setDescription] = useState(label?.description ?? '');
   const [color, setColor] = useState<string>(label?.color ?? DEFAULT_LABEL_COLOR);
   const [loading, setLoading] = useState(false);
+  /**
+   * Save failures stay in the modal: a name clash shows under the name input (the field the
+   * user must change), any other failure shows above the footer buttons.
+   */
+  const [nameError, setNameError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed || loading) return;
 
+    setNameError('');
+    setSaveError('');
     setLoading(true);
     try {
       if (label) {
@@ -96,11 +104,11 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
       // Keep the modal open on a name clash — the user's next move is to edit
       // the name they already typed, not to start over.
       if (isDuplicateLabelNameError(error)) {
-        toast.error(t('workspaceSetting.labels.form.duplicateName'));
+        setNameError(t('workspaceSetting.labels.form.duplicateName'));
         return;
       }
       console.error('Failed to save label:', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+      setSaveError(t('operationFailed', { ns: 'common' }));
     } finally {
       setLoading(false);
     }
@@ -113,11 +121,21 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
           <span>{t('workspaceSetting.labels.form.name')}</span>
           <Input
             autoFocus
+            aria-invalid={!!nameError}
+            data-invalid={nameError ? '' : undefined}
             maxLength={40}
             placeholder={t('workspaceSetting.labels.form.namePlaceholder')}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError('');
+            }}
           />
+          {nameError && (
+            <span role={'alert'} style={{ color: cssVar.colorError, fontSize: 12 }}>
+              {nameError}
+            </span>
+          )}
         </Flexbox>
         <Flexbox gap={8}>
           <span>{t('workspaceSetting.labels.form.description')}</span>
@@ -151,6 +169,7 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
             />
           </Flexbox>
         </Flexbox>
+        {saveError && <Alert showIcon title={saveError} type={'error'} />}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

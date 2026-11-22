@@ -237,7 +237,6 @@
   "rules.distill.truncated": "O material é longo; apenas o início foi lido.",
   "rules.distill.untitled": "Sem título",
   "rules.distill.upload": "Carregar um arquivo",
-  "rules.distill.uploadFailed": "Não foi possível carregar o arquivo.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint ou texto simples",
   "rules.enforcement.block": "Bloquear",
   "rules.enforcement.blockDesc": "Reterá a entrega até que você a libere. Ainda não em vigor: por enquanto, apenas notifica",

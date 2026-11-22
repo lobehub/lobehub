@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Das Material ist lang; nur der Anfang wurde gelesen.",
   "rules.distill.untitled": "Ohne Titel",
   "rules.distill.upload": "Datei hochladen",
-  "rules.distill.uploadFailed": "Die Datei konnte nicht hochgeladen werden.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint oder reiner Text",
   "rules.enforcement.block": "Blockieren",
   "rules.enforcement.blockDesc": "Hält die Lieferung zurück, bis Sie sie freigeben. Noch nicht aktiv: Derzeit wird nur erinnert",

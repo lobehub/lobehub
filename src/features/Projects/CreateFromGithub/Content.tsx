@@ -1,11 +1,11 @@
 import {
+  Alert,
   Button,
   cssVar,
   Flexbox,
   Input,
   ModalFooter,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { useState } from 'react';
@@ -70,6 +70,9 @@ const CreateFromGithubContent = () => {
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
 
+  /** Create failure that no field explains, shown above the footer buttons: the dialog stays open with the user's input. */
+  const [error, setError] = useState('');
+
   const repository = main && parseGithubRepository(main.url);
   const defaultMainAgentId = useDefaultMainAgent();
   const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
@@ -97,6 +100,7 @@ const CreateFromGithubContent = () => {
 
   const updateName = (name: string) => {
     setForm((current) => ({ ...current, duplicate: undefined, name, nameEdited: true }));
+    setError('');
   };
 
   const connectGithub = () => {
@@ -106,6 +110,7 @@ const CreateFromGithubContent = () => {
 
   const handleCreate = async () => {
     if (!createInput || !repository || form.loading) return;
+    setError('');
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
@@ -133,16 +138,16 @@ const CreateFromGithubContent = () => {
       }
       close();
       navigate(`/project/${project.slug ?? project.id}`);
-    } catch (error) {
+    } catch (err) {
       // A taken slug also comes back as a conflict; this dialog has no slug
       // input, so it reports it on the name the slug is derived from.
-      const field = getProjectConflictField(error);
+      const field = getProjectConflictField(err);
       const duplicate = field === 'slug' ? 'name' : field;
       if (duplicate) {
         setForm((current) => ({ ...current, duplicate }));
       } else {
-        console.error('Failed to create project from GitHub', error);
-        toast.error(t('operationFailed', { ns: 'common' }));
+        console.error('Failed to create project from GitHub', err);
+        setError(t('operationFailed', { ns: 'common' }));
       }
     } finally {
       setForm((current) => ({ ...current, loading: false }));
@@ -222,6 +227,7 @@ const CreateFromGithubContent = () => {
           onChange={changeRepositories}
           onConnect={connectGithub}
         />
+        {error && <Alert showIcon title={error} type="error" />}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

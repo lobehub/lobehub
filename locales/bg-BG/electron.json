@@ -90,7 +90,6 @@
   "proxy.port": "Порт",
   "proxy.resetButton": "Нулирай",
   "proxy.saveButton": "Запази",
-  "proxy.saveFailed": "Неуспешно запазване: {{error}}",
   "proxy.saveSuccess": "Настройките на проксито са запазени успешно",
   "proxy.server": "Адрес на сървъра",
   "proxy.testButton": "Тествай връзката",

@@ -90,7 +90,6 @@
   "proxy.port": "Cổng",
   "proxy.resetButton": "Đặt lại",
   "proxy.saveButton": "Lưu",
-  "proxy.saveFailed": "Lưu thất bại: {{error}}",
   "proxy.saveSuccess": "Đã lưu cài đặt proxy thành công",
   "proxy.server": "Địa chỉ máy chủ",
   "proxy.testButton": "Kiểm tra kết nối",

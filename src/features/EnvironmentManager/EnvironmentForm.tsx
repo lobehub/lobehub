@@ -4,6 +4,7 @@ import { layoutRepositorySources, repositoryFolderName } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
+  Alert,
   Button,
   createStaticStyles,
   cssVar,
@@ -283,6 +284,11 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
   const [pickingRepository, setPickingRepository] = useState(false);
   const [busy, setBusy] = useState(false);
+  /**
+   * Failure of a repository add / remove, shown in the Sources section: the page stays open and
+   * the control that failed has no confirm step of its own to hang an error on.
+   */
+  const [repositoryError, setRepositoryError] = useState('');
 
   // Every field saves the whole specification, so two saves in flight at once
   // would each start from the same snapshot and the later one would undo the
@@ -325,10 +331,12 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   /** For controls with no confirm step of their own: a switch, a disconnect. */
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
+    setRepositoryError('');
     try {
       await action();
     } catch (error) {
-      toast.error(describeError(error, t, t('environments.saveFailed')));
+      console.error('[EnvironmentForm] Save failed:', error);
+      setRepositoryError(describeError(error, t, t('environments.saveFailedRetry')));
     } finally {
       setBusy(false);
     }
@@ -490,6 +498,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
             ))}
           </Flexbox>
         )}
+        {repositoryError && <Alert showIcon title={repositoryError} type={'error'} />}
         {pickingRepository ? (
           <Flexbox gap={8}>
             <GithubRepositoryPicker onChange={addRepository} />

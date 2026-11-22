@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Öğe Ekle",
   "updateArgs.form.key": "Alan Anahtarı",
   "updateArgs.form.value": "Alan Değeri",
-  "updateArgs.formValidationFailed": "Form doğrulaması başarısız oldu, lütfen parametre biçimini kontrol edin",
   "updateArgs.keyRequired": "Alan anahtarı boş olamaz",
   "updateArgs.stringifyError": "Parametreler serileştirilemedi, lütfen parametre biçimini kontrol edin"
 }

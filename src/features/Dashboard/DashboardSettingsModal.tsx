@@ -2,6 +2,7 @@
 
 import type { DashboardVisibility, WidgetLevelFilter } from '@lobechat/types';
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
@@ -85,6 +86,8 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
   const [visibility, setVisibility] = useState<DashboardVisibility>(dashboard.visibility);
   const [pickedSchedule, setPickedSchedule] = useState<BoardScheduleChoice>();
   const [saving, setSaving] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's edits. */
+  const [error, setError] = useState('');
 
   // Home boards outside a workspace are personal: there is no one to share with.
   const showVisibility = !!dashboard.workspaceId;
@@ -117,6 +120,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
 
   const handleSave = async () => {
     if (!trimmedTitle || saving) return;
+    setError('');
     setSaving(true);
     try {
       const patch: DashboardSettingsPatch = {};
@@ -144,9 +148,9 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
       else if (keptPrivate) toast.info(t('settings.visibilityKeptPrivate'));
       else toast.success(t('settings.saved'));
       close();
-    } catch (error) {
-      console.error('[dashboard] settings save failed', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+    } catch (err) {
+      console.error('[dashboard] settings save failed', err);
+      setError(t('operationFailed', { ns: 'common' }));
     } finally {
       setSaving(false);
     }
@@ -167,7 +171,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         options={scheduleOptions}
         value={schedule}
         variant={'filled'}
-        onChange={(value) => setPickedSchedule(value as BoardScheduleChoice)}
+        onChange={(value) => {
+          setPickedSchedule(value as BoardScheduleChoice);
+          setError('');
+        }}
       />
     );
   };
@@ -182,7 +189,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
             maxLength={200}
             placeholder={t('form.titlePlaceholder')}
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setError('');
+            }}
           />
         </Field>
         <Field label={t('form.descriptionLabel')}>
@@ -191,7 +201,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
             maxLength={2000}
             placeholder={t('form.descriptionPlaceholder')}
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              setError('');
+            }}
           />
         </Field>
         {showVisibility && (
@@ -203,7 +216,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
                 { label: t('settings.visibilityPrivate'), value: 'private' },
                 { label: t('settings.visibilityPublic'), value: 'public' },
               ]}
-              onChange={(value) => setVisibility(value as DashboardVisibility)}
+              onChange={(value) => {
+                setVisibility(value as DashboardVisibility);
+                setError('');
+              }}
             />
           </Field>
         )}
@@ -222,6 +238,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         >
           {renderSchedule()}
         </Field>
+        {error && <Alert showIcon title={error} type="error" />}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

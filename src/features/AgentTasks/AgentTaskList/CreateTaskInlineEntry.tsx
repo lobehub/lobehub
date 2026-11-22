@@ -5,6 +5,7 @@ import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/t
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
+  Alert,
   Block,
   Button,
   cssVar,
@@ -151,6 +152,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
   const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
   const [instruction, setInstruction] = useState('');
+  /** Create failure, shown above the footer buttons: the composer keeps the draft so the user can retry. */
+  const [submitError, setSubmitError] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
   // Where this task will run, if not simply wherever the assignee agent runs.
   // Undefined = inherit; it is only sent when the user actually pinned
@@ -410,6 +413,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (!canCreateTask) return;
     const lexicalEditor = editor?.getLexicalEditor?.();
     if (!lexicalEditor) return;
+    setSubmitError('');
     lexicalEditor.getEditorState().read(() => {
       setInstruction($getRoot().getTextContent());
     });
@@ -485,6 +489,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       // `createTask` keeps its rejecting contract (other callers rely on `catch`);
       // handle the composer's own failure here so it isn't silent, keeping the
       // draft intact (the reset only runs on success).
+      setSubmitError('');
       try {
         const config = execution ? { execution: toTaskExecutionConfigPatch(execution) } : undefined;
         const result = await createTask({
@@ -550,7 +555,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             identifier: result.identifier,
           });
         }
-      } catch {
+      } catch (error) {
         // Nothing was created, so the draft is still the user's work: put it
         // back on disk to match the text the composer is still showing.
         if (draftStorageKey && persistedDraft !== null) {
@@ -560,7 +565,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             /* storage unavailable — persistence is best-effort */
           }
         }
-        toast.error(t('createTask.createFailed'));
+        console.error(error);
+        setSubmitError(t('createTask.createFailedRetry'));
       }
     },
     [
@@ -818,6 +824,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             onContentChange={handleContentChange}
           />
         </Flexbox>
+        {submitError && (
+          <div style={{ padding: '0 16px 8px' }}>
+            <Alert showIcon title={submitError} type="error" />
+          </div>
+        )}
         <Flexbox
           horizontal
           align={'center'}

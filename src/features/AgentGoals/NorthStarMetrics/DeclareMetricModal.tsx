@@ -2,6 +2,7 @@
 
 import type { GoalMetricComparison, GoalMetricCriterion } from '@lobechat/types';
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
@@ -9,7 +10,6 @@ import {
   type ModalInstance,
   Select,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';
@@ -36,12 +36,15 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
     const [op, setOp] = useState<GoalMetricComparison>(initial?.op ?? 'gte');
     const [target, setTarget] = useState(initial ? String(initial.target) : '');
     const [busy, setBusy] = useState(false);
+    /** Declare failure, shown above the submit button: the modal stays open with the user's input. */
+    const [error, setError] = useState('');
 
     const submit = async () => {
       const trimmedKey = key.trim();
       const parsedTarget = Number(target);
       if (!trimmedKey || !Number.isFinite(parsedTarget) || busy) return;
       setBusy(true);
+      setError('');
       try {
         await declareGoalMetric(goalId, {
           key: trimmedKey,
@@ -50,10 +53,10 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
           title: title.trim() || undefined,
         });
         close();
-      } catch (error) {
+      } catch (err) {
         // Keep the form open — a silent close would be indistinguishable from success.
-        console.error('[NorthStar] failed to declare metric:', error);
-        toast.error(t('goalProcess.northStar.declare.failed'));
+        console.error('[NorthStar] failed to declare metric:', err);
+        setError(t('goalProcess.northStar.declare.failedRetry'));
       } finally {
         setBusy(false);
       }
@@ -70,7 +73,10 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
             disabled={!!initial}
             placeholder={t('goalProcess.northStar.declare.keyPlaceholder')}
             value={key}
-            onChange={(e) => setKey(e.target.value)}
+            onChange={(e) => {
+              setKey(e.target.value);
+              setError('');
+            }}
           />
         </Flexbox>
         <Flexbox gap={6}>
@@ -104,11 +110,15 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
             <Input
               placeholder={'10000'}
               value={target}
-              onChange={(e) => setTarget(e.target.value)}
               onPressEnter={() => void submit()}
+              onChange={(e) => {
+                setTarget(e.target.value);
+                setError('');
+              }}
             />
           </Flexbox>
         </Flexbox>
+        {error && <Alert showIcon title={error} type="error" />}
         <Flexbox horizontal justify={'flex-end'}>
           <Button
             disabled={!key.trim() || !Number.isFinite(Number(target)) || target.trim() === ''}

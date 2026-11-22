@@ -1,13 +1,13 @@
 'use client';
 
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
   Input,
   type ModalInstance,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';
@@ -29,19 +29,22 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string; metri
 
     const [value, setValue] = useState('');
     const [busy, setBusy] = useState(false);
+    /** Record failure, shown above the submit button: the modal stays open with the typed value. */
+    const [error, setError] = useState('');
 
     const submit = async () => {
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || value.trim() === '' || busy) return;
       setBusy(true);
+      setError('');
       try {
         // The clause's display name rides along so the series created by the
         // first observation carries it too.
         await recordGoalObservation(goalId, { key: metricKey, title: metricTitle, value: parsed });
         close();
-      } catch (error) {
-        console.error('[NorthStar] failed to record observation:', error);
-        toast.error(t('goalProcess.northStar.record.failed'));
+      } catch (err) {
+        console.error('[NorthStar] failed to record observation:', err);
+        setError(t('goalProcess.northStar.record.failedRetry'));
       } finally {
         setBusy(false);
       }
@@ -57,10 +60,14 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string; metri
             autoFocus
             placeholder={'42180'}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
             onPressEnter={() => void submit()}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError('');
+            }}
           />
         </Flexbox>
+        {error && <Alert showIcon title={error} type="error" />}
         <Flexbox horizontal justify={'flex-end'}>
           <Button
             disabled={!Number.isFinite(Number(value)) || value.trim() === ''}

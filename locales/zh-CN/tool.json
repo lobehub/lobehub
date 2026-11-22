@@ -379,7 +379,7 @@
   "updateArgs.form.add": "添加一项",
   "updateArgs.form.key": "字段键",
   "updateArgs.form.value": "字段值",
-  "updateArgs.formValidationFailed": "表单验证失败，请检查参数格式",
   "updateArgs.keyRequired": "字段键不能为空",
+  "updateArgs.saveFailed": "参数保存失败，请检查网络后重试",
   "updateArgs.stringifyError": "无法序列化参数，请检查参数格式"
 }

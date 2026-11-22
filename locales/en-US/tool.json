@@ -379,7 +379,7 @@
   "updateArgs.form.add": "Add an Item",
   "updateArgs.form.key": "Field Key",
   "updateArgs.form.value": "Field Value",
-  "updateArgs.formValidationFailed": "Form validation failed, please check the parameter format",
   "updateArgs.keyRequired": "Field key cannot be empty",
+  "updateArgs.saveFailed": "Couldn't save the parameters. Check your network and try again.",
   "updateArgs.stringifyError": "Unable to serialize parameters, please check the parameter format"
 }

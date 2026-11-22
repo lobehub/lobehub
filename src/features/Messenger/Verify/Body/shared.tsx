@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text, toast } from '@lobehub/ui';
+import { Alert, Block, Button, createStaticStyles, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -192,6 +192,8 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     );
 
     const [confirming, setConfirming] = useState(false);
+    /** Link failure (already mapped to localized copy), shown above the confirm button so the user's agent pick stays in view. */
+    const [confirmError, setConfirmError] = useState('');
 
     // Default-select the first agent (inbox is pinned to the top) once the
     // server confirms a scope's list, and drop a pick that list no longer has.
@@ -226,12 +228,13 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
     const handleConfirm = async () => {
       if (!selectedAgentId || !isAgentsConfirmed) return;
+      setConfirmError('');
       setConfirming(true);
       try {
         await messengerService.confirmLink({ initialAgentId: selectedAgentId, randomId });
         onSuccess();
       } catch (error) {
-        toast.error(getMessengerErrorMessage(error, t, 'verify.error.generic'));
+        setConfirmError(getMessengerErrorMessage(error, t, 'verify.error.generic'));
       } finally {
         setConfirming(false);
       }
@@ -286,6 +289,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
                     setScope((next as string | null) ?? PERSONAL_SCOPE);
                     // Re-default to the new scope's inbox agent.
                     setSelectedAgentId(undefined);
+                    setConfirmError('');
                   }}
                 />
               </Flexbox>
@@ -299,7 +303,10 @@ export const ConfirmCard = memo<ConfirmCardProps>(
                   placeholder={t('verify.confirm.defaultAgentPlaceholder')}
                   value={selectedAgentId}
                   workspaceId={scopeWorkspaceId}
-                  onChange={setSelectedAgentId}
+                  onChange={(id) => {
+                    setSelectedAgentId(id);
+                    setConfirmError('');
+                  }}
                 />
               )}
               <Text style={{ fontSize: 12 }} type="secondary">
@@ -307,6 +314,10 @@ export const ConfirmCard = memo<ConfirmCardProps>(
               </Text>
             </Flexbox>
           </Flexbox>
+        )}
+
+        {confirmError && (
+          <Alert showIcon style={{ width: '100%' }} title={confirmError} type="error" />
         )}
 
         <Button

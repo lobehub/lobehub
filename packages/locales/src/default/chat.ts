@@ -2530,7 +2530,6 @@ export default {
     'Stops once total spend reaches this amount; leave blank for no cap.',
   'createGoal.costBudgetLabel': 'Cost budget',
   'createGoal.costBudgetPlaceholder': 'No cap',
-  'createGoal.createFailed': 'Failed to create goal',
   'createGoal.back': 'Back',
   'createGoal.agentsHint':
     'The main agent plans and supervises the goal; tasks go to the executor, or to the main agent when none is chosen.',
@@ -2538,6 +2537,8 @@ export default {
   'createGoal.budgetTitle': 'Budget',
   'createGoal.contextLabel': 'Context for the Agent',
   'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
+  'createGoal.createFailedRetry':
+    "Couldn't create the goal. Your plan is kept, check your connection and try again.",
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'Acceptance criteria',
@@ -2580,7 +2581,8 @@ export default {
   'createTask.assignee': 'Agent',
   'createTask.member': 'Assignee',
   'createTask.collapse': 'Hide input',
-  'createTask.createFailed': 'Failed to create task',
+  'createTask.createFailedRetry':
+    "Couldn't create the task. Your draft is kept, check your connection and try again.",
   'createTask.discardConfirm.cancel': 'Keep editing',
   'createTask.discardConfirm.content':
     'The title, instruction and attachments you added will be lost.',
@@ -2839,11 +2841,9 @@ export default {
   'goalProcess.northStar.declare.opLabel': 'Condition',
   'goalProcess.northStar.declare.targetLabel': 'Target value',
   'goalProcess.northStar.declare.submit': 'Declare',
-  'goalProcess.northStar.declare.failed': 'Failed to declare the metric',
   'goalProcess.northStar.record.title': 'Record observation',
   'goalProcess.northStar.record.valueLabel': 'Current value of {{key}}',
   'goalProcess.northStar.record.submit': 'Record',
-  'goalProcess.northStar.record.failed': 'Failed to record the observation',
   'goalProcess.northStar.detail.history': 'Observations ({{count}})',
   'goalProcess.northStar.detail.removed': 'This metric is no longer declared on the goal',
   'goalProcess.northStar.detail.source.agent': 'Recorded by agent',
@@ -3393,6 +3393,10 @@ export default {
   'goalPage.title': 'Overview',
   'goalPage.view.card': 'Cards',
   'goalPage.view.list': 'List',
+  'goalProcess.northStar.declare.failedRetry':
+    "Couldn't declare the metric. Check the key and target, then try again.",
+  'goalProcess.northStar.record.failedRetry':
+    "Couldn't record the observation. Check the value and try again.",
   'goalTurn.authorUser': 'User',
   'goalTurn.continuation': 'Why planning reopened',
   'goalTurn.earlierFeedback': 'Earlier feedback ({{count}})',

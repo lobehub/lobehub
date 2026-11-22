@@ -3,6 +3,7 @@
 import type { ExpertiseEnforcement } from '@lobechat/types';
 import {
   ActionIcon,
+  Alert,
   Button,
   Checkbox,
   createModal,
@@ -193,6 +194,8 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
   const [result, setResult] = useState<DistillResult>();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
+  /** Upload, read or save failure, shown above the footer buttons: the modal stays open with the user's picks. */
+  const [error, setError] = useState('');
 
   const recentPages = useRecentPages(tab === 'document');
   const pages = recentPages.items;
@@ -227,18 +230,20 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       : picked;
 
   const switchTab = (next: SourceTab) => {
+    setError('');
     setTab(next);
     setPicked(undefined);
   };
 
   const upload = async (file: File) => {
+    setError('');
     setUploading(true);
     try {
       const uploaded = await uploadWithProgress({ file });
       if (uploaded) setPicked({ name: file.name, source: { id: uploaded.id, type: 'file' } });
-    } catch (error) {
-      console.error('[MemoryRules] material upload failed:', error);
-      toast.error(t('rules.distill.uploadFailed'));
+    } catch (err) {
+      console.error('[MemoryRules] material upload failed:', err);
+      setError(t('rules.distill.uploadFailedRetry'));
     } finally {
       setUploading(false);
     }
@@ -246,6 +251,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
 
   const read = async () => {
     if (!source) return;
+    setError('');
     setStep('reading');
     try {
       const next = await expertiseService.distillRules({
@@ -270,9 +276,9 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
         })),
       );
       setStep('review');
-    } catch (error) {
-      console.error('[MemoryRules] distill failed:', error);
-      toast.error(t('rules.distill.readFailed'));
+    } catch (err) {
+      console.error('[MemoryRules] distill failed:', err);
+      setError(t('rules.distill.readFailed'));
       setStep('pick');
     }
   };
@@ -284,6 +290,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
 
   const save = async () => {
     if (!result || kept.length === 0 || saving) return;
+    setError('');
     setSaving(true);
     try {
       const saved = await expertiseService.commitDistilledRules({
@@ -310,9 +317,9 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       toast.success(t('rules.distill.saved', { count: saved.length }));
       onDone(saved.filter((item) => item.kind === 'create').map((item) => item.id));
       close();
-    } catch (error) {
-      console.error('[MemoryRules] distill save failed:', error);
-      toast.error(t('rules.saveFailed'));
+    } catch (err) {
+      console.error('[MemoryRules] distill save failed:', err);
+      setError(t('rules.saveFailedRetry'));
     } finally {
       setSaving(false);
     }
@@ -600,6 +607,12 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
             })
           )}
         </Flexbox>
+      )}
+
+      {error && (
+        <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
+          <Alert showIcon title={error} type="error" />
+        </div>
       )}
 
       <Flexbox

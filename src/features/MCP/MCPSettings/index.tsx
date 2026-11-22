@@ -1,4 +1,4 @@
-import { Button, createStaticStyles, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
+import { Alert, Button, createStaticStyles, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { useImperativeHandle, useState } from 'react';
@@ -161,6 +161,10 @@ const Settings = ({
   const [loading, setLoading] = useState(false);
   const [connectionLoading, setConnectionLoading] = useState(false);
   const [isEditingConnection, setIsEditingConnection] = useState(false);
+  /** Connection save failure, shown above the form's buttons: the form stays in edit mode with the user's input. */
+  const [connectionError, setConnectionError] = useState('');
+  /** Env save failure, shown above the form's buttons: the editor keeps the user's variables. */
+  const [envError, setEnvError] = useState('');
 
   const [updatePluginSettings, updateInstallPlugin] = useToolStore((s) => [
     s.updatePluginSettings,
@@ -181,6 +185,7 @@ const Settings = ({
   });
 
   const handleConnectionSubmit = async (values: ConnectionValues) => {
+    setConnectionError('');
     setConnectionLoading(true);
     try {
       await updateInstallPlugin(identifier!, values);
@@ -189,20 +194,21 @@ const Settings = ({
       setIsEditingConnection(false);
     } catch (error) {
       console.error('Connection update failed:', error);
-      toast.error(t('settings.messages.connectionUpdateFailed'));
+      setConnectionError(t('settings.messages.connectionUpdateFailedRetry'));
     } finally {
       setConnectionLoading(false);
     }
   };
 
   const handleEnvSubmit = async (values: EnvValues) => {
+    setEnvError('');
     setLoading(true);
     try {
       await updatePluginSettings(identifier!, values.env || {}, { override: true });
       toast.success(t('settings.messages.envUpdateSuccess'));
     } catch (error) {
       console.error('Settings update failed:', error);
-      toast.error(t('settings.messages.envUpdateFailed'));
+      setEnvError(t('settings.messages.envUpdateFailedRetry'));
     } finally {
       setLoading(false);
     }
@@ -217,14 +223,19 @@ const Settings = ({
     onSubmit: handleEnvSubmit,
   });
 
-  const resetEnvForm = () => envForm.reset({ env: pluginSettings });
+  const resetEnvForm = () => {
+    setEnvError('');
+    envForm.reset({ env: pluginSettings });
+  };
 
   const handleStartEdit = () => {
+    setConnectionError('');
     connectionForm.reset(getConnectionValues());
     setIsEditingConnection(true);
   };
 
   const handleCancelEdit = () => {
+    setConnectionError('');
     connectionForm.reset(getConnectionValues());
     setIsEditingConnection(false);
   };
@@ -346,6 +357,7 @@ const Settings = ({
                     </Form.Field>
                   </>
                 )}
+                {connectionError && <Alert showIcon title={connectionError} type="error" />}
                 <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={connectionLoading} type="primary">
                     {t('common:save')}
@@ -374,6 +386,7 @@ const Settings = ({
                   keyPlaceholder="VARIABLE_NAME"
                 />
               </Form.Field>
+              {envError && <Alert showIcon title={envError} type="error" />}
               {!hideFooter && (
                 <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={loading} type="primary">

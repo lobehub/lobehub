@@ -922,6 +922,7 @@ export default {
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
+  'channel.updateFailedRetry': "Couldn't save this change. Check your network and try again.",
 
   'share.entry': 'Share this Agent',
   'share.settings.autoGrant.desc':

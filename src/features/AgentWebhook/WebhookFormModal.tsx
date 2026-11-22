@@ -6,6 +6,7 @@ import type {
   InboundWebhookItemWithSecret,
 } from '@lobechat/types';
 import {
+  Alert,
   Button,
   createModal,
   Flexbox,
@@ -74,11 +75,14 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
     source?.topicId && item?.topic ? item.topic : undefined,
   );
   const [saving, setSaving] = useState(false);
+  /** Save/create failure, shown above the submit button: the modal stays open with the user's input. */
+  const [error, setError] = useState('');
   // Set once a new webhook exists; the modal then shows its URL and its key, this one time.
   const [created, setCreated] = useState<InboundWebhookItemWithSecret>();
 
   const submit = async () => {
     setSaving(true);
+    setError('');
     try {
       const settings = {
         autoApprove,
@@ -96,8 +100,9 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
         onSaved(next.item);
         setCreated(next);
       }
-    } catch {
-      toast.error(t(item ? 'webhook.form.saveFailed' : 'webhook.form.createFailed'));
+    } catch (err) {
+      console.error(err);
+      setError(t(item ? 'webhook.form.saveFailed' : 'webhook.form.createFailed'));
     } finally {
       setSaving(false);
     }
@@ -176,6 +181,7 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
           {t(autoApprove ? 'webhook.form.autoApprove.onHint' : 'webhook.form.autoApprove.offHint')}
         </span>
       </Flexbox>
+      {error && <Alert showIcon title={error} type="error" />}
       <Button block loading={saving} type={'primary'} onClick={submit}>
         {t(item ? 'webhook.form.save' : 'webhook.form.create')}
       </Button>

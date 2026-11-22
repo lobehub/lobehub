@@ -1,8 +1,10 @@
 'use client';
 
-import { Button, Flexbox, Input, Text, TextArea, toast, useModalContext } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { Alert, Button, Flexbox, Input, Text, TextArea, useModalContext } from '@lobehub/ui';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useAddTaskForm } from './useAddTaskForm';
 
 /**
  * Add a Task to a running goal. A task the coordinator will spend rounds on
@@ -17,26 +19,10 @@ export interface AddTaskContentProps {
 const AddTaskContent = memo<AddTaskContentProps>(({ onAdd }) => {
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    const trimmed = title.trim();
-    if (!trimmed || busy) return;
-    setBusy(true);
-    try {
-      await onAdd(trimmed, description.trim() || undefined);
-      close();
-    } catch (error) {
-      // Keep the form (and the user's input) open — a silent close would be
-      // indistinguishable from success.
-      console.error('[AddGoalTask] Failed to add task:', error);
-      toast.error(t('goalProcess.addTask.failed'));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, description, error, setDescription, setTitle, submit, title } = useAddTaskForm({
+    onAdd,
+    onDone: () => close(),
+  });
 
   return (
     <Flexbox gap={16} paddingBlock={'4px 8px'}>
@@ -63,6 +49,7 @@ const AddTaskContent = memo<AddTaskContentProps>(({ onAdd }) => {
           onChange={(e) => setDescription(e.target.value)}
         />
       </Flexbox>
+      {error && <Alert showIcon title={error} type="error" />}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={() => close()}>{t('cancel', { ns: 'common' })}</Button>
         <Button

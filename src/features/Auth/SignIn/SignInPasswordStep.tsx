@@ -1,4 +1,4 @@
-import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
+import { Alert, Button, Icon, InputPassword, Text } from '@lobehub/ui';
 import { Form, type FormInstance } from '@lobehub/ui/form';
 import { Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -13,6 +13,8 @@ export interface SignInPasswordStepProps {
   loading: boolean;
   onBackToEmail: () => void;
   onForgotPassword: () => Promise<void>;
+  /** Why sending the password reset email failed, shown under the "Forgot password?" link */
+  sendError?: string;
 }
 
 export const SignInPasswordStep = ({
@@ -22,6 +24,7 @@ export const SignInPasswordStep = ({
   loading,
   onBackToEmail,
   onForgotPassword,
+  sendError,
 }: SignInPasswordStepProps) => {
   const { t } = useTranslation('auth');
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +100,7 @@ export const SignInPasswordStep = ({
           {t('betterAuth.signin.forgotPassword')}
         </a>
       </Text>
+      {sendError && <Alert showIcon style={{ marginTop: 12 }} title={sendError} type="error" />}
     </AuthCard>
   );
 };

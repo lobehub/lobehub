@@ -655,6 +655,7 @@
   "channel.testFailedHint": "Check the credentials and try again.",
   "channel.testSuccess": "Connection test passed",
   "channel.updateFailed": "Failed to update status",
+  "channel.updateFailedRetry": "Couldn't save this change. Check your network and try again.",
   "channel.userId": "Your Platform User ID",
   "channel.userIdHint": "Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist",
   "channel.userIdHint.dingtalk": "Your DingTalk user ID (staff ID). Find it in the DingTalk admin console → Contacts → member details, or send /whoami to the bot in a direct message.",

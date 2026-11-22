@@ -2,6 +2,7 @@
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
 import {
+  Alert,
   Button,
   confirmModal,
   createModal,
@@ -12,7 +13,6 @@ import {
   Select,
   Tag,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';
@@ -83,6 +83,8 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
   const [targetId, setTargetId] = useState<string>();
   const [visibility, setVisibility] = useState<DeviceVisibility>('private');
   const [sharing, setSharing] = useState(false);
+  /** Share failure, shown above the footer buttons: the modal stays open with the chosen workspace and scope. */
+  const [shareError, setShareError] = useState('');
   const [step, setStep] = useState<'done' | 'select-target'>('select-target');
   const [completion, setCompletion] = useState<CompletionState>();
 
@@ -165,6 +167,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
     const target = workspaces.find((w) => w.id === effectiveTargetId);
     if (!target) return;
 
+    setShareError('');
     setSharing(true);
     // Lock dismissal so the mutation can't be interrupted mid-flight.
     setCanDismissByClickOutside?.(false);
@@ -199,7 +202,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
     } catch (error) {
       // Server messages (e.g. PRECONDITION_FAILED when the device dropped
       // offline mid-flow) are user-facing; known refusals get localized copy.
-      toast.error(`${target.name}: ${getDeviceActionErrorMessage(error)}`);
+      setShareError(`${target.name}: ${getDeviceActionErrorMessage(error)}`);
     } finally {
       setSharing(false);
       setCanDismissByClickOutside?.(true);
@@ -258,7 +261,10 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 placeholder={tSetting('devices.share.selectPlaceholder')}
                 style={{ width: '100%' }}
                 value={effectiveTargetId}
-                onChange={(value) => setTargetId(value as string)}
+                onChange={(value) => {
+                  setTargetId(value as string);
+                  setShareError('');
+                }}
               />
             </Flexbox>
 
@@ -277,6 +283,12 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
           </>
         )}
       </Flexbox>
+
+      {shareError && (
+        <Flexbox paddingBlock={'0 12px'} paddingInline={24}>
+          <Alert showIcon title={shareError} type="error" />
+        </Flexbox>
+      )}
 
       <Flexbox horizontal className={styles.footer} gap={8} justify={'space-between'}>
         <Button disabled={sharing} onClick={close}>
