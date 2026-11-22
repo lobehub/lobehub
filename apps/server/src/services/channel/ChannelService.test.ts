@@ -5,6 +5,7 @@ import { ChannelService } from './ChannelService';
 
 const {
   archiveThread,
+  create,
   onThreadArchived,
   remove,
   removeThread,
@@ -16,6 +17,7 @@ const {
   routing,
 } = vi.hoisted(() => ({
   archiveThread: vi.fn(),
+  create: vi.fn(),
   onThreadArchived: vi.fn(),
   remove: vi.fn(),
   send: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
     archiveThread = archiveThread;
+    create = create;
     remove = remove;
     send = send;
     removeThread = removeThread;
@@ -80,6 +83,33 @@ describe('Channel thread archive', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await expect(service().archiveThread('channel', 'thread')).resolves.toBeUndefined();
     expect(wake).toHaveBeenCalledWith('channel');
+  });
+});
+
+describe('Channel creation visibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    create.mockResolvedValue({ channel: { id: 'channel' }, member: { id: 'owner-member' } });
+  });
+
+  it('creates a workspace group public in one step', async () => {
+    await new ChannelService({} as never, 'owner', 'workspace').create({
+      agents: [],
+      title: 'Town hall',
+      visibility: 'public',
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
+  });
+
+  it('refuses a public channel outside a workspace before writing anything', async () => {
+    await expect(
+      new ChannelService({} as never, 'owner').create({
+        agents: [],
+        title: 'Mine',
+        visibility: 'public',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(create).not.toHaveBeenCalled();
   });
 });
 

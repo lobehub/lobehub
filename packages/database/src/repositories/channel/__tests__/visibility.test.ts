@@ -34,6 +34,16 @@ describe('Channel visibility', () => {
     await expect(outsider.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('can start public in one step, so no window leaves it private', async () => {
+    const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await owner.create({ title: 'Town hall', visibility: 'public' });
+    expect(channel.visibility).toBe('public');
+    const outsider = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    expect(await outsider.listJoinable()).toEqual([
+      expect.objectContaining({ id: channel.id, title: 'Town hall' }),
+    ]);
+  });
+
   it('lets an admin publish it, then any workspace member find and join it as a member', async () => {
     const { channel, outsider, owner } = await create();
     expect(await owner.updateVisibility(channel.id, 'public')).toMatchObject({

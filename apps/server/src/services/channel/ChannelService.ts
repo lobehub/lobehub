@@ -214,7 +214,12 @@ export class ChannelService {
     projectId?: string;
     title: string;
     userIds?: string[];
+    /** Public lets every workspace member find and join it; private (the default) only invited. */
+    visibility?: ChannelVisibility;
   }) => {
+    // The same rule as `updateVisibility`: only a workspace group can be found by its members.
+    if (input.visibility === 'public' && !this.workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'Only a workspace group channel can be public');
     // The creator joins as owner anyway; naming them is not an invitation.
     const userIds = (input.userIds ?? []).filter((id) => id !== this.userId);
     // The project must be readable in this scope, the same visibility as the project list.
@@ -236,6 +241,7 @@ export class ChannelService {
       projectId: input.projectId,
       title: input.title,
       userIds,
+      visibility: input.visibility,
     });
     await announceDeviceGrants(this.db, access.channel.id);
     return access;
