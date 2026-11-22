@@ -1043,6 +1043,8 @@ export default {
   'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
   'credits.budgetPage.limit.title': 'Spending limits',
   'plans.usageHero.comparedTo5h': '5-hour limit of {{plan}}',
+  'plans.usageHero.ownKey.desc': 'LobeHub-hosted model usage not included',
+  'plans.usageHero.ownKey.title': 'Your own API key',
   'balance.hobbyQuotaDesc':
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
   'balance.subscriptionQuota': 'Subscription usage',

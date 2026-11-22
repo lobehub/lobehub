@@ -724,6 +724,8 @@
   "plans.unlimited": "Unlimited",
   "plans.usageHero.comparedTo": "more usage than {{plan}}",
   "plans.usageHero.comparedTo5h": "5-hour limit of {{plan}}",
+  "plans.usageHero.ownKey.desc": "LobeHub-hosted model usage not included",
+  "plans.usageHero.ownKey.title": "Your own API key",
   "plans.workspace.features.adminControls": "Centralized billing and role management",
   "plans.workspace.features.apiKey": "Workspace API keys",
   "plans.workspace.features.auditLog": "Audit logs",
