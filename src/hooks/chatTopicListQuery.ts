@@ -12,7 +12,7 @@ import {
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode } from '@/types/topic';
 
 const EXCLUDE_STATUSES_COMPLETED = ['completed'];
@@ -22,6 +22,7 @@ const EXCLUDE_STATUSES_COMPLETED = ['completed'];
  * `query`, which decides which persisted row may hydrate the bucket.
  */
 export interface SidebarTopicListQuery {
+  excludeOpenedTopics?: boolean;
   excludeStatuses?: string[];
   excludeTriggers?: string[];
   onlyMine?: boolean;
@@ -43,18 +44,32 @@ export const deriveSidebarTopicListQuery = ({
   includeCompleted,
   isGroupSession,
   onlyMine,
+  showSubTopicTopics,
   topicGroupMode,
 }: {
   includeCompleted: boolean;
   isGroupSession: boolean;
   onlyMine: boolean;
+  /**
+   * List the agent's sub-topics (topics opened from a live parent) as its own rows: when it asks
+   * to show the ones others opened for it, and whenever Better Coding
+   * Experience is off — there is no hierarchy then to show them under their
+   * opener. See {@link resolveShowSubTopicTopics}.
+   */
+  showSubTopicTopics?: boolean;
   topicGroupMode: TopicGroupMode;
 }): SidebarTopicListQuery => ({
   excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
+  // A sub-topic lists under its parent; a group's list keeps the list it always asked for.
+  excludeOpenedTopics: showSubTopicTopics === false && !isGroupSession ? true : undefined,
   excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
   onlyMine: onlyMine || undefined,
   sortBy: !isGroupSession && topicGroupMode === 'byStatus' ? 'status' : undefined,
 });
+
+/** Whether an agent's list shows its sub-topics as its own rows; see `showSubTopicTopics`. */
+export const resolveShowSubTopicTopics = (labEnabled: boolean, showOpenedForMe: boolean) =>
+  !labEnabled || showOpenedForMe;
 
 /**
  * Topic-group mode of one agent, resolved the same way the sidebar resolves it
@@ -99,6 +114,10 @@ export const getSidebarTopicListParams = (session: {
       onlyMine:
         !!getActiveWorkspaceId() &&
         systemStatusSelectors.topicOnlyMine(groupId ?? agentId)(globalState),
+      showSubTopicTopics: resolveShowSubTopicTopics(
+        labPreferSelectors.enableBetterCodingExperience(userState),
+        systemStatusSelectors.topicShowOpenedForMe(agentId)(globalState),
+      ),
       topicGroupMode: getTopicGroupModeForAgent(agentId),
     }),
     agentId,

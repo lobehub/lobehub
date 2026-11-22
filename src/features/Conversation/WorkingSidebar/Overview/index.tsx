@@ -63,6 +63,7 @@ import PullRequestRow from './PullRequestRow';
 import PullRequestRowMenu from './PullRequestRowMenu';
 import { SectionHeader } from './SectionHeader';
 import { sectionProps } from './sectionStyles';
+import SubTopicSection from './SubTopicSection';
 import { TerminalRow } from './TerminalRow';
 
 const styles = stylex.create({
@@ -553,6 +554,9 @@ const Overview = memo<OverviewProps>(
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
         {topicId && <ThreadListSection afterBreak={showEmptyWorkspace} topicId={topicId} />}
+        {topicId && (
+          <SubTopicSection afterBreak={showEmptyWorkspace} agentId={agentId} topicId={topicId} />
+        )}
 
         <Flexbox {...sectionProps(showEmptyWorkspace)}>
           {hasWorkspace && (

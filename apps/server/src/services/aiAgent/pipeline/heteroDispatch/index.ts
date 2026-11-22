@@ -455,7 +455,12 @@ const dispatchHeteroAgentImpl = async (
     switch (heteroPlan.kind) {
       case 'sandbox': {
         failure = await traceHeteroStage('sandbox_spawn', () =>
-          spawnInCloudSandbox(deps, run, { deviceAccessDenied, heteroType, prepared }),
+          spawnInCloudSandbox(deps, run, {
+            canUseDevice,
+            deviceAccessDenied,
+            heteroType,
+            prepared,
+          }),
         );
         break;
       }

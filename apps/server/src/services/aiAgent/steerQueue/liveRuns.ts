@@ -1,5 +1,5 @@
 import type { AgentOperationStatus } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, not } from 'drizzle-orm';
 
 import { TopicModel } from '@/database/models/topic';
 import { agentOperations } from '@/database/schemas';
@@ -58,4 +58,66 @@ export const findOwnLiveRuns = async (
   const live: string[] = [];
   for (const { id } of candidates) if (await isRunAlive(ctx, scope.userId, id)) live.push(id);
   return live;
+};
+
+/**
+ * Every live run `userId` has in `topicId` — on its main line, in every
+ * thread, and the sub-agents it started (a background one outlives its
+ * parent's turn) — for a flow that retires the whole conversation and must
+ * stop all of them first.
+ */
+export const findOwnLiveRunsInTopic = async (
+  ctx: LiveRunContext,
+  params: { topicId: string; userId: string },
+): Promise<{ id: string; threadId: string | null }[]> => {
+  const candidates = await ctx.db
+    .select({ id: agentOperations.id, threadId: agentOperations.threadId })
+    .from(agentOperations)
+    .where(
+      and(
+        eq(agentOperations.topicId, params.topicId),
+        eq(agentOperations.userId, params.userId),
+        inArray(agentOperations.status, LIVE_STATUSES),
+      ),
+    )
+    .orderBy(desc(agentOperations.createdAt));
+
+  const live: { id: string; threadId: string | null }[] = [];
+  for (const run of candidates) if (await isRunAlive(ctx, params.userId, run.id)) live.push(run);
+  return live;
+};
+
+/**
+ * Of `topicIds`, the ones with a live run that another member (not `userId`)
+ * started — on the main line, in a thread, or a sub-agent of theirs. The
+ * caller cannot stop those runs, so a flow that retires the topics must leave
+ * them alone.
+ */
+export const findTopicsRunByOthers = async (
+  ctx: LiveRunContext,
+  params: { topicIds: string[]; userId: string },
+): Promise<string[]> => {
+  if (params.topicIds.length === 0) return [];
+  const candidates = await ctx.db
+    .select({
+      id: agentOperations.id,
+      topicId: agentOperations.topicId,
+      userId: agentOperations.userId,
+    })
+    .from(agentOperations)
+    .where(
+      and(
+        inArray(agentOperations.topicId, params.topicIds),
+        not(eq(agentOperations.userId, params.userId)),
+        inArray(agentOperations.status, LIVE_STATUSES),
+        ctx.workspaceId ? eq(agentOperations.workspaceId, ctx.workspaceId) : undefined,
+      ),
+    );
+
+  const topics = new Set<string>();
+  for (const row of candidates) {
+    if (!row.topicId || topics.has(row.topicId)) continue;
+    if (await isRunAlive(ctx, row.userId, row.id)) topics.add(row.topicId);
+  }
+  return [...topics];
 };

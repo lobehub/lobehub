@@ -22,6 +22,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { TopicTrigger } from '@/const/topic';
 import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
@@ -354,6 +355,7 @@ export interface TurnSetupInput {
   conversationAgentId: string;
   createdThreadId?: string;
   cronJobId?: string;
+  delegatedDeviceAccessDenied?: boolean;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
   modelOverride?: string;
@@ -468,6 +470,7 @@ export const setupTurn = async (
     continuationAssistantId,
     conversationAgentId,
     createdThreadId,
+    delegatedDeviceAccessDenied,
     externalOrigin,
     cronJobId,
     webhookThread,
@@ -581,7 +584,10 @@ export const setupTurn = async (
   await assertShareHetero(model);
 
   const assertProjectDirectoryAccess = () => {
-    if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
+    if (
+      shareGate ||
+      !resolveDeviceAccessPolicy({ botContext, delegatedDeviceAccessDenied }).canUseDevice
+    )
       throw new Error('Project directory access denied');
   };
   /** Pin the run to the device a project directory lives on — only it can honour the run. */
@@ -598,7 +604,10 @@ export const setupTurn = async (
     // Liveness comes from the gateway's device listing — not a device round
     // trip — so the send path keeps the latency fix, and the dispatch remains
     // the authority on whether the directory still exists on the device.
-    const { canUseDevice: canUseProjectDevice } = resolveDeviceAccessPolicy({ botContext });
+    const { canUseDevice: canUseProjectDevice } = resolveDeviceAccessPolicy({
+      botContext,
+      delegatedDeviceAccessDenied,
+    });
     const projectDevices = canUseProjectDevice
       ? await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
       : [];
@@ -639,11 +648,15 @@ export const setupTurn = async (
         await routeToProjectDirectory(projectDirectory);
       }
 
-      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId);
+      // A task run reports through its task, so a group origin just stays unlinked.
+      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId, {
+        groupParent: trigger === TopicTrigger.RunTask ? 'unlinked' : 'refuse',
+      });
       const metadata = buildNewTopicMetadata({
         appContext,
         botContext,
         cronJobId,
+        deviceAccessDenied: delegatedDeviceAccessDenied,
         deviceBindingPinned: Boolean(effectiveRequestedDeviceId),
         editingAgentId,
         openedBy,
@@ -732,6 +745,11 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      // A device-denied run continuing this conversation marks it, so its
+      // automatic continuations keep the denial too (see the metadata field).
+      if (delegatedDeviceAccessDenied && !existingTopic?.metadata?.deviceAccessDenied) {
+        await deps.topicModel.updateMetadata(topicId, { deviceAccessDenied: true });
+      }
       const pendingRun = existingTopic?.metadata?.scheduledRun;
       if (
         existingTopic?.status === 'scheduled' &&
@@ -900,6 +918,7 @@ export const setupTurn = async (
   // chat) and stops the device list from leaking into the LLM context.
   const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
     botContext,
+    delegatedDeviceAccessDenied,
     shareVisitor: shareGate ? { canUseDevice: shareGate.canUseDevice } : undefined,
   });
   log(

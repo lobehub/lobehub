@@ -1,4 +1,5 @@
 export default {
+  'filter.showOpenedForMe': 'Show topics others opened for me',
   'reportProblem.attachments.uploadFailed':
     "Couldn't upload the attachments. Your report is still here. Try again.",
   'reportProblem.attachments.invalid': 'Choose a non-empty file with a name under 256 characters.',
@@ -344,6 +345,42 @@ export default {
   'sidebar.collapseAll': 'Collapse all groups',
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',
+  'subTopic.anotherAgent': 'another agent',
+  'subTopic.backToOpener': 'Back to the parent topic',
+  'subTopic.collapse': 'Hide sub-topics',
+  'subTopic.detach': 'Move to top level',
+  'subTopic.expand': 'Show {{count}} sub-topics',
+  'subTopic.moved.agent': '{{name}} ({{count}})',
+  'subTopic.moved.separator': ', ',
+  'subTopic.moved.title_one': "{{count}} sub-topic moved to its agent's topic list",
+  'subTopic.moved.title_other': "{{count}} sub-topics moved to their agents' topic lists",
+  'subTopic.moved.unnamedAgent': 'Agent',
+  'subTopic.openInTask': 'Open in task',
+  'subTopic.openedBy': "Opened from {{agent}}'s “{{title}}”",
+  'subTopic.retire.archive.all_other': 'Archive all {{count}}',
+  'subTopic.retire.archive.description_one':
+    '“{{title}}” has {{count}} sub-topic. Archive only this one and it moves to the top level.',
+  'subTopic.retire.archive.description_other':
+    '“{{title}}” has {{count}} sub-topics. Archive only this one and they move to the top level.',
+  'subTopic.retire.archive.running_one': '{{count}} is still running; archiving it too stops it.',
+  'subTopic.retire.archive.running_other':
+    '{{count}} are still running; archiving them too stops them.',
+  'subTopic.retire.archive.self': 'Archive only this one',
+  'subTopic.retire.archive.title': 'Archive a topic with sub-topics',
+  'subTopic.retire.trash.all_other': 'Delete all {{count}}',
+  'subTopic.retire.trash.description_one':
+    '“{{title}}” has {{count}} sub-topic. Delete only this one and it moves to the top level.',
+  'subTopic.retire.trash.description_other':
+    '“{{title}}” has {{count}} sub-topics. Delete only this one and they move to the top level.',
+  'subTopic.retire.trash.running_one': '{{count}} is still running; deleting it too stops it.',
+  'subTopic.retire.trash.running_other':
+    '{{count}} are still running; deleting them too stops them.',
+  'subTopic.retire.trash.self': 'Delete only this one',
+  'subTopic.retire.trash.title': 'Delete a topic with sub-topics',
+  'subTopic.sectionTitle': 'Sub-topics',
+  'subTopic.showMore': 'Show {{count}} more',
+  'subTopic.untitled': 'Sub-topic',
+  'subTopic.untitledConversation': 'Untitled topic',
   'taskManager.agent': 'Task Agent',
   'taskManager.agentSelector.makePrivateConfirm.hint':
     'This agent is private, so the task and its subtasks become private before it is assigned. Members assigned to them are unassigned.',

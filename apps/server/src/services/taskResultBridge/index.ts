@@ -1,26 +1,18 @@
-import type {
-  ChatTopicBotContext,
-  TaskContext,
-  TaskTopicHandoff,
-  UserInterventionConfig,
-} from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import type { TaskContext, TaskTopicHandoff } from '@lobechat/types';
 import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
-import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
-import type { BotCallbackBody } from '@/server/services/bot/BotCallbackService';
-import { BotCallbackService } from '@/server/services/bot/BotCallbackService';
 
 import { AiAgentService } from '../aiAgent';
-import { resolveForegroundInterventionConfig } from '../aiAgent/foregroundIntervention';
-import { acquireTopicStartReservation } from '../aiAgent/topicStartReservation';
 import { TaskResultCallbackRedisStore } from './redisStore';
+import { type CompleteCreatorWakeupParams, ResultWakeChannel } from './wakeChannel';
+
+export type { CompleteCreatorWakeupParams } from './wakeChannel';
+export { ResultWakeChannel } from './wakeChannel';
 
 const log = debug('lobe-server:taskResultBridge');
 
@@ -85,12 +77,6 @@ export interface DeliverTaskResultParams {
   taskIdentifier: string;
   /** The task topic that just completed. */
   topicId?: string;
-}
-
-export interface CompleteCreatorWakeupParams {
-  agentId: string;
-  originTopicId: string;
-  receiptIds: string[];
 }
 
 /**
@@ -202,144 +188,28 @@ export class TaskResultBridgeService {
     log('queued task %s result for creator topic %s (%s)', taskIdentifier, originTopicId, reason);
   }
 
+  private get channel() {
+    return new ResultWakeChannel(this.db, this.userId, this.workspaceId, (params) =>
+      new AiAgentService(this.db, this.userId, { workspaceId: this.workspaceId }).execAgent(params),
+    );
+  }
+
+  /** See {@link ResultWakeChannel.queueWakeup}. */
+  queueWakeup(params: Parameters<ResultWakeChannel['queueWakeup']>[0]): Promise<void> {
+    return this.channel.queueWakeup(params);
+  }
+
+  /** Whether receipts are queued (and batched); see {@link ResultWakeChannel.queueWakeup}. */
+  static canQueue(): boolean {
+    return TaskResultCallbackRedisStore.isAvailable();
+  }
+
   /** Claim and start one aggregated creator wakeup for the topic. */
-  async drain(agentId: string, originTopicId: string): Promise<void> {
-    const callbackStore = new TaskResultCallbackRedisStore(
-      this.userId,
-      originTopicId,
-      this.workspaceId,
-    );
-    const receipts = await callbackStore.claimPending();
-    if (receipts.length === 0) return;
-
-    const receiptIds = receipts.map((item) => item.id);
-    const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
-    const topic = await topicModel.findById(originTopicId);
-    const botContext = topic?.metadata?.bot as ChatTopicBotContext | undefined;
-    const hooks: AgentHook[] = [
-      this.createCreatorCompletionHook(receiptIds, agentId, originTopicId, botContext),
-    ];
-    const reservationId = `task-result-wakeup-${receiptIds[0]}`;
-
-    try {
-      const reserved = await acquireTopicStartReservation({
-        reservationId,
-        topicId: originTopicId,
-        topicModel,
-      });
-      if (!reserved) {
-        await callbackStore.settle(receiptIds);
-        return;
-      }
-
-      // Receipt ordering is a queue concern, not the conversation's source of
-      // truth. Re-read the live spine only after owning the topic reservation
-      // so the Creator sees every callback card that landed before this run.
-      const parentMessageId = await new MessageModel(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).getLastMainThreadSpineMessageId(originTopicId);
-
-      // A creator wakeup continues a user-facing conversation. Preserve the
-      // same approval preferences as a foreground send, including its allow
-      // list. Bot channels still lack this UI/resume contract and stay headless.
-      const userInterventionConfig: UserInterventionConfig = botContext
-        ? { approvalMode: 'headless' }
-        : await resolveForegroundInterventionConfig(this.db, this.userId);
-
-      const result = await new AiAgentService(this.db, this.userId, {
-        workspaceId: this.workspaceId,
-      }).execAgent({
-        agentId,
-        appContext: { topicId: originTopicId },
-        autoStart: true,
-        botContext,
-        hooks,
-        parentMessageId,
-        prompt: `Process ${receipts.length} completed task result${receipts.length === 1 ? '' : 's'}`,
-        suppressUserMessage: true,
-        topicStartReservationId: reservationId,
-        trigger: RequestTrigger.TaskCallback,
-        userInterventionConfig,
-      });
-      await callbackStore.attachCreatorOperation(receiptIds, result.operationId);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to start creator agent';
-      await callbackStore.release(receiptIds, errorMessage);
-      throw error;
-    } finally {
-      await topicModel.releaseTaskCallbackReservation(originTopicId, reservationId);
-    }
+  drain(agentId: string, originTopicId: string): Promise<void> {
+    return this.channel.drain(agentId, originTopicId);
   }
 
-  async completeCreatorWakeup(params: CompleteCreatorWakeupParams): Promise<void> {
-    const callbackStore = new TaskResultCallbackRedisStore(
-      this.userId,
-      params.originTopicId,
-      this.workspaceId,
-    );
-    await callbackStore.settle(params.receiptIds);
-    await this.drain(params.agentId, params.originTopicId);
-  }
-
-  private createCreatorCompletionHook(
-    receiptIds: string[],
-    agentId: string,
-    originTopicId: string,
-    botContext?: ChatTopicBotContext,
-  ): AgentHook {
-    return {
-      handler: async (event) => {
-        if (botContext?.platformThreadId) {
-          const callbackStore = new TaskResultCallbackRedisStore(
-            this.userId,
-            originTopicId,
-            this.workspaceId,
-          );
-          const deliveredChunkCount = await callbackStore.getDeliveredChunkCount(event.operationId);
-          await new BotCallbackService(this.db).handleCallback(
-            {
-              ...event,
-              applicationId: botContext.applicationId,
-              messengerInstallationKey: botContext.messengerInstallationKey,
-              platformThreadId: botContext.platformThreadId,
-              type: 'completion',
-              userId: this.userId,
-              workspaceId: this.workspaceId,
-            } as BotCallbackBody,
-            {
-              deliveredChunkCount,
-              onChunkDelivered: (count) =>
-                callbackStore.markDeliveryChunk(event.operationId, count),
-              strictDelivery: true,
-            },
-          );
-        }
-        await this.completeCreatorWakeup({
-          agentId,
-          originTopicId,
-          receiptIds,
-        });
-      },
-      id: 'task-creator-completion',
-      type: 'onComplete',
-      webhook: {
-        body: {
-          agentId,
-          applicationId: botContext?.applicationId,
-          messengerInstallationKey: botContext?.messengerInstallationKey,
-          platformThreadId: botContext?.platformThreadId,
-          receiptIds,
-          originTopicId,
-          type: 'completion',
-          userId: this.userId,
-          workspaceId: this.workspaceId,
-        },
-        delivery: 'qstash',
-        fallback: 'none',
-        url: '/api/workflows/task/on-creator-complete',
-      },
-    };
+  completeCreatorWakeup(params: CompleteCreatorWakeupParams): Promise<void> {
+    return this.channel.completeCreatorWakeup(params);
   }
 }

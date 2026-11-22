@@ -122,6 +122,21 @@ describe('sub-topic link (metadata.openedBy)', () => {
       ),
     ).toBeUndefined();
     expect(await resolveTopicOpenedBy({ findById: vi.fn() } as any, undefined)).toBeUndefined();
+    // A group conversation never receives sub-topic receipts: refused, not linked.
+    await expect(
+      resolveTopicOpenedBy(
+        { findById: vi.fn().mockResolvedValue({ groupId: 'grp_1', id: 'tpc_group' }) } as any,
+        'tpc_group',
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // A task run from a group conversation reports through its task: unlinked, not refused.
+    expect(
+      await resolveTopicOpenedBy(
+        { findById: vi.fn().mockResolvedValue({ groupId: 'grp_1', id: 'tpc_group' }) } as any,
+        'tpc_group',
+        { groupParent: 'unlinked' },
+      ),
+    ).toBeUndefined();
   });
 });
 
@@ -145,5 +160,15 @@ describe('buildNewTopicMetadata — cloud sandbox placement', () => {
         } as any,
       }),
     ).toMatchObject({ sandboxEnvironmentId: 'env-1', sandboxSeeded: true });
+  });
+});
+
+describe('buildNewTopicMetadata — device denial', () => {
+  // A topic a device-denied run creates keeps the mark for its automatic continuations.
+  it('marks a topic created by a device-denied run, and only then', () => {
+    expect(buildNewTopicMetadata({ deviceAccessDenied: true })).toMatchObject({
+      deviceAccessDenied: true,
+    });
+    expect(buildNewTopicMetadata({ deviceAccessDenied: false })).toBeUndefined();
   });
 });

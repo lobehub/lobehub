@@ -411,40 +411,11 @@ describe('skillsRuntime', () => {
       false,
       // These runtimes carry no run context, so there is no operation to forward.
       undefined,
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
       command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
     });
-  });
-
-  it('recovers workspace scope for sandbox lh commands when context lost it', async () => {
-    mocks.preprocessLhCommand.mockResolvedValueOnce({
-      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
-      isLhCommand: true,
-      skipSkillLookup: true,
-    });
-    mocks.isLhCommand.mockReturnValue(true);
-    mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
-
-    const { skillsRuntime } = await import('../skills');
-    const runtime = await skillsRuntime.factory({
-      agentId: 'agent-1',
-      ...createRuntimeContext(),
-    });
-
-    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
-
-    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: 'agent-1' }),
-    );
-    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
-      'lh agent edit agt_123 -s "new prompt"',
-      'user-1',
-      'workspace-1',
-      false,
-      // These runtimes carry no run context, so there is no operation to forward.
-      undefined,
-    );
   });
 
   // The client-side executor (routers/tools/market.ts) has always preprocessed
@@ -477,6 +448,7 @@ describe('skillsRuntime', () => {
       'workspace-1',
       false,
       'op-abc',
+      false,
     );
   });
 
@@ -505,9 +477,9 @@ describe('skillsRuntime', () => {
       'user-1',
       'workspace-1',
       false,
-      // No run context here, so there is no operation for a dispatch to be
-      // attributed to.
+      // No run context, so no operation to attribute a dispatch to; no device denial either.
       undefined,
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'execScript',

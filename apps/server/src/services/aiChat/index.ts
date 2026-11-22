@@ -21,6 +21,7 @@ interface GetMessagesAndTopicsParams {
   timingRequestId?: string;
   timingStartedAt?: number;
   topicFilter?: {
+    excludeOpenedTopics?: boolean;
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];

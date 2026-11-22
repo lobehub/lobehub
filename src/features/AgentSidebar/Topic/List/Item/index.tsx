@@ -53,6 +53,8 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
+import SubTopicChildren from '../../SubTopic/SubTopicChildren';
+import SubTopicToggle from '../../SubTopic/SubTopicToggle';
 import ThreadList from '../../TopicListContent/ThreadList';
 import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
@@ -621,19 +623,23 @@ const TopicItemRow = memo<TopicItemRowProps>(
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           actions={() => (
-            <Actions
-              fav={fav}
-              id={id}
-              // Archiving a topic mid-run would hide work that is still going.
-              showInlineArchive={!shouldShowRunningIcon}
-              status={status}
-              title={title}
-            />
+            <>
+              <SubTopicToggle inActions topicId={id} />
+              <Actions
+                fav={fav}
+                id={id}
+                // Archiving a topic mid-run would hide work that is still going.
+                showInlineArchive={!shouldShowRunningIcon}
+                status={status}
+                title={title}
+              />
+            </>
           )}
           extra={
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
+              <SubTopicToggle topicId={id} />
               {/* Gated on the SAME boolean that draws the running ring: both say
                   "this row is visibly running", and a row that stopped spinning
                   must not keep counting. The server `runStartedAt` fallback only
@@ -680,6 +686,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
         ) : (
           navItem
         )}
+        <SubTopicChildren openerAgentId={activeAgentId} topicId={id} />
         {isMobileSurface() && showThreadList && id && (
           <Suspense
             fallback={

@@ -2,6 +2,7 @@ import {
   chatTopicCreateMetadataSchema,
   chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
+  isRetiredTopicStatus,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ import {
 import { isOperationOwnedByAnotherUser } from '../_helpers/operationReadGuard';
 import { resolveContext } from '../_helpers/resolveContext';
 import { assertCreatorTopicTargets } from '../_helpers/shareVisitorTargetGuard';
+import { childTopicsModeSchema, detachFromParent, retireChildTopics } from './childTopics';
 import { guardCtx, topicProcedure } from './procedures';
 
 export const updateRouter = router({
@@ -27,6 +29,13 @@ export const updateRouter = router({
     .use(withScopedPermission('topic:update'))
     .input(
       z.object({
+        /**
+         * With an archive (`value.status` retired): `all` stops and archives
+         * the topic's sub-topics too, `detach` moves them to the top level.
+         */
+        childTopics: childTopicsModeSchema.optional(),
+        /** Move this sub-topic to the top level: it stops listing under its parent. */
+        detachFromParent: z.boolean().optional(),
         id: z.string(),
         value: z.object({
           agentId: z.string().optional(),
@@ -52,6 +61,16 @@ export const updateRouter = router({
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      if (input.detachFromParent) await detachFromParent(ctx, input.id);
+      if (input.childTopics && isRetiredTopicStatus(input.value.status)) {
+        await retireChildTopics(ctx, {
+          action: 'archive',
+          mode: input.childTopics,
+          topicId: input.id,
+        });
+      }
+      // Nothing else to write (a bare move to the top level).
+      if (Object.keys(input.value).length === 0) return [];
       // Every archive goes through `TopicArchiveService`, which sets off what
       // archiving a topic does (cleanup of the worktree the app created).
       const archive = new TopicArchiveService(

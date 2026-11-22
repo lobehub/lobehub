@@ -845,7 +845,7 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
     const result = await dispatchHeteroAgent(deps, sandboxCtx(), createInput('claude-code'));
 
     expect(credsGet).toHaveBeenCalledWith('cred-1', { decrypt: true });
-    expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h');
+    expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h', { deviceAccessDenied: false });
     expect(mocks.spawnHeteroSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
         agentType: 'claude-code',
@@ -892,7 +892,7 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
     const result = await dispatchHeteroAgent(deps, sandboxCtx(), createInput('claude-code'));
 
     expect(mocks.signUserJWT).toHaveBeenCalledTimes(1);
-    expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h');
+    expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h', { deviceAccessDenied: false });
     expect(result).toMatchObject({ success: true, token: undefined });
   });
 

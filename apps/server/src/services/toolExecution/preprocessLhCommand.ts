@@ -218,6 +218,12 @@ export const preprocessLhCommand = async (
    * the device and heterogeneous runtimes.
    */
   operationId?: string,
+  /**
+   * The run may not use devices (an external bot sender's). Its token says so,
+   * so a run it starts through `lh` (`lh topic send --new`, `lh agent run`)
+   * keeps the denial instead of running as first-party on the owner's device.
+   */
+  deviceAccessDenied = false,
 ): Promise<PreprocessResult> => {
   if (!isLhCommand(command)) {
     return { command, isLhCommand: false, skipSkillLookup: false };
@@ -241,7 +247,7 @@ export const preprocessLhCommand = async (
   }
 
   try {
-    const jwt = await signUserJWT(userId);
+    const jwt = await signUserJWT(userId, undefined, { deviceAccessDenied });
 
     const serverUrl = isDev ? OFFICIAL_URL : appEnv.APP_URL;
 

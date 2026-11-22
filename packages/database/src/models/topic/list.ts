@@ -28,6 +28,7 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
 import { topicHasGoal } from '../topicGoal';
 import type { TopicModelContext } from './context';
+import { openedFromLiveParentCondition, visibleTaskRunCondition } from './openedBy';
 import type { QueryTopicParams, TopicListItem } from './types';
 
 /**
@@ -103,6 +104,7 @@ export const query = async (
     editingAgentId,
     editingGroupId,
     excludeStatuses,
+    excludeOpenedTopics,
     excludeTriggers,
     includeTriggers,
     pageSize = 9999,
@@ -191,6 +193,17 @@ export const query = async (
     : excludeTriggers && excludeTriggers.length > 0
       ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
       : undefined;
+  // A topic opened from a live parent lists under that parent instead.
+  const excludeOpenedCondition = excludeOpenedTopics
+    ? not(
+        openedFromLiveParentCondition(ctx, {
+          excludeStatuses: excludeStatuses as ChatTopicStatus[] | undefined,
+          excludeTriggers: includeTriggerCondition ? undefined : excludeTriggers,
+          includeTriggers: [includeTriggers, triggers],
+          onlyMine,
+        }) as SQL,
+      )
+    : undefined;
   const triggerCondition =
     triggers && triggers.length > 0 ? inArray(topics.trigger, triggers) : undefined;
   const excludeStatusCondition =
@@ -218,6 +231,8 @@ export const query = async (
       ctx.notShareVisitor(),
       notChannelTopic(),
       childOfCondition(openedByTopicId),
+      // Another member's private task run is not the caller's to list.
+      visibleTaskRunCondition(ctx),
       agentId ? eq(topics.agentId, agentId) : undefined,
       openedByAgentIds
         ? or(
@@ -290,6 +305,7 @@ export const query = async (
       eq(topics.groupId, groupId),
       includeTriggerCondition,
       excludeTriggerCondition,
+      excludeOpenedCondition,
       triggerCondition,
       excludeStatusCondition,
       onlyMineCondition,
@@ -379,6 +395,7 @@ export const query = async (
       editingTargetCondition,
       includeTriggerCondition,
       excludeTriggerCondition,
+      excludeOpenedCondition,
       triggerCondition,
       excludeStatusCondition,
       onlyMineCondition,
@@ -457,6 +474,7 @@ export const query = async (
     ctx.matchContainer(containerId),
     includeTriggerCondition,
     excludeTriggerCondition,
+    excludeOpenedCondition,
     triggerCondition,
     excludeStatusCondition,
     onlyMineCondition,

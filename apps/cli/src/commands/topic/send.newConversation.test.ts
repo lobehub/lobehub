@@ -41,7 +41,9 @@ describe('sending into a new conversation', () => {
   beforeEach(() => {
     vi.stubEnv('LOBEHUB_AGENT_ID', 'agt-self');
     vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-sender');
-    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-here');
+    // Not run from inside a conversation: --new opens a plain topic (the
+    // sub-topic cases below set a parent).
+    vi.stubEnv('LOBEHUB_TOPIC_ID', '');
     mockGetTrpcClient.mockResolvedValue(client);
     client.aiAgent.execAgent.mutate.mockResolvedValue({
       operationId: 'op-new',
@@ -76,8 +78,6 @@ describe('sending into a new conversation', () => {
 
     expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith({
       agentId: 'agt-self',
-      // Opened from inside a conversation: it becomes the new topic's parent.
-      openedByTopicId: 'tpc-here',
       prompt: 'Draft the release notes',
       sourceOperationId: 'op-sender',
       trigger: 'cli',
@@ -91,39 +91,6 @@ describe('sending into a new conversation', () => {
       delivery: 'created',
       operationId: 'op-new',
       topicId: 'tpc-new',
-    });
-  });
-
-  describe('the parent topic', () => {
-    const request = () => client.aiAgent.execAgent.mutate.mock.calls[0][0];
-
-    it('takes --parent-topic-id over the conversation running the command', async () => {
-      await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
-
-      expect(request().openedByTopicId).toBe('tpc-other');
-    });
-
-    it('links none with --detach', async () => {
-      await run('topic', 'send', '--new', '-c', 'x', '--detach');
-
-      expect(request()).not.toHaveProperty('openedByTopicId');
-    });
-
-    it('links none outside a conversation', async () => {
-      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
-
-      await run('topic', 'send', '--new', '-c', 'x');
-
-      expect(request()).not.toHaveProperty('openedByTopicId');
-    });
-
-    it('refuses --parent-topic-id with --detach, and both on an existing topic', async () => {
-      await run('topic', 'send', '--new', '-c', 'x', '--detach', '--parent-topic-id', 'tpc-p');
-      expect(errorLogged()).toMatch(/either --parent-topic-id or --detach/);
-
-      await run('topic', 'send', 'tpc-target', '-c', 'x', '--detach');
-      expect(errorLogged()).toMatch(/only apply with --new/);
-      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
     });
   });
 
@@ -242,6 +209,98 @@ describe('sending into a new conversation', () => {
 
       expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
       expect(exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('as a sub-topic', () => {
+    const request = () => client.aiAgent.execAgent.mutate.mock.calls[0][0];
+
+    beforeEach(() => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-here');
+      client.topic.getTopicDetail.query.mockResolvedValue({
+        metadata: { workingDirectoryConfig: { git: { branch: 'lobehub/brave-river' } } },
+      });
+    });
+
+    it('opens a sub-topic of this conversation, working where --where says', async () => {
+      await run(
+        'topic',
+        'send',
+        '--new',
+        '-c',
+        'Fix the flaky test',
+        '--agent-id',
+        'agt-codex',
+        '--where',
+        'new-worktree',
+        '--base-branch',
+        'canary',
+        '--json',
+      );
+
+      // An ordinary new topic with a parent: the server sets up its workspace.
+      expect(request()).toEqual({
+        agentId: 'agt-codex',
+        openedByTopicId: 'tpc-here',
+        parentWorkspace: 'new-worktree',
+        parentWorkspaceBaseBranch: 'canary',
+        prompt: 'Fix the flaky test',
+        sourceOperationId: 'op-sender',
+        trigger: 'cli',
+      });
+      // The branch the server named is read back to show it.
+      expect(JSON.parse(logged[0])).toMatchObject({
+        branch: 'lobehub/brave-river',
+        delivery: 'created',
+        topicId: 'tpc-new',
+      });
+    });
+
+    it("shares the parent's directory by default, asking for approvals like the user's own chats", async () => {
+      await run('topic', 'send', '--new', '-c', 'x');
+
+      expect(request()).toMatchObject({ openedByTopicId: 'tpc-here', parentWorkspace: 'inherit' });
+      // No headless override: the server applies the user's approval mode.
+      expect(request()).not.toHaveProperty('userInterventionConfig');
+    });
+
+    it('takes the parent from --parent-topic-id over LOBEHUB_TOPIC_ID', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
+
+      expect(request().openedByTopicId).toBe('tpc-other');
+    });
+
+    it('opens a sub-topic with --parent-topic-id even outside a conversation', async () => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+
+      await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
+
+      expect(request().openedByTopicId).toBe('tpc-other');
+    });
+
+    it('opens a plain, unlinked topic with --detach, even from inside a conversation', async () => {
+      await run('topic', 'send', '--new', '-c', 'Stand-alone work', '--detach');
+
+      expect(request().openedByTopicId).toBeUndefined();
+      expect(request().parentWorkspace).toBeUndefined();
+      expect(request().userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    });
+
+    it('refuses --detach with --parent-topic-id, and --where without a parent', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--detach', '--parent-topic-id', 'tpc-other');
+      expect(errorLogged()).toMatch(/either --parent-topic-id or --detach/);
+
+      vi.mocked(log.error).mockClear();
+      await run('topic', 'send', '--new', '-c', 'x', '--detach', '--where', 'new-worktree');
+      expect(errorLogged()).toMatch(/--where and --base-branch apply to a sub-topic/);
+      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown --where', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--where', 'elsewhere');
+
+      expect(errorLogged()).toMatch(/--where must be one of/);
+      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
     });
   });
 });

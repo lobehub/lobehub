@@ -12,6 +12,7 @@ import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
 import { useTopicListScope } from './TopicListScope';
 import { useOnlyMineFilterItem } from './useOnlyMineFilterItem';
 import { useProjectTopicFilterItems } from './useProjectTopicFilterItems';
+import { useShowOpenedForMeFilterItem } from './useShowOpenedForMeFilterItem';
 
 export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const { t } = useTranslation('topic');
@@ -19,6 +20,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const scope = useTopicListScope();
   const projectFilterItems = useProjectTopicFilterItems();
   const onlyMineItem = useOnlyMineFilterItem();
+  const showOpenedForMeItem = useShowOpenedForMeFilterItem();
 
   const [topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore((s) => [
     preferenceSelectors.topicSortBy(s),
@@ -78,6 +80,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
             },
           },
           ...(onlyMineItem ? [onlyMineItem] : []),
+          ...(showOpenedForMeItem ? [showOpenedForMeItem] : []),
         ],
         key: 'filter',
         label: t('filter.filter'),
@@ -89,6 +92,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
     topicSortBy,
     topicIncludeCompleted,
     onlyMineItem,
+    showOpenedForMeItem,
     updatePreference,
     updateTopicGroupMode,
     projectFilterItems,

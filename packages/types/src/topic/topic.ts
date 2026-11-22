@@ -195,6 +195,15 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * A turn of this conversation ran for a sender who may not use devices,
+   * started with a device-denied token (`device_access: 'denied'`, e.g.
+   * `lh topic send` from an external bot sender's sandbox). Sticky: every
+   * automatic continuation — a sub-topic receipt, a task callback, a
+   * background sub-agent result — keeps that denial, since the work it
+   * continues came from that sender.
+   */
+  deviceAccessDenied?: boolean;
+  /**
    * The conversation's device was chosen explicitly for it (the composer's
    * picker preset, a project directory, or `lh topic send --new --device`), not
    * picked automatically by an `auto` agent. Later turns honour that choice
@@ -995,6 +1004,8 @@ export interface QueryTopicParams {
    */
   editingAgentId?: string | null;
   editingGroupId?: string | null;
+  /** Leave out topics opened from a parent that is still there; they list under it. */
+  excludeOpenedTopics?: boolean;
   /**
    * Exclude topics by status (e.g. ['completed'])
    */

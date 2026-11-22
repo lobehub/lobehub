@@ -8,6 +8,7 @@ import * as find from './find';
 import * as inFlight from './inFlight';
 import * as list from './list';
 import * as memoryExtractor from './memoryExtractor';
+import * as openedBy from './openedBy';
 import * as ownedWorktree from './ownedWorktree';
 import * as runningOperation from './runningOperation';
 import * as scheduledRun from './scheduledRun';
@@ -16,6 +17,7 @@ import * as taskCallback from './taskCallback';
 import * as trash from './trash';
 import * as update from './update';
 
+export type { ListOpenedTopicsParams, OpenedTopicItem } from './openedBy';
 export type { OwnedWorktreeTopicRow } from './ownedWorktree';
 export { getTopicDeviceId } from './runningOperation';
 export { hasLiveTaskCallbackReservation } from './taskCallback';
@@ -148,6 +150,14 @@ export class TopicModel {
   countLiveTopicsUsingWorktree = this.withContext(ownedWorktree.countLiveTopicsUsingWorktree);
   updateOwnedWorktree = this.withContext(ownedWorktree.updateOwnedWorktree);
   recordFirstSendWorktreeCheckout = this.withContext(ownedWorktree.recordFirstSendWorktreeCheckout);
+
+  // **************** Sub-topics (metadata.openedBy) *************** //
+
+  listOpenedTopics = this.withContext(openedBy.listOpenedTopics);
+  listOpenedDescendants = this.withContext(openedBy.listOpenedDescendants);
+  detachOpenedTopics = this.withContext(openedBy.detachOpenedTopics);
+  getLatestRunStatus = this.withContext(openedBy.getLatestRunStatus);
+  isOpenedBy = this.withContext(openedBy.isOpenedBy);
 
   // **************** Agent Share (visitor-scoped) *************** //
 

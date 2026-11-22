@@ -212,4 +212,17 @@ describe('what a server tool learns about the run', () => {
       expect.objectContaining({ botContext: bot }),
     );
   });
+
+  it("hands the tool the run's device decision, so runs it starts cannot regain a device", async () => {
+    const fixture = setup([]);
+    const deviceAccess = { canUseDevice: false, reason: 'delegated-from-denied-run' };
+    fixture.state.principal = { policy: { deviceAccess } } as any;
+
+    await fixture.step();
+
+    expect(fixture.execute).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ deviceAccess }),
+    );
+  });
 });

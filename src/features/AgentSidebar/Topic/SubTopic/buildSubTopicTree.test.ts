@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest';
+
+import { buildSubTopicTree, type SubTopicNode, summarizeSubTopics } from './buildSubTopicTree';
+
+const link = (topicId: string, extra: Record<string, string> = {}) => ({
+  at: '2026-11-17T00:00:00.000Z',
+  topicId,
+  ...extra,
+});
+const node = (
+  id: string,
+  opener?: string,
+  state: SubTopicNode['state'] = 'idle',
+): SubTopicNode => ({
+  id,
+  openedBy: opener ? link(opener) : undefined,
+  state,
+});
+
+describe('buildSubTopicTree', () => {
+  it('nests sub-topics one level under their opener', () => {
+    const tree = buildSubTopicTree([{ id: 'a' }], [node('b', 'a'), node('c', 'a')]);
+
+    expect(tree.childrenByRoot.a.map((n) => n.id)).toEqual(['b', 'c']);
+    expect(tree.nestedIds.size).toBe(0);
+  });
+
+  it('attaches deeper sub-topics to the topmost visible ancestor', () => {
+    const tree = buildSubTopicTree([{ id: 'a' }], [node('b', 'a'), node('c', 'b'), node('d', 'c')]);
+
+    expect(tree.childrenByRoot.a.map((n) => n.id)).toEqual(['b', 'c', 'd']);
+    expect(Object.keys(tree.childrenByRoot)).toEqual(['a']);
+  });
+
+  it('moves a list row that is a sub-topic of another list row under it', () => {
+    const tree = buildSubTopicTree(
+      [{ id: 'a' }, { id: 'b', openedBy: link('a') }],
+      [node('b', 'a')],
+    );
+
+    expect(tree.nestedIds).toEqual(new Set(['b']));
+    expect(tree.childrenByRoot.a.map((n) => n.id)).toEqual(['b']);
+  });
+
+  it('keeps a sub-topic whose opener is not in the list at the top level', () => {
+    const tree = buildSubTopicTree([{ id: 'b', openedBy: link('gone') }], []);
+
+    expect(tree.nestedIds.size).toBe(0);
+    expect(tree.childrenByRoot).toEqual({});
+  });
+
+  it('ignores a detached link', () => {
+    const tree = buildSubTopicTree(
+      [{ id: 'a' }, { id: 'b', openedBy: link('a', { detachedAt: 'later' }) }],
+      [],
+    );
+
+    expect(tree.nestedIds.size).toBe(0);
+  });
+
+  it('turns a cycle into top-level rows instead of hiding both', () => {
+    const tree = buildSubTopicTree(
+      [
+        { id: 'a', openedBy: link('b') },
+        { id: 'b', openedBy: link('a') },
+      ],
+      [node('a', 'b'), node('b', 'a')],
+    );
+
+    expect(tree.nestedIds.size).toBe(0);
+    expect(tree.childrenByRoot).toEqual({});
+  });
+});
+
+describe('summarizeSubTopics', () => {
+  it('rolls up what needs attention', () => {
+    expect(
+      summarizeSubTopics([
+        node('a', 'x', 'running'),
+        node('b', 'x', 'waiting_for_user'),
+        node('c', 'x', 'idle'),
+        node('d', 'x', 'running'),
+      ]),
+    ).toEqual({ failed: 0, running: 2, waiting: 1 });
+  });
+});
+
+describe('sub-topic state helpers', () => {
+  it('keeps polling only while one is running or waiting, and maps the roll-up', async () => {
+    const { isInFlight, toRollupStatus } = await import('./buildSubTopicTree');
+
+    expect(isInFlight({ state: 'running' })).toBe(true);
+    expect(isInFlight({ state: 'waiting_for_user' })).toBe(true);
+    expect(isInFlight({ state: 'idle' })).toBe(false);
+    expect(toRollupStatus('running')).toBe('running');
+    expect(toRollupStatus('waiting_for_user')).toBe('waitingForHuman');
+    expect(toRollupStatus('failed')).toBe('failed');
+    expect(toRollupStatus('idle')).toBe('active');
+  });
+});

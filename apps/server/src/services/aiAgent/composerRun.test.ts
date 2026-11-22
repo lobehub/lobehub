@@ -61,4 +61,28 @@ describe('startComposerRun', () => {
       threadId: undefined,
     });
   });
+
+  // `lh topic send --new` reaches execAgent through the composer route: the
+  // sub-topic's workspace choice and the caller's device denial must survive it.
+  it("passes a new sub-topic's workspace and the caller's device denial through", async () => {
+    const execAgent = vi.fn().mockResolvedValue({ operationId: 'op-3' });
+    await startComposerRun(
+      { aiAgentService: { execAgent } as any, db: {} as any, userId: 'user-1' },
+      {
+        agentId: 'agt-1',
+        delegatedDeviceAccessDenied: true,
+        openedByTopicId: 'tpc-parent',
+        parentWorkspace: 'new-worktree',
+        parentWorkspaceBaseBranch: 'canary',
+        prompt: 'hi',
+      },
+    );
+
+    expect(execAgent.mock.calls[0][0]).toMatchObject({
+      delegatedDeviceAccessDenied: true,
+      openedByTopicId: 'tpc-parent',
+      parentWorkspace: 'new-worktree',
+      parentWorkspaceBaseBranch: 'canary',
+    });
+  });
 });

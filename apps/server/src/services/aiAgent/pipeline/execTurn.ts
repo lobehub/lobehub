@@ -23,6 +23,7 @@ import type { AgentConfigWithId } from '@/server/services/agent';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+import type { TopicRunSettledHandler } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import type { MarketService } from '@/server/services/market';
@@ -73,6 +74,8 @@ export interface ExecAgentTurnDeps {
     options?: { sandboxStorage: SandboxStorageClaim },
   ) => Promise<MarketService>;
   messageModel: MessageModel;
+  /** A topic's own turn settled; handed to the heterogeneous dispatch's error finalizer. */
+  onTopicRunSettled?: TopicRunSettledHandler;
   pluginModel: PluginModel;
   resolveAgentConfigOrThrow: (identifier: string) => Promise<AgentConfigWithId>;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
@@ -112,6 +115,7 @@ export const execAgentTurn = async (
     botContext,
     botSender,
     createdThreadId,
+    delegatedDeviceAccessDenied,
     externalOrigin,
     clientIp,
     userAgent,
@@ -465,6 +469,7 @@ export const execAgentTurn = async (
         botSender,
         clientIds,
         continuationAssistantId: continuationAssistantId ?? params.reservedAssistantMessageId,
+        delegatedDeviceAccessDenied,
         conversationAgentId,
         createdThreadId,
         externalOrigin,
@@ -595,6 +600,7 @@ export const execAgentTurn = async (
           getMarketService: (options) => deps.getMarketService(runFacts, options),
           includeShareVisitor: !!runContext.shareGate,
           messageModel: deps.messageModel,
+          onTopicRunSettled: deps.onTopicRunSettled,
           resolveDeviceWorkspaceId: deps.resolveDeviceWorkspaceId,
           topicModel: deps.topicModel,
           userId: deps.userId,

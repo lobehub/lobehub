@@ -164,6 +164,11 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   createdThreadId?: string;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
+  /**
+   * The caller's token was minted for a run that may not use devices; see
+   * `DeviceAccessPolicyInput.delegatedDeviceAccessDenied`. Router-set only.
+   */
+  delegatedDeviceAccessDenied?: boolean;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
   disableLocalSystem?: boolean;
   /** Disable the self-iteration declaration tool for reviewer/runtime paths. */

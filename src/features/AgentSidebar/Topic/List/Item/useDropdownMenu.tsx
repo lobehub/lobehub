@@ -38,6 +38,7 @@ import { useFavoriteMenuItem } from '@/features/Favorites';
 import { usePrivateAgentLinkNotice } from '@/features/PrivateAgentLinkNotice';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
+import { useRetireTopicWithSubTopics } from '@/features/SubTopicRetire/useRetireTopic';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -139,10 +140,19 @@ export const useTopicItemDropdownMenu = ({
     s.updateTopicTitle,
   ]);
 
+  const retireWithSubTopics = useRetireTopicWithSubTopics();
   const isCompleted = status === 'completed';
   const toggleCompleted = useCallback(async () => {
     if (!id) return;
     if (isCompleted) await unmarkTopicCompleted(id);
+    // A topic with sub-topics asks what happens to them (Better Coding Experience).
+    else if (!scope)
+      return retireWithSubTopics({
+        action: 'archive',
+        proceed: () => markTopicCompleted(id),
+        title,
+        topicId: id,
+      });
     else await markTopicCompleted(id);
     if (scope) {
       if (!isCompleted && !unmountedRef.current && routeTopicIdRef.current === id)
@@ -154,6 +164,8 @@ export const useTopicItemDropdownMenu = ({
     isCompleted,
     markTopicCompleted,
     unmarkTopicCompleted,
+    retireWithSubTopics,
+    title,
     scope,
     routeTopicIdRef,
     unmountedRef,
@@ -386,24 +398,34 @@ export const useTopicItemDropdownMenu = ({
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: () => {
-          void confirmRemoveTopic({
-            onConfirm: async (removeFiles) => {
-              try {
-                await removeTopic(id, removeFiles);
-                if (scope) {
-                  if (routeTopicId === id) navigate(`/project/${scope.projectId}`);
-                  await refresh();
+          const confirmRemove = () =>
+            confirmRemoveTopic({
+              onConfirm: async (removeFiles) => {
+                try {
+                  await removeTopic(id, removeFiles);
+                  if (scope) {
+                    if (routeTopicId === id) navigate(`/project/${scope.projectId}`);
+                    await refresh();
+                  }
+                } catch (error) {
+                  toast.error(
+                    isForbiddenError(error)
+                      ? t('manageOnlyCreator', { ns: 'common' })
+                      : t('operationFailed', { ns: 'common' }),
+                  );
                 }
-              } catch (error) {
-                toast.error(
-                  isForbiddenError(error)
-                    ? t('manageOnlyCreator', { ns: 'common' })
-                    : t('operationFailed', { ns: 'common' }),
-                );
-              }
-            },
-            topicIds: [id],
-          });
+              },
+              topicIds: [id],
+            });
+          // A topic with sub-topics asks what happens to them first.
+          void (scope
+            ? confirmRemove()
+            : retireWithSubTopics({
+                action: 'trash',
+                proceed: confirmRemove,
+                title,
+                topicId: id,
+              }));
         },
         sfSymbol: 'trash',
       },
@@ -431,6 +453,7 @@ export const useTopicItemDropdownMenu = ({
     favoriteMenuItem,
     favoriteTopic,
     toggleCompleted,
+    retireWithSubTopics,
     removeTopic,
     updateTopicTitle,
     openTopicInNewWindow,

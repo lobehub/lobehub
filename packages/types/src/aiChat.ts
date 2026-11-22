@@ -122,6 +122,7 @@ export interface SendMessageServerParams {
    * status), which would overwrite the filtered list in `topicDataMap`.
    */
   topicFilter?: {
+    excludeOpenedTopics?: boolean;
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];
@@ -214,6 +215,7 @@ export const AiSendMessageServerSchema = z.object({
   threadId: z.string().optional(),
   topicFilter: z
     .object({
+      excludeOpenedTopics: z.boolean().optional(),
       excludeStatuses: z.array(z.string()).optional(),
       excludeTriggers: z.array(z.string()).optional(),
       includeTriggers: z.array(z.string()).optional(),

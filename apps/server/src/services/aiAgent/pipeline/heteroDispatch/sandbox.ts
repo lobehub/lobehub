@@ -122,6 +122,8 @@ export const spawnInCloudSandbox = async (
   deps: HeteroDispatchDeps,
   run: HeteroRun,
   params: {
+    /** The run's sender may use devices (`ExecRunContext.canUseDevice`). */
+    canUseDevice?: boolean;
     /** The sender may not use the agent's device, which is why this run landed here. */
     deviceAccessDenied?: boolean;
     heteroType: HeteroDispatchInput['heteroType'];
@@ -152,7 +154,12 @@ export const spawnInCloudSandbox = async (
   // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
   // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
   // so it outlives a multi-hour run.
-  const sandboxJwt = await signUserJWT(deps.userId, '4h');
+  // A sender who may not use devices keeps that denial for any run it starts
+  // through `lh` from the sandbox (`lh topic send --new` would otherwise
+  // inherit the parent's device as a first-party run).
+  const sandboxJwt = await signUserJWT(deps.userId, '4h', {
+    deviceAccessDenied: params.canUseDevice === false,
+  });
   spawnHeteroSandbox({
     ...heteroParams,
     agentType: heteroType as 'claude-code' | 'codex',
