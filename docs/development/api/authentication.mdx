@@ -22,7 +22,7 @@ Authorization: Bearer <token>
 
 The server decides what kind of token it is by its shape:
 
-- A token in the API key format (`sk-lh-` plus 16 lowercase letters and digits) is looked up as an **API key**. The key must be enabled and not expired.
+- A token in the API key format (`sk-lh-` plus 58 lowercase letters and digits, or 16 for keys created earlier) is looked up as an **API key**. The key must be enabled and not expired.
 - Any other token is validated as an **OIDC access token** (an RS256 JWT for the audience `urn:lobehub:chat`), signed by the deployment's OIDC provider. Self-hosted instances accept OIDC tokens only when `JWKS_KEY` is configured.
 
 There is no `X-API-Key` header. A missing or invalid token returns `401`.
