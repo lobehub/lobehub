@@ -17,6 +17,7 @@ import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
+import { findMergeableRequests, mergeJobs } from './merge';
 import type { ChannelTopicScope } from './topic';
 import { continuationTopic, resolveTopic } from './topic';
 import { audit } from './transaction';
@@ -482,9 +483,13 @@ export const claimJob = async (
     request.sequence,
     executionConfig,
   );
+  // The requester's next requests queued behind this one are answered in the same run. A shared
+  // Agent's visitor is metered per request, so each of theirs stays its own run.
+  const merged = share ? [] : await findMergeableRequests(tx, job, request);
   const manifest = buildManifest({
     job,
     member,
+    merged: merged.map((next) => next.request),
     primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
     request,
     thread,
@@ -523,6 +528,11 @@ export const claimJob = async (
     })
     .where(eq(channelJobs.id, job.id))
     .returning();
+  await mergeJobs(
+    tx,
+    updated,
+    merged.map((next) => next.job.id),
+  );
   const claimed = { job: updated, topic };
 
   await audit(tx, channel.id, 'run_claimed', job.id, {

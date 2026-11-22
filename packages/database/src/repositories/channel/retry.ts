@@ -1,5 +1,5 @@
 import { channelMessageDeletedAt } from '@lobechat/types';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
 import { agentOperations, channelJobs, channelMessages } from '../../schemas';
@@ -17,7 +17,7 @@ const DEVICE_UNREACHABLE = 'DeviceGatewayNotConfigured';
  * without text or mentions, so re-running it would answer nothing), and only once its writer is
  * released: nothing ran, nothing was accepted or published, so running it again cannot repeat
  * work. Deliveries are unique per message and member, so the job itself goes back to the queue,
- * keeping its place in message order. The next claim reads the Agent's current settings and
+ * keeping its place in message order, with any requests merged into it. The next claim reads the Agent's current settings and
  * environment and opens a fresh operation; the failed one stays on its topic as history.
  */
 export const retryJob = async (
@@ -77,6 +77,20 @@ export const retryJob = async (
     })
     .where(eq(channelJobs.id, job.id))
     .returning();
+  // Requests merged into the failed run go back too, so the next claim merges them again.
+  const merged = job.manifest?.requestMessageIds?.filter((id) => id !== job.messageId) ?? [];
+  if (merged.length)
+    await tx
+      .update(channelJobs)
+      .set({ status: 'queued' })
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          eq(channelJobs.memberId, job.memberId),
+          inArray(channelJobs.messageId, merged),
+          eq(channelJobs.status, 'merged'),
+        ),
+      );
   await audit(tx, channelId, 'job_retried', job.id, { operationId: job.operationId });
 
   return retried;

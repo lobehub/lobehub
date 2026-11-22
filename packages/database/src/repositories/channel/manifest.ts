@@ -6,7 +6,21 @@ import {
   channelMessageReceipt,
   channelMessageVia,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, gt, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type {
   ChannelJobItem,
@@ -25,18 +39,24 @@ import { messageStands } from './tombstone';
 export const buildManifest = (params: {
   job: ChannelJobItem;
   member: ChannelMemberItem;
+  /** Later requests from the same requester answered in this run, oldest first. */
+  merged?: ChannelMessageItem[];
   /** A deferred follow-up's view of the primary responder's published reply. */
   primaryReplyMessageId?: string;
   request: ChannelMessageItem;
   thread: ChannelThreadItem | null;
 }): ChannelInputManifest => {
-  const { job, member, primaryReplyMessageId, request, thread } = params;
+  const { job, member, merged = [], primaryReplyMessageId, request, thread } = params;
+  const last = merged.at(-1) ?? request;
 
   return {
-    // Jobs inherit the request's branch, so the request itself always sorts last.
-    cutoffSequence: request.sequence,
+    // Jobs inherit the request's branch, so the last request always sorts last.
+    cutoffSequence: last.sequence,
     ...(primaryReplyMessageId && { primaryReplyMessageId }),
-    requestMessageId: request.id,
+    requestMessageId: last.id,
+    ...(merged.length > 0 && {
+      requestMessageIds: [request.id, ...merged.map((next) => next.id)],
+    }),
     requesterMemberId: job.requesterMemberId,
     self: { agentId: member.agentId!, memberId: member.id, name: member.name ?? 'Agent' },
     threadId: job.threadId,
@@ -113,7 +133,13 @@ export const readManifestMessages = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   manifest: ChannelInputManifest,
-  options: { beforeSequence?: number; limit?: number; messageId?: string } = {},
+  options: {
+    beforeSequence?: number;
+    limit?: number;
+    messageId?: string;
+    /** Only these messages; an empty list reads none. */
+    messageIds?: string[];
+  } = {},
 ): Promise<ChannelContextMessage[]> => {
   const scope = and(
     manifestScope(channelId, manifest),
@@ -121,6 +147,7 @@ export const readManifestMessages = async (
       ? undefined
       : lt(channelMessages.sequence, options.beforeSequence),
     options.messageId ? eq(channelMessages.id, options.messageId) : undefined,
+    options.messageIds ? inArray(channelMessages.id, options.messageIds) : undefined,
   );
   const query = db
     .select({

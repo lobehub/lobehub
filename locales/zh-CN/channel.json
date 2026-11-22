@@ -283,6 +283,7 @@
   "status.completed": "已回复",
   "status.failed": "回复失败",
   "status.idle": "空闲",
+  "status.merged": "已与前面的消息合并回复",
   "status.paused": "已暂停",
   "status.preparing": "准备中…",
   "status.running": "正在回复…",

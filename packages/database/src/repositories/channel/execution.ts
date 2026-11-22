@@ -276,8 +276,9 @@ export class ChannelExecutionRepository {
     );
 
   /**
-   * The triggering request and its explicit quote; see `recentContext` for the rest. Reads
-   * without the channel lock, since nothing at or before the cutoff changes after the claim.
+   * The triggering requests (one, or a merged batch oldest first) and the messages they quote;
+   * see `recentContext` for the rest. Reads without the channel lock, since nothing at or
+   * before the cutoff changes after the claim.
    */
   input = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
     const [job] = await this.db
@@ -292,15 +293,19 @@ export class ChannelExecutionRepository {
       );
     if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
 
-    const request = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: job.manifest.requestMessageId,
+    const { manifest } = job;
+    const requestIds = manifest.requestMessageIds ?? [manifest.requestMessageId];
+    const requests = await readManifestMessages(this.db, channelId, manifest, {
+      messageIds: requestIds,
     });
-    const replyToId = request[0]?.replyToId;
-    if (!replyToId) return request;
-    const quoted = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: replyToId,
+    const quotedIds = [
+      ...new Set(requests.flatMap(({ replyToId }) => (replyToId ? [replyToId] : []))),
+    ].filter((id) => !requestIds.includes(id));
+    if (!quotedIds.length) return requests;
+    const quoted = await readManifestMessages(this.db, channelId, manifest, {
+      messageIds: quotedIds,
     });
-    return [...quoted, ...request];
+    return [...quoted, ...requests];
   };
 
   /**
