@@ -34,16 +34,16 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 
-const agentType = vi.hoisted(() => ({ value: undefined as string | undefined }));
-vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (s: unknown) => unknown) => selector({}),
+const agency = vi.hoisted(() => ({
+  config: undefined as Record<string, unknown> | undefined,
+  isPreferenceLoading: false,
 }));
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentConfigById: () => () => ({
-      agencyConfig: { heterogeneousProvider: { type: agentType.value } },
-    }),
-  },
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: agency.config,
+    isPreferenceLoading: agency.isPreferenceLoading,
+    workspaceScoped: false,
+  }),
 }));
 
 describe('useChatFollowUp', () => {
@@ -84,12 +84,13 @@ describe('useChatFollowUp', () => {
 
     afterEach(() => {
       desktop.isDesktop = false;
-      agentType.value = undefined;
+      agency.config = undefined;
+      agency.isPreferenceLoading = false;
     });
 
     it('skips extraction on desktop and still clears on send', async () => {
       desktop.isDesktop = true;
-      agentType.value = 'claude-code';
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
       (useUserStore as unknown as Mock).mockImplementation((selector: any) =>
         selector({ settings: { systemAgent: { followUpAction: { enabled: false } } } }),
       );
@@ -102,13 +103,30 @@ describe('useChatFollowUp', () => {
     });
 
     it('keeps server extraction for Claude Code on the web', () => {
-      agentType.value = 'claude-code';
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
+
+    it.each(['device', 'sandbox'])('keeps server extraction for a desktop %s run', (target) => {
+      desktop.isDesktop = true;
+      agency.config = {
+        boundDeviceId: 'device-a',
+        executionTarget: target,
+        heterogeneousProvider: { type: 'claude-code' },
+      };
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
+
+    it('keeps server extraction while the device preference is loading', () => {
+      desktop.isDesktop = true;
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+      agency.isPreferenceLoading = true;
       expect(renderNative().onAssistantTurnSettled).toBeDefined();
     });
 
     it('keeps server extraction for other CLI agents on desktop', () => {
       desktop.isDesktop = true;
-      agentType.value = 'codex';
+      agency.config = { heterogeneousProvider: { type: 'codex' } };
       expect(renderNative().onAssistantTurnSettled).toBeDefined();
     });
   });

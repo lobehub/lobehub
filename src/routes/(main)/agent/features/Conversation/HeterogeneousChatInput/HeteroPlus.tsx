@@ -1,6 +1,5 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import { cssVar, Icon, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
@@ -57,11 +56,13 @@ const styles = stylex.create({
  * is shown next to it by `ScheduledSendChip`.
  */
 interface HeteroPlusProps {
+  /** The CLI runs on this desktop and can supply its own next-prompt suggestion. */
+  nativeSuggestionsAvailable?: boolean;
   /** The agent's CLI adapter type — decides whether picked images are accepted. */
   providerType?: string;
 }
 
-const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
+const HeteroPlus = memo<HeteroPlusProps>(({ nativeSuggestionsAvailable, providerType }) => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
@@ -76,9 +77,8 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
   const scheduledSendAt = useConversationStore((s) => s.scheduledSendAt);
   const setScheduledSendAt = useConversationStore((s) => s.setScheduledSendAt);
 
-  // Claude Code on desktop supplies its own next-prompt suggestion.
   const agentId = useConversationStore(contextSelectors.agentId);
-  const showFollowUpToggle = isDesktop && providerType === 'claude-code' && !!agentId;
+  const showFollowUpToggle = !!nativeSuggestionsAvailable && !!agentId;
   const followUpEnabled = useAgentStore(
     (s) =>
       !!agentId &&

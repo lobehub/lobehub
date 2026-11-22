@@ -1,14 +1,13 @@
-import { isDesktop } from '@lobechat/const';
 import { type LobeAgentChatConfig } from '@lobechat/types';
 import { useMemo } from 'react';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useFollowUpActionStore } from '@/store/followUpAction';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/slices/settings/selectors/systemAgent';
 
 import { type ConversationHooks } from '../types';
+import { supportsNativePromptSuggestions } from './nativePromptSuggestions';
 
 interface UseChatFollowUpParams {
   agentChatConfig: LobeAgentChatConfig | undefined;
@@ -27,8 +26,9 @@ interface UseChatFollowUpParams {
  * returns an empty `ConversationHooks` object so the merge chain treats it as
  * identity.
  *
- * A Claude Code agent on desktop gets its suggestion from the CLI instead: no
- * global model is needed, no extraction runs, and only the clearing stays.
+ * A Claude Code agent running on this desktop gets its suggestion from the CLI
+ * instead: no global model is needed, no extraction runs, and only the clearing
+ * stays. Its device and sandbox runs go through the gateway and keep extraction.
  *
  * Registration ordering note: callers MUST compose this hook LAST in a
  * `mergeConversationHooks(...)` chain. The hook's
@@ -44,14 +44,15 @@ export const useChatFollowUp = ({
   topicId,
 }: UseChatFollowUpParams): ConversationHooks => {
   const globalConfig = useUserStore(systemAgentSelectors.followUpAction);
-  const isClaudeCodeAgent = useAgentStore(
-    (s) =>
-      !!agentId &&
-      agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig?.heterogeneousProvider?.type ===
-        'claude-code',
+  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(
+    agentId || undefined,
+    { topicId: topicId ?? null },
   );
+  // While the member's device pick loads, the target can still flip: keep extraction.
   const usesNativeSuggestions =
-    isDesktop && isClaudeCodeAgent && agentChatConfig?.enableFollowUpChips === true;
+    !isPreferenceLoading &&
+    agentChatConfig?.enableFollowUpChips === true &&
+    supportsNativePromptSuggestions(agencyConfig, workspaceScoped);
 
   const effective = useMemo(() => {
     const globalEnabled = globalConfig.enabled === true;
