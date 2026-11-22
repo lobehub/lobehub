@@ -1,5 +1,6 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
+import { cssVar } from '@lobehub/ui';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -66,11 +67,17 @@ describe('coverImageSrc', () => {
     );
     expect(coverImageSrc(agent({ avatar: '🤖' }))).toBeUndefined();
     expect(coverImageSrc(agent({ avatar: DEFAULT_AVATAR }))).toBeUndefined();
+    expect(coverImageSrc(agent({ avatar: 'agent-avatar:rocket:cyan' }))).toBeUndefined();
     expect(coverImageSrc(agent({ avatar: null }))).toBeUndefined();
   });
 });
 
 describe('seedCoverColor', () => {
+  it('wears the color of a picked character, not the one the id derives', () => {
+    expect(seedCoverColor(agent({ avatar: 'agent-avatar:rocket:green' }))).toBe(cssVar.green);
+    expect(seedCoverColor(agent({ avatar: 'agent-avatar:cat:red', id: 'agt_2' }))).toBe(cssVar.red);
+  });
+
   it('is stable per agent id', () => {
     expect(seedCoverColor(agent())).toBe(seedCoverColor(agent({ title: 'Renamed' })));
   });
