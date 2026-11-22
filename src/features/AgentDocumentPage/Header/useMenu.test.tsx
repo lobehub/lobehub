@@ -189,6 +189,31 @@ describe('AgentDocumentPage/Header/useMenu', () => {
     expect(await createObjectURL.mock.calls[0][0].text()).toBe('');
   });
 
+  it('normalizes nullish live content instead of exporting literal "undefined"', async () => {
+    mocks.documents = { doc_1: { content: undefined } };
+    mocks.documentDetailMap = { doc_1: { document: { content: null } } };
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:doc');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    const { result } = renderHook(() =>
+      useMenu({
+        agentId: 'agent_1',
+        documentId: 'doc_1',
+        onDeleted: vi.fn(),
+        title: 'Nullable Doc',
+      }),
+    );
+
+    await act(async () => {
+      await findExportMarkdownAction(result.current.menuItems)!();
+    });
+
+    expect(await createObjectURL.mock.calls[0][0].text()).toBe('');
+    expect(mocks.toastSuccess).toHaveBeenCalledOnce();
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
   it('does not duplicate the .md extension when the title already ends with .md', async () => {
     vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:doc'), revokeObjectURL: vi.fn() });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});

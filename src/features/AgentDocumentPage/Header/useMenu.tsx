@@ -83,7 +83,7 @@ export const useMenu = ({
 
         let markdown: string;
         if (liveDoc !== undefined) {
-          markdown = liveDoc.content;
+          markdown = liveDoc.content ?? persistedDoc?.content ?? '';
         } else if (persistedDoc) {
           markdown = persistedDoc.content ?? '';
         } else {
