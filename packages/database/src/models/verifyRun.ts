@@ -253,6 +253,8 @@ export class VerifyRunModel {
     Map<
       string,
       Pick<VerifyRunItem, 'acceptanceId' | 'id' | 'roundIndex' | 'status'> & {
+        /** The Goal's automatic review outcome recorded on this round, if any. */
+        goalReviewStatus: string | null;
         passed: number;
         total: number;
       }
@@ -267,6 +269,7 @@ export class VerifyRunModel {
     const rows = await this.db
       .select({
         acceptanceId: verifyRuns.acceptanceId,
+        goalReviewStatus: sql<string | null>`${verifyRuns.metadata} -> 'goalReview' ->> 'status'`,
         id: verifyRuns.id,
         operationId: verifyRuns.operationId,
         passed: sql<number>`count(*) filter (where ${verifyCheckResults.verdict} = 'passed')`,

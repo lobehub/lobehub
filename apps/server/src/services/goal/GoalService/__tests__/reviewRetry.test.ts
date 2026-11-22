@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { TaskModel } from '@/database/models/task';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { agentOperations, verifyRuns } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -83,6 +84,14 @@ describe('a gate on an Acceptance review that reached no verdict', () => {
     ]);
     expect(graph.decisions[0].recommendedOptionId).toBe(GOAL_RETRY_REVIEW_OPTION);
     expect(graph.nodes.find((node) => node.kind === 'decision')?.description).toBe(CAUSE);
+  });
+
+  it('tells the task activity what the review did with a passed round', async () => {
+    const { operationId } = await setup('Run row', ACCEPTANCE_REVIEW_ERRORED_ERROR);
+
+    const rounds = await new VerifyRunModel(serverDB, userId).findByOperations([operationId]);
+
+    expect(rounds.get(operationId)?.goalReviewStatus).toBe('errored');
   });
 
   it('offers no re-run when the criterion itself cannot be judged', async () => {

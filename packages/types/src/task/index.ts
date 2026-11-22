@@ -630,6 +630,11 @@ export interface TaskRunVerifySummary {
   acceptanceId: string | null;
   /** Checks that returned a passing verdict in this round. */
   passed: number;
+  /**
+   * The Goal's automatic review, when it did not accept a round whose checks
+   * passed. Without it the row read "3/3 passed" on a delivery sent back.
+   */
+  reviewStatus?: 'errored' | 'rejected' | 'unjudgeable';
   roundIndex: number | null;
   runId: string;
   status: string | null;

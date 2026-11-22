@@ -8850,6 +8850,12 @@ components:
                   type: integer
                   minimum: -9007199254740991
                   maximum: 9007199254740991
+                reviewStatus:
+                  type: string
+                  enum:
+                    - errored
+                    - rejected
+                    - unjudgeable
                 roundIndex:
                   anyOf:
                     - type: integer

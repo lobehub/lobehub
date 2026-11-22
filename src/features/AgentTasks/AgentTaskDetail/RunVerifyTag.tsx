@@ -37,6 +37,13 @@ const VERDICT_META = {
 
 type VerdictKey = keyof typeof VERDICT_META;
 
+/** The automatic review's outcome on a round whose checks passed. */
+const REVIEW_LABEL_KEYS = {
+  errored: 'reviewErrored',
+  rejected: 'reviewRejected',
+  unjudgeable: 'reviewUnjudgeable',
+} as const;
+
 export const resolveVerdict = (status: string | null): VerdictKey => {
   switch (status) {
     case 'errored': {
@@ -68,6 +75,10 @@ export const resolveVerdict = (status: string | null): VerdictKey => {
   }
 };
 
+/** What the review held back, on a round whose own verdict reads passed. */
+export const reviewHoldOf = (verify: Pick<TaskRunVerifySummary, 'reviewStatus' | 'status'>) =>
+  resolveVerdict(verify.status) === 'passed' ? verify.reviewStatus : undefined;
+
 interface RunVerifyTagProps {
   verify?: TaskRunVerifySummary | null;
 }
@@ -84,7 +95,11 @@ const RunVerifyTag = memo<RunVerifyTagProps>(({ verify }) => {
   if (!verify) return null;
 
   const verdict = resolveVerdict(verify.status);
-  const meta = VERDICT_META[verdict];
+  // The checks passed but the review held the delivery: green would say it's done.
+  const reviewHeld = reviewHoldOf(verify);
+  const meta = reviewHeld
+    ? { color: cssVar.colorWarning, icon: TriangleAlert, labelKey: REVIEW_LABEL_KEYS[reviewHeld] }
+    : VERDICT_META[verdict];
   const round =
     verify.roundIndex == null
       ? undefined
@@ -93,6 +108,7 @@ const RunVerifyTag = memo<RunVerifyTagProps>(({ verify }) => {
   // "4/4" is what makes the verdict inspectable; a bare "passed" hides how much
   // was actually checked. Only shown once the round produced results.
   const counts = verify.total > 0 ? `${verify.passed}/${verify.total}` : undefined;
+  const countsLabel = reviewHeld ? t('taskDetail.runVerify.passed') : undefined;
 
   return (
     <Tag
@@ -112,7 +128,7 @@ const RunVerifyTag = memo<RunVerifyTagProps>(({ verify }) => {
           : undefined
       }
     >
-      {counts ? `${counts} ${label}` : label}
+      {counts ? [counts, countsLabel, countsLabel && '·', label].filter(Boolean).join(' ') : label}
     </Tag>
   );
 });
