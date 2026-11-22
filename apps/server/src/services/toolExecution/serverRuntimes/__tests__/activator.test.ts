@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  executeToolCall: vi.fn(),
   findAll: vi.fn(),
   findById: vi.fn(),
   findByName: vi.fn(),
   getAgentConfigById: vi.fn(),
+  getAgentSkills: vi.fn(),
+  listCatalog: vi.fn(),
+  loadRuntimeSkills: vi.fn(),
+  resolveContentWorkspaceId: vi.fn(),
+  resolveRunWorkspaceId: vi.fn(),
 }));
 
 vi.mock('@lobechat/builtin-skills', () => ({
@@ -35,6 +41,38 @@ vi.mock('@/helpers/skillFilters', () => ({
   }),
 }));
 
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn(function () {
+    return {
+      getAgentSkills: mocks.getAgentSkills,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mocks.executeToolCall(...args),
+}));
+
+vi.mock('@/server/services/userSkill', async () => {
+  const actual = await vi.importActual('@/server/services/userSkill');
+
+  return {
+    ...(actual as Record<string, unknown>),
+    UserSkillService: vi.fn(function () {
+      return {
+        listCatalog: mocks.listCatalog,
+        loadRuntimeSkills: mocks.loadRuntimeSkills,
+      };
+    }),
+  };
+});
+
+vi.mock('../resolveWorkspaceScope', () => ({
+  resolveContentWorkspaceId: mocks.resolveContentWorkspaceId,
+  resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
+}));
+
 vi.mock('@/server/services/agentSignal/procedure', () => ({
   emitToolOutcomeSafely: vi.fn().mockResolvedValue(undefined),
   resolveToolOutcomeScope: vi.fn(function () {
@@ -57,9 +95,16 @@ describe('activatorRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+    mocks.getAgentSkills.mockResolvedValue([]);
     mocks.findAll.mockResolvedValue({ data: [], total: 0 });
     mocks.findById.mockResolvedValue(undefined);
     mocks.findByName.mockResolvedValue(undefined);
+    mocks.listCatalog.mockResolvedValue([]);
+    mocks.loadRuntimeSkills.mockResolvedValue([]);
+    mocks.resolveContentWorkspaceId.mockImplementation(
+      async (ctx?: { workspaceId?: string }) => ctx?.workspaceId,
+    );
+    mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
   });
 
   describe('activateSkill — disabled skill enforcement', () => {
@@ -465,6 +510,116 @@ describe('activatorRuntime', () => {
 
       expect(result.content).toContain('Not found: tituwork-feishu-mcp');
       expect(result.content).not.toContain('Successfully activated');
+    }, 20_000);
+  });
+
+  describe('activateTools — full skill source parity with lobe-skills', () => {
+    it('resolves agent-document, project filesystem, and user-library skills via fallback', async () => {
+      mocks.getAgentSkills.mockResolvedValue([
+        {
+          content: '# Agent workflow body',
+          description: 'Agent workflow',
+          identifier: 'agent-skills:workflow',
+          name: 'agent-skills:workflow',
+          title: 'Workflow',
+        },
+      ]);
+      mocks.executeToolCall.mockResolvedValue({
+        content: '# Deploy skill body',
+        success: true,
+      });
+      mocks.loadRuntimeSkills.mockResolvedValue([
+        {
+          body: '# Saved plan body',
+          content: '# Saved plan body',
+          description: 'Saved plan',
+          identifier: 'user-skills:saved-plan',
+          name: 'user-skills:saved-plan',
+          title: 'Saved Plan',
+        },
+      ]);
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        activeDeviceId: 'device-1',
+        agentId: 'agent-1',
+        projectSkills: [
+          {
+            description: 'Project deploy',
+            location: '/repo/.agents/skills/deploy/SKILL.md',
+            name: 'deploy',
+            source: 'project',
+          },
+        ],
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: ['agent-skills:workflow', 'deploy', 'user-skills:saved-plan'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('# Agent workflow body');
+      expect(result.content).toContain('# Deploy skill body');
+      expect(result.content).toContain('# Saved plan body');
+      expect(result.state?.notFound).toEqual([]);
+      expect(result.state?.activatedSkills).toHaveLength(3);
+    }, 20_000);
+
+    it('still blocks ungranted agent/project/user skills for share visitors', async () => {
+      mocks.getAgentSkills.mockResolvedValue([
+        {
+          content: '# Secret agent skill',
+          description: 'Secret',
+          identifier: 'agent-skills:secret',
+          name: 'agent-skills:secret',
+        },
+      ]);
+      mocks.loadRuntimeSkills.mockResolvedValue([
+        {
+          body: '# Secret user skill',
+          content: '# Secret user skill',
+          description: 'Secret',
+          identifier: 'user-skills:secret',
+          name: 'user-skills:secret',
+          title: 'Secret',
+        },
+      ]);
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        activeDeviceId: 'device-1',
+        agentId: 'agent-1',
+        agentShareVisitor: {
+          skillGrants: ['allowed-skill'],
+          toolGrants: [{ identifier: 'lobe-calculator' }],
+        } as never,
+        projectSkills: [
+          {
+            location: '/repo/.agents/skills/secret-proj/SKILL.md',
+            name: 'secret-proj',
+            source: 'project',
+          },
+        ],
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: ['agent-skills:secret', 'secret-proj', 'user-skills:secret'],
+      });
+
+      expect(result.state?.activatedSkills).toEqual([]);
+      expect(result.state?.notFound).toEqual([
+        'agent-skills:secret',
+        'secret-proj',
+        'user-skills:secret',
+      ]);
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.loadRuntimeSkills).not.toHaveBeenCalled();
     }, 20_000);
   });
 });

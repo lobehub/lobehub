@@ -1,24 +1,20 @@
-import { builtinSkills } from '@lobechat/builtin-skills';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   ActivatorExecutionRuntime,
   type ActivatorRuntimeService,
   type ToolManifestInfo,
 } from '@lobechat/builtin-tool-activator/executionRuntime';
-import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
-import { resolveShareAllowedSkillIds } from '@lobechat/const';
+import { type SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
 import { describeLockedDevicePicker } from '@lobechat/types';
 
-import { AgentSkillModel } from '@/database/models/agentSkill';
-import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import {
   emitToolOutcomeSafely,
   resolveToolOutcomeScope,
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
-import { resolveAgentSkillGates } from './librarySkillGate';
 import { REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
+import { createSkillActivationRuntime } from './skillActivation';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
@@ -81,60 +77,15 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       });
     };
 
-    // Create SkillsExecutionRuntime for activateSkill delegation
+    // Share the full skill-activation runtime with `lobe-skills` so the
+    // `activateTools` skill fallback resolves agent-document, filesystem
+    // (project/device), and user-library skills under the exact same gates.
     let skillsRuntime: SkillsExecutionRuntime | undefined;
     if (context.serverDB && context.userId) {
-      const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
-
-      // `activateSkill` resolves independently of `operationSkillSet`/
-      // `<available_skills>` (built once, earlier, in aiAgent/index.ts) — it
-      // queries builtins/DB directly by name. Without this guard, a skill
-      // the agent has explicitly disabled would no longer be *listed*, but a
-      // model that already knows its name (prior turn, or a guess) could
-      // still activate and use it. Re-derive the disabled set here so this
-      // independent resolution path enforces the same tri-state.
-      const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(context);
-
-      // An Agent Share visitor reaches only the skills the creator listed in
-      // `shareConfig.skillGrants`. `activateTools` falls back to this runtime
-      // for any identifier that is not a tool, so without this check a
-      // model-supplied name would open a skill the share never granted —
-      // the same model-supplied-name hole the skills runtime closes with its
-      // own `isSkillGranted` predicate (`skills.ts`).
-      const shareVisitor = context.agentShareVisitor;
-      const isSkillReachable = (identifier: string) =>
-        !disabledSkillIds.has(identifier) &&
-        (!shareVisitor || resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0);
-      const isLibrarySkillReachable = (identifier: string) =>
-        isSkillReachable(identifier) && (isLibrarySkillEnabled?.(identifier) ?? true);
-
-      skillsRuntime = new SkillsExecutionRuntime({
-        // Same device gate as the skills runtime: device-only skills are
-        // activatable in device-capable runs (matching <available_skills>),
-        // with `activeDeviceId` as the fallback for callers without a plan.
-        builtinSkills: filterBuiltinSkills(builtinSkills, {
-          canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
-        }).filter((skill) => isLibrarySkillReachable(skill.identifier)),
-        service: {
-          findAll: async () => {
-            const result = await skillModel.findAll();
-            if (!shareVisitor && !isLibrarySkillEnabled) return result;
-
-            const data = result.data.filter((skill) => isLibrarySkillReachable(skill.identifier));
-            return { data, total: data.length };
-          },
-          findById: async (id) => {
-            const skill = await skillModel.findById(id);
-            return skill && isLibrarySkillReachable(skill.identifier) ? skill : undefined;
-          },
-          findByName: async (name) => {
-            const skill = await skillModel.findByName(name);
-            return skill && isLibrarySkillReachable(skill.identifier) ? skill : undefined;
-          },
-          readResource: async () => {
-            throw new Error('readResource not available in tools runtime');
-          },
-        },
+      skillsRuntime = await createSkillActivationRuntime({
+        ...context,
+        serverDB: context.serverDB,
+        userId: context.userId,
       });
     }
 

@@ -1,6 +1,6 @@
 const intro = `You have access to a Skills tool that loads and executes skills — reusable instruction packages that extend your capabilities.`;
 
-const sharedSkillGuidelines = `- **activateSkill**: Call when the user's task matches an available skill to load and follow its instructions. Do NOT call \`activateSkill\` if the skill's content is already provided in \`<selected_skill_context>\` within the user message.
+export const sharedSkillGuidelines = `- **activateSkill**: Call when the user's task matches an available skill to load and follow its instructions. Do NOT call \`activateSkill\` if the skill's content is already provided in \`<selected_skill_context>\` within the user message.
 - **readReference**: Load reference files explicitly mentioned in an activated skill's instructions.`;
 
 export const systemPrompt = `${intro}

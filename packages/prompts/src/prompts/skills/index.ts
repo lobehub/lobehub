@@ -9,8 +9,8 @@ export interface SkillItem {
   name: string;
   /**
    * Where the skill comes from. `project` and `device` skills live on the
-   * execution device filesystem and `location` carries their absolute path so
-   * the model can load them via the readFile tool.
+   * execution device filesystem; `activateSkill` loads them by name and
+   * `location` gives their absolute path for resolving relative paths.
    */
   source?: SkillSource;
 }
@@ -31,7 +31,7 @@ export const skillsPrompts = (skills: SkillItem[]) => {
     (skill) => skill.source === 'project' || skill.source === 'device',
   );
   const filesystemHint = hasFilesystemSkill
-    ? `\nFor a skill with source="project" or source="device", load it by calling the readFile tool on its \`location\` path and resolve relative paths against its parent directory (parent of SKILL.md).`
+    ? `\nFor a skill with source="project" or source="device", load it with activateSkill by name (do not bypass activation with readFile) and resolve relative paths against the parent directory of its \`location\` (parent of SKILL.md).`
     : '';
 
   return `The following skills provide specialized instructions for specific tasks.

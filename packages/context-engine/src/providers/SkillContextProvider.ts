@@ -35,8 +35,9 @@ export interface SkillMeta {
   location?: string;
   name: string;
   /**
-   * Skill origin. `project` skills are discovered on the device filesystem and
-   * loaded on demand via the readFile tool (see `location`).
+   * Skill origin. `project` and `device` skills are discovered on the device
+   * filesystem and loaded on demand via `activateSkill` (`location` gives their
+   * absolute SKILL.md path).
    */
   source?: SkillSource;
 }
