@@ -8,15 +8,12 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 export type GoalsAndTasksCollection = 'scheduled' | 'tasks';
 export type GoalsAndTasksView = 'goals' | GoalsAndTasksCollection;
 
-/**
- * Tab order. Scheduled tasks are still tasks, so they sit beside the ordinary
- * list rather than after goals.
- */
-export const GOALS_AND_TASKS_TABS: readonly GoalsAndTasksView[] = ['tasks', 'scheduled', 'goals'];
+/** Tab order: the two existing tabs keep their place, scheduled tasks join after them. */
+export const GOALS_AND_TASKS_TABS: readonly GoalsAndTasksView[] = ['tasks', 'goals', 'scheduled'];
 
 const TAB_LABEL_KEYS = {
   goals: 'goalList.title',
-  scheduled: 'taskList.scheduled.title',
+  scheduled: 'tab.scheduled',
   tasks: 'tab.tasks',
 } as const satisfies Record<GoalsAndTasksView, string>;
 

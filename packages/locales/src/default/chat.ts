@@ -2156,6 +2156,7 @@ export default {
   'tab.skills': 'Skills',
   'tab.search': 'Search',
   'tab.goalsAndTasks': 'Tasks and goals',
+  'tab.scheduled': 'Scheduled',
   'tab.tasks': 'Tasks',
   'task.activity.calling': 'Calling Skill...',
   'task.activity.clientExecuting': 'Executing locally...',

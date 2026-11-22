@@ -200,18 +200,24 @@ const PAGINATED_COLLECTION_VIEW = {
   showSubTasks: true,
 } as const;
 
+/**
+ * The scheduled tab is a plain list: no group headers, since each row already
+ * states its own rhythm (the schedule or heartbeat chip). A stored grouping
+ * belongs to the ordinary list and is set aside here.
+ */
 export const getScheduledTaskViewOptions = (
   viewOptions: TaskListViewOptions,
 ): TaskListViewOptions => ({
   ...viewOptions,
   ...PAGINATED_COLLECTION_VIEW,
-  groupBy: 'automationMode',
+  groupBy: 'none',
+  subGroupBy: 'none',
 });
 
 /**
  * Whether a collection's project groups need the project list to be told apart.
- * Judged on what the collection renders: the scheduled tab replaces the stored
- * grouping, so a stored `project` must not hold it behind the project request.
+ * Judged on what the collection renders: the scheduled tab is an ungrouped
+ * list, so a stored `project` must not hold it behind the project request.
  */
 export const collectionGroupsByProject = (
   collection: TaskCollection,

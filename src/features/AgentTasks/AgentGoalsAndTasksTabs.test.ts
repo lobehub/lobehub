@@ -7,8 +7,8 @@ import {
 } from './AgentGoalsAndTasksTabs';
 
 describe('GOALS_AND_TASKS_TABS', () => {
-  it('lists scheduled tasks as a tab of its own, between tasks and goals', () => {
-    expect(GOALS_AND_TASKS_TABS).toEqual(['tasks', 'scheduled', 'goals']);
+  it('lists scheduled tasks as a tab of its own, after tasks and goals', () => {
+    expect(GOALS_AND_TASKS_TABS).toEqual(['tasks', 'goals', 'scheduled']);
   });
 });
 
