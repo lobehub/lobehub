@@ -12,6 +12,7 @@ import {
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { onThreadArchived } from '@/business/server/channel/onThreadArchived';
 import { getAddressBook } from '@/business/server/contact/addressBook';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { DeviceModel } from '@/database/models/device';
@@ -582,7 +583,20 @@ export class ChannelService {
 
   archiveThread = async (channelId: string, threadId: string) => {
     await this.repository.archiveThread(channelId, threadId);
-    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    await Promise.all([
+      wakeChannel(channelId),
+      this.changed(channelId),
+      // Through the `@/business` slot (default impl is a no-op); a failure is
+      // logged and never fails the archive.
+      onThreadArchived({
+        channelId,
+        threadId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      }).catch((error) =>
+        console.error('[ChannelService] thread-archived follow-up failed (non-fatal):', error),
+      ),
+    ]);
   };
 
   unarchiveThread = async (channelId: string, threadId: string) => {
