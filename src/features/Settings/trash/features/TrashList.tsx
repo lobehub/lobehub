@@ -9,7 +9,6 @@ import type {
   TrashVisibility,
 } from '@lobechat/types';
 import {
-  Avatar,
   Button,
   Center,
   confirmModal,
@@ -33,6 +32,7 @@ import { Trash2Icon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';

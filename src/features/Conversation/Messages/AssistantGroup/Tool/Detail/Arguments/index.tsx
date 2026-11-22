@@ -73,6 +73,7 @@ const Arguments = memo<ArgumentsProps>(
       contentNode = (
         <Flexbox paddingBlock={4} paddingInline={16}>
           <Descriptions
+            revealCopyOnHover
             bordered={false}
             items={items}
             labelWidth={140}
