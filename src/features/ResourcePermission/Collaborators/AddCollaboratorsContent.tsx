@@ -26,6 +26,10 @@ import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers
 import UserAvatar from '@/components/UserAvatar';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/services/resourcePermission';
 import { densityVars } from '@/styles/densityVars';
+import {
+  getWorkspaceMemberName,
+  getWorkspaceMemberSearchLabels,
+} from '@/utils/workspaceMemberName';
 
 import { useResourceCollaborators } from '../useResourceCollaborators';
 import { useResourcePermission } from '../useResourcePermission';
@@ -86,6 +90,7 @@ const styles = createStaticStyles(({ css }) => ({
  * common type, and each side names its own.
  */
 interface MemberCandidate {
+  config?: { nickname?: string | null } | null;
   role?: string | null;
   user?: {
     avatar?: string | null;
@@ -96,8 +101,7 @@ interface MemberCandidate {
   userId: string;
 }
 
-const memberName = (member: MemberCandidate) =>
-  member.user?.fullName || member.user?.username || member.user?.email || member.userId;
+const memberName = (member: MemberCandidate) => getWorkspaceMemberName(member);
 
 /**
  * Workspace admins hold `:all` update capability and bypass Member
@@ -200,7 +204,7 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
       const keyword = query.trim().toLowerCase();
       if (!keyword) return candidates;
       return candidates.filter((member) =>
-        [member.user?.fullName, member.user?.username, member.user?.email]
+        getWorkspaceMemberSearchLabels(member)
           .filter(Boolean)
           .some((field) => field!.toLowerCase().includes(keyword)),
       );

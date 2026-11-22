@@ -44,6 +44,7 @@ import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
+import { channelUserNameSql } from './nickname';
 import { audit, withChannelLock } from './transaction';
 import { OPEN_JOB_STATUSES } from './writer';
 
@@ -461,7 +462,7 @@ export class ChannelHistoryRepository {
         },
         request: channelMessages.content,
         requesterName: channelMembers.name,
-        requesterFullName: users.fullName,
+        requesterFullName: channelUserNameSql(channelMembers.channelId, channelMembers.userId),
         requesterMemberId: channelJobs.requesterMemberId,
         status: channelJobs.status,
       })

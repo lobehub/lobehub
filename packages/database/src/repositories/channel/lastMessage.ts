@@ -14,6 +14,7 @@ import type { LobeChatDatabase } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { isAgentAuthored } from './author';
+import { channelUserNameSql } from './nickname';
 import { isOpeningAck } from './openingAck';
 import { messageStands } from './tombstone';
 
@@ -74,7 +75,7 @@ export const channelLastMessages = async (
         nullif(${channelThreads.metadata} ->> 'title', ''),
         nullif(left(split_part(btrim(${root.content}), E'\n', 1), ${THREAD_TITLE_LENGTH}), '')
       )`,
-      userFullName: users.fullName,
+      userFullName: channelUserNameSql(channelMessages.channelId, channelMessages.userId),
       userId: channelMessages.userId,
       username: users.username,
     })

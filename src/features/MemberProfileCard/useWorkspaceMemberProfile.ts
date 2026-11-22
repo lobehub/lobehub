@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import { getWorkspaceMemberName } from '@/utils/workspaceMemberName';
 
 // Derived from the slot rather than imported: deployments override the hook,
 // and the row type follows whichever implementation is in place.
@@ -34,8 +35,7 @@ export const toWorkspaceMemberProfile = (
   if (!member) return undefined;
 
   const user = member.user;
-  const name =
-    user?.fullName?.trim() || user?.username?.trim() || user?.email?.trim().split('@')[0] || '';
+  const name = getWorkspaceMemberName(member, { emailLocalPart: true, fallback: '' });
 
   return {
     avatar: user?.avatar,
