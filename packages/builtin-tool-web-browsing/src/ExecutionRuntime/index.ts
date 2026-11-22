@@ -60,7 +60,8 @@ const NON_ESCALATABLE_ERROR_TYPES = new Set([
   'UnsupportedContentError',
 ]);
 
-const NON_EXISTENT_DOMAIN_RE = /\b(?:ENOTFOUND|ERR_NAME_NOT_RESOLVED|EAI_NONAME)\b/i;
+const NON_EXISTENT_DOMAIN_RE =
+  /\b(?:ENOTFOUND|ERR_NAME_NOT_RESOLVED|EAI_NONAME|NXDOMAIN)\b|domain does not exist/i;
 
 const isEscalatableCrawlError = (data: Record<string, any>): boolean => {
   if (!('errorMessage' in data)) return false;

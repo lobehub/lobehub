@@ -357,6 +357,17 @@ describe('WebBrowsingExecutionRuntime', () => {
                 },
                 originalUrl: 'https://nope.invalid/',
               },
+              {
+                crawler: 'search1api',
+                data: {
+                  content:
+                    'Fail to crawl the page. Error type: HTTPStatusError, error message: Failed to crawl URL: Domain does not exist: www.nope.invalid (DNS NXDOMAIN)',
+                  errorMessage:
+                    'Failed to crawl URL: Domain does not exist: www.nope.invalid (DNS NXDOMAIN)',
+                  errorType: 'HTTPStatusError',
+                },
+                originalUrl: 'https://www.nope.invalid/',
+              },
             ],
           }),
           webSearch: vi.fn(),
