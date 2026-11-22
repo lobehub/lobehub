@@ -613,7 +613,7 @@ const spawnCliAgent = async (
   const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
-    env: childEnv,
+    env: cliSpawnPlan.env ?? childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 

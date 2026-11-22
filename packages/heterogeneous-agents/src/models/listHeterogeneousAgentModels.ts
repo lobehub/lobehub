@@ -455,7 +455,7 @@ export const listHeterogeneousAgentModels = async (
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd,
       encoding: 'utf8',
-      env: env as NodeJS.ProcessEnv,
+      env: spawnPlan.env ?? (env as NodeJS.ProcessEnv),
       maxBuffer: MODEL_CATALOG_MAX_BUFFER,
       timeout: MODEL_CATALOG_TIMEOUT_MS,
       windowsHide: true,
