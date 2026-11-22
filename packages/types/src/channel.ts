@@ -147,6 +147,11 @@ export interface ChannelMemberWorktree {
 export type ChannelMemberMetadata = Record<string, unknown> & {
   /** The member who added this one; absent when they joined on their own or before it was kept. */
   invitedBy?: string;
+  /**
+   * This person turned off their own push notifications for the Channel. Agents still reply;
+   * that is the Agent member's `config.muted`.
+   */
+  notificationsMuted?: boolean;
   /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
   worktrees?: Record<string, ChannelMemberWorktree>;
   /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
@@ -750,6 +755,12 @@ export interface ChannelListItem {
   memberRole?: ChannelMemberRole | null;
   /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
   mentionCount?: number;
+  /**
+   * The caller turned off their own push notifications here, so a client leaves it out of the
+   * app badge too; set by the Channel list and detail. Personal: other members never see it, and
+   * Agents still reply.
+   */
+  notificationsMuted?: boolean;
   /**
    * On a conversation between two people, the other person (relative to the viewer), who is also
    * the only entry of `memberAvatars`; null otherwise.

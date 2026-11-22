@@ -348,6 +348,16 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.markRead(input.channelId, input.sequence),
       success: true,
     })),
+  /**
+   * Turns the caller's own push notifications for the conversation off or on. Personal: Agents
+   * still reply (see `setMemberMuted` for that) and other members are untouched.
+   */
+  setNotificationsMuted: externalChannelProcedure
+    .input(z.object({ channelId, muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setNotificationsMuted(input.channelId, input.muted),
+      success: true,
+    })),
   /** Pins or unpins the conversation atop the caller's own list. */
   setPinned: externalChannelProcedure
     .input(z.object({ channelId, pinned: z.boolean() }))
