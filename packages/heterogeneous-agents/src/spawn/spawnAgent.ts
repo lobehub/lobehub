@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { platform } from 'node:os';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { HeteroPermissionMode } from '@lobechat/types';
+import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
 import { isHeteroPermissionMode } from '@lobechat/types';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
@@ -54,6 +54,11 @@ export interface SpawnAgentOptions {
   agentType: string;
   /** Bridge for bidirectional question requests emitted by ACP agents. */
   askUserBridge?: AskUserBridge;
+  /**
+   * (native Codex app-server only; `spawnAgent` ignores it) The Codex Plan
+   * switch: the collaboration mode every turn sends.
+   */
+  collaborationMode?: CodexCollaborationMode;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
    * Use this when the binary lives at a non-default
@@ -196,6 +201,11 @@ export interface SpawnAgentHandle {
    * server can persist it for `--resume` on the next turn.
    */
   readonly sessionId: string | undefined;
+  /**
+   * (native Codex) The Codex Plan switch flipped mid-run: the thread takes the
+   * collaboration mode from its next turn (`thread/settings/update`).
+   */
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
   /**
    * The child's stderr stream — caller can pipe to its own stderr or
    * collect for error reporting. The pipeline does not consume stderr.
