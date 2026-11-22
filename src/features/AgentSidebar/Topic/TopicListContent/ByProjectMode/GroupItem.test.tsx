@@ -1,9 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as LobeUI from '@lobehub/ui';
 import { AccordionRoot } from '@lobehub/ui';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { PanelDensityContext } from '@/styles/density';
 
 import { TopicListScopeContext } from '../../TopicListScope';
 import GroupItem from './GroupItem';
@@ -100,10 +103,15 @@ vi.mock('react-router', () => ({
   useParams: () => routeParamsMock,
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ...(await import('~base-ui-stubs')).baseUiStubs,
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeUI>();
+  return {
+    ...actual,
+    ...(await import('~base-ui-stubs')).baseUiStubs,
+    // The stub drops `fontSize`; the density tests read the rendered title size.
+    Text: actual.Text,
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -979,5 +987,89 @@ it('keeps the legacy directory start when a project group has a single directory
   expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith({
     agentId: 'agent-1',
     projectWorkingDirectoryId: 'binding-single',
+  });
+});
+
+describe('group header density', () => {
+  const projectDirectory = {
+    deviceId: 'device-2',
+    id: 'binding-density',
+    path: '/home/me/project',
+    projectAvatar: '',
+    projectId: 'prj-1',
+    projectName: 'Density Project',
+    projectSlug: 'density-project',
+  };
+  const projectGroup = {
+    children: [{ id: 't1', projectWorkingDirectoryId: 'binding-density', title: 'Work' }],
+    id: 'project-id:prj-1',
+    title: 'density',
+  };
+  const densities = [
+    { density: 'compact', fontSize: '13px', iconBox: '24px' },
+    { density: 'loose', fontSize: '14px', iconBox: '28px' },
+  ] as const;
+
+  const renderGroup = (density: 'compact' | 'loose', group: Record<string, unknown>) =>
+    render(
+      <PanelDensityContext value={density}>
+        <AccordionRoot defaultValue={[group.id as string]}>
+          <GroupItem expanded group={group as any} />
+        </AccordionRoot>
+      </PanelDensityContext>,
+    );
+
+  /** Reads the header row around a title: its icon cell, title cell and gap. */
+  const readRow = (titleNode: HTMLElement) => {
+    const row = titleNode.closest<HTMLElement>('.lobe-flex')!;
+    const cells = Array.from(row.children) as HTMLElement[];
+    return {
+      gap: row.style.getPropertyValue('--lobe-flex-gap'),
+      iconBox: cells[0].style.getPropertyValue('--lobe-flex-width'),
+      titleFontSize: getComputedStyle(cells.find((cell) => cell.contains(titleNode))!).fontSize,
+    };
+  };
+
+  beforeEach(() => {
+    directoryRows.length = 0;
+    subGroupModeMock.value = 'none';
+  });
+
+  it.each(densities)('sizes a project header from the $density metrics', (expected) => {
+    directoryRows.push(projectDirectory);
+    renderGroup(expected.density, projectGroup);
+
+    expect(readRow(screen.getByRole('link', { name: 'Density Project' }))).toEqual({
+      gap: '8px',
+      iconBox: expected.iconBox,
+      titleFontSize: expected.fontSize,
+    });
+  });
+
+  it.each(densities)('sizes a bare folder header from the $density metrics', (expected) => {
+    renderGroup(expected.density, {
+      children: [{ id: 't1', metadata: { workingDirectory: '/tmp/x' }, title: 'Work' }],
+      id: 'project:/tmp/x',
+      title: 'folder-title',
+    });
+
+    expect(readRow(screen.getByText('folder-title'))).toEqual({
+      gap: '8px',
+      iconBox: expected.iconBox,
+      titleFontSize: expected.fontSize,
+    });
+  });
+
+  it.each(densities)('keeps a device sub-group in the $density icon column', (expected) => {
+    subGroupModeMock.value = 'byDevice';
+    directoryRows.push(projectDirectory);
+    renderGroup(expected.density, projectGroup);
+
+    expect(readRow(screen.getByText('Studio Linux'))).toEqual({
+      gap: '8px',
+      iconBox: expected.iconBox,
+      // The sub-group label is deliberately smaller at every density.
+      titleFontSize: '12px',
+    });
   });
 });
