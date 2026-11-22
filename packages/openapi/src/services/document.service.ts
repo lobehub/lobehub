@@ -175,8 +175,8 @@ export class DocumentRestService extends BaseService {
     const current = await this.documentModel.findById(id);
     if (!current) throw notFound(id);
 
-    // Checked here as well as inside the write: a page with a live room merges
-    // the body into the room, where the write's row predicate does not apply.
+    // An early answer for a version that is already stale. The write enforces it
+    // itself, on the row or in the page's live room, where it cannot race.
     const expectedUpdatedAt = ifUpdatedAt === undefined ? undefined : new Date(ifUpdatedAt);
     if (expectedUpdatedAt && current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
       throw versionConflict(current.updatedAt);
@@ -191,7 +191,8 @@ export class DocumentRestService extends BaseService {
         id,
       });
     } catch (error) {
-      // Another save landed between the check above and the write.
+      // Another save landed before the write, or the page's live room held edits
+      // the stored page did not show yet (the write stored them first).
       const versionMismatch =
         error instanceof TRPCError &&
         error.code === 'CONFLICT' &&
