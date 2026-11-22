@@ -629,7 +629,7 @@ export default {
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
-  'plans.limits.agentRunCredit.runs': '{{runs}} start fees a month, models extra',
+  'plans.limits.agentRunCredit.runs': '{{runs}} start fees/mo',
   'plans.limits.agentRunCredit.tooltip':
     'Pays only the start fee of agent tasks. Model calls while a task runs are billed separately: LobeHub adds nothing for models on your own API key, and LobeHub-hosted models draw on your free allowance and top-ups.',
   'plans.limits.agentRunFee': '{{value}} per agent task',
