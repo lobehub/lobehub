@@ -13,7 +13,6 @@ import { CHANGE_EMAIL_IN_USE_CODE } from '@/libs/better-auth/constants';
 import { electronSystemService } from '@/services/electron/system';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { saveToast } from '@/store/utils/saveToast';
 
 import ProfileRow from './ProfileRow';
 
@@ -25,16 +24,20 @@ const EmailRow = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
+  /** Shown under the input instead of a toast so the guidance stays visible while the user fixes it */
+  const [error, setError] = useState('');
   const appOrigin = useAppOrigin();
 
   const handleStartEdit = () => {
     setEditValue('');
+    setError('');
     setIsEditing(true);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setEditValue('');
+    setError('');
   };
 
   const handleSave = useCallback(async () => {
@@ -42,26 +45,27 @@ const EmailRow = () => {
     if (!trimmed) return;
 
     if (!EMAIL_REGEX.test(trimmed)) {
-      toast.error(t('profile.emailInvalid'));
+      setError(t('profile.emailInvalid'));
       return;
     }
 
     try {
       setSaving(true);
+      setError('');
       const res = await changeEmail({ callbackURL: '/settings/profile', newEmail: trimmed });
       if (res.error) {
         if (res.error.code === CHANGE_EMAIL_IN_USE_CODE) {
-          toast.error(t('profile.emailInUse'));
+          setError(t('profile.emailInUseHint', { email: trimmed }));
           return;
         }
-        toast.error(res.error.message ?? res.error.statusText ?? t('profile.saveError'));
+        setError(res.error.message ?? res.error.statusText ?? t('profile.emailChangeFailed'));
         return;
       }
       setIsEditing(false);
       toast.success(t('profile.emailChangeSuccess'));
     } catch (err) {
       console.error('Failed to change email:', err);
-      saveToast(err, { retry: () => void handleSave(), title: t('profile.saveError') });
+      setError(t('profile.emailChangeFailed'));
     } finally {
       setSaving(false);
     }
@@ -115,19 +119,31 @@ const EmailRow = () => {
       }
     >
       {isEditing ? (
-        <Input
-          autoFocus
-          autoComplete="email"
-          inputMode="email"
-          placeholder={t('profile.emailPlaceholder')}
-          size="small"
-          style={{ flex: 1, minWidth: 0, width: '100%' }}
-          type="email"
-          value={editValue}
-          variant="filled"
-          onChange={(e) => setEditValue(e.target.value)}
-          onPressEnter={handleSave}
-        />
+        <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+          <Input
+            autoFocus
+            aria-invalid={!!error}
+            autoComplete="email"
+            data-invalid={error ? '' : undefined}
+            inputMode="email"
+            placeholder={t('profile.emailPlaceholder')}
+            size="small"
+            style={{ flex: 1, minWidth: 0, width: '100%' }}
+            type="email"
+            value={editValue}
+            variant="filled"
+            onPressEnter={handleSave}
+            onChange={(e) => {
+              setEditValue(e.target.value);
+              setError('');
+            }}
+          />
+          {error && (
+            <Text fontSize={12} role="alert" type="danger">
+              {error}
+            </Text>
+          )}
+        </Flexbox>
       ) : (
         <Text>{email || '--'}</Text>
       )}

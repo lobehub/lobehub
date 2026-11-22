@@ -387,8 +387,10 @@ export default {
   'profile.changePassword': 'Reset password',
   'profile.email': 'Email Address',
   'profile.emailChangeSuccess': 'Verification email sent. Please check your new email inbox.',
-  'profile.emailInUse':
-    'This email is already used by another account. Please use a different email.',
+  'profile.emailChangeFailed':
+    'Could not update your email. Check your network connection and try again.',
+  'profile.emailInUseHint':
+    '{{email}} is already used by another account. Enter a different email, or if that account is also yours, sign in to it and change its email first, then come back and try again.',
   'profile.emailInvalid': 'Please enter a valid email address',
   'profile.emailPlaceholder': 'new-email@example.com',
   'profile.fullName': 'Fullname',
