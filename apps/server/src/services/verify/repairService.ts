@@ -508,6 +508,26 @@ export class VerifyRepairService {
   }
 
   /**
+   * Close the window between the check before spawning and the spawn itself. A
+   * spawn cannot hold the Goal row, so a pause can commit while it is under way.
+   * This read comes after the round is marked `repairing`: a pause it misses
+   * committed later, so a Stop behind that pause finds this repair in its scan.
+   * The interrupted repair settles its round through the completion hook.
+   */
+  private async stopRepairIfGoalHeld(operationId: string, repairOperationId: string) {
+    if (!(await this.isGoalHoldingWork(operationId))) return;
+    try {
+      const result = await new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      }).interruptTask({ operationId: repairOperationId });
+      if (!result.success) throw new Error('Interruption was not confirmed');
+      log('goal stopped during spawn, interrupted repair %s', repairOperationId);
+    } catch (error) {
+      console.error('[verify-repair] could not stop a repair on a held Goal:', error);
+    }
+  }
+
+  /**
    * Mark a failed round's auto-repair as declined, so readers (the persisted
    * verify card) can treat its `failed` status as final rather than transient.
    */
@@ -575,6 +595,7 @@ export class VerifyRepairService {
       }
     }
     await this.statusService.markRepairing(operationId);
+    await this.stopRepairIfGoalHeld(operationId, spawned.repairOperationId);
     log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
 
     return spawned;

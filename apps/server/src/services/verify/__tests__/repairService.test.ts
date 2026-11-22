@@ -6,6 +6,7 @@ import { carriedRunPolicy, VerifyRepairService } from '../repairService';
 const m = vi.hoisted(() => ({
   findVerifyMessage: vi.fn(),
   goal: vi.fn(),
+  interrupt: vi.fn(),
   listResults: vi.fn(),
   markRepairing: vi.fn(),
   operation: vi.fn(),
@@ -14,6 +15,11 @@ const m = vi.hoisted(() => ({
   run: vi.fn(),
   updateMessage: vi.fn(),
   updateResult: vi.fn(),
+}));
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn(function () {
+    return { interruptTask: m.interrupt };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
@@ -139,6 +145,54 @@ describe('VerifyRepairService.triggerAutoRepair', () => {
       await new VerifyRepairService({} as any, 'user').triggerAutoRepair('op-3', spawner);
 
       expect(spawner).toHaveBeenCalledOnce();
+    });
+
+    /** Regression: a pause landing between the check and the spawn let the run through. */
+    it('interrupts a repair whose Goal was paused while it was spawning', async () => {
+      m.goal
+        .mockResolvedValueOnce({ status: 'running' })
+        .mockResolvedValueOnce({ status: 'paused' });
+      m.interrupt.mockResolvedValue({ success: true });
+      const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'repair-op' });
+
+      const spawned = await new VerifyRepairService({} as any, 'user').triggerAutoRepair(
+        'op-3',
+        spawner,
+      );
+
+      expect(spawner).toHaveBeenCalledOnce();
+      expect(m.interrupt).toHaveBeenCalledWith({ operationId: 'repair-op' });
+      // Marked first, so a Stop behind the pause can always find it.
+      expect(m.markRepairing.mock.invocationCallOrder[0]).toBeLessThan(
+        m.interrupt.mock.invocationCallOrder[0],
+      );
+      expect(spawned).toEqual({ repairOperationId: 'repair-op' });
+    });
+
+    it('leaves a repair alone when the Goal is still running after the spawn', async () => {
+      m.goal.mockResolvedValue({ status: 'running' });
+      const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'repair-op' });
+
+      await new VerifyRepairService({} as any, 'user').triggerAutoRepair('op-3', spawner);
+
+      expect(m.interrupt).not.toHaveBeenCalled();
+    });
+
+    it('keeps the spawned repair on record when it cannot be interrupted', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      m.goal
+        .mockResolvedValueOnce({ status: 'running' })
+        .mockResolvedValueOnce({ status: 'paused' });
+      m.interrupt.mockResolvedValue({ success: false });
+      const spawner = vi.fn().mockResolvedValue({ repairOperationId: 'repair-op' });
+
+      await expect(
+        new VerifyRepairService({} as any, 'user').triggerAutoRepair('op-3', spawner),
+      ).resolves.toEqual({ repairOperationId: 'repair-op' });
+
+      expect(m.recordAutoRepair).toHaveBeenCalledWith('round-3', 'spawned');
+      expect(consoleError).toHaveBeenCalled();
+      consoleError.mockRestore();
     });
 
     it('does not drop a repair because the Goal could not be read', async () => {
