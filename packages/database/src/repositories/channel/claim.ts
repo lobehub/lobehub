@@ -208,6 +208,39 @@ const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
   'workspace_changed',
 ]);
 
+/**
+ * The run that answers a request: the job whose manifest lists the message in its batch. A request
+ * settled as `merged` has no writer and no queued row of its own — the run that merged it holds it.
+ */
+const answeringRun = async (
+  tx: Transaction,
+  channelId: string,
+  memberId: string,
+  messageId: string,
+) => {
+  const [owner] = await tx
+    .select({
+      blockedCode: channelJobs.blockedCode,
+      isolatedAt: channelJobs.isolatedAt,
+      publishedMessageId: channelJobs.publishedMessageId,
+      status: channelJobs.status,
+      writerHeld: channelJobs.writerHeld,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        inArray(channelJobs.status, ['queued', 'running', 'completed']),
+        sql`${channelJobs.manifest} -> 'requestMessageIds' @> ${JSON.stringify([messageId])}::jsonb`,
+      ),
+    )
+    .orderBy(desc(channelJobs.claimedAt))
+    .limit(1);
+
+  return owner;
+};
+
 /** The job of the member a deferred follow-up waits for, on the same message. */
 const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string) => {
   const [primary] = await tx
@@ -229,23 +262,7 @@ const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string
   // follow-up waits for, and reads the reply of, the run that merged it.
   if (primary?.status !== 'merged') return primary;
 
-  const [owner] = await tx
-    .select({
-      blockedCode: channelJobs.blockedCode,
-      publishedMessageId: channelJobs.publishedMessageId,
-      status: channelJobs.status,
-    })
-    .from(channelJobs)
-    .where(
-      and(
-        eq(channelJobs.channelId, job.channelId),
-        eq(channelJobs.memberId, memberId),
-        inArray(channelJobs.status, ['queued', 'running', 'completed']),
-        sql`${channelJobs.manifest} -> 'requestMessageIds' @> ${JSON.stringify([job.messageId])}::jsonb`,
-      ),
-    )
-    .orderBy(desc(channelJobs.claimedAt))
-    .limit(1);
+  const owner = await answeringRun(tx, job.channelId, memberId, job.messageId);
 
   return owner ?? primary;
 };
@@ -359,24 +376,34 @@ export const claimJob = async (
   }
 
   // A Thread follows its root: the member answers the root on the main timeline first.
-  const [rootReply] = thread
+  const [root] = thread
     ? await tx
-        .select({ id: channelJobs.id })
+        .select({
+          isolatedAt: channelJobs.isolatedAt,
+          status: channelJobs.status,
+          writerHeld: channelJobs.writerHeld,
+        })
         .from(channelJobs)
         .where(
           and(
             eq(channelJobs.memberId, job.memberId),
             eq(channelJobs.messageId, thread.rootMessageId),
             isNull(channelJobs.threadId),
-            or(
-              eq(channelJobs.status, 'queued'),
-              and(eq(channelJobs.writerHeld, true), isNull(channelJobs.isolatedAt)),
-            ),
           ),
         )
         .limit(1)
     : [];
-  if (rootReply) {
+  // The root may have been settled as `merged` into an earlier run of the same batch: such a row
+  // has no writer and no queued row of its own, yet that run still owes the root its answer. So
+  // resolve it to the run that answers it before deciding, the way `primaryJob()` does.
+  const rootReply =
+    root?.status === 'merged'
+      ? await answeringRun(tx, channel.id, job.memberId, thread!.rootMessageId)
+      : root;
+  if (
+    rootReply &&
+    (rootReply.status === 'queued' || (rootReply.writerHeld && rootReply.isolatedAt === null))
+  ) {
     await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
     return null;
   }

@@ -190,6 +190,58 @@ describe('a deferred follow-up whose request an earlier run answers', () => {
   });
 });
 
+describe('a Thread whose root an earlier run merged', () => {
+  it('starts only after that run answers the root', async () => {
+    const team = await fixture.createTeamChannel();
+    // Routing asks the workspace who the sender is.
+    await db.insert(workspaceMembers).values({
+      role: 'owner',
+      userId: fixture.ownerId,
+      workspaceId: fixture.workspaceId,
+    });
+    const agent = await fixture.addAgent(team.channel.id, 'Agent');
+
+    /** One request on the given timeline, routed to the Agent by decision. */
+    const ask = async (content: string, threadId?: string) => {
+      const message = await team.asOwner.send(team.channel.id, {
+        content,
+        requestKey: content,
+        routing: 'decision',
+        ...(threadId && { threadId }),
+      });
+      const input = await routing.claim(team.channel.id, message.id);
+      await execution.resolveRouting(team.channel.id, message.id, input!.attempt, {
+        memberIds: [agent.id],
+        reason: 'test',
+        status: 'assigned',
+      });
+      return message;
+    };
+
+    const root = await ask('root');
+    const later = await ask('later');
+    const rootJob = (await jobsOf(db, root.id)).find((job) => job.memberId === agent.id)!;
+    const laterJob = (await jobsOf(db, later.id)).find((job) => job.memberId === agent.id)!;
+
+    // The Agent answers both main-timeline requests in one run, so the later one is merged.
+    const claim = await execution.claim(team.channel.id, rootJob.id, lease);
+    expect(claim?.job.manifest?.requestMessageIds).toEqual([root.id, later.id]);
+    expect((await jobById(db, laterJob.id)).status).toBe('merged');
+
+    // A Thread hangs off the merged request; that request is still owed the same run's answer.
+    const thread = await team.asOwner.createThread(team.channel.id, { rootMessageId: later.id });
+    const inThread = await ask('in the thread', thread.id);
+    const threadJob = (await jobsOf(db, inThread.id)).find((job) => job.memberId === agent.id)!;
+
+    expect(await execution.claim(team.channel.id, threadJob.id, lease)).toBeNull();
+    expect((await jobById(db, threadJob.id)).blockedCode).toBe('member_busy');
+
+    await finish(team.channel.id, claim!.job.id);
+
+    expect(await execution.claim(team.channel.id, threadJob.id, lease)).not.toBeNull();
+  });
+});
+
 describe('the scope of a batch continued into a Thread', () => {
   it('keeps what an earlier request of the batch quotes', async () => {
     const team = await fixture.createTeamChannel();
