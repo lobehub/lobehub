@@ -5,6 +5,7 @@ import type { AiModelConfig, ModelAbilities } from 'model-bank';
 import type { loadModels } from '@/business/client/model-bank/loadModels';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
+import { resolveServerProviderModelList } from '@/server/globalConfig/providerModelList';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
 
@@ -62,11 +63,13 @@ export const resolveModelContext = async (
   const activeProviderMetadata =
     providerMetadataResult.status === 'fulfilled' ? providerMetadataResult.value : undefined;
   const activeModelAbilities = activeModelMetadata?.abilities as ModelAbilities | undefined;
+  const serverModels = await resolveServerProviderModelList(provider, builtinModels);
   const modelMediaCapabilities =
     resolveModelMediaCapabilities({
       builtinModels,
       model,
       provider,
+      serverModels,
       userAbilities: activeModelAbilities,
     }) ?? {};
   // Everything downstream — one per step, retries included — reads these back

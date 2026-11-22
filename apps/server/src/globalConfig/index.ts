@@ -34,6 +34,7 @@ import {
 import { parseAgentConfig } from './parseDefaultAgent';
 import { parseFilesConfig } from './parseFilesConfig';
 import { getPublicMemoryExtractionConfig } from './parseMemoryExtractionConfig';
+import { PROVIDER_MODEL_LIST_OPTIONS } from './providerModelList';
 import { getServerFetchOnClientOverride } from './serverFetchOnClient';
 
 /**
@@ -65,25 +66,25 @@ const resolveAgentGatewayProtocol = (): 1 | 2 => {
 const getAiProviderSpecificConfig = () => {
   const aiProviderSpecificConfig: Record<string, ProviderSpecificConfig> = {
     azure: {
+      ...PROVIDER_MODEL_LIST_OPTIONS.azure,
       enabledKey: 'ENABLED_AZURE_OPENAI',
-      withDeploymentName: true,
     },
     azureai: {
-      withDeploymentName: true,
+      ...PROVIDER_MODEL_LIST_OPTIONS.azureai,
     },
     bedrock: {
+      ...PROVIDER_MODEL_LIST_OPTIONS.bedrock,
       enabledKey: 'ENABLED_AWS_BEDROCK',
-      modelListKey: 'AWS_BEDROCK_MODEL_LIST',
     },
     deepseek: {
       enabled: true,
     },
     giteeai: {
+      ...PROVIDER_MODEL_LIST_OPTIONS.giteeai,
       enabledKey: 'ENABLED_GITEE_AI',
-      modelListKey: 'GITEE_AI_MODEL_LIST',
     },
     kimicodingplan: {
-      withDeploymentName: true,
+      ...PROVIDER_MODEL_LIST_OPTIONS.kimicodingplan,
     },
     lmstudio: {
       fetchOnClient: getServerFetchOnClientOverride('lmstudio'),
@@ -99,23 +100,23 @@ const getAiProviderSpecificConfig = () => {
       enabledKey: 'ENABLED_OLLAMA_CLOUD',
     },
     qwen: {
-      withDeploymentName: true,
+      ...PROVIDER_MODEL_LIST_OPTIONS.qwen,
     },
     spark: {
-      withDeploymentName: true,
+      ...PROVIDER_MODEL_LIST_OPTIONS.spark,
     },
     tencentcloud: {
+      ...PROVIDER_MODEL_LIST_OPTIONS.tencentcloud,
       enabledKey: 'ENABLED_TENCENT_CLOUD',
-      modelListKey: 'TENCENT_CLOUD_MODEL_LIST',
     },
     unsloth: {
       fetchOnClient: getServerFetchOnClientOverride('unsloth'),
     },
     volcengine: {
-      withDeploymentName: true,
+      ...PROVIDER_MODEL_LIST_OPTIONS.volcengine,
     },
     volcenginecodingplan: {
-      withDeploymentName: true,
+      ...PROVIDER_MODEL_LIST_OPTIONS.volcenginecodingplan,
     },
   };
 

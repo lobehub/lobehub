@@ -533,6 +533,21 @@ describe('shareRouter', () => {
 
         await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
       });
+
+      it('honors env *_MODEL_LIST media abilities when the model is absent from DB and bundle', async () => {
+        vi.stubEnv('OPENAI_MODEL_LIST', '-all,+custom-vlm=Custom VLM<262144:vision:video>');
+        resolveModelSelectionMock.mockResolvedValue({
+          model: 'custom-vlm',
+          provider: 'openai',
+        });
+        loadModelsMock.mockResolvedValue([]);
+
+        try {
+          await expect(resolve()).resolves.toEqual({ audio: false, image: true, video: true });
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      });
     });
 
     it('returns the Workspace slug to the owner only', async () => {
