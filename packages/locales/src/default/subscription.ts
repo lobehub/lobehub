@@ -174,6 +174,7 @@ export default {
     'Maximum amount that can be auto-charged per month. Leave empty for no limit',
   'credits.autoTopUp.monthlyTopUpAmount': 'Monthly top-up amount',
   'credits.autoTopUp.monthlyLimitPlaceholder': 'No limit',
+  'credits.autoTopUp.saveError': 'Failed to save auto top-up settings',
   'credits.autoTopUp.saveSuccess': 'Auto top-up settings saved',
   'credits.autoTopUp.targetBalance': 'Target balance',
   'credits.autoTopUp.targetBalanceDesc': 'The balance to restore to when auto top-up triggers',
@@ -204,6 +205,7 @@ export default {
   'credits.agentShareBudget.limitHint':
     'Leave blank for no Workspace-wide cap. Set 0 to pause all visitor runs. These charges use the Workspace balance and never consume a member quota.',
   'credits.agentShareBudget.save': 'Save',
+  'credits.agentShareBudget.saveError': 'Failed to save the Agent Share budget policy',
   'credits.agentShareBudget.saveSuccess': 'Agent Share budget policy saved',
   'credits.agentShareBudget.title': 'External agent sharing',
   'credits.agentShareBudget.unlimited': 'No workspace-wide cap',
@@ -331,6 +333,7 @@ export default {
   'credits.memberBudget.emptyTitle': 'No member limits yet',
   'credits.costEstimateHint.desc':
     'Before you send a message, warn above the chat input if its estimated model cost reaches this amount',
+  'credits.costEstimateHint.saveError': 'Failed to save cost estimate alert settings',
   'credits.costEstimateHint.saveSuccess': 'Cost estimate alert settings saved',
   'credits.costEstimateHint.threshold': 'Warning threshold',
   'credits.costEstimateHint.title': 'Cost estimate alert',

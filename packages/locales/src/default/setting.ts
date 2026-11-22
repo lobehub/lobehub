@@ -120,6 +120,7 @@ export default {
   'accountDeletion.confirmContent':
     'After submission, you will enter a <0>72-hour</0> cooling-off period during which you can cancel at any time. Once the period ends, your account data will be permanently deleted, unpaid invoices will be canceled immediately, and paid fees will not be refunded. Your registration and deletion records will be retained for compliance purposes.',
   'accountDeletion.confirmOk': 'Delete Account',
+  'accountDeletion.confirmRequired': 'Please confirm you understand the consequences',
   'accountDeletion.confirmTitle': 'Delete Account?',
   'accountDeletion.desc':
     'Permanently delete your account and all associated data. This action cannot be undone.',
@@ -2140,6 +2141,7 @@ When I am ___, I need ___
   'storage.used': 'Storage Usage',
   'storageOverage.addPaymentMethod': 'Add payment method',
   'storageOverage.capped': 'Monthly spending cap reached. Overage uploads are paused.',
+  'storageOverage.capUpdateFailed': 'Failed to update monthly cap.',
   'storageOverage.capUpdated': 'Monthly cap updated.',
   'storageOverage.consent.billedMonthlyForYearly':
     'Storage overage is billed monthly, separate from your yearly plan renewal',
@@ -2167,7 +2169,9 @@ When I am ___, I need ___
   'storageOverage.disableConfirm.existingCharges':
     'Charges already incurred in this billing cycle will still be included on your subscription invoice.',
   'storageOverage.disableConfirm.title': 'Disable storage pay-as-you-go?',
+  'storageOverage.disableFailed': 'Failed to disable storage pay-as-you-go.',
   'storageOverage.disabled': 'Storage pay-as-you-go disabled.',
+  'storageOverage.enableFailed': 'Failed to enable storage pay-as-you-go.',
   'storageOverage.enabled': 'Storage pay-as-you-go enabled.',
   'storageOverage.monthlyCap': 'Monthly spending cap',
   'storageOverage.monthlyCapDesc':
@@ -2676,6 +2680,7 @@ When I am ___, I need ___
     'Type the workspace name "{{name}}" to confirm:',
   'workspace.billingPage.billing.downgrade.confirmInputPlaceholder': 'Workspace name',
   'workspace.billingPage.billing.downgrade.confirmTitle': 'Downgrade to Free?',
+  'workspace.billingPage.billing.downgrade.failedToast': 'Failed to downgrade.',
   'workspace.billingPage.billing.downgrade.successToast': 'Workspace downgraded to Free.',
   'workspace.billingPage.billing.basic.subtitle':
     'Basic workspace · shared monthly pool · no paid seats',
@@ -3843,6 +3848,7 @@ When I am ___, I need ___
   'workspace.upgradeModal.freeTag': 'Free',
   'workspace.upgradeModal.noBasicHint': "You don't own any Basic workspaces to upgrade.",
   'workspace.upgradeModal.noFreeHint': "You don't own any Free workspaces to upgrade.",
+  'workspace.upgradeModal.payFailed': 'Failed to start checkout',
   'workspace.upgradeModal.pickerLabel': 'Select a workspace',
   'workspace.upgradeModal.proTag': 'Pro',
   'workspace.upgradeModal.subtitle': 'Unlock collaboration, more usage, and higher rate limits.',
@@ -3920,6 +3926,7 @@ When I am ___, I need ___
   'workspace.wizard.step2.chargeDisclosurePayOnce':
     'Confirming creates this workspace on {{plan}} and charges a one-time fee of ${{fee}} for {{duration}}, plus any applicable taxes. It does not auto-renew — you can upgrade or add seats at any time, while downgrades wait until the period ends.',
   'workspace.wizard.step2.confirmPurchase': 'Confirm purchase',
+  'workspace.wizard.step2.createFailed': 'Failed to create workspace',
   'workspace.wizard.step2.details.description': "See what's included in your selected plan.",
   'workspace.wizard.step2.details.title': 'Plan details',
   'workspace.wizard.step2.createBasic': 'Create workspace',
@@ -3967,6 +3974,7 @@ When I am ___, I need ___
   'workspace.wizard.step2.left.proTagline': '${{fee}}/seat/month. Extra usage is billed on demand.',
   'workspace.wizard.step2.left.proTopUpHint':
     'Top up when balance runs low: ${{price}} per $1 ({{percent}}% off the standard rate)',
+  'workspace.wizard.step2.payFailed': 'Failed to start checkout',
   'workspace.wizard.step2.pill.basic': 'Basic',
   'workspace.wizard.step2.pill.basicUsed': '{{used}}/{{limit}} used',
   'workspace.wizard.step2.pill.free': 'Free',
