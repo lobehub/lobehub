@@ -482,14 +482,12 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           {/* Uploading an image lives in the studio, so the picker keeps the
               character tab (first, and where it opens), emoji and the studio
               launcher tab. */}
-          {/* Keyed by the url for the same reason as the studio preview: the
-              underlying Avatar latches its image-error state, so without a
-              remount a newly generated avatar stays invisible whenever the
-              previous one failed to load. */}
+          {/* Not keyed by the avatar: a remount would close the popup on every
+              character pick. The trigger's AgentAvatar resets a broken image
+              itself when the url changes. */}
           <EmojiPicker
             allowModelAvatar
             allowDelete={canEdit && !!avatar}
-            key={avatarRemountKey(avatar)}
             locale={locale}
             open={canEdit ? undefined : false}
             popupClassName="agent-avatar-artwork-picker"

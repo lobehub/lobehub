@@ -6,11 +6,11 @@ import type { Operation } from '@/store/chat/slices/operation/types';
 
 import { AGENT_AVATAR_DONE_MS, useAgentAvatarActivity } from './useAgentAvatarActivity';
 
-const setRun = (status?: Operation['status']) => {
+const setRun = (status?: Operation['status'], metadata?: Record<string, unknown>) => {
   const run = {
     context: { agentId: 'agent' },
     id: 'run',
-    metadata: { startTime: 1 },
+    metadata: { startTime: 1, ...metadata },
     status,
     type: 'execAgentRuntime',
   } as unknown as Operation;
@@ -60,6 +60,27 @@ describe('useAgentAvatarActivity', () => {
     });
     expect(result.current.state).toBeUndefined();
     expect(result.current.avatar.animated).toBe(false);
+  });
+
+  // A client run hides its loading state first and is marked completed a moment later.
+  it('celebrates a run that is marked completed after it stopped showing as busy', () => {
+    const { result } = renderHook(() => useAgentAvatarActivity('agent'));
+
+    setRun('running');
+    setRun('running', { visibleLoadingDone: true });
+    expect(result.current.state).toBeUndefined();
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    setRun('completed', { visibleLoadingDone: true });
+    expect(result.current.state).toBe('done');
+  });
+
+  it('does not celebrate a run already completed before it mounted', () => {
+    setRun('completed');
+    const { result } = renderHook(() => useAgentAvatarActivity('agent'));
+    expect(result.current.state).toBeUndefined();
   });
 
   it.each(['failed', 'cancelled'] as const)('does not celebrate a %s run', (status) => {

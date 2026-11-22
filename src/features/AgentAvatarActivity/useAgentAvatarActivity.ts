@@ -10,7 +10,14 @@ import {
 /** How long a finished run celebrates (`done`: smiling eyes, two small hops) before idling. */
 export const AGENT_AVATAR_DONE_MS = 2400;
 
+/**
+ * How long after a run stops showing as busy it may still report how it ended. A client run hides
+ * its loading state before its operation is marked completed.
+ */
+export const AGENT_AVATAR_SETTLE_MS = 8000;
+
 const idle = () => undefined;
+const never = () => false;
 const isProducing = (state?: AgentAvatarState) => state === 'working' || state === 'thinking';
 
 /**
@@ -20,20 +27,26 @@ const isProducing = (state?: AgentAvatarState) => state === 'working' || state =
  */
 export const useAgentAvatarActivity = (agentId?: string | null) => {
   const busy = useChatStore(agentId ? agentRunAvatarState(agentId) : idle);
+  const completed = useChatStore(agentId ? isLatestAgentRunCompleted(agentId) : never);
   const [hovered, setHovered] = useState(false);
   const [done, setDone] = useState(false);
   const previous = useRef(busy);
+  const settlingUntil = useRef(0);
 
   useEffect(() => {
     const was = previous.current;
     previous.current = busy;
     if (busy) {
+      settlingUntil.current = 0;
       setDone(false);
       return;
     }
-    if (agentId && isProducing(was) && isLatestAgentRunCompleted(agentId)(useChatStore.getState()))
-      setDone(true);
-  }, [agentId, busy]);
+    if (isProducing(was)) settlingUntil.current = Date.now() + AGENT_AVATAR_SETTLE_MS;
+    if (!completed || Date.now() > settlingUntil.current) return;
+
+    settlingUntil.current = 0;
+    setDone(true);
+  }, [busy, completed]);
 
   useEffect(() => {
     if (!done) return;
