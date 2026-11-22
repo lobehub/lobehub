@@ -198,13 +198,13 @@ export class SearchService {
       }
     } catch {}
 
-    const { Crawler, formatCrawlFailureContent } = await import('@lobechat/web-crawler');
+    const { Crawler } = await import('@lobechat/web-crawler');
     const crawler = new Crawler(this.crawlerOptions);
 
     const results = await pMap(
       input.urls,
       async (url) => {
-        return await this.crawlWithRetry(crawler, url, input.impls, formatCrawlFailureContent);
+        return await this.crawlWithRetry(crawler, url, input.impls);
       },
       { concurrency: this.crawlConcurrency },
     );
@@ -216,7 +216,6 @@ export class SearchService {
     crawler: Crawler,
     url: string,
     impls?: CrawlImplType[],
-    formatFailure?: (errorType: string, errorMessage?: string) => string,
   ): Promise<CrawlUniformResult> {
     const maxAttempts = this.crawlerRetry + 1;
     let lastResult: CrawlUniformResult | undefined;
@@ -256,9 +255,7 @@ export class SearchService {
     return {
       crawler: 'unknown',
       data: {
-        content: formatFailure
-          ? formatFailure(errorType, errorMessage)
-          : `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}`,
+        content: `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}. Do not keep retrying with different queries or sources — if the \`agent-browser\` skill is available, activate it and re-fetch this page with a real browser (anti-bot walls often masquerade as timeouts or generic errors); otherwise explain the issue and suggest alternatives.`,
         errorMessage,
         errorType,
       },
