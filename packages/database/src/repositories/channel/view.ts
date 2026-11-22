@@ -40,7 +40,6 @@ import {
   channels,
   channelThreads,
   devices,
-  files as fileTable,
   topics,
   users,
   workspaceUserSettings,
@@ -48,7 +47,7 @@ import {
 import type { Transaction } from '../../type';
 import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
-import { fileIdsByMessage } from './attachments';
+import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
@@ -738,18 +737,7 @@ export const readChannelView = async (
     relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
   ]);
   const ids = [...new Set([...files.values()].flat())];
-  const attachments = ids.length
-    ? await tx
-        .select({
-          id: fileTable.id,
-          name: fileTable.name,
-          fileType: fileTable.fileType,
-          size: fileTable.size,
-          url: fileTable.url,
-        })
-        .from(fileTable)
-        .where(inArray(fileTable.id, ids))
-    : [];
+  const attachments = await channelAttachments(tx, ids);
   return {
     attachments,
     hasMore: reversed.length > limit,
