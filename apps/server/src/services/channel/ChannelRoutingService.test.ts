@@ -8,6 +8,7 @@ import {
 } from './ChannelRoutingService';
 
 const mocks = vi.hoisted(() => ({
+  availability: vi.fn(),
   record: vi.fn(),
   classify: vi.fn(),
   countCall: vi.fn(),
@@ -45,6 +46,11 @@ vi.mock('@/server/services/conversationWake/dutyJudge', () => ({
 }));
 vi.mock('@/server/services/redis', () => ({
   redisService: { botWake: { countClassifierCall: mocks.countCall } },
+}));
+vi.mock('@/server/services/agentAvailability', () => ({
+  AgentAvailabilityService: class {
+    getAvailability = mocks.availability;
+  },
 }));
 vi.mock('./notify', () => ({ notifyChannel: mocks.notify }));
 vi.mock('./wakeRecords', () => ({ recordChannelWakeDecisions: mocks.record }));
@@ -103,6 +109,7 @@ beforeEach(() => {
   mocks.decide.mockResolvedValue(response(0.95, 0.05));
   mocks.resolve.mockResolvedValue({ recipients: ['coder'], status: 'assigned' });
   mocks.countCall.mockResolvedValue(1);
+  mocks.availability.mockResolvedValue({});
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -695,5 +702,78 @@ describe('members’ own wake rules', () => {
         }),
       }),
     );
+  });
+});
+
+describe('dispatch policy', () => {
+  const run = () => new ChannelRoutingService({} as never).advance('channel');
+  const bench = (...agentIds: string[]) =>
+    mocks.availability.mockResolvedValue(
+      Object.fromEntries(
+        agentIds.map((agentId) => [
+          agentId,
+          { activeJobs: 0, dispatchable: false, status: 'offDuty' },
+        ]),
+      ),
+    );
+
+  it('reads availability as the sender, for every candidate', async () => {
+    await run();
+    expect(mocks.availability).toHaveBeenCalledWith(['agt-coder', 'agt-reviewer']);
+  });
+
+  it('never offers the decision model a member the policy benches', async () => {
+    bench('agt-coder');
+    mocks.decide.mockResolvedValue({
+      answers: { reviewer: { probability: 0.9, type: 'boolean' as const } },
+      model: 'jev-1.14.0',
+    });
+    await run();
+
+    expect(Object.keys(mocks.decide.mock.calls[0][0].questions)).toEqual(['reviewer']);
+    expect(mocks.resolve.mock.calls[0][3]).toMatchObject({
+      memberIds: ['reviewer'],
+      status: 'assigned',
+    });
+  });
+
+  it('leaves a benched member out of fallback delivery', async () => {
+    bench('agt-coder');
+    mocks.claim.mockResolvedValue({ ...input, fallback: true });
+    await run();
+    expect(mocks.resolve.mock.calls[0][3]).toMatchObject({
+      memberIds: ['reviewer'],
+      status: 'assigned',
+    });
+  });
+
+  it('skips the message when every member that could answer is benched', async () => {
+    bench('agt-coder', 'agt-reviewer');
+    await run();
+    expect(mocks.decide).not.toHaveBeenCalled();
+    expect(mocks.resolve.mock.calls[0][3]).toEqual({
+      reason: 'Every Agent that could answer is offline or unavailable',
+      status: 'skipped',
+    });
+  });
+
+  it('still wakes a member named in the message: being named is being addressed', async () => {
+    bench('agt-reviewer');
+    mocks.claim.mockResolvedValue({ ...input, message: 'Reviewer, can you take a look at this?' });
+    await run();
+    expect(mocks.resolve.mock.calls[0][3]).toMatchObject({
+      memberIds: ['reviewer'],
+      status: 'assigned',
+    });
+  });
+
+  it('routes as before when availability cannot be read', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.availability.mockRejectedValue(new Error('redis down'));
+    await run();
+    expect(mocks.resolve.mock.calls[0][3]).toMatchObject({
+      memberIds: ['coder'],
+      status: 'assigned',
+    });
   });
 });
