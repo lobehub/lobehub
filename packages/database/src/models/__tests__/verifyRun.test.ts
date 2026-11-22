@@ -158,7 +158,7 @@ describe('VerifyRunModel.claimRepairing', () => {
 
     await expect(
       new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId)),
-    ).resolves.toBe(true);
+    ).resolves.toBeInstanceOf(Date);
     expect(await statusOf(runId)).toBe('repairing');
   });
 
@@ -167,12 +167,12 @@ describe('VerifyRunModel.claimRepairing', () => {
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
     const settled = await snapshotOf(runId);
 
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, settled)).resolves.toBe(
-      true,
-    );
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, settled)).resolves.toBe(
-      false,
-    );
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, settled),
+    ).resolves.toBeInstanceOf(Date);
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, settled),
+    ).resolves.toBeNull();
     expect(await statusOf(runId)).toBe('repairing');
   });
 
@@ -182,7 +182,7 @@ describe('VerifyRunModel.claimRepairing', () => {
 
     await expect(
       new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId)),
-    ).resolves.toBe(true);
+    ).resolves.toBeInstanceOf(Date);
     expect(await statusOf(runId)).toBe('repairing');
   });
 
@@ -193,12 +193,12 @@ describe('VerifyRunModel.claimRepairing', () => {
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
     const read = await snapshotOf(runId);
 
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, read)).resolves.toBe(
-      true,
-    );
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, read)).resolves.toBe(
-      false,
-    );
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, read),
+    ).resolves.toBeInstanceOf(Date);
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, read),
+    ).resolves.toBeNull();
   });
 
   it('misses the CAS when the expected status differs from the row', async () => {
@@ -208,7 +208,7 @@ describe('VerifyRunModel.claimRepairing', () => {
 
     await expect(
       new VerifyRunModel(serverDB, userId).claimRepairing(runId, { ...read, status: 'passed' }),
-    ).resolves.toBe(false);
+    ).resolves.toBeNull();
     expect(await statusOf(runId)).toBe('failed');
   });
 
@@ -225,16 +225,16 @@ describe('VerifyRunModel.claimRepairing', () => {
     const readByA = await snapshotOf(runId);
 
     const readByB = await snapshotOf(runId);
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, readByB)).resolves.toBe(
-      true,
-    );
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, readByB),
+    ).resolves.toBeInstanceOf(Date);
     // The repair child's finalizer collapses the parent back to the same status.
     await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'failed');
     expect(await statusOf(runId)).toBe('failed');
 
-    await expect(new VerifyRunModel(serverDB, userId).claimRepairing(runId, readByA)).resolves.toBe(
-      false,
-    );
+    await expect(
+      new VerifyRunModel(serverDB, userId).claimRepairing(runId, readByA),
+    ).resolves.toBeNull();
     expect(await statusOf(runId)).toBe('failed');
   });
 
@@ -243,7 +243,7 @@ describe('VerifyRunModel.claimRepairing', () => {
 
     await expect(
       new VerifyRunModel(serverDB, userId).claimRepairing(runId, await snapshotOf(runId)),
-    ).resolves.toBe(false);
+    ).resolves.toBeNull();
     expect(await statusOf(runId)).toBe('planned');
   });
 });
@@ -302,7 +302,9 @@ describe('VerifyRunModel.reclaimRepairing', () => {
       true,
     );
     await model.updateStatus(runId, 'failed');
-    await expect(model.claimRepairing(runId, await snapshotOf(runId))).resolves.toBe(true);
+    await expect(model.claimRepairing(runId, await snapshotOf(runId))).resolves.toBeInstanceOf(
+      Date,
+    );
     expect(await statusOf(runId)).toBe('repairing');
 
     await expect(model.reclaimRepairing(runId, readBySweep.updatedAt)).resolves.toBe(false);
@@ -318,6 +320,56 @@ describe('VerifyRunModel.reclaimRepairing', () => {
       new VerifyRunModel(serverDB, userId).reclaimRepairing(runId, updatedAt),
     ).resolves.toBe(false);
     expect(await statusOf(runId)).toBe('repairing');
+  });
+});
+
+describe('VerifyRunModel.fenceRepairClaim', () => {
+  it('passes for the current claim and re-stamps it so an older read cannot reclaim', async () => {
+    const runId = await buildRun('op-fence-1');
+    const model = new VerifyRunModel(serverDB, userId);
+    await model.updateStatus(runId, 'failed');
+    const claimVersion = await model.claimRepairing(runId, await snapshotOf(runId));
+    expect(claimVersion).toBeInstanceOf(Date);
+    const readBySweep = await snapshotOf(runId);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await expect(model.fenceRepairClaim(runId, claimVersion!)).resolves.toBe(true);
+    expect(await statusOf(runId)).toBe('repairing');
+    // The sweep read the claim before the spawner prepared its child: its
+    // reclaim must now miss instead of starting a replacement repair.
+    await expect(model.reclaimRepairing(runId, readBySweep.updatedAt)).resolves.toBe(false);
+    expect(await statusOf(runId)).toBe('repairing');
+  });
+
+  it('misses once the sweep retook a stalled claim', async () => {
+    // The spawner claimed, persisted its child operation and stalled past the
+    // grace; the sweep reclaimed the run and a replacement claim followed.
+    const runId = await buildRun('op-fence-2');
+    const model = new VerifyRunModel(serverDB, userId);
+    await model.updateStatus(runId, 'failed');
+    const stalledClaim = await model.claimRepairing(runId, await snapshotOf(runId));
+    await backdate(runId, 10 * 60 * 1000);
+    const staleRead = await snapshotOf(runId);
+
+    await expect(model.reclaimRepairing(runId, staleRead.updatedAt)).resolves.toBe(true);
+    await model.updateStatus(runId, 'failed');
+    await expect(model.claimRepairing(runId, await snapshotOf(runId))).resolves.toBeInstanceOf(
+      Date,
+    );
+
+    await expect(model.fenceRepairClaim(runId, stalledClaim!)).resolves.toBe(false);
+    await expect(model.fenceRepairClaim(runId, staleRead.updatedAt)).resolves.toBe(false);
+    expect(await statusOf(runId)).toBe('repairing');
+  });
+
+  it('never fences another owner’s run', async () => {
+    const runId = await buildRun('op-fence-3', otherUserId);
+    await new VerifyRunModel(serverDB, otherUserId).updateStatus(runId, 'repairing');
+    const { updatedAt } = await snapshotOf(runId);
+
+    await expect(
+      new VerifyRunModel(serverDB, userId).fenceRepairClaim(runId, updatedAt),
+    ).resolves.toBe(false);
   });
 });
 

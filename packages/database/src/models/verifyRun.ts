@@ -802,12 +802,14 @@ export class VerifyRunModel {
    * matches nothing and the caller drops out; the next settlement retry or
    * sweep re-enters with a fresh read.
    *
-   * @returns true when this caller owns the repair round, false otherwise.
+   * @returns the claim's version (the row's new `updatedAt`) when this caller
+   * owns the repair round — the spawner fences its child with it (see
+   * {@link fenceRepairClaim}) — or null when another caller got there first.
    */
   claimRepairing = async (
     runId: string,
     expected: Pick<VerifyRunItem, 'status' | 'updatedAt'>,
-  ): Promise<boolean> => {
+  ): Promise<Date | null> => {
     const claimed = await this.db
       .update(verifyRuns)
       .set({ status: 'repairing' })
@@ -823,9 +825,43 @@ export class VerifyRunModel {
           this.ownership(),
         ),
       )
+      .returning({ updatedAt: verifyRuns.updatedAt });
+
+    return claimed[0]?.updatedAt ?? null;
+  };
+
+  /**
+   * Confirm a repair claim is still current right before its child round is
+   * prepared, and re-stamp it so the claim can no longer be retaken from an
+   * older read.
+   *
+   * The spawner persists its child operation before it prepares the child's
+   * round, so a spawner that stalls past the sweep's grace leaves the parent
+   * looking abandoned: the sweep reclaims it and a replacement repair starts.
+   * The stalled spawner must then drop its child instead of preparing it
+   * alongside the replacement. Both sides go through one conditional UPDATE on
+   * the claim's version: if the sweep's `reclaimRepairing` landed first the
+   * fence misses, and if the fence landed first its re-stamp makes the
+   * sweep's CAS miss — never both.
+   *
+   * @returns true when the claim is still the caller's and the child may be
+   * prepared.
+   */
+  fenceRepairClaim = async (runId: string, claimVersion: Date): Promise<boolean> => {
+    const fenced = await this.db
+      .update(verifyRuns)
+      .set({ status: 'repairing' })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          eq(verifyRuns.status, 'repairing'),
+          this.isUnchangedSince(claimVersion),
+          this.ownership(),
+        ),
+      )
       .returning({ id: verifyRuns.id });
 
-    return claimed.length > 0;
+    return fenced.length > 0;
   };
 
   /**

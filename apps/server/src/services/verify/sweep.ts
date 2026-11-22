@@ -173,7 +173,10 @@ const recoverRun = async (
     // only a repair owns a round: `prepareRepairRound` gives it a confirmed
     // round of the same acceptance as it is created. A verifier parked on an
     // async tool is not a repair in flight, and counting it would keep a dead
-    // claim forever.
+    // claim forever. A repair child persisted but not yet prepared (its spawner
+    // stalled before `prepareRepairRound`) is safe to pass over as well: the
+    // reclaim below and that spawner's `fenceRepairClaim` race on the same claim
+    // version, so either this reclaim misses or that child is aborted.
     const repairChildren: typeof children = [];
     for (const child of children) {
       if (child.id === operationId || child.parentOperationId !== operationId) continue;
