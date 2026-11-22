@@ -37,6 +37,40 @@ describe('Channel request prompt', () => {
   const caller = { id: 'caller', name: 'Mia', type: 'user' } as const;
   const coder = { id: 'coder', name: 'Coder', type: 'agent' } as const;
 
+  it('asks for one answer to requests the same person sent in a row', () => {
+    const prompt = buildChannelPrompt(
+      { ...manifest, requestMessageIds: ['first', 'current'] },
+      [
+        message('quoted', 'The plan', coder),
+        message('first', 'Fix the list', caller, { replyToId: 'quoted' }),
+        message('current', 'Only the queued items', caller),
+      ],
+      {
+        boundary: 'b0',
+        // The earlier request is also unseen context; it is shown once, as a request.
+        context: [message('first', 'Fix the list', caller), message('theirs', 'Ok', coder)],
+      },
+    );
+
+    expect(prompt.split('\n')).toEqual([
+      '<channel_message from="Coder" type="agent" boundary="b0">',
+      'Ok',
+      '</channel_message boundary="b0">',
+      '<channel_quote from="Coder" type="agent" boundary="b0">',
+      'The plan',
+      '</channel_quote boundary="b0">',
+      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      'Fix the list',
+      '</channel_request boundary="b0">',
+      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+      'Only the queued items',
+      '</channel_request boundary="b0">',
+      '<channel_merged boundary="b0">',
+      'The 2 `channel_request` blocks are requests the same person sent in a row while you were busy, oldest first. Answer them together in one reply. Where a later one corrects, narrows or replaces an earlier one, follow the later one.',
+      '</channel_merged boundary="b0">',
+    ]);
+  });
+
   it('marks the member’s own earlier replies and says how much unseen history is left out', () => {
     const self = { id: 'agent', name: 'Codex', type: 'agent' } as const;
     const prompt = buildChannelPrompt(manifest, [message('current', 'And now?', caller)], {

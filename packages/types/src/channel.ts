@@ -389,9 +389,11 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
  * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
+ * - `merged`: queued behind an earlier request from the same person and answered in that run;
+ *   the run's manifest lists it in `requestMessageIds`.
  */
 export type ChannelJobStatus =
-  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+  'cancelled' | 'completed' | 'failed' | 'merged' | 'queued' | 'running' | 'silent';
 
 /**
  * Why a job was woken, frozen when it is delivered.
@@ -715,7 +717,15 @@ export interface ChannelInputManifest {
   primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
+  /** The last request this run answers; with a merged batch, the newest of them. */
   requestMessageId: string;
+  /**
+  /**
+   * Every request this run answers, oldest first, when the requester sent several in a row
+   * while the member was busy: their queued jobs settle as `merged` into this one. Absent for
+   * a single request.
+   */
+  requestMessageIds?: string[];
   /**
    * Set when the run resumes a failed reply in the same topic (`resumeJob`), so the run gets a
    * short continuation prompt and the runtime resumes its session.

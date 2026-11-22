@@ -160,6 +160,14 @@ actions in place. A shared Agent's card keeps the visitor-safe error projection 
 rewrite. A stop through the Channel cancels the job and writes no card. The job's own
 `errorMessage` / `errorType` / `deviceId` stay in the detail view for older clients.
 
+Each member answers a branch in message order, but not one run per message: when a job is
+claimed, the same person's owed answers queued right behind it from that member in that branch
+are merged into the run (`claim.ts`, `merge.ts`). The manifest's cutoff and `requestMessageId`
+move to the newest of them and `requestMessageIds` lists them all; their jobs settle as `merged`,
+and only the first opens a reply. Merging stops at someone else's request, a `followup` wake, a
+relay or brought-back answer, or a message whose routing is still undecided, and never applies
+to a shared Agent, whose visitors are metered per request. Retrying the run re-queues them.
+
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
 token count, latency, and each member's own rule verdicts (`wakeRules`). No raw provider errors are stored. Runtime hooks still receive
 `trigger: channel`, the message ID and attempt for billing/routing observability.
