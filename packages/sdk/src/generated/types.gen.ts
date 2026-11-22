@@ -317,6 +317,12 @@ export type Document = {
      * Markdown body.
      */
     content: string | null;
+    /**
+     * Lexical editor state (`SerializedEditorState`) of the body; `null` for folders, HTML pages and pages saved without one.
+     */
+    editorData: {
+        [key: string]: unknown;
+    } | null;
 };
 
 export type EvalRun = {
@@ -5397,6 +5403,17 @@ export type PostApiV1DocumentsData = {
          */
         content?: string;
         /**
+         * Lexical editor state (`SerializedEditorState`) with a non-empty `root`, at most 50000000 characters serialized. Replaces the whole body. When `content` is omitted, the server exports the Markdown body from it. Not accepted for folders or HTML pages (`custom/html`).
+         */
+        editorData?: {
+            root: {
+                children: Array<unknown>;
+                type: 'root';
+                [key: string]: unknown;
+            };
+            [key: string]: unknown;
+        };
+        /**
          * `custom/folder` creates a folder; defaults to a page (`custom/document`).
          */
         fileType?: string;
@@ -5525,9 +5542,24 @@ export type GetApiV1DocumentsByIdResponse = GetApiV1DocumentsByIdResponses[keyof
 export type PatchApiV1DocumentsByIdData = {
     body: {
         /**
-         * Markdown body; replaces the whole body.
+         * Markdown body; replaces the whole body. Sent with `editorData`, it is stored as that state’s Markdown.
          */
         content?: string;
+        /**
+         * Lexical editor state (`SerializedEditorState`) with a non-empty `root`, at most 50000000 characters serialized. Replaces the whole body. When `content` is omitted, the server exports the Markdown body from it. Not accepted for folders or HTML pages (`custom/html`).
+         */
+        editorData?: {
+            root: {
+                children: Array<unknown>;
+                type: 'root';
+                [key: string]: unknown;
+            };
+            [key: string]: unknown;
+        };
+        /**
+         * The `updatedAt` the client last read. When the stored `updatedAt` differs, nothing is written and the API answers 409 `conflict`; the error’s `details` entry for `json.ifUpdatedAt` carries the stored `updatedAt` as its message.
+         */
+        ifUpdatedAt?: string;
         title?: string;
     };
     headers?: {
@@ -5560,6 +5592,10 @@ export type PatchApiV1DocumentsByIdErrors = {
      * Resource not found
      */
     404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
     /**
      * Rate limit exceeded
      */
