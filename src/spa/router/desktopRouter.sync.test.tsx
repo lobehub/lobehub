@@ -848,6 +848,21 @@ describe('desktop router shared definition', () => {
   );
 
   it.each(mainAreaVariants)(
+    '%s serves Conversation settings and forwards old chat-preference links to it',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      expect(matchRoutes(routes, '/acme/settings/conversation')?.at(-1)?.route.path).toBe(
+        'conversation',
+      );
+
+      const legacy = matchRoutes(routes, '/acme/settings/chat-preference')?.at(-1)?.route
+        .element as ReactElement<{ to: string }> | undefined;
+      expect(legacy?.props.to).toBe('../conversation');
+    },
+  );
+
+  it.each(mainAreaVariants)(
     '%s keeps workspace provider deep-links inside the workspace',
     (_, factory) => {
       const routes = createMainAreaRoutes(factory);

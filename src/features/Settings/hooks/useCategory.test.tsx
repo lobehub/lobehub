@@ -77,6 +77,7 @@ describe('settings useCategory', () => {
     expect(groupKeys(SettingsGroupKey.Account)).toEqual([
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
+      SettingsTabs.Conversation,
       SettingsTabs.Hotkey,
       SettingsTabs.Notification,
       SettingsTabs.Stats,
