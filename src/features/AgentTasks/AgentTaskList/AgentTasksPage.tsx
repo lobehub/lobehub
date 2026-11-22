@@ -8,7 +8,7 @@ import {
   TabsRoot,
   TabsTab,
 } from '@lobehub/ui';
-import { ClockIcon, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useSearchParams } from 'react-router';
@@ -575,7 +575,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
 
   const showGoalsAndTasksTabs = !!agentId || (!projectId && !activeWorkspaceId);
   const headerLeft = showGoalsAndTasksTabs ? (
-    <AgentGoalsAndTasksTabs agentId={agentId} view={'tasks'} />
+    <AgentGoalsAndTasksTabs
+      agentId={agentId}
+      view={isScheduledCollection ? 'scheduled' : 'tasks'}
+      onTaskCollectionChange={handleCollectionChange}
+    />
   ) : (
     <Flexbox horizontal align={'center'} gap={8}>
       {headerVisibility.showBreadcrumb && <Breadcrumb />}
@@ -611,21 +615,6 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           styles={showGoalsAndTasksTabs ? undefined : { left: { gap: 8, paddingLeft: 4 } }}
           right={
             <Flexbox horizontal align={'center'} gap={4}>
-              {showGoalsAndTasksTabs && (
-                <Button
-                  aria-label={t('taskList.scheduled.title')}
-                  aria-pressed={isScheduledCollection}
-                  icon={ClockIcon}
-                  size={'small'}
-                  title={t('taskList.scheduled.title')}
-                  type={isScheduledCollection ? 'fill' : 'text'}
-                  onClick={() =>
-                    handleCollectionChange(isScheduledCollection ? 'tasks' : 'scheduled')
-                  }
-                >
-                  {isMobile ? undefined : t('taskList.scheduled.title')}
-                </Button>
-              )}
               {showFind && <TaskListFind content={filter?.content} onChange={handleFindChange} />}
               {(headerVisibility.showViewOptions || hasFilter) && (
                 <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
