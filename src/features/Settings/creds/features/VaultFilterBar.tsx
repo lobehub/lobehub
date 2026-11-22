@@ -47,11 +47,21 @@ const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, creds, onChange, va
         }))}
         onChange={(next) => onChange({ ...value, type: next as CredTypeFilterValue })}
       />
-      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+      {/* Takes the rest of the row and shrinks the search box before wrapping,
+          so the tabs, search and visibility filter share one line at settings
+          widths; a very narrow pane still wraps each control onto its own line. */}
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={8}
+        justify={'flex-end'}
+        style={{ flex: '1 1 auto' }}
+        wrap={'wrap'}
+      >
         <SearchBar
           allowClear
           placeholder={t('creds.searchPlaceholder')}
-          style={{ width: 220 }}
+          style={{ flex: '1 1 140px', maxWidth: 240, minWidth: 140 }}
           value={value.keyword ?? ''}
           variant={'filled'}
           onChange={(e) => onChange({ ...value, keyword: e.target.value })}
