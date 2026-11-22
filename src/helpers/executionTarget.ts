@@ -272,6 +272,30 @@ export const isExecutionTargetUnselected = (
   !agencyConfig?.boundDeviceId;
 
 /**
+ * Whether a project-directory conversation already has its execution target
+ * decided by that directory, so an unset agent target is not an unmade choice.
+ *
+ * A conversation bound to a project directory — or a blank one a project
+ * group's "+" staged there (`pendingNewTopicDirectory`) — runs on the
+ * directory's device: `resolveProjectDirectoryRun` pins
+ * `executionTarget: 'device'` + `boundDeviceId` before dispatch. The composer
+ * must not demand a device selection it is about to override, otherwise the
+ * staged picker alone can never satisfy the guard.
+ *
+ * A workspace contract fixed to another device is the exception: that send is
+ * rejected rather than re-routed, so the directory cannot decide it.
+ */
+export const isProjectDirectoryTargetDecided = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  directoryDeviceId: string | undefined,
+): boolean =>
+  !!directoryDeviceId &&
+  !(
+    agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+    agencyConfig.boundDeviceId !== directoryDeviceId
+  );
+
+/**
  * Whether this run's shell commands must go through the device sandbox.
  *
  * The stored flag alone is not the answer: `localSandbox` qualifies *local*

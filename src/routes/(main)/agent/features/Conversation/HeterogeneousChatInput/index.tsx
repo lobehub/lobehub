@@ -12,6 +12,7 @@ import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
 import HeteroControlBar from '@/features/ChatInput/ControlBar/HeteroControlBar';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
+import { stagedProjectDirectoryIdSelector } from '@/features/ChatInput/ControlBar/useProjectTopicDirectory';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
@@ -19,12 +20,14 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import {
   isExecutionTargetUnselected,
   isHeterogeneousSandboxExecutionAvailable,
+  isProjectDirectoryTargetDecided,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
 import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import ApiModeModelBar from './ApiModeModelBar';
 import HeteroPlus from './HeteroPlus';
@@ -129,10 +132,28 @@ const HeterogeneousChatInput = memo(() => {
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
+  // A blank conversation staged in a project directory already has its machine:
+  // the first send pins that directory's device (`resolveProjectDirectoryRun`),
+  // and the picker shown here is the staged one, whose selections only rewrite
+  // `pendingNewTopicDirectory`. Requiring an agent-level device pick would leave
+  // Send blocked with no way to clear it.
+  const stagedProjectDirectoryId = useChatStore(
+    stagedProjectDirectoryIdSelector(agentId, scopeTopicId),
+  );
+  const stagedProjectDirectoryDeviceId = useProjectDirectoryStore((state) =>
+    stagedProjectDirectoryId
+      ? Object.values(state.directoriesMap)
+          .flat()
+          .find((directory) => directory.id === stagedProjectDirectoryId)?.deviceId
+      : undefined,
+  );
   // Nothing stored: `local` is only the desktop fallback, not a choice the user
-  // made. Ask for one rather than running on whichever machine opened the chat.
+  // made. Ask for one rather than running on whichever machine opened the chat —
+  // unless the project directory already answered that question.
   const executionTargetUnselected =
-    !!providerType && isExecutionTargetUnselected(agencyConfig, executionTarget);
+    !!providerType &&
+    isExecutionTargetUnselected(agencyConfig, executionTarget) &&
+    !isProjectDirectoryTargetDecided(agencyConfig, stagedProjectDirectoryDeviceId);
   const deviceSelectionRequired = deviceOnlyTargetMissing || executionTargetUnselected;
 
   const showHeteroModel =

@@ -1,7 +1,11 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { isExecutionTargetUnselected, resolveExecutionTarget } from './executionTarget';
+import {
+  isExecutionTargetUnselected,
+  isProjectDirectoryTargetDecided,
+  resolveExecutionTarget,
+} from './executionTarget';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
 
@@ -28,5 +32,29 @@ describe('isExecutionTargetUnselected', () => {
   it('does not flag an unset target that resolves elsewhere', () => {
     expect(isExecutionTargetUnselected(hetero, 'sandbox')).toBe(false);
     expect(isExecutionTargetUnselected(hetero, 'none')).toBe(false);
+  });
+});
+
+describe('isProjectDirectoryTargetDecided', () => {
+  const hetero = cfg({ heterogeneousProvider: { command: 'claude', type: 'claude-code' } });
+
+  it('lets the staged directory answer an unset target', () => {
+    expect(isProjectDirectoryTargetDecided(hetero, 'mac-book')).toBe(true);
+  });
+
+  it('does not answer for a directory with no device', () => {
+    expect(isProjectDirectoryTargetDecided(hetero, undefined)).toBe(false);
+  });
+
+  it('keeps a contract fixed to another device as the blocker', () => {
+    const fixedElsewhere = {
+      ...hetero,
+      boundDeviceId: 'win-box',
+      executionTargetSelectionPolicy: 'fixed' as const,
+    };
+    expect(isProjectDirectoryTargetDecided(fixedElsewhere, 'mac-book')).toBe(false);
+    expect(
+      isProjectDirectoryTargetDecided({ ...fixedElsewhere, boundDeviceId: 'mac-book' }, 'mac-book'),
+    ).toBe(true);
   });
 });
