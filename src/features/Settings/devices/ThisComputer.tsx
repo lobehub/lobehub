@@ -7,11 +7,17 @@ import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useGatewayKeepAwake } from '@/features/Electron/connection/useGatewayKeepAwake';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
-/** Desktop-only keep-awake setting for this computer as a device. */
+/** Desktop-only settings for this computer as a device. */
 const ThisComputer = memo(() => {
   const { t } = useTranslation('setting');
   const { enabled, isLoading, setKeepAwake } = useGatewayKeepAwake();
+  const [showIndicator, updateSystemStatus] = useGlobalStore((s) => [
+    systemStatusSelectors.showDeviceGatewayIndicator(s),
+    s.updateSystemStatus,
+  ]);
   const form = useForm();
 
   const items: FormGroupItem = {
@@ -26,6 +32,17 @@ const ThisComputer = memo(() => {
         ),
         desc: t('devices.keepAwake.desc'),
         label: t('devices.keepAwake.title'),
+        minWidth: undefined,
+      },
+      {
+        children: (
+          <Switch
+            checked={showIndicator}
+            onChange={(checked) => updateSystemStatus({ showDeviceGatewayIndicator: checked })}
+          />
+        ),
+        desc: t('devices.titleBarIndicator.desc'),
+        label: t('devices.titleBarIndicator.title'),
         minWidth: undefined,
       },
     ],

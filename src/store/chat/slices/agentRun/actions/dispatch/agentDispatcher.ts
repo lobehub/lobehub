@@ -7,6 +7,7 @@ import {
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { getElectronStoreState } from '@/store/electron';
 
 /**
  * Which agent runtime should handle an operation.
@@ -61,8 +62,9 @@ export interface RuntimeSelectionContext {
    * (claude-code / codex). Controls the desktop fork:
    *   - `'device'` / `'sandbox'` → route through Gateway so the server can
    *     dispatch to an `lh connect` device or spawn a sandbox.
-   *   - `'local'` / `undefined`  → keep today's default (desktop → `hetero`
-   *     in-process spawn, web → `gateway` sandbox unless a desktop-local
+   *   - `'local'` / `undefined`  → desktop → `gateway` dispatched back to this
+   *     desktop's device when it is online (in-process `hetero` spawn
+   *     otherwise), web → `gateway` sandbox unless a desktop-local
    *     boundDeviceId is available, in which case the server dispatches to it.
    */
   executionTarget?: DeviceExecutionTarget;
@@ -99,7 +101,17 @@ export interface RuntimeSelectionContext {
 interface SelectRuntimeTypeOptions {
   /** Override of `isDesktop` for testability. Defaults to the build-time const. */
   isDesktop?: boolean;
+  /**
+   * Whether this desktop is reachable as a device through the device gateway
+   * (connected, with a known deviceId). Defaults to the live Electron store.
+   */
+  localDeviceOnline?: boolean;
 }
+
+const isLocalDeviceOnline = () => {
+  const { gatewayConnectionStatus, gatewayDeviceInfo } = getElectronStoreState();
+  return gatewayConnectionStatus === 'connected' && !!gatewayDeviceInfo?.deviceId;
+};
 
 /**
  * Centralized "which runtime should run this agent operation" decision.
@@ -119,7 +131,7 @@ interface SelectRuntimeTypeOptions {
  */
 export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
-  { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
+  { isDesktop = defaultIsDesktop, localDeviceOnline }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
   if (ctx.heterogeneousProvider?.authMode === 'api') {
     // Personal-scope invariant: Desktop main resolves the binding's providerId
@@ -166,10 +178,16 @@ export const selectRuntimeType = (
   }
   // Local CLI hetero (Amp / Claude Code / Codex) — route by the resolved execution
   // target (shared resolution with the server / the device switcher UI):
-  // `device` / `sandbox` need server-side dispatch; `local` runs in-process on
-  // the desktop. On web, unbound `local` resolves to sandbox when supported
-  // (otherwise the pending `none` state), while a desktop `local` selection
-  // synced with boundDeviceId resolves to device dispatch.
+  // `device` / `sandbox` need server-side dispatch. `local` also goes through
+  // the gateway whenever this desktop is online as a device: the send carries
+  // this desktop's deviceId (`resolveDesktopDeviceHints`), so the server
+  // dispatches the run back here and other clients can follow it. The
+  // in-process IPC spawn remains the fallback when gateway mode is off or the
+  // device connection is down, and for API auth, whose provider credentials
+  // only resolve inside this desktop's main process. On web, unbound `local`
+  // resolves to sandbox when supported (otherwise the pending `none` state),
+  // while a desktop `local` selection synced with boundDeviceId resolves to
+  // device dispatch.
   if (ctx.heterogeneousProvider) {
     const target = resolveExecutionTarget(
       {
@@ -184,7 +202,12 @@ export const selectRuntimeType = (
         workspaceScoped: ctx.workspaceScoped,
       },
     );
-    return target === 'local' ? 'hetero' : 'gateway';
+    if (target !== 'local') return 'gateway';
+    const routeLocalThroughGateway =
+      ctx.isGatewayMode &&
+      ctx.heterogeneousProvider.authMode !== 'api' &&
+      (localDeviceOnline ?? isLocalDeviceOnline());
+    return routeLocalThroughGateway ? 'gateway' : 'hetero';
   }
   if (ctx.isGatewayMode) return 'gateway';
   return 'client';

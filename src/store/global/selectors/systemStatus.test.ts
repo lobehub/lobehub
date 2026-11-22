@@ -871,6 +871,19 @@ describe('systemStatusSelectors', () => {
     });
   });
 
+  describe('showDeviceGatewayIndicator', () => {
+    it('hides the title bar device gateway icon by default', () => {
+      expect(systemStatusSelectors.showDeviceGatewayIndicator(initialState)).toBe(false);
+      const legacy = merge(initialState, { status: { showDeviceGatewayIndicator: undefined } });
+      expect(systemStatusSelectors.showDeviceGatewayIndicator(legacy)).toBe(false);
+    });
+
+    it('shows it once the user turns it on', () => {
+      const s: GlobalState = merge(initialState, { status: { showDeviceGatewayIndicator: true } });
+      expect(systemStatusSelectors.showDeviceGatewayIndicator(s)).toBe(true);
+    });
+  });
+
   describe('homeGoalsCollapsed', () => {
     // The goals card opens by default: a first-time viewer must see the goals,
     // not an unexplained folded header.

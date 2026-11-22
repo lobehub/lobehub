@@ -13,6 +13,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 /** Why the last attempt ended, phrased with the next step. */
 const ERROR_MESSAGE_KEYS = {
@@ -71,10 +73,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface DeviceGatewayProps {
   /** Keeps the status subscriptions running while a page claims the corner for its own actions. */
   hidden?: boolean;
+  /** User preference; when off the icon only surfaces to report a failed connection. */
+  showIndicator: boolean;
   workspaceScoped: boolean;
 }
 
-const DeviceGateway = memo<DeviceGatewayProps>(({ hidden, workspaceScoped }) => {
+const DeviceGateway = memo<DeviceGatewayProps>(({ hidden, showIndicator, workspaceScoped }) => {
   const { t } = useTranslation('electron');
   const navigate = useWorkspaceAwareNavigate();
   const [
@@ -190,7 +194,7 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ hidden, workspaceScoped }) => 
     </Flexbox>
   );
 
-  if (hidden) return null;
+  if (hidden || (!showIndicator && !failure)) return null;
 
   return (
     <Popover
@@ -223,10 +227,17 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ hidden, workspaceScoped }) => 
 const DeviceGatewayWithAuth = memo<{ hidden?: boolean }>(({ hidden }) => {
   const isSyncActive = useElectronStore(electronSyncSelectors.isSyncActive);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const showIndicator = useGlobalStore(systemStatusSelectors.showDeviceGatewayIndicator);
 
   if (!isSyncActive) return null;
 
-  return <DeviceGateway hidden={hidden} workspaceScoped={!!activeWorkspaceSlug} />;
+  return (
+    <DeviceGateway
+      hidden={hidden}
+      showIndicator={showIndicator}
+      workspaceScoped={!!activeWorkspaceSlug}
+    />
+  );
 });
 
 export default DeviceGatewayWithAuth;

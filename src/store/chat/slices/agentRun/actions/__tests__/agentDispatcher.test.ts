@@ -333,6 +333,55 @@ describe('selectRuntimeType', () => {
       ).toBe('hetero');
     });
 
+    it('routes desktop local through the gateway when this desktop is online as a device', () => {
+      for (const executionTarget of ['local', undefined] as const) {
+        expect(
+          selectRuntimeType(
+            { executionTarget, heterogeneousProvider: heteroProvider, isGatewayMode: true },
+            { isDesktop: true, localDeviceOnline: true },
+          ),
+        ).toBe('gateway');
+      }
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: codexCliProvider,
+            isGatewayMode: true,
+          },
+          { isDesktop: true, localDeviceOnline: true },
+        ),
+      ).toBe('gateway');
+    });
+
+    it('falls back to the in-process spawn when the local gateway route is unavailable', () => {
+      // Device connection down.
+      expect(
+        selectRuntimeType(
+          { executionTarget: 'local', heterogeneousProvider: heteroProvider, isGatewayMode: true },
+          { isDesktop: true, localDeviceOnline: false },
+        ),
+      ).toBe('hetero');
+      // Gateway mode off for this agent / deployment.
+      expect(
+        selectRuntimeType(
+          { executionTarget: 'local', heterogeneousProvider: heteroProvider, isGatewayMode: false },
+          { isDesktop: true, localDeviceOnline: true },
+        ),
+      ).toBe('hetero');
+      // API auth resolves provider credentials only inside this desktop.
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: true,
+          },
+          { isDesktop: true, localDeviceOnline: true },
+        ),
+      ).toBe('hetero');
+    });
+
     it('falls back to gateway when executionTarget = local on web (sandbox or bound device)', () => {
       expect(
         selectRuntimeType(
