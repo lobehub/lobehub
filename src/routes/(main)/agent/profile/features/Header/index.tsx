@@ -1,14 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
-import {
-  ActionIcon,
-  cssVar,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  type ModalInstance,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, cssVar, DropdownMenu, Flexbox, Icon, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
@@ -22,7 +14,7 @@ import {
   UserRound,
   UsersIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
@@ -43,6 +35,7 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
+import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -54,7 +47,6 @@ import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
-import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentSocialShare from './AgentSocialShare';
@@ -260,14 +252,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   // Ownership handover to a workspace member — separate from the scope moves.
   const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
-  const settingsModalRef = useRef<ModalInstance | null>(null);
-  useEffect(
-    () => () => {
-      settingsModalRef.current?.close();
-      settingsModalRef.current = null;
-    },
-    [],
-  );
+  const openAdvancedSettings = useOpenChatSettings();
 
   const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
   // External sharing is stronger than General Access `edit`: only the Agent
@@ -311,8 +296,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
             label: t('advancedSettings', { ns: 'setting' }),
             onClick: () => {
               if (!canConfigure) return;
-              settingsModalRef.current?.close();
-              settingsModalRef.current = openAgentSettingsModal();
+              openAdvancedSettings();
             },
           }
         : null,
@@ -414,6 +398,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
     marketSubmission.isSubmitting,
     marketSubmission.open,
     navigate,
+    openAdvancedSettings,
     showMarketSubmission,
     showPermissionPageEntry,
     t,

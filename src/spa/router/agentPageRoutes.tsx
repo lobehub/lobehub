@@ -4,6 +4,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
+  agentAdvancedRouteMeta,
   agentAutomationsRouteMeta,
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
@@ -278,6 +279,14 @@ export const agentPageChildren: RouteObject[] = [
     ),
     handle: { meta: routeMeta({ Skeleton: NoRouteSkeleton }) },
     path: 'self-learning/*',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/advanced'),
+      'Desktop > Chat > Advanced Settings',
+    ),
+    handle: { meta: agentAdvancedRouteMeta },
+    path: 'advanced',
   },
   {
     element: dynamicElement(

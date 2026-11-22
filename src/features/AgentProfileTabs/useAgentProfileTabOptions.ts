@@ -18,8 +18,10 @@ import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { type AgentProfileTab, buildAgentProfileTabOptions } from './tabOptions';
 
-/** Whether this member may change the agent's configuration or manage its sharing. */
-export const useAgentProfileAccess = (agentId: string) => {
+/** The profile-group entries this member may open, for any switcher of the group. */
+export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: string) => {
+  const { t } = useTranslation(['chat', 'common', 'selfLearning', 'setting', 'spend']);
+
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess(
     'agent',
@@ -27,17 +29,9 @@ export const useAgentProfileAccess = (agentId: string) => {
   );
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
 
-  return {
-    canConfigure: !!isAgentEditable && isAccessResolved && canEditContent && canEditResource,
-    canManageShare: !!isAgentEditable && isAccessResolved && canEditContent && canManageResource,
-  };
-};
-
-/** The profile-group entries this member may open, for any switcher of the group. */
-export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: string) => {
-  const { t } = useTranslation(['chat', 'common', 'selfLearning', 'setting', 'spend']);
-
-  const { canConfigure, canManageShare } = useAgentProfileAccess(agentId);
+  const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
+  const canManageShare =
+    !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const hasActiveWorkspace = useHasActiveWorkspace();
   const { visible: shareVisible } = useAgentShareSupported(agentId);
   const mailSupported = useShowAgentIdentity(agentId);
@@ -48,16 +42,19 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
   // The mobile Segmented has no room for another segment, so mobile keeps the
   // drawer entry in `AgentSidebar/Header/Nav`.
   const selfLearningSupported = enableSelfLearning && !isMobileSurface();
-  // Mobile reaches this page from the profile header menu instead.
+  // Mobile reaches these two from the profile header menu instead.
+  const advancedSupported = !isMobileSurface();
   const permissionSupported = hasActiveWorkspace && !isMobileSurface();
 
   return useMemo(
     () =>
       buildAgentProfileTabOptions({
         active,
+        advancedSupported,
         automationsSupported: webhookSupported,
         canConfigure,
         labels: {
+          'advanced': t('advancedSettings', { ns: 'setting' }),
           'automations': t('tab.automations'),
           'channel': t('tab.integration'),
           'engine': t('tab.engine'),
@@ -86,6 +83,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
       }),
     [
       active,
+      advancedSupported,
       canConfigure,
       canManageShare,
       isHeterogeneous,

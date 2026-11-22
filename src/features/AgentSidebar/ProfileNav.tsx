@@ -29,10 +29,7 @@ import {
   buildAgentProfileTabPath,
   groupAgentProfileTabOptions,
 } from '@/features/AgentProfileTabs/tabOptions';
-import {
-  useAgentProfileAccess,
-  useAgentProfileTabOptions,
-} from '@/features/AgentProfileTabs/useAgentProfileTabOptions';
+import { useAgentProfileTabOptions } from '@/features/AgentProfileTabs/useAgentProfileTabOptions';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
@@ -40,9 +37,9 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
 import Agent from './Header/Agent';
-import { useAgentSettingsModal } from './useAgentSettingsModal';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
+  'advanced': Settings2Icon,
   'automations': ZapIcon,
   'channel': RadioTowerIcon,
   'engine': CpuIcon,
@@ -66,12 +63,10 @@ interface ProfileNavProps {
 
 /** Replaces the topic sidebar while the agent's profile group is open. */
 const ProfileNav = ({ active }: ProfileNavProps) => {
-  const { t } = useTranslation(['chat', 'setting']);
+  const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const agentId = useActiveRouteParams().aid!;
   const options = useAgentProfileTabOptions(active, agentId);
-  const { canConfigure } = useAgentProfileAccess(agentId);
-  const openSettings = useAgentSettingsModal(agentId);
 
   return (
     <SideBarLayout
@@ -99,13 +94,6 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
                   onClick={() => navigate(buildAgentProfileTabPath(agentId, value))}
                 />
               ))}
-              {group.key === 'setup' && canConfigure && (
-                <NavItem
-                  icon={Settings2Icon}
-                  title={t('advancedSettings', { ns: 'setting' })}
-                  onClick={() => void openSettings()}
-                />
-              )}
             </Flexbox>
           ))}
         </Flexbox>

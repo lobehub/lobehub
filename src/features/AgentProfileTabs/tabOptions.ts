@@ -1,6 +1,7 @@
 import urlJoin from 'url-join';
 
 export type AgentProfileTab =
+  | 'advanced'
   | 'automations'
   | 'channel'
   | 'engine'
@@ -33,7 +34,7 @@ export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) 
   urlJoin('/agent', agentId, tab);
 
 const AGENT_PROFILE_ROUTE =
-  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|permission|share)\/?$/;
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|advanced|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|permission|share)\/?$/;
 
 /**
  * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
@@ -62,6 +63,7 @@ export const getAgentProfileTab = (pathname: string): AgentProfileTab | undefine
  */
 export const buildAgentProfileTabOptions = ({
   active,
+  advancedSupported = false,
   automationsSupported = false,
   canConfigure,
   labels,
@@ -73,6 +75,8 @@ export const buildAgentProfileTabOptions = ({
   webhookSupported = false,
 }: {
   active: AgentProfileTab;
+  /** This surface lists the advanced settings page; mobile has its own settings screen. */
+  advancedSupported?: boolean;
   /** Inbound webhooks are switched on for this member (`webhook`). */
   automationsSupported?: boolean;
   canConfigure: boolean;
@@ -100,6 +104,7 @@ export const buildAgentProfileTabOptions = ({
   const showEnvironment = (canConfigure && heterogeneous) || active === 'environment';
   const showTools = (canConfigure && !heterogeneous) || active === 'tools';
   const showSkills = (canConfigure && !heterogeneous) || active === 'skills';
+  const showAdvanced = (canConfigure && advancedSupported) || active === 'advanced';
   const showMail = (canConfigure && mailSupported) || active === 'mail';
   // Channels can dispatch to a bound device; cloud sandbox support is not required.
   const showChannel = canConfigure || active === 'channel';
@@ -124,6 +129,7 @@ export const buildAgentProfileTabOptions = ({
     showEnvironment ? { label: labels.environment, value: 'environment' as const } : null,
     showTools ? { label: labels.tools, value: 'tools' as const } : null,
     showSkills ? { label: labels.skills, value: 'skills' as const } : null,
+    showAdvanced ? { label: labels.advanced, value: 'advanced' as const } : null,
     showMail ? { label: labels.mail, value: 'mail' as const } : null,
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
     showAutomations ? { label: labels.automations, value: 'automations' as const } : null,
@@ -138,7 +144,7 @@ export const buildAgentProfileTabOptions = ({
 const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfileTab[] }[] = [
   { key: 'profile', tabs: ['profile'] },
   { key: 'shape', tabs: ['instruction', 'knowledge'] },
-  { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
+  { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills', 'advanced'] },
   { key: 'identity', tabs: ['mail', 'channel', 'automations', 'webhook'] },
   { key: 'general', tabs: ['self-evolving', 'statistics', 'permission', 'share'] },
 ];

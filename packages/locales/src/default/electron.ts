@@ -10,6 +10,7 @@ export default {
   'startupUpdate.retry': 'Retry',
   'startupUpdate.quit': 'Quit',
 
+  'navigation.advancedSettings': 'Advanced Settings',
   'navigation.agentShare': 'Share',
   'navigation.agents': 'Agents',
   'navigation.channels': 'IM Bots',

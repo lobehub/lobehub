@@ -11,6 +11,7 @@ import {
   MonitorSmartphoneIcon,
   RadioTowerIcon,
   ScrollTextIcon,
+  Settings2Icon,
   Share2Icon,
   SparklesIcon,
   UsersIcon,
@@ -40,6 +41,11 @@ const AgentDynamicMeta = lazy(() => import('@/features/RouteMeta/AgentDynamicMet
 const TopicsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.TopicsDynamicMeta,
+  })),
+);
+const AdvancedSettingsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.AdvancedSettingsDynamicMeta,
   })),
 );
 const EngineDynamicMeta = lazy(() =>
@@ -266,6 +272,13 @@ export const agentSelfLearningRouteMeta = routeMeta({
   icon: GraduationCapIcon,
   Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'navigation.selfLearning',
+});
+
+export const agentAdvancedRouteMeta = routeMeta({
+  DynamicMeta: AdvancedSettingsDynamicMeta,
+  icon: Settings2Icon,
+  Skeleton: createSurfaceSkeleton('form'),
+  titleKey: 'navigation.advancedSettings',
 });
 
 export const agentPermissionRouteMeta = routeMeta({

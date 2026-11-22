@@ -9,6 +9,7 @@ import {
 } from './tabOptions';
 
 const labels = {
+  'advanced': 'advancedSettings',
   'automations': 'tab.automations',
   'channel': 'tab.integration',
   'engine': 'tab.engine',
@@ -45,6 +46,7 @@ describe('getAgentProfileTab', () => {
     ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
     ['/agent/agt_1/self-evolving', 'self-evolving'],
     ['/agent/agt_1/webhook', 'webhook'],
+    ['/acme/agent/agt_1/advanced', 'advanced'],
     ['/acme/agent/agt_1/permission', 'permission'],
     ['/acme/agent/agt_1/automations', 'automations'],
     ['/agent/agt_1/self-evolving/new', 'self-evolving'],
@@ -449,5 +451,50 @@ describe('permission tab', () => {
     });
 
     expect(options.map((option) => option.value)).toContain('permission');
+  });
+});
+
+describe('advanced tab', () => {
+  const base = {
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: false,
+    heterogeneous: false,
+  };
+
+  it('closes the setup section for a member who can configure', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'profile',
+      advancedSupported: true,
+      canConfigure: true,
+    });
+
+    expect(
+      groupAgentProfileTabOptions(options)
+        .find((group) => group.key === 'setup')
+        ?.options.map((option) => option.value),
+    ).toEqual(['engine', 'tools', 'skills', 'advanced']);
+  });
+
+  it('leaves the tab out on mobile or without edit access', () => {
+    for (const gate of [
+      { advancedSupported: false, canConfigure: true },
+      { advancedSupported: true, canConfigure: false },
+    ])
+      expect(
+        buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate }).map((o) => o.value),
+      ).not.toContain('advanced');
+  });
+
+  it('keeps the tab of the current page even when gated off', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'advanced',
+      canConfigure: false,
+    });
+
+    expect(options.map((option) => option.value)).toContain('advanced');
   });
 });
