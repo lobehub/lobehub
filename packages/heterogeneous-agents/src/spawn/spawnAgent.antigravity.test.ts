@@ -155,12 +155,7 @@ describe('spawnAgent — Antigravity', () => {
         }) + '\n',
         JSON.stringify({
           event: 'result',
-          result: {
-            conversation_id: 'agy-live',
-            num_turns: 1,
-            response: 'first',
-            status: 'SUCCESS',
-          },
+          result: { conversation_id: 'agy-live', num_turns: 1, response: 'first', status: 'SUCCESS' },
         }) + '\n',
         JSON.stringify({
           event: 'step_update',

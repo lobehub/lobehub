@@ -2343,12 +2343,7 @@ export default class HeterogeneousAgentCtr {
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
       const live = !!spawnPlan.liveInput;
-      session.liveInput = writeCliPrompt(
-        proc.stdin as Writable,
-        spawnPlan.stdinPayload,
-        live,
-        session.agentType,
-      );
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live, session.agentType);
     }
 
     session.process = proc;
