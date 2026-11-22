@@ -14,7 +14,6 @@ import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useInterfaceDensity } from '@/styles/density';
 import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
-import { normalizeNickname } from '@/utils/workspaceMemberName';
 
 import {
   axisPercent,
@@ -239,7 +238,7 @@ const Bar = ({
         title,
         t(`team.status.${run.status}`),
         duration,
-        normalizeNickname(member?.nickname) || member?.fullName || member?.username,
+        member?.fullName || member?.username,
         run.model,
       ]
         .filter(Boolean)

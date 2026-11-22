@@ -1,12 +1,10 @@
 interface MentionProfile {
   fullName?: string | null;
-  /** Workspace nickname; only workspace member profiles carry one. */
-  nickname?: string | null;
   username?: string | null;
 }
 
 const profileName = (profile?: MentionProfile | null) =>
-  profile?.nickname?.trim() || profile?.fullName || profile?.username || undefined;
+  profile?.fullName || profile?.username || undefined;
 
 /**
  * Display name of a mention tag. Agents and the CLI often write only

@@ -19,12 +19,9 @@ export interface WorkspaceMemberNameSource {
   userId: string;
 }
 
-/** A stored nickname, or `undefined` when unset or blank. */
-export const normalizeNickname = (nickname?: string | null) => nickname?.trim() || undefined;
-
 /** The member's nickname in this workspace, or `undefined` when unset or blank. */
 export const getWorkspaceMemberNickname = (member: Pick<WorkspaceMemberNameSource, 'config'>) =>
-  normalizeNickname(member.config?.nickname);
+  member.config?.nickname?.trim() || undefined;
 
 /**
  * nickname → full name → @handle → email → `fallback` (the user id by default).

@@ -12,8 +12,6 @@
 export interface WorkspaceMemberProfile {
   avatar?: string | null;
   fullName?: string | null;
-  /** The name they go by in the active workspace; shown in place of `fullName` when set. */
-  nickname?: string | null;
   username?: string | null;
 }
 

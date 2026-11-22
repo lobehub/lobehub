@@ -4,7 +4,6 @@ import {
   getWorkspaceMemberName,
   getWorkspaceMemberNickname,
   getWorkspaceMemberSearchLabels,
-  normalizeNickname,
 } from './workspaceMemberName';
 
 const member = {
@@ -39,7 +38,6 @@ describe('getWorkspaceMemberNickname', () => {
     expect(getWorkspaceMemberNickname({ config: { nickname: '' } })).toBeUndefined();
     expect(getWorkspaceMemberNickname({ config: {} })).toBeUndefined();
     expect(getWorkspaceMemberNickname({})).toBeUndefined();
-    expect(normalizeNickname('  ')).toBeUndefined();
   });
 });
 
