@@ -269,8 +269,7 @@ chosen Agents (`ChannelMessagingService`).
 
 "Let Alice know when you are done" is a message to a person, not a request for an Agent.
 `lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
-the run's scope (`ContactModel.listPeople`): personal contacts, or in a workspace its other members
-and the external contacts paired with the requester. `lobe-channel.messagePerson` (`lh channel dm`)
+the run's scope (`AddressBook.listPeople`, a business slot that lists nobody by default). `lobe-channel.messagePerson` (`lh channel dm`)
 posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
 first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
 
