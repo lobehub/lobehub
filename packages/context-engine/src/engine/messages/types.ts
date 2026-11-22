@@ -66,6 +66,13 @@ export interface KnowledgeConfig {
  * Tools configuration
  */
 export interface ToolsConfig {
+  /**
+   * The transport can declare tools inside the conversation. Tools activated by an
+   * `activateTools` result still in the request are then anchored at that result
+   * (`toolsAdded` plus their instructions) instead of being appended to the system
+   * message, which keeps the request prefix stable across an activation.
+   */
+  anchorActivatedTools?: boolean;
   /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
   disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */

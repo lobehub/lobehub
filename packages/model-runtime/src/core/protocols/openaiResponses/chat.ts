@@ -2,7 +2,7 @@ import debug from 'debug';
 import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import type { ChatMethodOptions, ChatStreamPayload } from '../../../types';
+import type { ChatMethodOptions, ChatStreamPayload, OpenAIChatMessage } from '../../../types';
 import { debugPayload, debugResponse, debugStream } from '../../../utils/debugStream';
 import { desensitizeUrl } from '../../../utils/desensitizeUrl';
 import { getModelPricing } from '../../../utils/getModelPricing';
@@ -26,6 +26,7 @@ import type { OpenAIStreamOptions } from '../openaiChatCompletions/stream';
 import { convertOpenAIResponseInputs } from './inputs';
 import { transformResponseAPIToStream } from './nonStreamToStream';
 import { OpenAIResponsesStream } from './stream';
+import { splitAnchoredTools } from './toolAnchoring';
 import { convertChatCompletionToolToResponseTool, stripChatCompletionParameters } from './tools';
 
 export const chatViaResponses = async (
@@ -60,12 +61,23 @@ export const chatViaResponses = async (
     'responses',
   );
 
+  // Native Responses tools are forwarded verbatim; only function tools of our own
+  // conversation are anchored.
+  const toolAnchoringMode = responsesTools
+    ? undefined
+    : factory.responses?.toolAnchoring?.({ baseURL: runtime.baseURL, model: requestModel });
+  const { anchored, requestTools } = toolAnchoringMode
+    ? splitAnchoredTools(messages as OpenAIChatMessage[], tools, { strictToolPairing: true })
+    : { anchored: undefined, requestTools: tools };
+
   const input = await convertOpenAIResponseInputs(messages as any, {
     forceImageBase64: factory.chatCompletion?.forceImageBase64,
     forceVideoBase64: factory.chatCompletion?.forceVideoBase64,
     provider: runtime.id,
     reasoningSignatureScope,
     strictToolPairing: true,
+    ...(toolAnchoringMode &&
+      anchored && { toolAnchors: { byMessageIndex: anchored, mode: toolAnchoringMode } }),
   });
 
   const isStreaming = payload.stream !== false;
@@ -90,7 +102,7 @@ export const chatViaResponses = async (
     ...(max_tokens && { max_output_tokens: max_tokens }),
     store: false,
     stream: isStreaming || undefined,
-    tools: responsesTools ?? tools?.map(convertChatCompletionToolToResponseTool),
+    tools: responsesTools ?? requestTools?.map(convertChatCompletionToolToResponseTool),
     ...runtime.resolvePromptCacheKeyParams(
       res.model,
       options?.user,

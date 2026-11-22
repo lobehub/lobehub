@@ -6,6 +6,7 @@ import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
 import { ToolNameResolver } from '../engine/tools';
 import type { LobeToolManifest } from '../engine/tools/types';
 import type { PipelineContext, ProcessorOptions } from '../types';
+import { collectActivatedToolIds } from '../utils/activatedTools';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
@@ -24,6 +25,13 @@ const log = debug('context-engine:provider:ToolSystemRoleProvider');
  * Tool System Role Configuration
  */
 export interface ToolSystemRoleConfig {
+  /**
+   * Leave a tool out of the system message while the `activateTools` result that
+   * activated it is part of the request. ToolActivationAnchorProcessor appends its
+   * instructions to that result instead, so activating a tool mid-conversation does
+   * not rewrite the system message (and the prompt cache behind it).
+   */
+  anchorActivatedTools?: boolean;
   enabled?: boolean;
   /** Function to check if function calling is supported */
   isCanUseFC: (model: string, provider: string) => boolean | undefined;
@@ -46,6 +54,22 @@ export interface ToolSystemRoleConfig {
 export const selectToolPromptManifests = (manifests?: LobeToolManifest[]): LobeToolManifest[] =>
   (manifests ?? []).filter((manifest) => manifest.api.length > 0 || manifest.systemRole);
 
+/** The prompt entry a manifest contributes to the tool instructions. */
+export const toToolPrompt = (manifest: LobeToolManifest): Tool => {
+  const toolNameResolver = new ToolNameResolver();
+
+  return {
+    apis: manifest.api.map((api): API => ({
+      desc: api.description,
+      name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+    })),
+    description: manifest.meta?.description,
+    identifier: manifest.identifier,
+    name: manifest.meta?.title || manifest.identifier,
+    systemRole: manifest.systemRole,
+  };
+};
+
 /**
  * Tool System Role Provider
  * Responsible for injecting tool-related system roles for models that support tool calling
@@ -53,14 +77,42 @@ export const selectToolPromptManifests = (manifests?: LobeToolManifest[]): LobeT
 export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
   readonly name = 'ToolSystemRoleProvider';
 
-  private toolNameResolver: ToolNameResolver;
+  /** Tools whose instructions stay with their activation result for this request. */
+  private anchoredToolIds = new Set<string>();
 
   constructor(
     private config: ToolSystemRoleConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
-    this.toolNameResolver = new ToolNameResolver();
+  }
+
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    this.anchoredToolIds = this.resolveAnchoredToolIds(context);
+
+    const processed = await super.doProcess(context);
+    if (this.anchoredToolIds.size === 0) return processed;
+
+    return {
+      ...processed,
+      metadata: {
+        ...processed.metadata,
+        toolActivationAnchors: { toolIds: [...this.anchoredToolIds] },
+      },
+    };
+  }
+
+  /**
+   * Only tools this provider would otherwise inject are anchored, so nothing is
+   * relocated when the provider is off or the model cannot call functions.
+   */
+  private resolveAnchoredToolIds(context: PipelineContext): Set<string> {
+    const { anchorActivatedTools, enabled, manifests, model, provider } = this.config;
+    if (!anchorActivatedTools || enabled === false || !manifests?.length) return new Set();
+    if (!this.config.isCanUseFC(model, provider)) return new Set();
+
+    const injectable = new Set(selectToolPromptManifests(manifests).map((m) => m.identifier));
+    return new Set(collectActivatedToolIds(context.messages).filter((id) => injectable.has(id)));
   }
 
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
@@ -103,16 +155,9 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return undefined;
     }
 
-    const tools: Tool[] = selectToolPromptManifests(manifests).map((manifest) => ({
-      apis: manifest.api.map((api): API => ({
-        desc: api.description,
-        name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
-      })),
-      description: manifest.meta?.description,
-      identifier: manifest.identifier,
-      name: manifest.meta?.title || manifest.identifier,
-      systemRole: manifest.systemRole,
-    }));
+    const tools: Tool[] = selectToolPromptManifests(manifests)
+      .filter((manifest) => !this.anchoredToolIds.has(manifest.identifier))
+      .map((manifest) => toToolPrompt(manifest));
 
     if (tools.length === 0) {
       log('No meaningful tools to inject (all manifests have empty APIs and no systemRole)');

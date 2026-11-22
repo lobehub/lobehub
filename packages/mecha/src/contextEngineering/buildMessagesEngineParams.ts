@@ -1,5 +1,6 @@
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { LobeToolManifest, MessagesEngineParams } from '@lobechat/context-engine';
+import { isToolAnchoringGPTModel } from '@lobechat/model-runtime/providers/openai/modelId';
 
 import type { ContextSnapshot } from './types';
 import { createVariableGenerators } from './variableGenerators';
@@ -99,6 +100,11 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     selectedTools: tools?.selectedTools,
     toolDiscoveryConfig: tools?.toolDiscoveryConfig,
     toolsConfig: {
+      // These models take tools declared inside the conversation, so an activation
+      // stays at its result instead of rewriting the system message and the tool list.
+      // The runtime decides per endpoint whether it really anchors; when it does not,
+      // the instructions simply stay with the result and the tools at the top level.
+      anchorActivatedTools: isToolAnchoringGPTModel(model.model),
       disabledToolIdentifiers,
       manifests,
       tools: enabledToolIds,

@@ -83,6 +83,16 @@ export interface OpenAIChatMessage {
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
+  /**
+   * Function names that first became callable at this message, e.g. the result of a
+   * mid-conversation tool activation. Their definitions stay in `ChatStreamPayload.tools`.
+   *
+   * A transport that can declare tools inside the conversation moves these definitions
+   * out of the top-level tool list and anchors them here, so activating a tool does not
+   * rewrite the request prefix (and the prompt cache with it). Every other transport
+   * ignores the field and sends the full top-level list.
+   */
+  toolsAdded?: string[];
 }
 
 /**

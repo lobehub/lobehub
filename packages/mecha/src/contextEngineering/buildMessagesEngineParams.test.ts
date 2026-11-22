@@ -11,6 +11,17 @@ const baseSnapshot = (): ContextSnapshot => ({
 });
 
 describe('buildMessagesEngineParams', () => {
+  it('anchors tool activations only for models that take tools inside the conversation', () => {
+    const forModel = (model: string) =>
+      buildMessagesEngineParams({ ...baseSnapshot(), model: { model, provider: 'openai' } })
+        .toolsConfig?.anchorActivatedTools;
+
+    expect(forModel('gpt-6.1-sol')).toBe(true);
+    expect(forModel('gpt-5.6-luna')).toBe(true);
+    expect(forModel('gpt-5.5')).toBe(false);
+    expect(forModel('claude-opus-5-5')).toBe(false);
+  });
+
   it('hides the page agent system role unless the run enabled the tool', () => {
     expect(buildMessagesEngineParams(baseSnapshot()).toolsConfig?.disabledToolIdentifiers).toEqual([
       PageAgentIdentifier,
