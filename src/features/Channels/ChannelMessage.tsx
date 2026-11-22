@@ -25,6 +25,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { HoverFollowAgentAvatar } from '@/components/AgentAvatar/HoverFollowAgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -258,11 +259,10 @@ export const ChannelMessage = ({
                 }}
               >
                 <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                  <AgentAvatar
+                  <HoverFollowAgentAvatar
                     agentId={agentAuthorId}
                     avatar={message.author.avatar}
                     name={message.author.name}
-                    shape={'circle'}
                     size={36}
                   />
                 </span>
