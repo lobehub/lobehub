@@ -7,7 +7,10 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
-import VisibilityFilter, { type VisibilityFilterValue } from '@/components/VisibilityFilter';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
 import CreateCredButton from '@/features/Settings/creds/features/CreateCredButton';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
 import { type CredFilter } from '@/features/Settings/creds/features/credFilter';
@@ -76,7 +79,7 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
 
   // Shares its query key with the list inside WorkspaceCredsList, so
   // `refetch` here refreshes the list.
-  const { error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
+  const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
     // Cap retries for other errors (500s, network) so failures surface instead of looping.
@@ -116,7 +119,14 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
           ))}
       </Flexbox>
       {isAuthenticated && !orgMissing && (
-        <VaultFilterBar value={filter} onChange={setFilter}>
+        <VaultFilterBar
+          // Counts follow the visibility filter, like the list below.
+          value={filter}
+          creds={(data?.data ?? []).filter((cred) =>
+            matchesVisibilityFilter(cred.visibility === 'private', visibilityFilter),
+          )}
+          onChange={setFilter}
+        >
           <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
         </VaultFilterBar>
       )}

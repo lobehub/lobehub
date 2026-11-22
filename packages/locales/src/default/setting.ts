@@ -821,8 +821,6 @@ export default {
   'creds.share.viewerHint': "Viewers can't share credentials",
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
-  'creds.typeFilter.all': 'All types',
-  'creds.typeFilter.label': 'Filter by type',
   'creds.viewerHint': "Viewers can't create credentials",
   'creds.visibility.publish': 'Publish to Workspace',
   'creds.visibility.publishConfirmTitle': 'Publish this credential to the workspace?',

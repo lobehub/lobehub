@@ -1,55 +1,60 @@
 'use client';
 
-import { Flexbox, Icon, SearchBar, Select } from '@lobehub/ui';
-import { ShapesIcon } from 'lucide-react';
+import { type UserCredSummary } from '@lobechat/types';
+import { Flexbox, SearchBar, Segmented } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredFilter, type CredTypeFilterValue } from './credFilter';
-import { CRED_TYPE_ICONS, CRED_TYPES } from './credTypes';
+import { countCredsByType, type CredFilter, type CredTypeFilterValue } from './credFilter';
+import { CRED_TYPES } from './credTypes';
+
+const styles = stylex.create({
+  count: { marginInlineStart: '6px', color: cssVar.colorTextTertiary },
+});
 
 interface VaultFilterBarProps {
-  /** More filters after the type filter, e.g. the workspace visibility filter. */
+  /** More filters after the search box, e.g. the workspace visibility filter. */
   children?: ReactNode;
+  /** The rows the tabs count, already narrowed by any other page filter. */
+  creds: UserCredSummary[];
   onChange: (filter: CredFilter) => void;
   value: CredFilter;
 }
 
 /**
- * The vault's filter row, under the tabs and the create button: the search box
- * on the left, the type filter (and any extra filters) on the right. It has a
- * row of its own so the header keeps the tabs and the create button on one line
- * at settings widths.
+ * The vault's filter row, under the tabs and the create button: one tab per
+ * credential type with its count on the left, the search box (and any extra
+ * filters) on the right.
  */
-const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, onChange, value }) => {
+const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, creds, onChange, value }) => {
   const { t } = useTranslation('setting');
+  const counts = countCredsByType(creds, value.keyword);
 
   return (
     <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
-      <SearchBar
-        allowClear
-        placeholder={t('creds.searchPlaceholder')}
-        style={{ maxWidth: 320, minWidth: 200, flex: 1 }}
-        value={value.keyword ?? ''}
-        variant={'filled'}
-        onChange={(e) => onChange({ ...value, keyword: e.target.value })}
+      <Segmented
+        value={value.type ?? 'all'}
+        options={(['all', ...CRED_TYPES] as CredTypeFilterValue[]).map((option) => ({
+          label: (
+            <span>
+              {t(`creds.types.${option}`)}
+              <span {...stylex.props(styles.count)}>{counts[option]}</span>
+            </span>
+          ),
+          value: option,
+        }))}
+        onChange={(next) => onChange({ ...value, type: next as CredTypeFilterValue })}
       />
       <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-        <Select
-          aria-label={t('creds.typeFilter.label')}
-          style={{ minWidth: 150 }}
-          value={value.type ?? 'all'}
+        <SearchBar
+          allowClear
+          placeholder={t('creds.searchPlaceholder')}
+          style={{ width: 220 }}
+          value={value.keyword ?? ''}
           variant={'filled'}
-          options={(['all', ...CRED_TYPES] as CredTypeFilterValue[]).map((option) => ({
-            label: (
-              <Flexbox horizontal align={'center'} gap={6}>
-                <Icon icon={option === 'all' ? ShapesIcon : CRED_TYPE_ICONS[option]} size={14} />
-                {option === 'all' ? t('creds.typeFilter.all') : t(`creds.types.${option}`)}
-              </Flexbox>
-            ),
-            value: option,
-          }))}
-          onChange={(next) => onChange({ ...value, type: next as CredTypeFilterValue })}
+          onChange={(e) => onChange({ ...value, keyword: e.target.value })}
         />
         {children}
       </Flexbox>

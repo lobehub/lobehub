@@ -132,22 +132,11 @@ const CredItem: FC<CredItemProps> = memo(
               {titleSuffix}
               {tags}
             </Flexbox>
-            <Flexbox
-              horizontal
-              align="center"
-              gap={8}
-              style={{ lineHeight: compact ? '18px' : undefined }}
-            >
-              <code {...stylex.props(styles.key)}>{cred.key}</code>
-              <span {...stylex.props(styles.separator)}>·</span>
-              <span {...stylex.props(styles.type)}>{t(`creds.types.${cred.type}`)}</span>
-              {cred.description && (
-                <>
-                  <span {...stylex.props(styles.separator)}>·</span>
-                  <span {...stylex.props(styles.description)}>{cred.description}</span>
-                </>
-              )}
-            </Flexbox>
+            {cred.description && (
+              <span {...stylex.props(styles.description, compact && styles.descriptionCompact)}>
+                {cred.description}
+              </span>
+            )}
           </Flexbox>
         </Flexbox>
         <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>

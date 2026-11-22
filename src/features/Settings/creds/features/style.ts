@@ -19,6 +19,7 @@ export const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  descriptionCompact: { lineHeight: '18px' },
   icon: {
     display: 'flex',
     flexShrink: 0,
@@ -35,26 +36,14 @@ export const styles = stylex.create({
     height: '36px',
     borderRadius: '10px',
   },
-  // The key never wraps or shrinks: a long description gives way instead, and
-  // a long key is cut with an ellipsis rather than broken at its hyphens.
-  key: {
-    overflow: 'hidden',
-    flexShrink: 0,
-    maxWidth: '50%',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '12px',
-    color: cssVar.colorTextSecondary,
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  separator: { flexShrink: 0, color: cssVar.colorTextQuaternary },
   title: {
     overflow: 'hidden',
     fontSize: '15px',
     fontWeight: 500,
     color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
-  type: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextTertiary, whiteSpace: 'nowrap' },
   titleCompact: {
     fontSize: '14px',
   },

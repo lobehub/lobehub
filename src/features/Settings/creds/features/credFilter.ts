@@ -1,5 +1,7 @@
 import { type CredType, type UserCredSummary } from '@lobechat/types';
 
+import { CRED_TYPES } from './credTypes';
+
 export type CredTypeFilterValue = CredType | 'all';
 
 export interface CredFilter {
@@ -28,4 +30,21 @@ export const filterCreds = <
       text?.toLowerCase().includes(needle),
     );
   });
+};
+
+/**
+ * How many rows each type tab would show: the search keyword applies, the
+ * selected type does not, so switching tabs never changes the counts.
+ */
+export const countCredsByType = <
+  T extends Pick<UserCredSummary, 'description' | 'key' | 'name' | 'type'>,
+>(
+  creds: T[],
+  keyword?: string,
+): Record<CredTypeFilterValue, number> => {
+  const matched = filterCreds(creds, { keyword });
+  const counts = { all: matched.length } as Record<CredTypeFilterValue, number>;
+  for (const type of CRED_TYPES) counts[type] = 0;
+  for (const cred of matched) counts[cred.type] += 1;
+  return counts;
 };

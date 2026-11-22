@@ -542,8 +542,6 @@
   "creds.table.neverUsed": "Never",
   "creds.table.preview": "Preview",
   "creds.table.type": "Type",
-  "creds.typeFilter.all": "All types",
-  "creds.typeFilter.label": "Filter by type",
   "creds.types.all": "All",
   "creds.types.file": "File",
   "creds.types.kv-env": "Environment variable",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { filterCreds, isCredFilterActive } from './credFilter';
+import { countCredsByType, filterCreds, isCredFilterActive } from './credFilter';
 
 const creds = [
   { description: 'Used by the coder agent', key: 'openai', name: 'OpenAI API Key', type: 'kv-env' },
@@ -32,5 +32,24 @@ describe('isCredFilterActive', () => {
     expect(isCredFilterActive({ keyword: ' ', type: 'all' })).toBe(false);
     expect(isCredFilterActive({ keyword: 'a' })).toBe(true);
     expect(isCredFilterActive({ type: 'file' })).toBe(true);
+  });
+});
+
+describe('countCredsByType', () => {
+  it('counts every type, including empty ones, after the keyword', () => {
+    expect(countCredsByType([...creds])).toEqual({
+      'all': 3,
+      'file': 1,
+      'kv-env': 1,
+      'kv-header': 0,
+      'oauth': 1,
+    });
+    expect(countCredsByType([...creds], 'gcp')).toEqual({
+      'all': 1,
+      'file': 1,
+      'kv-env': 0,
+      'kv-header': 0,
+      'oauth': 0,
+    });
   });
 });

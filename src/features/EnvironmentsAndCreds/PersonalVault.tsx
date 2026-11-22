@@ -30,6 +30,8 @@ const PersonalVault = memo<PersonalVaultProps>(({ headerLeading }) => {
   const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
   const [refreshKey, setRefreshKey] = useState(0);
   const [filter, setFilter] = useState<CredFilter>({});
+  // Same query and options as CredsList, so the tab counts read its cache.
+  const { data } = personalCredsApi.query.list.useQuery(undefined, { enabled: isAuthenticated });
 
   const handleCreate = (type: CredType) => {
     if (!canManageCredentials) return;
@@ -50,7 +52,9 @@ const PersonalVault = memo<PersonalVaultProps>(({ headerLeading }) => {
           </span>
         </Tooltip>
       </Flexbox>
-      {isAuthenticated && <VaultFilterBar value={filter} onChange={setFilter} />}
+      {isAuthenticated && (
+        <VaultFilterBar creds={data?.data ?? []} value={filter} onChange={setFilter} />
+      )}
       <Block className={stylex.props(vaultStyles.container).className} variant={'outlined'}>
         <CredsList filter={filter} key={refreshKey} />
       </Block>

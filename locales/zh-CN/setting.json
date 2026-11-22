@@ -542,8 +542,6 @@
   "creds.table.neverUsed": "从未使用",
   "creds.table.preview": "预览",
   "creds.table.type": "类型",
-  "creds.typeFilter.all": "全部类型",
-  "creds.typeFilter.label": "按类型筛选",
   "creds.types.all": "全部",
   "creds.types.file": "文件",
   "creds.types.kv-env": "环境变量",
