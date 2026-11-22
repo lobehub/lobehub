@@ -63,3 +63,13 @@ export const exportHtmlDocument = (content: string, title: string | null | undef
     filterName: 'HTML',
     mimeType: 'text/html',
   });
+
+/** Download a Markdown document as a `.md` file. */
+export const exportMarkdownDocument = (content: string, title: string | null | undefined) =>
+  exportTextFile({
+    baseName: title || '',
+    content,
+    extension: 'md',
+    filterName: 'Markdown',
+    mimeType: 'text/markdown',
+  });

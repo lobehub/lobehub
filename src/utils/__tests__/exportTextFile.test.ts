@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { exportFileName, exportHtmlDocument } from '../exportTextFile';
+import { exportFileName, exportHtmlDocument, exportMarkdownDocument } from '../exportTextFile';
 
 const mocks = vi.hoisted(() => ({ exportFile: vi.fn(), isDesktop: false }));
 
@@ -70,5 +70,45 @@ describe('exportHtmlDocument', () => {
     mocks.exportFile.mockResolvedValue({ canceled: true });
 
     await expect(exportHtmlDocument(HTML, null)).resolves.toBe('canceled');
+  });
+});
+
+describe('exportMarkdownDocument', () => {
+  const MARKDOWN = '# Spec\n\nBody';
+
+  beforeEach(() => {
+    mocks.isDesktop = false;
+    mocks.exportFile.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('downloads Markdown as a .md file without duplicating an existing extension', async () => {
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:spec');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    await expect(exportMarkdownDocument(MARKDOWN, 'spec.md')).resolves.toBe('downloaded');
+
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('spec.md');
+    const blob = createObjectURL.mock.calls[0][0];
+    expect(blob.type).toBe('text/markdown');
+    expect(await blob.text()).toBe(MARKDOWN);
+  });
+
+  it('saves through the desktop dialog with a Markdown filter', async () => {
+    mocks.isDesktop = true;
+    mocks.exportFile.mockResolvedValue({ canceled: false, filePath: '/tmp/Spec.md' });
+
+    await expect(exportMarkdownDocument(MARKDOWN, 'Spec')).resolves.toBe('saved');
+
+    expect(mocks.exportFile).toHaveBeenCalledWith({
+      content: MARKDOWN,
+      fileName: 'Spec.md',
+      filter: { extensions: ['md'], name: 'Markdown' },
+    });
   });
 });
