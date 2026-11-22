@@ -184,7 +184,7 @@ export const replyWorksByMessage = async (
         const runWorks = summaries[job.operationId!] ?? [];
         const cards: WorkSummaryItem[] = visitorSeesOwn
           ? (sanitizeVisitorWorks(runWorks.filter(isVisitorOpenableWork)) ?? [])
-          : runWorks.flatMap((item) => {
+          : runWorks.flatMap<WorkSummaryItem>((item): WorkSummaryItem[] => {
               if (isLinkedExternalWork(item)) return [publicSummary(item)];
               if (!share && isCanvasWork(item) && canOpenCanvas(item, job.requesterUserId!))
                 return [item];
