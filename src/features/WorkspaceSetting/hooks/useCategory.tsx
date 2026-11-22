@@ -126,13 +126,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Hotkey,
               label: t('tab.hotkey'),
             },
-            // Follow-up chips / input completion act on the member's own chat
-            // surface, so every role configures them here — the workspace
-            // Service Model page stays admin-only.
+            // Conversation preferences (reply language, chat assist, send key…)
+            // act on the member's own chat surface, so every role configures
+            // them here — the workspace Service Model page stays admin-only.
             {
               icon: MessagesSquareIcon,
-              key: WorkspaceSettingsTabs.ChatPreference,
-              label: t('tab.chatPreference'),
+              key: WorkspaceSettingsTabs.Conversation,
+              label: t('tab.conversation'),
             },
           ],
           key: WorkspaceSettingsGroupKey.Account,

@@ -23,7 +23,14 @@ export type LinkWorkResourceType = 'link';
 export type ExternalWorkResourceType =
   GithubWorkResourceType | LinearWorkResourceType | LinkWorkResourceType;
 export type WorkResourceType =
-  'artboard' | 'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'collection' | 'goal_report' | 'task';
+  | 'artboard'
+  | 'canvas'
+  | 'document'
+  | ExternalWorkResourceType
+  | 'file'
+  | 'collection'
+  | 'goal_report'
+  | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating

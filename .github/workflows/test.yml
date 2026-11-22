@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/editor-runtime @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/device-mcp @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/chat-adapter-wecom'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/editor-runtime @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/device-mcp @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/chat-adapter-wecom @lobehub/sdk'
 
     steps:
       - name: Checkout
@@ -166,6 +166,7 @@ jobs:
 
           for package in $PACKAGES; do
             dir="${package#@lobechat/}"
+            dir="${dir#@lobehub/}"
             if [ -f "./packages/$dir/coverage/lcov.info" ]; then
               flag="packages/$dir"
 

@@ -38,6 +38,7 @@ const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLi
 // Users who switched off the retired `enableInputMarkdown` lab did so to keep pasted text verbatim.
 const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
+const enableVoiceMessage = (s: UserStore) => generalConfig(s).enableVoiceMessage ?? false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
 const interfaceDensity = (s: UserStore): InterfaceDensity =>
@@ -64,6 +65,7 @@ export const userGeneralSettingsSelectors = {
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
   enablePasteAutoConvert,
+  enableVoiceMessage,
   followUpBehavior,
   fontAntialiasing,
   fontSize,

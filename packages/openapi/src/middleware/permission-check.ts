@@ -1,15 +1,19 @@
 import debug from 'debug';
-import type { Context, Next } from 'hono';
+import type { Context, MiddlewareHandler, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { uniqueSymbol } from 'hono-openapi';
 
 import type { ApiKeyScope } from '@/const/apiKeyScope';
 import {
+  API_KEY_FULL_ACCESS_SCOPE,
   hasApiKeyScope,
   isFullAccessApiKey,
   requiredApiKeyScopeForPermission,
 } from '@/const/apiKeyScope';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { RbacModel } from '@/database/models/rbac';
+
+import { SPEC_ERROR_EXTENSION } from '../common/openapi';
 
 // Create context logger namespace
 const log = debug('lobe-hono:permission-middleware');
@@ -94,8 +98,68 @@ const assertApiKeyScopesAllow = (
   }
 };
 
+/** OpenAPI extension listing the API key scopes an operation needs (all of them). */
+export const REQUIRED_SCOPES_EXTENSION = 'x-required-scopes';
+
+/**
+ * Scopes a restricted API key must hold to pass this gate, as documented in
+ * the spec. Mirrors `assertApiKeyScopesAllow`: an OR gate passes with any one
+ * mappable scope, so unmappable permissions only matter when nothing maps —
+ * then only a full-access key (`*`) gets through.
+ *
+ * Every OR gate in the API maps its alternatives onto one scope (e.g.
+ * `agent:read:all` / `agent:read:owner` → `agent:read`). A genuine either-or
+ * cannot be written as the spec's all-of list, so it comes back as `error`.
+ */
+export const documentedScopes = (
+  permissionCodes: string[],
+  operator: 'AND' | 'OR',
+  apiKeyScope?: ApiKeyScope,
+): { error?: string; scopes: string[] } => {
+  if (apiKeyScope) return { scopes: [apiKeyScope] };
+
+  const mapped = permissionCodes.map((code) => requiredApiKeyScopeForPermission(code));
+  const reachable = [...new Set(mapped.filter(Boolean) as string[])];
+  if (reachable.length === 0 || (operator === 'AND' && mapped.includes(null))) {
+    return { scopes: [API_KEY_FULL_ACCESS_SCOPE] };
+  }
+  if (operator === 'OR' && reachable.length > 1) {
+    return {
+      error: `Permission gate [${permissionCodes.join(', ')}] accepts any of ${reachable.join(', ')}; pass an explicit apiKeyScope`,
+      scopes: reachable,
+    };
+  }
+  return { scopes: reachable };
+};
+
+/**
+ * Attach the gate's scopes to the route's OpenAPI operation. hono-openapi merges
+ * every documented middleware on a route, concatenating these arrays — which
+ * matches runtime semantics, since stacked gates must all pass.
+ */
+const documentScopes = <T extends MiddlewareHandler>(
+  middleware: T,
+  { error, scopes }: { error?: string; scopes: string[] },
+): T =>
+  Object.assign(middleware, {
+    [uniqueSymbol]: {
+      spec: {
+        [REQUIRED_SCOPES_EXTENSION]: scopes,
+        ...(error ? { [SPEC_ERROR_EXTENSION]: [error] } : {}),
+      },
+    },
+  });
+
 const requirePermission = (options: PermissionCheckOptions) => {
-  return async (c: Context, next: Next) => {
+  const permissionList = Array.isArray(options.permissions)
+    ? options.permissions
+    : [options.permissions];
+  const scopes =
+    permissionList.length === 0
+      ? { scopes: [] }
+      : documentedScopes(permissionList, options.operator || 'OR', options.apiKeyScope);
+
+  return documentScopes(async (c: Context, next: Next) => {
     // Development mode bypass if enabled
     if (options.skipInDev && process.env.NODE_ENV === 'development') {
       log('Development mode: skipping permission check');
@@ -183,7 +247,7 @@ const requirePermission = (options: PermissionCheckOptions) => {
         message: 'Internal error during permission check',
       });
     }
-  };
+  }, scopes);
 };
 
 /**
@@ -251,17 +315,20 @@ export const requireAnyPermissionWithApiKeyScope = (
  * restricted keys must hold the given scope.
  */
 export const requireApiKeyScope = (scope: ApiKeyScope) => {
-  return async (c: Context, next: Next) => {
-    if (c.get('authType') !== 'apikey') return next();
+  return documentScopes(
+    async (c: Context, next: Next) => {
+      if (c.get('authType') !== 'apikey') return next();
 
-    const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
-    if (!isFullAccessApiKey(scopes) && !hasApiKeyScope(scopes, scope)) {
-      throw new HTTPException(403, {
-        cause: { missingScopes: [scope] },
-        message: `insufficient_scope: this API key is missing required scope '${scope}'`,
-      });
-    }
+      const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+      if (!isFullAccessApiKey(scopes) && !hasApiKeyScope(scopes, scope)) {
+        throw new HTTPException(403, {
+          cause: { missingScopes: [scope] },
+          message: `insufficient_scope: this API key is missing required scope '${scope}'`,
+        });
+      }
 
-    return next();
-  };
+      return next();
+    },
+    { scopes: [scope] },
+  );
 };

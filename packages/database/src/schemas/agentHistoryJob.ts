@@ -36,6 +36,11 @@ export interface AgentHistoryJobPayload {
   /** Agents duplicated by this job, for guards that only need the id map. */
   agents?: { newAgentId: string; sourceAgentId: string }[];
   /**
+   * Agent transfers only: session shells that stayed in the source scope
+   * because they still hold legacy rows. Moved messages drop their reference.
+   */
+  detachSessionIds?: string[];
+  /**
    * Present only for a chat-group copy. Its presence is the discriminator the
    * drain uses to pick the group remap (every member agent maps through
    * `agents` above, and copied rows are re-parented onto `newGroupId`) instead

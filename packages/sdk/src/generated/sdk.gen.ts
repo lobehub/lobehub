@@ -75,6 +75,8 @@ export class AgentGroups extends HeyApiClient {
      * List agent groups
      *
      * Paginated with `limit` + `cursor`; answers `{ items, total, hasMore, nextCursor }`. Clients that still expect the former bare array can pass the deprecated `format=array`, which returns every item as a plain array.
+     *
+     * **API key scopes:** `agent:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentGroupsData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsResponses, GetApiV1AgentGroupsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1AgentGroupsResponses, GetApiV1AgentGroupsErrors, ThrowOnError>({
@@ -86,6 +88,8 @@ export class AgentGroups extends HeyApiClient {
     
     /**
      * Create an agent group
+     *
+     * **API key scopes:** `agent:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentGroupsData, ThrowOnError>): RequestResult<PostApiV1AgentGroupsResponses, PostApiV1AgentGroupsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1AgentGroupsResponses, PostApiV1AgentGroupsErrors, ThrowOnError>({
@@ -98,6 +102,8 @@ export class AgentGroups extends HeyApiClient {
     
     /**
      * Delete an agent group
+     *
+     * **API key scopes:** `agent:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentGroupsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1AgentGroupsByIdResponses, DeleteApiV1AgentGroupsByIdErrors, ThrowOnError>({
@@ -109,6 +115,8 @@ export class AgentGroups extends HeyApiClient {
     
     /**
      * Get an agent group
+     *
+     * **API key scopes:** `agent:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentGroupsByIdResponses, GetApiV1AgentGroupsByIdErrors, ThrowOnError>({
@@ -120,6 +128,8 @@ export class AgentGroups extends HeyApiClient {
     
     /**
      * Update an agent group
+     *
+     * **API key scopes:** `agent:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentGroupsByIdData, ThrowOnError>): RequestResult<PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentGroupsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1AgentGroupsByIdResponses, PatchApiV1AgentGroupsByIdErrors, ThrowOnError>({
@@ -134,6 +144,8 @@ export class AgentGroups extends HeyApiClient {
 export class Agents extends HeyApiClient {
     /**
      * List agents
+     *
+     * **API key scopes:** `agent:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentsData, ThrowOnError>): RequestResult<GetApiV1AgentsResponses, GetApiV1AgentsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1AgentsResponses, GetApiV1AgentsErrors, ThrowOnError>({
@@ -145,6 +157,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Create an agent
+     *
+     * **API key scopes:** `agent:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentsData, ThrowOnError>): RequestResult<PostApiV1AgentsResponses, PostApiV1AgentsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1AgentsResponses, PostApiV1AgentsErrors, ThrowOnError>({
@@ -157,6 +171,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Delete an agent
+     *
+     * **API key scopes:** `agent:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentsByIdResponses, DeleteApiV1AgentsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1AgentsByIdResponses, DeleteApiV1AgentsByIdErrors, ThrowOnError>({
@@ -168,6 +184,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Get an agent with its mounted files and knowledge bases
+     *
+     * **API key scopes:** `agent:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByIdData, ThrowOnError>): RequestResult<GetApiV1AgentsByIdResponses, GetApiV1AgentsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentsByIdResponses, GetApiV1AgentsByIdErrors, ThrowOnError>({
@@ -179,6 +197,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Update an agent
+     *
+     * **API key scopes:** `agent:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentsByIdData, ThrowOnError>): RequestResult<PatchApiV1AgentsByIdResponses, PatchApiV1AgentsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1AgentsByIdResponses, PatchApiV1AgentsByIdErrors, ThrowOnError>({
@@ -191,6 +211,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Duplicate an agent
+     *
+     * **API key scopes:** `agent:write`.
      */
     public createDuplicate<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentsByIdDuplicateData, ThrowOnError>): RequestResult<PostApiV1AgentsByIdDuplicateResponses, PostApiV1AgentsByIdDuplicateErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1AgentsByIdDuplicateResponses, PostApiV1AgentsByIdDuplicateErrors, ThrowOnError>({
@@ -203,6 +225,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * List an agent's accounts
+     *
+     * **API key scopes:** `agent:read`.
      */
     public listAccounts<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByIdAccountsData, ThrowOnError>): RequestResult<GetApiV1AgentsByIdAccountsResponses, GetApiV1AgentsByIdAccountsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentsByIdAccountsResponses, GetApiV1AgentsByIdAccountsErrors, ThrowOnError>({
@@ -214,6 +238,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Mount or provision an agent account
+     *
+     * **API key scopes:** `agent:write`.
      */
     public createAccount<ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentsByIdAccountsData, ThrowOnError>): RequestResult<PostApiV1AgentsByIdAccountsResponses, PostApiV1AgentsByIdAccountsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1AgentsByIdAccountsResponses, PostApiV1AgentsByIdAccountsErrors, ThrowOnError>({
@@ -228,6 +254,8 @@ export class Agents extends HeyApiClient {
      * Revoke an agent account
      *
      * Releases the account and marks it revoked. The row is kept for audit, so the response is the revoked account.
+     *
+     * **API key scopes:** `agent:write`.
      */
     public deleteAccount<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentsByIdAccountsByAccountIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentsByIdAccountsByAccountIdResponses, DeleteApiV1AgentsByIdAccountsByAccountIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1AgentsByIdAccountsByAccountIdResponses, DeleteApiV1AgentsByIdAccountsByAccountIdErrors, ThrowOnError>({
@@ -239,6 +267,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Get an agent account
+     *
+     * **API key scopes:** `agent:read`.
      */
     public getAccount<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByIdAccountsByAccountIdData, ThrowOnError>): RequestResult<GetApiV1AgentsByIdAccountsByAccountIdResponses, GetApiV1AgentsByIdAccountsByAccountIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentsByIdAccountsByAccountIdResponses, GetApiV1AgentsByIdAccountsByAccountIdErrors, ThrowOnError>({
@@ -250,6 +280,8 @@ export class Agents extends HeyApiClient {
     
     /**
      * Update an agent account
+     *
+     * **API key scopes:** `agent:write`.
      */
     public updateAccount<ThrowOnError extends boolean = false>(options: Options<PatchApiV1AgentsByIdAccountsByAccountIdData, ThrowOnError>): RequestResult<PatchApiV1AgentsByIdAccountsByAccountIdResponses, PatchApiV1AgentsByIdAccountsByAccountIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1AgentsByIdAccountsByAccountIdResponses, PatchApiV1AgentsByIdAccountsByAccountIdErrors, ThrowOnError>({
@@ -264,6 +296,8 @@ export class Agents extends HeyApiClient {
      * Write an agent account credential
      *
      * Write-only: the response carries the non-secret hint and `hasCredential`, never the secret.
+     *
+     * **API key scopes:** `agent:credential:write` + `agent:write`.
      */
     public updateAccountCredential<ThrowOnError extends boolean = false>(options: Options<PutApiV1AgentsByIdAccountsByAccountIdCredentialData, ThrowOnError>): RequestResult<PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses, PutApiV1AgentsByIdAccountsByAccountIdCredentialErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses, PutApiV1AgentsByIdAccountsByAccountIdCredentialErrors, ThrowOnError>({
@@ -280,6 +314,8 @@ export class ApiKeys extends HeyApiClient {
      * List API keys
      *
      * Paginated with `limit` + `cursor`; answers `{ items, total, hasMore, nextCursor }`. Clients that still expect the former bare array can pass the deprecated `format=array`, which returns every item as a plain array.
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ApiKeysData, ThrowOnError>): RequestResult<GetApiV1ApiKeysResponses, GetApiV1ApiKeysErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1ApiKeysResponses, GetApiV1ApiKeysErrors, ThrowOnError>({
@@ -293,6 +329,8 @@ export class ApiKeys extends HeyApiClient {
      * Create an API key
      *
      * The plaintext key is returned only in this response.
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ApiKeysData, ThrowOnError>): RequestResult<PostApiV1ApiKeysResponses, PostApiV1ApiKeysErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ApiKeysResponses, PostApiV1ApiKeysErrors, ThrowOnError>({
@@ -305,6 +343,8 @@ export class ApiKeys extends HeyApiClient {
     
     /**
      * Delete an API key
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ApiKeysByIdData, ThrowOnError>): RequestResult<DeleteApiV1ApiKeysByIdResponses, DeleteApiV1ApiKeysByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1ApiKeysByIdResponses, DeleteApiV1ApiKeysByIdErrors, ThrowOnError>({
@@ -316,6 +356,8 @@ export class ApiKeys extends HeyApiClient {
     
     /**
      * Get an API key
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ApiKeysByIdData, ThrowOnError>): RequestResult<GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1ApiKeysByIdResponses, GetApiV1ApiKeysByIdErrors, ThrowOnError>({
@@ -327,6 +369,8 @@ export class ApiKeys extends HeyApiClient {
     
     /**
      * Update an API key
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ApiKeysByIdData, ThrowOnError>): RequestResult<PatchApiV1ApiKeysByIdResponses, PatchApiV1ApiKeysByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1ApiKeysByIdResponses, PatchApiV1ApiKeysByIdErrors, ThrowOnError>({
@@ -343,6 +387,8 @@ export class Audio extends HeyApiClient {
      * Create speech
      *
      * OpenAI-compatible text-to-speech. Point an OpenAI SDK at `/api/v1` and call `audio.speech.create`. `model` takes `provider/model` (for example `lobehub/speech-2.8-hd`) or a bare model id; the optional `provider` and `params` (emotion, pitch, volume, sampleRate) are LobeHub extensions. Returns the audio bytes; usage is reported in `X-LobeHub-*` headers. Synthesis errors use OpenAI's `{ error: { message, type, code, param } }` body; authentication and permission errors use the platform `ApiError` envelope.
+     *
+     * **API key scopes:** `model:invoke`.
      */
     public createSpeech<ThrowOnError extends boolean = false>(options?: Options<PostApiV1AudioSpeechData, ThrowOnError>): RequestResult<PostApiV1AudioSpeechResponses, PostApiV1AudioSpeechErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<PostApiV1AudioSpeechResponses, PostApiV1AudioSpeechErrors, ThrowOnError>({
@@ -356,6 +402,8 @@ export class Audio extends HeyApiClient {
 export class Chat extends HeyApiClient {
     /**
      * Run a non-streaming chat completion
+     *
+     * **API key scopes:** `model:invoke`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatData, ThrowOnError>): RequestResult<PostApiV1ChatResponses, PostApiV1ChatErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ChatResponses, PostApiV1ChatErrors, ThrowOnError>({
@@ -368,6 +416,8 @@ export class Chat extends HeyApiClient {
     
     /**
      * Translate text
+     *
+     * **API key scopes:** `model:invoke`.
      */
     public createTranslate<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatTranslateData, ThrowOnError>): RequestResult<PostApiV1ChatTranslateResponses, PostApiV1ChatTranslateErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ChatTranslateResponses, PostApiV1ChatTranslateErrors, ThrowOnError>({
@@ -380,6 +430,8 @@ export class Chat extends HeyApiClient {
     
     /**
      * Generate a reply to a message
+     *
+     * **API key scopes:** `model:invoke`.
      */
     public createGenerateReply<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatGenerateReplyData, ThrowOnError>): RequestResult<PostApiV1ChatGenerateReplyResponses, PostApiV1ChatGenerateReplyErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ChatGenerateReplyResponses, PostApiV1ChatGenerateReplyErrors, ThrowOnError>({
@@ -394,6 +446,8 @@ export class Chat extends HeyApiClient {
 export class ChatGroups extends HeyApiClient {
     /**
      * List chat groups
+     *
+     * **API key scopes:** `agent:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ChatGroupsData, ThrowOnError>): RequestResult<GetApiV1ChatGroupsResponses, GetApiV1ChatGroupsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1ChatGroupsResponses, GetApiV1ChatGroupsErrors, ThrowOnError>({
@@ -405,6 +459,8 @@ export class ChatGroups extends HeyApiClient {
     
     /**
      * Create a chat group with its supervisor and members
+     *
+     * **API key scopes:** `agent:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatGroupsData, ThrowOnError>): RequestResult<PostApiV1ChatGroupsResponses, PostApiV1ChatGroupsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ChatGroupsResponses, PostApiV1ChatGroupsErrors, ThrowOnError>({
@@ -417,6 +473,8 @@ export class ChatGroups extends HeyApiClient {
     
     /**
      * Delete a chat group
+     *
+     * **API key scopes:** `agent:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ChatGroupsByIdData, ThrowOnError>): RequestResult<DeleteApiV1ChatGroupsByIdResponses, DeleteApiV1ChatGroupsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1ChatGroupsByIdResponses, DeleteApiV1ChatGroupsByIdErrors, ThrowOnError>({
@@ -428,6 +486,8 @@ export class ChatGroups extends HeyApiClient {
     
     /**
      * Get a chat group
+     *
+     * **API key scopes:** `agent:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ChatGroupsByIdData, ThrowOnError>): RequestResult<GetApiV1ChatGroupsByIdResponses, GetApiV1ChatGroupsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1ChatGroupsByIdResponses, GetApiV1ChatGroupsByIdErrors, ThrowOnError>({
@@ -439,6 +499,8 @@ export class ChatGroups extends HeyApiClient {
     
     /**
      * Update a chat group
+     *
+     * **API key scopes:** `agent:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ChatGroupsByIdData, ThrowOnError>): RequestResult<PatchApiV1ChatGroupsByIdResponses, PatchApiV1ChatGroupsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1ChatGroupsByIdResponses, PatchApiV1ChatGroupsByIdErrors, ThrowOnError>({
@@ -453,6 +515,8 @@ export class ChatGroups extends HeyApiClient {
      * Remove members from a chat group
      *
      * Detaches the agents and answers with the updated group.
+     *
+     * **API key scopes:** `agent:write`.
      */
     public removeMembers<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ChatGroupsByIdMembersData, ThrowOnError>): RequestResult<DeleteApiV1ChatGroupsByIdMembersResponses, DeleteApiV1ChatGroupsByIdMembersErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1ChatGroupsByIdMembersResponses, DeleteApiV1ChatGroupsByIdMembersErrors, ThrowOnError>({
@@ -465,6 +529,8 @@ export class ChatGroups extends HeyApiClient {
     
     /**
      * Add members to a chat group
+     *
+     * **API key scopes:** `agent:write`.
      */
     public addMembers<ThrowOnError extends boolean = false>(options: Options<PostApiV1ChatGroupsByIdMembersData, ThrowOnError>): RequestResult<PostApiV1ChatGroupsByIdMembersResponses, PostApiV1ChatGroupsByIdMembersErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ChatGroupsByIdMembersResponses, PostApiV1ChatGroupsByIdMembersErrors, ThrowOnError>({
@@ -479,6 +545,8 @@ export class ChatGroups extends HeyApiClient {
 export class Documents extends HeyApiClient {
     /**
      * List documents
+     *
+     * **API key scopes:** `knowledge:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1DocumentsData, ThrowOnError>): RequestResult<GetApiV1DocumentsResponses, GetApiV1DocumentsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1DocumentsResponses, GetApiV1DocumentsErrors, ThrowOnError>({
@@ -492,6 +560,8 @@ export class Documents extends HeyApiClient {
      * Create a document
      *
      * Creates a page from Markdown, or a folder with `fileType: "custom/folder"`.
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1DocumentsData, ThrowOnError>): RequestResult<PostApiV1DocumentsResponses, PostApiV1DocumentsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1DocumentsResponses, PostApiV1DocumentsErrors, ThrowOnError>({
@@ -504,6 +574,8 @@ export class Documents extends HeyApiClient {
     
     /**
      * Get a document
+     *
+     * **API key scopes:** `knowledge:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1DocumentsByIdData, ThrowOnError>): RequestResult<GetApiV1DocumentsByIdResponses, GetApiV1DocumentsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1DocumentsByIdResponses, GetApiV1DocumentsByIdErrors, ThrowOnError>({
@@ -517,6 +589,8 @@ export class Documents extends HeyApiClient {
      * Update a document
      *
      * Replaces the title and/or the whole Markdown body. A page open in the editor receives the write through its live room.
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1DocumentsByIdData, ThrowOnError>): RequestResult<PatchApiV1DocumentsByIdResponses, PatchApiV1DocumentsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1DocumentsByIdResponses, PatchApiV1DocumentsByIdErrors, ThrowOnError>({
@@ -531,6 +605,8 @@ export class Documents extends HeyApiClient {
 export class Eval extends HeyApiClient {
     /**
      * List eval runs
+     *
+     * **API key scopes:** `eval:read`.
      */
     public listRuns<ThrowOnError extends boolean = false>(options?: Options<GetApiV1EvalRunsData, ThrowOnError>): RequestResult<GetApiV1EvalRunsResponses, GetApiV1EvalRunsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1EvalRunsResponses, GetApiV1EvalRunsErrors, ThrowOnError>({
@@ -544,6 +620,8 @@ export class Eval extends HeyApiClient {
      * Create an eval run
      *
      * Queues an asynchronous QStash-backed evaluation run and returns immediately.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createRuns<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsData, ThrowOnError>): RequestResult<PostApiV1EvalRunsResponses, PostApiV1EvalRunsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalRunsResponses, PostApiV1EvalRunsErrors, ThrowOnError>({
@@ -556,6 +634,8 @@ export class Eval extends HeyApiClient {
     
     /**
      * List topic results of an eval run
+     *
+     * **API key scopes:** `eval:read`.
      */
     public listRunsTopics<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalRunsByIdTopicsData, ThrowOnError>): RequestResult<GetApiV1EvalRunsByIdTopicsResponses, GetApiV1EvalRunsByIdTopicsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalRunsByIdTopicsResponses, GetApiV1EvalRunsByIdTopicsErrors, ThrowOnError>({
@@ -567,6 +647,8 @@ export class Eval extends HeyApiClient {
     
     /**
      * Get an eval run
+     *
+     * **API key scopes:** `eval:read`.
      */
     public getRuns<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalRunsByIdData, ThrowOnError>): RequestResult<GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalRunsByIdResponses, GetApiV1EvalRunsByIdErrors, ThrowOnError>({
@@ -578,6 +660,8 @@ export class Eval extends HeyApiClient {
     
     /**
      * List case results of an eval run
+     *
+     * **API key scopes:** `eval:read`.
      */
     public listRunsResults<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalRunsByIdResultsData, ThrowOnError>): RequestResult<GetApiV1EvalRunsByIdResultsResponses, GetApiV1EvalRunsByIdResultsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalRunsByIdResultsResponses, GetApiV1EvalRunsByIdResultsErrors, ThrowOnError>({
@@ -591,6 +675,8 @@ export class Eval extends HeyApiClient {
      * Report results for a batch of run topics
      *
      * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createRunsResults<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsByIdResultsData, ThrowOnError>): RequestResult<PostApiV1EvalRunsByIdResultsResponses, PostApiV1EvalRunsByIdResultsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalRunsByIdResultsResponses, PostApiV1EvalRunsByIdResultsErrors, ThrowOnError>({
@@ -605,6 +691,8 @@ export class Eval extends HeyApiClient {
      * List benchmarks
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:read`.
      */
     public listBenchmarks<ThrowOnError extends boolean = false>(options?: Options<GetApiV1EvalBenchmarksData, ThrowOnError>): RequestResult<GetApiV1EvalBenchmarksResponses, GetApiV1EvalBenchmarksErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1EvalBenchmarksResponses, GetApiV1EvalBenchmarksErrors, ThrowOnError>({
@@ -618,6 +706,8 @@ export class Eval extends HeyApiClient {
      * Create a benchmark
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createBenchmarks<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalBenchmarksData, ThrowOnError>): RequestResult<PostApiV1EvalBenchmarksResponses, PostApiV1EvalBenchmarksErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalBenchmarksResponses, PostApiV1EvalBenchmarksErrors, ThrowOnError>({
@@ -632,6 +722,8 @@ export class Eval extends HeyApiClient {
      * Delete a benchmark
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public deleteBenchmarks<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1EvalBenchmarksByIdData, ThrowOnError>): RequestResult<DeleteApiV1EvalBenchmarksByIdResponses, DeleteApiV1EvalBenchmarksByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1EvalBenchmarksByIdResponses, DeleteApiV1EvalBenchmarksByIdErrors, ThrowOnError>({
@@ -645,6 +737,8 @@ export class Eval extends HeyApiClient {
      * Get a benchmark
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:read`.
      */
     public getBenchmarks<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalBenchmarksByIdData, ThrowOnError>): RequestResult<GetApiV1EvalBenchmarksByIdResponses, GetApiV1EvalBenchmarksByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalBenchmarksByIdResponses, GetApiV1EvalBenchmarksByIdErrors, ThrowOnError>({
@@ -658,6 +752,8 @@ export class Eval extends HeyApiClient {
      * Update a benchmark
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public updateBenchmarks<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalBenchmarksByIdData, ThrowOnError>): RequestResult<PatchApiV1EvalBenchmarksByIdResponses, PatchApiV1EvalBenchmarksByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1EvalBenchmarksByIdResponses, PatchApiV1EvalBenchmarksByIdErrors, ThrowOnError>({
@@ -672,6 +768,8 @@ export class Eval extends HeyApiClient {
      * List datasets
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:read`.
      */
     public listDatasets<ThrowOnError extends boolean = false>(options?: Options<GetApiV1EvalDatasetsData, ThrowOnError>): RequestResult<GetApiV1EvalDatasetsResponses, GetApiV1EvalDatasetsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1EvalDatasetsResponses, GetApiV1EvalDatasetsErrors, ThrowOnError>({
@@ -685,6 +783,8 @@ export class Eval extends HeyApiClient {
      * Create a dataset
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createDatasets<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalDatasetsData, ThrowOnError>): RequestResult<PostApiV1EvalDatasetsResponses, PostApiV1EvalDatasetsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalDatasetsResponses, PostApiV1EvalDatasetsErrors, ThrowOnError>({
@@ -699,6 +799,8 @@ export class Eval extends HeyApiClient {
      * Delete a dataset
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public deleteDatasets<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1EvalDatasetsByIdData, ThrowOnError>): RequestResult<DeleteApiV1EvalDatasetsByIdResponses, DeleteApiV1EvalDatasetsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1EvalDatasetsByIdResponses, DeleteApiV1EvalDatasetsByIdErrors, ThrowOnError>({
@@ -712,6 +814,8 @@ export class Eval extends HeyApiClient {
      * Get a dataset
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:read`.
      */
     public getDatasets<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalDatasetsByIdData, ThrowOnError>): RequestResult<GetApiV1EvalDatasetsByIdResponses, GetApiV1EvalDatasetsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalDatasetsByIdResponses, GetApiV1EvalDatasetsByIdErrors, ThrowOnError>({
@@ -725,6 +829,8 @@ export class Eval extends HeyApiClient {
      * Update a dataset
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public updateDatasets<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalDatasetsByIdData, ThrowOnError>): RequestResult<PatchApiV1EvalDatasetsByIdResponses, PatchApiV1EvalDatasetsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1EvalDatasetsByIdResponses, PatchApiV1EvalDatasetsByIdErrors, ThrowOnError>({
@@ -739,6 +845,8 @@ export class Eval extends HeyApiClient {
      * List test cases of a dataset
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:read`.
      */
     public listDatasetsTestCases<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalDatasetsByDatasetIdTestCasesData, ThrowOnError>): RequestResult<GetApiV1EvalDatasetsByDatasetIdTestCasesResponses, GetApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalDatasetsByDatasetIdTestCasesResponses, GetApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError>({
@@ -752,6 +860,8 @@ export class Eval extends HeyApiClient {
      * Create a test case
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createDatasetsTestCases<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalDatasetsByDatasetIdTestCasesData, ThrowOnError>): RequestResult<PostApiV1EvalDatasetsByDatasetIdTestCasesResponses, PostApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalDatasetsByDatasetIdTestCasesResponses, PostApiV1EvalDatasetsByDatasetIdTestCasesErrors, ThrowOnError>({
@@ -766,6 +876,8 @@ export class Eval extends HeyApiClient {
      * Delete a test case
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public deleteTestCases<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1EvalTestCasesByIdData, ThrowOnError>): RequestResult<DeleteApiV1EvalTestCasesByIdResponses, DeleteApiV1EvalTestCasesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1EvalTestCasesByIdResponses, DeleteApiV1EvalTestCasesByIdErrors, ThrowOnError>({
@@ -779,6 +891,8 @@ export class Eval extends HeyApiClient {
      * Get a test case
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:read`.
      */
     public getTestCases<ThrowOnError extends boolean = false>(options: Options<GetApiV1EvalTestCasesByIdData, ThrowOnError>): RequestResult<GetApiV1EvalTestCasesByIdResponses, GetApiV1EvalTestCasesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1EvalTestCasesByIdResponses, GetApiV1EvalTestCasesByIdErrors, ThrowOnError>({
@@ -792,6 +906,8 @@ export class Eval extends HeyApiClient {
      * Update a test case
      *
      * Creates accept an optional id: an identical replay returns the resource; conflicting id or identifier returns 409. Lists are paginated.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public updateTestCases<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalTestCasesByIdData, ThrowOnError>): RequestResult<PatchApiV1EvalTestCasesByIdResponses, PatchApiV1EvalTestCasesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1EvalTestCasesByIdResponses, PatchApiV1EvalTestCasesByIdErrors, ThrowOnError>({
@@ -806,6 +922,8 @@ export class Eval extends HeyApiClient {
      * Claim a pending external eval run
      *
      * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createRunsClaim<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsByIdClaimData, ThrowOnError>): RequestResult<PostApiV1EvalRunsByIdClaimResponses, PostApiV1EvalRunsByIdClaimErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalRunsByIdClaimResponses, PostApiV1EvalRunsByIdClaimErrors, ThrowOnError>({
@@ -819,6 +937,8 @@ export class Eval extends HeyApiClient {
      * Set the status of an external eval run
      *
      * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public updateRunsStatus<ThrowOnError extends boolean = false>(options: Options<PatchApiV1EvalRunsByIdStatusData, ThrowOnError>): RequestResult<PatchApiV1EvalRunsByIdStatusResponses, PatchApiV1EvalRunsByIdStatusErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1EvalRunsByIdStatusResponses, PatchApiV1EvalRunsByIdStatusErrors, ThrowOnError>({
@@ -833,6 +953,8 @@ export class Eval extends HeyApiClient {
      * Retry the errored cases of an eval run
      *
      * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public createRunsRetryErrors<ThrowOnError extends boolean = false>(options: Options<PostApiV1EvalRunsByIdRetryErrorsData, ThrowOnError>): RequestResult<PostApiV1EvalRunsByIdRetryErrorsResponses, PostApiV1EvalRunsByIdRetryErrorsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1EvalRunsByIdRetryErrorsResponses, PostApiV1EvalRunsByIdRetryErrorsErrors, ThrowOnError>({
@@ -846,6 +968,8 @@ export class Eval extends HeyApiClient {
      * Report the result of one run topic
      *
      * Claim: one pending worker succeeds, others receive 409. Reports: identical replays succeed; different results conflict. Batches are atomic. External workers can supply testCaseId to associate their own topic with a dataset case on first report. Retry: only terminal runs, concurrent repeats conflict.
+     *
+     * **API key scopes:** `eval:write`.
      */
     public updateRunsTopicsResult<ThrowOnError extends boolean = false>(options: Options<PutApiV1EvalRunsByRunIdTopicsByTopicIdResultData, ThrowOnError>): RequestResult<PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses, PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors, ThrowOnError>({
@@ -860,6 +984,8 @@ export class Eval extends HeyApiClient {
 export class Plugins extends HeyApiClient {
     /**
      * List installed plugins in the current workspace or personal scope
+     *
+     * **API key scopes:** `agent:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1PluginsData, ThrowOnError>): RequestResult<GetApiV1PluginsResponses, GetApiV1PluginsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1PluginsResponses, GetApiV1PluginsErrors, ThrowOnError>({
@@ -873,6 +999,8 @@ export class Plugins extends HeyApiClient {
 export class Files extends HeyApiClient {
     /**
      * List files
+     *
+     * **API key scopes:** `file:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1FilesData, ThrowOnError>): RequestResult<GetApiV1FilesResponses, GetApiV1FilesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1FilesResponses, GetApiV1FilesErrors, ThrowOnError>({
@@ -884,6 +1012,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Upload a file and return the corresponding file record
+     *
+     * **API key scopes:** `file:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesData, ThrowOnError>): RequestResult<PostApiV1FilesResponses, PostApiV1FilesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1FilesResponses, PostApiV1FilesErrors, ThrowOnError>({
@@ -897,6 +1027,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Delete a file
+     *
+     * **API key scopes:** `file:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1FilesByIdData, ThrowOnError>): RequestResult<DeleteApiV1FilesByIdResponses, DeleteApiV1FilesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1FilesByIdResponses, DeleteApiV1FilesByIdErrors, ThrowOnError>({
@@ -910,6 +1042,8 @@ export class Files extends HeyApiClient {
      * Get a file
      *
      * Non-image files include their parse result. A file that does not exist answers 400.
+     *
+     * **API key scopes:** `file:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdData, ThrowOnError>): RequestResult<GetApiV1FilesByIdResponses, GetApiV1FilesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1FilesByIdResponses, GetApiV1FilesByIdErrors, ThrowOnError>({
@@ -921,6 +1055,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Update a file
+     *
+     * **API key scopes:** `file:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1FilesByIdData, ThrowOnError>): RequestResult<PatchApiV1FilesByIdResponses, PatchApiV1FilesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1FilesByIdResponses, PatchApiV1FilesByIdErrors, ThrowOnError>({
@@ -933,6 +1069,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Get a pre-signed file URL
+     *
+     * **API key scopes:** `file:read`.
      */
     public getUrl<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdUrlData, ThrowOnError>): RequestResult<GetApiV1FilesByIdUrlResponses, GetApiV1FilesByIdUrlErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1FilesByIdUrlResponses, GetApiV1FilesByIdUrlErrors, ThrowOnError>({
@@ -944,6 +1082,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Parse file content
+     *
+     * **API key scopes:** `file:write`.
      */
     public parse<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdParsesData, ThrowOnError>): RequestResult<PostApiV1FilesByIdParsesResponses, PostApiV1FilesByIdParsesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1FilesByIdParsesResponses, PostApiV1FilesByIdParsesErrors, ThrowOnError>({
@@ -955,6 +1095,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Get file chunking status
+     *
+     * **API key scopes:** `file:read`.
      */
     public listChunks<ThrowOnError extends boolean = false>(options: Options<GetApiV1FilesByIdChunksData, ThrowOnError>): RequestResult<GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdChunksErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1FilesByIdChunksResponses, GetApiV1FilesByIdChunksErrors, ThrowOnError>({
@@ -966,6 +1108,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Start a file chunking task
+     *
+     * **API key scopes:** `file:write`.
      */
     public createChunks<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdChunksData, ThrowOnError>): RequestResult<PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdChunksErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1FilesByIdChunksResponses, PostApiV1FilesByIdChunksErrors, ThrowOnError>({
@@ -978,6 +1122,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Batch file upload
+     *
+     * **API key scopes:** `file:write`.
      */
     public uploadBatch<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesBatchesData, ThrowOnError>): RequestResult<PostApiV1FilesBatchesResponses, PostApiV1FilesBatchesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1FilesBatchesResponses, PostApiV1FilesBatchesErrors, ThrowOnError>({
@@ -991,6 +1137,8 @@ export class Files extends HeyApiClient {
     
     /**
      * Get several files
+     *
+     * **API key scopes:** `file:read`.
      */
     public query<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesQueriesData, ThrowOnError>): RequestResult<PostApiV1FilesQueriesResponses, PostApiV1FilesQueriesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1FilesQueriesResponses, PostApiV1FilesQueriesErrors, ThrowOnError>({
@@ -1005,6 +1153,8 @@ export class Files extends HeyApiClient {
 export class Goals extends HeyApiClient {
     /**
      * List goals
+     *
+     * **API key scopes:** `agent:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1GoalsData, ThrowOnError>): RequestResult<GetApiV1GoalsResponses, GetApiV1GoalsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1GoalsResponses, GetApiV1GoalsErrors, ThrowOnError>({
@@ -1018,6 +1168,8 @@ export class Goals extends HeyApiClient {
      * Create a goal
      *
      * Creates the goal graph and hands it to the coordinator.
+     *
+     * **API key scopes:** `agent:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsData, ThrowOnError>): RequestResult<PostApiV1GoalsResponses, PostApiV1GoalsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsResponses, PostApiV1GoalsErrors, ThrowOnError>({
@@ -1030,6 +1182,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Delete a goal
+     *
+     * **API key scopes:** `agent:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1GoalsByIdData, ThrowOnError>): RequestResult<DeleteApiV1GoalsByIdResponses, DeleteApiV1GoalsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1GoalsByIdResponses, DeleteApiV1GoalsByIdErrors, ThrowOnError>({
@@ -1041,6 +1195,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Get a goal and its graph
+     *
+     * **API key scopes:** `agent:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1GoalsByIdData, ThrowOnError>): RequestResult<GetApiV1GoalsByIdResponses, GetApiV1GoalsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1GoalsByIdResponses, GetApiV1GoalsByIdErrors, ThrowOnError>({
@@ -1052,6 +1208,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Update a goal requirement or budget
+     *
+     * **API key scopes:** `agent:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1GoalsByIdData, ThrowOnError>): RequestResult<PatchApiV1GoalsByIdResponses, PatchApiV1GoalsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1GoalsByIdResponses, PatchApiV1GoalsByIdErrors, ThrowOnError>({
@@ -1064,6 +1222,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Get goal supervision state
+     *
+     * **API key scopes:** `agent:read`.
      */
     public getSupervision<ThrowOnError extends boolean = false>(options: Options<GetApiV1GoalsByIdSupervisionData, ThrowOnError>): RequestResult<GetApiV1GoalsByIdSupervisionResponses, GetApiV1GoalsByIdSupervisionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1GoalsByIdSupervisionResponses, GetApiV1GoalsByIdSupervisionErrors, ThrowOnError>({
@@ -1075,6 +1235,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Run the goal coordinator now
+     *
+     * **API key scopes:** `agent:write`.
      */
     public advance<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdAdvanceData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdAdvanceResponses, PostApiV1GoalsByIdAdvanceErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdAdvanceResponses, PostApiV1GoalsByIdAdvanceErrors, ThrowOnError>({
@@ -1086,6 +1248,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Pause a goal
+     *
+     * **API key scopes:** `agent:write`.
      */
     public pause<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdPauseData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdPauseResponses, PostApiV1GoalsByIdPauseErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdPauseResponses, PostApiV1GoalsByIdPauseErrors, ThrowOnError>({
@@ -1097,6 +1261,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Resume a paused goal
+     *
+     * **API key scopes:** `agent:write`.
      */
     public resume<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdResumeData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdResumeResponses, PostApiV1GoalsByIdResumeErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdResumeResponses, PostApiV1GoalsByIdResumeErrors, ThrowOnError>({
@@ -1108,6 +1274,8 @@ export class Goals extends HeyApiClient {
     
     /**
      * Restart every unfinished task of a goal
+     *
+     * **API key scopes:** `agent:write`.
      */
     public restart<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdRestartData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdRestartResponses, PostApiV1GoalsByIdRestartErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdRestartResponses, PostApiV1GoalsByIdRestartErrors, ThrowOnError>({
@@ -1122,6 +1290,8 @@ export class Goals extends HeyApiClient {
 export class Im extends HeyApiClient {
     /**
      * Send a message to an agent; the reply arrives asynchronously via sync
+     *
+     * **API key scopes:** `agent:write` + `chat:write` + `model:invoke`.
      */
     public send<ThrowOnError extends boolean = false>(options: Options<PostApiV1ImMessagesData, ThrowOnError>): RequestResult<PostApiV1ImMessagesResponses, PostApiV1ImMessagesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ImMessagesResponses, PostApiV1ImMessagesErrors, ThrowOnError>({
@@ -1134,6 +1304,8 @@ export class Im extends HeyApiClient {
     
     /**
      * Long-poll a conversation for whole new messages, typing and read receipts
+     *
+     * **API key scopes:** `chat:read`.
      */
     public sync<ThrowOnError extends boolean = false>(options: Options<GetApiV1ImTopicsByTopicIdSyncData, ThrowOnError>): RequestResult<GetApiV1ImTopicsByTopicIdSyncResponses, GetApiV1ImTopicsByTopicIdSyncErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1ImTopicsByTopicIdSyncResponses, GetApiV1ImTopicsByTopicIdSyncErrors, ThrowOnError>({
@@ -1145,6 +1317,8 @@ export class Im extends HeyApiClient {
     
     /**
      * Mark the agent's messages read up to a message
+     *
+     * **API key scopes:** `chat:write`.
      */
     public markRead<ThrowOnError extends boolean = false>(options: Options<PostApiV1ImTopicsByTopicIdReadData, ThrowOnError>): RequestResult<PostApiV1ImTopicsByTopicIdReadResponses, PostApiV1ImTopicsByTopicIdReadErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ImTopicsByTopicIdReadResponses, PostApiV1ImTopicsByTopicIdReadErrors, ThrowOnError>({
@@ -1159,6 +1333,8 @@ export class Im extends HeyApiClient {
 export class KnowledgeBases extends HeyApiClient {
     /**
      * List knowledge bases
+     *
+     * **API key scopes:** `knowledge:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1KnowledgeBasesData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesResponses, GetApiV1KnowledgeBasesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1KnowledgeBasesResponses, GetApiV1KnowledgeBasesErrors, ThrowOnError>({
@@ -1170,6 +1346,8 @@ export class KnowledgeBases extends HeyApiClient {
     
     /**
      * Create a knowledge base
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesResponses, PostApiV1KnowledgeBasesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1KnowledgeBasesResponses, PostApiV1KnowledgeBasesErrors, ThrowOnError>({
@@ -1184,6 +1362,8 @@ export class KnowledgeBases extends HeyApiClient {
      * Delete a knowledge base
      *
      * Also deletes the files that belong to no other knowledge base.
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1KnowledgeBasesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1KnowledgeBasesByIdResponses, DeleteApiV1KnowledgeBasesByIdErrors, ThrowOnError>({
@@ -1195,6 +1375,8 @@ export class KnowledgeBases extends HeyApiClient {
     
     /**
      * Get a knowledge base
+     *
+     * **API key scopes:** `knowledge:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByIdResponses, GetApiV1KnowledgeBasesByIdErrors, ThrowOnError>({
@@ -1206,6 +1388,8 @@ export class KnowledgeBases extends HeyApiClient {
     
     /**
      * Update a knowledge base
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1KnowledgeBasesByIdData, ThrowOnError>): RequestResult<PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1KnowledgeBasesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1KnowledgeBasesByIdResponses, PatchApiV1KnowledgeBasesByIdErrors, ThrowOnError>({
@@ -1218,6 +1402,8 @@ export class KnowledgeBases extends HeyApiClient {
     
     /**
      * List the files of a knowledge base
+     *
+     * **API key scopes:** `knowledge:read`.
      */
     public listFiles<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByIdFilesData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdFilesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByIdFilesResponses, GetApiV1KnowledgeBasesByIdFilesErrors, ThrowOnError>({
@@ -1231,6 +1417,8 @@ export class KnowledgeBases extends HeyApiClient {
      * Remove files from a knowledge base
      *
      * Detaches the files from the knowledge base without deleting them, and reports per file which ones were detached.
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public removeFiles<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1KnowledgeBasesByIdFilesBatchData, ThrowOnError>): RequestResult<DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1KnowledgeBasesByIdFilesBatchResponses, DeleteApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError>({
@@ -1243,6 +1431,8 @@ export class KnowledgeBases extends HeyApiClient {
     
     /**
      * Add files to a knowledge base
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public addFiles<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesByIdFilesBatchData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1KnowledgeBasesByIdFilesBatchResponses, PostApiV1KnowledgeBasesByIdFilesBatchErrors, ThrowOnError>({
@@ -1255,6 +1445,8 @@ export class KnowledgeBases extends HeyApiClient {
     
     /**
      * Move files to another knowledge base
+     *
+     * **API key scopes:** `knowledge:write`.
      */
     public moveFiles<ThrowOnError extends boolean = false>(options: Options<PostApiV1KnowledgeBasesByIdFilesMoveData, ThrowOnError>): RequestResult<PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesByIdFilesMoveErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1KnowledgeBasesByIdFilesMoveResponses, PostApiV1KnowledgeBasesByIdFilesMoveErrors, ThrowOnError>({
@@ -1271,6 +1463,8 @@ export class McpServers extends HeyApiClient {
      * List remote MCP servers
      *
      * Paginated with `limit` + `cursor`; answers `{ items, total, hasMore, nextCursor }`. Clients that still expect the former bare array can pass the deprecated `format=array`, which returns every item as a plain array.
+     *
+     * **API key scopes:** `mcp:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1McpServersData, ThrowOnError>): RequestResult<GetApiV1McpServersResponses, GetApiV1McpServersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1McpServersResponses, GetApiV1McpServersErrors, ThrowOnError>({
@@ -1282,6 +1476,8 @@ export class McpServers extends HeyApiClient {
     
     /**
      * Add a remote MCP server
+     *
+     * **API key scopes:** `mcp:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1McpServersData, ThrowOnError>): RequestResult<PostApiV1McpServersResponses, PostApiV1McpServersErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1McpServersResponses, PostApiV1McpServersErrors, ThrowOnError>({
@@ -1294,6 +1490,8 @@ export class McpServers extends HeyApiClient {
     
     /**
      * Delete a remote MCP server
+     *
+     * **API key scopes:** `mcp:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1McpServersByIdData, ThrowOnError>): RequestResult<DeleteApiV1McpServersByIdResponses, DeleteApiV1McpServersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1McpServersByIdResponses, DeleteApiV1McpServersByIdErrors, ThrowOnError>({
@@ -1305,6 +1503,8 @@ export class McpServers extends HeyApiClient {
     
     /**
      * Get a remote MCP server
+     *
+     * **API key scopes:** `mcp:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1McpServersByIdData, ThrowOnError>): RequestResult<GetApiV1McpServersByIdResponses, GetApiV1McpServersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1McpServersByIdResponses, GetApiV1McpServersByIdErrors, ThrowOnError>({
@@ -1318,6 +1518,8 @@ export class McpServers extends HeyApiClient {
      * Update a remote MCP server
      *
      * Changing `serverUrl` or `credentials` resets the status to `disconnected`.
+     *
+     * **API key scopes:** `mcp:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1McpServersByIdData, ThrowOnError>): RequestResult<PatchApiV1McpServersByIdResponses, PatchApiV1McpServersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1McpServersByIdResponses, PatchApiV1McpServersByIdErrors, ThrowOnError>({
@@ -1330,6 +1532,8 @@ export class McpServers extends HeyApiClient {
     
     /**
      * Discover and sync MCP tools
+     *
+     * **API key scopes:** `mcp:write`.
      */
     public createSync<ThrowOnError extends boolean = false>(options: Options<PostApiV1McpServersByIdSyncData, ThrowOnError>): RequestResult<PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersByIdSyncErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1McpServersByIdSyncResponses, PostApiV1McpServersByIdSyncErrors, ThrowOnError>({
@@ -1345,6 +1549,8 @@ export class Memories extends HeyApiClient {
      * Get the current persona document
      *
      * `data` is null until a persona has been written.
+     *
+     * **API key scopes:** `user:read`.
      */
     public getPersona<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MemoriesPersonaData, ThrowOnError>): RequestResult<GetApiV1MemoriesPersonaResponses, GetApiV1MemoriesPersonaErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1MemoriesPersonaResponses, GetApiV1MemoriesPersonaErrors, ThrowOnError>({
@@ -1356,6 +1562,8 @@ export class Memories extends HeyApiClient {
     
     /**
      * List persona document versions
+     *
+     * **API key scopes:** `user:read`.
      */
     public listPersonaVersions<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MemoriesPersonaVersionsData, ThrowOnError>): RequestResult<GetApiV1MemoriesPersonaVersionsResponses, GetApiV1MemoriesPersonaVersionsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1MemoriesPersonaVersionsResponses, GetApiV1MemoriesPersonaVersionsErrors, ThrowOnError>({
@@ -1369,6 +1577,8 @@ export class Memories extends HeyApiClient {
      * Delete all memory entries
      *
      * Removes every memory, the persona and the per-topic extraction status; `count` is the number of memories removed.
+     *
+     * **API key scopes:** `user:write`.
      */
     public deleteAll<ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1MemoriesData, ThrowOnError>): RequestResult<DeleteApiV1MemoriesResponses, DeleteApiV1MemoriesErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DeleteApiV1MemoriesResponses, DeleteApiV1MemoriesErrors, ThrowOnError>({
@@ -1380,6 +1590,8 @@ export class Memories extends HeyApiClient {
     
     /**
      * Delete a memory entry
+     *
+     * **API key scopes:** `user:write`.
      */
     public deleteEntry<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MemoriesByCategoryByIdData, ThrowOnError>): RequestResult<DeleteApiV1MemoriesByCategoryByIdResponses, DeleteApiV1MemoriesByCategoryByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1MemoriesByCategoryByIdResponses, DeleteApiV1MemoriesByCategoryByIdErrors, ThrowOnError>({
@@ -1393,6 +1605,8 @@ export class Memories extends HeyApiClient {
      * List the entries of a memory category
      *
      * Every identity, or the newest entries of the other categories; the array shape follows `category`.
+     *
+     * **API key scopes:** `user:read`.
      */
     public listCategory<ThrowOnError extends boolean = false>(options: Options<GetApiV1MemoriesByCategoryData, ThrowOnError>): RequestResult<GetApiV1MemoriesByCategoryResponses, GetApiV1MemoriesByCategoryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1MemoriesByCategoryResponses, GetApiV1MemoriesByCategoryErrors, ThrowOnError>({
@@ -1408,6 +1622,8 @@ export class MessageTranslations extends HeyApiClient {
      * Delete a message's translation
      *
      * `id` is the id of the message whose translation was removed.
+     *
+     * **API key scopes:** `chat:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1MessageTranslationsByMessageIdResponses, DeleteApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
@@ -1421,6 +1637,8 @@ export class MessageTranslations extends HeyApiClient {
      * Get a message's translation
      *
      * `null` when the message has no stored translation.
+     *
+     * **API key scopes:** `chat:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1MessageTranslationsByMessageIdResponses, GetApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
@@ -1432,6 +1650,8 @@ export class MessageTranslations extends HeyApiClient {
     
     /**
      * Set a message's translation
+     *
+     * **API key scopes:** `chat:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1MessageTranslationsByMessageIdResponses, PatchApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
@@ -1444,6 +1664,8 @@ export class MessageTranslations extends HeyApiClient {
     
     /**
      * Translate a message
+     *
+     * **API key scopes:** `chat:write` + `model:invoke`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessageTranslationsByMessageIdData, ThrowOnError>): RequestResult<PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1MessageTranslationsByMessageIdErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1MessageTranslationsByMessageIdResponses, PostApiV1MessageTranslationsByMessageIdErrors, ThrowOnError>({
@@ -1458,6 +1680,8 @@ export class MessageTranslations extends HeyApiClient {
 export class Messages extends HeyApiClient {
     /**
      * Count messages
+     *
+     * **API key scopes:** `chat:read`.
      */
     public getCount<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MessagesCountData, ThrowOnError>): RequestResult<GetApiV1MessagesCountResponses, GetApiV1MessagesCountErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1MessagesCountResponses, GetApiV1MessagesCountErrors, ThrowOnError>({
@@ -1471,6 +1695,8 @@ export class Messages extends HeyApiClient {
      * Delete messages in batch
      *
      * Best effort: ids the caller may not delete or that no longer exist are skipped. `count` is the number of messages actually removed.
+     *
+     * **API key scopes:** `chat:write`.
      */
     public deleteMany<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesData, ThrowOnError>): RequestResult<DeleteApiV1MessagesResponses, DeleteApiV1MessagesErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1MessagesResponses, DeleteApiV1MessagesErrors, ThrowOnError>({
@@ -1483,6 +1709,8 @@ export class Messages extends HeyApiClient {
     
     /**
      * List messages
+     *
+     * **API key scopes:** `chat:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1MessagesData, ThrowOnError>): RequestResult<GetApiV1MessagesResponses, GetApiV1MessagesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1MessagesResponses, GetApiV1MessagesErrors, ThrowOnError>({
@@ -1494,6 +1722,8 @@ export class Messages extends HeyApiClient {
     
     /**
      * Create a message
+     *
+     * **API key scopes:** `chat:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessagesData, ThrowOnError>): RequestResult<PostApiV1MessagesResponses, PostApiV1MessagesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1MessagesResponses, PostApiV1MessagesErrors, ThrowOnError>({
@@ -1506,6 +1736,8 @@ export class Messages extends HeyApiClient {
     
     /**
      * Delete a message
+     *
+     * **API key scopes:** `chat:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MessagesByIdData, ThrowOnError>): RequestResult<DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1MessagesByIdResponses, DeleteApiV1MessagesByIdErrors, ThrowOnError>({
@@ -1517,6 +1749,8 @@ export class Messages extends HeyApiClient {
     
     /**
      * Get a message
+     *
+     * **API key scopes:** `chat:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MessagesByIdData, ThrowOnError>): RequestResult<GetApiV1MessagesByIdResponses, GetApiV1MessagesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1MessagesByIdResponses, GetApiV1MessagesByIdErrors, ThrowOnError>({
@@ -1530,6 +1764,8 @@ export class Messages extends HeyApiClient {
      * Create a user message and generate an AI reply
      *
      * Stores the user message, then generates and stores the assistant reply. Answers with the reply; `null` only if it could not be read back.
+     *
+     * **API key scopes:** `chat:write` + `model:invoke`.
      */
     public createReply<ThrowOnError extends boolean = false>(options: Options<PostApiV1MessagesRepliesData, ThrowOnError>): RequestResult<PostApiV1MessagesRepliesResponses, PostApiV1MessagesRepliesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1MessagesRepliesResponses, PostApiV1MessagesRepliesErrors, ThrowOnError>({
@@ -1544,6 +1780,8 @@ export class Messages extends HeyApiClient {
 export class Models extends HeyApiClient {
     /**
      * List models
+     *
+     * **API key scopes:** `model:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ModelsData, ThrowOnError>): RequestResult<GetApiV1ModelsResponses, GetApiV1ModelsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1ModelsResponses, GetApiV1ModelsErrors, ThrowOnError>({
@@ -1555,6 +1793,8 @@ export class Models extends HeyApiClient {
     
     /**
      * Create a model
+     *
+     * **API key scopes:** `model:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ModelsData, ThrowOnError>): RequestResult<PostApiV1ModelsResponses, PostApiV1ModelsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ModelsResponses, PostApiV1ModelsErrors, ThrowOnError>({
@@ -1567,6 +1807,8 @@ export class Models extends HeyApiClient {
     
     /**
      * Get a model
+     *
+     * **API key scopes:** `model:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ModelsByProviderIdByModelIdData, ThrowOnError>): RequestResult<GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1ModelsByProviderIdByModelIdResponses, GetApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError>({
@@ -1578,6 +1820,8 @@ export class Models extends HeyApiClient {
     
     /**
      * Update a model
+     *
+     * **API key scopes:** `model:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ModelsByProviderIdByModelIdData, ThrowOnError>): RequestResult<PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1ModelsByProviderIdByModelIdResponses, PatchApiV1ModelsByProviderIdByModelIdErrors, ThrowOnError>({
@@ -1594,6 +1838,8 @@ export class Notifications extends HeyApiClient {
      * List notifications
      *
      * Unarchived notifications, newest first; pass the last `id` as `cursor` for the next page.
+     *
+     * **API key scopes:** any API key (no scope needed).
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1NotificationsData, ThrowOnError>): RequestResult<GetApiV1NotificationsResponses, GetApiV1NotificationsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1NotificationsResponses, GetApiV1NotificationsErrors, ThrowOnError>({
@@ -1605,6 +1851,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Get notification delivery settings
+     *
+     * **API key scopes:** any API key (no scope needed).
      */
     public listSettings<ThrowOnError extends boolean = false>(options?: Options<GetApiV1NotificationsSettingsData, ThrowOnError>): RequestResult<GetApiV1NotificationsSettingsResponses, GetApiV1NotificationsSettingsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1NotificationsSettingsResponses, GetApiV1NotificationsSettingsErrors, ThrowOnError>({
@@ -1618,6 +1866,8 @@ export class Notifications extends HeyApiClient {
      * Update notification delivery settings
      *
      * Answers with the merged settings now stored for the scope.
+     *
+     * **API key scopes:** any API key (no scope needed).
      */
     public updateSettings<ThrowOnError extends boolean = false>(options: Options<PatchApiV1NotificationsSettingsData, ThrowOnError>): RequestResult<PatchApiV1NotificationsSettingsResponses, PatchApiV1NotificationsSettingsErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1NotificationsSettingsResponses, PatchApiV1NotificationsSettingsErrors, ThrowOnError>({
@@ -1630,6 +1880,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Get the unread notification count
+     *
+     * **API key scopes:** any API key (no scope needed).
      */
     public getUnreadCount<ThrowOnError extends boolean = false>(options?: Options<GetApiV1NotificationsUnreadCountData, ThrowOnError>): RequestResult<GetApiV1NotificationsUnreadCountResponses, GetApiV1NotificationsUnreadCountErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1NotificationsUnreadCountResponses, GetApiV1NotificationsUnreadCountErrors, ThrowOnError>({
@@ -1641,6 +1893,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Get per-category notification counts
+     *
+     * **API key scopes:** any API key (no scope needed).
      */
     public getCounts<ThrowOnError extends boolean = false>(options?: Options<GetApiV1NotificationsCountsData, ThrowOnError>): RequestResult<GetApiV1NotificationsCountsResponses, GetApiV1NotificationsCountsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1NotificationsCountsResponses, GetApiV1NotificationsCountsErrors, ThrowOnError>({
@@ -1652,6 +1906,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Mark notifications as read
+     *
+     * **API key scopes:** `chat:write`.
      */
     public markRead<ThrowOnError extends boolean = false>(options: Options<PostApiV1NotificationsReadData, ThrowOnError>): RequestResult<PostApiV1NotificationsReadResponses, PostApiV1NotificationsReadErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1NotificationsReadResponses, PostApiV1NotificationsReadErrors, ThrowOnError>({
@@ -1664,6 +1920,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Mark every notification as read
+     *
+     * **API key scopes:** `chat:write`.
      */
     public markAllRead<ThrowOnError extends boolean = false>(options?: Options<PostApiV1NotificationsReadAllData, ThrowOnError>): RequestResult<PostApiV1NotificationsReadAllResponses, PostApiV1NotificationsReadAllErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<PostApiV1NotificationsReadAllResponses, PostApiV1NotificationsReadAllErrors, ThrowOnError>({
@@ -1675,6 +1933,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Archive every notification
+     *
+     * **API key scopes:** `chat:write`.
      */
     public archiveAll<ThrowOnError extends boolean = false>(options?: Options<PostApiV1NotificationsArchiveAllData, ThrowOnError>): RequestResult<PostApiV1NotificationsArchiveAllResponses, PostApiV1NotificationsArchiveAllErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<PostApiV1NotificationsArchiveAllResponses, PostApiV1NotificationsArchiveAllErrors, ThrowOnError>({
@@ -1686,6 +1946,8 @@ export class Notifications extends HeyApiClient {
     
     /**
      * Archive a notification
+     *
+     * **API key scopes:** `chat:write`.
      */
     public archive<ThrowOnError extends boolean = false>(options: Options<PostApiV1NotificationsByIdArchiveData, ThrowOnError>): RequestResult<PostApiV1NotificationsByIdArchiveResponses, PostApiV1NotificationsByIdArchiveErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1NotificationsByIdArchiveResponses, PostApiV1NotificationsByIdArchiveErrors, ThrowOnError>({
@@ -1699,6 +1961,8 @@ export class Notifications extends HeyApiClient {
 export class Permissions extends HeyApiClient {
     /**
      * List permissions
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1PermissionsData, ThrowOnError>): RequestResult<GetApiV1PermissionsResponses, GetApiV1PermissionsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1PermissionsResponses, GetApiV1PermissionsErrors, ThrowOnError>({
@@ -1710,6 +1974,8 @@ export class Permissions extends HeyApiClient {
     
     /**
      * Create a permission
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1PermissionsData, ThrowOnError>): RequestResult<PostApiV1PermissionsResponses, PostApiV1PermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1PermissionsResponses, PostApiV1PermissionsErrors, ThrowOnError>({
@@ -1722,6 +1988,8 @@ export class Permissions extends HeyApiClient {
     
     /**
      * Delete a permission
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1PermissionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1PermissionsByIdResponses, DeleteApiV1PermissionsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1PermissionsByIdResponses, DeleteApiV1PermissionsByIdErrors, ThrowOnError>({
@@ -1733,6 +2001,8 @@ export class Permissions extends HeyApiClient {
     
     /**
      * Get a permission
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1PermissionsByIdData, ThrowOnError>): RequestResult<GetApiV1PermissionsByIdResponses, GetApiV1PermissionsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1PermissionsByIdResponses, GetApiV1PermissionsByIdErrors, ThrowOnError>({
@@ -1744,6 +2014,8 @@ export class Permissions extends HeyApiClient {
     
     /**
      * Update a permission
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1PermissionsByIdData, ThrowOnError>): RequestResult<PatchApiV1PermissionsByIdResponses, PatchApiV1PermissionsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1PermissionsByIdResponses, PatchApiV1PermissionsByIdErrors, ThrowOnError>({
@@ -1758,6 +2030,8 @@ export class Permissions extends HeyApiClient {
 export class Providers extends HeyApiClient {
     /**
      * List providers
+     *
+     * **API key scopes:** `model:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ProvidersData, ThrowOnError>): RequestResult<GetApiV1ProvidersResponses, GetApiV1ProvidersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1ProvidersResponses, GetApiV1ProvidersErrors, ThrowOnError>({
@@ -1769,6 +2043,8 @@ export class Providers extends HeyApiClient {
     
     /**
      * Create a provider
+     *
+     * **API key scopes:** `model:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ProvidersData, ThrowOnError>): RequestResult<PostApiV1ProvidersResponses, PostApiV1ProvidersErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ProvidersResponses, PostApiV1ProvidersErrors, ThrowOnError>({
@@ -1783,6 +2059,8 @@ export class Providers extends HeyApiClient {
      * Delete a provider
      *
      * Also removes the models configured under the provider.
+     *
+     * **API key scopes:** `model:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ProvidersByIdData, ThrowOnError>): RequestResult<DeleteApiV1ProvidersByIdResponses, DeleteApiV1ProvidersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1ProvidersByIdResponses, DeleteApiV1ProvidersByIdErrors, ThrowOnError>({
@@ -1794,6 +2072,8 @@ export class Providers extends HeyApiClient {
     
     /**
      * Get a provider
+     *
+     * **API key scopes:** `model:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1ProvidersByIdData, ThrowOnError>): RequestResult<GetApiV1ProvidersByIdResponses, GetApiV1ProvidersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1ProvidersByIdResponses, GetApiV1ProvidersByIdErrors, ThrowOnError>({
@@ -1805,6 +2085,8 @@ export class Providers extends HeyApiClient {
     
     /**
      * Update a provider
+     *
+     * **API key scopes:** `model:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ProvidersByIdData, ThrowOnError>): RequestResult<PatchApiV1ProvidersByIdResponses, PatchApiV1ProvidersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1ProvidersByIdResponses, PatchApiV1ProvidersByIdErrors, ThrowOnError>({
@@ -1821,6 +2103,8 @@ export class PushTokens extends HeyApiClient {
      * Stop pushing to this device (sign-out)
      *
      * `id` is the device id. Idempotent: a stale `expoToken` removes nothing and leaves the rotated registration in place.
+     *
+     * **API key scopes:** `chat:read`.
      */
     public unregister<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1PushTokensByDeviceIdData, ThrowOnError>): RequestResult<DeleteApiV1PushTokensByDeviceIdResponses, DeleteApiV1PushTokensByDeviceIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1PushTokensByDeviceIdResponses, DeleteApiV1PushTokensByDeviceIdErrors, ThrowOnError>({
@@ -1832,6 +2116,8 @@ export class PushTokens extends HeyApiClient {
     
     /**
      * Register or rotate this device's push token
+     *
+     * **API key scopes:** `chat:read`.
      */
     public register<ThrowOnError extends boolean = false>(options: Options<PutApiV1PushTokensByDeviceIdData, ThrowOnError>): RequestResult<PutApiV1PushTokensByDeviceIdResponses, PutApiV1PushTokensByDeviceIdErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutApiV1PushTokensByDeviceIdResponses, PutApiV1PushTokensByDeviceIdErrors, ThrowOnError>({
@@ -1847,7 +2133,9 @@ export class Responses extends HeyApiClient {
     /**
      * Create a model response
      *
-     * OpenResponses-compatible: `model` takes an agent id. Without `stream` the response object is the whole JSON body (no success envelope); a run that fails still answers 200 with `status: "failed"` and `error`. With `stream: true` the same object arrives through `response.*` server-sent events.
+     * OpenResponses-compatible: `model` takes an agent id. Without `stream` the response object is the whole JSON body (no success envelope); a run that fails still answers 200 with `status: "failed"` and `error`. With `stream: true` the body is `text/event-stream`: each message is `event: <type>` plus `data: <ResponseStreamEvent JSON>`, and the final `response.completed` / `response.failed` / `response.incomplete` event carries the same response object.
+     *
+     * **API key scopes:** `agent:write` + `chat:write` + `model:invoke`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1ResponsesData, ThrowOnError>): RequestResult<PostApiV1ResponsesResponses, PostApiV1ResponsesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ResponsesResponses, PostApiV1ResponsesErrors, ThrowOnError>({
@@ -1862,6 +2150,8 @@ export class Responses extends HeyApiClient {
 export class Roles extends HeyApiClient {
     /**
      * List roles
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1RolesData, ThrowOnError>): RequestResult<GetApiV1RolesResponses, GetApiV1RolesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1RolesResponses, GetApiV1RolesErrors, ThrowOnError>({
@@ -1873,6 +2163,8 @@ export class Roles extends HeyApiClient {
     
     /**
      * Create a role
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1RolesData, ThrowOnError>): RequestResult<PostApiV1RolesResponses, PostApiV1RolesErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1RolesResponses, PostApiV1RolesErrors, ThrowOnError>({
@@ -1885,6 +2177,8 @@ export class Roles extends HeyApiClient {
     
     /**
      * Delete a role
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1RolesByIdData, ThrowOnError>): RequestResult<DeleteApiV1RolesByIdResponses, DeleteApiV1RolesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1RolesByIdResponses, DeleteApiV1RolesByIdErrors, ThrowOnError>({
@@ -1896,6 +2190,8 @@ export class Roles extends HeyApiClient {
     
     /**
      * Get a role
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1RolesByIdData, ThrowOnError>): RequestResult<GetApiV1RolesByIdResponses, GetApiV1RolesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1RolesByIdResponses, GetApiV1RolesByIdErrors, ThrowOnError>({
@@ -1907,6 +2203,8 @@ export class Roles extends HeyApiClient {
     
     /**
      * Update a role
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1RolesByIdData, ThrowOnError>): RequestResult<PatchApiV1RolesByIdResponses, PatchApiV1RolesByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1RolesByIdResponses, PatchApiV1RolesByIdErrors, ThrowOnError>({
@@ -1921,6 +2219,8 @@ export class Roles extends HeyApiClient {
      * Clear a role's permissions
      *
      * `count` is the number of permission mappings removed.
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public deletePermissions<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdPermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1RolesByIdPermissionsResponses, DeleteApiV1RolesByIdPermissionsErrors, ThrowOnError>({
@@ -1932,6 +2232,8 @@ export class Roles extends HeyApiClient {
     
     /**
      * List a role's permissions
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listPermissions<ThrowOnError extends boolean = false>(options: Options<GetApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdPermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1RolesByIdPermissionsResponses, GetApiV1RolesByIdPermissionsErrors, ThrowOnError>({
@@ -1945,6 +2247,8 @@ export class Roles extends HeyApiClient {
      * Update a role's permissions
      *
      * Grants and revokes permissions by id; returns how many mappings changed.
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public updatePermissions<ThrowOnError extends boolean = false>(options: Options<PatchApiV1RolesByIdPermissionsData, ThrowOnError>): RequestResult<PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdPermissionsErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1RolesByIdPermissionsResponses, PatchApiV1RolesByIdPermissionsErrors, ThrowOnError>({
@@ -1959,6 +2263,8 @@ export class Roles extends HeyApiClient {
 export class Signals extends HeyApiClient {
     /**
      * Emit an agent signal source event
+     *
+     * **API key scopes:** `agent:write` + `model:invoke`.
      */
     public emit<ThrowOnError extends boolean = false>(options: Options<PostApiV1SignalsSourceEventsData, ThrowOnError>): RequestResult<PostApiV1SignalsSourceEventsResponses, PostApiV1SignalsSourceEventsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1SignalsSourceEventsResponses, PostApiV1SignalsSourceEventsErrors, ThrowOnError>({
@@ -1971,6 +2277,8 @@ export class Signals extends HeyApiClient {
     
     /**
      * Trigger a synthesized agent signal source event
+     *
+     * **API key scopes:** `agent:write` + `model:invoke`.
      */
     public trigger<ThrowOnError extends boolean = false>(options: Options<PostApiV1SignalsTriggerData, ThrowOnError>): RequestResult<PostApiV1SignalsTriggerResponses, PostApiV1SignalsTriggerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1SignalsTriggerResponses, PostApiV1SignalsTriggerErrors, ThrowOnError>({
@@ -1983,6 +2291,8 @@ export class Signals extends HeyApiClient {
     
     /**
      * List agent signal receipts for a topic
+     *
+     * **API key scopes:** `agent:read`.
      */
     public listReceipts<ThrowOnError extends boolean = false>(options: Options<GetApiV1SignalsReceiptsData, ThrowOnError>): RequestResult<GetApiV1SignalsReceiptsResponses, GetApiV1SignalsReceiptsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1SignalsReceiptsResponses, GetApiV1SignalsReceiptsErrors, ThrowOnError>({
@@ -1996,6 +2306,8 @@ export class Signals extends HeyApiClient {
 export class Tasks extends HeyApiClient {
     /**
      * List tasks
+     *
+     * **API key scopes:** `agent:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1TasksData, ThrowOnError>): RequestResult<GetApiV1TasksResponses, GetApiV1TasksErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1TasksResponses, GetApiV1TasksErrors, ThrowOnError>({
@@ -2007,6 +2319,8 @@ export class Tasks extends HeyApiClient {
     
     /**
      * Create a task
+     *
+     * **API key scopes:** `agent:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1TasksData, ThrowOnError>): RequestResult<PostApiV1TasksResponses, PostApiV1TasksErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1TasksResponses, PostApiV1TasksErrors, ThrowOnError>({
@@ -2019,6 +2333,8 @@ export class Tasks extends HeyApiClient {
     
     /**
      * Delete a task
+     *
+     * **API key scopes:** `agent:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1TasksByIdData, ThrowOnError>): RequestResult<DeleteApiV1TasksByIdResponses, DeleteApiV1TasksByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1TasksByIdResponses, DeleteApiV1TasksByIdErrors, ThrowOnError>({
@@ -2030,6 +2346,8 @@ export class Tasks extends HeyApiClient {
     
     /**
      * Get a task
+     *
+     * **API key scopes:** `agent:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1TasksByIdData, ThrowOnError>): RequestResult<GetApiV1TasksByIdResponses, GetApiV1TasksByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1TasksByIdResponses, GetApiV1TasksByIdErrors, ThrowOnError>({
@@ -2041,6 +2359,8 @@ export class Tasks extends HeyApiClient {
     
     /**
      * Update a task
+     *
+     * **API key scopes:** `agent:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1TasksByIdData, ThrowOnError>): RequestResult<PatchApiV1TasksByIdResponses, PatchApiV1TasksByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1TasksByIdResponses, PatchApiV1TasksByIdErrors, ThrowOnError>({
@@ -2053,6 +2373,8 @@ export class Tasks extends HeyApiClient {
     
     /**
      * Change a task status
+     *
+     * **API key scopes:** `agent:write`.
      */
     public updateStatus<ThrowOnError extends boolean = false>(options: Options<PatchApiV1TasksByIdStatusData, ThrowOnError>): RequestResult<PatchApiV1TasksByIdStatusResponses, PatchApiV1TasksByIdStatusErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1TasksByIdStatusResponses, PatchApiV1TasksByIdStatusErrors, ThrowOnError>({
@@ -2065,6 +2387,8 @@ export class Tasks extends HeyApiClient {
     
     /**
      * List past runs of a task
+     *
+     * **API key scopes:** `agent:read`.
      */
     public listRuns<ThrowOnError extends boolean = false>(options: Options<GetApiV1TasksByIdRunsData, ThrowOnError>): RequestResult<GetApiV1TasksByIdRunsResponses, GetApiV1TasksByIdRunsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1TasksByIdRunsResponses, GetApiV1TasksByIdRunsErrors, ThrowOnError>({
@@ -2078,6 +2402,8 @@ export class Tasks extends HeyApiClient {
      * Run a task now
      *
      * Starts the run and answers once the agent operation is accepted; follow it with `operationId`.
+     *
+     * **API key scopes:** `agent:write`.
      */
     public run<ThrowOnError extends boolean = false>(options: Options<PostApiV1TasksByIdRunsData, ThrowOnError>): RequestResult<PostApiV1TasksByIdRunsResponses, PostApiV1TasksByIdRunsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1TasksByIdRunsResponses, PostApiV1TasksByIdRunsErrors, ThrowOnError>({
@@ -2092,6 +2418,8 @@ export class Tasks extends HeyApiClient {
 export class Topics extends HeyApiClient {
     /**
      * List topics
+     *
+     * **API key scopes:** `chat:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1TopicsData, ThrowOnError>): RequestResult<GetApiV1TopicsResponses, GetApiV1TopicsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1TopicsResponses, GetApiV1TopicsErrors, ThrowOnError>({
@@ -2103,6 +2431,8 @@ export class Topics extends HeyApiClient {
     
     /**
      * Create a topic
+     *
+     * **API key scopes:** `chat:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1TopicsData, ThrowOnError>): RequestResult<PostApiV1TopicsResponses, PostApiV1TopicsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1TopicsResponses, PostApiV1TopicsErrors, ThrowOnError>({
@@ -2115,6 +2445,8 @@ export class Topics extends HeyApiClient {
     
     /**
      * Delete a topic
+     *
+     * **API key scopes:** `chat:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1TopicsByIdData, ThrowOnError>): RequestResult<DeleteApiV1TopicsByIdResponses, DeleteApiV1TopicsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1TopicsByIdResponses, DeleteApiV1TopicsByIdErrors, ThrowOnError>({
@@ -2126,6 +2458,8 @@ export class Topics extends HeyApiClient {
     
     /**
      * Get a topic
+     *
+     * **API key scopes:** `chat:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1TopicsByIdData, ThrowOnError>): RequestResult<GetApiV1TopicsByIdResponses, GetApiV1TopicsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1TopicsByIdResponses, GetApiV1TopicsByIdErrors, ThrowOnError>({
@@ -2137,6 +2471,8 @@ export class Topics extends HeyApiClient {
     
     /**
      * Update a topic
+     *
+     * **API key scopes:** `chat:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1TopicsByIdData, ThrowOnError>): RequestResult<PatchApiV1TopicsByIdResponses, PatchApiV1TopicsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1TopicsByIdResponses, PatchApiV1TopicsByIdErrors, ThrowOnError>({
@@ -2149,6 +2485,8 @@ export class Topics extends HeyApiClient {
     
     /**
      * List topic threads
+     *
+     * **API key scopes:** `chat:read`.
      */
     public listThreads<ThrowOnError extends boolean = false>(options: Options<GetApiV1TopicsByTopicIdThreadsData, ThrowOnError>): RequestResult<GetApiV1TopicsByTopicIdThreadsResponses, GetApiV1TopicsByTopicIdThreadsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1TopicsByTopicIdThreadsResponses, GetApiV1TopicsByTopicIdThreadsErrors, ThrowOnError>({
@@ -2164,6 +2502,8 @@ export class Users extends HeyApiClient {
      * Get current authenticated user
      *
      * Reachable by every authenticated caller. An API key without `user:read` receives only `{ id }`; `messageCount` is included only with `?includeCount=1` and `chat:read`.
+     *
+     * **API key scopes:** any API key (no scope needed).
      */
     public me<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsersMeData, ThrowOnError>): RequestResult<GetApiV1UsersMeResponses, GetApiV1UsersMeErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1UsersMeResponses, GetApiV1UsersMeErrors, ThrowOnError>({
@@ -2175,6 +2515,8 @@ export class Users extends HeyApiClient {
     
     /**
      * List users
+     *
+     * **API key scopes:** `user:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsersData, ThrowOnError>): RequestResult<GetApiV1UsersResponses, GetApiV1UsersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1UsersResponses, GetApiV1UsersErrors, ThrowOnError>({
@@ -2186,6 +2528,8 @@ export class Users extends HeyApiClient {
     
     /**
      * Create a user
+     *
+     * **API key scopes:** `user:write`.
      */
     public create<ThrowOnError extends boolean = false>(options: Options<PostApiV1UsersData, ThrowOnError>): RequestResult<PostApiV1UsersResponses, PostApiV1UsersErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1UsersResponses, PostApiV1UsersErrors, ThrowOnError>({
@@ -2198,6 +2542,8 @@ export class Users extends HeyApiClient {
     
     /**
      * Delete a user
+     *
+     * **API key scopes:** `user:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1UsersByIdData, ThrowOnError>): RequestResult<DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1UsersByIdResponses, DeleteApiV1UsersByIdErrors, ThrowOnError>({
@@ -2209,6 +2555,8 @@ export class Users extends HeyApiClient {
     
     /**
      * Get a user
+     *
+     * **API key scopes:** `user:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1UsersByIdData, ThrowOnError>): RequestResult<GetApiV1UsersByIdResponses, GetApiV1UsersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1UsersByIdResponses, GetApiV1UsersByIdErrors, ThrowOnError>({
@@ -2220,6 +2568,8 @@ export class Users extends HeyApiClient {
     
     /**
      * Update a user
+     *
+     * **API key scopes:** `user:write`.
      */
     public update<ThrowOnError extends boolean = false>(options: Options<PatchApiV1UsersByIdData, ThrowOnError>): RequestResult<PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1UsersByIdResponses, PatchApiV1UsersByIdErrors, ThrowOnError>({
@@ -2234,6 +2584,8 @@ export class Users extends HeyApiClient {
      * Clear a user's roles
      *
      * `count` is the number of role assignments removed.
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public deleteRoles<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<DeleteApiV1UsersByIdRolesResponses, DeleteApiV1UsersByIdRolesErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1UsersByIdRolesResponses, DeleteApiV1UsersByIdRolesErrors, ThrowOnError>({
@@ -2245,6 +2597,8 @@ export class Users extends HeyApiClient {
     
     /**
      * List a user's roles
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listRoles<ThrowOnError extends boolean = false>(options: Options<GetApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<GetApiV1UsersByIdRolesResponses, GetApiV1UsersByIdRolesErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1UsersByIdRolesResponses, GetApiV1UsersByIdRolesErrors, ThrowOnError>({
@@ -2258,6 +2612,8 @@ export class Users extends HeyApiClient {
      * Update a user's roles
      *
      * Adds and removes role assignments, then returns all of the user's roles.
+     *
+     * **API key scopes:** a full-access API key (`*`).
      */
     public updateRoles<ThrowOnError extends boolean = false>(options: Options<PatchApiV1UsersByIdRolesData, ThrowOnError>): RequestResult<PatchApiV1UsersByIdRolesResponses, PatchApiV1UsersByIdRolesErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1UsersByIdRolesResponses, PatchApiV1UsersByIdRolesErrors, ThrowOnError>({
@@ -2272,6 +2628,8 @@ export class Users extends HeyApiClient {
 export class Usage extends HeyApiClient {
     /**
      * Get usage and quota summary
+     *
+     * **API key scopes:** `usage:read`.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1UsageData, ThrowOnError>): RequestResult<GetApiV1UsageResponses, GetApiV1UsageErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1UsageResponses, GetApiV1UsageErrors, ThrowOnError>({

@@ -18,6 +18,11 @@ import * as fx from '../github/__tests__/fixtures';
 import { normalizeGitHubEvent } from '../github/normalize';
 import { ScmIngestService } from '../ScmIngestService';
 
+const { onChangeRequestSettled } = vi.hoisted(() => ({
+  onChangeRequestSettled: vi.fn(async () => {}),
+}));
+vi.mock('@/business/server/scm/onChangeRequestSettled', () => ({ onChangeRequestSettled }));
+
 const serverDB = await getTestDB();
 const userId = 'scm-ingest-user';
 const acceptanceId = '0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f';
@@ -44,6 +49,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  onChangeRequestSettled.mockClear();
   await serverDB.delete(scmWebhookDeliveries);
   await serverDB.delete(users);
 });
@@ -146,6 +152,15 @@ describe('ScmIngestService', () => {
       state: 'merged',
     });
     expect(hook).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'merged' }));
+    expect(onChangeRequestSettled).toHaveBeenCalledTimes(1);
+    expect(onChangeRequestSettled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeRequestId: row!.id,
+        settledAt: new Date('2026-09-20T07:00:00Z'),
+        state: 'merged',
+        userId,
+      }),
+    );
   });
 
   it('drops a review the same reviewer has already superseded', async () => {

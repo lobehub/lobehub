@@ -20,6 +20,9 @@ export const LOBEHUB_DESKTOP_CLIENT_ID = 'lobehub-desktop';
  */
 export const LOBOT_DESKTOP_CLIENT_ID = 'lobot-desktop';
 
+/** OIDC client the Lobot iOS app signs in with, through an HTTPS universal-link callback. */
+export const LOBOT_MOBILE_CLIENT_ID = 'lobot-mobile';
+
 /** Desktop apps that sign in through the `/oidc/callback/desktop` handoff. */
 export const DESKTOP_OIDC_CLIENT_IDS: readonly string[] = [
   LOBEHUB_DESKTOP_CLIENT_ID,

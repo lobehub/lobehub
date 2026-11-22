@@ -449,7 +449,7 @@ export const listHeterogeneousAgentModels = async (
               : params.type === 'pi'
                 ? buildPiCatalogArgs(params.args)
                 : ['--list-models'];
-    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
+    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args, env as NodeJS.ProcessEnv);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd,
       encoding: 'utf8',
