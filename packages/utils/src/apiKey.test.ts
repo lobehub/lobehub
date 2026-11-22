@@ -70,6 +70,29 @@ describe('apiKey', () => {
           expect(() => generateApiKey()).toThrow(/API_KEY_PREFIX.*at most 67/);
         },
       );
+
+      it.each([
+        { prefixCharacters: 18, suffixLength: 45 },
+        { prefixCharacters: 22, suffixLength: 33 },
+      ])(
+        'should fit the storage budget with a $prefixCharacters-character multibyte prefix',
+        async ({ prefixCharacters, suffixLength }) => {
+          const prefix = '界'.repeat(prefixCharacters);
+          const { generateApiKey, validateApiKeyFormat } = await loadWithPrefix(prefix);
+
+          const apiKey = generateApiKey();
+
+          expect(apiKey.slice(prefix.length)).toHaveLength(suffixLength);
+          expect(new TextEncoder().encode(apiKey).length).toBeLessThanOrEqual(99);
+          expect(validateApiKeyFormat(apiKey)).toBe(true);
+        },
+      );
+
+      it('should measure the prefix limit in UTF-8 bytes', async () => {
+        const { generateApiKey } = await loadWithPrefix('界'.repeat(23));
+
+        expect(() => generateApiKey()).toThrow(/API_KEY_PREFIX.*at most 67 UTF-8 bytes, got 69/);
+      });
     });
   });
 

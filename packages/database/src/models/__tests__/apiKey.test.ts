@@ -1,7 +1,7 @@
 // @vitest-environment node
 import {
   API_KEY_PREFIX,
-  MAX_API_KEY_PREFIX_LENGTH,
+  MAX_API_KEY_PREFIX_BYTES,
   validateApiKeyFormat,
 } from '@lobechat/utils/apiKey';
 import { eq } from 'drizzle-orm';
@@ -92,8 +92,11 @@ describe('ApiKeyModel', () => {
       expect(stored?.key).toContain(':');
     });
 
-    it('stores the longest supported key in the encrypted key column', async () => {
-      const key = `${'p'.repeat(MAX_API_KEY_PREFIX_LENGTH)}${'a'.repeat(32)}`;
+    it.each([
+      ['ascii', 'p'.repeat(MAX_API_KEY_PREFIX_BYTES)],
+      ['multibyte', `${'界'.repeat(22)}p`],
+    ])('stores the longest supported %s-prefixed key in the key column', async (_, prefix) => {
+      const key = `${prefix}${'a'.repeat(32)}`;
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
       const encrypted = await gateKeeper.encrypt(key);
 

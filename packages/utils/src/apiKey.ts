@@ -13,8 +13,9 @@ export const API_KEY_PREFIX =
   typeof configuredApiKeyPrefix === 'string' ? configuredApiKeyPrefix : 'sk-lh-';
 
 /**
- * Total length of a newly issued key, prefix included. A prefix too long to
- * leave {@link MIN_KEY_SUFFIX_LENGTH} random characters lengthens the key instead.
+ * Target length of a newly issued key in characters, prefix included. A long or
+ * multibyte prefix can move it: the key always keeps
+ * {@link MIN_KEY_SUFFIX_LENGTH} random characters and fits {@link MAX_STORED_KEY_BYTES}.
  */
 export const API_KEY_LENGTH = 64;
 
@@ -25,16 +26,22 @@ const LEGACY_KEY_SUFFIX_LENGTH = 16;
 const MIN_KEY_SUFFIX_LENGTH = 32;
 
 /**
- * Longest plaintext key the `api_keys.key` column can hold: encryption adds 58
- * characters of IV, auth tag and separators and hex-encodes the plaintext, so
- * 99 characters become exactly the column's 256.
+ * Longest plaintext key, in UTF-8 bytes, the `api_keys.key` column can hold:
+ * encryption adds 58 characters of IV, auth tag and separators and hex-encodes
+ * the bytes, so 99 bytes become exactly the column's 256 characters.
  */
-const MAX_STORED_KEY_LENGTH = 99;
+const MAX_STORED_KEY_BYTES = 99;
 
-/** Longest prefix that still leaves room for {@link MIN_KEY_SUFFIX_LENGTH} random characters. */
-export const MAX_API_KEY_PREFIX_LENGTH = MAX_STORED_KEY_LENGTH - MIN_KEY_SUFFIX_LENGTH;
+/** Longest prefix, in UTF-8 bytes, that leaves room for {@link MIN_KEY_SUFFIX_LENGTH} characters. */
+export const MAX_API_KEY_PREFIX_BYTES = MAX_STORED_KEY_BYTES - MIN_KEY_SUFFIX_LENGTH;
 
-const KEY_SUFFIX_LENGTH = Math.max(API_KEY_LENGTH - API_KEY_PREFIX.length, MIN_KEY_SUFFIX_LENGTH);
+const API_KEY_PREFIX_BYTES = new TextEncoder().encode(API_KEY_PREFIX).length;
+
+// The suffix is ASCII, so each of its characters costs one stored byte.
+const KEY_SUFFIX_LENGTH = Math.min(
+  Math.max(API_KEY_LENGTH - API_KEY_PREFIX.length, MIN_KEY_SUFFIX_LENGTH),
+  MAX_STORED_KEY_BYTES - API_KEY_PREFIX_BYTES,
+);
 const KEY_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 // Largest multiple of the alphabet size in a byte; higher bytes are discarded
 // so that `byte % 36` stays uniform.
@@ -43,14 +50,14 @@ const MAX_UNBIASED_BYTE = 256 - (256 % KEY_ALPHABET.length);
 /**
  * Generate API Key
  * Format: `${API_KEY_PREFIX}{lowercase alphanumerics}`, {@link API_KEY_LENGTH} characters in total
- * unless the prefix needs the key to be longer
+ * unless the prefix requires a different length
  * @returns Generated API Key
  * @throws When the configured prefix is too long for the key to be stored
  */
 export function generateApiKey(): string {
-  if (API_KEY_PREFIX.length > MAX_API_KEY_PREFIX_LENGTH) {
+  if (API_KEY_PREFIX_BYTES > MAX_API_KEY_PREFIX_BYTES) {
     throw new Error(
-      `API_KEY_PREFIX must be at most ${MAX_API_KEY_PREFIX_LENGTH} characters, got ${API_KEY_PREFIX.length}.`,
+      `API_KEY_PREFIX must be at most ${MAX_API_KEY_PREFIX_BYTES} UTF-8 bytes, got ${API_KEY_PREFIX_BYTES}.`,
     );
   }
 
