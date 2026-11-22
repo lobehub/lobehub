@@ -103,24 +103,23 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
         {headerLeading}
-        {isAuthenticated && !orgMissing && (
-          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-            <VaultFilterBar value={filter} onChange={setFilter} />
-            <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
-            {
-              // Disabled buttons swallow hover events, so the tooltip needs the
-              // span wrapper to fire (see the usePermission docstring pattern).
-              isViewer ? (
-                <Tooltip title={t('creds.viewerHint')}>
-                  <span>{createButton}</span>
-                </Tooltip>
-              ) : (
-                createButton
-              )
-            }
-          </Flexbox>
-        )}
+        {isAuthenticated &&
+          !orgMissing &&
+          // Disabled buttons swallow hover events, so the tooltip needs the
+          // span wrapper to fire (see the usePermission docstring pattern).
+          (isViewer ? (
+            <Tooltip title={t('creds.viewerHint')}>
+              <span>{createButton}</span>
+            </Tooltip>
+          ) : (
+            createButton
+          ))}
       </Flexbox>
+      {isAuthenticated && !orgMissing && (
+        <VaultFilterBar value={filter} onChange={setFilter}>
+          <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+        </VaultFilterBar>
+      )}
       <Block className={stylex.props(vaultStyles.container).className} variant={'outlined'}>
         <MarketSignInGate>
           {orgMissing ? (

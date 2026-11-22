@@ -23,7 +23,9 @@ const CreateCredButton: FC<CreateCredButtonProps> = ({ disabled, onCreate, size 
   const { t } = useTranslation('setting');
 
   const button = (
-    <Button disabled={disabled} size={size} type={'primary'}>
+    // `data-no-highlight` keeps the open-menu trigger highlight (a grey fill)
+    // off the primary button, which would leave its white label unreadable.
+    <Button data-no-highlight disabled={disabled} size={size} type={'primary'}>
       {t('creds.create')}
       <Icon icon={ChevronDown} size={14} />
     </Button>

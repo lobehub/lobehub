@@ -44,15 +44,13 @@ const PersonalVault = memo<PersonalVaultProps>(({ headerLeading }) => {
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
         {headerLeading}
-        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          {isAuthenticated && <VaultFilterBar value={filter} onChange={setFilter} />}
-          <Tooltip title={reason}>
-            <span>
-              <CreateCredButton disabled={!canManageCredentials} onCreate={handleCreate} />
-            </span>
-          </Tooltip>
-        </Flexbox>
+        <Tooltip title={reason}>
+          <span>
+            <CreateCredButton disabled={!canManageCredentials} onCreate={handleCreate} />
+          </span>
+        </Tooltip>
       </Flexbox>
+      {isAuthenticated && <VaultFilterBar value={filter} onChange={setFilter} />}
       <Block className={stylex.props(vaultStyles.container).className} variant={'outlined'}>
         <CredsList filter={filter} key={refreshKey} />
       </Block>
