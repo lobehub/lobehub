@@ -94,13 +94,17 @@ describe('Crawler', () => {
     expect(result).toEqual({
       crawler: 'browserless',
       data: {
-        content: 'Fail to crawl the page. Error type: CrawlError, error message: Crawl failed',
+        content: expect.stringContaining(
+          'Fail to crawl the page. Error type: CrawlError, error message: Crawl failed',
+        ),
         errorMessage: 'Crawl failed',
         errorType: 'CrawlError',
       },
       originalUrl: 'https://example.com',
       transformedUrl: undefined,
     });
+    expect(result.data.content).toContain('activate it');
+    expect(result.data.content).toContain('`agent-browser`');
   });
 
   it('should handle transformed urls', async () => {
@@ -265,14 +269,16 @@ describe('Crawler', () => {
     expect(result).toEqual({
       crawler: 'browserless',
       data: {
-        content:
+        content: expect.stringContaining(
           'Fail to crawl the page. Error type: EmptyCrawlResultError, error message: browserless returned empty or short content',
+        ),
         errorMessage: 'browserless returned empty or short content',
         errorType: 'EmptyCrawlResultError',
       },
       originalUrl: 'https://example.com',
       transformedUrl: undefined,
     });
+    expect(result.data.content).toContain('`agent-browser`');
   });
 
   describe('preflight', () => {

@@ -198,13 +198,13 @@ export class SearchService {
       }
     } catch {}
 
-    const { Crawler } = await import('@lobechat/web-crawler');
+    const { Crawler, formatCrawlFailureContent } = await import('@lobechat/web-crawler');
     const crawler = new Crawler(this.crawlerOptions);
 
     const results = await pMap(
       input.urls,
       async (url) => {
-        return await this.crawlWithRetry(crawler, url, input.impls);
+        return await this.crawlWithRetry(crawler, url, input.impls, formatCrawlFailureContent);
       },
       { concurrency: this.crawlConcurrency },
     );
@@ -216,6 +216,7 @@ export class SearchService {
     crawler: Crawler,
     url: string,
     impls?: CrawlImplType[],
+    formatFailure?: (errorType: string, errorMessage?: string) => string,
   ): Promise<CrawlUniformResult> {
     const maxAttempts = this.crawlerRetry + 1;
     let lastResult: CrawlUniformResult | undefined;
@@ -249,12 +250,17 @@ export class SearchService {
       return lastResult;
     }
 
+    const errorType = lastError?.name || 'UnknownError';
+    const errorMessage = lastError?.message;
+
     return {
       crawler: 'unknown',
       data: {
-        content: `Fail to crawl the page. Error type: ${lastError?.name || 'UnknownError'}, error message: ${lastError?.message}`,
-        errorMessage: lastError?.message,
-        errorType: lastError?.name || 'UnknownError',
+        content: formatFailure
+          ? formatFailure(errorType, errorMessage)
+          : `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}`,
+        errorMessage,
+        errorType,
       },
       originalUrl: url,
     };

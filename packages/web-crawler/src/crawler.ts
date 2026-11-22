@@ -40,6 +40,15 @@ interface CrawlOptions {
 }
 
 /**
+ * Model-facing guidance for retryable/unexpected crawl failures (timeouts, anti-bot
+ * walls, empty bodies). Keeping this on the error payload instead of the always-on
+ * `lobe-web-browsing` system prompt avoids paying for recovery instructions on every
+ * turn while giving the model the exact escalation rule when a crawl actually fails.
+ */
+export const formatCrawlFailureContent = (errorType: string, errorMessage?: string): string =>
+  `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}. Do not keep retrying with different queries or sources — if the \`agent-browser\` skill is available, activate it and re-fetch this page with a real browser (anti-bot walls often masquerade as timeouts or generic errors); otherwise explain the issue and suggest alternatives.`;
+
+/**
  * Build the error payload handed back to the model. Authoritative failures get an
  * explicit "this is final, do not retry" message so the model changes strategy
  * instead of re-issuing the same (billed) request.
@@ -58,7 +67,7 @@ const buildErrorData = (error: Error | undefined): CrawlErrorResult => {
   } else if (error instanceof UnsupportedContentError) {
     content = `Unsupported content: ${errorMessage}. Nothing to read here — only crawl HTML/text document pages.`;
   } else {
-    content = `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}`;
+    content = formatCrawlFailureContent(errorType, errorMessage);
   }
 
   return {

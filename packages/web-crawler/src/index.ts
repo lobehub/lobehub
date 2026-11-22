@@ -1,5 +1,5 @@
 export type { CrawlImplType } from './crawImpl';
-export { Crawler, DEFAULT_CRAWL_IMPLS } from './crawler';
+export { Crawler, DEFAULT_CRAWL_IMPLS, formatCrawlFailureContent } from './crawler';
 export * from './type';
 export {
   HTTPStatusError,
