@@ -6,9 +6,13 @@ import type { Operation } from '@/store/chat/slices/operation/types';
 
 import { AGENT_AVATAR_DONE_MS, useAgentAvatarActivity } from './useAgentAvatarActivity';
 
-const setRun = (status?: Operation['status'], metadata?: Record<string, unknown>) => {
+const setRun = (
+  status?: Operation['status'],
+  metadata?: Record<string, unknown>,
+  agentId = 'agent',
+) => {
   const run = {
-    context: { agentId: 'agent' },
+    context: { agentId },
     id: 'run',
     metadata: { startTime: 1, ...metadata },
     status,
@@ -80,6 +84,30 @@ describe('useAgentAvatarActivity', () => {
   it('does not celebrate a run already completed before it mounted', () => {
     setRun('completed');
     const { result } = renderHook(() => useAgentAvatarActivity('agent'));
+    expect(result.current.state).toBeUndefined();
+  });
+
+  it('does not carry a celebration over to another Agent', () => {
+    const { rerender, result } = renderHook(({ id }) => useAgentAvatarActivity(id), {
+      initialProps: { id: 'agent' },
+    });
+    setRun('running');
+    setRun('completed');
+    expect(result.current.state).toBe('done');
+
+    rerender({ id: 'other' });
+    expect(result.current.state).toBeUndefined();
+  });
+
+  it('does not credit a running Agent with the completed run of the next one', () => {
+    const { rerender, result } = renderHook(({ id }) => useAgentAvatarActivity(id), {
+      initialProps: { id: 'agent' },
+    });
+    setRun('running');
+    expect(result.current.state).toBe('working');
+
+    setRun('completed', undefined, 'other');
+    rerender({ id: 'other' });
     expect(result.current.state).toBeUndefined();
   });
 

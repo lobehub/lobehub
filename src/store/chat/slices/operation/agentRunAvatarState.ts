@@ -50,5 +50,6 @@ export const isLatestAgentRunCompleted =
     const runs = AI_RUNTIME_OPERATION_TYPES.flatMap((type) => operationsOfType(s, type, agentId));
     if (runs.length === 0) return false;
     const latest = runs.reduce((a, b) => (b.metadata.startTime > a.metadata.startTime ? b : a));
-    return latest.status === 'completed';
+    // A run stopped from another tab, device or the API is stored as completed with this flag.
+    return latest.status === 'completed' && !latest.metadata.endedWithoutCompletion;
   };

@@ -29,30 +29,35 @@ export const useAgentAvatarActivity = (agentId?: string | null) => {
   const busy = useChatStore(agentId ? agentRunAvatarState(agentId) : idle);
   const completed = useChatStore(agentId ? isLatestAgentRunCompleted(agentId) : never);
   const [hovered, setHovered] = useState(false);
-  const [done, setDone] = useState(false);
+  // Held per Agent: a shared surface such as the sidebar header changes `agentId` while mounted.
+  const [doneAgentId, setDoneAgentId] = useState<string | null>(null);
+  const done = !!agentId && doneAgentId === agentId;
+  const trackedAgentId = useRef(agentId);
   const previous = useRef(busy);
   const settlingUntil = useRef(0);
 
   useEffect(() => {
-    const was = previous.current;
+    const was = trackedAgentId.current === agentId ? previous.current : undefined;
+    if (trackedAgentId.current !== agentId) settlingUntil.current = 0;
+    trackedAgentId.current = agentId;
     previous.current = busy;
     if (busy) {
       settlingUntil.current = 0;
-      setDone(false);
+      setDoneAgentId(null);
       return;
     }
     if (isProducing(was)) settlingUntil.current = Date.now() + AGENT_AVATAR_SETTLE_MS;
     if (!completed || Date.now() > settlingUntil.current) return;
 
     settlingUntil.current = 0;
-    setDone(true);
-  }, [busy, completed]);
+    setDoneAgentId(agentId ?? null);
+  }, [agentId, busy, completed]);
 
   useEffect(() => {
-    if (!done) return;
-    const timer = setTimeout(() => setDone(false), AGENT_AVATAR_DONE_MS);
+    if (!doneAgentId) return;
+    const timer = setTimeout(() => setDoneAgentId(null), AGENT_AVATAR_DONE_MS);
     return () => clearTimeout(timer);
-  }, [done]);
+  }, [doneAgentId]);
 
   const state: AgentAvatarState | undefined = busy ?? (done ? 'done' : undefined);
   const hover = useMemo(

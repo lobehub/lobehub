@@ -109,6 +109,14 @@ describe('isLatestAgentRunCompleted', () => {
     ).toBe(false);
   });
 
+  it('is false for a run stopped elsewhere, which is stored as completed', () => {
+    const stopped = op('a', 'execServerAgentRuntime', {
+      metadata: { endedWithoutCompletion: true },
+      status: 'completed',
+    });
+    expect(isLatestAgentRunCompleted('agent')(store([stopped]))).toBe(false);
+  });
+
   it('is false without runs', () => {
     expect(isLatestAgentRunCompleted('agent')(store([]))).toBe(false);
   });
