@@ -119,6 +119,18 @@ export const channelRouter = router({
       ),
       success: true,
     })),
+  /** Requests to run Channel Agents on the caller's private devices, for them to decide. */
+  deviceGrants: channelProcedure.query(async ({ ctx }) => ({
+    data: await ctx.channelService.deviceGrants(),
+    success: true,
+  })),
+  /** Only the device owner named on the grant may decide it. */
+  decideDeviceGrant: channelProcedure
+    .input(z.object({ decision: z.enum(['approve', 'reject', 'revoke']), grantId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.decideDeviceGrant(input.grantId, input.decision),
+      success: true,
+    })),
   /** The channel's reply strategy and each Agent member's own, as stored; admins only. */
   wakeConfig: channelProcedure.input(z.object({ channelId })).query(async ({ ctx, input }) => ({
     data: await ctx.channelService.repository.wakeConfig(input.channelId),
@@ -336,6 +348,16 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.markRead(input.channelId, input.sequence),
       success: true,
     })),
+  /**
+   * Turns the caller's own push notifications for the conversation off or on. Personal: Agents
+   * still reply (see `setMemberMuted` for that) and other members are untouched.
+   */
+  setNotificationsMuted: externalChannelProcedure
+    .input(z.object({ channelId, muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setNotificationsMuted(input.channelId, input.muted),
+      success: true,
+    })),
   /** Pins or unpins the conversation atop the caller's own list. */
   setPinned: externalChannelProcedure
     .input(z.object({ channelId, pinned: z.boolean() }))
@@ -443,6 +465,13 @@ export const channelRouter = router({
     .input(z.object({ channelId, threadId }))
     .mutation(async ({ ctx, input }) => {
       await ctx.channelService.removeThread(input.channelId, input.threadId);
+      return { success: true };
+    }),
+  /** Runs a failed reply again in the conversation it stopped in; see `retryJob` for a fresh start. */
+  resumeJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.resumeJob(input.channelId, input.jobId);
       return { success: true };
     }),
   retryJob: channelProcedure

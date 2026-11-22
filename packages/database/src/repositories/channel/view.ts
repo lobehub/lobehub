@@ -3,7 +3,9 @@ import {
   channelMessageDeletedAt,
   channelMessageEditedAt,
   channelMessageReceipt,
+  channelMessageReplyError,
   channelMessageVia,
+  type ChannelReplyError,
   type ChatMessageError,
   contactCardOf,
   defaultChannelAgentDirectory,
@@ -32,6 +34,7 @@ import {
   agentOperations,
   agents,
   channelJobs,
+  channelMemberGrants,
   channelMembers,
   channelMessages,
   channels,
@@ -70,7 +73,48 @@ type MessageRow = typeof channelMessages.$inferSelect & {
   senderUsername: string | null;
 };
 
-export const publicMessage = (row: MessageRow, fileIds: string[]) => {
+/**
+ * Messages on this page whose card belongs to a shared Agent's run. Their failure text is the
+ * owner's diagnostics, so `publicMessage` returns the share page's projection on every read.
+ */
+const sharedCardMessageIds = async (tx: Transaction, rows: MessageRow[]) => {
+  const jobIds = rows
+    .map((row) => channelMessageReplyError(row.metadata)?.jobId)
+    .filter((jobId): jobId is string => !!jobId);
+  if (!jobIds.length) return new Set<string>();
+  const shared = await tx
+    .select({ id: channelJobs.id })
+    .from(channelJobs)
+    .where(
+      and(
+        inArray(channelJobs.id, jobIds),
+        sql`jsonb_exists(${channelJobs.executionConfig}, 'share')`,
+      ),
+    );
+  const sharedJobIds = new Set(shared.map((row) => row.id));
+  return new Set(
+    rows
+      .filter((row) => sharedJobIds.has(channelMessageReplyError(row.metadata)?.jobId ?? ''))
+      .map((row) => row.id),
+  );
+};
+
+/**
+ * The card's own failure text, as a visitor sees it. A card written while its share showed
+ * details keeps that text; a read after the owner turned details off must not hand it back, so
+ * every read applies the share page's projection, as `readJobs` does on the job.
+ */
+const redactCardError = (card: ChannelReplyError): ChannelReplyError => ({
+  ...card,
+  errorMessage: null,
+  errorType: null,
+});
+
+export const publicMessage = (
+  row: MessageRow,
+  fileIds: string[],
+  options: { redactCardError?: boolean } = {},
+) => {
   const {
     senderAgentAvatar,
     senderAgentName,
@@ -81,8 +125,12 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
     ...message
   } = row;
   const isAgent = isAgentAuthored(message);
+  const card = (isAgent && channelMessageReplyError(message.metadata)) || null;
+  const replyError = card && options.redactCardError ? redactCardError(card) : card;
+  const visible =
+    replyError === card ? message : { ...message, metadata: { ...message.metadata, replyError } };
   return {
-    ...message,
+    ...visible,
     fileIds,
     author: {
       avatar: isAgent ? senderAgentAvatar : senderUserAvatar,
@@ -100,6 +148,8 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       const { agent, ...rest } = receipt;
       return { ...rest, agent: agent && { ...agent, avatar: null as string | null } };
     })(),
+    // An Agent's failed reply, shown as a card in its reply slot.
+    replyError,
     via: isAgent
       ? null
       : (() => {
@@ -195,10 +245,14 @@ const THREAD_PREVIEW_LENGTH = 240;
  */
 const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
 
-/** An Agent's acknowledgement before its run: it says the work started, not what came of it. */
+/**
+ * An Agent's acknowledgement before its run: it says the work started, not what came of it. One
+ * a failure turned into the reply's card is news again.
+ */
 const isOpeningAck = and(
   eq(channelMessages.routingStatus, 'reply'),
   like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
+  sql`COALESCE(${channelMessages.metadata} ->> 'replyError', '') = ''`,
 );
 
 type ThreadSummary = {
@@ -542,6 +596,11 @@ export const readChannelView = async (
         deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
         deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
         workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
+        grantDeviceId: channelMemberGrants.deviceId,
+        grantDeviceOwnerId: channelMemberGrants.deviceOwnerId,
+        grantId: channelMemberGrants.id,
+        grantStatus: channelMemberGrants.status,
+        grantWorkingDirectory: channelMemberGrants.workingDirectory,
         agencyConfig: agents.agencyConfig,
         agentUserId: agents.userId,
         agentVisibility: agents.visibility,
@@ -550,6 +609,7 @@ export const readChannelView = async (
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
       .leftJoin(agents, eq(agents.id, channelMembers.agentId))
+      .leftJoin(channelMemberGrants, eq(channelMemberGrants.memberId, channelMembers.id))
       .where(eq(channelMembers.channelId, channelId))
       .orderBy(asc(channelMembers.createdAt)),
     tx
@@ -571,7 +631,14 @@ export const readChannelView = async (
     tx
       .select()
       .from(channelThreads)
-      .where(and(eq(channelThreads.channelId, channelId), notTrashed(channelThreads.isDeleted)))
+      .where(
+        and(
+          eq(channelThreads.channelId, channelId),
+          notTrashed(channelThreads.isDeleted),
+          // A Thread's view needs only its own entry, not every Thread in the Channel.
+          options.threadId ? eq(channelThreads.id, options.threadId) : undefined,
+        ),
+      )
       .orderBy(asc(channelThreads.createdAt)),
     readJobs(
       tx,
@@ -630,6 +697,10 @@ export const readChannelView = async (
     ? []
     : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
   const summaries = await threadSummaries(tx, channelId, summarized);
+  const sharedCards = await sharedCardMessageIds(tx, [
+    ...page,
+    ...(rootMessage ? [rootMessage] : []),
+  ]);
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -690,11 +761,27 @@ export const readChannelView = async (
         agentVisibility: _agentVisibility,
         agentWorkspaceId: _agentWorkspaceId,
         deviceId,
-        deviceOwnerId: _deviceOwnerId,
+        deviceOwnerId,
+        grantDeviceId,
+        grantDeviceOwnerId,
+        grantId,
+        grantStatus,
+        grantWorkingDirectory,
         inheritedConfig,
         workingDirectory: channelDirectory,
         ...member
       } = row;
+      // Only a grant for exactly the Channel's current pick speaks for it; a stale one is moot.
+      const grant =
+        grantId &&
+        grantStatus &&
+        grantDeviceOwnerId &&
+        !inheritedConfig &&
+        grantDeviceId === deviceId &&
+        grantDeviceOwnerId === deviceOwnerId &&
+        grantWorkingDirectory === channelDirectory
+          ? { deviceOwnerId: grantDeviceOwnerId, id: grantId, status: grantStatus }
+          : null;
       const device = deviceInfos.get(row);
       // An inherited device works in the Agent's own folder there, else the device's default.
       const workingDirectory =
@@ -705,7 +792,12 @@ export const readChannelView = async (
         ...member,
         environment:
           member.agentId && (deviceId || workingDirectory)
-            ? { deviceId, deviceName: device?.name ?? null, workingDirectory }
+            ? {
+                deviceId,
+                deviceName: device?.name ?? null,
+                ...(grant ? { grant } : {}),
+                workingDirectory,
+              }
             : null,
       };
     }),
@@ -724,7 +816,9 @@ export const readChannelView = async (
     rootMessage: rootMessage
       ? {
           ...withRelayAvatar(
-            publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+            publicMessage(rootMessage, files.get(rootMessage.id) ?? [], {
+              redactCardError: sharedCards.has(rootMessage.id),
+            }),
             relayAvatars,
           ),
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
@@ -734,7 +828,12 @@ export const readChannelView = async (
         }
       : null,
     messages: page.map((message) => ({
-      ...withRelayAvatar(publicMessage(message, files.get(message.id) ?? []), relayAvatars),
+      ...withRelayAvatar(
+        publicMessage(message, files.get(message.id) ?? [], {
+          redactCardError: sharedCards.has(message.id),
+        }),
+        relayAvatars,
+      ),
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],

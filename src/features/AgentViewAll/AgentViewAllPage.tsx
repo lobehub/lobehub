@@ -542,11 +542,14 @@ const AgentViewAllPage = memo(() => {
     createMarketAgentMenuItem,
   } = useCreateMenuItems();
 
-  // Creating from the Private tab lands the item in the private bucket, so
-  // the new row appears in the list the user is currently looking at.
+  // Each tab starts creation in its own bucket, so the new row appears in the
+  // list the user is currently looking at. The create dialogs still show the
+  // choice and let the user change it.
   const createOptions = useMemo(
     () =>
-      activeWorkspaceId && segment === 'private' ? { visibility: 'private' as const } : undefined,
+      activeWorkspaceId
+        ? { visibility: segment === 'private' ? ('private' as const) : ('public' as const) }
+        : undefined,
     [activeWorkspaceId, segment],
   );
 

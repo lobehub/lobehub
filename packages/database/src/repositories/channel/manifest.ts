@@ -4,6 +4,7 @@ import {
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
   channelMessageReceipt,
+  channelMessageReplyError,
   channelMessageVia,
 } from '@lobechat/types';
 import {
@@ -35,6 +36,9 @@ import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { messageStands } from './tombstone';
 
+/** What other Agents read in place of a failed reply's card. */
+export const replyErrorNote = (agentName: string) => `${agentName} did not finish this reply.`;
+
 /** Freeze the public history cutoff and branch for this request. */
 export const buildManifest = (params: {
   job: ChannelJobItem;
@@ -44,9 +48,11 @@ export const buildManifest = (params: {
   /** A deferred follow-up's view of the primary responder's published reply. */
   primaryReplyMessageId?: string;
   request: ChannelMessageItem;
+  /** The run continues the topic of this job's failed run. */
+  resumed?: boolean;
   thread: ChannelThreadItem | null;
 }): ChannelInputManifest => {
-  const { job, member, merged = [], primaryReplyMessageId, request, thread } = params;
+  const { job, member, merged = [], primaryReplyMessageId, request, resumed, thread } = params;
   const last = merged.at(-1) ?? request;
 
   return {
@@ -58,6 +64,7 @@ export const buildManifest = (params: {
       requestMessageIds: [request.id, ...merged.map((next) => next.id)],
     }),
     requesterMemberId: job.requesterMemberId,
+    ...(resumed && { resumed: true }),
     self: { agentId: member.agentId!, memberId: member.id, name: member.name ?? 'Agent' },
     threadId: job.threadId,
     threadRootSequence: thread?.rootSequence ?? null,
@@ -190,17 +197,22 @@ export const readManifestMessages = async (
     const isAgent = isAgentAuthored(message);
     const via = isAgent ? undefined : channelMessageVia(message.metadata);
     const receipt = channelMessageReceipt(message.metadata);
+    const name = isAgent
+      ? message.agentId
+        ? agentDisplayName({ name: message.agentName, title: message.agentTitle }, 'Agent')
+        : CHANNEL_DELETED_AGENT_NAME
+      : message.fullName || message.username || CHANNEL_DELETED_USER_NAME;
     return {
       author: {
         id: isAgent ? message.agentId : message.userId,
-        name: isAgent
-          ? message.agentId
-            ? agentDisplayName({ name: message.agentName, title: message.agentTitle }, 'Agent')
-            : CHANNEL_DELETED_AGENT_NAME
-          : message.fullName || message.username || CHANNEL_DELETED_USER_NAME,
+        name,
         type: isAgent ? 'agent' : 'user',
       },
-      content: message.content,
+      // A failed reply's card explains the failure to people; Agents only learn it did not finish.
+      content:
+        isAgent && channelMessageReplyError(message.metadata)
+          ? replyErrorNote(name)
+          : message.content,
       ...(attachments.has(message.id) && { fileIds: attachments.get(message.id) }),
       id: message.id,
       sequence: message.sequence,

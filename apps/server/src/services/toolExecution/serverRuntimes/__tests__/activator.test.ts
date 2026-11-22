@@ -254,6 +254,48 @@ describe('activatorRuntime', () => {
         relatedObjects: [{ objectId: 'user-skill', objectType: 'skill', relation: 'selected' }],
       });
     }, 20_000);
+
+    it('reports nothing when a requested identifier is neither a tool nor a skill', async () => {
+      // The skill lookup answers a miss with `success: false` instead of
+      // throwing. That used to be reported as a successful skill selection, so
+      // every mistyped tool identifier left a skill record behind.
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-web-browsing-typo'] });
+
+      expect(result.state.notFound).toEqual(['lobe-web-browsing-typo']);
+      expect(emitToolOutcomeSafely).not.toHaveBeenCalled();
+    }, 20_000);
+
+    it('reports a skill that could not be opened by name as a failed skill activation', async () => {
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'missing-skill' });
+
+      expect(result.success).toBe(false);
+      expect(emitToolOutcomeSafely).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(emitToolOutcomeSafely).mock.calls[0][0]).toMatchObject({
+        apiName: 'activateSkill',
+        domainKey: 'skill:builtin-skill',
+        errorReason: expect.stringContaining('Skill not found: "missing-skill"'),
+        relatedObjects: [{ objectId: 'missing-skill', objectType: 'skill', relation: 'selected' }],
+        status: 'failed',
+      });
+    }, 20_000);
   });
 
   describe('activateTools — wire-name resolution', () => {

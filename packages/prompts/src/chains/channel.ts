@@ -120,10 +120,18 @@ export const buildChannelPrompt = (
     peers?: string[];
     /** A deferred follow-up's view of the primary responder's answer to the same request. */
     primaryReply?: ChannelContextMessage | null;
+    /**
+     * The run resumes this member's failed reply to the same request in the same conversation:
+     * the request is repeated with a short note to continue, without the context it already has.
+     */
+    resume?: { reason?: string };
     wake?: ChannelJobWake | null;
   } = {},
 ) => {
-  const { context = [], omitted = 0, opening, peers = [], primaryReply, wake } = options;
+  const { omitted: omittedCount = 0, opening, peers = [], primaryReply, resume, wake } = options;
+  // A resumed run already read the context, and acknowledged or not, in its earlier turn.
+  const context = resume ? [] : (options.context ?? []);
+  const omitted = resume ? 0 : omittedCount;
   const selfAgentId = manifest.self.agentId;
   const requestIds = manifest.requestMessageIds ?? [manifest.requestMessageId];
   const requests = requestIds.flatMap((requestId) => messages.filter(({ id }) => id === requestId));
@@ -142,7 +150,7 @@ export const buildChannelPrompt = (
     createBoundary(
       [...recent, ...quotes, ...requests, ...(primaryReply ? [primaryReply] : [])]
         .map(({ content }) => content)
-        .concat(opening ?? [], peers),
+        .concat(opening ?? [], peers, resume?.reason ?? []),
     );
 
   return [
@@ -207,7 +215,17 @@ export const buildChannelPrompt = (
           ),
         ]
       : []),
-    ...(opening?.trim()
+    ...(resume
+      ? [
+          block(
+            'channel_resume',
+            {},
+            boundary,
+            `Your previous run on this request stopped before you replied${resume.reason ? ` (${resume.reason})` : ''}. Continue from where you left off instead of starting over: keep the work you already did, finish what is left, and reply with the result. Do not apologize for the interruption or acknowledge again.`,
+          ),
+        ]
+      : []),
+    ...(opening?.trim() && !resume
       ? [
           block(
             'channel_opening',

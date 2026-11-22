@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import EmojiPicker from '@/components/EmojiPicker';
+import CreateVisibilityField, { useCreateVisibility } from '@/features/CreateVisibilityField';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
@@ -28,13 +29,16 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
     const { t } = useTranslation(['setting', 'common']);
     const { close } = useModalContext();
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+    // `visibility` is only the starting point; in a workspace the user sees and
+    // can change who the agent is for before it exists.
+    const visibilityState = useCreateVisibility({ groupId, visibility });
     const form = useCreateAgentIdentityForm({
       groupId,
       onCreated: (agentId) => {
         close();
         onCreated(agentId);
       },
-      visibility,
+      visibility: visibilityState.value,
     });
 
     return (
@@ -77,6 +81,7 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
           form={form}
           slugPlaceholder={t('settingAgent.slug.autoPlaceholder', { ns: 'setting' })}
         />
+        <CreateVisibilityField state={visibilityState} />
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button disabled={form.saving} onClick={() => close()}>
             {t('cancel', { ns: 'common' })}
