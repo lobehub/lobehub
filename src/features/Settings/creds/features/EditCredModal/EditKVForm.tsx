@@ -1,23 +1,18 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Flexbox, Input, InputPassword, Spin, Text, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Input, Spin, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { Minus, Plus } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 
+import CredFormFooter from '../CredFormFooter';
+import KVPairsField from '../KVPairsField';
 import { type CredsApi } from '../useCredsApi';
 import { buildKVUpdateInput } from './kvUpdateInput';
-
-const styles = stylex.create({
-  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
-  kvPair: { display: 'flex', gap: '8px', alignItems: 'flex-start' },
-});
 
 interface EditKVFormProps {
   cred: UserCredSummary;
@@ -125,58 +120,11 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess, 
         <Input disabled={!canManageCredentials} />
       </Form.Field>
 
-      <Form.Field label={t('creds.form.values')}>
-        {writeOnly && (
-          <Text fontSize={12} style={{ display: 'block', marginBlockEnd: 8 }} type={'secondary'}>
-            {t('creds.writeOnly.editHint')}
-          </Text>
-        )}
-        <Form.List name="kvPairs">
-          {({ fields, add, remove }) => (
-            <Flexbox gap={8}>
-              {fields.map(({ key, index }) => (
-                <div {...stylex.props(styles.kvPair)} key={key}>
-                  <div style={{ flex: 1 }}>
-                    <Form.Field bare name={`kvPairs.${index}.key`}>
-                      <Input
-                        disabled={!canManageCredentials}
-                        placeholder={cred.type === 'kv-env' ? 'ENV_VAR_NAME' : 'Header-Name'}
-                      />
-                    </Form.Field>
-                  </div>
-                  <div style={{ flex: 2 }}>
-                    <Form.Field bare name={`kvPairs.${index}.value`}>
-                      <InputPassword
-                        autoComplete="new-password"
-                        disabled={!canManageCredentials}
-                        placeholder={t('creds.form.valuePlaceholder')}
-                      />
-                    </Form.Field>
-                  </div>
-                  {fields.length > 1 && (
-                    <Button
-                      disabled={!canManageCredentials}
-                      icon={Minus}
-                      size="small"
-                      type="text"
-                      onClick={() => remove(index)}
-                    />
-                  )}
-                </div>
-              ))}
-              <Button
-                block
-                disabled={!canManageCredentials}
-                icon={Plus}
-                type="dashed"
-                onClick={() => add({ key: '', value: '' })}
-              >
-                {t('creds.form.addPair')}
-              </Button>
-            </Flexbox>
-          )}
-        </Form.List>
-      </Form.Field>
+      <KVPairsField
+        disabled={!canManageCredentials}
+        hint={writeOnly ? t('creds.writeOnly.editHint') : undefined}
+        type={cred.type as 'kv-env' | 'kv-header'}
+      />
 
       <Form.Field label={t('creds.form.description')} name="description">
         <TextArea
@@ -186,7 +134,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess, 
         />
       </Form.Field>
 
-      <div {...stylex.props(styles.footer)}>
+      <CredFormFooter>
         <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
         <Button
           disabled={!canManageCredentials}
@@ -196,7 +144,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess, 
         >
           {t('creds.form.save')}
         </Button>
-      </div>
+      </CredFormFooter>
     </Form>
   );
 };

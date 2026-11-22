@@ -1,14 +1,20 @@
 'use client';
 
-import { Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Plus } from 'lucide-react';
+import { type CredType } from '@lobechat/types';
+import { Block, Flexbox, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
+import CreateCredButton from '@/features/Settings/creds/features/CreateCredButton';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
+import { type CredFilter } from '@/features/Settings/creds/features/credFilter';
 import CredsList from '@/features/Settings/creds/features/CredsList';
 import { personalCredsApi } from '@/features/Settings/creds/features/useCredsApi';
+import VaultFilterBar from '@/features/Settings/creds/features/VaultFilterBar';
 import { usePermission } from '@/hooks/usePermission';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+
+import { vaultStyles } from './vaultStyles';
 
 interface PersonalVaultProps {
   /** The page tabs, at the left of the header row. */
@@ -17,18 +23,20 @@ interface PersonalVaultProps {
 
 /**
  * The vault tab of the personal Environments & Vault page: every credential
- * here is the caller's own, so there is nothing to filter.
+ * here is the caller's own, so the header only searches and filters by type.
  */
 const PersonalVault = memo<PersonalVaultProps>(({ headerLeading }) => {
-  const { t } = useTranslation('setting');
+  const { isAuthenticated } = useMarketAuth();
   const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [filter, setFilter] = useState<CredFilter>({});
 
-  const handleCreate = () => {
+  const handleCreate = (type: CredType) => {
     if (!canManageCredentials) return;
     createCreateCredModal({
       credsApi: personalCredsApi,
       onSuccess: () => setRefreshKey((k) => k + 1),
+      type,
     });
   };
 
@@ -36,19 +44,18 @@ const PersonalVault = memo<PersonalVaultProps>(({ headerLeading }) => {
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
         {headerLeading}
-        <Tooltip title={reason}>
-          <Button
-            disabled={!canManageCredentials}
-            icon={<Icon icon={Plus} />}
-            style={{ flex: 'none' }}
-            type={'primary'}
-            onClick={handleCreate}
-          >
-            {t('creds.create')}
-          </Button>
-        </Tooltip>
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          {isAuthenticated && <VaultFilterBar value={filter} onChange={setFilter} />}
+          <Tooltip title={reason}>
+            <span>
+              <CreateCredButton disabled={!canManageCredentials} onCreate={handleCreate} />
+            </span>
+          </Tooltip>
+        </Flexbox>
       </Flexbox>
-      <CredsList key={refreshKey} />
+      <Block className={stylex.props(vaultStyles.container).className} variant={'outlined'}>
+        <CredsList filter={filter} key={refreshKey} />
+      </Block>
     </Flexbox>
   );
 });

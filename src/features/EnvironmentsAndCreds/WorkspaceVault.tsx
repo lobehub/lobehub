@@ -1,29 +1,24 @@
 'use client';
 
-import { Block, Button, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { type CredType } from '@lobechat/types';
+import { Block, Empty, Flexbox, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Plus } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
 import VisibilityFilter, { type VisibilityFilterValue } from '@/components/VisibilityFilter';
+import CreateCredButton from '@/features/Settings/creds/features/CreateCredButton';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
+import { type CredFilter } from '@/features/Settings/creds/features/credFilter';
 import MarketSignInGate from '@/features/Settings/creds/features/MarketSignInGate';
 import { type CredsApi } from '@/features/Settings/creds/features/useCredsApi';
+import VaultFilterBar from '@/features/Settings/creds/features/VaultFilterBar';
 import WorkspaceCredsList from '@/features/Settings/creds/features/WorkspaceCredsList';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
-import { densityTokens } from '@/styles/density.stylex';
 
-const styles = stylex.create({
-  container: {
-    overflow: 'hidden',
-    width: '100%',
-    paddingBlock: '4px',
-    paddingInline: densityTokens['--lobe-density-card-padding'],
-  },
-});
+import { vaultStyles } from './vaultStyles';
 
 type Visibility = 'private' | 'public';
 
@@ -77,6 +72,7 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
   const { isAuthenticated } = useMarketAuth();
   const isViewer = useIsWorkspaceViewer();
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+  const [filter, setFilter] = useState<CredFilter>({});
 
   // Shares its query key with the list inside WorkspaceCredsList, so
   // `refetch` here refreshes the list.
@@ -96,28 +92,20 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
   // New credentials are private, which any non-viewer member may create.
   const canCreate = !isViewer;
 
-  const handleCreate = () => {
+  const handleCreate = (type: CredType) => {
     if (!canCreate) return;
-    createCreateCredModal({ credsApi, onSuccess: () => refetch() });
+    createCreateCredModal({ credsApi, onSuccess: () => refetch(), type });
   };
 
-  const createButton = (
-    <Button
-      disabled={!canCreate}
-      icon={<Icon icon={Plus} />}
-      type={'primary'}
-      onClick={handleCreate}
-    >
-      {t('creds.create')}
-    </Button>
-  );
+  const createButton = <CreateCredButton disabled={!canCreate} onCreate={handleCreate} />;
 
   return (
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
         {headerLeading}
         {isAuthenticated && !orgMissing && (
-          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            <VaultFilterBar value={filter} onChange={setFilter} />
             <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
             {
               // Disabled buttons swallow hover events, so the tooltip needs the
@@ -133,14 +121,18 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
           </Flexbox>
         )}
       </Flexbox>
-      <Block className={stylex.props(styles.container).className} variant={'outlined'}>
+      <Block className={stylex.props(vaultStyles.container).className} variant={'outlined'}>
         <MarketSignInGate>
           {orgMissing ? (
             <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
               <Empty description={t('creds.orgSetupRequired')} />
             </Flexbox>
           ) : (
-            <WorkspaceCredsList credsApi={credsApi} visibilityFilter={visibilityFilter} />
+            <WorkspaceCredsList
+              credsApi={credsApi}
+              filter={filter}
+              visibilityFilter={visibilityFilter}
+            />
           )}
         </MarketSignInGate>
       </Block>
