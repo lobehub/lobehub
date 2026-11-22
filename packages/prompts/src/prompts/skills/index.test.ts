@@ -103,6 +103,25 @@ For a skill with source="project" or source="device", load it with activateSkill
     );
   });
 
+  it('should keep the readFile route for project/device skills when activateSkill was not sent', () => {
+    const skills: SkillItem[] = [
+      {
+        description: 'Device writing guidance',
+        identifier: 'device:writing',
+        location: '/Users/dev/.agents/skills/writing/SKILL.md',
+        name: 'writing',
+        source: 'device',
+      },
+    ];
+
+    const prompt = skillsPrompts(skills, { canActivateSkill: false });
+
+    expect(prompt).toContain(
+      'For a skill with source="project" or source="device", load it by calling the readFile tool on its `location` path and resolve relative paths against its parent directory (parent of SKILL.md).',
+    );
+    expect(prompt).not.toContain('do not bypass activation with readFile');
+  });
+
   it('should return empty string for empty skills array', () => {
     expect(skillsPrompts([])).toBe('');
   });

@@ -46,6 +46,11 @@ export interface SkillMeta {
  * Skill Context Provider Configuration
  */
 export interface SkillContextProviderConfig {
+  /**
+   * Whether the run was sent the `activateSkill` tool. Without it the prompt
+   * keeps the readFile route into filesystem skills. Defaults to true.
+   */
+  canActivateSkill?: boolean;
   enabled?: boolean;
   enabledSkills?: SkillMeta[];
 }
@@ -108,7 +113,9 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
         source: skill.source,
       }));
 
-      const availableSkillsContent = skillsPrompts(skills);
+      const availableSkillsContent = skillsPrompts(skills, {
+        canActivateSkill: this.config.canActivateSkill,
+      });
       if (availableSkillsContent) {
         contentParts.push(availableSkillsContent);
       }
