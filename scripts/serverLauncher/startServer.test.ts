@@ -11,11 +11,14 @@ const launcher = path.join(import.meta.dirname, 'startServer.js');
 const launch = async (env: Record<string, string>, failure?: { code: number; script: string }) => {
   const commands: string[][] = [];
   const exits: number[] = [];
+  // The environment each child inherits: `spawn` passes the launcher's `process.env`.
+  const spawnEnvs: Record<string, string>[] = [];
   const source = await readFile(launcher, 'utf8');
   const modules: Record<string, unknown> = {
     'node:child_process': {
       spawn: (executable: string, args: string[]) => {
         commands.push([executable, ...args]);
+        spawnEnvs.push({ ...env });
         const child = new EventEmitter();
         queueMicrotask(() => child.emit('close', args[0] === failure?.script ? failure.code : 0));
         return child;
@@ -42,7 +45,8 @@ const launch = async (env: Record<string, string>, failure?: { code: number; scr
     .catch((error: Error) => {
       if (error.message !== 'launcher exited') throw error;
     });
-  return { commands, exits };
+  const serverEnv = spawnEnvs[commands.findIndex((command) => command[1] === '/app/server.js')];
+  return { commands, exits, serverEnv };
 };
 
 describe('Docker startup migrations', () => {
@@ -104,4 +108,19 @@ describe('Docker startup migrations', () => {
       expect(result.exits).toEqual([1]);
     },
   );
+});
+
+describe('Docker startup schedules', () => {
+  it('tells the server that QStash drives the schedules it registers', async () => {
+    const result = await launch({ APP_URL: 'https://chat.example.com', QSTASH_TOKEN: 'token' });
+    expect(result.serverEnv).toMatchObject({ QSTASH_SCHEDULES_MANAGED: '1' });
+  });
+
+  it.each([
+    ['no QStash token', { APP_URL: 'https://chat.example.com' }],
+    ['no APP_URL to register against', { QSTASH_TOKEN: 'token' }],
+  ])('leaves schedules to the built-in scheduler with %s', async (_, env) => {
+    const result = await launch(env);
+    expect(result.serverEnv).not.toHaveProperty('QSTASH_SCHEDULES_MANAGED');
+  });
 });
