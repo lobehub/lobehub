@@ -48,6 +48,10 @@ vi.mock('@/server/services/deviceGateway', () => ({
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
 vi.mock('./notify', () => ({ notifyChannel: notify }));
+vi.mock('./deviceGrantCard', () => ({
+  announceDeviceGrants: vi.fn(),
+  refreshDeviceGrantCard: vi.fn(),
+}));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
 
 describe('changing an Agent member’s channel environment', () => {
@@ -163,6 +167,7 @@ describe('changing an Agent member’s channel environment', () => {
   it('creates a member in the device home folder when the Agent has no directory there', async () => {
     querySystemInfo.mockResolvedValue({ homePath: '/Users/me' });
     statPath.mockResolvedValue({ canonicalPath: '/Users/me', isDirectory: true });
+    create.mockResolvedValue({ channel: { id: 'channel-1' } });
 
     await service().create({ agents: [{ agentId: 'agent-1', deviceId: 'mac' }], title: 'c' });
 
