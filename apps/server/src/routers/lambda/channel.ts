@@ -248,6 +248,11 @@ export const channelRouter = router({
       z.object({
         before: z.number().int().positive().optional(),
         channelId,
+        /**
+         * The client renders the opt-in Work types (files, collections) on reply cards. Released
+         * desktop clients without them omit it and keep receiving only the types they know.
+         */
+        includeFileWorks: z.boolean().optional(),
         limit: z.number().int().min(1).max(100).optional(),
         threadId: threadId.nullish(),
       }),

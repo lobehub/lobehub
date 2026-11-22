@@ -52,7 +52,7 @@ import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
-import { externalWorksByMessage } from './works';
+import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
@@ -567,7 +567,13 @@ export const viewerJobs = (
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
-  options: { before?: number; limit?: number; threadId?: string | null } = {},
+  options: {
+    before?: number;
+    /** The client renders the opt-in Work types on reply cards; see `replyWorksByMessage`. */
+    includeFileWorks?: boolean;
+    limit?: number;
+    threadId?: string | null;
+  } = {},
   viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
@@ -734,7 +740,10 @@ export const readChannelView = async (
   );
   const [sourceTopics, works, relayAvatars] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
-    externalWorksByMessage(tx, channelId, replyIds),
+    replyWorksByMessage(tx, channelId, replyIds, {
+      includeFileWorks: options.includeFileWorks,
+      userId: viewerUserId,
+    }),
     relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
   ]);
   const ids = [...new Set([...files.values()].flat())];

@@ -6,7 +6,7 @@ import {
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
-import type { ExternalWorkSummaryItem } from './work';
+import type { WorkSummaryItem } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -974,10 +974,12 @@ export interface ChannelPublicMessage {
   /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */
   via?: (ChannelMessageVia & { avatar: string | null }) | null;
   /**
-   * External Works a reply's run touched: the conversation's work summaries, for every member,
-   * without the ids that link them to the requester's Work, topic and run. Empty on requests.
+   * Works a reply's run touched, as the conversation's work summaries. Every member gets the
+   * external ones, without the ids that link them to the requester's Work, topic and run. A shared
+   * Agent's visitor also gets the internal Works of their own runs (collections, files, ...), with
+   * the Agent owner's identity and spend removed. Empty on requests.
    */
-  works?: ExternalWorkSummaryItem[];
+  works?: WorkSummaryItem[];
 }
 
 export interface ChannelPublicJob {
