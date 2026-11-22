@@ -467,6 +467,13 @@ export const channelRouter = router({
       await ctx.channelService.removeThread(input.channelId, input.threadId);
       return { success: true };
     }),
+  /** Runs a failed reply again in the conversation it stopped in; see `retryJob` for a fresh start. */
+  resumeJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.resumeJob(input.channelId, input.jobId);
+      return { success: true };
+    }),
   retryJob: channelProcedure
     .input(z.object({ channelId, jobId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {

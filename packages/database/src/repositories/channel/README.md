@@ -253,9 +253,19 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
   Isolation frees the member's branch but keeps the device/directory lock. Never retry an unknown delivery.
-  `retryJob` re-queues only a failed job whose device could not be reached
-  (`DeviceGatewayNotConfigured`), with its writer released and nothing accepted or published;
-  the next claim opens a fresh operation.
+  `retryJob` re-queues a failed job at its requester's (or an admin's) request, once its writer
+  is released and nothing was published; the next claim opens a fresh operation. In `resume`
+  mode it keeps the failed run's topic, and the claim continues there (`resumableTopic`, with
+  `manifest.resumed`) while that topic is still the Agent's, in scope, unheld and on the same
+  runtime, device and directory; otherwise it starts like a retry.
+- A job that fails leaves one card in its reply slot (`replyError.ts`): its opening
+  acknowledgement in the reply's branch turned into the card, else an Agent message under the
+  reply's own request key `job:<jobId>`, with `metadata.replyError`. A later failure rewrites that
+  message (`attempts`, keyed by the failed operation), and `publish` writes the reply over it,
+  clearing `replyError`. Each rewrite moves the message to the end of its timeline (a Thread root
+  stays) so it reads as new and unread. Cards carry no mentions and never route; manifests and
+  routing history show other Agents only "<Agent> did not finish this reply.", and a card does not
+  count as the Agent's last reply for wake rules.
 - A job blocked only by another writer in its member's directory moves its conversation branch
   (a Thread, or the main timeline) into a git worktree instead of waiting: the coordinator asks
   the device to cut `lobe-channel/<member>-<branch>` from that directory's HEAD under

@@ -121,6 +121,27 @@ describe('Channel request prompt', () => {
     );
   });
 
+  it('tells a resumed run to continue its stopped turn, without context it already read', () => {
+    const request = [message('current', 'Why did the deploy fail?', caller)];
+    const prompt = buildChannelPrompt(manifest, request, {
+      boundary: 'b0',
+      context: [message('earlier', 'Deploy is red again', caller)],
+      omitted: 4,
+      opening: 'Got it, checking the deploy logs first.',
+      resume: { reason: 'Coder stopped making progress' },
+    });
+
+    expect(prompt.split('\n')[0]).toBe(
+      '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+    );
+    expect(prompt).toContain('<channel_resume boundary="b0">');
+    expect(prompt).toContain('(Coder stopped making progress)');
+    expect(prompt).toContain('Continue from where you left off');
+    expect(prompt).not.toContain('Deploy is red again');
+    expect(prompt).not.toContain('<channel_gap');
+    expect(prompt).not.toContain('<channel_opening');
+  });
+
   it('tells a run which other Agents the request asked, so the answers divide the work', () => {
     const request = [message('current', 'How do we close the SEO-to-revenue loop?', caller)];
     const prompt = buildChannelPrompt(manifest, request, {
