@@ -7,6 +7,14 @@ import {
 
 /** Consecutive charged turns that errored without a plan before the Goal pauses. */
 export const MAX_FAILED_MANAGER_TURNS = 5;
+/**
+ * Consecutive turns that finished normally without a plan before a person is
+ * asked. Such a run reports no error, so without this limit the Goal re-dispatches
+ * it until the whole turn budget is gone.
+ */
+export const MAX_NO_PLAN_MANAGER_TURNS = 3;
+export const noPlanPauseReason = (turns: number) =>
+  `Main Agent finished ${turns} turns in a row without submitting a plan. If it reported that \`lh\` has no LobeHub sign-in, update LobeHub Desktop or run \`lh login\` on that device`;
 const FAILED_TURN_BASE_BACKOFF_MS = 60_000;
 const FAILED_TURN_MAX_BACKOFF_MS = 30 * 60_000;
 

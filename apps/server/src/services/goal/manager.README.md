@@ -186,6 +186,11 @@ uses:
 - Anything else backs off exponentially from one minute up to 30 minutes and is
   charged. Five such turns in a row pause the Goal on the last error.
 
+A turn whose run finishes normally without a plan reports no error (an Agent
+whose `lh` cannot sign in says so and exits), so it has its own limit: three in a
+row pause the Goal with sign-in guidance, and an invited turn declines instead so
+its gate keeps the real problem.
+
 A pause clears these streaks, so resuming starts a fresh schedule. Before this, a
 failing Agent was re-dispatched on every tick and spent the whole turn budget in
 minutes. An unconfirmed running/missing

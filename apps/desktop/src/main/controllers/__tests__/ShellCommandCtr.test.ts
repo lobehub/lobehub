@@ -29,6 +29,7 @@ const { ipcMainHandleMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/userData' },
   ipcMain: {
     handle: ipcMainHandleMock,
   },
@@ -312,6 +313,51 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       expect(mockProbeSandboxCapability).not.toHaveBeenCalled();
       expect(mockCreateSandboxLaunchPlan).not.toHaveBeenCalled();
       expect(mockSpawn.mock.calls[0][2].env).toMatchObject({ LOBEHUB_JWT: 'jwt-token' });
+    });
+
+    it.each([
+      'export PATH="$HOME/bin:$PATH" && lh goal show goal_1',
+      'cd /repo && lh goal plan goal_1 --token turn --file plan.json',
+      'timeout 60 lh goal show goal_1',
+      "bash -lc 'lh goal show goal_1'",
+    ])('gives the app sign-in to an lh further into the command: %s', async (command) => {
+      exitWith(0);
+
+      await ctr.handleRunCommand({ command, cwd: '/repo', env: { LOBEHUB_OPERATION_ID: 'op-1' } });
+
+      expect(mockSpawn.mock.calls[0][1]).toEqual(['-c', command]);
+      expect(mockSpawn.mock.calls[0][2].env).toMatchObject({
+        LOBEHUB_JWT: 'jwt-token',
+        LOBEHUB_OPERATION_ID: 'op-1',
+        LOBEHUB_SERVER: 'https://app.example.com',
+      });
+    });
+
+    it('keeps the app sign-in away from a command that never reaches lh', async () => {
+      exitWith(0);
+
+      await ctr.handleRunCommand({ command: 'cd /repo/lh-tools && ls ./lh', cwd: '/repo' });
+
+      expect(mockCliCtr.buildCliEnv).not.toHaveBeenCalled();
+      expect(mockSpawn.mock.calls[0][2].env.LOBEHUB_JWT).not.toBe('jwt-token');
+    });
+
+    it('leaves a sandboxed compound command inside the fence, without the sign-in', async () => {
+      mockProbeSandboxCapability.mockResolvedValue(createAvailableSandboxCapability());
+      mockCreateSandboxLaunchPlan.mockResolvedValue({
+        args: ['-c', 'cd /repo && lh status'],
+        capability: { available: true, backend: 'srt', networkIsolation: true },
+        cmd: '/usr/bin/sandbox-exec',
+        env: {},
+        release: vi.fn(),
+        sandboxed: true,
+      });
+      exitWith(0);
+
+      await ctr.handleRunCommand({ command: 'cd /repo && lh status', cwd: '/repo', sandbox: true });
+
+      expect(mockCreateSandboxLaunchPlan).toHaveBeenCalledTimes(1);
+      expect(mockCliCtr.buildCliEnv).not.toHaveBeenCalled();
     });
   });
 
