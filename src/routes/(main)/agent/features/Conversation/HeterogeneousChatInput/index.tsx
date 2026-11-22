@@ -17,6 +17,7 @@ import { contextSelectors, useConversationStore } from '@/features/Conversation/
 import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
+  isExecutionTargetUnselected,
   isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
@@ -124,10 +125,15 @@ const HeterogeneousChatInput = memo(() => {
   });
   const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
     useProviderBindingValidation(providerType, providerApiConfig);
-  const deviceSelectionRequired =
+  const deviceOnlyTargetMissing =
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
+  // Nothing stored: `local` is only the desktop fallback, not a choice the user
+  // made. Ask for one rather than running on whichever machine opened the chat.
+  const executionTargetUnselected =
+    !!providerType && isExecutionTargetUnselected(agencyConfig, executionTarget);
+  const deviceSelectionRequired = deviceOnlyTargetMissing || executionTargetUnselected;
 
   const showHeteroModel =
     !isApiAuth &&
@@ -299,6 +305,14 @@ const HeterogeneousChatInput = memo(() => {
 
   const renderDeviceSelectionGuard = () => {
     if (!deviceSelectionRequired) return null;
+
+    if (executionTargetUnselected)
+      return (
+        <GuardBanner
+          hint={t('heteroAgent.executionTarget.selectRequired.desc')}
+          title={t('heteroAgent.executionTarget.selectRequired.title')}
+        />
+      );
 
     return (
       <GuardBanner

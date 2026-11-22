@@ -257,6 +257,21 @@ export const resolveExecutionTarget = (
 };
 
 /**
+ * Whether a hetero agent's `local` target was only inferred because nothing is
+ * stored — no target and no bound device. `resolveExecutionTarget` falls back
+ * to `local` on a desktop client, but that is a guess, not the user's pick:
+ * the chat input blocks sending until the user chooses where the agent runs,
+ * instead of writing this machine in as their selection.
+ */
+export const isExecutionTargetUnselected = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  resolvedTarget: DeviceExecutionTarget,
+): boolean =>
+  resolvedTarget === 'local' &&
+  agencyConfig?.executionTarget === undefined &&
+  !agencyConfig?.boundDeviceId;
+
+/**
  * Whether this run's shell commands must go through the device sandbox.
  *
  * The stored flag alone is not the answer: `localSandbox` qualifies *local*
