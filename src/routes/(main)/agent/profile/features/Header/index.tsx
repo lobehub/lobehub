@@ -51,6 +51,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { useHeaderActionSize } from '@/styles/density';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 import { openAgentSettingsModal } from '../AgentSettings';
@@ -296,21 +297,26 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
 
+    // Desktop lists these two in the profile sidebar; mobile has no sidebar there.
+    const showConfigEntries = isMobileSurface();
+
     return [
-      {
-        // View/use-level members can't edit the agent config — keep the entry
-        // visible but disabled (project convention: disabled, not hidden).
-        disabled: !canConfigure,
-        icon: <Icon icon={Settings2Icon} />,
-        key: 'advanced-settings',
-        label: t('advancedSettings', { ns: 'setting' }),
-        onClick: () => {
-          if (!canConfigure) return;
-          settingsModalRef.current?.close();
-          settingsModalRef.current = openAgentSettingsModal();
-        },
-      },
-      showPermissionPageEntry
+      showConfigEntries
+        ? {
+            // View/use-level members can't edit the agent config — keep the entry
+            // visible but disabled (project convention: disabled, not hidden).
+            disabled: !canConfigure,
+            icon: <Icon icon={Settings2Icon} />,
+            key: 'advanced-settings',
+            label: t('advancedSettings', { ns: 'setting' }),
+            onClick: () => {
+              if (!canConfigure) return;
+              settingsModalRef.current?.close();
+              settingsModalRef.current = openAgentSettingsModal();
+            },
+          }
+        : null,
+      showConfigEntries && showPermissionPageEntry
         ? {
             // Same gate the page itself applies (ResourceConfigAccessGate):
             // without edit-level access it redirects straight back with a
@@ -326,7 +332,7 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
             },
           }
         : null,
-      { type: 'divider' as const },
+      showConfigEntries ? { type: 'divider' as const } : null,
       showMarketSubmission
         ? {
             disabled: !canSubmitToMarket || marketSubmission.isSubmitting,

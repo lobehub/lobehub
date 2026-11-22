@@ -16,6 +16,7 @@ const labels = {
   'instruction': 'tab.instruction',
   'knowledge': 'tab.knowledge',
   'mail': 'tab.mail',
+  'permission': 'permission.page.entry',
   'profile': 'tab.profile',
   'self-evolving': 'title',
   'share': 'share',
@@ -44,6 +45,7 @@ describe('getAgentProfileTab', () => {
     ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
     ['/agent/agt_1/self-evolving', 'self-evolving'],
     ['/agent/agt_1/webhook', 'webhook'],
+    ['/acme/agent/agt_1/permission', 'permission'],
     ['/acme/agent/agt_1/automations', 'automations'],
     ['/agent/agt_1/self-evolving/new', 'self-evolving'],
     ['/acme/agent/agt_1/self-evolving/dom_1/experience/les_1', 'self-evolving'],
@@ -402,5 +404,50 @@ describe('automations tab', () => {
     expect(
       buildAgentProfileTabOptions({ ...off, active: 'automations' }).map((option) => option.value),
     ).toContain('automations');
+  });
+});
+
+describe('permission tab', () => {
+  const base = {
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: true,
+    heterogeneous: false,
+  };
+
+  it('sits with the general entries, before share, for a workspace agent', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'profile',
+      canConfigure: true,
+      permissionSupported: true,
+    });
+
+    expect(
+      groupAgentProfileTabOptions(options)
+        .find((group) => group.key === 'general')
+        ?.options.map((option) => option.value),
+    ).toEqual(['statistics', 'permission', 'share']);
+  });
+
+  it('leaves the tab out without a workspace or edit access', () => {
+    for (const gate of [
+      { canConfigure: true, permissionSupported: false },
+      { canConfigure: false, permissionSupported: true },
+    ])
+      expect(
+        buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate }).map((o) => o.value),
+      ).not.toContain('permission');
+  });
+
+  it('keeps the tab of the current page even when gated off', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'permission',
+      canConfigure: false,
+    });
+
+    expect(options.map((option) => option.value)).toContain('permission');
   });
 });
