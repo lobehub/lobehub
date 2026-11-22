@@ -106,6 +106,7 @@ export * from './artboardReadiness';
 export * from './connector';
 export * from './connectorToolIdentifier';
 export * from './heteroPermissionMode';
+export * from './heteroPlanMode';
 export * from './inboundWebhook';
 export * from './oauthApp';
 export * from './openai/chat';

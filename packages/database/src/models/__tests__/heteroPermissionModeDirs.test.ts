@@ -61,3 +61,27 @@ describe('WorkspaceUserSettingsModel.setHeteroPermissionModeDir', () => {
     });
   });
 });
+
+describe('setHeteroPlanModeDir (Codex Plan switch)', () => {
+  it('keeps only directories left on, latest first, in the personal bucket', async () => {
+    const model = new UserModel(serverDB, userId);
+    await model.setHeteroPlanModeDir('d::/a', true);
+    expect(await model.setHeteroPlanModeDir('d::/b', true)).toEqual(['d::/b', 'd::/a']);
+    expect(await model.setHeteroPlanModeDir('d::/b', false)).toEqual(['d::/a']);
+    const user = await serverDB.query.users.findFirst({ where: eq(users.id, userId) });
+    expect(user?.preference).toMatchObject({
+      heteroPlanModeDirs: ['d::/a'],
+      topicGroupMode: 'byTime',
+    });
+  });
+
+  it('keeps the member list beside the other directory habits', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userId, workspaceId);
+    await model.setWorktreeModeDir('d::/a', true);
+    expect(await model.setHeteroPlanModeDir('d::/a', true)).toEqual(['d::/a']);
+    expect(await model.getPreference()).toMatchObject({
+      heteroPlanModeDirs: ['d::/a'],
+      worktreeModeDirs: ['d::/a'],
+    });
+  });
+});

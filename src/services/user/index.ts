@@ -140,6 +140,10 @@ export class UserService {
     return lambdaClient.user.setWorktreeModeDir.mutate({ enabled, key });
   };
 
+  /** Personal-mode Codex Plan switch for one directory; resolves to the stored list. */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    lambdaClient.user.setHeteroPlanModeDir.mutate({ enabled, key });
+
   /** Personal-mode Claude Code permission mode for one directory; resolves to the stored list. */
   setHeteroPermissionModeDir = async (
     key: string,
