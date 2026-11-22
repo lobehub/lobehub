@@ -80,6 +80,7 @@ describe('A failed reply leaves a card in its reply slot', () => {
       agentId: agent.agentId,
       content: draft.summary,
       id: posted!.messageId,
+      kind: 'error',
       mentions: [],
       replyToId: message.id,
       routingStatus: 'reply',
@@ -182,7 +183,11 @@ describe('A failed reply leaves a card in its reply slot', () => {
     expect(replyId).toBe(posted!.messageId);
     const replies = (await messagesOf(channel.id)).filter((row) => row.routingStatus === 'reply');
     expect(replies).toHaveLength(1);
-    expect(replies[0]).toMatchObject({ content: 'The migration timed out.', id: replyId });
+    expect(replies[0]).toMatchObject({
+      content: 'The migration timed out.',
+      id: replyId,
+      kind: 'text',
+    });
     expect(channelMessageReplyError(replies[0].metadata)).toBeUndefined();
     expect((await asMember.detail(channel.id)).messages.at(-1)?.replyError).toBeNull();
   });

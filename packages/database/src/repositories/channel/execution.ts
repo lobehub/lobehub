@@ -553,9 +553,7 @@ export class ChannelExecutionRepository {
           }
         : undefined;
       const published = {
-        content: ask ? [body, channelAskFallbackText(ask)].filter(Boolean).join('
-
-') : job.draft,
+        content: ask ? [body, channelAskFallbackText(ask)].filter(Boolean).join('\n\n') : job.draft,
         ...(ask && { kind: 'ask' as const, metadata: { ask } }),
       };
       // A card from an earlier failure of this job is replaced by the reply, in the same slot.

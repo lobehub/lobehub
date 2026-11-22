@@ -307,7 +307,8 @@ export const refineReplyError = async (
 export const replaceReplyError = async (
   tx: Transaction,
   job: SlotJob,
-  reply: Pick<ChannelMessageItem, 'content'> & Partial<Pick<ChannelMessageItem, 'kind' | 'metadata'>>,
+  published: Pick<ChannelMessageItem, 'content'> &
+    Partial<Pick<ChannelMessageItem, 'kind' | 'metadata'>>,
 ): Promise<ChannelMessageItem | undefined> => {
   const slot = await findReplySlot(tx, job, false);
   if (!slot) return;
@@ -315,10 +316,10 @@ export const replaceReplyError = async (
   const [reply] = await tx
     .update(channelMessages)
     .set({
-      content: reply.content,
-      kind: reply.kind ?? 'text',
+      content: published.content,
+      kind: published.kind ?? 'text',
       mentions: [],
-      metadata: { ...baseMetadata(slot.metadata), ...reply.metadata },
+      metadata: { ...baseMetadata(slot.metadata), ...published.metadata },
       // Cleared as an acknowledgement: `lastNewsAt` counts the published reply, not the opening.
       ...(slot.requestKey === openingRequestKey(job.id) && {
         requestKey: replyRequestKey(job.id),

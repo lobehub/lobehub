@@ -54,6 +54,14 @@ export interface ChannelAskAnswerItem {
   selected: string[];
 }
 
+/** `lobe-channel.askUser`: questions posted with the reply, answered from a card. */
+export type ChannelAskUserParams = ChannelAskInput;
+
+export interface ChannelAskedUser {
+  questions: number;
+  status: 'posts_with_reply';
+}
+
 export type ChannelAskStatus = 'answered' | 'pending';
 
 /** `metadata.ask` of an `ask` message. */
