@@ -317,7 +317,10 @@ describe('buildGoalGraphView', () => {
     });
 
     it('keeps a delivery still being judged as verifying', () => {
-      const view = paused({ acceptances: { w1: { id: 'acc-1', status: 'repairing' } } });
+      const view = paused({
+        // The rollup follows the newest round, which a repair opens as `planned`.
+        acceptances: { w1: { id: 'acc-1', repairing: true, status: 'planned' } },
+      });
 
       expect(view.byId.w1).toMatchObject({ isVerifying: true });
       expect(view.byId.w1.halted).toBeUndefined();

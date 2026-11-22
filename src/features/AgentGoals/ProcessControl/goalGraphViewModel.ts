@@ -452,6 +452,7 @@ export const buildGoalGraphView = (
     // while its acceptance still said `verifying` rendered a red "lost" badge
     // next to a "verifying" chip on the same row, which cannot both be true.
     const acceptanceVerifying =
+      !!acceptances?.[node.id]?.repairing ||
       acceptances?.[node.id]?.status === 'verifying' ||
       acceptances?.[node.id]?.status === 'repairing';
     const beingJudged =

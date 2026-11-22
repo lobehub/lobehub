@@ -459,6 +459,7 @@ const GoalNodeAcceptanceSchema = z
       .strict()
       .optional(),
     id: z.string(),
+    repairing: z.boolean().optional(),
     status: AcceptanceStatusSchema,
   } satisfies Record<keyof GoalNodeAcceptance, z.ZodType>)
   .strict();

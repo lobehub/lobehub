@@ -322,6 +322,22 @@ export class VerifyRunModel {
     });
   };
 
+  /** Which of these acceptances have a round under repair, in one batched read. */
+  listRepairingAcceptanceIds = async (acceptanceIds: string[]): Promise<string[]> => {
+    if (acceptanceIds.length === 0) return [];
+    const rows = await this.db
+      .selectDistinct({ acceptanceId: verifyRuns.acceptanceId })
+      .from(verifyRuns)
+      .where(
+        and(
+          inArray(verifyRuns.acceptanceId, acceptanceIds),
+          eq(verifyRuns.status, 'repairing'),
+          this.ownership(),
+        ),
+      );
+    return rows.flatMap((row) => (row.acceptanceId ? [row.acceptanceId] : []));
+  };
+
   /**
    * Chain a run onto an acceptance as its next round. The round index is
    * assigned inside the UPDATE from the chain's current max, so two concurrent

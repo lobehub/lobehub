@@ -10,4 +10,6 @@ export const hasLiveGoalRuns = ({
   runHeartbeats,
 }: Pick<GoalGraphSnapshot, 'acceptances' | 'runHeartbeats'>): boolean =>
   Object.keys(runHeartbeats ?? {}).length > 0 ||
-  Object.values(acceptances ?? {}).some((acceptance) => acceptance.status === 'repairing');
+  Object.values(acceptances ?? {}).some(
+    (acceptance) => acceptance.repairing || acceptance.status === 'repairing',
+  );

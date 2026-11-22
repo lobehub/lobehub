@@ -3592,6 +3592,8 @@ components:
                 additionalProperties: false
               id:
                 type: string
+              repairing:
+                type: boolean
               status:
                 type: string
                 enum:

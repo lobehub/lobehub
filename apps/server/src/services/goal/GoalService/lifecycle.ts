@@ -452,7 +452,15 @@ const interruptGoalWork = async (
           'task',
           taskId,
         );
-        if (acceptance && ['repairing', 'verifying'].includes(acceptance.status)) return;
+        if (acceptance) {
+          // Read off the rounds: the rollup follows the newest round, which a
+          // repair opens as `planned`.
+          const rounds = await new VerifyRunModel(tx, ctx.userId, ctx.workspaceId).listByAcceptance(
+            acceptance.id,
+          );
+          if (rounds.some((round) => ['repairing', 'verifying'].includes(round.status ?? '')))
+            return;
+        }
         if (task.updatedAt.getTime() > staleBefore) {
           starting = true;
           return;

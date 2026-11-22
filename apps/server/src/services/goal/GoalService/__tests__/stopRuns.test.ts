@@ -43,8 +43,23 @@ const deliver = async (taskId: string, status: 'repairing' | 'verifying', suffix
   await taskTopics.add(taskId, topicId, { seq: 1 });
   await taskTopics.updateStatus(taskId, topicId, 'completed');
   const acceptance = (await new AcceptanceModel(serverDB, userId).findBySubject('task', taskId))!;
-  await serverDB.update(acceptances).set({ status }).where(eq(acceptances.id, acceptance.id));
-  return { acceptanceId: acceptance.id, topicId };
+  const [run] = await serverDB
+    .insert(verifyRuns)
+    .values({ acceptanceId: acceptance.id, plan: [], roundIndex: 1, status, userId } as never)
+    .returning();
+  // The repair's own round: it is the newest, so the rollup reads `planned`.
+  await serverDB.insert(verifyRuns).values({
+    acceptanceId: acceptance.id,
+    plan: [],
+    roundIndex: 2,
+    status: 'planned',
+    userId,
+  } as never);
+  await serverDB
+    .update(acceptances)
+    .set({ status: 'planned' })
+    .where(eq(acceptances.id, acceptance.id));
+  return { acceptanceId: acceptance.id, runId: run.id, topicId };
 };
 
 describe('GoalService.stopRuns', () => {
@@ -69,15 +84,11 @@ describe('GoalService.stopRuns', () => {
       .spyOn(AiAgentService.prototype, 'interruptTask')
       .mockResolvedValue({ success: true } as never);
     const { goalId, service, taskId } = await setup('Stop a repair');
-    const { acceptanceId, topicId } = await deliver(taskId, 'repairing', 'repair');
+    const { runId, topicId } = await deliver(taskId, 'repairing', 'repair');
     await serverDB.insert(agentOperations).values([
       { id: 'op_stop_repair', status: 'running', topicId, userId },
       { id: 'op_stop_finished', status: 'completed', topicId, userId },
     ] as never);
-    const [run] = await serverDB
-      .insert(verifyRuns)
-      .values({ acceptanceId, plan: [], roundIndex: 1, status: 'repairing', userId } as never)
-      .returning();
     await serverDB.insert(verifyCheckResults).values(
       [
         ['a', 'op_stop_repair'],
@@ -88,9 +99,16 @@ describe('GoalService.stopRuns', () => {
         status: 'failed' as const,
         userId,
         verifierType: 'agent' as const,
-        verifyRunId: run.id,
+        verifyRunId: runId,
       })),
     );
+
+    // The page learns a repair is live from the rounds, not the rollup.
+    const nodeId = (await service.graph(goalId)).nodes.find((node) => node.taskId === taskId)!.id;
+    expect((await service.graph(goalId)).acceptances?.[nodeId]).toMatchObject({
+      repairing: true,
+      status: 'planned',
+    });
 
     const goal = await service.stopRuns(goalId);
 
@@ -104,21 +122,17 @@ describe('GoalService.stopRuns', () => {
       success: false,
     } as never);
     const { goalId, service, taskId } = await setup('Unstoppable repair');
-    const { acceptanceId, topicId } = await deliver(taskId, 'repairing', 'refused');
+    const { runId, topicId } = await deliver(taskId, 'repairing', 'refused');
     await serverDB
       .insert(agentOperations)
       .values({ id: 'op_stop_refused', status: 'running', topicId, userId } as never);
-    const [run] = await serverDB
-      .insert(verifyRuns)
-      .values({ acceptanceId, plan: [], roundIndex: 1, status: 'repairing', userId } as never)
-      .returning();
     await serverDB.insert(verifyCheckResults).values({
       checkItemId: 'a',
       repairOperationId: 'op_stop_refused',
       status: 'failed',
       userId,
       verifierType: 'agent',
-      verifyRunId: run.id,
+      verifyRunId: runId,
     });
 
     await expect(service.stopRuns(goalId)).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
