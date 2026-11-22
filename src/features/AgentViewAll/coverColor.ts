@@ -1,5 +1,9 @@
 import type { SidebarAgentItem } from '@lobechat/types';
+<<<<<<< HEAD
 import { cssVar, getAgentAvatarTraits, parseAgentAvatar } from '@lobehub/ui';
+=======
+import { cssVar, getAgentAvatarTraits } from '@lobehub/ui';
+>>>>>>> origin/main
 
 import { isDefaultAgentAvatar } from '@/components/AgentAvatar';
 import { remoteAvatarSrc } from '@/components/Avatar/fallback';
@@ -14,7 +18,11 @@ import { remoteAvatarSrc } from '@/components/Avatar/fallback';
  * every build that resolves a newer one. A color it adds before it is listed
  * here falls back to gray.
  */
+<<<<<<< HEAD
 const SEED_COLORS: Record<string, string> = {
+=======
+const SEED_COLORS = {
+>>>>>>> origin/main
   cyan: cssVar.cyan,
   geekblue: cssVar.geekblue,
   gray: cssVar.gray,
