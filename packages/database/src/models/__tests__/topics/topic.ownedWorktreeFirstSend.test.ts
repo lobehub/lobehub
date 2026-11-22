@@ -268,12 +268,10 @@ describe('owned worktree lookups by id and parent', () => {
     expect((await model().findOwnedWorktreeTopics(['by-id'])).map((row) => row.id)).toEqual([
       'by-id',
     ]);
-    expect(await model().findWaitingCleanupTopicsUnder({ agentIds: [], sessionIds: [] })).toEqual(
-      [],
-    );
+    expect(await model().findWaitingCleanupTopicsUnder({ agentIds: [], topicIds: [] })).toEqual([]);
   });
 
-  it('finds waiting cleanups under agents, legacy sessions, and both', async () => {
+  it('finds waiting cleanups under agents, by topic id, and both', async () => {
     const waiting = (): ChatTopicMetadata => ({
       ownedWorktrees: [
         {
@@ -291,18 +289,18 @@ describe('owned worktree lookups by id and parent', () => {
     });
 
     expect(
-      (await model().findWaitingCleanupTopicsUnder({ agentIds: ['agent-1'], sessionIds: [] })).map(
+      (await model().findWaitingCleanupTopicsUnder({ agentIds: ['agent-1'], topicIds: [] })).map(
         (row) => row.id,
       ),
-    ).toContain('w-agent');
+    ).toEqual(['w-agent']);
     expect(
-      (
-        await model().findWaitingCleanupTopicsUnder({ agentIds: [], sessionIds: ['session-1'] })
-      ).map((row) => row.id),
-    ).toContain('w-session');
+      (await model().findWaitingCleanupTopicsUnder({ agentIds: [], topicIds: ['w-session'] })).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['w-session']);
     const both = await model().findWaitingCleanupTopicsUnder({
       agentIds: ['agent-1'],
-      sessionIds: ['session-1'],
+      topicIds: ['w-session'],
     });
     expect(both.map((row) => row.id).sort()).toEqual(['w-agent', 'w-session']);
   });
