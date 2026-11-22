@@ -27,6 +27,7 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { hasLiveGoalRuns } from '@/store/goal/liveRuns';
 
 import GoalAgentModelConfig from './GoalAgentModelConfig';
 import GoalChat from './GoalChat';
@@ -34,7 +35,6 @@ import { GoalConversationContext } from './goalConversation';
 import GoalDetailActions from './GoalDetailActions';
 import GoalDetailTitle from './GoalDetailTitle';
 import GoalHeaderMetrics from './GoalHeaderMetrics';
-import { hasLiveGoalRuns } from './goalLiveRuns';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';

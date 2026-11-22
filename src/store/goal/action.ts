@@ -42,6 +42,7 @@ import { goalArchivedForFilter, goalStatusesForFilter } from './goalListFilter';
 import { buildGoalTitleMessages } from './goalTitle';
 import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
+import { hasLiveGoalRuns } from './liveRuns';
 import {
   GOAL_LIST_FILTERS,
   goalGraphResource,
@@ -87,7 +88,8 @@ const HOME_GOAL_FETCH_LIMIT = 100;
  * on a goal that already finished — until the tab lost and regained focus.
  *
  * `review` and `paused` are deliberately out: those wait on a person, and the
- * action that moves them refreshes the snapshot itself.
+ * action that moves them refreshes the snapshot itself. A paused goal with runs
+ * still going is the exception, handled in `goalGraphShouldPoll`.
  */
 const SERVER_ADVANCING_STATUSES = new Set<GoalStatus>(['planning', 'running', 'verifying']);
 
@@ -148,6 +150,9 @@ const goalAcceptanceUnsettled = (graph: GoalGraphSnapshot): boolean => {
  */
 const goalGraphShouldPoll = (graph: GoalGraphSnapshot): boolean =>
   goalStatusPolled(graph.goal.status) ||
+  // Pausing lets live runs finish, and a stopped repair settles after the stop
+  // returns. Unpolled, the page kept showing them as running until a reload.
+  (graph.goal.status === 'paused' && hasLiveGoalRuns(graph)) ||
   graph.report?.status === 'running' ||
   (graph.goal.status === 'achieved' && goalAcceptanceUnsettled(graph));
 

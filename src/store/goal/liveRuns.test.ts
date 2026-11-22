@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasLiveGoalRuns } from './goalLiveRuns';
+import { hasLiveGoalRuns } from './liveRuns';
 
 describe('hasLiveGoalRuns', () => {
   it('is false when nothing is running, even with nodes still active', () => {
