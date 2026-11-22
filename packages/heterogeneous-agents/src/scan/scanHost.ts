@@ -161,10 +161,10 @@ export const resolveRemotePlatformRuntime = async (
 
   const validatedPath = status.path;
   const env = buildRemotePlatformEnvironment(status, baseEnv);
-  const prepareSpawn = async (args: string[]): Promise<RemotePlatformSpawnPlan> => ({
-    ...(await resolveCliSpawnPlan(validatedPath, args, env)),
-    env,
-  });
+  const prepareSpawn = async (args: string[]): Promise<RemotePlatformSpawnPlan> => {
+    const plan = await resolveCliSpawnPlan(validatedPath, args, env);
+    return { ...plan, env: plan.env ?? env };
+  };
 
   return {
     available: true,

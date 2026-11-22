@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import type { LocalHeterogeneousAgentType } from '../config';
 import { HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import { resolveCliSpawnPlan } from './cliSpawn';
+import { findWslCommandCandidates, invalidateWslCache, isWslCommand } from './wsl';
 
 /**
  * Shared resolver for external CLI-agent binaries.
@@ -224,6 +225,8 @@ const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
  * fresh scan.
  */
 export const invalidateLoginShellPathCache = (): void => {
+  // A Rescan must also see agents installed inside WSL since the last scan.
+  invalidateWslCache();
   cachedShellPath = undefined;
   shellPathGeneration += 1;
   shellPathPromise = undefined;
@@ -480,7 +483,7 @@ const execProbe = async (
   }
 
   return execFilePromise(spawnPlan.command, spawnPlan.args, {
-    env,
+    env: spawnPlan.env ?? env,
     timeout: 5000,
     windowsHide: true,
   });
@@ -649,8 +652,9 @@ export const detectValidatedCommandCandidates = async (
     lastStatus = inheritedStatus;
 
     // Invalid Windows shell expressions must not trigger even the registry
-    // helper processes used for PATH recovery.
-    if (!isProbeableCommand(command)) continue;
+    // helper processes used for PATH recovery. A WSL command runs on the WSL
+    // side's own PATH, so a recovered Windows PATH can't help it either.
+    if (!isProbeableCommand(command) || isWslCommand(command)) continue;
 
     if (!recoveryAttempted) {
       recoveryAttempted = true;
@@ -861,6 +865,15 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
       ];
     }
     case 'cursor': {
+      // Cursor's Windows installer (`irm 'https://cursor.com/install?win32=true' | iex`)
+      // puts its `agent.cmd` launcher in `%LOCALAPPDATA%\cursor-agent` and only adds
+      // that to the registry User PATH, which an already-running app never sees.
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        if (!localAppData) return [];
+
+        return [path.win32.join(localAppData, 'cursor-agent', 'agent.cmd')];
+      }
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
       return [
         path.join(homedir(), '.local', 'bin', 'agent'),
@@ -972,12 +985,39 @@ export const detectHeterogeneousCliCommand = async (
   // default command: the well-known paths hold the *default* binary, so applying
   // them to a custom command (e.g. `claude-beta`) would silently resolve it to
   // stock `claude` instead of reporting the configured command as missing.
-  const commands =
-    command.trim() === DEFAULT_HETERO_COMMAND[agentType]
-      ? [command, ...getWellKnownCommandPaths(agentType)]
-      : [command];
+  const isDefaultCommand = command.trim() === DEFAULT_HETERO_COMMAND[agentType];
+  const commands = isDefaultCommand ? [command, ...getWellKnownCommandPaths(agentType)] : [command];
 
-  return detectValidatedCommandCandidates(commands, validator, probeEnv);
+  const status = await detectValidatedCommandCandidates(commands, validator, probeEnv);
+  if (!isDefaultCommand) return status;
+
+  return detectInWslWhenMissing(status, WSL_COMMAND_NAMES[agentType] ?? [command], validator);
+};
+
+// Cursor's installer creates `agent` and the unambiguous `cursor-agent` alias.
+const WSL_COMMAND_NAMES: Partial<Record<HeterogeneousCliAgentType, string[]>> = {
+  cursor: ['agent', 'cursor-agent'],
+};
+
+/**
+ * When nothing on the Windows side answers, look for the command inside WSL.
+ * Only then: probing a distro may boot its VM, which a user whose agents are
+ * all on Windows should never pay for. A hit is a `wsl://` command that
+ * `resolveCliSpawnPlan` launches through `wsl.exe`. No-op off Windows.
+ */
+export const detectInWslWhenMissing = async (
+  status: CliCommandStatus,
+  commandNames: string[],
+  options: ValidateOptions,
+): Promise<CliCommandStatus> => {
+  if (status.available || !isWindows()) return status;
+
+  const candidates: string[] = [];
+  for (const name of commandNames) candidates.push(...(await findWslCommandCandidates(name)));
+  if (candidates.length === 0) return status;
+
+  const wslStatus = await detectValidatedCommandCandidates(candidates, options);
+  return wslStatus.available ? wslStatus : status;
 };
 
 /**

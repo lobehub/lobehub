@@ -91,7 +91,7 @@ export const fetchAntigravityQuota = async (
     const query = execFilePromise(plan.command, plan.args, {
       cwd: tmpdir(),
       encoding: 'utf8',
-      env,
+      env: plan.env ?? env,
       killSignal: 'SIGKILL',
       maxBuffer: 1024 * 1024,
       timeout: 20_000,
