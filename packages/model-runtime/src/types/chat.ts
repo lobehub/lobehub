@@ -3,6 +3,7 @@ import type {
   ModelReasoning,
   ModelTokensUsage,
   ModelUsage,
+  ToolActivationPlan,
 } from '@lobechat/types';
 import type OpenAI from 'openai';
 
@@ -83,6 +84,7 @@ export interface OpenAIChatMessage {
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
+  toolActivationPlan?: ToolActivationPlan;
   /**
    * Function names that first became callable at this message, e.g. the result of a
    * mid-conversation tool activation. Their definitions stay in `ChatStreamPayload.tools`.
@@ -244,6 +246,8 @@ export interface ChatMethodOptions {
    */
   requestHeaders?: Record<string, any>;
   signal?: AbortSignal;
+  /** Context edits for a Responses transport that supports inline tool declarations. */
+  toolActivationPlan?: ToolActivationPlan;
   /**
    * userId for the chat completion
    */

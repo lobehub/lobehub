@@ -113,16 +113,22 @@ const run = async (anchorActivatedTools: boolean) => {
 };
 
 describe('MessagesEngine tool activation anchoring', () => {
-  it('only appends to the request when a tool is activated', async () => {
+  it('keeps a canonical request and prepares the append-only variant for the transport', async () => {
     const { after, before } = await run(true);
-
-    expect(after.slice(0, before.length)).toEqual(before);
-
     const result = after.find((message) => message.role === 'tool');
-    expect(result.toolsAdded).toEqual(['lobe-creds____listCreds']);
-    // The instructions reach the model once, with the result that activated the tool.
-    expect(result.content).toContain(CREDS_SYSTEM_ROLE);
-    expect(after[0].content).not.toContain(CREDS_SYSTEM_ROLE);
+    const plan = result.toolActivationPlan;
+    expect(result.content).not.toContain(CREDS_SYSTEM_ROLE);
+    expect(after[0].content).toContain(CREDS_SYSTEM_ROLE);
+    expect(plan.results).toEqual([
+      {
+        callId: 'call_activate_1',
+        content: expect.stringContaining(CREDS_SYSTEM_ROLE),
+        toolNames: ['lobe-creds____listCreds'],
+      },
+    ]);
+    expect(after[0].content.replace(plan.system.original, plan.system.replacement)).toEqual(
+      before[0].content,
+    );
   });
 
   it('keeps the system-prompt injection and no annotation when the transport cannot anchor', async () => {
@@ -133,8 +139,29 @@ describe('MessagesEngine tool activation anchoring', () => {
 
     const result = after.find((message) => message.role === 'tool');
     expect(result.content).not.toContain(CREDS_SYSTEM_ROLE);
-    expect(result).not.toHaveProperty('toolsAdded');
+    expect(result).not.toHaveProperty('toolActivationPlan');
   });
+
+  it.each(['truncated caller', 'disabled activator'])(
+    'retains instructions after a %s',
+    async (scenario) => {
+      const { messages } = await new MessagesEngine(
+        createParams({
+          messages: afterActivation(),
+          enableHistoryCount: scenario === 'truncated caller',
+          historyCount: 1,
+          toolsConfig: {
+            anchorActivatedTools: true,
+            disabledToolIdentifiers: scenario === 'disabled activator' ? ['lobe-activator'] : [],
+            manifests: [activatorManifest, credsManifest],
+            tools: ['lobe-activator', 'lobe-creds'],
+          },
+        }),
+      ).process();
+      expect(messages.some((m) => m.role === 'tool')).toBe(false);
+      expect(messages.find((m) => m.role === 'system')?.content).toContain(CREDS_SYSTEM_ROLE);
+    },
+  );
 
   it('documents the tool in the system message once its activation left the history', async () => {
     const messages = [

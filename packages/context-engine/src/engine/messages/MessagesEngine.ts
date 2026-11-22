@@ -378,7 +378,6 @@ export class MessagesEngine {
       // Tool system role (tool manifests and API definitions)
       new ToolSystemRoleProvider({
         enabled: !!(toolsConfig?.manifests && toolsConfig.manifests.length > 0),
-        anchorActivatedTools: toolsConfig?.anchorActivatedTools,
         isCanUseFC: capabilities?.isCanUseFC || (() => true),
         manifests: toolsConfig?.manifests,
         model,
@@ -612,13 +611,6 @@ export class MessagesEngine {
         injectedManifests: injectedToolManifests,
         injectedSkills: injectedActivatedSkills,
       }),
-      // Anchor mid-conversation tool activations at their result: the functions
-      // it made callable and their instructions, so neither the top-level tools
-      // nor the system message changes when a tool is activated. Right after the
-      // trim above, which leaves the result in its short deterministic form.
-      ...(toolsConfig?.anchorActivatedTools
-        ? [new ToolActivationAnchorProcessor({ manifests: injectedToolManifests })]
-        : []),
       // Stale tool-result trimming — replaces the bodies of superseded tool
       // results (file reads later overwritten, stale browser snapshots, old
       // command output) with short placeholders. Rules are monotone so the
@@ -688,6 +680,15 @@ export class MessagesEngine {
       new ToolMessageReorder(),
       // Force finish summary (when maxSteps exceeded)
       new ForceFinishSummaryInjector({ enabled: !!forceFinish }),
+      // Only paired activation results still present in the outgoing conversation can own tools.
+      ...(toolsConfig?.anchorActivatedTools
+        ? [
+            new ToolActivationAnchorProcessor({
+              manifests: injectedToolManifests,
+              variableGenerators,
+            }),
+          ]
+        : []),
       // Message cleanup (final step)
       new MessageCleanupProcessor(),
     ];

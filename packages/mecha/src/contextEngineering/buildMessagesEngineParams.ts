@@ -1,6 +1,6 @@
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { LobeToolManifest, MessagesEngineParams } from '@lobechat/context-engine';
-import { isToolAnchoringGPTModel } from '@lobechat/model-runtime/providers/openai/modelId';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import type { ContextSnapshot } from './types';
 import { createVariableGenerators } from './variableGenerators';
@@ -9,6 +9,13 @@ const definedOnly = <T extends Record<string, unknown>>(record: T): Partial<T> =
   Object.fromEntries(
     Object.entries(record).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
+
+const builtInProviders = new Set<string>(Object.values(ModelProvider));
+const responsesProviders = new Set<string>([
+  ModelProvider.OpenAI,
+  ModelProvider.ChatGPT,
+  ModelProvider.LobeHub,
+]);
 
 const CURRENT_DATE_LINE = /Current date: \d{4}-\d{2}-\d{2}/g;
 
@@ -100,11 +107,10 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     selectedTools: tools?.selectedTools,
     toolDiscoveryConfig: tools?.toolDiscoveryConfig,
     toolsConfig: {
-      // These models take tools declared inside the conversation, so an activation
-      // stays at its result instead of rewriting the system message and the tool list.
-      // The runtime decides per endpoint whether it really anchors; when it does not,
-      // the instructions simply stay with the result and the tools at the top level.
-      anchorActivatedTools: isToolAnchoringGPTModel(model.model),
+      // Custom provider IDs use the OpenAI-compatible runtime. Defer the final
+      // decision until aliases, relays and the effective protocol are resolved.
+      anchorActivatedTools:
+        responsesProviders.has(model.provider) || !builtInProviders.has(model.provider),
       disabledToolIdentifiers,
       manifests,
       tools: enabledToolIds,

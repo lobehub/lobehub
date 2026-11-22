@@ -26,7 +26,7 @@ import type { OpenAIStreamOptions } from '../openaiChatCompletions/stream';
 import { convertOpenAIResponseInputs } from './inputs';
 import { transformResponseAPIToStream } from './nonStreamToStream';
 import { OpenAIResponsesStream } from './stream';
-import { splitAnchoredTools } from './toolAnchoring';
+import { prepareAnchoredMessages, splitAnchoredTools } from './toolAnchoring';
 import { convertChatCompletionToolToResponseTool, stripChatCompletionParameters } from './tools';
 
 export const chatViaResponses = async (
@@ -66,11 +66,14 @@ export const chatViaResponses = async (
   const toolAnchoringMode = responsesTools
     ? undefined
     : factory.responses?.toolAnchoring?.({ baseURL: runtime.baseURL, model: requestModel });
+  const inputMessages = toolAnchoringMode
+    ? prepareAnchoredMessages(messages as OpenAIChatMessage[], tools, options?.toolActivationPlan)
+    : (messages as OpenAIChatMessage[]);
   const { anchored, requestTools } = toolAnchoringMode
-    ? splitAnchoredTools(messages as OpenAIChatMessage[], tools, { strictToolPairing: true })
+    ? splitAnchoredTools(inputMessages, tools, { strictToolPairing: true })
     : { anchored: undefined, requestTools: tools };
 
-  const input = await convertOpenAIResponseInputs(messages as any, {
+  const input = await convertOpenAIResponseInputs(inputMessages, {
     forceImageBase64: factory.chatCompletion?.forceImageBase64,
     forceVideoBase64: factory.chatCompletion?.forceVideoBase64,
     provider: runtime.id,

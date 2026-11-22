@@ -1,13 +1,10 @@
+import { pluginPrompts } from '@lobechat/prompts';
 import { describe, expect, it } from 'vitest';
 
 import type { LobeToolManifest } from '../../engine/tools/types';
+import { toToolPrompt } from '../../providers/ToolSystemRole';
 import type { PipelineContext } from '../../types';
-import { collectActivatedToolIds } from '../../utils/activatedTools';
-import {
-  ACTIVATION_DOCS_FOLLOW_NOTE,
-  ACTIVATION_DOCS_FOLLOW_WITH_SKILLS_NOTE,
-  ToolActivationAnchorProcessor,
-} from '../ToolActivationAnchor';
+import { ToolActivationAnchorProcessor } from '../ToolActivationAnchor';
 
 const CREDS_SYSTEM_ROLE = 'Always list credentials before creating one.';
 
@@ -55,151 +52,73 @@ const activation = (identifiers: string[], overrides?: Record<string, unknown>) 
   ...overrides,
 });
 
-const process = (messages: any[], relocated: string[] = []) =>
-  new ToolActivationAnchorProcessor({ manifests: [credsManifest, notionManifest] }).process(
-    createContext(
-      messages,
-      relocated.length > 0 ? { toolActivationAnchors: { toolIds: relocated } } : {},
-    ),
-  );
+const manifests = [credsManifest, notionManifest];
+const block = pluginPrompts({ tools: manifests.map(toToolPrompt) });
+const system = { role: 'system', content: 'Agent instructions\n\n' + block };
+const process = (messages: PipelineContext['messages']) =>
+  new ToolActivationAnchorProcessor({ manifests }).process(createContext(messages));
 
 describe('ToolActivationAnchorProcessor', () => {
-  it('names the functions an activation made callable, as the tools array spells them', async () => {
-    const result = await process([activation(['lobe-creds', 'notion'])]);
-
-    expect(result.messages[0].toolsAdded).toEqual([
-      'lobe-creds____listCreds',
-      'lobe-creds____createCred',
-      'notion____createPage____mcp',
+  it('leaves the canonical messages intact and prepares each tool at its first surviving activation', async () => {
+    const first = activation(['lobe-creds']);
+    const second = activation(['lobe-creds', 'notion'], { tool_call_id: 'call-2' });
+    const result = await process([system, first, second]);
+    expect(result.messages[0]).toEqual(system);
+    expect(result.messages[1].content).toBe(first.content);
+    expect(result.messages[2]).toEqual(second);
+    const plan = result.messages[1].toolActivationPlan;
+    expect(plan.results.map((entry: { toolNames: string[] }) => entry.toolNames)).toEqual([
+      ['lobe-creds____listCreds', 'lobe-creds____createCred'],
+      ['notion____createPage____mcp'],
     ]);
-    // Instructions stay wherever they were unless the system message dropped them.
-    expect(result.messages[0].content).toBe(TRIMMED_RESULT);
-  });
-
-  it('keeps the instructions with the result when the system message left them out', async () => {
-    const result = await process([activation(['lobe-creds'])], ['lobe-creds']);
-
-    const content = result.messages[0].content as string;
-    expect(content).toContain(ACTIVATION_DOCS_FOLLOW_NOTE);
-    expect(content).not.toContain('in the system prompt');
-    expect(content).toContain(CREDS_SYSTEM_ROLE);
-    expect(content.startsWith('Successfully activated tools:')).toBe(true);
-  });
-
-  it('still points at the system prompt for skills activated by the same call', async () => {
-    const result = await process(
-      [
-        activation(['lobe-creds'], {
-          pluginState: {
-            activatedSkills: [{ name: 'PowerShell' }],
-            activatedTools: [{ identifier: 'lobe-creds' }],
-          },
-        }),
-      ],
-      ['lobe-creds'],
+    expect(plan.results[0].content).toContain(CREDS_SYSTEM_ROLE);
+    expect(plan.results[0].content).not.toContain('in the system prompt');
+    expect(plan.results[1].content).not.toContain(CREDS_SYSTEM_ROLE);
+    expect(plan.results[1].content).toContain('Notion workspace');
+    expect(system.content.replace(plan.system.original, plan.system.replacement)).toBe(
+      'Agent instructions',
     );
-
-    expect(result.messages[0].content).toContain(ACTIVATION_DOCS_FOLLOW_WITH_SKILLS_NOTE);
+    expect(first).not.toHaveProperty('toolActivationPlan');
   });
 
-  it('renders the same text on every request', async () => {
-    const first = await process([activation(['lobe-creds'])], ['lobe-creds']);
-    const second = await process([activation(['lobe-creds'])], ['lobe-creds']);
-
-    expect(second.messages[0].content).toBe(first.messages[0].content);
+  it('prepares no edit for absent, disabled or unrelated activations', async () => {
+    const messages = [
+      system,
+      activation(['uninstalled']),
+      activation(['notion'], { plugin: { identifier: 'other', apiName: 'run' } }),
+    ];
+    expect((await process(messages)).messages).toEqual(messages);
   });
 
-  it('anchors a tool once, at the first result that activated it', async () => {
-    const result = await process(
-      [
-        activation(['lobe-creds']),
-        activation(['lobe-creds', 'notion'], { id: 'tool-2', tool_call_id: 'call-2' }),
-      ],
-      ['lobe-creds', 'notion'],
+  it('leaves a replaced or ambiguous system prompt intact', async () => {
+    for (const content of ['custom agent document', block + '\n\n' + block]) {
+      const messages = [{ role: 'system', content }, activation(['notion'])];
+      expect((await process(messages)).messages).toEqual(messages);
+    }
+  });
+
+  it('keeps an explicit replacement document and prepares guidance at the activation', async () => {
+    const document = { role: 'system', content: 'Custom agent document' };
+    const result = await new ToolActivationAnchorProcessor({ manifests }).process(
+      createContext([document, activation(['lobe-creds'])], {
+        agentDocumentSystemReplace: { replaced: true },
+      }),
     );
+    expect(result.messages[0]).toEqual(document);
+    expect(result.messages[1].toolActivationPlan).not.toHaveProperty('system');
+    expect(result.messages[1].toolActivationPlan.results[0].content).toContain(CREDS_SYSTEM_ROLE);
+  });
 
-    expect(result.messages[0].toolsAdded).toEqual([
-      'lobe-creds____listCreds',
-      'lobe-creds____createCred',
+  it('preserves skill guidance in a mixed activation', async () => {
+    const result = await process([
+      system,
+      activation(['notion'], {
+        pluginState: {
+          activatedSkills: [{ name: 'Skill' }],
+          activatedTools: [{ identifier: 'notion' }],
+        },
+      }),
     ]);
-    expect(result.messages[1].toolsAdded).toEqual(['notion____createPage____mcp']);
-    expect(result.messages[1].content).not.toContain(CREDS_SYSTEM_ROLE);
-    expect(result.messages[1].content).toContain('Notion workspace');
-  });
-
-  it('leaves results alone when the activated tool is not enabled for this request', async () => {
-    const message = activation(['uninstalled-tool']);
-    const result = await process([message]);
-
-    expect(result.messages[0]).toEqual(message);
-  });
-
-  it('ignores other tool results', async () => {
-    const message = {
-      content: 'done',
-      plugin: { apiName: 'listCreds', identifier: 'lobe-creds' },
-      pluginState: { activatedTools: [{ identifier: 'notion' }] },
-      role: 'tool',
-      tool_call_id: 'call-9',
-    };
-    const result = await process([message]);
-
-    expect(result.messages[0]).toEqual(message);
-  });
-
-  it('puts the instructions back in the system message when the result is gone', async () => {
-    const result = await process(
-      [
-        { content: 'You are a helpful assistant.', role: 'system' },
-        { content: 'list my creds', role: 'user' },
-      ],
-      ['lobe-creds'],
-    );
-
-    expect(result.messages[0].content).toContain('You are a helpful assistant.');
-    expect(result.messages[0].content).toContain(CREDS_SYSTEM_ROLE);
-    expect(result.metadata.toolActivationAnchor?.fallbackToolIds).toEqual(['lobe-creds']);
-  });
-});
-
-describe('collectActivatedToolIds', () => {
-  it('reads flat tool rows and tools nested in an assistant group', () => {
-    const ids = collectActivatedToolIds([
-      activation(['lobe-creds']),
-      {
-        children: [
-          {
-            tools: [
-              {
-                apiName: 'activateTools',
-                identifier: 'lobe-activator',
-                result: { state: { activatedTools: [{ identifier: 'notion' }] } },
-              },
-              {
-                apiName: 'createPage',
-                identifier: 'notion',
-                result: { state: { activatedTools: [{ identifier: 'ignored' }] } },
-              },
-            ],
-          },
-        ],
-        content: '',
-        role: 'assistantGroup',
-      },
-    ]);
-
-    expect(ids).toEqual(['lobe-creds', 'notion']);
-  });
-
-  it('skips results inside a compressed group, which reaches the model as a summary', () => {
-    const ids = collectActivatedToolIds([
-      {
-        compressedMessages: [activation(['lobe-creds'])],
-        content: 'summary',
-        role: 'compressedGroup',
-      },
-    ]);
-
-    expect(ids).toEqual([]);
+    expect(result.messages[1].toolActivationPlan.results[0].content).toContain('skill');
   });
 });

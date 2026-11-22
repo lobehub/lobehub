@@ -5,6 +5,7 @@ import { convertOpenAIResponseInputs } from './inputs';
 import {
   buildAnchoredToolItems,
   INCREMENTAL_TOOLS_NOTICE,
+  prepareAnchoredMessages,
   resolveOpenAIToolAnchoring,
   splitAnchoredTools,
 } from './toolAnchoring';
@@ -40,6 +41,26 @@ const activation = (
     tool_call_id: callId,
   })),
 ];
+
+describe('prepareAnchoredMessages', () => {
+  it('keeps the canonical prompt when one schema in an activation batch is filtered out', () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'system', content: 'Tool guidance' },
+      ...activation('call', []),
+    ];
+    messages[2].toolActivationPlan = {
+      results: [
+        {
+          callId: 'call',
+          content: 'Activated tools and guidance',
+          toolNames: [search.function.name, crawl.function.name],
+        },
+      ],
+      system: { start: 0, original: 'Tool guidance', replacement: '' },
+    };
+    expect(prepareAnchoredMessages(messages, [search])).toBe(messages);
+  });
+});
 
 describe('splitAnchoredTools', () => {
   it('keeps every tool at the top level when no message announces one', () => {

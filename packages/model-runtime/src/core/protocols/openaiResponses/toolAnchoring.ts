@@ -1,3 +1,4 @@
+import type { ToolActivationPlan } from '@lobechat/types';
 import type OpenAI from 'openai';
 
 import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types';
@@ -98,6 +99,62 @@ export const splitAnchoredTools = <T>(
   });
 
   return { anchored, requestTools: requestTools.length > 0 ? requestTools : undefined };
+};
+
+/**
+ * Apply a context-engine plan as one edit, after the runtime has selected its
+ * endpoint and tool set. Revalidate the system span and every target because
+ * callers can filter messages/tools between context assembly and dispatch.
+ */
+export const prepareAnchoredMessages = <T>(
+  messages: OpenAIChatMessage[],
+  tools: T[] | undefined,
+  plan: ToolActivationPlan | undefined = messages.find(
+    (message) => message.role === 'tool' && message.toolActivationPlan,
+  )?.toolActivationPlan,
+) => {
+  if (!plan?.results.length || !tools?.length) return messages;
+  const systemIndex = messages.findIndex((message) =>
+    ['system', 'developer'].includes(message.role),
+  );
+  let editedSystem: string | undefined;
+  if (plan.system) {
+    const system = messages[systemIndex]?.content;
+    const { original, replacement, start } = plan.system;
+    if (
+      typeof system !== 'string' ||
+      !original ||
+      !Number.isInteger(start) ||
+      start < 0 ||
+      !system.startsWith(original, start)
+    )
+      return messages;
+    editedSystem = system.slice(0, start) + replacement + system.slice(start + original.length);
+  }
+  const available = new Set(tools.map(getFunctionName));
+  const byCallId = new Map(plan.results.map((result) => [result.callId, result]));
+  const { pairedToolOutputIds } = collectToolCallPairing(
+    messages.filter((message) => !message.responsesTools && message.responsesOutput === undefined),
+  );
+  for (const result of plan.results) {
+    if (
+      !pairedToolOutputIds.has(result.callId) ||
+      !result.toolNames.length ||
+      !result.toolNames.every((name) => available.has(name))
+    )
+      return messages;
+  }
+  return messages.flatMap((message, index): OpenAIChatMessage[] => {
+    if (index === systemIndex && editedSystem !== undefined)
+      return editedSystem ? [{ ...message, content: editedSystem }] : [];
+    const result =
+      message.role === 'tool' && message.tool_call_id
+        ? byCallId.get(message.tool_call_id)
+        : undefined;
+    return result
+      ? [{ ...message, content: result.content, toolsAdded: result.toolNames }]
+      : [message];
+  });
 };
 
 /**

@@ -87,8 +87,8 @@ export class MessageCleanupProcessor extends BaseProcessor {
           role: message.role,
           tool_call_id: message.tool_call_id,
           ...(message.name && { name: message.name }),
-          // Set by ToolActivationAnchorProcessor; the transport declares these tools here.
           ...(message.toolsAdded?.length && { toolsAdded: message.toolsAdded }),
+          ...(message.toolActivationPlan && { toolActivationPlan: message.toolActivationPlan }),
         };
       }
 
