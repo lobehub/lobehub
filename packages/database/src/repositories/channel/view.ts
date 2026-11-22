@@ -568,6 +568,8 @@ export const readChannelView = async (
   channelId: string,
   options: {
     before?: number;
+    /** The client opens canvases from reply cards; see `replyWorksByMessage`. */
+    includeCanvasWorks?: boolean;
     /** The client renders the opt-in Work types on reply cards; see `replyWorksByMessage`. */
     includeFileWorks?: boolean;
     limit?: number;
@@ -740,6 +742,7 @@ export const readChannelView = async (
   const [sourceTopics, works, relayAvatars] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
     replyWorksByMessage(tx, channelId, replyIds, {
+      includeCanvasWorks: options.includeCanvasWorks,
       includeFileWorks: options.includeFileWorks,
       userId: viewerUserId,
     }),
