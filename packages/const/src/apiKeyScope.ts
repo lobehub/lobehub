@@ -20,6 +20,8 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
  * the one that burns money (chat/completions, image, video, music, asr).
+ * On the public REST API, text / JSON / image / video generation, speech and
+ * transcription spend credits under `generation:write` instead.
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
@@ -49,6 +51,17 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Text, JSON (structured output), image and video generation, text-to-speech
+   * and transcription on the public REST API (`/api/v1/text`, `/api/v1/objects`,
+   * `/api/v1/images`, `/api/v1/videos`, `/api/v1/generations`, `/api/v1/audio`).
+   * `generation:write` starts paid generations and deletes generated assets;
+   * `generation:read` reads their status and results. Text / JSON generation and
+   * speech also accept keys issued with `model:invoke`. The tRPC generation
+   * namespaces keep requiring `model:invoke`.
+   */
+  'generation:read',
+  'generation:write',
   'mcp:read',
   'mcp:write',
   'usage:read',
