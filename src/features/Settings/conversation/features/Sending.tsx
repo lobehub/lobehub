@@ -51,6 +51,7 @@ const Sending = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
   const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
+  const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
   const enableBetterCodingExperience = useUserStore(
     labPreferSelectors.enableBetterCodingExperience,
   );
@@ -125,6 +126,21 @@ const Sending = memo(() => {
         label: (
           <SettingsSearchAnchor id={'conversation-paste-auto-convert'}>
             {t('settingChatAppearance.pasteAutoConvert.title')}
+          </SettingsSearchAnchor>
+        ),
+        minWidth: undefined,
+      },
+      {
+        children: (
+          <Switch
+            checked={enableVoiceMessage}
+            onChange={(checked) => update({ enableVoiceMessage: checked })}
+          />
+        ),
+        desc: t('settingConversation.voiceMessage.desc'),
+        label: (
+          <SettingsSearchAnchor id={'conversation-voice-message'}>
+            {t('settingConversation.voiceMessage.title')}
           </SettingsSearchAnchor>
         ),
         minWidth: undefined,

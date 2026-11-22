@@ -101,6 +101,12 @@ export const SendingSectionSkeleton = () => {
               label: text('settingChatAppearance.pasteAutoConvert.title', 120, 14),
               minWidth: undefined,
             },
+            {
+              control: SWITCH_CONTROL,
+              desc: text('settingConversation.voiceMessage.desc', 360, 12),
+              label: text('settingConversation.voiceMessage.title', 96, 14),
+              minWidth: undefined,
+            },
           ],
           title: text('settingConversation.input.title', 72),
         },

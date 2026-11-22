@@ -39,6 +39,7 @@ describe('settings search index', () => {
     const conversationLabels = [
       'settingCommon.responseLanguage.title',
       'hotkey.sendMessage.title',
+      'settingConversation.voiceMessage.title',
       'settingChatAppearance.fontSize.title',
       'systemAgent.followUpAction.title',
       'systemAgent.inputCompletion.title',

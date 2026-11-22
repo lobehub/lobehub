@@ -81,6 +81,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
     'chat preferences',
     'reply language',
     'send key',
+    'voice message',
     'follow up',
     'follow-up suggestions',
     'input suggestions',
@@ -492,6 +493,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'settingChatAppearance.pasteAutoConvert.desc',
     keywords: ['paste', 'markdown', 'rich text', 'format'],
     labelKey: 'settingChatAppearance.pasteAutoConvert.title',
+    tab: SettingsTabs.Conversation,
+  },
+  {
+    anchor: 'conversation-voice-message',
+    descKey: 'settingConversation.voiceMessage.desc',
+    keywords: ['voice message', 'voice', 'audio', 'microphone', 'record', 'speech'],
+    labelKey: 'settingConversation.voiceMessage.title',
     tab: SettingsTabs.Conversation,
   },
   {

@@ -1718,6 +1718,9 @@ export default {
   'settingConversation.display.title': 'Message Display',
   'settingConversation.input.title': 'Input & Sending',
   'settingConversation.reply.title': 'Replies',
+  'settingConversation.voiceMessage.desc':
+    'Show the voice message button in the chat input to record and send voice messages.',
+  'settingConversation.voiceMessage.title': 'Voice Message',
   'settingGroup.description.placeholder': 'Enter Group description',
   'settingGroup.description.title': 'Group description',
   'settingGroup.name.placeholder': 'Enter Group name',
@@ -1872,7 +1875,7 @@ export default {
   'settingsSearch.tabKeywords.billing': 'billing, payment, invoice, card, transaction',
   'settingsSearch.tabKeywords.connector': 'connectors, integrations, mcp',
   'settingsSearch.tabKeywords.conversation':
-    'conversation, chat, reply language, send key, enter to send, follow-up suggestions, input suggestions, autocomplete, font size, code highlight, mermaid',
+    'conversation, chat, reply language, send key, enter to send, voice message, follow-up suggestions, input suggestions, autocomplete, font size, code highlight, mermaid',
   'settingsSearch.tabKeywords.credits': 'usage, balance, top up, recharge, buy top-up pack',
   'settingsSearch.tabKeywords.creds': 'credentials, secrets, oauth',
   'settingsSearch.tabKeywords.devices': 'devices, sessions, logged in devices',

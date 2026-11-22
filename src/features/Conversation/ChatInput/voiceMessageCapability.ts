@@ -14,7 +14,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAiInfraStoreState, useAiInfraStore } from '@/store/aiInfra';
 import type { AiInfraStore } from '@/store/aiInfra/store';
 import { getUserStoreState, useUserStore } from '@/store/user';
-import { systemAgentSelectors } from '@/store/user/selectors';
+import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 /**
  * A chosen speech-to-text model only counts once its provider is enabled: the default points at
@@ -33,8 +33,10 @@ export const isVoiceMessageTranscribed = (context: ConversationContext) =>
   agentByIdSelectors.isAgentHeterogeneousById(context.agentId)(getAgentStoreState());
 
 export const canSendVoiceMessage = (context: ConversationContext) => {
+  const userState = getUserStoreState();
+  if (!userGeneralSettingsSelectors.enableVoiceMessage(userState)) return false;
+
   if (isVoiceMessageTranscribed(context)) {
-    const userState = getUserStoreState();
     const { provider } = systemAgentSelectors.asr(userState);
 
     return (
@@ -50,12 +52,15 @@ export const canSendVoiceMessage = (context: ConversationContext) => {
 };
 
 export const useCanSendVoiceMessage = (context: ConversationContext) => {
+  const enableVoiceMessage = useUserStore(userGeneralSettingsSelectors.enableVoiceMessage);
   const { model, provider } = useEffectiveConversationModelConfig(context);
   const isTranscribed = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(context.agentId));
   const isAsrConfigured = useUserStore(systemAgentSelectors.isAsrConfigured);
   const asrProvider = useUserStore((s) => systemAgentSelectors.asr(s).provider);
   const isAsrProviderReady = useAiInfraStore(isAsrProviderEnabled(asrProvider));
   const canSendRawAudio = useVoiceMessageCapability(model, provider, context.agentId);
+
+  if (!enableVoiceMessage) return false;
 
   return isTranscribed ? isAsrConfigured && isAsrProviderReady : canSendRawAudio;
 };
