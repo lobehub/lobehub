@@ -15,6 +15,18 @@ describe('web browsing systemPrompt', () => {
     expect(prompt).toContain('perspectives for controversial topics');
   });
 
+  it('keeps engine auto-selection and avoids ambiguous !category placeholder', () => {
+    expect(prompt).toContain('let search choose engines automatically unless asked');
+    expect(prompt).not.toContain('!category');
+  });
+
+  it('preserves URL and ambiguous-query guardrails from #18702 and #23595', () => {
+    expect(prompt).toContain('Clarify ambiguous queries before extensive searching');
+    expect(prompt).toContain(
+      'never bare domains, markdown links, guessed paths, or non-HTML assets',
+    );
+  });
+
   it('escalates challenge/JS-wall crawl bodies to agent-browser', () => {
     expect(prompt).toContain('activate the `agent-browser` skill');
   });
@@ -24,7 +36,7 @@ describe('web browsing systemPrompt', () => {
     expect(prompt).not.toContain('PageNotFoundError');
     expect(prompt).not.toContain('InvalidUrlError');
     expect(prompt).not.toContain('UnsupportedContentError');
-    expect(prompt.length).toBeLessThan(900);
+    expect(prompt.length).toBeLessThan(1000);
   });
 
   it('shows the footnote citation as renderable markdown, not inline code', () => {
