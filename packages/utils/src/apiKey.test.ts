@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   API_KEY_LENGTH,
@@ -24,6 +24,43 @@ describe('apiKey', () => {
       }
       // All 100 keys should be unique
       expect(keys.size).toBe(100);
+    });
+
+    describe('with a customized prefix', () => {
+      const loadWithPrefix = async (prefix: string) => {
+        vi.resetModules();
+        vi.doMock('@lobechat/business-const', () => ({ API_KEY_PREFIX: prefix }));
+        return import('./apiKey');
+      };
+
+      afterEach(() => {
+        vi.doUnmock('@lobechat/business-const');
+        vi.resetModules();
+      });
+
+      it('should keep the 64-character total while 32 random characters still fit', async () => {
+        const prefix = 'p'.repeat(32);
+        const { generateApiKey, validateApiKeyFormat } = await loadWithPrefix(prefix);
+
+        const apiKey = generateApiKey();
+
+        expect(apiKey).toHaveLength(64);
+        expect(validateApiKeyFormat(apiKey)).toBe(true);
+      });
+
+      it.each([33, 63, 64, 100])(
+        'should keep 32 random characters with a %i-character prefix',
+        async (prefixLength) => {
+          const prefix = 'p'.repeat(prefixLength);
+          const { generateApiKey, validateApiKeyFormat } = await loadWithPrefix(prefix);
+
+          const apiKey = generateApiKey();
+
+          expect(apiKey.startsWith(prefix)).toBe(true);
+          expect(apiKey.slice(prefix.length)).toMatch(/^[\da-z]{32}$/);
+          expect(validateApiKeyFormat(apiKey)).toBe(true);
+        },
+      );
     });
   });
 

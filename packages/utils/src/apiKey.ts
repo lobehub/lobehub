@@ -12,13 +12,19 @@ const configuredApiKeyPrefix = (businessConst as Record<string, unknown>).API_KE
 export const API_KEY_PREFIX =
   typeof configuredApiKeyPrefix === 'string' ? configuredApiKeyPrefix : 'sk-lh-';
 
-/** Total length of a newly issued key, prefix included. */
+/**
+ * Total length of a newly issued key, prefix included. A prefix too long to
+ * leave {@link MIN_KEY_SUFFIX_LENGTH} random characters lengthens the key instead.
+ */
 export const API_KEY_LENGTH = 64;
 
 /** Random-part length of keys issued before {@link API_KEY_LENGTH}; they stay valid. */
 const LEGACY_KEY_SUFFIX_LENGTH = 16;
 
-const KEY_SUFFIX_LENGTH = API_KEY_LENGTH - API_KEY_PREFIX.length;
+/** Random characters every new key keeps (about 165 bits), whatever the prefix. */
+const MIN_KEY_SUFFIX_LENGTH = 32;
+
+const KEY_SUFFIX_LENGTH = Math.max(API_KEY_LENGTH - API_KEY_PREFIX.length, MIN_KEY_SUFFIX_LENGTH);
 const KEY_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 // Largest multiple of the alphabet size in a byte; higher bytes are discarded
 // so that `byte % 36` stays uniform.
@@ -27,6 +33,7 @@ const MAX_UNBIASED_BYTE = 256 - (256 % KEY_ALPHABET.length);
 /**
  * Generate API Key
  * Format: `${API_KEY_PREFIX}{lowercase alphanumerics}`, {@link API_KEY_LENGTH} characters in total
+ * unless the prefix needs the key to be longer
  * @returns Generated API Key
  */
 export function generateApiKey(): string {
