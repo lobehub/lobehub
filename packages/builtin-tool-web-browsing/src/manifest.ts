@@ -6,17 +6,16 @@ import { WebBrowsingApiName } from './types';
 export const WebBrowsingManifest: BuiltinToolManifest = {
   api: [
     {
-      description:
-        'a search service with automatic engine selection. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results. An empty result is a completed search, not an error: never resend the same query — rewrite it instead (fewer quoted phrases, no site:/language modifiers, more general keywords).',
+      description: 'Search the web with automatic engine selection.',
       name: WebBrowsingApiName.search,
       parameters: {
         properties: {
           query: {
-            description: 'The search query',
+            description: 'Search query',
             type: 'string',
           },
           searchCategories: {
-            description: 'The search categories you can set:',
+            description: 'Optional categories',
             items: {
               enum: ['general', 'images', 'news', 'science', 'videos'],
               type: 'string',
@@ -24,7 +23,7 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
             type: 'array',
           },
           searchTimeRange: {
-            description: 'The time range you can set:',
+            description: 'Optional time range',
             enum: ['anytime', 'day', 'week', 'month', 'year'],
             type: 'string',
           },
@@ -34,14 +33,12 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'A crawler can visit page content. Output is a JSON object of title, content, url and website. Only pass absolute http(s) URLs of HTML/text document pages; image, SVG, font, video and archive files have no readable content. A 404/410 dead-link result is final — do not retry it.',
+      description: 'Crawl one absolute http(s) HTML/text webpage URL.',
       name: WebBrowsingApiName.crawlSinglePage,
       parameters: {
         properties: {
           url: {
-            description:
-              'The absolute http(s) URL to crawl, e.g. https://example.com/path — not a bare domain, markdown link or free text',
+            description: 'Absolute http(s) URL to crawl',
             type: 'string',
           },
         },
@@ -50,15 +47,13 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website. Only pass absolute http(s) URLs of HTML/text document pages; image, SVG, font, video and archive files have no readable content. A 404/410 dead-link result is final — do not retry it.',
+      description: 'Crawl multiple absolute http(s) HTML/text webpage URLs.',
       name: WebBrowsingApiName.crawlMultiPages,
       parameters: {
         properties: {
           urls: {
             items: {
-              description:
-                'An absolute http(s) URL to crawl, e.g. https://example.com/path — not a bare domain, markdown link or free text',
+              description: 'Absolute http(s) URL to crawl',
               type: 'string',
             },
             type: 'array',

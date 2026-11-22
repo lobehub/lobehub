@@ -16,9 +16,10 @@ import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
+import { requestMissingGrant } from './grants';
 import { buildManifest } from './manifest';
 import type { ChannelTopicScope } from './topic';
-import { continuationTopic, resolveTopic } from './topic';
+import { continuationTopic, resolveTopic, resumableTopic } from './topic';
 import { audit } from './transaction';
 import { assignedWorktree } from './worktree';
 
@@ -123,6 +124,7 @@ const deviceBlock = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
+  job: Pick<ChannelJobItem, 'requesterMemberId'>,
 ): Promise<Block | undefined> => {
   const { deviceId, deviceOwnerId, workingDirectory } = member.config ?? {};
   if (workingDirectory && !deviceId)
@@ -152,6 +154,11 @@ const deviceBlock = async (
     .select()
     .from(channelMemberGrants)
     .where(eq(channelMemberGrants.memberId, member.id));
+  // Picked while the device was public, then made private: ask its owner now.
+  if (!grant) {
+    await requestMissingGrant(tx, channel, member, job.requesterMemberId);
+    return APPROVAL_PENDING;
+  }
   if (
     !grant ||
     grant.deviceId !== deviceId ||
@@ -417,7 +424,7 @@ export const claimJob = async (
   }
 
   const blocked =
-    (await deviceBlock(tx, channel, member)) ??
+    (await deviceBlock(tx, channel, member, job)) ??
     (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
@@ -432,21 +439,26 @@ export const claimJob = async (
     ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
     : { userId: requester.userId!, workspaceId: channel.workspaceId };
 
+  // A resumed reply continues the topic its failed run worked in, when it still can.
+  const resumed = await resumableTopic(tx, job, member, scope, executionConfig);
+
   // A device picked in the Channel, else the one the Agent's own settings route the run to.
   const channelDeviceId = member.config?.deviceId;
   const routed =
     options.onlineDeviceIds && !channelDeviceId
       ? await options.routedDevice?.({
           agentId: member.agentId!,
-          continuation: await continuationTopic(
-            tx,
-            channel,
-            job,
-            member,
-            scope,
-            request.sequence,
-            executionConfig,
-          ),
+          continuation:
+            resumed ??
+            (await continuationTopic(
+              tx,
+              channel,
+              job,
+              member,
+              scope,
+              request.sequence,
+              executionConfig,
+            )),
           executionConfig,
           userId: scope.userId,
           workspaceId: scope.workspaceId,
@@ -473,20 +485,15 @@ export const claimJob = async (
   }
 
   const now = new Date();
-  const topic = await resolveTopic(
-    tx,
-    channel,
-    job,
-    member,
-    scope,
-    request.sequence,
-    executionConfig,
-  );
+  const topic =
+    resumed ??
+    (await resolveTopic(tx, channel, job, member, scope, request.sequence, executionConfig));
   const manifest = buildManifest({
     job,
     member,
     primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
     request,
+    resumed: !!resumed,
     thread,
   });
   // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage

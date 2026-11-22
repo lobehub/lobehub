@@ -18,6 +18,12 @@ import { createSkillActivationRuntime } from './skillActivation';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
+ * A skill miss lists every available skill in its content. The reported reason
+ * only needs the leading sentence that says what went wrong.
+ */
+const MAX_ERROR_REASON_LENGTH = 200;
+
+/**
  * Tools Activator Server Runtime
  * Resolves tool manifests from context.toolManifestMap (populated by the agent state).
  */
@@ -94,26 +100,40 @@ export const activatorRuntime: ServerRuntimeRegistration = {
 
     const service: ActivatorRuntimeService = {
       activateSkill: getSkillsRuntime
-        ? async (args) => {
+        ? async (args, options) => {
+            const reportFailure = (errorReason: string) =>
+              emitActivationOutcome({
+                errorReason,
+                identifiers: [args.name],
+                kind: 'skill',
+                status: 'failed',
+                summary: 'Activator failed to select a skill.',
+              });
+
+            let result: Awaited<ReturnType<SkillsExecutionRuntime['activateSkill']>>;
             try {
-              const result = await (await getSkillsRuntime()).activateSkill(args);
+              result = await (await getSkillsRuntime()).activateSkill(args);
+            } catch (error) {
+              await reportFailure((error as Error).message);
+              throw error;
+            }
+
+            // The skills runtime answers a skill it cannot open with
+            // `success: false` instead of throwing, so the result decides what
+            // is reported. A miss while probing an `activateTools` identifier
+            // is not a skill event: the identifier simply names nothing.
+            if (result.success) {
               await emitActivationOutcome({
                 identifiers: [args.name],
                 kind: 'skill',
                 status: 'succeeded',
                 summary: 'Activator selected a skill.',
               });
-              return result;
-            } catch (error) {
-              await emitActivationOutcome({
-                errorReason: (error as Error).message,
-                identifiers: [args.name],
-                kind: 'skill',
-                status: 'failed',
-                summary: 'Activator failed to select a skill.',
-              });
-              throw error;
+            } else if (!options?.probe) {
+              await reportFailure(result.content.slice(0, MAX_ERROR_REASON_LENGTH));
             }
+
+            return result;
           }
         : undefined,
       // A device-locked run walls the picker off, so activating it can only fail;

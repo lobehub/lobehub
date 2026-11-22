@@ -7,6 +7,17 @@ export const ANTIGRAVITY_BASE_ARGS = [
   '--dangerously-skip-permissions',
 ] as const;
 
+/** A Connect service can inherit an old SSH session that makes agy skip the desktop keyring. */
+export const getAntigravitySpawnEnv = <T extends Record<string, string | undefined>>(env: T): T => {
+  if (env.LOBEHUB_CONNECT_SERVICE !== '1') return env;
+
+  const childEnv = { ...env };
+  delete childEnv.SSH_CLIENT;
+  delete childEnv.SSH_CONNECTION;
+  delete childEnv.SSH_TTY;
+  return childEnv;
+};
+
 // agy 1.5.7+ defaults to Auto on supported systems. Use per-run settings
 // so Full access does not depend on the CLI's saved sandbox or startup mode.
 const FULL_ACCESS_SETTINGS = JSON.stringify({

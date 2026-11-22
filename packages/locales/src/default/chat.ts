@@ -317,7 +317,7 @@ export default {
   'agentDocument.portal.titlePlaceholder': 'Untitled document',
   'agentDocument.portal.export': 'Export',
   'agentNotFound.desc':
-    'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+    "It may have been deleted, or it's another member's private agent. Ask its creator to publish it to the workspace.",
   'permission.configAccess.agentChatOnly':
     'You can only use this Agent, not configure it. You were returned to chat.',
   'permission.configAccess.agentManageRestricted':
@@ -328,7 +328,9 @@ export default {
     'You can only use this Agent Group, not configure it. You were returned to chat.',
   'permission.configAccess.groupRoleRestricted':
     'Your workspace role cannot configure Agent Groups. You were returned to chat.',
-  'agentNotFound.title': 'Agent Unavailable',
+  'agentNotFound.descPersonal': 'It may have been deleted, or the link is wrong.',
+  'agentNotFound.title': "This agent doesn't exist or you don't have access",
+  'agentNotFound.viewAgents': 'View all agents',
   'agentSkillModal.frontmatterInvalid':
     "This skill's SKILL.md has malformed frontmatter, so its name and description come from the last saved version. Open the document to fix it.",
   'agentSkillModal.loadFailed': "Couldn't load this skill",
@@ -1340,6 +1342,17 @@ export default {
   'minimap.senderAssistant': 'Agent',
   'minimap.senderUser': 'You',
   'modelSelector.model': 'Model',
+  'privateAgentLink.desc':
+    "This is your private agent, so other members can't open the link. Publish it to the workspace to share it.",
+  'privateAgentLink.title': 'Link copied, but only you can open it',
+  'createVisibility.inheritedPrivate': 'Follows its folder: only you can see it.',
+  'createVisibility.inheritedPublic': 'Follows its folder: everyone in the workspace can see it.',
+  'createVisibility.label': 'Visibility',
+  'createVisibility.private': 'Private',
+  'createVisibility.privateHint':
+    "Only you can see it. Other members can't open its link until you publish it to the workspace.",
+  'createVisibility.public': 'Workspace',
+  'createVisibility.publicHint': 'Everyone in the workspace can see and use it.',
   'createModal.createBlank': 'Start Blank',
   'createModal.groupPlaceholder': 'Describe what this Group should do...',
   'createModal.groupTitle': 'What should this Group do?',
@@ -1623,6 +1636,12 @@ export default {
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
     'Publish the fixed device to the workspace, or let members choose a device, before publishing this Agent.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
+  'agent.visibility': 'Visibility',
+  'agent.visibility.change': 'Change visibility',
+  'agent.visibility.private': 'Private',
+  'agent.visibility.privateDesc': 'Only you can see it',
+  'agent.visibility.workspace': 'Workspace',
+  'agent.visibility.workspaceDesc': 'Workspace members can access it',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
     'Other workspace members will be able to see this file. You will not be able to make it private again.',
