@@ -88,7 +88,7 @@ describe('useChatFollowUp', () => {
       agency.isPreferenceLoading = false;
     });
 
-    it('skips extraction on desktop and still clears on send', async () => {
+    it('needs no global model and still clears on send', async () => {
       desktop.isDesktop = true;
       agency.config = { heterogeneousProvider: { type: 'claude-code' } };
       (useUserStore as unknown as Mock).mockImplementation((selector: any) =>
@@ -100,6 +100,13 @@ describe('useChatFollowUp', () => {
       expect(hooks.onAssistantTurnSettled).toBeUndefined();
       await hooks.onBeforeSendMessage?.({} as any);
       expect(clear).toHaveBeenCalledWith(CONVERSATION_KEY);
+    });
+
+    it('leaves the extraction decision to the executor for a local run', () => {
+      desktop.isDesktop = true;
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+
+      expect(renderNative().onAssistantTurnSettled).toBeUndefined();
     });
 
     it('keeps server extraction for Claude Code on the web', () => {

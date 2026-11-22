@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAgentStoreState } from '@/store/agent/store';
 import { getFollowUpActionStoreState } from '@/store/followUpAction/store';
 
-import { applyPromptSuggestion, resolvePromptSuggestionArgs } from './promptSuggestions';
+import { applyPromptSuggestion, preparePromptSuggestions } from './promptSuggestions';
 
 const getChatConfigById = vi.hoisted(() => vi.fn());
 
@@ -13,33 +13,36 @@ vi.mock('@/store/agent/selectors', () => ({
 vi.mock('@/store/agent/store', () => ({ getAgentStoreState: vi.fn(() => ({})) }));
 vi.mock('@/store/followUpAction/store', () => ({ getFollowUpActionStoreState: vi.fn() }));
 
-describe('resolvePromptSuggestionArgs', () => {
+describe('preparePromptSuggestions', () => {
+  const clear = vi.fn();
+  const claudeCode = { adapterType: 'claude-code', agentId: 'a', conversationKey: 'key' };
   const withConfig = (enableFollowUpChips?: boolean) =>
     getChatConfigById.mockReturnValue(() => ({ enableFollowUpChips }));
 
   beforeEach(() => {
+    clear.mockClear();
     vi.mocked(getAgentStoreState).mockReturnValue({} as any);
+    vi.mocked(getFollowUpActionStoreState).mockReturnValue({ clear } as any);
   });
 
   it('asks Claude Code for suggestions when the agent turned them on', () => {
     withConfig(true);
-    expect(
-      resolvePromptSuggestionArgs({ adapterType: 'claude-code', agentId: 'a', args: ['--x'] }),
-    ).toEqual(['--x', '--prompt-suggestions=true']);
+    expect(preparePromptSuggestions({ ...claudeCode, args: ['--x'] })).toEqual([
+      '--x',
+      '--prompt-suggestions=true',
+    ]);
+    expect(clear).toHaveBeenCalledWith('key');
   });
 
   it('leaves args alone when the toggle is off', () => {
     withConfig(false);
-    expect(
-      resolvePromptSuggestionArgs({ adapterType: 'claude-code', agentId: 'a', args: ['--x'] }),
-    ).toEqual(['--x']);
+    expect(preparePromptSuggestions({ ...claudeCode, args: ['--x'] })).toEqual(['--x']);
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it('never adds the flag to another CLI', () => {
     withConfig(true);
-    expect(resolvePromptSuggestionArgs({ adapterType: 'codex', agentId: 'a', args: [] })).toEqual(
-      [],
-    );
+    expect(preparePromptSuggestions({ ...claudeCode, adapterType: 'codex', args: [] })).toEqual([]);
   });
 });
 

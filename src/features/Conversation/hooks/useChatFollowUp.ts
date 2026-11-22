@@ -26,9 +26,10 @@ interface UseChatFollowUpParams {
  * returns an empty `ConversationHooks` object so the merge chain treats it as
  * identity.
  *
- * A Claude Code agent running on this desktop gets its suggestion from the CLI
- * instead: no global model is needed, no extraction runs, and only the clearing
- * stays. Its device and sandbox runs go through the gateway and keep extraction.
+ * A Claude Code agent running on this desktop gets its suggestion from the CLI,
+ * which needs no global model. This watcher fires when the reply stops rendering,
+ * before that suggestion arrives, so the hetero executor owns the extraction
+ * fallback at run end (see `fallBackToFollowUpExtraction`). Only clearing stays.
  *
  * Registration ordering note: callers MUST compose this hook LAST in a
  * `mergeConversationHooks(...)` chain. The hook's
@@ -48,8 +49,7 @@ export const useChatFollowUp = ({
     agentId || undefined,
     { topicId: topicId ?? null },
   );
-  // While the member's device pick loads, the target can still flip: keep extraction.
-  const usesNativeSuggestions =
+  const nativeSuggestionsActive =
     !isPreferenceLoading &&
     agentChatConfig?.enableFollowUpChips === true &&
     supportsNativePromptSuggestions(agencyConfig, workspaceScoped);
@@ -67,22 +67,23 @@ export const useChatFollowUp = ({
   ]);
 
   return useMemo<ConversationHooks>(() => {
-    if ((!effective && !usesNativeSuggestions) || !conversationKey || !topicId) return {};
+    if ((!effective && !nativeSuggestionsActive) || !conversationKey || !topicId) return {};
 
     const clearSlot = () => useFollowUpActionStore.getState().clear(conversationKey);
 
     return {
-      ...(!usesNativeSuggestions && {
-        onAssistantTurnSettled: async (_messageId, { reason }) => {
-          if (reason === 'stopped') return;
-          await useFollowUpActionStore.getState().fetchFor(conversationKey, {
-            hint: { kind: 'chat' },
-            modelConfig: { model: globalConfig.model, provider: globalConfig.provider },
-            threadId,
-            topicId,
-          });
-        },
-      }),
+      ...(effective &&
+        !nativeSuggestionsActive && {
+          onAssistantTurnSettled: async (_messageId, { reason }) => {
+            if (reason === 'stopped') return;
+            await useFollowUpActionStore.getState().fetchFor(conversationKey, {
+              hint: { kind: 'chat' },
+              modelConfig: { model: globalConfig.model, provider: globalConfig.provider },
+              threadId,
+              topicId,
+            });
+          },
+        }),
       onBeforeContinue: async () => {
         clearSlot();
       },
@@ -95,7 +96,7 @@ export const useChatFollowUp = ({
     };
   }, [
     effective,
-    usesNativeSuggestions,
+    nativeSuggestionsActive,
     conversationKey,
     globalConfig.model,
     globalConfig.provider,

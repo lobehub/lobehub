@@ -97,7 +97,11 @@ import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { waitForPersistQueue } from './persistQueue';
-import { applyPromptSuggestion, resolvePromptSuggestionArgs } from './promptSuggestions';
+import {
+  applyPromptSuggestion,
+  fallBackToFollowUpExtraction,
+  preparePromptSuggestions,
+} from './promptSuggestions';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
 import {
   buildEditedTopicPreviousConversation,
@@ -1739,10 +1743,11 @@ export const executeHeterogeneousAgent = async (
       if (deepSeekAuth.apiKey) sessionEnv.DEEPSEEK_API_KEY = deepSeekAuth.apiKey;
     }
 
-    const spawnArgs = resolvePromptSuggestionArgs({
+    const spawnArgs = preparePromptSuggestions({
       adapterType,
       agentId: context.agentId,
       args: buildHeteroSpawnArgs(heterogeneousProvider),
+      conversationKey: messageMapKey(context),
     });
     const providerBinding = serverDefaultBindingActive
       ? {
@@ -2214,6 +2219,18 @@ export const executeHeterogeneousAgent = async (
           // the CLI itself reported as stopped (`interrupted`), which is not a
           // finished run and must not announce itself as one.
           if (!isAborted() && isCleanCompletion) {
+            const conversationKey = messageMapKey(context);
+            fallBackToFollowUpExtraction({
+              adapterType,
+              agentId: context.agentId,
+              assistantMessageId: mainState.currentAssistantId,
+              conversationKey,
+              messages:
+                get().dbMessagesMap?.[conversationKey] ?? get().messagesMap?.[conversationKey],
+              threadId: context.threadId,
+              topicId: context.topicId,
+            });
+
             await runLifecycle.afterRunComplete({
               context,
               notification: { content: finalContent },
