@@ -13,7 +13,7 @@ const memberGroups: WorkspaceSettingCategoryGroup[] = [
   {
     items: [
       { icon: null, key: WorkspaceSettingsTabs.Profile, label: 'Profile' },
-      { icon: null, key: WorkspaceSettingsTabs.ChatPreference, label: 'Chat Preferences' },
+      { icon: null, key: WorkspaceSettingsTabs.Conversation, label: 'Conversation' },
     ],
     key: WorkspaceSettingsGroupKey.Account,
     title: 'Account',
@@ -68,18 +68,18 @@ describe('workspace settings search scope', () => {
     );
   });
 
-  it('deep-links follow-up suggestions to the chat preferences row for members', () => {
+  it('deep-links follow-up suggestions to the conversation row for members', () => {
     const urls = search('follow up', memberGroups).map((result) => result.url);
 
-    expect(urls).toContain('/acme/settings/chat-preference#chat-preference-followUpAction');
+    expect(urls).toContain('/acme/settings/conversation#conversation-followUpAction');
     // Service Model is admin-only: hidden from the sidebar, so not searchable
     expect(urls.some((url) => url.includes('service-model'))).toBe(false);
   });
 
-  it('sends admins searching follow-up only to chat preferences', () => {
+  it('sends admins searching follow-up only to conversation', () => {
     const urls = search('follow up', adminGroups).map((result) => result.url);
 
-    expect(urls).toContain('/acme/settings/chat-preference#chat-preference-followUpAction');
+    expect(urls).toContain('/acme/settings/conversation#conversation-followUpAction');
     // The workspace Service Model page no longer renders these rows
     expect(urls.some((url) => url.includes('service-model'))).toBe(false);
   });

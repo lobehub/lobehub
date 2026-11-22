@@ -22,7 +22,7 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.Webhooks,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Budget,
-  WorkspaceSettingsTabs.ChatPreference,
+  WorkspaceSettingsTabs.Conversation,
   WorkspaceSettingsTabs.Creds,
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,

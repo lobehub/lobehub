@@ -46,22 +46,25 @@ export interface ToolSystemRoleConfig {
 export const selectToolPromptManifests = (manifests?: LobeToolManifest[]): LobeToolManifest[] =>
   (manifests ?? []).filter((manifest) => manifest.api.length > 0 || manifest.systemRole);
 
-/** Tool guidance shared by the leading system prompt and mid-conversation discovery. */
-export const renderToolInstructions = (manifests: LobeToolManifest[]): string => {
-  const resolver = new ToolNameResolver();
-  const tools: Tool[] = selectToolPromptManifests(manifests).map((manifest) => ({
+/** The prompt entry a manifest contributes to the tool instructions. */
+export const toToolPrompt = (manifest: LobeToolManifest): Tool => {
+  const toolNameResolver = new ToolNameResolver();
+
+  return {
     apis: manifest.api.map((api): API => ({
       desc: api.description,
-      name: resolver.generate(manifest.identifier, api.name, manifest.type),
+      name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
     })),
     description: manifest.meta?.description,
     identifier: manifest.identifier,
     name: manifest.meta?.title || manifest.identifier,
     systemRole: manifest.systemRole,
-  }));
-
-  return pluginPrompts({ tools });
+  };
 };
+
+/** Render the same tool definitions in the initial prompt and after discovery. */
+export const renderToolInstructions = (manifests: LobeToolManifest[]): string =>
+  pluginPrompts({ tools: selectToolPromptManifests(manifests).map(toToolPrompt) });
 
 /**
  * Tool System Role Provider
@@ -117,6 +120,14 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return undefined;
     }
 
-    return renderToolInstructions(manifests);
+    const toolSystemRole = renderToolInstructions(manifests);
+
+    if (!toolSystemRole) {
+      log('Failed to generate tool system role content');
+      return undefined;
+    }
+
+    log(`Generated tool system role for ${manifests.length} tools`);
+    return toolSystemRole;
   }
 }
