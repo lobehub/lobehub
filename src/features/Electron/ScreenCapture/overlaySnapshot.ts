@@ -53,7 +53,11 @@ const createInboxOverlayAgentOption = (
   inboxAgentId: string,
   inboxMeta?: OverlayInboxMeta,
 ): ScreenCaptureAgentOption => ({
-  avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
+  // The overlay draws emoji and images only; a picked character falls back to the inbox image.
+  avatar:
+    inboxMeta?.avatar && !isGeneratedAgentAvatar(inboxMeta.avatar)
+      ? inboxMeta.avatar
+      : DEFAULT_INBOX_AVATAR,
   backgroundColor: inboxMeta?.backgroundColor ?? undefined,
   id: inboxAgentId,
   title: agentDisplayName(inboxMeta, LOBE_AI_TITLE),
