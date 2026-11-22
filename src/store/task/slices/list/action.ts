@@ -62,6 +62,9 @@ export const COMPLETE_TASK_LIST_PAGE_SIZE = 500;
 /** Page size of the Tasks page's paginated collections (scheduled, "My tasks"). */
 export const TASK_COLLECTION_PAGE_SIZE = 50;
 
+/** How many past runs each row of the scheduled tasks table shows. */
+export const SCHEDULED_TASK_RECENT_RUNS = 5;
+
 export interface ScheduledTaskListOptions {
   agentId?: string;
   /** The Tasks page filter; Home's roll-up sends none. */
@@ -69,6 +72,8 @@ export interface ScheduledTaskListOptions {
   limit?: number;
   offset?: number;
   projectId?: string;
+  /** Rows carry their latest N runs and `awaitingHuman`; Home's roll-up asks for none. */
+  recentRuns?: number;
 }
 
 /**
@@ -82,6 +87,7 @@ export const scheduledTaskListQuery = ({
   limit,
   offset,
   projectId,
+  recentRuns,
 }: ScheduledTaskListOptions): TaskListQuery => ({
   agentId: projectId ? undefined : agentId,
   automated: true,
@@ -90,6 +96,8 @@ export const scheduledTaskListQuery = ({
   offset,
   orderBy: 'updatedAt',
   projectId,
+  // Left out of the query (and its key) when unset, so Home's roll-up keeps its entry.
+  ...(recentRuns ? { recentRuns } : {}),
   visibility: 'all',
 });
 export const COMPLETE_TASK_LIST_MAX_ITEMS = 1000;
@@ -214,6 +222,7 @@ export class TaskListSliceActionImpl {
       includeArchived: query.includeArchived,
       orderBy: query.orderBy,
       projectId: query.projectId,
+      ...(query.recentRuns && { recentRuns: query.recentRuns }),
       ...(query.scope && { scope: query.scope }),
       statuses: query.statuses,
       visibility: filterToServerVisibility(query.visibility),

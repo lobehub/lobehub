@@ -16,7 +16,7 @@ import {
 import * as stylex from '@stylexjs/stylex';
 import { ClipboardCheckIcon, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Components } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
@@ -46,11 +46,8 @@ import {
   normalizeTaskGroupBy,
 } from './listViewOptions';
 import SelectableTaskRow, { selectableTaskItemClassName } from './selection/SelectableTaskRow';
-import { useTaskSelectionStore } from './selection/store';
 import TaskBulkActionBar from './selection/TaskBulkActionBar';
-import { isEditableTarget } from './selection/taskSelectionModel';
-import { useTaskBatchUndo } from './selection/undo/useTaskBatchUndo';
-import { useSelectionScope } from './selection/useSelectionScope';
+import { useTaskListSelection } from './selection/useTaskListSelection';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
@@ -334,63 +331,11 @@ const TaskList = memo<TaskListProps>((props) => {
     return [...ids];
   }, [groupedTaskEntries]);
   const listRef = useRef<HTMLDivElement>(null);
-  const selectableIdsRef = useRef(selectableIds);
-  selectableIdsRef.current = selectableIds;
-  const getSelectionOrder = useCallback(() => selectableIdsRef.current, []);
-
-  // A selection never outlives the rows it names: prune on every list change,
-  // and drop it when this list (or its collection) goes away.
-  useEffect(() => {
-    useTaskSelectionStore.getState().prune(new Set(selectableIds));
-  }, [selectableIds]);
-  const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
-  useSelectionScope(selectionScope);
-  const { undoLast } = useTaskBatchUndo();
-  const undoLastRef = useRef(undoLast);
-  useEffect(() => {
-    undoLastRef.current = undoLast;
-  }, [undoLast]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) return;
-      // Only when nothing else holds focus, or focus is on the list itself:
-      // ⌘A over a side panel's text keeps selecting that text, and Esc inside
-      // a drawer or popover stays theirs.
-      const target = event.target as Node | null;
-      const onList = !!target && !!listRef.current?.contains(target);
-      if (target !== document.body && !onList) return;
-      const selection = useTaskSelectionStore.getState();
-      if (
-        event.key.toLowerCase() === 'a' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        if (selectableIdsRef.current.length === 0) return;
-        event.preventDefault();
-        selection.selectAll(selectableIdsRef.current);
-        return;
-      }
-      // ⌘/Ctrl+Z: undo the most recent batch action (session-wide stack, so it
-      // still works after its toast is gone). Shift+⌘Z is left to the page.
-      if (
-        event.key.toLowerCase() === 'z' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        if (undoLastRef.current()) event.preventDefault();
-        return;
-      }
-      if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
-        event.preventDefault();
-        selection.clear();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  const { getSelectionOrder } = useTaskListSelection({
+    listRef,
+    scope: props.selectionScope ?? (items ? 'items' : (queryKey ?? '')),
+    selectableIds,
+  });
 
   const virtualItems = useMemo(
     () =>
