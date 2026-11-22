@@ -489,7 +489,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     });
   });
 
-  it('falls back to the no-reason rejection string when rejectionReason is omitted', async () => {
+  it('stores a default reason when rejectionReason is omitted', async () => {
     await service.execAgent({
       ...baseParams,
       resumeApproval: {
@@ -502,10 +502,12 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     expect(mockResolveHumanApproval).toHaveBeenCalledWith(
       [
         {
-          content: 'User reject this tool calling without reason',
+          content:
+            'User reject this tool calling with reason: [unspecified] The user rejected this call without giving a specific reason.',
           id: 'tool-msg-1',
           intervention: {
-            rejectedReason: undefined,
+            rejectedReason:
+              '[unspecified] The user rejected this call without giving a specific reason.',
             resolutionRequestId: expect.stringMatching(/^legacy_/),
             status: 'rejected',
           },

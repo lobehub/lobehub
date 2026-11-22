@@ -20,6 +20,30 @@ const wrapper = {
 };
 
 describe('ResolveAgentInterventionSchema', () => {
+  it.each([{}, { reason: '' }, { reason: '   ' }])(
+    'stores a default reason for a reject without one (%j)',
+    (reasonInput) => {
+      const parsed = ResolveAgentInterventionSchema.parse({
+        ...wrapper,
+        action: { itemIds: ['item-1'], type: 'reject_continue', ...reasonInput },
+      });
+
+      expect(parsed.action).toMatchObject({
+        reason: '[unspecified] The user rejected this call without giving a specific reason.',
+        type: 'reject_continue',
+      });
+    },
+  );
+
+  it('keeps the reason the user gave on a reject', () => {
+    const parsed = ResolveAgentInterventionSchema.parse({
+      ...wrapper,
+      action: { itemIds: ['item-1'], reason: ' [too_risky] no ', type: 'reject_continue' },
+    });
+
+    expect(parsed.action).toMatchObject({ reason: '[too_risky] no' });
+  });
+
   it('accepts the frozen approve contract without client authority fields', () => {
     expect(
       ResolveAgentInterventionSchema.parse({
