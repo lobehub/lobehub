@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChannelVisibility } from '@lobechat/types';
+import type { ChannelMetadata, ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
@@ -38,7 +38,6 @@ import {
   listShareVisitorTopics,
   readShareVisitorChannel,
 } from '@/database/repositories/channel/shareVisitors';
-import type { ChannelItem } from '@/database/schemas';
 import { agents, users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -536,7 +535,13 @@ export class ChannelService {
   changed = (channelId: string) => notifyChannel(this.db, channelId);
 
   /** Adds `displayTitle` to a Channel handed back to a client; see `withDisplayTitle`. */
-  private withDisplayTitle = async <T extends { channel: ChannelItem }>(access: T) => ({
+  private withDisplayTitle = async <
+    T extends {
+      channel: { metadata: ChannelMetadata | null; projectId: string | null; title: string };
+    },
+  >(
+    access: T,
+  ) => ({
     ...access,
     channel: await withDisplayTitle(this.db, access.channel),
   });
