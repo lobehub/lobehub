@@ -48,6 +48,10 @@ vi.mock('@/server/services/deviceGateway', () => ({
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
 vi.mock('./notify', () => ({ notifyChannel: notify }));
+vi.mock('./deviceGrantCard', () => ({
+  announceDeviceGrants: vi.fn(),
+  refreshDeviceGrantCard: vi.fn(),
+}));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
 
 describe('changing an Agent member’s channel environment', () => {
