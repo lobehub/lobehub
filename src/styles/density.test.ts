@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DENSITY_TOKENS } from './density';
+import { DENSITY_TOKENS, resolveEffectiveDensity } from './density';
 
 describe('DENSITY_TOKENS', () => {
   it('uses 32px rows in compact', () => {
@@ -25,5 +25,22 @@ describe('DENSITY_TOKENS', () => {
 
   it('uses 36px rows in loose', () => {
     expect(DENSITY_TOKENS.loose).toMatchObject({ fontSize: 14, iconSize: 18, rowHeight: 36 });
+  });
+});
+
+describe('resolveEffectiveDensity', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the stored density on desktop bundles', () => {
+    vi.stubGlobal('__MOBILE__', false);
+    expect(resolveEffectiveDensity('compact')).toBe('compact');
+    expect(resolveEffectiveDensity('loose')).toBe('loose');
+  });
+
+  it('forces loose on the mobile bundle whatever the preference says', () => {
+    vi.stubGlobal('__MOBILE__', true);
+    expect(resolveEffectiveDensity('compact')).toBe('loose');
   });
 });

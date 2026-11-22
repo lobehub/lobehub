@@ -16,7 +16,7 @@ import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
-import { useDensityTokens } from '@/styles/density';
+import { useDensity, useDensityTokens } from '@/styles/density';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { openAddKnowledgeBaseModal } from './AddKnowledgeBaseModal';
@@ -26,6 +26,7 @@ type ProjectKnowledgeBase = NonNullable<ProjectDetail['knowledgeBases']>[number]
 export function ProjectKnowledgeBaseSettings({ detail }: { detail: ProjectDetail }) {
   const { t } = useTranslation('project');
   const { pageTitleFontSize } = useDensityTokens();
+  const { compact, tokens } = useDensity();
   const navigate = useWorkspaceAwareNavigate();
   const updateProjectKnowledgeBase = useProjectStore((s) => s.updateProjectKnowledgeBase);
   const removeProjectKnowledgeBase = useProjectStore((s) => s.removeProjectKnowledgeBase);
@@ -91,12 +92,13 @@ export function ProjectKnowledgeBaseSettings({ detail }: { detail: ProjectDetail
               align="center"
               gap={12}
               key={item.knowledgeBase.id}
-              padding={16}
+              paddingBlock={compact ? 8 : 16}
+              paddingInline={16}
               style={index ? { borderTop: `1px solid ${cssVar.colorBorderSecondary}` } : undefined}
             >
               <KnowledgeIcon
                 name={item.knowledgeBase.name}
-                size={28}
+                size={tokens.headerAvatarSize}
                 type={KnowledgeType.KnowledgeBase}
               />
               <Flexbox

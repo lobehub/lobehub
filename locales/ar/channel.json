@@ -91,7 +91,6 @@
   "events.youInvited": "لقد دعوت {{names}} إلى القناة",
   "events.youInvitedMembers": "لقد دعوت <members/> إلى القناة",
   "failure.locate": "عرض الرسالة",
-  "failure.messageLabel": "فشل الرد: {{names}}",
   "failure.title": "الردود الفاشلة · {{count}}",
   "followers": "الردود من: {{names}}",
   "invite.directHint": "الدعوة هنا تبدأ قناة جديدة مع {{name}} والأعضاء الذين تختارهم. تبقى هذه المحادثة مع {{name}} كما هي.",

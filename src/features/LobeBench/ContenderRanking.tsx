@@ -26,6 +26,7 @@ import {
 import { adaptBrandColor, findBrandColor } from '@/features/LobeBench/modelBrand';
 import RankingBars, { type RankingBarRow } from '@/features/LobeBench/RankingBars';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   title: {
@@ -37,7 +38,7 @@ const styles = stylex.create({
   empty: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlock: 40,
     paddingInline: 24,
     borderWidth: 1,

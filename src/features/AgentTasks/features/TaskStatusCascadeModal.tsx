@@ -16,11 +16,13 @@ import {
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { STATUS_META } from './taskStatusMeta';
 
 const styles = createStaticStyles(({ css }) => ({
   actions: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   content: css`
@@ -35,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};

@@ -11,7 +11,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
 import { useProjectStore } from '@/store/project';
@@ -101,7 +101,7 @@ const CreateFromGithubContent = () => {
 
   const connectGithub = () => {
     close();
-    navigate(GITHUB_RETURN_TO);
+    navigate(buildConnectorPagePath('github'));
   };
 
   const handleCreate = async () => {

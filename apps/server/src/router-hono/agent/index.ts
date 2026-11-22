@@ -6,7 +6,7 @@ import { agentInboxReport } from './handlers/agentInboxReport';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
-import { channelAdvance, channelCallback } from './handlers/channel';
+import { channelAdvance, channelCallback, channelWatchReport } from './handlers/channel';
 import { deviceToolCompletion } from './handlers/deviceToolCompletion';
 import {
   documentAccess,
@@ -56,6 +56,7 @@ app.post('/run', qstashAuth(), runStep);
 app.get('/run', runStepHealth);
 
 app.post('/channel/advance', qstashAuth(), channelAdvance);
+app.post('/channel/watch-report', qstashAuth(), channelWatchReport);
 app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 
 // POST /api/agent/webhooks/inbox-report — a mail-woken run finished: post its answer to the

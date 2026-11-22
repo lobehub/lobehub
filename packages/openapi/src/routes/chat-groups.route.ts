@@ -109,6 +109,7 @@ ChatGroupRoutes.delete(
 ChatGroupRoutes.post(
   '/:id/members',
   routeDoc({
+    operationId: 'chatGroups.addMembers',
     data: ChatGroupSchema,
     errors: [404],
     summary: 'Add members to a chat group',
@@ -124,6 +125,7 @@ ChatGroupRoutes.post(
 ChatGroupRoutes.delete(
   '/:id/members',
   routeDoc({
+    operationId: 'chatGroups.removeMembers',
     data: ChatGroupSchema,
     description: 'Detaches the agents and answers with the updated group.',
     errors: [404, 409],

@@ -4,8 +4,6 @@ import type { ResponseAnimationStyle } from '../../aiProvider';
 
 export type AnimationMode = 'disabled' | 'agile' | 'elegant';
 
-export type ContextMenuMode = 'disabled' | 'default';
-
 export type InterfaceDensity = 'compact' | 'loose';
 
 /**
@@ -26,7 +24,6 @@ export const resolveFollowUpMode = (
 
 export interface UserGeneralConfig {
   animationMode?: AnimationMode;
-  contextMenuMode?: ContextMenuMode;
   costEstimateWarningThreshold?: number;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -45,6 +42,11 @@ export interface UserGeneralConfig {
    * @default true
    */
   enablePasteAutoConvert?: boolean;
+  /**
+   * Whether to show the voice message button in the chat input bar.
+   * @default false
+   */
+  enableVoiceMessage?: boolean;
   /**
    * Whether a turn's tool workflow starts expanded while the agent is still
    * running. Off keeps the running turn to a single live headline row.
@@ -70,6 +72,7 @@ export interface UserGeneralConfig {
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
   primaryColor?: LobePrimaryColor;
+  /** A locale chosen by the user. An empty string records an explicit Automatic choice. */
   responseLanguage?: string;
   /**
    * Whether a tool call that only reads an image (e.g. Claude Code `Read` of a

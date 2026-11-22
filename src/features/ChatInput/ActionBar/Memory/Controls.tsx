@@ -12,6 +12,7 @@ import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Lev
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -40,7 +41,11 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  title: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
 });
 
 interface ToggleOption {
@@ -91,7 +96,7 @@ const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
  * separator above itself and disappears entirely while memory is off, so a host
  * panel never ends up with a divider that separates nothing.
  */
-export const MemoryEffortControl = memo(() => {
+export const MemoryEffortControl = memo<{ showDivider?: boolean }>(({ showDivider = true }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -103,7 +108,7 @@ export const MemoryEffortControl = memo(() => {
 
   return (
     <>
-      <Divider style={{ margin: 0 }} />
+      {showDivider && <Divider style={{ margin: 0 }} />}
       <Flexbox horizontal align={'center'} gap={16} padding={8}>
         <Flexbox flex={1} gap={4} style={{ minWidth: 100 }}>
           <div {...stylex.props(styles.title)}>{t('memory.effort.title')}</div>

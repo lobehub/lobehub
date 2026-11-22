@@ -3,11 +3,24 @@ import debug from 'debug';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { findOwnLiveRuns } from '@/server/services/aiAgent/steerQueue/liveRuns';
 
-import { assertCanUseOperationAgent } from './guards';
+import { assertCanUseAgentRunConversation, assertCanUseOperationAgent } from './guards';
 import { aiAgentWriteProcedure } from './procedures';
 
 const log = debug('lobe-server:ai-agent-router');
+
+/** What `interruptTask` answers; `running` / `stopped` are set when it stopped a whole topic. */
+type InterruptTaskResult = {
+  deviceCancellationConfirmed?: boolean;
+  operationId?: string;
+  /** Live runs found on the topic (topic-only stop). */
+  running?: number;
+  /** Of those, the ones confirmed stopped. */
+  stopped?: number;
+  success: boolean;
+  threadId?: string;
+};
 
 /**
  * Schema for interruptTask - interrupt a running task
@@ -22,11 +35,13 @@ const InterruptTaskSchema = z
      * Topic ID — used to cancel device-backed heterogeneous agent tasks.
      * When provided and the topic's runningOperation has a deviceId, the server
      * will dispatch a cancelHeteroTask tool call to kill the device process.
+     * On its own (no operation or thread), stops every live run the caller
+     * owns on the topic's main line (`lh topic stop`).
      */
     topicId: z.string().optional(),
   })
-  .refine((data) => data.threadId || data.operationId, {
-    message: 'Either threadId or operationId must be provided',
+  .refine((data) => data.threadId || data.operationId || data.topicId, {
+    message: 'Either threadId, operationId or topicId must be provided',
   });
 
 /**
@@ -48,10 +63,37 @@ const StartExecutionSchema = z.object({
 export const runControlRouter = router({
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }): Promise<InterruptTaskResult> => {
       const { threadId, operationId, topicId } = input;
 
       log('interruptTask: threadId=%s, operationId=%s, topicId=%s', threadId, operationId, topicId);
+
+      // A topic alone: stop the caller's own live runs on its main line.
+      if (!operationId && !threadId && topicId) {
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        const runIds = await findOwnLiveRuns(
+          { db: ctx.serverDB, workspaceId: ctx.workspaceId ?? undefined },
+          { threadId: null, topicId, userId: ctx.userId },
+        );
+        let stopped = 0;
+        for (const runId of runIds) {
+          const result = await ctx.aiAgentService.interruptTask({ operationId: runId, topicId });
+          if (result.success) stopped += 1;
+        }
+        // `success: false` when a run could not be confirmed stopped (a device
+        // process that did not answer): it stays live so the stop can be retried.
+        return {
+          operationId: runIds[0],
+          running: runIds.length,
+          stopped,
+          success: stopped === runIds.length,
+        };
+      }
 
       try {
         return await ctx.aiAgentService.interruptTask({ operationId, threadId, topicId });

@@ -53,7 +53,6 @@ export class MessageModel {
   queryLastUserMessageByTopics: MessageConversationQueries['queryLastUserMessageByTopics'];
   query: MessageConversationQueries['query'];
   queryForVisitor: MessageConversationQueries['queryForVisitor'];
-  countByTopic: MessageConversationQueries['countByTopic'];
   queryTopicTranscript: MessageConversationQueries['queryTopicTranscript'];
   queryTopicMessageTree: MessageConversationQueries['queryTopicMessageTree'];
   queryTopicMessagesByCursor: MessageConversationQueries['queryTopicMessagesByCursor'];
@@ -173,7 +172,6 @@ export class MessageModel {
     this.queryLastUserMessageByTopics = conversation.queryLastUserMessageByTopics;
     this.query = conversation.query;
     this.queryForVisitor = conversation.queryForVisitor;
-    this.countByTopic = conversation.countByTopic;
     this.queryTopicTranscript = conversation.queryTopicTranscript;
     this.queryTopicMessageTree = conversation.queryTopicMessageTree;
     this.queryTopicMessagesByCursor = conversation.queryTopicMessagesByCursor;

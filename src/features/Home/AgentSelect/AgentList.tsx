@@ -21,12 +21,11 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { type AgentRow, useHomeAgentRows } from './useHomeAgentRows';
 
-/** Row height hint for the virtual list — keep in sync with `styles.item`. */
-const ROW_HEIGHT = 36;
-const SECTION_HEIGHT = 28;
 const MAX_LIST_HEIGHT = 360;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -35,9 +34,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   empty: css`
     padding-block: 24px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
-    font-size: 13px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
@@ -51,10 +50,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    height: ${ROW_HEIGHT}px;
+    height: ${densityVars.rowHeight};
     padding-block: 0;
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${densityVars.radius};
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
@@ -62,12 +61,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   searchBar: css`
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorSplit};
   `,
   // Same spec as the agent-detail SwitchPanel's section header.
   section: css`
-    height: ${SECTION_HEIGHT}px;
+    height: ${densityVars.controlHeight};
     padding-block: 4px 2px;
     padding-inline: 8px;
 
@@ -94,6 +93,8 @@ const toSectionRow = (key: string, label: string): ListRow => ({ key, kind: 'sec
 
 const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelect }) => {
   const { t } = useTranslation('common');
+  const compact = useInterfaceDensity() === 'compact';
+  const { controlHeight, fontSize, rowHeight } = useDensityTokens();
   const [search, setSearch] = useState('');
 
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
@@ -128,10 +129,10 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
   // The virtual viewport needs an explicit height; clamp to the old 360px cap
   // so a long list scrolls instead of growing the popup.
   const contentHeight = rows.reduce(
-    (sum, item) => sum + (item.kind === 'section' ? SECTION_HEIGHT : ROW_HEIGHT),
+    (sum, item) => sum + (item.kind === 'section' ? controlHeight : rowHeight),
     0,
   );
-  const listHeight = Math.min(Math.max(contentHeight, ROW_HEIGHT), MAX_LIST_HEIGHT);
+  const listHeight = Math.min(Math.max(contentHeight, rowHeight), MAX_LIST_HEIGHT);
 
   // Error gated ahead of the skeleton so a failed list fetch shows Retry instead
   // of a permanent skeleton (`isAgentListInit` only flips on success).
@@ -171,8 +172,8 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
           // virtua sizes itself on mount; remount when the filtered count changes
           // so a narrowed list never leaves stale rows undrawn.
           virtual
-          key={rows.length}
-          listItemHeight={ROW_HEIGHT}
+          key={`${rows.length}:${rowHeight}`}
+          listItemHeight={rowHeight}
           style={{ height: listHeight }}
           getItemLabel={(_, index) => {
             const item = rows[index];
@@ -198,10 +199,11 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
                   background={item.row.backgroundColor}
                   name={item.row.title}
                   shape={'square'}
-                  size={24}
+                  size={compact ? 20 : 24}
                 />
                 <Text
                   ellipsis
+                  fontSize={fontSize}
                   style={{ flex: 1 }}
                   weight={item.row.id === activeAgentId ? 600 : 500}
                   color={

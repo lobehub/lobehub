@@ -3,6 +3,7 @@
 import { Flexbox, Tabs, Text } from '@lobehub/ui';
 
 import { LABEL_COLUMN_WIDTHS } from '@/features/WorkspaceSetting/Labels/constants';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
 
 import SkeletonBar from '../../Bar';
 import { useSkeletonText } from '../useSkeletonText';
@@ -12,11 +13,12 @@ const ROWS = 4;
 
 /**
  * The label table while the registry loads: the static column header, then
- * 42px rows (color dot + name, description, usage, created date, menu) on the
- * same column widths as the loaded rows.
+ * 42px (compact 36px) rows (color dot + name, description, usage, created date,
+ * menu) on the same column widths as the loaded rows.
  */
 export const LabelsListSkeleton = () => {
   const text = useSkeletonText('setting');
+  const compact = useInterfaceDensity() === 'compact';
   const head = (key: string, width: number) =>
     text(`workspaceSetting.labels.columns.${key}`, width, 12);
 
@@ -50,7 +52,14 @@ export const LabelsListSkeleton = () => {
         <span style={{ flex: 'none', width: LABEL_COLUMN_WIDTHS.action }} />
       </Flexbox>
       {Array.from({ length: ROWS }, (_, index) => (
-        <Flexbox horizontal align={'center'} gap={12} height={42} key={index} paddingInline={12}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={12}
+          height={compact ? 36 : 42}
+          key={index}
+          paddingInline={12}
+        >
           <Flexbox
             horizontal
             align={'center'}
@@ -83,6 +92,7 @@ export const LabelsListSkeleton = () => {
  */
 const Body = () => {
   const text = useSkeletonText('setting');
+  const { controlHeight, radius } = useDensityTokens();
 
   return (
     <Flexbox gap={16}>
@@ -95,10 +105,10 @@ const Body = () => {
       />
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <SkeletonBar height={32} radius={8} width={200} />
-          <SkeletonBar height={32} radius={8} width={76} />
+          <SkeletonBar height={controlHeight} radius={radius} width={200} />
+          <SkeletonBar height={controlHeight} radius={radius} width={76} />
         </Flexbox>
-        <SkeletonBar height={32} radius={8} width={104} />
+        <SkeletonBar height={controlHeight} radius={radius} width={104} />
       </Flexbox>
       <LabelsListSkeleton />
     </Flexbox>

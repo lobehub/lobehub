@@ -23,14 +23,15 @@ export type LifecyclePresentation =
     };
 
 export type LifecycleAction =
-  | 'paused'
-  | 'resumed'
-  | 'taskCanceled'
-  | `work.${GoalNodeWorkVersionRelation}`;
+  'paused' | 'resumed' | 'taskCanceled' | `work.${GoalNodeWorkVersionRelation}`;
 
 export type LifecycleNote =
-  | { key: 'budgetExhausted' | 'recoveredAbandoned' | 'retryAfterVerification' }
+  | { key: 'budgetExhausted' | KnownNoteKey }
+  | { detail: string; key: DetailNoteKey }
+  | { detail: string; key: 'experimentLimit'; max: string; used: string }
   | { key: 'mainAgent'; text: string }
+  | { key: 'retiredWithPrerequisite'; title: string }
+  | { count: number; key: 'revisionLimit' }
   | { text: string };
 
 const ATTACHED_WORK = /^Attached Work version (\S+) as (input|produced|supports|contradicts)$/;
@@ -38,20 +39,133 @@ const ATTACHED_WORK = /^Attached Work version (\S+) as (input|produced|supports|
 const MAIN_AGENT = ' — main Agent: ';
 const TASK_CANCELED = 'Task canceled';
 const BUDGET_EXHAUSTED = 'Goal or main Agent turn budget exhausted';
+/** The CLI hint a paused main Agent turn appends; the page has its own resume control. */
+const RESUME_HINT = /\. Resume with: lh goal resume \S+$/;
+/** Generated reasons that only restate the row or the node row written with it. */
+const REDUNDANT_PATTERNS = [
+  /^dispatched \S+$/,
+  /^status \S+ → \S+$/,
+  /^decision "[\S\s]*" resolved: \S+$/,
+];
+const BOUND_TO_TOPIC =
+  /^bound to topic \S+(?: \(moved from (\S+) \S+\))?(?:; goal agent (\S+) → \S+)?$/;
+const DEADLINE_PASSED = /^Deadline passed \(.*\); no new Task will be dispatched$/;
+const EXPERIMENT_LIMIT =
+  /^Experiment limit reached \((\d+)\/(\d+)\); goal is not yet accepted\. ([\S\s]*)$/;
+const REPORT_WRITING = /^Writing the Goal report \(.*\)$/;
+const RETIRED_WITH_PREREQUISITE = /^Retired with its prerequisite "([\S\s]*)"$/;
+const REVISION_LIMIT =
+  /^Experiment \S+ already ran (\d+) corrected protocols; the planner asked for another\. Resume to replan\.$/;
+
+type KnownNoteKey =
+  | 'deadlinePassed'
+  | 'decisionPending'
+  | 'descriptionRefined'
+  | 'explorationBudget'
+  | 'explorationFailed'
+  | 'foldedIntoBatch'
+  | 'goalRenamed'
+  | 'lateRunUnstoppable'
+  | 'measurementCleared'
+  | 'noEligibleTask'
+  | 'planRevisionFailed'
+  | 'planSentBack'
+  | 'recipeSuperseded'
+  | 'recoveredAbandoned'
+  | 'releaseApproved'
+  | 'reportSubmitted'
+  | 'reportWriting'
+  | 'retryAfterVerification'
+  | 'stoppingBeforeClose'
+  | 'stoppingBeforeDelete'
+  | 'taskMissing'
+  | 'agentChanged'
+  | 'topicMoved';
+
+type DetailNoteKey = 'measuredNotMet' | 'patternBreak' | 'releaseReview';
+
+/** A fixed prefix the coordinator puts before a generated detail. */
+const DETAIL_PREFIXES: [prefix: string, key: DetailNoteKey][] = [
+  ['Batch pattern break needs a decision: ', 'patternBreak'],
+  ['Batch release needs approval: ', 'releaseReview'],
+  ['Measured acceptance not met: ', 'measuredNotMet'],
+];
 
 /** Fixed coordinator reasons that carry meaning, shown in the reader's language. */
-const KNOWN_NOTES: Record<string, 'recoveredAbandoned' | 'retryAfterVerification'> = {
+const KNOWN_NOTES: Record<string, KnownNoteKey> = {
+  'A planning run that started after the Goal was closed could not be stopped; close the Goal again to stop it':
+    'lateRunUnstoppable',
   'Automatically started the next Task attempt after verification feedback':
     'retryAfterVerification',
+  'Budget exhausted before graph exploration': 'explorationBudget',
+  'Exploration planning failed; resume to retry.': 'explorationFailed',
+  'Folded into the batch before start': 'foldedIntoBatch',
+  'Goal report submitted': 'reportSubmitted',
+  'Goal renamed': 'goalRenamed',
+  'Plan sent back to the main Agent': 'planSentBack',
+  'Planner refined the description': 'descriptionRefined',
   'Recovered an abandoned Task operation and started the next attempt': 'recoveredAbandoned',
+  'Release approved': 'releaseApproved',
+  'Responsible task is missing': 'taskMissing',
+  'Stopping Goal before closing': 'stoppingBeforeClose',
+  'Stopping Goal before deletion': 'stoppingBeforeDelete',
+  'The main Agent could not take the plan revision; resume the goal once it can, and the correction goes to it again':
+    'planRevisionFailed',
+  'a decision gate is open': 'decisionPending',
+  'a measurement cleared the acceptance gate': 'measurementCleared',
+  'no eligible task to advance': 'noEligibleTask',
+  'superseded by a new recipe revision': 'recipeSuperseded',
 };
 
-/** Reasons that only restate what the row's verb already says. */
+/** Reasons the coordinator generates from a fixed template, in the reader's language. */
+const presentGeneratedReason = (reason: string): LifecyclePresentation | undefined => {
+  if (REDUNDANT_PATTERNS.some((pattern) => pattern.test(reason))) return {};
+
+  const bound = BOUND_TO_TOPIC.exec(reason);
+  if (bound) {
+    const [, movedFrom, previousAgent] = bound;
+    if (previousAgent && previousAgent !== 'none') return { note: { key: 'agentChanged' } };
+    if (movedFrom === 'topic') return { note: { key: 'topicMoved' } };
+    // A goal's first binding to its conversation is plumbing, not a change.
+    return { hidden: true };
+  }
+
+  if (DEADLINE_PASSED.test(reason)) return { note: { key: 'deadlinePassed' } };
+  if (REPORT_WRITING.test(reason)) return { note: { key: 'reportWriting' } };
+
+  const experimentLimit = EXPERIMENT_LIMIT.exec(reason);
+  if (experimentLimit) {
+    const [, used, max, detail] = experimentLimit;
+    return { note: { detail, key: 'experimentLimit', max, used } };
+  }
+
+  const revisionLimit = REVISION_LIMIT.exec(reason);
+  if (revisionLimit) return { note: { count: Number(revisionLimit[1]), key: 'revisionLimit' } };
+
+  const retired = RETIRED_WITH_PREREQUISITE.exec(reason);
+  if (retired) return { note: { key: 'retiredWithPrerequisite', title: retired[1] } };
+
+  for (const [prefix, key] of DETAIL_PREFIXES)
+    if (reason.startsWith(prefix)) return { note: { detail: reason.slice(prefix.length), key } };
+
+  return undefined;
+};
+
+/**
+ * Reasons that only restate the row: its verb, its actor, or the node row
+ * written in the same step.
+ */
 const REDUNDANT_REASONS = new Set([
   'Goal achieved',
   'Goal-level acceptance passed',
   'Responsible task completed',
+  'Started by the goal agent',
+  'Started by the owner',
+  'automatic recovery started a run',
+  'decomposition claimed',
+  'nodes retired by user',
   'paused by user',
+  'reclaimed an abandoned Task',
   'resumed by user',
 ]);
 
@@ -77,7 +191,7 @@ export const presentLifecycleEvent = (
   event: Pick<GoalGraphEvent, 'entityType' | 'eventType' | 'reason'>,
   { hasNodeTwin, workTypeOf }: LifecycleContext,
 ): LifecyclePresentation => {
-  const reason = event.reason?.trim();
+  const reason = event.reason?.trim().replace(RESUME_HINT, '');
   if (!reason) return {};
 
   const attached = ATTACHED_WORK.exec(reason);
@@ -97,11 +211,18 @@ export const presentLifecycleEvent = (
     if (reason === 'paused by user') return { action: 'paused' };
     if (reason === BUDGET_EXHAUSTED) return { action: 'paused', note: { key: 'budgetExhausted' } };
   }
-  if (event.entityType === 'goal' && event.eventType === 'activated' && reason === 'resumed by user')
+  if (
+    event.entityType === 'goal' &&
+    event.eventType === 'activated' &&
+    reason === 'resumed by user'
+  )
     return { action: 'resumed' };
 
   if (REDUNDANT_REASONS.has(reason)) return {};
   if (KNOWN_NOTES[reason]) return { note: { key: KNOWN_NOTES[reason] } };
+
+  const generated = presentGeneratedReason(reason);
+  if (generated) return generated;
 
   const { diagnosis, failure } = splitDiagnosis(reason);
   if (event.entityType === 'node' && failure === TASK_CANCELED)

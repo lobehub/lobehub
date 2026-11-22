@@ -11,7 +11,7 @@ import {
   reactionModeField,
   watchKeywordsField,
 } from '../const';
-import { deviceAccessFields } from '../deviceAccess';
+import { deviceAccessFields, deviceChannelFields } from '../deviceAccess';
 import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 
@@ -51,6 +51,7 @@ export const schema: FieldSchema[] = [
     properties: [
       makeUserIdField('telegram'),
       ...deviceAccessFields,
+      ...deviceChannelFields,
       {
         key: 'charLimit',
         default: 4000,

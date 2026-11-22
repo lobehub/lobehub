@@ -29,6 +29,7 @@ import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 import { shinyTextStyles } from '@/styles';
 import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { coordinatorNodeTitleKey } from './coordinatorCopy';
 import { openTargetOf, useOpenGoalArtifact } from './Deliverables';
@@ -77,7 +78,7 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     width: 100%;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: none;
 
     text-align: start;

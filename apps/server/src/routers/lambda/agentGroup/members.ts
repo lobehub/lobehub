@@ -66,10 +66,6 @@ export const membersRouter = router({
       // Batch create virtual agents
       const agentConfigs = input.agents.map((agent) => ({
         ...agent,
-        // `agentModel.batchCreate`'s config type is still `plugins?: string[]`
-        // (widening deferred to the tri-state rollout's final phase); the
-        // zod schema above already allows the tri-state object shape through.
-        plugins: agent.plugins as unknown as string[] | undefined,
         tags: agent.tags as string[] | undefined,
         virtual: true,
       }));

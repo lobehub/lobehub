@@ -1,3 +1,4 @@
+import { MARKETPLACE_INSTALLED_CONNECTORS_PATH } from '@/features/Marketplace/paths';
 import {
   encodeMobileSelection,
   MOBILE_SELECTION_PARAM,
@@ -9,7 +10,8 @@ export interface ConnectorRef {
   identifier: string;
 }
 
-const CONNECTOR_SETTINGS = '/settings/connector';
+// The Connectors page moved from `/settings/connector` to the Marketplace.
+const CONNECTOR_SETTINGS = MARKETPLACE_INSTALLED_CONNECTORS_PATH;
 
 /**
  * Where to send the user to fix a connector: straight to its detail on the

@@ -5,7 +5,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useDensityTokens } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
 import PrHead, { PrStatePill, PrTitle } from './Head';
@@ -14,7 +14,7 @@ const styles = stylex.create({
   dock: {
     flexShrink: 0,
     paddingBlockStart: '10px',
-    paddingBlockEnd: '12px',
+    paddingBlockEnd: densityTokens['--lobe-density-content-gap'],
     paddingInline: '4px',
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',

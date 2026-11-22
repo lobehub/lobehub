@@ -7,6 +7,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getPlatformIcon } from '@/features/AgentChannel/const';
+import { MARKETPLACE_APPS_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { InputBanner } from './InputBanner';
@@ -34,7 +35,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorBgContainer};
     box-shadow:
-      0 0 8px -2px rgb(0 0 0 / 5%),
+      ${cssVar.boxShadowTertiary},
       0 0 0 1px ${cssVar.colorFillTertiary};
   `,
   icon: css`
@@ -71,7 +72,7 @@ const MessengerBanner = memo(() => {
   }, []);
 
   const handleNavigateToMessenger = useCallback(() => {
-    navigate('/settings/messenger');
+    navigate(MARKETPLACE_APPS_PATH);
   }, [navigate]);
 
   return (

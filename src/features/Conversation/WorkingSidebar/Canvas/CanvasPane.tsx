@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PortalMoreMenu from '@/features/Portal/components/PortalMoreMenu';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import CanvasFrame from './CanvasFrame';
 import CanvasShareButton from './CanvasShareButton';
@@ -42,7 +42,7 @@ const styles = stylex.create({
     insetBlockStart: 52,
     insetInlineStart: '50%',
     paddingBlock: 6,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     position: 'absolute',
     transform: 'translateX(-50%)',
     zIndex: 1,

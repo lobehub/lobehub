@@ -5,6 +5,7 @@ export * from './agent';
 export * from './agentAccount';
 export * from './agentBotProvider';
 export * from './agentCronJob';
+export * from './agentDelivery';
 export * from './agentDocuments';
 export * from './agentEvalMemory';
 export * from './agentEvals';

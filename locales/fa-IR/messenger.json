@@ -220,7 +220,6 @@
   "verify.error.generic": "مشکلی پیش آمد. لطفاً دوباره امتحان کنید.",
   "verify.error.missingToken": "لینک نامعتبر. این صفحه را از ربات باز کنید.",
   "verify.error.title": "تأیید لینک امکان‌پذیر نیست",
-  "verify.error.unlinkBeforeRelink": "این حساب LobeHub قبلاً به یک حساب تلگرام دیگر متصل شده است. ابتدا آن را در تنظیمات → پیام‌رسان قطع کنید تا بتوانید حساب جدیدی را متصل کنید.",
   "verify.signInCta": "برای ادامه وارد شوید",
   "verify.signInRequired": "لطفاً وارد LobeHub شوید تا لینک را تأیید کنید.",
   "verify.success.backToLobeHub": "بازگشت به LobeHub",

@@ -7,6 +7,8 @@ import type { StyleXStyles } from '@stylexjs/stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, Fragment, type ReactNode, useId } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { sparklinePoints } from '../../../utils/series';
 import { WIDGET_LAYOUT_ICON_MAP } from './icons';
 import {
@@ -82,8 +84,8 @@ const styles = stylex.create({
     letterSpacing: '-0.04em',
     lineHeight: 1,
   },
-  sizeLg: { fontSize: 16, lineHeight: 1.4 },
-  sizeMd: { fontSize: 14, lineHeight: 1.45 },
+  sizeLg: { fontSize: densityTokens['--lobe-density-page-title-font-size'], lineHeight: 1.4 },
+  sizeMd: { fontSize: densityTokens['--lobe-density-font-size'], lineHeight: 1.45 },
   sizeSm: { fontSize: 12, lineHeight: 1.45 },
   sizeXl: { fontSize: 20, letterSpacing: '-0.01em', lineHeight: 1.3 },
   sizeXs: { fontSize: 11, lineHeight: 1.4 },

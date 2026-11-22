@@ -66,6 +66,8 @@ export interface KnowledgeConfig {
  * Tools configuration
  */
 export interface ToolsConfig {
+  /** Prepare optional prompt edits for a transport that can declare tools mid-conversation. */
+  anchorActivatedTools?: boolean;
   /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
   disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */

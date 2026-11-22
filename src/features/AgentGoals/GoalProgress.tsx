@@ -2,6 +2,8 @@ import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 /** `3m` · `2.1h` · `1.4d` — the coarse grain a list row can carry. */
 export const formatGoalDuration = (milliseconds: number) => {
   if (!milliseconds || milliseconds <= 0) return '—';
@@ -25,7 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
   metrics: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px 64px;
-    column-gap: 12px;
+    column-gap: ${densityVars.contentGap};
     align-items: center;
 
     width: min(100%, 390px);

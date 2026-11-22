@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getRouteById } from '@/config/routes';
+import { getMarketplaceEntryPath, MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
 import {
@@ -17,6 +18,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 export interface NavItem {
   /** First path segment that marks this item active, when it differs from `key`. */
   activeTab?: string;
+  additionalActiveTabs?: string[];
   hidden?: boolean;
   icon: any;
   isNew?: boolean;
@@ -42,12 +44,11 @@ export interface NavLayout {
 }
 
 export const useNavLayout = (): NavLayout => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'chat']);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const enableDashboard = useServerConfigStore(serverConfigSelectors.enableDashboard);
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const enableProjects = useUserStore(labPreferSelectors.enableProjects);
 
   const topNavItems = useMemo(
@@ -67,18 +68,21 @@ export const useNavLayout = (): NavLayout => {
         },
         {
           icon: getRouteById('tasks')!.icon,
+          additionalActiveTabs: activeWorkspaceSlug ? undefined : ['goals', 'goal', 'task'],
           key: SidebarTabKey.Tasks,
-          title: t('tab.tasks'),
+          title: activeWorkspaceSlug ? t('tab.tasks') : t('tab.goalsAndTasks', { ns: 'chat' }),
           url: '/tasks',
         },
-        {
-          // Behind the same lab toggle as the agent-scoped goal pages.
-          hidden: !enableGoals,
-          icon: getRouteById('goals')!.icon,
-          key: SidebarTabKey.Goals,
-          title: t('tab.goals'),
-          url: '/goals',
-        },
+        ...(activeWorkspaceSlug
+          ? [
+              {
+                icon: getRouteById('goals')!.icon,
+                key: SidebarTabKey.Goals,
+                title: t('tab.goals'),
+                url: '/goals',
+              },
+            ]
+          : []),
         {
           // Keyed `project` to match the sidebar layout id; the page is `/projects`.
           activeTab: 'projects',
@@ -104,7 +108,7 @@ export const useNavLayout = (): NavLayout => {
           url: '/resource',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableGoals, enableProjects],
+    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableProjects],
   );
 
   const bottomMenuItems = useMemo(
@@ -116,12 +120,14 @@ export const useNavLayout = (): NavLayout => {
           title: t('tab.generation'),
           url: '/image',
         },
+        // Always shown: installed skills and connectors live in the Marketplace,
+        // so with the market off the entry opens straight on the installed skills.
         {
-          hidden: !showMarket,
+          activeTab: MARKETPLACE_SEGMENT,
           icon: getRouteById('community')!.icon,
           key: SidebarTabKey.Community,
-          title: t('tab.community'),
-          url: '/community',
+          title: t('tab.marketplace'),
+          url: getMarketplaceEntryPath(showMarket),
         },
         {
           hidden: !!activeWorkspaceSlug,

@@ -57,7 +57,7 @@ import {
   UserSkillService,
 } from '@/server/services/userSkill';
 
-import { resolveAgentSkillGates } from './librarySkillGate';
+import { readSkillUserSettings, resolveAgentSkillGates } from './librarySkillGate';
 import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
@@ -89,12 +89,6 @@ const isPrepareTimeout = (error?: string) =>
   (/"error"\s*:\s*"TIMEOUT"/.test(error) ||
     error.startsWith('DEVICE_RESPONSE_TIMEOUT') ||
     /aborted due to timeout/i.test(error));
-
-interface UserSettingsWithMarketToken {
-  market?: {
-    accessToken?: string;
-  };
-}
 
 /**
  * Device-execution wiring for the exec APIs, present only when the run's
@@ -897,24 +891,17 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     }
 
     // Fetch market access token from user settings
-    let marketAccessToken: string | undefined;
-    try {
-      const userModel = new UserModel(context.serverDB, context.userId);
-      const userSettings = await userModel.getUserSettings();
-      marketAccessToken = (userSettings as UserSettingsWithMarketToken | undefined)?.market
-        ?.accessToken;
-      log(
-        'Fetched market accessToken for user %s: %s',
-        context.userId,
-        marketAccessToken ? 'exists' : 'not found',
-      );
-    } catch (error) {
-      log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
-    }
+    const userSettings = await readSkillUserSettings(
+      new UserModel(context.serverDB, context.userId),
+    );
+    const marketAccessToken = userSettings?.market?.accessToken;
 
     // This runtime resolves skills fresh by name/id, so the agent's own
     // tri-state is enforced here too (see `resolveAgentSkillGates`).
-    const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(context);
+    const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(
+      context,
+      userSettings,
+    );
 
     // The share's own opt-out, for the same reason: the creator named the
     // skills a visitor may load (`shareConfig.skillGrants`), and the

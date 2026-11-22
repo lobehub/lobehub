@@ -3,6 +3,7 @@ import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import type { ConnectorWithTools } from '@/store/tool/slices/connector';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-block: 0;
     margin-inline: 4px;
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 6px;
 
     &:hover {

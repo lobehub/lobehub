@@ -32,6 +32,7 @@ import NavHeader from '@/features/NavHeader';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { useAgentStore } from '@/store/agent';
 import type { BotProviderItem } from '@/store/agent/slices/bot/action';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { resolveChannelHeaderView } from './headerView';
 import { isImportableChannel, planChannelImport } from './importPlan';
@@ -59,6 +60,7 @@ const Header = memo<HeaderProps>(
     providers,
   }) => {
     const { t } = useTranslation(['agent', 'chat', 'common']);
+    const headerActionSize = useHeaderActionSize(true);
     const view = resolveChannelHeaderView(platformId, platformDef, platformsLoading);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -277,7 +279,7 @@ const Header = memo<HeaderProps>(
                   disabled={writeDisabled}
                   icon={RefreshCw}
                   loading={refreshingStatus}
-                  size={'small'}
+                  size={headerActionSize}
                   title={t('channel.refreshStatus')}
                   onClick={handleRefreshStatus}
                 />
@@ -294,12 +296,17 @@ const Header = memo<HeaderProps>(
                 <ActionIcon
                   aria-label={t('channel.documentation')}
                   icon={BookOpen}
+                  size={headerActionSize}
                   title={t('channel.documentation')}
                   onClick={() => window.open(setupGuideUrl, '_blank', 'noopener,noreferrer')}
                 />
               )}
               <DropdownMenu items={menuItems} placement={'bottomRight'}>
-                <ActionIcon icon={MoreHorizontal} title={t('more', { ns: 'common' })} />
+                <ActionIcon
+                  icon={MoreHorizontal}
+                  size={headerActionSize}
+                  title={t('more', { ns: 'common' })}
+                />
               </DropdownMenu>
             </Flexbox>
           }

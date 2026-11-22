@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "اتصال‌دهنده‌های Stdio فقط در برنامه دسکتاپ قابل همگام‌سازی هستند. برنامه LobeHub Desktop را باز کنید تا این اتصال‌دهنده همگام‌سازی شود.",
   "connector.kind.agent": "اتصال‌دهنده عامل",
   "connector.kind.builtin": "ابزار داخلی",
-  "connector.kind.community": "ابزار جامعه",
+  "connector.kind.community": "ابزار بازار",
   "connector.kind.custom": "اتصال‌دهنده سفارشی",
   "connector.kind.oauth": "اتصال‌دهنده OAuth",
   "connector.manageOnlyCreator": "تنها سازنده یا مالک فضای کاری می‌تواند این اتصال‌دهنده را مدیریت کند",

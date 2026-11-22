@@ -142,6 +142,18 @@ describe('marketplace MCPs installed as connectors', () => {
     ).toBe(marked);
   });
 
+  it('keeps a private reinstall over a legacy row listed, a tool set of its own', () => {
+    // Regression: made private, the reinstall vanished from the Private tab:
+    // the list hid it behind its legacy plugin, which only the Workspace tab shows
+    const privateRow = { ...marked, visibility: 'private' as const };
+    const withLegacyRow = state({
+      connectors: [privateRow],
+      installedPlugins: [{ identifier: 'oauth-market' }] as never,
+    });
+
+    expect(connectorSelectors.marketplaceMcpConnectors(withLegacyRow)).toEqual([privateRow]);
+  });
+
   it('resolves no connector for a row that only projects a plugin or comes from another source', () => {
     const projection = connector({ mcpConnectionType: null, mcpServerUrl: null });
     const custom = connector({ sourceType: 'custom' });
@@ -170,6 +182,50 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
     );
     // Nor a call that names no agent at all
     expect(connectorSelectors.connectorByIdentifierForAgent('oauth-market')(s)).toBe(undefined);
+  });
+
+  it("resolves each row by its own tool prefix: the shared one's and the private one's", () => {
+    const privateRow = connector({ id: '3f9a1c2e-private', visibility: 'private' });
+    const sharedRow = connector({ id: 'shared-row', visibility: 'public' });
+    // The shared row listed first: physical order is not a ranking
+    const s = state([sharedRow, privateRow]);
+
+    // The connector's identifier names the shared row's tool set, in any run
+    for (const includePrivate of [true, false]) {
+      expect(
+        connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a', {
+          includePrivate,
+        })(s)?.id,
+      ).toBe('shared-row');
+    }
+    // The private row is a tool set of its own, under its suffixed prefix
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market-3f9a1c2e', 'agt_a', {
+        includePrivate: true,
+      })(s)?.id,
+    ).toBe('3f9a1c2e-private');
+    // ... which a run that may not use it never resolves
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market-3f9a1c2e', 'agt_a', {
+        includePrivate: false,
+      })(s),
+    ).toBe(undefined);
+  });
+
+  it('resolves a private row mounted on the agent by its own prefix, never the bare one', () => {
+    const mounted = connector({
+      id: '3f9a1c2e-mounted',
+      metadata: { mountedByAgentId: 'agt_a' },
+      visibility: 'private',
+    });
+    const s = { ...state([mounted]), agentConnectors: { agt_a: [mounted] } } as never;
+
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market-3f9a1c2e', 'agt_a')(s)?.id,
+    ).toBe('3f9a1c2e-mounted');
+    expect(connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a')(s)).toBe(
+      undefined,
+    );
   });
 
   it('resolves a base connector that is free or mounted by this agent', () => {

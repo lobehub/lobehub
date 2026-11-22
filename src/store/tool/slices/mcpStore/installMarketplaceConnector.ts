@@ -124,7 +124,7 @@ export const installMarketplaceConnector = async (
   let snapshot: ConnectorSnapshot | undefined;
 
   if (isOAuth) {
-    const connector = connectorSelectors.connectorByIdentifier(identifier)(get());
+    const connector = connectorSelectors.sharedConnectorByIdentifier(identifier)(get());
     if (!connector) throw new Error('The MCP connector did not finish authorization');
     connectorId = connector.id;
     // Authorization already wrote the row: a cancel while finishing removes the

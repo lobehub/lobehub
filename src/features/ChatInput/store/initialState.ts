@@ -22,6 +22,11 @@ export interface SendButtonProps {
   disabled?: boolean;
   generating: boolean;
   /**
+   * The host already shows the run elsewhere (e.g. the conversation status tray),
+   * so the send area skips its own running spinner.
+   */
+  hideRunningIndicator?: boolean;
+  /**
    * A send was committed but has not reached the agent yet (the message and its
    * topic are still being created). Send shows as loading instead of Stop: there
    * is no run to stop until the message is accepted.

@@ -9,6 +9,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -21,7 +22,6 @@ import { useHomeStore } from '@/store/home';
 import { useAgentModal } from '../../ModalProvider';
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
-import PrivateLockIcon from '../PrivateLockIcon';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 

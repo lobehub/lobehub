@@ -16,6 +16,7 @@ import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
+import { requestMissingGrant } from './grants';
 import { buildManifest } from './manifest';
 import type { ChannelTopicScope } from './topic';
 import { continuationTopic, resolveTopic } from './topic';
@@ -31,10 +32,10 @@ export interface ChannelClaimOptions {
   onlineDeviceIds?: string[];
   /**
    * The device a run with no device picked in the Channel will route to, from the Agent's own
-   * settings as the requester's ordinary conversation would resolve them, and whether it is
-   * online for that requester; undefined when it needs none or would wake it. Lets an offline
-   * Agent-bound device wait like a Channel one. Its presence is the requester's, which may
-   * include their personal device, so it stays out of `onlineDeviceIds`. Only consulted with
+   * settings as the execution identity's ordinary conversation would resolve them, and whether it
+   * is online for that identity; undefined when it needs none or would wake it. Lets an offline
+   * Agent-bound device wait like a Channel one. Its presence is that identity's, which may
+   * include a personal device, so it stays out of `onlineDeviceIds`. Only consulted with
    * `onlineDeviceIds`.
    */
   routedDevice?: (run: ChannelRoutedDeviceInput) => Promise<ChannelRoutedDevice | undefined>;
@@ -55,8 +56,12 @@ export interface ChannelRoutedDeviceInput {
    */
   continuation?: Pick<TopicItem, 'agentId' | 'groupId' | 'metadata' | 'projectWorkingDirectoryId'>;
   executionConfig: ChannelExecutionConfig;
-  /** The requester: the run executes as them, with their device preference for the Agent. */
+  /**
+   * The execution identity, with its device preference for the Agent: the requester, or a shared
+   * Agent's owner, whose device the visitor's run uses.
+   */
   userId: string;
+  /** The run's scope: the Channel's, or a shared Agent's owner scope. */
   workspaceId: string | null;
 }
 
@@ -119,6 +124,7 @@ const deviceBlock = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
+  job: Pick<ChannelJobItem, 'requesterMemberId'>,
 ): Promise<Block | undefined> => {
   const { deviceId, deviceOwnerId, workingDirectory } = member.config ?? {};
   if (workingDirectory && !deviceId)
@@ -148,6 +154,11 @@ const deviceBlock = async (
     .select()
     .from(channelMemberGrants)
     .where(eq(channelMemberGrants.memberId, member.id));
+  // Picked while the device was public, then made private: ask its owner now.
+  if (!grant) {
+    await requestMissingGrant(tx, channel, member, job.requesterMemberId);
+    return APPROVAL_PENDING;
+  }
   if (
     !grant ||
     grant.deviceId !== deviceId ||
@@ -413,7 +424,7 @@ export const claimJob = async (
   }
 
   const blocked =
-    (await deviceBlock(tx, channel, member)) ??
+    (await deviceBlock(tx, channel, member, job)) ??
     (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
@@ -444,8 +455,8 @@ export const claimJob = async (
             executionConfig,
           ),
           executionConfig,
-          userId: requester.userId!,
-          workspaceId: channel.workspaceId,
+          userId: scope.userId,
+          workspaceId: scope.workspaceId,
         })
       : undefined;
   const offlineDeviceId = !options.onlineDeviceIds

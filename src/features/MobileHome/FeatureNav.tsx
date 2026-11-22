@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useFeatureNavItems } from './useFeatureNavItems';
 
@@ -20,7 +21,7 @@ const styles = stylex.create({
     fontSize: 13,
     gap: 6,
     height: 36,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     transitionDuration: '150ms',
     transitionProperty: 'background-color',
     transitionTimingFunction: cssVar.motionEaseOut,
@@ -38,7 +39,7 @@ const styles = stylex.create({
   row: {
     gap: 8,
     paddingBlock: 4,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

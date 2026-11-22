@@ -25,22 +25,20 @@ import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/Create
 import { SANDBOX_STORAGE_PATH } from '@/features/ResourceHome/paths';
 import { openSandboxDirectoryModal } from '@/features/WorkingDirectory';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { environmentService } from '@/services/environment';
 import { refreshProjectFiles } from '@/services/projectFile';
 import { sandboxStorageService } from '@/services/sandboxStorage';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 
 import OptionRow from './OptionRow';
 import SandboxDriveMenu from './SandboxDriveMenu';
 import {
   environmentChipState,
-  pickableEnvironments,
+  environmentSettingsPath,
   repositoriesLabel,
   repositorySelection,
   repositorySlug,
 } from './sandboxEnvironmentOptions';
 import SandboxRepositoryMenu, { type SandboxRepositoryOption } from './SandboxRepositoryMenu';
+import { useSandboxEnvironmentList } from './useSandboxEnvironmentList';
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
@@ -96,6 +94,14 @@ interface SandboxDrivePickerProps {
    */
   modeInEnvironmentMenu?: boolean;
   onChange: (selection: SandboxSelection) => Promise<void>;
+  /**
+   * The project this conversation belongs to. It runs in the project's own
+   * environment, so that is the only one offered, and managed on the
+   * project's settings rather than in the workspace's list.
+   */
+  projectId?: string;
+  /** Whether the conversation's agent is workspace-public; it applies published environments only. */
+  sharedAgent?: boolean;
   topicId?: string;
   /** Where this conversation works today. */
   value: SandboxSelection;
@@ -127,7 +133,15 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * replaces it.
  */
 const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
-  ({ entitled, modeInEnvironmentMenu = true, onChange, topicId, value }) => {
+  ({
+    entitled,
+    modeInEnvironmentMenu = true,
+    onChange,
+    projectId,
+    sharedAgent = false,
+    topicId,
+    value,
+  }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
@@ -142,24 +156,19 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     const repositoryOnly = modeInEnvironmentMenu && !onDrive;
 
     const {
-      data: environmentList,
-      error: environmentsError,
-      mutate: refreshEnvironments,
-    } = useSWR(['sandbox-environment-chip', workspaceId ?? ''], () =>
-      environmentService.listEnvironments(),
-    );
-    const sharedAgent = useAgentStore(
-      (s) => !!workspaceId && agentSelectors.currentAgentVisibility(s) === 'public',
-    );
-    const environments = pickableEnvironments(environmentList?.environments ?? [], sharedAgent);
+      environments,
+      failed: environmentsFailed,
+      loaded: environmentsLoaded,
+      refresh: refreshEnvironments,
+    } = useSandboxEnvironmentList({ projectId, sharedAgent, workspaceId });
     const repository = environments.find((item) => item.id === value.environmentId);
     // Picked once but no longer readable — deleted, or unpublished by its owner
     // — is said rather than hidden; a list that has not loaded says nothing.
     const repositoryState = environmentChipState({
       current: repository,
       environmentId: value.environmentId,
-      failed: !!environmentsError,
-      loaded: !!environmentList,
+      failed: environmentsFailed,
+      loaded: environmentsLoaded,
     });
 
     // A legacy environment directory's own row, for its name — from the
@@ -306,13 +315,15 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
 
     const repositoryMenuProps = {
       environments,
-      failed: !!environmentsError,
-      loaded: !!environmentList,
-      onAdd: addRepository,
+      failed: environmentsFailed,
+      loaded: environmentsLoaded,
+      // A project has exactly one environment, edited on its settings: there
+      // is no second one to add from here.
+      onAdd: projectId ? undefined : addRepository,
       onClose: () => setOpen(false),
       onManage: () => {
         setOpen(false);
-        navigate('/settings/environments');
+        navigate(environmentSettingsPath(projectId));
       },
       onPick: pickRepository,
       onRetry: () => void refreshEnvironments(),

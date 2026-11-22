@@ -11,6 +11,9 @@ import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
+
 import { extendActivityWithFuture } from './layout';
 import { RUN_STATUS_VISUALS } from './statusVisuals';
 
@@ -24,6 +27,10 @@ const styles = stylex.create({
     paddingBlock: 20,
     paddingInline: 20,
   },
+  cardCompact: {
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+  },
   label: { color: cssVar.colorTextSecondary, fontSize: 13 },
   value: {
     color: cssVar.colorText,
@@ -32,6 +39,7 @@ const styles = stylex.create({
     fontWeight: 600,
     lineHeight: 1.2,
   },
+  valueCompact: { fontSize: 20 },
 });
 
 const STATS: { key: keyof AgentRunBoardSummary; status: AgentRunBoardRunStatus }[] = [
@@ -50,6 +58,7 @@ interface ActivityPanelProps {
 /** The numbers double as the chart's legend: each one carries its series' icon and color. */
 const ActivityPanel = ({ action, activity, summary }: ActivityPanelProps) => {
   const { t } = useTranslation('home');
+  const { compact, tokens } = useDensity();
   const series = STATS.map((stat) => ({
     ...stat,
     color: RUN_STATUS_VISUALS[stat.status].color,
@@ -62,16 +71,29 @@ const ActivityPanel = ({ action, activity, summary }: ActivityPanelProps) => {
   }));
 
   return (
-    <Flexbox gap={16} {...stylex.props(styles.card)} data-testid={'team-board-activity'}>
-      <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'} wrap={'wrap'}>
-        <Flexbox horizontal gap={40} wrap={'wrap'}>
+    <Flexbox
+      gap={tokens.sectionGap}
+      {...stylex.props(styles.card, compact && styles.cardCompact)}
+      data-testid={'team-board-activity'}
+    >
+      <Flexbox
+        horizontal
+        align={'flex-start'}
+        gap={tokens.sectionGap}
+        justify={'space-between'}
+        wrap={'wrap'}
+      >
+        <Flexbox horizontal gap={compact ? 28 : 40} wrap={'wrap'}>
           {series.map(({ color, key, label, status }) => (
             <Flexbox gap={4} key={key}>
               <Flexbox horizontal align={'center'} gap={6}>
                 <Icon color={color} icon={RUN_STATUS_VISUALS[status].icon} size={14} />
                 <span {...stylex.props(styles.label)}>{label}</span>
               </Flexbox>
-              <span {...stylex.props(styles.value)} data-testid={`team-board-count-${key}`}>
+              <span
+                {...stylex.props(styles.value, compact && styles.valueCompact)}
+                data-testid={`team-board-count-${key}`}
+              >
                 {summary[key]}
               </span>
             </Flexbox>

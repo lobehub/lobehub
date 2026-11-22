@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Flexbox, InputNumber, TextArea, Tooltip } from '@lobehub/ui';
+import { Flexbox, InputNumber, TextArea, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -10,6 +10,7 @@ import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 

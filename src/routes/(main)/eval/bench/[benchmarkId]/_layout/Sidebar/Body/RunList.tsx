@@ -65,8 +65,8 @@ const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={sectionTriggerStyle}>
-        <AccordionTrigger>
+      <AccordionHeader>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={4}>
             <SectionTitle>{t('sidebar.runs')}</SectionTitle>
             {runList.length > 0 && (

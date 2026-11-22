@@ -6,18 +6,20 @@ import {
   AskUserQuestionView,
   DEFAULT_COUNTDOWN_MS,
   DRAFT_PLUGIN_STATE_KEY,
-  SUBMIT_ACK_TIMEOUT_MS,
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { CircleAlert } from 'lucide-react';
-import { memo, useCallback, useEffect } from 'react';
+import { type ComponentProps, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
 import { useChatStore } from '@/store/chat';
+
+import PermissionRequestIntervention from '../PermissionRequest';
+import { useSubmissionReconcile } from '../useSubmissionReconcile';
 
 /**
  * CC AskUserQuestion intervention component.
@@ -54,12 +56,9 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     )?.heterogeneousIntervention?.deadline;
     return typeof stored === 'number' ? stored : undefined;
   });
-  const context = useConversationStore((s) => s.context);
-  const checkQuestionSubmission = useChatStore((s) => s.checkQuestionSubmission);
   const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
-  const resolving = useConversationStore(
-    (s) => dataSelectors.getDbMessageById(messageId)(s)?.pluginIntervention?.resolving === true,
-  );
+  // Stream events normally settle the card; a missed ACK is re-read.
+  useSubmissionReconcile(messageId);
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
@@ -75,19 +74,6 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     persistedDraft,
     writeDraft,
   });
-
-  // Stream events normally settle the card. Revalidate a missed ACK after
-  // remount or reconnect without asking the user to inspect runtime state.
-  useEffect(() => {
-    if (!resolving) return;
-    const reconcile = () => void checkQuestionSubmission(messageId, context);
-    const timer = window.setTimeout(reconcile, SUBMIT_ACK_TIMEOUT_MS);
-    window.addEventListener('online', reconcile);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('online', reconcile);
-    };
-  }, [checkQuestionSubmission, context, messageId, resolving]);
 
   const labels = {
     customPlaceholder: t('claudeCode.askUserQuestion.customOption.placeholder'),
@@ -132,4 +118,21 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
 AskUserQuestionIntervention.displayName = 'CCAskUserQuestionIntervention';
 
-export default AskUserQuestionIntervention;
+/**
+ * A Claude Code permission request (Better Coding Experience) carries a
+ * `claudeCodePermission` detail beside the AskUserQuestion-shaped question:
+ * it gets its own card, which never counts down — Claude Code waits.
+ */
+const AskUserQuestionOrPermission = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) =>
+  (props.args as { claudeCodePermission?: unknown } | undefined)?.claudeCodePermission ? (
+    <PermissionRequestIntervention
+      {...(props as unknown as ComponentProps<typeof PermissionRequestIntervention>)}
+    />
+  ) : (
+    <AskUserQuestionIntervention {...props} />
+  ),
+);
+
+AskUserQuestionOrPermission.displayName = 'CCAskUserQuestionOrPermission';
+
+export default AskUserQuestionOrPermission;

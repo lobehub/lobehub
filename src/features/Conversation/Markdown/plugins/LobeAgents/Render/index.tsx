@@ -9,6 +9,7 @@ import { memo, useCallback } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { type MarkdownElementProps } from '../../type';
 
@@ -33,7 +34,7 @@ const styles = stylex.create({
   content: { minWidth: '0' },
   title: {
     overflow: 'hidden',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',

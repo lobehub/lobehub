@@ -1,4 +1,5 @@
 // Built-in control commands register themselves when the steer loop loads.
+import './heteroPermissionMode';
 import './heteroStopTask';
 
 import type {
@@ -90,6 +91,7 @@ interface SteerableHandle {
   ) => ClaudeCodeControlRequestHandle | undefined;
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
   supportsSteerImageAttachments?: true;
+  supportsSteerImages?: boolean;
 }
 
 const RETRY_MS = 2000;
@@ -207,7 +209,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
             ...(acceptsControl && { acceptsControl: true }),
             ...(handle.supportsSteerImageAttachments && { acceptsImageAttachments: true }),
             // The session takes image blocks, so pasted images come along.
-            acceptsImages: true,
+            ...(handle.supportsSteerImages !== false && { acceptsImages: true }),
             // The first poll answers at once, so the run is marked steerable early.
             ...(!answered && { blockMs: 1 }),
             ...(waitingForUser() && { holdSteer: true }),

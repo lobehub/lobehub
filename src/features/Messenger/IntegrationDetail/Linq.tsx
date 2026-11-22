@@ -274,7 +274,7 @@ export { LinqLinkSetup };
 
 interface LinqDetailProps {
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 const LinqDetail = memo<LinqDetailProps>(({ name, onBack }) => {

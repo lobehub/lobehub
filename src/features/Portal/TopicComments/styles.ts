@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css }) => ({
   anchor: css`
     cursor: pointer;
@@ -34,7 +36,7 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   card: css`
     position: relative;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
 
     &:hover .topic-comment-actions,
     &:focus-within .topic-comment-actions {
@@ -83,7 +85,7 @@ export const styles = createStaticStyles(({ css }) => ({
 
     min-height: 44px;
     padding-block: 8px;
-    padding-inline: 12px 8px;
+    padding-inline: ${densityVars.contentGap} 8px;
   `,
   /**
    * Mentions render as plain coloured text here, so the chip's own inset would
@@ -126,7 +128,7 @@ export const styles = createStaticStyles(({ css }) => ({
     flex: 1;
 
     min-height: 0;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   moderatedContent: css`
     opacity: 0.62;
@@ -134,7 +136,7 @@ export const styles = createStaticStyles(({ css }) => ({
   /** "3 replies" followed by a rule: the one line that separates the comment from its replies. */
   repliesDivider: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     margin-block: 4px;

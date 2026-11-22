@@ -35,6 +35,8 @@ export interface AssembleSkillPoolOptions {
    * skill matching one is auto-activated and its content injected directly.
    */
   enabledPluginIds?: readonly string[];
+  /** Builtins implicitly offered by a legacy Auto profile. */
+  implicitBuiltinSkillIds?: readonly string[];
   /**
    * Identifiers a share configuration allows. `undefined` means the run is not
    * shared; an empty list collapses the pool to nothing.
@@ -70,28 +72,27 @@ export const assembleSkillPool = (
 ): OperationSkillSet => {
   const enabledPluginIds = new Set(options.enabledPluginIds ?? []);
   const turnSkillIds = new Set(options.turnSkillIds ?? []);
-  // Manual mode exposes only what the user picked. Project / device skills are
-  // discovered from the run's working directory and can never be picked in the
-  // UI, so the mode does not speak about them and they stay.
-  const selectable =
-    options.skillActivateMode === 'manual'
-      ? (skills: readonly SkillMeta[] = []) =>
-          skills.filter(
-            (skill) => enabledPluginIds.has(skill.identifier) || turnSkillIds.has(skill.identifier),
-          )
-      : (skills: readonly SkillMeta[] = []) => skills;
-
   // Profile-managed skills are opt-in. A legacy pin and explicit auto both
   // make a skill discoverable, even on agents with the old manual setting.
   const on = new Set([...enabledPluginIds, ...turnSkillIds, ...(options.autoSkillIds ?? [])]);
   const offered = (skills: readonly SkillMeta[] = []) =>
     skills.filter((skill) => on.has(skill.identifier));
 
+  // Manual mode exposes only what the user (or turn) opted into. Project / device
+  // skills come from the working directory and stay visible either way.
+  const selectable =
+    options.skillActivateMode === 'manual'
+      ? offered
+      : (skills: readonly SkillMeta[] = []) => skills;
+
   const ordered = [
     ...(sources.project ?? []),
     ...offered(sources.db),
     ...selectable(sources.agentSkills),
-    ...offered(sources.builtin),
+    ...(sources.builtin ?? []).filter(
+      (skill) =>
+        on.has(skill.identifier) || options.implicitBuiltinSkillIds?.includes(skill.identifier),
+    ),
   ];
   const disabled = new Set(options.disabledIds ?? []);
   const shareAllowed = options.shareAllowedIds ? new Set(options.shareAllowedIds) : undefined;

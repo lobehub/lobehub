@@ -23,7 +23,7 @@ interface TelegramDetailProps {
   appId?: string;
   botUsername?: string;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 // Telegram is the only remaining global-token bot with no install audit list,

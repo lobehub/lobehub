@@ -110,6 +110,7 @@ export class AgentModel {
       agentId,
     );
   assertDeletable = this.withContext(remove.assertDeletable);
+  detachFromSurvivingTopics = this.withContext(remove.detachFromSurvivingTopics);
   findSessionIdsByAgentIds = this.withContext(remove.findSessionIdsByAgentIds);
   findAgentIdsBySessionIds = this.withContext(remove.findAgentIdsBySessionIds);
   batchDelete = this.withContext(remove.batchDelete);
@@ -129,6 +130,7 @@ export class AgentModel {
   // **************** Transfer *************** //
 
   transferHasForeignRows = this.withContext(transfer.transferHasForeignRows);
+  getDeleteImpact = this.withContext(transfer.getDeleteImpact);
   /**
    * Cross-scope transfer of agents and everything they own. The unit of work
    * spans many aggregates, so it lives in {@link AgentTransferRepository};

@@ -1,4 +1,8 @@
-import { SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
+import {
+  MAX_UPLOAD_FILE_SIZE,
+  SHARE_VISITOR_MAX_FILE_SIZE,
+  UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+} from '@lobechat/const';
 import { type ChatContextContent } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
@@ -12,7 +16,7 @@ import { findUnreadableServerResponseError } from '@/libs/trpc/client/unreadable
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
-import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
+import { UPLOAD_NETWORK_ERROR, UploadRequestError } from '@/services/upload';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { type UploadFileListDispatch } from '@/store/file/reducers/uploadFileList';
@@ -124,8 +128,31 @@ const withoutDuplicateImages = (
 
 const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
 
+const formatUploadLimit = () => `${Math.round(MAX_UPLOAD_FILE_SIZE / 1024 ** 3)} GB`;
+
+/**
+ * The file is over the size every upload is held to: the client check in
+ * `uploadFileToS3` and the server's input validation both carry this message.
+ * Sending it again fails the same way, so it is not offered as a retry.
+ */
+const isUploadSizeLimitError = (error: unknown) =>
+  getErrorMessage(error).includes(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+
 const getUploadErrorDescription = (error: unknown): string => {
   if (error === UPLOAD_NETWORK_ERROR) return t('upload.networkError', { ns: 'error' });
+
+  if (isUploadSizeLimitError(error)) {
+    return t('upload.fileTooLarge', { max: formatUploadLimit(), ns: 'error' });
+  }
+
+  // Storage answered the PUT with an error. Its status and code are the only
+  // trace of why (the browser's statusText is empty over HTTP/2).
+  if (error instanceof UploadRequestError) {
+    return t('upload.storageRejected', {
+      detail: [`HTTP ${error.status}`, error.code].filter(Boolean).join(' · '),
+      ns: 'error',
+    });
+  }
 
   // A share upload is admitted by the CREATOR's storage quota, so the block
   // is theirs to lift — never route the visitor to their own plan/usage page.
@@ -144,12 +171,23 @@ const getUploadErrorDescription = (error: unknown): string => {
     return withResponseDetail(t('upload.serviceUnavailable', { ns: 'error' }), unreadable);
   }
 
-  return typeof error === 'string'
-    ? error
-    : t('upload.unknownError', { ns: 'error', reason: getErrorMessage(error) });
+  const reason = getErrorMessage(error).trim();
+  // A failed chip must always say why; an empty reason left only a red icon.
+  if (!reason) return t('upload.uploadFailed', { ns: 'error' });
+
+  return typeof error === 'string' ? reason : t('upload.unknownError', { ns: 'error', reason });
 };
 
 const EMPTY_CHAT_UPLOAD_FILE_LIST: UploadFileItem[] = [];
+
+/** Statuses of a chip whose file has no server row yet (its id is still the pending id). */
+const UNSETTLED_UPLOAD_STATUSES = new Set<UploadFileItem['status']>([
+  'cancelled',
+  'error',
+  'pending',
+  'processing',
+  'uploading',
+]);
 
 export class FileActionImpl {
   readonly #get: () => FileStore;
@@ -161,6 +199,8 @@ export class FileActionImpl {
    * and a same-named upload may appear under the old key later.
    */
   readonly #inFlightUploads = new Set<{ contextKey: string }>();
+  /** Cancels an upload when its chip is removed, keyed by the chip's pending id. */
+  readonly #uploadAbortControllers = new Map<string, AbortController>();
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
@@ -227,15 +267,39 @@ export class FileActionImpl {
    * rejected before any message owned them (e.g. the server refused the turn
    * up front). Items already in the list are skipped by id so a concurrent
    * draft does not end up with duplicates.
+   *
+   * `order` is the composer's id order before the send. When given, restored and
+   * retained items (e.g. a failed upload that never left) go back to those
+   * positions; anything newer keeps its place after them.
    */
-  restoreChatUploadFileList = (contextKey: string, files: UploadFileItem[]): void => {
+  restoreChatUploadFileList = (
+    contextKey: string,
+    files: UploadFileItem[],
+    order?: string[],
+  ): void => {
     if (files.length === 0) return;
 
-    const currentIds = new Set(this.#getChatUploadFileList(contextKey).map((file) => file.id));
+    const current = this.#getChatUploadFileList(contextKey);
+    const currentIds = new Set(current.map((file) => file.id));
     const restored = files.filter((file) => !currentIds.has(file.id));
     if (restored.length === 0) return;
 
-    this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
+    if (!order) {
+      this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
+      return;
+    }
+
+    const rank = new Map(order.map((id, index) => [id, index]));
+    const merged = [...current, ...restored];
+    const ranked = merged
+      .filter((file) => rank.has(file.id))
+      .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+    const unranked = merged.filter((file) => !rank.has(file.id));
+    this.#setChatUploadFileList(
+      contextKey,
+      [...ranked, ...unranked],
+      n('restoreChatUploadFileList'),
+    );
   };
 
   dispatchChatUploadFileList = (contextKey: string, payload: UploadFileListDispatch): void => {
@@ -345,15 +409,19 @@ export class FileActionImpl {
 
     this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
 
+    // Removing a chip mid-upload cancels the transfer rather than letting it
+    // finish in the background into a file nobody sends.
+    this.#uploadAbortControllers.get(id)?.abort();
+
     if (item?.skipRemoveFile) return;
+
+    // Only a settled upload has a server row; until then the id is the pending
+    // client id, and an upload that lands after the abort deletes itself.
+    if (item && UNSETTLED_UPLOAD_STATUSES.has(item.status)) return;
 
     // Share uploads are creator-owned rows the visitor's own file API cannot
     // see; the share endpoint deletes them only while still unsent.
     if (item?.shareId) {
-      // Only a settled upload has a server row to drop; a pending or failed
-      // draft is client-side only (its id is still the file name) and the
-      // share endpoint would just reject it.
-      if (item.status !== 'success') return;
       await shareChatService.removeFile(item.shareId, id);
       return;
     }
@@ -363,7 +431,7 @@ export class FileActionImpl {
 
   retryChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
     const item = this.#getChatUploadFileList(contextKey).find((file) => file.id === id);
-    if (!item?.agentId) return;
+    if (!item?.agentId || item.retryable === false) return;
 
     this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
     await this.uploadChatFiles(contextKey, [item.file], item.agentId, { shareId: item.shareId });
@@ -538,57 +606,98 @@ export class FileActionImpl {
     for (const id of repastedIds)
       dispatchChatUploadFileList({ id, type: 'updateFile', value: { repastedAt } });
 
-    const files = uploadFiles.map((item) => item.file);
-    const uploadIds = new Map(uploadFiles.map((item) => [item.file, item.id]));
-
     // upload files and process it
-    const pools = files.map(async (file) => {
-      const uploadId = uploadIds.get(file)!;
-      let fileResult: { id: string; url: string } | undefined;
-
+    const pools = uploadFiles.map(async ({ file, id: uploadId }) => {
+      // Share uploads have no cancellable transfer of their own yet.
+      const abortController = shareId ? undefined : new AbortController();
+      if (abortController) this.#uploadAbortControllers.set(uploadId, abortController);
       try {
-        fileResult = shareId
-          ? await uploadShareVisitorFile({
-              file,
-              onStatusUpdate: dispatchChatUploadFileList,
-              shareId,
-              uploadId,
-            })
-          : await this.#get().uploadWithProgress({
-              conversationAgentId: agentId,
-              file,
-              onStatusUpdate: dispatchChatUploadFileList,
-              uploadId,
-            });
-      } catch (error) {
-        if (getErrorMessage(error) === 'UNAUTHORIZED') {
-          dispatchChatUploadFileList({ id: uploadId, type: 'removeFile' });
-        } else {
-          dispatchChatUploadFileList({
-            id: uploadId,
-            type: 'updateFile',
-            value: {
-              error: getUploadErrorDescription(error),
-              status: 'error',
-              uploadState: undefined,
-            },
-          });
-        }
+        await this.#uploadChatFile({
+          abortController,
+          agentId,
+          dispatchChatUploadFileList,
+          file,
+          shareId,
+          uploadId,
+        });
+      } finally {
+        this.#uploadAbortControllers.delete(uploadId);
       }
-
-      if (!fileResult) return;
-
-      // image don't need to be chunked and embedding
-      if (isChunkingUnsupported(file.type)) return;
-
-      // A share file is creator-owned, so the visitor cannot pre-parse it; the
-      // run parses it on the creator's account when the turn is set up.
-      if (shareId) return;
-
-      await ragService.parseFileContent(fileResult.id);
     });
 
     await Promise.all(pools);
+  };
+
+  #uploadChatFile = async ({
+    abortController,
+    agentId,
+    dispatchChatUploadFileList,
+    file,
+    shareId,
+    uploadId,
+  }: {
+    abortController?: AbortController;
+    agentId: string;
+    dispatchChatUploadFileList: (payload: UploadFileListDispatch) => void;
+    file: File;
+    shareId: string | undefined;
+    uploadId: string;
+  }): Promise<void> => {
+    let fileResult: { id: string; url: string } | undefined;
+
+    try {
+      fileResult = shareId
+        ? await uploadShareVisitorFile({
+            file,
+            onStatusUpdate: dispatchChatUploadFileList,
+            shareId,
+            uploadId,
+          })
+        : await this.#get().uploadWithProgress({
+            abortController,
+            conversationAgentId: agentId,
+            file,
+            onStatusUpdate: dispatchChatUploadFileList,
+            uploadId,
+          });
+    } catch (error) {
+      if (abortController?.signal.aborted) return;
+
+      if (getErrorMessage(error) === 'UNAUTHORIZED') {
+        dispatchChatUploadFileList({ id: uploadId, type: 'removeFile' });
+      } else {
+        dispatchChatUploadFileList({
+          id: uploadId,
+          type: 'updateFile',
+          value: {
+            error: getUploadErrorDescription(error),
+            retryable: !isUploadSizeLimitError(error),
+            status: 'error',
+            uploadState: undefined,
+          },
+        });
+      }
+    }
+
+    if (!fileResult) return;
+
+    // The chip was removed while the file record was being created: drop the
+    // record too, so a cancelled upload leaves nothing behind.
+    if (abortController?.signal.aborted) {
+      await fileService.removeFile(fileResult.id).catch((error: unknown) => {
+        console.error('Failed to remove cancelled upload:', error);
+      });
+      return;
+    }
+
+    // image don't need to be chunked and embedding
+    if (isChunkingUnsupported(file.type)) return;
+
+    // A share file is creator-owned, so the visitor cannot pre-parse it; the
+    // run parses it on the creator's account when the turn is set up.
+    if (shareId) return;
+
+    await ragService.parseFileContent(fileResult.id);
   };
 }
 

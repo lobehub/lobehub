@@ -93,6 +93,55 @@ const rewriteHeaderSpreads = (dir: string) => {
   writeFileSync(utilsPath, utilsRewritten);
 };
 
+const CONFIG_ANCHOR = "  extends Omit<RequestInit, 'body' | 'headers' | 'method'>, CoreConfig {\n";
+const CONFIG_FIELDS = `  /**
+   * Retries on 408/429/5xx and network errors, for idempotent methods or a
+   * POST with an \`idempotencyKey\` only. Applied by \`createLobeHub\`; default 2.
+   */
+  maxRetries?: number;
+  /**
+   * Milliseconds to wait for the response headers, per attempt; \`0\` disables.
+   * Applied by \`createLobeHub\`; default 600000 (10 minutes).
+   */
+  timeout?: number;
+`;
+const REQUEST_OPTIONS_ANCHOR = `  /**
+   * Any body that you want to add to your request.
+   *
+   * {@link https://developer.mozilla.org/docs/Web/API/fetch#body}
+   */
+  body?: unknown;
+  path?: Record<string, unknown>;
+`;
+const REQUEST_OPTIONS_FIELDS = `  /**
+   * Sent as \`Idempotency-Key\`: the server runs the request once and replays
+   * its answer for repeats, which also makes a POST safe to retry.
+   */
+  idempotencyKey?: string;
+`;
+
+/**
+ * Declare the hand-written runtime options of \`createLobeHub\` (see
+ * \`src/client.ts\`) on the generated client types, so every method accepts
+ * them. Done here rather than by module augmentation because the published
+ * d.ts is bundled, and a relative \`declare module\` does not survive that.
+ */
+const injectRuntimeOptions = (dir: string) => {
+  const typesPath = path.join(dir, 'client', 'types.gen.ts');
+  const source = readFileSync(typesPath, 'utf8');
+  if (!source.includes(CONFIG_ANCHOR) || !source.includes(REQUEST_OPTIONS_ANCHOR)) {
+    throw new Error(
+      'injectRuntimeOptions: expected Config / RequestOptions declarations not found in client/types.gen.ts — check the generator output.',
+    );
+  }
+  writeFileSync(
+    typesPath,
+    source
+      .replace(CONFIG_ANCHOR, CONFIG_ANCHOR + CONFIG_FIELDS)
+      .replace(REQUEST_OPTIONS_ANCHOR, REQUEST_OPTIONS_FIELDS + REQUEST_OPTIONS_ANCHOR),
+  );
+};
+
 const listFiles = (dir: string, base = dir): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -106,6 +155,7 @@ if (process.argv.includes('--check')) {
   try {
     await createClient({ ...config, logs: { level: 'silent' }, output: tempDir });
     rewriteHeaderSpreads(tempDir);
+    injectRuntimeOptions(tempDir);
 
     const expected = listFiles(tempDir).sort();
     const committed = listFiles(OUTPUT_DIR).sort();
@@ -131,5 +181,6 @@ if (process.argv.includes('--check')) {
   rmSync(OUTPUT_DIR, { force: true, recursive: true });
   await createClient(config);
   rewriteHeaderSpreads(OUTPUT_DIR);
+  injectRuntimeOptions(OUTPUT_DIR);
   console.log(`✓ Generated ${path.relative(PKG_ROOT, OUTPUT_DIR)} from openapi.yml`);
 }

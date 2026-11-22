@@ -2,7 +2,7 @@ import { Button, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openConnectorEditDrawer } from '@/features/Connectors/CustomConnectorModal/imperative';
+import { openConnectorEditModal } from '@/features/Connectors/CustomConnectorModal/imperative';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 import { useConnectorConfigureGate } from './useConnectorConfigureGate';
@@ -21,7 +21,7 @@ const ConnectorConfigureButton = memo<{ canEdit: boolean; connector: ConnectorWi
       <Button
         disabled={!allowed}
         onClick={() => {
-          if (allowed) openConnectorEditDrawer(connector.id);
+          if (allowed) openConnectorEditModal(connector.id);
         }}
       >
         {t('store.actions.configure')}

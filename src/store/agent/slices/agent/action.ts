@@ -414,26 +414,10 @@ export class AgentSliceActionImpl {
   };
 
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
-    const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
+    const { activeAgentId, togglePlugin } = this.#get();
     if (!activeAgentId) return;
 
-    const currentPlugins = (agentMap[activeAgentId]?.plugins as string[]) || [];
-    const hasPlugin = currentPlugins.includes(pluginId);
-
-    // Determine new state
-    const shouldEnable = state !== undefined ? state : !hasPlugin;
-
-    let newPlugins: string[];
-    if (shouldEnable && !hasPlugin) {
-      newPlugins = [...currentPlugins, pluginId];
-    } else if (!shouldEnable && hasPlugin) {
-      newPlugins = currentPlugins.filter((id) => id !== pluginId);
-    } else {
-      // No change needed
-      return;
-    }
-
-    await updateAgentConfig({ plugins: newPlugins });
+    await togglePlugin(pluginId, state);
   };
 
   updateAgentChatConfig = async (

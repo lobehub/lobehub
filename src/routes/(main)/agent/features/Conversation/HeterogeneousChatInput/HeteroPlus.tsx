@@ -13,8 +13,6 @@ import SubmenuChevron from '@/features/ChatInput/ActionBar/components/SubmenuChe
 import { insertGoalTag } from '@/features/ChatInput/InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { OFFSETS_IN_HOURS, resolveScheduleTime } from './scheduleTime';
 import { useHeteroUpload } from './useHeteroUpload';
@@ -64,7 +62,6 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
 
   const scheduledSendAt = useConversationStore((s) => s.scheduledSendAt);
   const setScheduledSendAt = useConversationStore((s) => s.setScheduledSendAt);
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const closeMenu = useCallback(() => setOpen(false), []);
   const { beforeUpload, onFiles } = useHeteroUpload(providerType, closeMenu);
@@ -130,21 +127,17 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
         type: 'switch',
       },
       // Goal creation shares the standard input's goal chip.
-      ...(enableGoals
-        ? ([
-            { type: 'divider' },
-            {
-              icon: TargetIcon,
-              key: 'set-topic-goal',
-              // Same string as the chip it inserts — see the agent composer's Plus.
-              label: tEditor('slash.goal'),
-              onClick: () => {
-                setOpen(false);
-                insertGoalTag(editor, tEditor('slash.goal'));
-              },
-            },
-          ] as ActionDropdownMenuItems)
-        : []),
+      { type: 'divider' },
+      {
+        icon: TargetIcon,
+        key: 'set-topic-goal',
+        // Same string as the chip it inserts — see the agent composer's Plus.
+        label: tEditor('slash.goal'),
+        onClick: () => {
+          setOpen(false);
+          insertGoalTag(editor, tEditor('slash.goal'));
+        },
+      },
     ];
   }, [
     t,
@@ -153,7 +146,6 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
     setShowTypoBar,
     armSchedule,
     scheduledSendAt,
-    enableGoals,
     editor,
     beforeUpload,
     onFiles,

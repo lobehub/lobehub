@@ -1,32 +1,22 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  Empty,
-  Flexbox,
-  Icon,
-  SearchBar,
-  Select,
-  Tabs,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Empty, Flexbox, SearchBar, Select, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import { LockIcon, RefreshCwIcon, UsersIcon } from 'lucide-react';
+import { RefreshCwIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonBar from '@/components/Skeleton/Bar';
+import VisibilityFilter, {
+  matchesVisibilityFilter,
+  type VisibilityFilterValue,
+} from '@/components/VisibilityFilter';
 import { cacheScope } from '@/libs/replica';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 
 import AccountDetailPanel from './AccountDetailPanel';
 import AccountRow, { AccountListHeader, LIST_MIN_WIDTH, PROVIDER_NAME } from './AccountRow';
 import {
-  type AccountVisibilityTab,
-  accountVisibilityTab,
   isSubscriptionProvider,
   matchesKeyword,
   sortAccounts,
@@ -45,9 +35,8 @@ const ALL = 'all';
  * Accounts register themselves when a CLI login reports quota; this page only
  * decides which of them stay in rotation and what they are called.
  *
- * In a workspace the accounts split into two tabs, as on the Devices page:
- * Workspace (shared with every member) and Private (the caller's own). The tab
- * lives in `?visibility=`; the personal space has no team and no tabs.
+ * In a workspace the shared accounts and the caller's own private ones list
+ * together, the private ones marked with a lock (as on the Devices page).
  */
 const SubscriptionAccounts = () => {
   const { t } = useTranslation('setting');
@@ -60,39 +49,27 @@ const SubscriptionAccounts = () => {
   const loaded = useAgentQuotaStore(agentQuotaSelectors.accounts);
   const [provider, setProvider] = useState<SubscriptionProvider | typeof ALL>(ALL);
   const [keyword, setKeyword] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
   const [openId, setOpenId] = useState<string>();
-  const split = !!useActiveWorkspaceId();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab: AccountVisibilityTab =
-    searchParams.get('visibility') === 'private' ? 'private' : 'public';
-  const setTab = (next: AccountVisibilityTab) => {
-    // The open account belongs to the tab being left.
-    setOpenId(undefined);
-    // Keep the other params (e.g. `?hl=`); only the tab changes.
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        if (next === 'private') params.set('visibility', next);
-        else params.delete('visibility');
-        return params;
-      },
-      { replace: true },
-    );
-  };
-
-  const allAccounts = sortAccounts(
+  const accounts = sortAccounts(
     (loaded ?? []).filter((a): a is ProviderAccount => isSubscriptionProvider(a.provider)),
   );
-  // Everything below (filters, counts, capacity, the open account) speaks for the active tab.
-  const accounts = split ? allAccounts.filter((a) => accountVisibilityTab(a) === tab) : allAccounts;
   const present = SUBSCRIPTION_PROVIDERS.filter((p) => accounts.some((a) => a.provider === p));
   // A provider filter that no longer has accounts falls back to everything.
   const active = provider !== ALL && present.includes(provider) ? provider : ALL;
+  // Only workspace accounts carry a visibility, so the filter shows only in a
+  // workspace, where shared and the caller's private accounts list together.
+  const isPrivateAccount = (a: ProviderAccount) => !!a.workspaceId && a.visibility === 'private';
+  const showVisibilityFilter = accounts.some((a) => !!a.workspaceId);
   const visible = accounts.filter(
-    (a) => (active === ALL || a.provider === active) && matchesKeyword(a, keyword),
+    (a) =>
+      (active === ALL || a.provider === active) &&
+      (!showVisibilityFilter || matchesVisibilityFilter(isPrivateAccount(a), visibilityFilter)) &&
+      matchesKeyword(a, keyword),
   );
   const openAccount = accounts.find((a) => a.id === openId);
-  const inRotation = accounts.filter((a) => a.enabled !== false).length;
+  // The summary counts what the filters leave, so it moves with them.
+  const inRotation = visible.filter((a) => a.enabled !== false).length;
 
   // The meters read each account's own readings, which the list sync does not
   // touch: refreshing re-reads them too, or a newer sample would never show.
@@ -109,7 +86,7 @@ const SubscriptionAccounts = () => {
   };
 
   // A hydrated empty list may be stale: only the server's answer settles "none yet".
-  const settling = !confirmed && !error && allAccounts.length === 0;
+  const settling = !confirmed && !error && accounts.length === 0;
 
   const body = settling ? (
     <Flexbox gap={4}>
@@ -117,27 +94,17 @@ const SubscriptionAccounts = () => {
         <SkeletonBar height={56} key={i} radius={cssVar.borderRadius} />
       ))}
     </Flexbox>
-  ) : error && allAccounts.length === 0 ? (
+  ) : error && accounts.length === 0 ? (
     // A failed load must not read as "no accounts" — they would look identical.
     <Flexbox align={'center'} gap={12} paddingBlock={40}>
       <Empty description={t('subscriptionAccounts.loadFailed')} />
       <Button onClick={() => void revalidate()}>{t('retry', { ns: 'common' })}</Button>
     </Flexbox>
-  ) : allAccounts.length === 0 ? (
+  ) : accounts.length === 0 ? (
     <Empty
       description={t('subscriptionAccounts.empty.desc')}
       style={{ paddingBlock: 40 }}
       title={t('subscriptionAccounts.empty.title')}
-    />
-  ) : accounts.length === 0 ? (
-    // The other tab has accounts: say what belongs here and how one gets here.
-    <Empty
-      style={{ paddingBlock: 40 }}
-      description={
-        tab === 'private'
-          ? t('subscriptionAccounts.empty.privateDesc')
-          : t('subscriptionAccounts.empty.workspaceDesc')
-      }
     />
   ) : (
     <Flexbox gap={16}>
@@ -171,41 +138,17 @@ const SubscriptionAccounts = () => {
   const summary = (
     <Text fontSize={13} type={'secondary'}>
       {accounts.length > 0 &&
-        t('subscriptionAccounts.summary', { count: accounts.length, inRotation })}
+        t('subscriptionAccounts.summary', { count: visible.length, inRotation })}
     </Text>
   );
 
   return (
     <Flexbox gap={16} width={'100%'}>
-      {/* Tabs, the summary beside them, and the toolbar share one row, as on the
-          Devices page. The tabs sit in a plain block (as there): a flex wrapper
-          stretches their full-width root and throws the row out of line. */}
+      {/* The summary and the toolbar share one row. */}
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
-        <Flexbox horizontal align={'center'} gap={16} style={{ minWidth: 0 }}>
-          {split && (
-            <div style={{ flex: 'none' }}>
-              <Tabs
-                activeKey={tab}
-                items={[
-                  {
-                    icon: <Icon icon={UsersIcon} />,
-                    key: 'public',
-                    label: t('subscriptionAccounts.tabs.workspace'),
-                  },
-                  {
-                    icon: <Icon icon={LockIcon} />,
-                    key: 'private',
-                    label: t('subscriptionAccounts.tabs.private'),
-                  },
-                ]}
-                onChange={(key) => setTab(key as AccountVisibilityTab)}
-              />
-            </div>
-          )}
-          {summary}
-        </Flexbox>
+        {summary}
         <Flexbox horizontal align={'center'} gap={8}>
-          {/* Nothing to search or filter in an empty tab. Filters sit on the right
+          {/* Nothing to search or filter in an empty list. Filters sit on the right
               as a dropdown: the provider list grows with every coding plan we
               support, which a segmented control cannot hold. */}
           {accounts.length > 0 && (
@@ -218,17 +161,20 @@ const SubscriptionAccounts = () => {
                 variant={'filled'}
                 onChange={(e) => setKeyword(e.target.value)}
               />
+              {showVisibilityFilter && (
+                <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+              )}
               <Select
                 style={{ minWidth: 168 }}
                 value={active}
                 variant={'filled'}
                 options={[
                   {
-                    label: `${t('subscriptionAccounts.filter.all')} · ${accounts.length}`,
+                    label: t('subscriptionAccounts.filter.allProviders'),
                     value: ALL,
                   },
                   ...present.map((p) => ({
-                    label: `${PROVIDER_NAME[p]} · ${accounts.filter((a) => a.provider === p).length}`,
+                    label: PROVIDER_NAME[p],
                     value: p,
                   })),
                 ]}
@@ -237,10 +183,12 @@ const SubscriptionAccounts = () => {
             </>
           )}
           <ActionIcon
-            icon={RefreshCwIcon}
             loading={isValidating || refreshing}
             title={t('subscriptionAccounts.refresh')}
             onClick={() => void refresh()}
+            icon={RefreshCwIcon}
+            // A row that runs short of width shrinks its children; the icon keeps its square.
+            style={{ flex: 'none' }}
           />
         </Flexbox>
       </Flexbox>
