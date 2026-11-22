@@ -33,6 +33,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
+import { announceDeviceGrants } from './deviceGrantCard';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
@@ -266,6 +267,8 @@ export class ChannelCoordinator {
     } finally {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
+    // A claim that found the device made private since it was picked files a request; ask now.
+    if (pending.length) await announceDeviceGrants(this.db, channelId);
   };
 
   /**
