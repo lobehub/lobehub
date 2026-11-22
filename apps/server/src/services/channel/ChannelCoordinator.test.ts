@@ -1,12 +1,14 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChannelCoordinator } from './ChannelCoordinator';
+import { ChannelCoordinator, STOP_CONFIRM_TIMEOUT_MS } from './ChannelCoordinator';
+import { wakeChannel } from './queue';
 
 const { executions, executeToolCall, interruptTask } = vi.hoisted(() => ({
   interruptTask: vi.fn().mockResolvedValue({ success: true }),
   executions: {
     input: vi.fn(),
+    isolateUnconfirmedStop: vi.fn().mockResolvedValue(false),
     deliverAnswerToAsker: vi.fn(),
     deliverReplyMentions: vi
       .fn()
@@ -241,6 +243,43 @@ describe('Channel completion physical writer confirmation', () => {
     });
     await coordinator(false, 'codex', 'crashed-worker').complete('channel', 'job', 'op');
     expect(executions.releaseWriter).toHaveBeenCalledWith('channel', 'job');
+  });
+
+  // A stopped run whose device never confirms the exit must not hold the queue for good: the
+  // repository isolates it once the stop is old enough, and the queue is woken right away.
+  it('isolates a stopped writer the device does not confirm, then wakes the queue', async () => {
+    executeToolCall.mockResolvedValue({ success: true, state: { exited: false } });
+    executions.isolateUnconfirmedStop.mockResolvedValueOnce(true);
+    await coordinator(true, 'codex', null, 'running').stopWriters([
+      { channelId: 'channel', id: 'job', operationId: 'op' },
+    ]);
+    expect(executions.releaseWriter).not.toHaveBeenCalled();
+    expect(executions.isolateUnconfirmedStop).toHaveBeenCalledWith(
+      'channel',
+      'job',
+      STOP_CONFIRM_TIMEOUT_MS,
+    );
+    expect(wakeChannel).toHaveBeenCalledWith('channel');
+  });
+
+  it('still isolates a stopped writer when asking its device to stop throws', async () => {
+    interruptTask.mockRejectedValueOnce(new Error('gateway down'));
+    executions.isolateUnconfirmedStop.mockResolvedValueOnce(true);
+    await expect(
+      coordinator(true, 'codex', null, 'running', null, null).stopWriters([
+        { channelId: 'channel', id: 'job', operationId: 'op' },
+      ]),
+    ).rejects.toThrow('gateway down');
+    expect(executions.isolateUnconfirmedStop).toHaveBeenCalled();
+  });
+
+  it('does not consider isolation once the writer is released', async () => {
+    executeToolCall.mockResolvedValue({ success: true, state: { exited: true } });
+    await coordinator(true, 'codex', null, 'running').stopWriters([
+      { channelId: 'channel', id: 'job', operationId: 'op' },
+    ]);
+    expect(executions.releaseWriter).toHaveBeenCalledWith('channel', 'job');
+    expect(executions.isolateUnconfirmedStop).not.toHaveBeenCalled();
   });
 
   it('trusts a missing process after the dispatch settled normally', async () => {

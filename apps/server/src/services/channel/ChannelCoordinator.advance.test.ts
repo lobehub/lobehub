@@ -230,6 +230,75 @@ describe('Channel concurrent startup', () => {
     expect(executions.accepted).toHaveBeenCalledWith('channel', 'job-0');
   });
 
+  describe('one Agent asked by two people in the same branch', () => {
+    /** Person A's earlier run is still settling; A and B each have a queued request. */
+    const twoRequesters = (config: Record<string, unknown>) => {
+      executions.candidates.mockResolvedValue({
+        heads: [
+          { id: 'a-next', memberId: 'agent', requesterMemberId: 'a', status: 'queued' },
+          { id: 'b-first', memberId: 'agent', requesterMemberId: 'b', status: 'queued' },
+        ],
+        inFlight: [
+          {
+            id: 'a-stuck',
+            memberId: 'agent',
+            operationId: 'op',
+            requesterMemberId: 'a',
+            status: 'running',
+          },
+        ],
+      });
+      const query = (rows: unknown[]) => {
+        const result = Object.assign(Promise.resolve(rows), { from: vi.fn(), where: vi.fn() });
+        result.from.mockReturnValue(result);
+        result.where.mockReturnValue(result);
+        return result;
+      };
+      const select = vi
+        .fn()
+        .mockReturnValueOnce(query([{ id: 'channel', workspaceId: 'workspace' }]))
+        .mockReturnValueOnce(query([{ config, id: 'agent' }]))
+        .mockReturnValueOnce(query([{ userId: 'user-a' }, { userId: 'user-b' }]));
+      getScopedOnlineDevices.mockResolvedValue([]);
+      return new ChannelCoordinator({ select } as never);
+    };
+
+    // Each person's run goes to their own device: B's request must not wait for A's stuck run.
+    it("starts another person's request while one person's run is still settling", async () => {
+      const gate = Promise.withResolvers<void>();
+      const instance = twoRequesters({});
+      vi.spyOn(instance, 'complete').mockReturnValue(gate.promise);
+      const advancing = instance.advance('channel');
+      try {
+        await vi.waitFor(() =>
+          expect(executions.accepted).toHaveBeenCalledWith('channel', 'b-first'),
+        );
+        expect(executions.claim).not.toHaveBeenCalledWith('channel', 'a-next', expect.anything());
+      } finally {
+        gate.resolve();
+        await advancing;
+      }
+      expect(executions.claim).toHaveBeenCalledWith('channel', 'a-next', expect.anything());
+    });
+
+    // A device picked in the Channel hosts every run: the member still takes turns.
+    it('keeps the whole member waiting on a device picked in the Channel', async () => {
+      const gate = Promise.withResolvers<void>();
+      const instance = twoRequesters({ deviceId: 'device-1', deviceOwnerId: 'owner' });
+      vi.spyOn(instance, 'complete').mockReturnValue(gate.promise);
+      const advancing = instance.advance('channel');
+      try {
+        await vi.waitFor(() => expect(instance.complete).toHaveBeenCalled());
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(executions.claim).not.toHaveBeenCalled();
+      } finally {
+        gate.resolve();
+        await advancing;
+      }
+      expect(executions.claim).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('bounds startup concurrency and drains the remaining Agents', async () => {
     const gate = Promise.withResolvers<{ success: boolean }>();
     execAgent.mockReturnValue(gate.promise);
