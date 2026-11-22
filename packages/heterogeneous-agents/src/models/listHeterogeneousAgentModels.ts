@@ -13,6 +13,7 @@ import { isRecord } from '@lobechat/utils/object';
 import { isHeterogeneousAgentAuthRequired } from '../config';
 import { getHeterogeneousTypeLabel } from '../labels';
 import { AcpRpcResponseError } from '../spawn/acpStdioClient';
+import { getAntigravitySpawnEnv } from '../spawn/antigravity';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { listCopilotAcpModels } from '../spawn/copilotAcpSession';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
@@ -368,10 +369,11 @@ export const listHeterogeneousAgentModels = async (
   ]
     .filter(Boolean)
     .join(path.delimiter);
-  const env = {
+  const mergedEnv = {
     ...callerEnv,
     ...(mergedPath ? { PATH: mergedPath } : {}),
   };
+  const env = params.type === 'antigravity' ? getAntigravitySpawnEnv(mergedEnv) : mergedEnv;
 
   try {
     if (params.type === 'codex') {
