@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useInRouterContext, useLocation } from 'react-router';
 
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
@@ -38,6 +39,7 @@ import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
 import SubmenuChevron from '../components/SubmenuChevron';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
+import { usePopupToolsMenuItem } from './usePopupToolsMenuItem';
 import { useSkillsMenuItem } from './useSkillsMenuItem';
 import { useToolsMenuItem } from './useToolsMenuItem';
 
@@ -82,7 +84,13 @@ const styles = stylex.create({
   labelWithChip: { display: 'inline-flex', gap: '8px', alignItems: 'center' },
 });
 
-const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+const usePlusMenuItemsBase = ({
+  close,
+  toolsMenuItem,
+}: {
+  close: () => void;
+  toolsMenuItem: ActionDropdownMenuItems[number];
+}): ActionDropdownMenuItems => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
@@ -124,7 +132,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
   const closeDropdown = useCallback(() => close(), [close]);
   const skillsMenuItem = useSkillsMenuItem(closeDropdown);
-  const toolsMenuItem = useToolsMenuItem(closeDropdown);
 
   const handleToggleParams = useCallback(() => {
     close();
@@ -322,12 +329,27 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   return items;
 };
 
+const useMainPlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+  const closeDropdown = useCallback(() => close(), [close]);
+  const toolsMenuItem = useToolsMenuItem(closeDropdown);
+
+  return usePlusMenuItemsBase({ close, toolsMenuItem });
+};
+
+const usePopupPlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuItems => {
+  const closeDropdown = useCallback(() => close(), [close]);
+  const toolsMenuItem = usePopupToolsMenuItem(closeDropdown);
+
+  return usePlusMenuItemsBase({ close, toolsMenuItem });
+};
+
 /**
  * The trigger stays hook-free: every store subscription and the whole item tree
- * live in `usePlusMenuItems`, which ActionDropdown only invokes from inside the
- * popup — so opening a conversation no longer pays for a menu nobody opened.
+ * live in `useMainPlusMenuItems` / `usePopupPlusMenuItems`, which ActionDropdown
+ * only invokes from inside the popup — so opening a conversation no longer pays
+ * for a menu nobody opened.
  */
-const PlusAction = memo(() => {
+const PlusActionBase = memo<{ isPopup: boolean }>(({ isPopup }) => {
   const { t } = useTranslation('chat');
   const { controlHeight, iconSize } = useDensityTokens();
 
@@ -338,12 +360,28 @@ const PlusAction = memo(() => {
       title={t('plus.contextTooltip')}
       tooltipProps={{ placement: 'top' }}
       dropdown={{
-        menu: { useItems: usePlusMenuItems },
+        menu: { useItems: isPopup ? usePopupPlusMenuItems : useMainPlusMenuItems },
         minWidth: 196,
         placement: 'topLeft',
       }}
     />
   );
+});
+
+PlusActionBase.displayName = 'PlusActionBase';
+
+const PlusActionInRouter = memo(() => {
+  const { pathname } = useLocation();
+
+  return <PlusActionBase isPopup={pathname.startsWith('/popup')} />;
+});
+
+PlusActionInRouter.displayName = 'PlusActionInRouter';
+
+const PlusAction = memo(() => {
+  const inRouter = useInRouterContext();
+
+  return inRouter ? <PlusActionInRouter /> : <PlusActionBase isPopup={false} />;
 });
 
 PlusAction.displayName = 'PlusAction';
