@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import {
   generateToolsFromManifest,
   renderToolInstructions,
@@ -26,7 +27,11 @@ export function createToolActivationResolver(
 ): ResolveToolActivationContext | undefined {
   const initial = state.operationToolSet;
   if (!initial || !resolved.enabledToolIds.includes(LobeActivatorIdentifier)) return;
-  return async () => {
+  // Keep evaluation runs using their session clock on the canonical, hydrated prompt.
+  if (!state.activatedStepTools?.length || input.evalContext?.sessionDate) return;
+  // The same step can be retried on another provider route; share its lazy reconstruction.
+  let pending: ReturnType<ResolveToolActivationContext> | undefined;
+  const resolve: ResolveToolActivationContext = async () => {
     const additions: ToolActivationContext['additions'] = [];
     const deferred = new Set<string>();
     const visibleResults = new Set(
@@ -43,9 +48,18 @@ export function createToolActivationResolver(
         initial.enabledToolIds.includes(activation.id)
       )
         continue;
+      // The identity injector also changes the system instructions when account access becomes available.
+      // Retain that canonical prompt when the step has an identity block.
+      if (
+        activation.id === AgentAccountIdentifier &&
+        input.agentAccountContext &&
+        (input.agentAccountContext.accounts.length > 0 ||
+          input.agentAccountContext.inbox.unreadCount > 0)
+      )
+        return;
       const instructions = renderToolInstructions([manifest]);
       // A templated manifest must keep the context engine's variable hydration.
-      if (instructions.includes('{{') || input.evalContext?.sessionDate) continue;
+      if (instructions.includes('{{')) continue;
       additions.push({
         afterToolCallId: activation.afterToolCallId,
         instructions,
@@ -75,4 +89,5 @@ export function createToolActivationResolver(
       return { additions, system: { current, initial: original } };
     }
   };
+  return () => (pending ??= resolve());
 }

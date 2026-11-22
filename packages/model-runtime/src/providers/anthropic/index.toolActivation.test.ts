@@ -1,11 +1,15 @@
 // @vitest-environment node
 import type { ToolActivationContext } from '@lobechat/types';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import type { ChatStreamPayload } from '../../types';
 import { LobeAnthropicAI } from './index';
 
-afterEach(() => vi.restoreAllMocks());
+beforeEach(() => vi.stubEnv('ANTHROPIC_ENABLE_INLINE_TOOLS', '1'));
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 const tool = (name: string) => ({
   function: { description: name, name, parameters: { type: 'object', properties: {} } },
@@ -58,7 +62,6 @@ it('preserves tools and system across activation and sends the schema after the 
   expect(second.tools).toEqual(first.tools);
   expect(first.tools).toMatchObject([
     { name: 'activateTools', cache_control: { type: 'ephemeral' } },
-    { defer_loading: true },
   ]);
   expect(second.messages.slice(-2)).toMatchObject([
     { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'act1' }] },
@@ -195,4 +198,43 @@ it('replays the addition before a later call to the activated tool', async () =>
     { role: 'assistant', content: [{ type: 'tool_use', name: 'readDocument' }] },
     { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'read1' }] },
   ]);
+});
+
+it('leaves both the cold and activated request unchanged unless the server opts in', async () => {
+  vi.stubEnv('ANTHROPIC_ENABLE_INLINE_TOOLS', undefined);
+  const { runtime, create } = capture();
+  const resolve = vi.fn(async () => delta);
+  for (const payload of [initial, next]) {
+    await runtime.chat(payload);
+    await runtime.chat(payload, { getToolActivationContext: resolve });
+    expect(create.mock.calls.at(-1)).toEqual(create.mock.calls.at(-2));
+  }
+  expect(resolve).not.toHaveBeenCalled();
+});
+
+it('sends the ordinary cold request even when the feature is enabled', async () => {
+  const { runtime, create } = capture();
+  await runtime.chat(initial);
+  await runtime.chat(initial, { getToolActivationContext: async () => ({ additions: [] }) });
+  expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
+});
+
+it.each([
+  [
+    'a synthetic todo reminder',
+    [{ role: 'user', content: '<todo_context>finish the task</todo_context>' }],
+  ],
+  [
+    'a resumed user after an empty assistant turn',
+    [
+      { role: 'assistant', content: '' },
+      { role: 'user', content: 'Continue.' },
+    ],
+  ],
+] as const)('preserves the ordinary request before %s', async (_, tail) => {
+  const { runtime, create } = capture();
+  const payload = { ...next, messages: [...next.messages, ...tail] };
+  await runtime.chat(payload);
+  await runtime.chat(payload, { getToolActivationContext: async () => delta });
+  expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
 });

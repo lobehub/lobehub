@@ -2,33 +2,12 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { ToolActivationContext } from '@lobechat/types';
 import debug from 'debug';
 
+import { supportsClaudeInlineToolChanges } from '../../../providers/anthropic/modelId';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../../types';
 import type { AnthropicCompatibleRuntimeContext } from '../../anthropicCompatible/context';
 
 const inlineToolsBeta = 'inline-tools-2026-09-15';
-const placeholder = {
-  defer_loading: true,
-  description: 'Reserved for tool discovery. Never available for execution.',
-  input_schema: { properties: {}, type: 'object' as const },
-  name: '__lobehub_deferred_placeholder__',
-};
-
-// Mid-conversation tool changes require a supported model AND endpoint. Compatible
-// proxies opt in per route by advertising the beta in their configured default headers.
-// https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages
-const inlineToolModels = new Set([
-  'claude-opus-4-8',
-  'claude-opus-5',
-  'claude-opus-5-5',
-  'claude-sonnet-5-5',
-  'claude-haiku-5-5',
-  'claude-fable-5',
-  'claude-fable-5-1',
-  'claude-fable-5-2',
-  'claude-mythos-5',
-  'claude-mythos-5-1',
-  'claude-mythos-5-2',
-]);
+const log = debug('lobe-model-runtime:anthropic:tools');
 
 function betaHeader(headers?: object | null) {
   const entry = Object.entries(headers ?? {}).find(
@@ -50,7 +29,7 @@ type WireUpdate = {
 
 function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActivationContext) {
   const tools = body.tools ?? [];
-  if (!tools.length || tools.some((tool) => tool.type || tool.name === placeholder.name)) return;
+  if (!tools.length || tools.some((tool) => tool.type)) return;
   const definitions = new Map((tools as Anthropic.Tool[]).map((tool) => [tool.name, tool]));
   const later = new Set<string>();
   const updates = new Map<number, WireUpdate>();
@@ -68,6 +47,9 @@ function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActiv
     );
     if (matches.length !== 1) return;
     const index = matches[0];
+    // Anthropic permits a content-bearing system message only at the tail or before an assistant.
+    const next = body.messages[index + 1];
+    if (next && next.role !== 'assistant') return;
     const update: WireUpdate = updates.get(index) ?? { role: 'system', content: [] };
     if (addition.instructions) update.content.push({ type: 'text', text: addition.instructions });
     for (const name of addition.names) {
@@ -119,7 +101,7 @@ function anchorAdditions(body: Anthropic.MessageCreateParams, context: ToolActiv
   return {
     ...body,
     messages: messages as Anthropic.MessageParam[],
-    tools: [...initialTools, placeholder],
+    tools: initialTools,
   };
 }
 
@@ -131,44 +113,78 @@ export async function prepareAnthropicToolChanges(
     payload: ChatStreamPayload,
   ) => Promise<Anthropic.MessageCreateParams> | Anthropic.MessageCreateParams,
 ) {
-  const ordinary = async () => ({ body: await build(payload), headers: options?.requestHeaders });
+  // Build the canonical body once. In particular, resolving an image URL can perform I/O.
+  const body = await build(payload);
+  const ordinary = { body, headers: options?.requestHeaders };
   if (
+    process.env.ANTHROPIC_ENABLE_INLINE_TOOLS !== '1' ||
     !options?.getToolActivationContext ||
     !payload.tools?.length ||
     payload.enabledContextCaching === false ||
     payload.enabledSearch
   )
-    return ordinary();
+    return ordinary;
+
   const actualModel = runtime.withMappedRequestModel({ model: payload.model }, payload.model).model;
   const configured = betaHeader(runtime._options.defaultHeaders);
   if (
-    !inlineToolModels.has(
-      actualModel
-        .replace(/^anthropic\//, '')
-        .replace(/-\d{8}$/, '')
-        .replaceAll('.', '-'),
-    ) ||
+    !supportsClaudeInlineToolChanges(actualModel) ||
     (runtime.baseURL.replace(/\/$/, '') !== 'https://api.anthropic.com' &&
       !configured?.split(',').some((token) => token.trim() === inlineToolsBeta))
   )
-    return ordinary();
-  const context = await options.getToolActivationContext().catch(() => {
-    debug('lobe-model-runtime:anthropic:tools')('Could not reconstruct the initial tool context');
+    return ordinary;
+
+  const context = await options.getToolActivationContext().catch((error: unknown) => {
+    log(
+      'Resolver failed for model=%s operation=%s error=%s',
+      actualModel,
+      options.metadata?.operationId,
+      error instanceof Error ? error.name : 'unknown',
+    );
     return undefined;
   });
-  if (!context) return ordinary();
-  const system = context.system;
-  if (system) {
-    const first = payload.messages[0];
-    if (first?.role !== 'system' || first.content !== system.current) return ordinary();
+  if (!context?.additions.length) {
+    log(
+      'Ordinary request: no eligible tool changes, model=%s operation=%s',
+      actualModel,
+      options.metadata?.operationId,
+    );
+    return ordinary;
   }
-  const messages = system
-    ? [{ ...payload.messages[0], content: system.initial }, ...payload.messages.slice(1)]
-    : payload.messages;
-
-  const body = await build({ ...payload, messages });
   const projected = anchorAdditions(body, context);
-  if (!projected) return system ? ordinary() : { body, headers: options.requestHeaders };
+  if (!projected) {
+    log(
+      'Ordinary request: incompatible tools or history, model=%s operation=%s',
+      actualModel,
+      options.metadata?.operationId,
+    );
+    return ordinary;
+  }
+  if (context.system) {
+    // Only rewrite a plain system block that survived the provider's conversion verbatim.
+    const system = body.system;
+    if (
+      !Array.isArray(system) ||
+      system.length !== 1 ||
+      system[0].text !== context.system.current ||
+      !context.system.initial.trim()
+    ) {
+      log(
+        'Ordinary request: system prompt changed, model=%s operation=%s',
+        actualModel,
+        options.metadata?.operationId,
+      );
+      return ordinary;
+    }
+    projected.system = [{ ...system[0], text: context.system.initial }];
+  }
+
+  log(
+    'Inline tool changes=%d model=%s operation=%s',
+    context.additions.length,
+    actualModel,
+    options.metadata?.operationId,
+  );
   const betas = new Set(
     [
       configured,
