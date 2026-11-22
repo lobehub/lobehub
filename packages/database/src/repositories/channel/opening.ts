@@ -19,6 +19,7 @@ import { notTrashed } from '../../utils/softDelete';
 import { channelReplyShare } from './agent';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
+import { openingRequestKey } from './openingKey';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
 import { chooseOpeningLayout } from './openingLayout';
 import { messageStands } from './tombstone';
@@ -54,9 +55,6 @@ const OPENING_THREAD_READ_CONCURRENCY = 3;
 
 /** Thread reference a message carries, shown by clients as the Thread's chip. */
 export const channelThreadReference = (threadId: string) => `<#${threadId}>`;
-
-/** Request key of the acknowledgement a job posted before its run. */
-export const openingRequestKey = (jobId: string) => `opening:${jobId}`;
 
 /** Another Agent the same request asked to answer, in parallel with this one. */
 export interface ChannelCoAddressedAgent {

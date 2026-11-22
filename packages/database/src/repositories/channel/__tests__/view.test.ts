@@ -6,7 +6,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { channelJobs, channelMembers, channelMessages } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { appendMessage } from '../delivery';
-import { openingRequestKey } from '../opening';
+import { openingRequestKey } from '../openingKey';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
