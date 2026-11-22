@@ -34,7 +34,7 @@ const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, onChange, value }) 
         variant={'filled'}
         onChange={(e) => onChange({ ...value, keyword: e.target.value })}
       />
-      <Flexbox horizontal align={'center'} gap={8}>
+      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
         <Select
           aria-label={t('creds.typeFilter.label')}
           style={{ minWidth: 150 }}
