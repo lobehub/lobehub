@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   stylexDevCssPath,
+  stylexDevCssVersionMarker,
   stylexDevRuntimeId,
   stylexProxiedDevCssModuleId,
   stylexProxiedDevCssPlugin,
@@ -27,8 +28,18 @@ const loadShim = () => {
 // Runs the shim as the browser would after loading it from the Vite origin.
 const runShim = () => {
   const meta = { url: `${viteOrigin}/@id/__x00__${stylexProxiedDevCssModuleId}` };
-  new Function('__meta', loadShim().replaceAll('import.meta', '__meta'))(meta);
+  const body = loadShim().replaceAll('import.meta', '__meta').replace('export async', 'async');
+  return new Function('__meta', `${body}\nreturn { waitForStylexCss };`)(meta) as {
+    waitForStylexCss: (version: number) => Promise<void>;
+  };
 };
+
+const cssResponse = (version: number, rules: string) =>
+  new Response(`/*${stylexDevCssVersionMarker}${version}*/\n${rules}`, {
+    headers: { 'content-type': 'text/css' },
+  });
+
+const appliedCss = () => document.getElementById('__stylex_virtual__')?.textContent;
 
 describe('stylexProxiedDevCssPlugin', () => {
   let link: HTMLLinkElement;
@@ -72,6 +83,99 @@ describe('stylexProxiedDevCssPlugin', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(link.disabled).toBeFalsy();
     expect(document.querySelector('style')).toBeNull();
+  });
+
+  it('settles a module wait only after CSS of its rule version is applied', async () => {
+    const responses = [cssResponse(1, '.lh-old{}'), cssResponse(3, '.lh-old{}.lh-new{}')];
+    const fetchMock = vi.fn(async () => responses.shift() ?? cssResponse(3, '.lh-new{}'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { waitForStylexCss } = runShim();
+    await waitForStylexCss(3);
+
+    expect(appliedCss()).toContain('.lh-new{}');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops waiting after the cap when the CSS request never settles', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+
+    try {
+      const settled = vi.fn();
+      runShim().waitForStylexCss(1).then(settled);
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(settled).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not wait again for rules already applied', async () => {
+    const fetchMock = vi.fn(async () => cssResponse(4, '.lh1{}'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { waitForStylexCss } = runShim();
+    await waitForStylexCss(4);
+    await waitForStylexCss(2);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps newer CSS when an older response from another shim instance arrives later', async () => {
+    let releaseOld: (response: Response) => void = () => {};
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (releaseOld = resolve)))
+      .mockImplementationOnce(async () => cssResponse(7, '.lh-new{}'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    runShim();
+    await runShim().waitForStylexCss(7);
+    releaseOld(cssResponse(2, '.lh-old{}'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(appliedCss()).toBe(`/*${stylexDevCssVersionMarker}7*/\n.lh-new{}`);
+  });
+
+  it('serves dev CSS prefixed with the rule version it was collected at', () => {
+    let version = 11;
+    const plugin = stylexProxiedDevCssPlugin({
+      collectCss: () => {
+        version += 1;
+        return '.lh1{}';
+      },
+      getVersion: () => version,
+    }) as Plugin & { configureServer: (server: unknown) => void };
+    let middleware: (req: { url?: string }, res: unknown, next: () => void) => void = () => {};
+    plugin.configureServer({ middlewares: { use: (fn: typeof middleware) => (middleware = fn) } });
+
+    const res = { end: vi.fn(), setHeader: vi.fn(), statusCode: 0 };
+    middleware({ url: `${stylexDevCssPath}?t=1` }, res, () => {});
+    const next = vi.fn();
+    middleware({ url: '/src/main.tsx' }, res, next);
+
+    expect(res.end).toHaveBeenCalledWith(`/*${stylexDevCssVersionMarker}11*/\n.lh1{}`);
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/css');
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('serves the StyleX runtime id as the shared shim module', () => {
+    const plugin = stylexProxiedDevCssPlugin({
+      collectCss: () => '',
+      getVersion: () => 0,
+    }) as Plugin & {
+      load: (id: string) => string | undefined;
+      resolveId: (id: string) => string | undefined;
+    };
+
+    const runtime = plugin.load(String(plugin.resolveId(`/@id/${stylexDevRuntimeId}`)));
+
+    expect(runtime).toBe(`import ${JSON.stringify(stylexProxiedDevCssModuleId)};`);
   });
 });
 
