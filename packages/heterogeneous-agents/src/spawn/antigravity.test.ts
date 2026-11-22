@@ -49,12 +49,4 @@ describe('Antigravity process input', () => {
   ])('rejects custom %s that breaks protocol or session ownership', (flag) => {
     expect(() => buildAntigravityArgs({ extraArgs: [flag] })).toThrow('LobeHub manages');
   });
-
-  it('rejects image attachments instead of silently dropping them', async () => {
-    await expect(
-      buildAgentInput('antigravity', [
-        { type: 'image', source: { type: 'path', path: '/tmp/image.png' } },
-      ]),
-    ).rejects.toThrow('does not support image attachments');
-  });
 });

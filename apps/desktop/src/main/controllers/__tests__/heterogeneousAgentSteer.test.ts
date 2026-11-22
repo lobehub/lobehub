@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { AntigravityLiveInput, ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
@@ -75,7 +78,7 @@ describe('steerAgentSession', () => {
     );
   });
 
-  it('steers a live Antigravity CLI with text and rejects image attachments', async () => {
+  it('steers a live Antigravity CLI with text and image attachments', async () => {
     const stdin = new PassThrough();
     const written = readLines(stdin);
     const liveInput = new AntigravityLiveInput(stdin);
@@ -92,13 +95,26 @@ describe('steerAgentSession', () => {
     });
     expect(liveInput.takeSteerUuid()).toBe('steer-1');
 
-    await expect(
-      steerAgentSession(
-        agy,
-        { ...params, imageList: [{ id: 'img-1', url: 'https://example.com/a.png' }] },
-        '/tmp',
-      ),
-    ).resolves.toEqual({ status: 'rejected' });
+    const cacheDir = await mkdtemp(path.join(tmpdir(), 'agy-desktop-steer-test-'));
+    const image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
+    try {
+      await expect(
+        steerAgentSession(
+          agy,
+          {
+            ...params,
+            imageList: [{ id: 'img-1', url: `data:image/png;base64,${image}` }],
+            messageId: 'steer-image',
+          },
+          cacheDir,
+        ),
+      ).resolves.toEqual({ status: 'accepted' });
+      const filePath = JSON.parse(written[1].message.content.match(/^- (".+")$/m)![1]);
+      expect(await readFile(filePath)).toEqual(Buffer.from(image, 'base64'));
+      expect(liveInput.takeSteerUuid()).toBe('steer-image');
+    } finally {
+      await rm(cacheDir, { force: true, recursive: true });
+    }
   });
 
   it('steers a Pi run', async () => {
