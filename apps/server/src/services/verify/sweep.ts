@@ -10,9 +10,8 @@ import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { redriveClaimedVerification } from './lifecycle';
-import { settleFailedRepair } from './repairTerminal';
 import { planItemToPendingResult } from './resultSnapshot';
-import { finalizeVerifyRun } from './settle';
+import { finalizeVerifyRun, settleFailedRepair } from './settle';
 import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
 import { releaseUndeliveredRound } from './undeliveredRound';

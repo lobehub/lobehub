@@ -58,7 +58,6 @@ export {
   type RepairSpawner,
   VerifyRepairService,
 } from './repairService';
-export { settleFailedRepair } from './repairTerminal';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
   isCurrentReviewPrediction,
@@ -67,7 +66,7 @@ export {
   shouldSurfaceProposal,
   VerifyReviewPredictorService,
 } from './reviewPredictor';
-export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
+export { driveTaskFromVerify, finalizeVerifyRun, settleFailedRepair } from './settle';
 export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
 export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { settleFailedRepair } from '../repairTerminal';
+import { settleFailedRepairRound } from '../repairTerminal';
 
 const m = vi.hoisted(() => ({
   op: vi.fn(),
@@ -33,10 +33,11 @@ vi.mock('../statusService', () => ({
     return { claimVerifying: m.claim, recompute: m.recompute };
   }),
 }));
-vi.mock('../settle', () => ({
-  driveTaskFromVerify: m.drive,
-  recomputeRepairAncestors: m.ancestors,
-}));
+vi.mock('../repairAncestors', () => ({ recomputeRepairAncestors: m.ancestors }));
+
+const settleFailedRepair = (db: any, userId: string, operationId: string, workspaceId?: string) =>
+  settleFailedRepairRound(db, userId, operationId, workspaceId, m.drive);
+
 const db = {} as any;
 const run = {
   id: 'repair-run',

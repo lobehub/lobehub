@@ -65,9 +65,8 @@ vi.mock('@/database/models/message', () => ({
   }),
 }));
 vi.mock('../lifecycle', () => ({ redriveClaimedVerification }));
-vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
 vi.mock('../undeliveredRound', () => ({ releaseUndeliveredRound }));
-vi.mock('../settle', () => ({ finalizeVerifyRun }));
+vi.mock('../settle', () => ({ finalizeVerifyRun, settleFailedRepair }));
 
 const db = {} as any;
 const NOW = new Date('2026-08-10T00:00:00Z');

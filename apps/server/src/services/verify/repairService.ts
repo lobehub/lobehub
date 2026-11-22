@@ -21,7 +21,6 @@ import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AcceptanceService } from './acceptanceService';
 import { carryPassedResultsForward } from './carryForward';
-import { settleFailedRepair } from './repairTerminal';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
@@ -576,9 +575,6 @@ export class VerifyRepairService {
       }
     }
     await this.statusService.markRepairing(operationId);
-    // A fast startup failure can precede the plan/parent writes above. Reconcile
-    // after both exist as well as from the completion hook.
-    await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
     log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
 
     return spawned;

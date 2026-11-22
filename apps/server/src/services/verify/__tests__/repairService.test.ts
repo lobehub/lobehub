@@ -12,7 +12,6 @@ const m = vi.hoisted(() => ({
   recordAutoRepair: vi.fn(),
   rounds: vi.fn(),
   run: vi.fn(),
-  settleFailedRepair: vi.fn(),
   updateMessage: vi.fn(),
   updateResult: vi.fn(),
 }));
@@ -50,7 +49,6 @@ vi.mock('../statusService', () => ({
     return { markRepairing: m.markRepairing };
   }),
 }));
-vi.mock('../repairTerminal', () => ({ settleFailedRepair: m.settleFailedRepair }));
 
 const item = (id: string, required = true) => ({
   id,
