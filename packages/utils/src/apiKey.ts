@@ -24,6 +24,16 @@ const LEGACY_KEY_SUFFIX_LENGTH = 16;
 /** Random characters every new key keeps (about 165 bits), whatever the prefix. */
 const MIN_KEY_SUFFIX_LENGTH = 32;
 
+/**
+ * Longest plaintext key the `api_keys.key` column can hold: encryption adds 58
+ * characters of IV, auth tag and separators and hex-encodes the plaintext, so
+ * 99 characters become exactly the column's 256.
+ */
+const MAX_STORED_KEY_LENGTH = 99;
+
+/** Longest prefix that still leaves room for {@link MIN_KEY_SUFFIX_LENGTH} random characters. */
+export const MAX_API_KEY_PREFIX_LENGTH = MAX_STORED_KEY_LENGTH - MIN_KEY_SUFFIX_LENGTH;
+
 const KEY_SUFFIX_LENGTH = Math.max(API_KEY_LENGTH - API_KEY_PREFIX.length, MIN_KEY_SUFFIX_LENGTH);
 const KEY_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 // Largest multiple of the alphabet size in a byte; higher bytes are discarded
@@ -35,8 +45,15 @@ const MAX_UNBIASED_BYTE = 256 - (256 % KEY_ALPHABET.length);
  * Format: `${API_KEY_PREFIX}{lowercase alphanumerics}`, {@link API_KEY_LENGTH} characters in total
  * unless the prefix needs the key to be longer
  * @returns Generated API Key
+ * @throws When the configured prefix is too long for the key to be stored
  */
 export function generateApiKey(): string {
+  if (API_KEY_PREFIX.length > MAX_API_KEY_PREFIX_LENGTH) {
+    throw new Error(
+      `API_KEY_PREFIX must be at most ${MAX_API_KEY_PREFIX_LENGTH} characters, got ${API_KEY_PREFIX.length}.`,
+    );
+  }
+
   let randomPart = '';
 
   while (randomPart.length < KEY_SUFFIX_LENGTH) {

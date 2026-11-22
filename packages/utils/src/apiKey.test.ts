@@ -48,7 +48,7 @@ describe('apiKey', () => {
         expect(validateApiKeyFormat(apiKey)).toBe(true);
       });
 
-      it.each([33, 63, 64, 100])(
+      it.each([33, 63, 64, 67])(
         'should keep 32 random characters with a %i-character prefix',
         async (prefixLength) => {
           const prefix = 'p'.repeat(prefixLength);
@@ -59,6 +59,15 @@ describe('apiKey', () => {
           expect(apiKey.startsWith(prefix)).toBe(true);
           expect(apiKey.slice(prefix.length)).toMatch(/^[\da-z]{32}$/);
           expect(validateApiKeyFormat(apiKey)).toBe(true);
+        },
+      );
+
+      it.each([68, 100])(
+        'should refuse to issue a key that cannot be stored with a %i-character prefix',
+        async (prefixLength) => {
+          const { generateApiKey } = await loadWithPrefix('p'.repeat(prefixLength));
+
+          expect(() => generateApiKey()).toThrow(/API_KEY_PREFIX.*at most 67/);
         },
       );
     });

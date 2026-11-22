@@ -1,8 +1,13 @@
 // @vitest-environment node
-import { API_KEY_PREFIX, validateApiKeyFormat } from '@lobechat/utils/apiKey';
+import {
+  API_KEY_PREFIX,
+  MAX_API_KEY_PREFIX_LENGTH,
+  validateApiKeyFormat,
+} from '@lobechat/utils/apiKey';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { hashApiKey, hashApiKeyWithSecret } from '@/utils/server/apiKeyHash';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -85,6 +90,21 @@ describe('ApiKeyModel', () => {
       const stored = await apiKeyModel.findById(created.id);
       expect(stored?.key).not.toBe(created.key);
       expect(stored?.key).toContain(':');
+    });
+
+    it('stores the longest supported key in the encrypted key column', async () => {
+      const key = `${'p'.repeat(MAX_API_KEY_PREFIX_LENGTH)}${'a'.repeat(32)}`;
+      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+      const encrypted = await gateKeeper.encrypt(key);
+
+      expect(encrypted).toHaveLength(256);
+
+      const [row] = await serverDB
+        .insert(apiKeys)
+        .values({ key: encrypted, keyHash: hashApiKey(key), name: 'Longest Key', userId })
+        .returning();
+
+      expect(row.key).toBe(encrypted);
     });
   });
 
