@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { API_KEY_PREFIX, generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
+import {
+  API_KEY_LENGTH,
+  API_KEY_PREFIX,
+  generateApiKey,
+  isApiKeyExpired,
+  validateApiKeyFormat,
+} from './apiKey';
 
 describe('apiKey', () => {
   describe('generateApiKey', () => {
-    it('should generate API key with correct format', () => {
+    it('should generate a 64-character API key with correct format', () => {
       const apiKey = generateApiKey();
+      expect(API_KEY_LENGTH).toBe(64);
+      expect(apiKey).toHaveLength(64);
       expect(apiKey.startsWith(API_KEY_PREFIX)).toBe(true);
-      expect(apiKey.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+      expect(apiKey.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]+$/);
     });
     it('should generate unique API keys', () => {
       const keys = new Set();
@@ -40,6 +48,17 @@ describe('apiKey', () => {
     it('should accept keys with mixed alphanumeric characters', () => {
       const validKey = `${API_KEY_PREFIX}abc123def456789a`;
       expect(validateApiKeyFormat(validKey)).toBe(true);
+    });
+    it('should keep accepting legacy keys with a 16-character suffix', () => {
+      expect(validateApiKeyFormat(`${API_KEY_PREFIX}abc123def456789a`)).toBe(true);
+    });
+    it('should reject lengths between the legacy and current formats', () => {
+      const suffix = 'a'.repeat(API_KEY_LENGTH - API_KEY_PREFIX.length - 1);
+      expect(validateApiKeyFormat(`${API_KEY_PREFIX}${suffix}`)).toBe(false);
+    });
+    it('should reject keys longer than the current format', () => {
+      const suffix = 'a'.repeat(API_KEY_LENGTH - API_KEY_PREFIX.length + 1);
+      expect(validateApiKeyFormat(`${API_KEY_PREFIX}${suffix}`)).toBe(false);
     });
     it('should reject keys with wrong prefix', () => {
       const invalidKey = 'lb-1234567890abcdef';

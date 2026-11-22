@@ -12,43 +12,34 @@ const configuredApiKeyPrefix = (businessConst as Record<string, unknown>).API_KE
 export const API_KEY_PREFIX =
   typeof configuredApiKeyPrefix === 'string' ? configuredApiKeyPrefix : 'sk-lh-';
 
-// Global counter for additional uniqueness
-let apiKeyCounter = 0;
+/** Total length of a newly issued key, prefix included. */
+export const API_KEY_LENGTH = 64;
+
+/** Random-part length of keys issued before {@link API_KEY_LENGTH}; they stay valid. */
+const LEGACY_KEY_SUFFIX_LENGTH = 16;
+
+const KEY_SUFFIX_LENGTH = API_KEY_LENGTH - API_KEY_PREFIX.length;
+const KEY_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
+// Largest multiple of the alphabet size in a byte; higher bytes are discarded
+// so that `byte % 36` stays uniform.
+const MAX_UNBIASED_BYTE = 256 - (256 % KEY_ALPHABET.length);
 
 /**
  * Generate API Key
- * Format: `${API_KEY_PREFIX}{16 lowercase alphanumerics}`
+ * Format: `${API_KEY_PREFIX}{lowercase alphanumerics}`, {@link API_KEY_LENGTH} characters in total
  * @returns Generated API Key
  */
 export function generateApiKey(): string {
-  // Use high-resolution timestamp for better uniqueness
-  const timestamp = performance.now().toString(36).replaceAll('.', '');
+  let randomPart = '';
 
-  // Generate multiple random components
-  const random1 = Math.random().toString(36).slice(2);
-  const random2 = Math.random().toString(36).slice(2);
-  const random3 = Math.random().toString(36).slice(2);
-
-  // Add a counter-based component for additional uniqueness
-  apiKeyCounter = (apiKeyCounter + 1) % 1_000_000;
-  const counter = apiKeyCounter.toString(36);
-
-  // Combine all components
-  const combined = (timestamp + random1 + random2 + random3 + counter).replaceAll(/[^\da-z]/g, '');
-
-  // Ensure we have enough entropy
-  let randomPart = combined.slice(0, 16);
-
-  // If we don't have enough characters, generate more
-  while (randomPart.length < 16) {
-    const additional = Math.random().toString(36).slice(2);
-    randomPart += additional;
+  while (randomPart.length < KEY_SUFFIX_LENGTH) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(KEY_SUFFIX_LENGTH))) {
+      if (byte >= MAX_UNBIASED_BYTE) continue;
+      randomPart += KEY_ALPHABET[byte % KEY_ALPHABET.length];
+      if (randomPart.length === KEY_SUFFIX_LENGTH) break;
+    }
   }
 
-  // Take exactly 16 characters
-  randomPart = randomPart.slice(0, 16);
-
-  // Combine to form the final API Key
   return `${API_KEY_PREFIX}${randomPart}`;
 }
 
@@ -62,8 +53,8 @@ export function isApiKeyExpired(expiresAt: Date | null): boolean {
   return new Date() > expiresAt;
 }
 
-/** The random half of a key: exactly 16 lowercase alphanumerics. */
-const KEY_SUFFIX_PATTERN = /^[\da-z]{16}$/;
+/** The random half of a key: lowercase alphanumerics only. */
+const KEY_SUFFIX_PATTERN = /^[\da-z]+$/;
 
 /**
  * Validate API Key format.
@@ -83,5 +74,10 @@ const KEY_SUFFIX_PATTERN = /^[\da-z]{16}$/;
  */
 export function validateApiKeyFormat(key: string): boolean {
   if (!key.startsWith(API_KEY_PREFIX)) return false;
-  return KEY_SUFFIX_PATTERN.test(key.slice(API_KEY_PREFIX.length));
+
+  const suffix = key.slice(API_KEY_PREFIX.length);
+  if (suffix.length !== KEY_SUFFIX_LENGTH && suffix.length !== LEGACY_KEY_SUFFIX_LENGTH) {
+    return false;
+  }
+  return KEY_SUFFIX_PATTERN.test(suffix);
 }
