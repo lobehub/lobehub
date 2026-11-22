@@ -22,6 +22,11 @@ export interface AgentAvatarProps extends Omit<AvatarProps, 'avatar' | 'brokenFa
    * legacy default image) draws the character generated from the id.
    */
   avatar?: string | null;
+  /**
+   * Turn the generated character's eyes and body toward the pointer. Only applies while it is
+   * `animated`.
+   */
+  followPointer?: boolean;
   /** Display name: labels the avatar and seeds the character when `agentId` is absent. */
   name?: string | null;
   /** Activity state of the generated character. */
@@ -40,6 +45,7 @@ const AgentAvatar = memo<AgentAvatarProps>(
     avatar,
     background,
     className,
+    followPointer,
     name,
     onClick,
     ref,
@@ -65,6 +71,7 @@ const AgentAvatar = memo<AgentAvatarProps>(
         <GeneratedAgentAvatar
           {...(resolved.kind === 'generated' ? resolved.choice : undefined)}
           animated={animated}
+          followPointer={followPointer}
           name={resolved.label}
           seed={resolved.seed}
           size={size}

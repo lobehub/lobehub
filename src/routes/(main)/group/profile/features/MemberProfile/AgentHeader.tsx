@@ -18,6 +18,7 @@ import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { createAgentCharacterTab } from '@/components/AgentAvatar/pickerTab';
 import { isDefaultAgentAvatar } from '@/components/AgentAvatar/resolve';
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
@@ -193,7 +194,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
                   <SupervisorAvatar size={72} />
                 </Block>
               )
-            : // A character picked in Lobot is no emoji or image; the picker would print its text.
+            : // A picked character is no emoji or image; the picker would print its text.
               parseAgentAvatar(agentMeta.avatar)
               ? () => (
                   <Block clickable height={72} width={72}>
@@ -203,6 +204,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
               : undefined
         }
         customTabs={[
+          createAgentCharacterTab(agentId),
           {
             label: (
               <Tooltip title={t('settingAgent.backgroundColor.title', { ns: 'setting' })}>

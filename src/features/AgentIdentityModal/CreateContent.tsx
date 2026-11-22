@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { createAgentCharacterTab } from '@/components/AgentAvatar/pickerTab';
 import EmojiPicker from '@/components/EmojiPicker';
 import CreateVisibilityField, { useCreateVisibility } from '@/features/CreateVisibilityField';
 import { useGlobalStore } from '@/store/global';
@@ -47,6 +48,7 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
           <EmojiPicker
             allowUpload
             allowDelete={!!form.avatar}
+            customTabs={[createAgentCharacterTab()]}
             loading={form.uploading}
             locale={locale}
             popupProps={{ placement: 'bottom' }}
