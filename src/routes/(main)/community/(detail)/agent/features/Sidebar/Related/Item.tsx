@@ -1,8 +1,9 @@
-import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import Avatar from '@/components/Avatar';
 import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverAssistantItem } from '@/types/discover';
 
