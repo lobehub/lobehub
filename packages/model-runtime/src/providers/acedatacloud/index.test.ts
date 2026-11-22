@@ -215,6 +215,7 @@ describe('Ace deployment and error boundaries', () => {
 
   it.each([
     [401, 'invalid_api_key', 'Invalid token', AgentRuntimeErrorType.InvalidProviderAPIKey],
+    [403, 'permission_denied', 'Access denied', AgentRuntimeErrorType.PermissionDenied],
     [
       403,
       'content_policy_violation',

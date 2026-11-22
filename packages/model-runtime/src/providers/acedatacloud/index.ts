@@ -21,15 +21,21 @@ import { aceChatProtocol, isOfficialAceEndpoint, loadAceCatalog } from './catalo
 // cannot be selected as a chat model. Keep those services in their own tools.
 const NON_CHAT_PREFIXES = ['dall-e-', 'gpt-image-', 'nano-banana', 'text-embedding-'];
 
+const handleAceError = (error: { code?: string; error?: { code?: string }; status?: number }) => {
+  if (error?.status === 429) {
+    return { error, errorType: AgentRuntimeErrorType.RateLimitExceeded };
+  }
+  if (error?.status === 403 && (error.code ?? error.error?.code) === 'permission_denied') {
+    return { error, errorType: AgentRuntimeErrorType.PermissionDenied };
+  }
+};
+
 export const params = {
   baseURL: 'https://api.acedata.cloud/v1',
   chatCompletion: {
     // Ace signals throttling with HTTP 429; the generic message parser does not
     // classify every localized or flat compatible error body as a rate limit.
-    handleError: (error) =>
-      error?.status === 429
-        ? { error, errorType: AgentRuntimeErrorType.RateLimitExceeded }
-        : undefined,
+    handleError: handleAceError,
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_ACEDATACLOUD_CHAT_COMPLETION === '1',
@@ -69,6 +75,7 @@ export const params = {
 const AceMessagesAI = createAnthropicCompatibleRuntime(
   createAnthropicCompatibleParams({
     baseURL: 'https://api.acedata.cloud',
+    chatCompletion: { handleError: handleAceError },
     customClient: {
       createClient: (options) =>
         createDefaultAnthropicClient({ ...options, apiKey: null, authToken: options.apiKey }),
