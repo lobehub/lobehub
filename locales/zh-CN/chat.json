@@ -879,6 +879,7 @@
   "goalProcess.attempts.passed": "通过",
   "goalProcess.attempts.retired": "已放弃",
   "goalProcess.attempts.running": "进行中",
+  "goalProcess.attempts.stopped": "已中止",
   "goalProcess.attempts.title": "之前的尝试",
   "goalProcess.clarify.description": "回答一次，Agent 就会按你的回答规划；跳过则按 Agent 自己的假设开工。",
   "goalProcess.clarify.islandSubtitle": "开工前需要你确认",

@@ -541,7 +541,9 @@ const FrontierRow = memo<{
                     ? t('goalProcess.tag.done')
                     : t('goalProcess.tag.retired'),
               }
-            : null;
+            : view.halted
+              ? { color: undefined, text: t('goalProcess.node.stopped') }
+              : null;
 
   return (
     <Block

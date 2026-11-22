@@ -283,6 +283,47 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1).toMatchObject({ isStale: false, isVerifying: true });
   });
 
+  describe('on a paused goal', () => {
+    const paused = (extra: Partial<GoalGraphSnapshot> = {}) =>
+      buildGoalGraphView(
+        snapshot({
+          events: [event('w1', 'activated', 118)],
+          goal: goal({ status: 'paused', updatedAt: at(119) }),
+          nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(118) })],
+          ...extra,
+        }),
+        NOW,
+      );
+
+    /**
+     * Regression: stopping a run leaves its node `active` so Resume can pick it
+     * up, and the row kept spinning with a running clock after the stop.
+     */
+    it('shows a task whose run was stopped as stopped, waiting for Resume', () => {
+      const view = paused();
+
+      expect(view.byId.w1).toMatchObject({ halted: true, isVerifying: false });
+      expect(view.byId.w1.startedAt).toBeUndefined();
+      expect(view.byId.w1.attempts.at(-1)?.outcome).toBe('stopped');
+      expect(isRunningNode(view.byId.w1)).toBe(false);
+      expect(view.frontier.map((item) => [item.key, item.kind])).toEqual([['w1', 'ready']]);
+    });
+
+    it('keeps a run that is still going as running: pausing does not stop it', () => {
+      const view = paused({ runHeartbeats: { w1: at(119) } });
+
+      expect(view.byId.w1.halted).toBeUndefined();
+      expect(isRunningNode(view.byId.w1)).toBe(true);
+    });
+
+    it('keeps a delivery still being judged as verifying', () => {
+      const view = paused({ acceptances: { w1: { id: 'acc-1', status: 'repairing' } } });
+
+      expect(view.byId.w1).toMatchObject({ isVerifying: true });
+      expect(view.byId.w1.halted).toBeUndefined();
+    });
+  });
+
   it('stops asking for a sign-off on a retired node', () => {
     // The node's delivery is discarded; a `delivered` acceptance beside the
     // "retired" tag asked the owner to confirm work the Goal had dropped.

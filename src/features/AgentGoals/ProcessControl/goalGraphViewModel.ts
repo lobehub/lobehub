@@ -47,7 +47,7 @@ const nodeAcceptance = (node: GoalGraphNode, acceptance: GoalNodeAcceptance): Go
     ? { ...acceptance, status: 'closed' }
     : acceptance;
 
-export type GoalAttemptOutcome = 'passed' | 'failed' | 'retired' | 'running';
+export type GoalAttemptOutcome = 'passed' | 'failed' | 'retired' | 'stopped' | 'running';
 
 export interface GoalAttempt {
   endedAt?: Date;
@@ -441,22 +441,6 @@ export const buildGoalGraphView = (
     const attempts = buildAttempts(node, events);
     const closedReason = closedReasonOf(node, events);
     const open = attempts.at(-1);
-    const halted = goalClosed && node.kind === 'task' && node.status === 'active';
-    const live = node.status === 'active' && !goalClosed;
-    // The goal ended under this attempt: it was interrupted, not still going.
-    if (halted && open?.outcome === 'running') {
-      open.endedAt = goal.updatedAt;
-      open.outcome = 'retired';
-    }
-    const isRunningAttempt = live && open?.outcome === 'running';
-    // Liveness = the newer of the node row (moves on observations / status
-    // changes) and the run operation's lease heartbeat (refreshed ~90s while
-    // the agent works). Judging from the node row alone flags any long quiet
-    // stretch — a big tool call, the verify stage — as lost while the
-    // coordinator's reclaim path still sees a healthy lease.
-    const heartbeatAt = new Date(
-      Math.max(node.updatedAt.getTime(), runHeartbeats?.[node.id]?.getTime() ?? 0),
-    );
     // A delivered run contributes no heartbeat — its topic is `completed`, not
     // running — so liveness alone would call the verification window lost. That
     // window is where the goal is most informative, and it lasted up to an hour
@@ -470,6 +454,37 @@ export const buildGoalGraphView = (
     const acceptanceVerifying =
       acceptances?.[node.id]?.status === 'verifying' ||
       acceptances?.[node.id]?.status === 'repairing';
+    const beingJudged =
+      acceptanceVerifying ||
+      (!acceptances?.[node.id] &&
+        !!delivered &&
+        now - delivered.getTime() <= VERIFY_SETTLE_GRACE_MS);
+    // Stopping a run leaves its node `active` so Resume picks it up. On a paused
+    // goal, a Task with no live run and nothing being judged is not running,
+    // however its node reads.
+    const stoppedOnPause =
+      goal.status === 'paused' &&
+      node.kind === 'task' &&
+      node.status === 'active' &&
+      !runHeartbeats?.[node.id] &&
+      !beingJudged;
+    const halted =
+      (goalClosed && node.kind === 'task' && node.status === 'active') || stoppedOnPause;
+    const live = node.status === 'active' && !goalClosed && !stoppedOnPause;
+    // The goal ended under this attempt: it was interrupted, not still going.
+    if (halted && open?.outcome === 'running') {
+      open.endedAt = goal.updatedAt;
+      open.outcome = stoppedOnPause ? 'stopped' : 'retired';
+    }
+    const isRunningAttempt = live && open?.outcome === 'running';
+    // Liveness = the newer of the node row (moves on observations / status
+    // changes) and the run operation's lease heartbeat (refreshed ~90s while
+    // the agent works). Judging from the node row alone flags any long quiet
+    // stretch — a big tool call, the verify stage — as lost while the
+    // coordinator's reclaim path still sees a healthy lease.
+    const heartbeatAt = new Date(
+      Math.max(node.updatedAt.getTime(), runHeartbeats?.[node.id]?.getTime() ?? 0),
+    );
     const isVerifying =
       node.kind === 'task' &&
       live &&
@@ -539,6 +554,11 @@ export const buildGoalGraphView = (
     if (node.status === 'active') {
       // Stopped by the goal ending: nothing can advance it until a reopen.
       if (goalClosed) continue;
+      // Stopped by its owner: it waits for Resume, so it reads as ready to run.
+      if (view.halted) {
+        frontier.push({ key: node.id, kind: 'ready', rank: 2, view });
+        continue;
+      }
       frontier.push({
         key: node.id,
         kind: view.isStale

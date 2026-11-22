@@ -3012,6 +3012,7 @@ export default {
   'goalProcess.attempts.passed': 'Passed',
   'goalProcess.attempts.failed': 'Did not pass',
   'goalProcess.attempts.retired': 'Retired',
+  'goalProcess.attempts.stopped': 'Stopped',
   'goalProcess.attempts.running': 'Running',
   'goalProcess.stalled.description':
     'Last heartbeat {{duration}}. The next advance restarts this attempt — it does not count as a failure.',

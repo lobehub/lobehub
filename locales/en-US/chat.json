@@ -879,6 +879,7 @@
   "goalProcess.attempts.passed": "Passed",
   "goalProcess.attempts.retired": "Retired",
   "goalProcess.attempts.running": "Running",
+  "goalProcess.attempts.stopped": "Stopped",
   "goalProcess.attempts.title": "Previous attempts",
   "goalProcess.clarify.description": "Answer these once and the agent plans with them. Skip to let it proceed on its own assumptions.",
   "goalProcess.clarify.islandSubtitle": "needs your answers before it starts",
