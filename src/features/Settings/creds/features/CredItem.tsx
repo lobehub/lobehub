@@ -2,32 +2,23 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import {
+  ActionIcon,
   Avatar,
-  Button,
   confirmModal,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
   Icon,
   stopPropagation,
-  Tag,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import {
-  Eye,
-  File,
-  Globe,
-  Key,
-  MoreHorizontalIcon,
-  Pencil,
-  TerminalSquare,
-  Trash2,
-} from 'lucide-react';
+import { Eye, MoreHorizontalIcon, Pencil, Trash2 } from 'lucide-react';
 import { type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDensity } from '@/styles/density';
 
+import { CRED_TYPE_ICONS } from './credTypes';
 import { styles } from './style';
 
 interface CredItemProps {
@@ -43,29 +34,15 @@ interface CredItemProps {
   onDelete?: (id: number) => void;
   onEdit?: (cred: UserCredSummary) => void;
   onView?: (cred: UserCredSummary) => void;
-  /** Tags shown after the type tag (owner, sharing state). */
+  /** Tags shown after the name (owner, sharing state). */
   tags?: React.ReactNode;
   /** Inline marker right after the name, e.g. the private lock in the workspace list. */
   titleSuffix?: React.ReactNode;
 }
 
-const typeIcons: Record<string, React.ReactNode> = {
-  'file': <File size={20} />,
-  'kv-env': <TerminalSquare size={20} />,
-  'kv-header': <Globe size={20} />,
-  'oauth': <Key size={20} />,
-};
-
-const typeColors: Record<string, string> = {
-  'file': 'purple',
-  'kv-env': 'blue',
-  'kv-header': 'cyan',
-  'oauth': 'green',
-};
-
 const CredItem: FC<CredItemProps> = memo(
   ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags, titleSuffix }) => {
-    const { t } = useTranslation('setting');
+    const { t } = useTranslation(['setting', 'common']);
     const { compact, tokens } = useDensity();
 
     const handleDelete = () => {
@@ -127,7 +104,7 @@ const CredItem: FC<CredItemProps> = memo(
         // `display: flex` collapses the inline span's line box so the svg sits
         // dead-center in the 48px container instead of on the text baseline.
         <span style={{ color: 'var(--lobe-color-text-secondary)', display: 'flex' }}>
-          {typeIcons[cred.type]}
+          <Icon icon={CRED_TYPE_ICONS[cred.type]} size={20} />
         </span>
       );
     };
@@ -147,35 +124,25 @@ const CredItem: FC<CredItemProps> = memo(
           style={{ flex: 1, overflow: 'hidden' }}
         >
           <div {...stylex.props(styles.icon, compact && styles.iconCompact)}>{renderAvatar()}</div>
-          <Flexbox gap={compact ? 2 : 4} style={{ overflow: 'hidden' }}>
+          <Flexbox gap={compact ? 2 : 4} style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
             <Flexbox horizontal align="center" gap={8}>
               <span {...stylex.props(styles.title, compact && styles.titleCompact)}>
                 {cred.name}
               </span>
               {titleSuffix}
-              <Tag color={typeColors[cred.type]}>{t(`creds.types.${cred.type}`)}</Tag>
               {tags}
             </Flexbox>
-            <Flexbox
-              horizontal
-              align="center"
-              gap={8}
-              style={{ lineHeight: compact ? '18px' : undefined }}
-            >
-              <code {...stylex.props(styles.key)}>{cred.key}</code>
-              {cred.description && (
-                <>
-                  <span style={{ color: 'var(--lobe-color-text-quaternary)' }}>·</span>
-                  <span {...stylex.props(styles.description)}>{cred.description}</span>
-                </>
-              )}
-            </Flexbox>
+            {cred.description && (
+              <span {...stylex.props(styles.description, compact && styles.descriptionCompact)}>
+                {cred.description}
+              </span>
+            )}
           </Flexbox>
         </Flexbox>
         <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
           {menuItems.length > 0 && (
             <DropdownMenu items={menuItems} placement="bottomRight">
-              <Button icon={MoreHorizontalIcon} />
+              <ActionIcon icon={MoreHorizontalIcon} title={t('more', { ns: 'common' })} />
             </DropdownMenu>
           )}
         </Flexbox>
