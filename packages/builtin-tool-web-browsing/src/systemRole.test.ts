@@ -27,7 +27,8 @@ describe('web browsing systemPrompt', () => {
     );
   });
 
-  it('escalates challenge/JS-wall crawl bodies to agent-browser', () => {
+  it('escalates failed or challenge/JS-wall crawls to agent-browser', () => {
+    expect(prompt).toContain('If a crawl fails or returns an empty');
     expect(prompt).toContain('activate the `agent-browser` skill');
   });
 
@@ -36,7 +37,7 @@ describe('web browsing systemPrompt', () => {
     expect(prompt).not.toContain('PageNotFoundError');
     expect(prompt).not.toContain('InvalidUrlError');
     expect(prompt).not.toContain('UnsupportedContentError');
-    expect(prompt.length).toBeLessThan(1000);
+    expect(prompt.length).toBeLessThan(1400);
   });
 
   it('shows the footnote citation as renderable markdown, not inline code', () => {

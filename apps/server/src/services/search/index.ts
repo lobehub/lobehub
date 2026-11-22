@@ -249,15 +249,12 @@ export class SearchService {
       return lastResult;
     }
 
-    const errorType = lastError?.name || 'UnknownError';
-    const errorMessage = lastError?.message;
-
     return {
       crawler: 'unknown',
       data: {
-        content: `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}. Do not keep retrying with different queries or sources — if the \`agent-browser\` skill is available, activate it and re-fetch this page with a real browser (anti-bot walls often masquerade as timeouts or generic errors); otherwise explain the issue and suggest alternatives.`,
-        errorMessage,
-        errorType,
+        content: `Fail to crawl the page. Error type: ${lastError?.name || 'UnknownError'}, error message: ${lastError?.message}`,
+        errorMessage: lastError?.message,
+        errorType: lastError?.name || 'UnknownError',
       },
       originalUrl: url,
     };
