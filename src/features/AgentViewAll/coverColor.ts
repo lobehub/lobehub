@@ -1,5 +1,5 @@
 import type { SidebarAgentItem } from '@lobechat/types';
-import { type AgentAvatarColor, cssVar, getAgentAvatarTraits } from '@lobehub/ui';
+import { cssVar, getAgentAvatarTraits } from '@lobehub/ui';
 
 import { isDefaultAgentAvatar } from '@/components/AgentAvatar';
 import { remoteAvatarSrc } from '@/components/Avatar/fallback';
@@ -9,13 +9,16 @@ import { remoteAvatarSrc } from '@/components/Avatar/fallback';
  * gray scale: the cover is mixed toward the container color, which keeps both
  * readable in either theme.
  */
-const SEED_COLORS: Record<AgentAvatarColor, string> = {
+const SEED_COLORS = {
+  cyan: cssVar.cyan,
   geekblue: cssVar.geekblue,
   gray: cssVar.gray,
+  green: cssVar.green,
   ink: cssVar.gray,
   magenta: cssVar.magenta,
   orange: cssVar.orange,
   purple: cssVar.purple,
+  red: cssVar.red,
   volcano: cssVar.volcano,
 };
 
