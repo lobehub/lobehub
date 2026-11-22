@@ -120,8 +120,10 @@ export const createSecondaryStorage = (): BetterAuthOptions['secondaryStorage'] 
   if (!isRedisEnabled(redisConfig)) return undefined;
 
   const secondaryStorageKeyPrefix = 'better-auth:';
+  const atomicCounterKeyPrefix = `${secondaryStorageKeyPrefix}counter:v1:`;
 
   const buildKey = (key: string) => `${secondaryStorageKeyPrefix}${key}`;
+  const buildAtomicCounterKey = (key: string) => `${atomicCounterKeyPrefix}${key}`;
 
   const getRedisClient = async () => {
     const redisClient = await initializeRedis(redisConfig);
@@ -154,13 +156,16 @@ export const createSecondaryStorage = (): BetterAuthOptions['secondaryStorage'] 
     },
     increment: async (key: string, ttl: number) => {
       const redisClient = await getRedisClient();
-      // Never extend a live counter's window, including when requests arrive concurrently.
+      /**
+       * Better Auth 1.6 stored rate-limit snapshots as JSON through set(). A separate namespace
+       * prevents 1.7's INCR from colliding with those live keys during a rolling deployment.
+       */
       return redisClient.eval<number>(
         `local value = redis.call('INCR', KEYS[1])
          if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
          return value`,
         1,
-        buildKey(key),
+        buildAtomicCounterKey(key),
         ttl,
       );
     },

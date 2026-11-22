@@ -14,6 +14,7 @@ This guide covers LobeHub's upgrade from Better Auth **1.6.33 to 1.7.16**. Read 
 
 - Back up the database and record the deployed application version. Rehearse the upgrade against a private copy of the database.
 - Upgrade the server and browser assets together. The removed generic OAuth endpoints are not compatible with old clients. Ask users to reload open tabs after deployment.
+- Avoid serving authentication callbacks from mixed 1.6 and 1.7 instances. Their OAuth state storage formats differ, so an authorization started on 1.6 cannot finish on 1.7; users with an in-flight login must restart it after the cutover.
 - If Redis is enabled, its application credentials must permit `EVAL`, `GET`, `DEL`, `INCR`, and `EXPIRE`, in addition to the existing operations. The adapter now consumes one-time values atomically and creates rate-limit counters without extending an existing counter's TTL.
 - Check for duplicate provider identities. Resolve each duplicate by verifying ownership; do not automatically merge users or delete accounts:
 

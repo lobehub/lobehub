@@ -43,6 +43,15 @@ export const buildOidcConfig = ({
   const discoveryUrl = createDiscoveryUrl(normalizedIssuer);
 
   return {
+    /**
+     * Better Auth 1.6 identified generic providers by `id`, then `sub`. Keep that order so the
+     * 1.7 migration neither changes existing account IDs nor rejects OIDC UserInfo responses that
+     * expose only the standard `sub` claim when discovery metadata is incomplete.
+     */
+    accountSubject: ({ profile }) =>
+      profile.id === undefined || profile.id === null || profile.id === ''
+        ? (profile.sub ?? '')
+        : profile.id,
     clientId,
     clientSecret,
     discoveryUrl,

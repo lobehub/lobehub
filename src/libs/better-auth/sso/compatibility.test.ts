@@ -2,10 +2,16 @@
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { genericOAuth } from 'better-auth/plugins';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { buildOidcConfig } from './helpers';
 
 const BASE_URL = 'http://localhost:3000';
 const PROVIDER_ID = 'custom-oauth';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const createAuth = () => {
   const db: Record<string, any[]> = { account: [], session: [], user: [], verification: [] };
@@ -118,5 +124,59 @@ describe('Better Auth 1.7 generic provider compatibility', () => {
     await auth.api.unlinkAccount({ body: { accountId: account.id }, headers });
     expect(db.account).toHaveLength(1);
     expect(db.account[0].providerId).toBe('credential');
+  });
+
+  it('keeps the legacy account subject for OIDC profiles when discovery metadata is incomplete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        if (url.endsWith('/.well-known/openid-configuration')) {
+          return Response.json({
+            authorization_endpoint: 'https://provider.example.com/authorize',
+            issuer: 'https://provider.example.com',
+          });
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const db: Record<string, any[]> = { account: [], session: [], user: [], verification: [] };
+    const auth = betterAuth({
+      baseURL: BASE_URL,
+      database: memoryAdapter(db),
+      plugins: [
+        genericOAuth({
+          config: [
+            buildOidcConfig({
+              clientId: 'test-client',
+              clientSecret: 'test-client-secret',
+              issuer: 'https://provider.example.com',
+              overrides: {
+                getToken: async () => ({ accessToken: 'fixture-access-token' }),
+                getUserInfo: async () => ({
+                  email: 'user@example.com',
+                  emailVerified: true,
+                  id: '',
+                  name: 'User',
+                  sub: 'provider-subject',
+                }),
+              },
+              pkce: false,
+              providerId: PROVIDER_ID,
+            }),
+          ],
+        }),
+      ],
+      secret: 'test-secret-test-secret-test-secret',
+    });
+
+    await completeOAuth(auth, '/sign-in/social');
+
+    expect(db.account).toHaveLength(1);
+    expect(db.account[0]).toMatchObject({
+      accountId: 'provider-subject',
+      providerId: PROVIDER_ID,
+    });
   });
 });

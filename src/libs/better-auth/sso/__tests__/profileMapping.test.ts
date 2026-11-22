@@ -37,6 +37,27 @@ const providers = [
 ];
 
 describe.each(providers)('$providerId profile mapping', (provider) => {
+  it('preserves the 1.6 account subject precedence while accepting an empty id', async () => {
+    expect(
+      await provider.accountSubject!({
+        profile: { id: 'legacy-id', sub: 'oidc-subject' },
+        tokens: {},
+      }),
+    ).toBe('legacy-id');
+    expect(
+      await provider.accountSubject!({
+        profile: { id: '', sub: 'oidc-subject' },
+        tokens: {},
+      }),
+    ).toBe('oidc-subject');
+    expect(
+      await provider.accountSubject!({
+        profile: { id: 0, sub: 'oidc-subject' },
+        tokens: {},
+      }),
+    ).toBe(0);
+  });
+
   it('keeps valid names', async () => {
     expect(
       await provider.mapProfileToUser!({ email: 'user@example.com', name: 'User' }),

@@ -62,21 +62,26 @@ describe('createSecondaryStorage', () => {
     expect(redis.del).not.toHaveBeenCalled();
   });
 
-  it('increments atomically and only sets the counter TTL on creation', async () => {
+  it('increments atomically in a namespace isolated from legacy JSON values', async () => {
     const { createSecondaryStorage } = await import('./config');
     const storage = createSecondaryStorage()!;
     redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
 
+    await storage.set('rate-limit', JSON.stringify({ count: 1, lastRequest: 1 }), 60);
     expect(await storage.increment!('rate-limit', 60)).toBe(1);
     expect(await storage.increment!('rate-limit', 60)).toBe(2);
 
+    expect(redis.set).toHaveBeenCalledWith(
+      'better-auth:rate-limit',
+      JSON.stringify({ count: 1, lastRequest: 1 }),
+      { ex: 60 },
+    );
     expect(redis.eval).toHaveBeenCalledWith(
       expect.stringContaining("if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end"),
       1,
-      'better-auth:rate-limit',
+      'better-auth:counter:v1:rate-limit',
       60,
     );
-    expect(redis.set).not.toHaveBeenCalled();
   });
 
   it('fails closed when the enabled Redis client cannot initialize', async () => {
