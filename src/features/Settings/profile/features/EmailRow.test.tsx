@@ -105,6 +105,35 @@ describe('EmailRow', () => {
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
+  it('shows friendly copy instead of the raw server message for other errors', async () => {
+    mocks.changeEmail.mockResolvedValue({
+      error: { message: "Verification email isn't enabled", status: 400 },
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await submitEmail('new@example.com');
+
+    expect(await screen.findByText('profile.emailChangeFailed')).toBeInTheDocument();
+    expect(screen.queryByText("Verification email isn't enabled")).not.toBeInTheDocument();
+  });
+
+  it('tells the user to wait when change-email is rate limited', async () => {
+    mocks.changeEmail.mockResolvedValue({
+      error: { code: 'TOO_MANY_CHANGE_EMAIL_REQUESTS', message: 'Too many', status: 429 },
+    });
+
+    await submitEmail('new@example.com');
+
+    expect(await screen.findByText('profile.emailChangeTooMany')).toBeInTheDocument();
+  });
+
+  it('rejects the current email inline without calling the API', async () => {
+    await submitEmail('OLD@example.com');
+
+    expect(await screen.findByText('profile.emailSameAsCurrent')).toBeInTheDocument();
+    expect(mocks.changeEmail).not.toHaveBeenCalled();
+  });
+
   it('shows the invalid-format error inline without calling the API', async () => {
     await submitEmail('not-an-email');
 

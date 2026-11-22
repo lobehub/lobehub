@@ -49,6 +49,12 @@ const EmailRow = () => {
       return;
     }
 
+    // Better Auth rejects this with an untranslated "Email is the same" and no error code
+    if (trimmed.toLowerCase() === email?.toLowerCase()) {
+      setError(t('profile.emailSameAsCurrent'));
+      return;
+    }
+
     try {
       setSaving(true);
       setError('');
@@ -58,7 +64,13 @@ const EmailRow = () => {
           setError(t('profile.emailInUseHint', { email: trimmed }));
           return;
         }
-        setError(res.error.message ?? res.error.statusText ?? t('profile.emailChangeFailed'));
+        if (res.error.status === 429) {
+          setError(t('profile.emailChangeTooMany'));
+          return;
+        }
+        // Server messages are untranslated and technical; keep them in the console only
+        console.error('Failed to change email:', res.error);
+        setError(t('profile.emailChangeFailed'));
         return;
       }
       setIsEditing(false);
@@ -69,7 +81,7 @@ const EmailRow = () => {
     } finally {
       setSaving(false);
     }
-  }, [editValue, t]);
+  }, [editValue, email, t]);
 
   // Desktop OIDC and Better Auth sessions are not bridged, so change-email can only
   // be completed on the web app.

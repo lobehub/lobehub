@@ -389,6 +389,9 @@ export default {
   'profile.emailChangeSuccess': 'Verification email sent. Please check your new email inbox.',
   'profile.emailChangeFailed':
     'Could not update your email. Check your network connection and try again.',
+  'profile.emailChangeTooMany':
+    'Too many email change attempts. Please wait a while and try again.',
+  'profile.emailSameAsCurrent': 'This is already your current email. Enter a different address.',
   'profile.emailInUseHint':
     '{{email}} is already used by another account. Enter a different email, or if that account is also yours, sign in to it and change its email first, then come back and try again.',
   'profile.emailInvalid': 'Please enter a valid email address',
