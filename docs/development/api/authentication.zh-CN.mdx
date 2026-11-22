@@ -22,7 +22,7 @@ Authorization: Bearer <token>
 
 服务端根据令牌的形态判断其类型：
 
-- 符合 API Key 格式（`sk-lh-` 加 16 位小写字母和数字）的令牌按 **API Key** 查找。Key 必须处于启用状态且未过期。
+- 符合 API Key 格式（`sk-lh-` 加 58 位小写字母和数字，较早创建的 Key 为 16 位）的令牌按 **API Key** 查找。Key 必须处于启用状态且未过期。
 - 其他令牌一律按 **OIDC 访问令牌** 校验（受众为 `urn:lobehub:chat` 的 RS256 JWT），由部署自身的 OIDC 提供方签发。自托管实例只有在配置了 `JWKS_KEY` 时才接受 OIDC 令牌。
 
 不存在 `X-API-Key` 请求头。缺少令牌或令牌无效时返回 `401`。
