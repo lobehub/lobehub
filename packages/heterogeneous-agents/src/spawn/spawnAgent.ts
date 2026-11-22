@@ -855,8 +855,6 @@ const spawnCliAgent = async (
         const plan = await buildAgentInput('antigravity', prompt, options.inputOptions);
         return antigravityLive.send(plan.stdin, sendOptions?.uuid);
       },
-      // Antigravity stream-json input only supports text content blocks.
-      supportsSteerImages: false,
     }),
     kill: (signal: NodeJS.Signals = 'SIGINT') => {
       killedByUs = true;
