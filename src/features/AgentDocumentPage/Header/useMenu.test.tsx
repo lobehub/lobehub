@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMenu } from './useMenu';
 
 const mocks = vi.hoisted(() => ({
-  documentDetailMap: {} as Record<string, { document?: { content?: string | null } }>,
+  documentDetailMap: {} as Record<string, { document?: { content?: string | null } | null }>,
   documents: {} as Record<string, { content?: string }>,
   exportFile: vi.fn(),
+  getDocumentById: vi.fn(),
   isDesktop: false,
   isHtmlPage: false,
   toastError: vi.fn(),
@@ -49,6 +50,10 @@ vi.mock('@/services/agentDocument', () => ({
   agentDocumentService: { removeDocument: vi.fn() },
 }));
 
+vi.mock('@/services/document', () => ({
+  documentService: { getDocumentById: mocks.getDocumentById },
+}));
+
 vi.mock('@/services/electron/desktopExportService', () => ({
   desktopExportService: { exportFile: mocks.exportFile, exportMarkdown: mocks.exportFile },
 }));
@@ -74,17 +79,20 @@ vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { wideScreen: () => false },
 }));
 
-const findExportMarkdownAction = (menuItems: DropdownItem[]) => {
-  const exportItem = menuItems.find(
+const findExportItem = (menuItems: DropdownItem[]) =>
+  menuItems.find(
     (item): item is Extract<DropdownItem, { key?: unknown; children?: DropdownItem[] }> =>
       !!item && 'key' in item && item.key === 'export',
   );
-  const mdItem = exportItem?.children?.find(
+
+const findExportMarkdownItem = (menuItems: DropdownItem[]) =>
+  findExportItem(menuItems)?.children?.find(
     (item): item is Extract<DropdownItem, { key?: unknown; onClick?: () => unknown }> =>
       !!item && 'key' in item && item.key === 'export-markdown',
   );
-  return mdItem?.onClick as (() => Promise<void>) | undefined;
-};
+
+const findExportMarkdownAction = (menuItems: DropdownItem[]) =>
+  findExportMarkdownItem(menuItems)?.onClick as (() => Promise<void>) | undefined;
 
 describe('AgentDocumentPage/Header/useMenu', () => {
   beforeEach(() => {
@@ -95,6 +103,7 @@ describe('AgentDocumentPage/Header/useMenu', () => {
       doc_1: { content: '# Live Spec' },
     };
     mocks.exportFile.mockReset();
+    mocks.getDocumentById.mockReset();
     mocks.isDesktop = false;
     mocks.isHtmlPage = false;
     mocks.toastError.mockReset();
@@ -266,5 +275,59 @@ describe('AgentDocumentPage/Header/useMenu', () => {
       .filter(Boolean);
     expect(keys).not.toContain('export');
     expect(keys).not.toContain('full-width');
+  });
+
+  it('disables export until the document body is loaded and fetches on demand if invoked early', async () => {
+    mocks.documents = {};
+    mocks.documentDetailMap = {};
+    mocks.getDocumentById.mockResolvedValue({ content: '# Fetched On Demand' });
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:doc');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    const { result } = renderHook(() =>
+      useMenu({
+        agentId: 'agent_1',
+        documentId: 'doc_1',
+        onDeleted: vi.fn(),
+        title: 'Pending Doc',
+      }),
+    );
+
+    expect(findExportItem(result.current.menuItems)?.disabled).toBe(true);
+    expect(findExportMarkdownItem(result.current.menuItems)?.disabled).toBe(true);
+
+    await act(async () => {
+      await findExportMarkdownAction(result.current.menuItems)!();
+    });
+
+    expect(mocks.getDocumentById).toHaveBeenCalledWith('doc_1');
+    expect(await createObjectURL.mock.calls[0][0].text()).toBe('# Fetched On Demand');
+    expect(mocks.toastSuccess).toHaveBeenCalledOnce();
+  });
+
+  it('reports an error instead of downloading an empty file when on-demand document fetch fails or returns null', async () => {
+    mocks.documents = {};
+    mocks.documentDetailMap = {};
+    mocks.getDocumentById.mockResolvedValue(null);
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:doc');
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+
+    const { result } = renderHook(() =>
+      useMenu({
+        agentId: 'agent_1',
+        documentId: 'doc_1',
+        onDeleted: vi.fn(),
+        title: 'Missing Doc',
+      }),
+    );
+
+    await act(async () => {
+      await findExportMarkdownAction(result.current.menuItems)!();
+    });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledOnce();
   });
 });

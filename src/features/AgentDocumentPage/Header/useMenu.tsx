@@ -10,6 +10,7 @@ import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditor
 import { useIsHtmlPage } from '@/features/PageEditor/HtmlPageBody';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
+import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -48,6 +49,10 @@ export const useMenu = ({
 
   // An HTML page has no Markdown to export: it downloads as the page itself.
   const isHtmlPage = useIsHtmlPage(documentId);
+  const isDocumentLoaded = useDocumentStore(
+    (s) =>
+      s.documents[documentId] !== undefined || Boolean(s.documentDetailMap[documentId]?.document),
+  );
   const htmlContent = useDocumentStore((s) =>
     isHtmlPage ? s.documentDetailMap[documentId]?.document?.content : undefined,
   );
@@ -70,10 +75,26 @@ export const useMenu = ({
     const handleExportMarkdown = async () => {
       try {
         // The editor canvas keeps the live buffer in `documents`; fall back to
-        // the persisted detail replica when no live buffer has been populated yet.
+        // the persisted detail replica, or fetch the document when neither has
+        // hydrated yet so we never silently download a zero-byte file.
         const { documentDetailMap, documents } = useDocumentStore.getState();
-        const markdown =
-          documents[documentId]?.content ?? documentDetailMap[documentId]?.document?.content ?? '';
+        const liveDoc = documents[documentId];
+        const persistedDoc = documentDetailMap[documentId]?.document;
+
+        let markdown: string;
+        if (liveDoc !== undefined) {
+          markdown = liveDoc.content;
+        } else if (persistedDoc) {
+          markdown = persistedDoc.content ?? '';
+        } else {
+          const fetched = await documentService.getDocumentById(documentId);
+          if (!fetched) {
+            toast.error(t('pageEditor.exportError'));
+            return;
+          }
+          markdown = fetched.content ?? '';
+        }
+
         const result = await exportMarkdownDocument(markdown, title);
         if (result === 'downloaded') toast.success(t('pageEditor.exportSuccess'));
       } catch {
@@ -144,6 +165,7 @@ export const useMenu = ({
         children: isHtmlPage
           ? [
               {
+                disabled: !isDocumentLoaded,
                 key: 'export-html',
                 label: t('pageEditor.menu.export.html'),
                 onClick: handleExportHtml,
@@ -151,11 +173,13 @@ export const useMenu = ({
             ]
           : [
               {
+                disabled: !isDocumentLoaded,
                 key: 'export-markdown',
                 label: t('pageEditor.menu.export.markdown'),
                 onClick: handleExportMarkdown,
               },
             ],
+        disabled: !isDocumentLoaded,
         icon: <Icon icon={Download} />,
         key: 'export',
         label: t('pageEditor.menu.export'),
@@ -198,6 +222,7 @@ export const useMenu = ({
     documentId,
     fileBacked,
     htmlContent,
+    isDocumentLoaded,
     isHtmlPage,
     lg,
     dateLocale,
