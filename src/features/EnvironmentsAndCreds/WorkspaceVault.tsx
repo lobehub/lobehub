@@ -127,7 +127,11 @@ const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
           )}
           onChange={setFilter}
         >
-          <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+          {/* A fixed box: in a wrapping row the Select would otherwise stretch
+              to the full row width and drop to a line of its own. */}
+          <div style={{ flex: 'none', width: 140 }}>
+            <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
+          </div>
         </VaultFilterBar>
       )}
       <Block className={stylex.props(vaultStyles.container).className} variant={'outlined'}>
