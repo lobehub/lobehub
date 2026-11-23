@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useRevealOnMount } from './useRevealOnMount';
 
+/** Summary line box is 18px (12px × 1.5); the icon and toggle share that height. */
 const styles = stylex.create({
   detail: {
     backgroundColor: cssVar.colorFillQuaternary,
@@ -30,21 +31,35 @@ const styles = stylex.create({
     display: 'flex',
     fontSize: 12,
     gap: 4,
-    lineHeight: 1.5,
+    lineHeight: '18px',
     wordBreak: 'break-word',
   },
+  /**
+   * One line tall and flex-centered, so the icon sits on the first text line's
+   * center. A margin-offset inline span drifts with the SVG's baseline instead.
+   */
   icon: {
+    alignItems: 'center',
+    display: 'flex',
     flex: 'none',
-    marginBlockStart: 3,
+    height: 18,
   },
   root: {
     display: 'flex',
     flexDirection: 'column',
     gap: 4,
   },
+  /** Secondary action: muted and regular weight so it never outshouts the error itself. */
   toggle: {
+    color: {
+      ':hover': cssVar.colorText,
+      'default': cssVar.colorTextSecondary,
+    },
     flex: 'none',
-    height: 'auto',
+    fontSize: 12,
+    fontWeight: 400,
+    height: 18,
+    lineHeight: '18px',
     paddingBlock: 0,
   },
 });
@@ -87,7 +102,8 @@ const InlineErrorText = memo<InlineErrorTextProps>(({ children, detail, style })
         <span {...stylex.props(styles.icon)}>
           <Icon icon={CircleAlert} size={12} />
         </span>
-        <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
+        {/* Shrinks to its text so the toggle stays next to the message, not at the far edge. */}
+        <span style={{ flex: '0 1 auto', minWidth: 0 }}>{children}</span>
         {detail && (
           <Button
             size={'small'}
