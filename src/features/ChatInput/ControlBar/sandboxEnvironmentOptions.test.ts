@@ -110,6 +110,13 @@ describe('environmentFolderName', () => {
     expect(environmentFolderName({ name: ' .hidden ' })).toBe('hidden');
     expect(environmentFolderName({ name: '..' })).toBe('environment');
   });
+
+  // The server refuses a working directory starting with `~`; a folder named
+  // that way would send every run to a temporary sandbox.
+  it('never produces a name the server refuses as a working directory', () => {
+    expect(environmentFolderName({ name: '~tools' })).toBe('tools');
+    expect(environmentFolderName({ name: '~.~' })).toBe('environment');
+  });
 });
 
 // T-14791: the drive and the environment are two options of one cloud sandbox.

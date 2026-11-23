@@ -111,7 +111,7 @@ const SandboxDriveChip = memo<SandboxDriveChipProps>(
     const warnIfSetupSkipped = async (pick: SandboxSelection) => {
       if (!pick.environmentId || pick.workingDirectory === undefined) return;
       try {
-        const { entries } = await sandboxStorageService.listFiles({
+        const { entries = [] } = await sandboxStorageService.listFiles({
           drive: pick.drive,
           path: pick.workingDirectory === '.' ? undefined : pick.workingDirectory,
         });

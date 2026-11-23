@@ -1,3 +1,4 @@
+import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
 import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
@@ -114,14 +115,16 @@ export const environmentFolderName = (environment: {
 }): string => {
   const base = repositorySlug(environment)?.split('/').pop() || environment.name;
   // A single path segment the drive accepts: no separators, no leading dot
-  // (hidden, and `.`/`..` are not folders), no surrounding whitespace.
+  // (hidden, and `.`/`..` are not folders) or `~`, no surrounding whitespace.
+  // Checked with the server's own rule at the end: a name it refuses would
+  // send every run to a temporary sandbox while the chip names the folder.
   const name = base
     .replaceAll(/[/\\]+/g, '-')
     .trim()
-    .replace(/^\.+/, '')
+    .replace(/^[.~]+/, '')
     .slice(0, 64)
     .trim();
-  return name || 'environment';
+  return name && isSafeSandboxCwd(name) ? name : 'environment';
 };
 
 /**
