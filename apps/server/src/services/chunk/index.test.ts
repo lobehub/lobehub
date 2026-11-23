@@ -59,7 +59,7 @@ vi.mock('@/server/modules/ContentChunk', () => ({
   }),
 }));
 
-vi.mock('@/server/routers/async', () => ({
+vi.mock('@/server/routers/async/caller', () => ({
   createAsyncCaller: mockCreateAsyncCaller,
 }));
 

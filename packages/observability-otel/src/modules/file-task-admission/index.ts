@@ -30,6 +30,11 @@ export interface FileTaskAdmissionMetric {
   kind: 'embedding' | 'parse';
 }
 
+/** Called when a slot frees up, so the gauge also falls back to zero once an import drains. */
+export const recordFileTaskGlobalActive = (globalActive: number) => {
+  globalActiveGauge.record(globalActive);
+};
+
 /** Labels stay low-cardinality: per-workspace detail belongs in the structured log. */
 export const recordFileTaskAdmission = ({
   decision,
@@ -37,5 +42,5 @@ export const recordFileTaskAdmission = ({
   kind,
 }: FileTaskAdmissionMetric) => {
   decisionCounter.add(1, { decision, kind });
-  if (globalActive !== undefined) globalActiveGauge.record(globalActive);
+  if (globalActive !== undefined) recordFileTaskGlobalActive(globalActive);
 };

@@ -39,11 +39,12 @@ redis.call('PEXPIREAT', KEYS[2], ARGV[2])
 return 1
 `;
 
-/** KEYS = scope slots, global slots; ARGV = holder. */
+/** KEYS = scope slots, global slots; ARGV = holder, now. Returns the live global leases left. */
 const RELEASE_SCRIPT = `
 redis.call('ZREM', KEYS[1], ARGV[1])
 redis.call('ZREM', KEYS[2], ARGV[1])
-return 1
+redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[2])
+return redis.call('ZCARD', KEYS[2])
 `;
 
 export type FileTaskSlotAcquireResult =
@@ -91,12 +92,20 @@ export const fileTaskSlots = {
     }
   },
 
-  /** Best effort: a lease that cannot be released lapses on its own. */
-  async release(scope: string, holderId: string) {
+  /**
+   * Best effort: a lease that cannot be released lapses on its own.
+   *
+   * @returns the live leases left across the deployment, `undefined` when Redis did not answer
+   */
+  async release(scope: string, holderId: string): Promise<number | undefined> {
     const redis = await getClient();
-    if (!redis) return;
+    if (!redis) return undefined;
 
-    await redis.eval(RELEASE_SCRIPT, 2, ...slotKeys(scope), holderId).catch(() => undefined);
+    const globalActive = await redis
+      .eval<number>(RELEASE_SCRIPT, 2, ...slotKeys(scope), holderId, String(Date.now()))
+      .catch(() => undefined);
+
+    return globalActive === undefined ? undefined : Number(globalActive);
   },
 
   /** Best effort: extends the holder's lease; never recreates one that already lapsed. */

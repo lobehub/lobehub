@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   fileEnv: { FILE_TASK_GLOBAL_CONCURRENCY: 80, FILE_TASK_WORKSPACE_CONCURRENCY: 20 },
   files: new Map<string, any>(),
   publish: vi.fn(),
+  recordGlobalActive: vi.fn(),
   redisAvailable: { value: true },
   slots: {
     global: new Set<string>(),
@@ -33,30 +34,15 @@ const h = vi.hoisted(() => ({
   tasks: new Map<string, any>(),
 }));
 
+vi.mock('@lobechat/observability-otel/modules/file-task-admission', () => ({
+  recordFileTaskAdmission: vi.fn(),
+  recordFileTaskGlobalActive: h.recordGlobalActive,
+}));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.test' } }));
 vi.mock('@/envs/file', () => ({ fileEnv: h.fileEnv }));
 vi.mock('@/envs/redis', () => ({ getRedisConfig: () => ({ enabled: true }) }));
 vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
-// Replaces the HTTP hop: its dynamic import cannot resolve while timers are faked.
-vi.mock('./trigger', () => {
-  const prepareFileTaskTrigger = async ({
-    admissionScope,
-    fileId,
-    kind,
-    taskId,
-    userId,
-    workspaceId,
-  }: any) => {
-    const { file } = await h.createAsyncCaller({ userId });
-    const input = { admissionScope, fileId, taskId, workspaceId };
-    return async () =>
-      kind === 'parse' ? file.parseFileToChunks(input) : file.embeddingChunks(input);
-  };
-  return {
-    prepareFileTaskTrigger,
-    triggerFileTask: async (task: any) => (await prepareFileTaskTrigger(task))(),
-  };
-});
+vi.mock('@/server/routers/async/caller', () => ({ createAsyncCaller: h.createAsyncCaller }));
 vi.mock('@/server/modules/ContentChunk', () => ({
   ContentChunk: vi.fn(function () {
     return {};
@@ -129,6 +115,7 @@ vi.mock('@/server/services/redis', () => ({
       release: async (scope: string, holder: string) => {
         h.slots.scopes.get(scope)?.delete(holder);
         h.slots.global.delete(holder);
+        return h.slots.global.size;
       },
       renew: async () => undefined,
     },
@@ -500,5 +487,14 @@ describe('file task admission', () => {
     ).rejects.toThrow('boom');
 
     expect(h.slots.global.has('task')).toBe(false);
+  });
+
+  it('reports the active count falling to zero when the last slot frees up', async () => {
+    h.slots.scopes.set('workspace:ws-1', new Set(['task']));
+    h.slots.global.add('task');
+
+    await holdFileTaskLease({ admissionScope: 'workspace:ws-1', taskId: 'task' }, async () => 'ok');
+
+    expect(h.recordGlobalActive).toHaveBeenLastCalledWith(0);
   });
 });

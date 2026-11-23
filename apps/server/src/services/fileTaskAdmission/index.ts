@@ -1,6 +1,7 @@
 import {
   type FileTaskAdmissionDecision,
   recordFileTaskAdmission,
+  recordFileTaskGlobalActive,
 } from '@lobechat/observability-otel/modules/file-task-admission';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -140,8 +141,12 @@ export const admitFileTask = async (
   return { queued: true };
 };
 
-export const releaseFileTaskAdmission = (scope: string | undefined, taskId: string) =>
-  scope ? redisService.fileTaskSlots.release(scope, taskId) : Promise.resolve();
+export const releaseFileTaskAdmission = async (scope: string | undefined, taskId: string) => {
+  if (!scope) return;
+
+  const globalActive = await redisService.fileTaskSlots.release(scope, taskId);
+  if (globalActive !== undefined) recordFileTaskGlobalActive(globalActive);
+};
 
 /** Holds the task's slot for as long as the async route runs it. */
 export const holdFileTaskLease = async <T>(
@@ -161,7 +166,7 @@ export const holdFileTaskLease = async <T>(
     return await run();
   } finally {
     clearInterval(heartbeat);
-    await redisService.fileTaskSlots.release(scope, taskId);
+    await releaseFileTaskAdmission(scope, taskId);
   }
 };
 

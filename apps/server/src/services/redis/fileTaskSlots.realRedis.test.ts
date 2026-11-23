@@ -75,6 +75,15 @@ describe.skipIf(!url)('fileTaskSlots redis domain (real Redis)', () => {
     );
   });
 
+  it('returns the live leases left after a release, ignoring lapsed ones', async () => {
+    await domain.acquire('count', 'lapsed', { ...limits, ttlMs: 20 });
+    await domain.acquire('count', 'live', limits);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(await domain.release('count', 'other')).toBe(1);
+    expect(await domain.release('count', 'live')).toBe(0);
+  });
+
   it('reports a lease the holder already has without counting it twice', async () => {
     await domain.acquire('held', 'same', limits);
 

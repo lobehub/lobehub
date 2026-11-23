@@ -1,3 +1,5 @@
+import { createAsyncCaller } from '@/server/routers/async/caller';
+
 import type { FileTaskRef } from './types';
 
 type TriggerableFileTask = FileTaskRef & { admissionScope?: string };
@@ -9,9 +11,6 @@ type TriggerableFileTask = FileTaskRef & { admissionScope?: string };
  * because a serverless function can be frozen right after.
  */
 export const prepareFileTaskTrigger = async (task: TriggerableFileTask) => {
-  // Kept dynamic on purpose: the async router imports the chunk service, which imports this
-  // module, so a static import would form a real cycle that `lint:circular` rejects.
-  const { createAsyncCaller } = await import('@/server/routers/async');
   const asyncCaller = await createAsyncCaller({ userId: task.userId });
   const input = {
     fileId: task.fileId,
