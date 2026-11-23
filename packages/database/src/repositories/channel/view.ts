@@ -24,7 +24,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  like,
   lt,
   or,
   type SQL,
@@ -53,6 +52,7 @@ import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
+import { isOpeningAck } from './openingAck';
 import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
@@ -277,22 +277,6 @@ const sourceTopicsByMessage = async (
 };
 
 const THREAD_PREVIEW_LENGTH = 240;
-
-/**
- * Request keys of the acknowledgements an Agent posts before its run (`openingRequestKey` in
- * `./opening`, which imports this module, so the prefix is repeated here).
- */
-const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
-
-/**
- * An Agent's acknowledgement before its run: it says the work started, not what came of it. One
- * a failure turned into the reply's card is news again.
- */
-const isOpeningAck = and(
-  eq(channelMessages.routingStatus, 'reply'),
-  like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
-  sql`COALESCE(${channelMessages.metadata} ->> 'replyError', '') = ''`,
-);
 
 type ThreadSummary = {
   lastNewsAt: Date | null;
