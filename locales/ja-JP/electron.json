@@ -90,7 +90,6 @@
   "proxy.port": "ポート",
   "proxy.resetButton": "リセット",
   "proxy.saveButton": "保存",
-  "proxy.saveFailed": "保存に失敗しました：{{error}}",
   "proxy.saveSuccess": "プロキシ設定が正常に保存されました",
   "proxy.server": "サーバーアドレス",
   "proxy.testButton": "接続テスト",

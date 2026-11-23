@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Le matériel est long ; seul son début a été lu.",
   "rules.distill.untitled": "Sans titre",
   "rules.distill.upload": "Télécharger un fichier",
-  "rules.distill.uploadFailed": "Impossible de télécharger le fichier.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint ou texte brut",
   "rules.enforcement.block": "Bloquer",
   "rules.enforcement.blockDesc": "Retiendra la livraison jusqu'à ce que vous la validiez. Pas encore en vigueur : pour l'instant, cela ne fait que rappeler",

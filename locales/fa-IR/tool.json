@@ -311,7 +311,6 @@
   "updateArgs.form.add": "افزودن مورد",
   "updateArgs.form.key": "کلید فیلد",
   "updateArgs.form.value": "مقدار فیلد",
-  "updateArgs.formValidationFailed": "اعتبارسنجی فرم ناموفق بود، لطفاً قالب پارامترها را بررسی کنید",
   "updateArgs.keyRequired": "کلید فیلد نمی‌تواند خالی باشد",
   "updateArgs.stringifyError": "امکان سریال‌سازی پارامترها وجود ندارد، لطفاً قالب پارامترها را بررسی کنید"
 }

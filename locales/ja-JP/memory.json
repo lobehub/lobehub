@@ -237,7 +237,6 @@
   "rules.distill.truncated": "素材が長いため、冒頭部分のみが読み取られました。",
   "rules.distill.untitled": "無題",
   "rules.distill.upload": "ファイルをアップロード",
-  "rules.distill.uploadFailed": "ファイルをアップロードできませんでした。",
   "rules.distill.uploadHint": "Markdown、PDF、Word、PowerPoint、またはプレーンテキスト",
   "rules.enforcement.block": "ブロック",
   "rules.enforcement.blockDesc": "配信を保留します。まだ有効ではありません: 現時点では通知のみ",

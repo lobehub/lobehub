@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Eintrag hinzufügen",
   "updateArgs.form.key": "Feldschlüssel",
   "updateArgs.form.value": "Feldwert",
-  "updateArgs.formValidationFailed": "Formularvalidierung fehlgeschlagen. Bitte überprüfen Sie das Parameterformat.",
   "updateArgs.keyRequired": "Feldschlüssel darf nicht leer sein",
   "updateArgs.stringifyError": "Parameter konnten nicht serialisiert werden. Bitte überprüfen Sie das Format."
 }

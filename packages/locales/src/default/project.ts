@@ -678,6 +678,7 @@ export default {
   'artboard.question.placeholder': 'Answer this question…',
   'artboard.question.answer': 'Answer',
   'artboard.question.hint': 'Your answer goes to the agent with the next send.',
+  'create.failedRetry': "Couldn't create the project. Check your network and try again.",
   'environment.configure': 'Configure environment',
   'settings.environmentIntro':
     'Every conversation in this project runs in this environment: its repositories are cloned, the setup command runs, and its variables are set.',
@@ -693,4 +694,5 @@ export default {
   'createFromGithub.advancedWithCount': 'Advanced settings · {{count}} extra',
   'createFromGithub.extraRepositoriesLabel': 'More repositories',
   'createFromGithub.chooseFromGithub': 'Choose from GitHub',
+  'knowledgeBases.addFailedRetry': "Couldn't add this library. Check your network and try again.",
 };

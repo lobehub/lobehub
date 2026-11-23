@@ -90,6 +90,7 @@ export default {
   'doctor.summary_other': '{{count}} messages exist in this topic but are not being shown.',
   'doctor.title': 'Message Chain Check',
   'displayItems': 'Display Items',
+  'doctor.repairFailedRetry': "Couldn't repair this topic. Check your network and try again.",
   'draft': '[Draft]',
   'duplicateLoading': 'Copying Topic...',
   'duplicateSuccess': 'Topic Copied Successfully',
@@ -293,6 +294,8 @@ export default {
   'management.moveModal.doneOk': 'Done',
   'management.moveModal.error': 'Move failed, please try again',
   'management.moveModal.goToTarget': 'Go to “{{title}}”',
+  'management.moveModal.moveFailedRetry':
+    "Couldn't move the topics. Check your network and try again.",
   'management.moveModal.moving': 'Moving…',
   'management.moveModal.title': 'Move topics',
   'management.searchPlaceholder': "Search this agent's topics…",

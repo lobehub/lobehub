@@ -90,7 +90,6 @@
   "proxy.port": "埠號",
   "proxy.resetButton": "重設",
   "proxy.saveButton": "儲存",
-  "proxy.saveFailed": "儲存失敗：{{error}}",
   "proxy.saveSuccess": "代理設定儲存成功",
   "proxy.server": "伺服器地址",
   "proxy.testButton": "測試連接",

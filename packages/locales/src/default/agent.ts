@@ -906,6 +906,12 @@ export default {
   'channel.feishu.fetchOwnerIdFailed': 'Failed to read the app owner',
   'channel.feishu.fetchOwnerIdMissingCredentials':
     'Enter the Application ID and App Secret first — the lookup runs as your app.',
+  'channel.imessage.bridgeTestFailedRetry':
+    "Couldn't reach BlueBubbles. Check the server URL and password, then test again.",
+  'channel.imessage.bridgeToggleFailedRetry':
+    "Couldn't change the bridge status. Check the BlueBubbles server URL and password, then try again.",
+  'channel.line.fetchBotInfoFailedRetry':
+    "Couldn't fetch the bot info. Check the Channel Access Token and try again.",
   'channel.userIdHint.imessage':
     'Use your iMessage handle as seen in BlueBubbles, usually an email address or E.164 phone number.',
   'channel.userIdHint.line':
@@ -922,6 +928,7 @@ export default {
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
+  'channel.updateFailedRetry': "Couldn't save this change. Check your network and try again.",
 
   'share.entry': 'Share this Agent',
   'share.settings.autoGrant.desc':

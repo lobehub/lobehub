@@ -1123,7 +1123,10 @@ export default {
   'dev.preview.mcp.tools_other': '{{count}} tools',
   'dev.preview.title': 'Skill name preview',
   'dev.saveError': 'Install failed, please try again',
+  'dev.saveFailedRetry': "Couldn't save the connector. Check your network and try again.",
   'dev.saveSuccess': 'Settings saved',
+  'dev.ssrfBlockedRetry':
+    "This server address isn't allowed. Use a public address, or open details to see how to allow it.",
   'dev.tabs.manifest': 'Manifest',
   'dev.tabs.meta': 'Meta info',
   'dev.title.connectorSettings': 'Connector settings',
@@ -1251,6 +1254,8 @@ export default {
   'protocolInstall.marketplace.verified': 'Verified',
   'protocolInstall.messages.connectionTestFailed': 'Connection test failed',
   'protocolInstall.messages.installError': 'Install failed, retry',
+  'protocolInstall.messages.installFailedRetry':
+    "Couldn't install this plugin. Check your network and try again.",
   'protocolInstall.messages.installSuccess': '{{name}} installed. Enable now or configure later.',
   'protocolInstall.messages.manifestError':
     'Failed to fetch Skill info. Check network or retry later.',
@@ -1302,9 +1307,11 @@ export default {
   'settings.httpTypeNotice': 'HTTP MCP has no env vars to configure',
   'settings.indexUrl.title': 'Community index',
   'settings.indexUrl.tooltip': 'Edit via deployment env vars',
-  'settings.messages.connectionUpdateFailed': 'Failed to update connection',
+  'settings.messages.connectionUpdateFailedRetry':
+    "Couldn't update the connection. Check the URL or command, then try again.",
   'settings.messages.connectionUpdateSuccess': 'Connection updated',
-  'settings.messages.envUpdateFailed': 'Failed to save env vars',
+  'settings.messages.envUpdateFailedRetry':
+    "Couldn't save the environment variables. Check your connection and try again.",
   'settings.messages.envUpdateSuccess': 'Env vars saved',
   'settings.modalDesc': 'Configure community URL to use custom Skill community.',
   'settings.rules.argsRequired': 'Enter arguments',

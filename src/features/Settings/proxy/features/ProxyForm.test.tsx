@@ -40,11 +40,13 @@ vi.mock('@/store/electron', () => ({
 
 vi.mock('./SaveBar', () => ({
   default: ({
+    error,
     isDirty,
     isSaving,
     onReset,
     onSave,
   }: {
+    error?: string;
     isDirty: boolean;
     isSaving: boolean;
     onReset: () => void;
@@ -52,6 +54,7 @@ vi.mock('./SaveBar', () => ({
   }) =>
     isDirty ? (
       <div>
+        {error && <div role="alert">{error}</div>}
         <button disabled={isSaving} onClick={onReset}>
           proxy.resetButton
         </button>
@@ -200,7 +203,7 @@ describe('ProxyForm', () => {
     });
   });
 
-  it('reverts the enable switch and shows an error when auto-saving fails', async () => {
+  it('reverts the enable switch and shows the error on the switch, not a toast, when auto-saving fails', async () => {
     const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
@@ -214,7 +217,8 @@ describe('ProxyForm', () => {
     await user.click(screen.getAllByRole('switch')[0]);
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('proxy.saveFailed');
+      expect(screen.getByText('proxy.saveFailedRetry')).toBeInTheDocument();
+      expect(toastErrorMock).not.toHaveBeenCalled();
       expect(screen.getAllByRole('switch')[0]).toHaveAttribute('aria-checked', 'true');
     });
   });
@@ -258,7 +262,31 @@ describe('ProxyForm', () => {
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('proxy.testFailed: connect ECONNREFUSED');
+      expect(screen.getByText('proxy.testFailed. proxy.testFailedHint')).toBeInTheDocument();
+      expect(toastErrorMock).not.toHaveBeenCalled();
     });
+    // The raw provider message stays folded until the user asks for it.
+    expect(screen.queryByText('connect ECONNREFUSED')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'asyncState.showDetails' }));
+    expect(screen.getByText('connect ECONNREFUSED')).toBeInTheDocument();
+  });
+
+  it('shows a failed Save in the Save bar instead of a toast, and keeps the changes', async () => {
+    const user = userEvent.setup({ delay: null });
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
+
+    setProxySettingsMock.mockRejectedValueOnce(new Error('boom'));
+    await user.click(await screen.findByRole('button', { name: 'proxy.saveButton' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('proxy.saveFailedRetry');
+    });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'proxy.saveButton' })).toBeInTheDocument();
   });
 }, 10000);

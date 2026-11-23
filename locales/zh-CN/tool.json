@@ -155,6 +155,7 @@
   "connector.add.clientSecret": "OAuth Client Secret（可选）",
   "connector.add.confirm": "添加",
   "connector.add.editTitle": "编辑连接器",
+  "connector.add.failedRetry": "无法保存连接器，请检查服务器地址和网络后重试。",
   "connector.add.name": "名称",
   "connector.add.namePlaceholder": "我的连接器",
   "connector.add.popupBlocked": "请允许此网站打开弹出窗口后重试。",
@@ -379,7 +380,7 @@
   "updateArgs.form.add": "添加一项",
   "updateArgs.form.key": "字段键",
   "updateArgs.form.value": "字段值",
-  "updateArgs.formValidationFailed": "表单验证失败，请检查参数格式",
   "updateArgs.keyRequired": "字段键不能为空",
+  "updateArgs.saveFailed": "参数保存失败，请检查网络后重试",
   "updateArgs.stringifyError": "无法序列化参数，请检查参数格式"
 }

@@ -1,12 +1,15 @@
 'use client';
 
-import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea, toast } from '@lobehub/ui';
+import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 
 import { credErrorKey } from '../credError';
 import CredFormFooter from '../CredFormFooter';
@@ -58,6 +61,12 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
     };
   });
 
+  /**
+   * Create failures (including Market's 409 slot conflicts) render above the submit row: the
+   * modal stays open and the user's next move is on this form, not behind a corner toast.
+   */
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
+
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (disabled) return;
@@ -71,7 +80,8 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
       });
     },
     onError: (error) => {
-      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
+      console.error('[OAuthCredForm] Create failed:', error);
+      setSubmitError(toInlineError(t(credErrorKey(error, 'creds.errors.createFailed')), error));
     },
     onSuccess: () => {
       onSuccess();
@@ -81,6 +91,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
   const handleSubmit = (values: FormValues) => {
     if (disabled) return;
 
+    setSubmitError(null);
     createMutation.mutate(values);
   };
 
@@ -142,6 +153,10 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
           rows={2}
         />
       </Form.Field>
+
+      {submitError && (
+        <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+      )}
 
       <CredFormFooter>
         <Button type="fill" onClick={onCancel}>

@@ -1317,7 +1317,6 @@ export default {
   'user.workspaceProfile.errors.namespace.pattern':
     'Use lowercase letters, numbers, and hyphens. Start and end with a letter or number.',
   'user.workspaceProfile.errors.namespace.required': 'Enter a Community handle',
-  'user.workspaceProfile.errors.uploadFailed': 'Failed to upload avatar',
   'user.workspaceProfile.errors.url': 'Enter a valid URL',
   'user.workspaceProfile.failed': 'Failed to update workspace profile',
   'user.workspaceProfile.fields.avatar': 'Avatar',
@@ -1337,7 +1336,8 @@ export default {
   'user.workspaceProfile.fields.namespace.available': 'This URL is available',
   'user.workspaceProfile.fields.namespace.checking': 'Checking availability…',
   'user.workspaceProfile.fields.namespace.placeholder': 'workspace-handle',
-  'user.workspaceProfile.fields.namespace.taken': 'This URL is already taken',
+  'user.workspaceProfile.fields.namespace.taken':
+    'This URL is already taken. Try a different handle.',
   'user.workspaceProfile.fields.websiteUrl': 'Website',
   'user.workspaceProfile.fields.websiteUrl.placeholder': 'Workspace website link',
   'user.workspaceProfile.optional.toggle': 'More settings',
@@ -1372,7 +1372,6 @@ export default {
   'user.workspaceProfile.settings.members.role.admin': 'Admin',
   'user.workspaceProfile.settings.members.role.member': 'Member',
   'user.workspaceProfile.settings.members.sync': 'Sync members',
-  'user.workspaceProfile.settings.members.syncFailed': 'Failed to sync members',
   'user.workspaceProfile.settings.members.syncHint':
     'Sync the current workspace members to the Community organization.',
   'user.workspaceProfile.settings.members.syncSuccess': 'Members synced',
@@ -1391,7 +1390,6 @@ export default {
   'user.workspaceProfile.settings.tabs.members': 'Members',
   'user.workspaceProfile.settings.tabs.profile': 'Profile',
   'user.workspaceProfile.settings.title': 'Community Profile Settings',
-  'user.workspaceProfile.settings.updateFailed': 'Failed to update Community profile',
   'user.workspaceProfile.settings.updateSuccess': 'Community profile updated',
   'user.workspaceProfile.settings.website.description':
     'Add a website shown on the Community profile.',
@@ -1472,4 +1470,12 @@ export default {
   'user.submitRepoHint': 'The repository will be reviewed before being published.',
   'user.submitRepoSuccess': 'Repository submitted successfully! It will be reviewed shortly.',
   'user.submitRepoTitle': 'Submit Your Repository',
+  'user.workspaceProfile.errors.saveFailed':
+    "Couldn't save your profile. Check your network and try again.",
+  'user.workspaceProfile.errors.uploadFailedRetry':
+    'Upload failed. Check your network and try again.',
+  'user.workspaceProfile.settings.members.syncFailedRetry':
+    "Couldn't sync members. Check your network and click Sync members again.",
+  'user.workspaceProfile.settings.updateFailedRetry':
+    "Couldn't save. Check your network and click Save again.",
 };

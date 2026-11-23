@@ -1051,12 +1051,15 @@ export default {
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
   'balance.subscriptionQuota': 'Subscription usage',
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
+  'cancelPlan.failed': "Couldn't cancel the subscription. Check your connection and try again.",
   'compare.monthlyQuota': 'Monthly usage',
   'plans.quota.freeLimit': 'Monthly limit, resets every month',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
   'creditUsageReminder.used': "{{percent}} of this billing cycle's subscription usage is used",
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
+  'credits.agentShareBudget.saveFailed':
+    "Couldn't save the Agent Share budget. Check your connection and try again.",
   'creditsChip.rolling.usageTitle': 'Plan usage',
   'creditsChip.rolling.usageTooltip': 'Plan usage toward the nearest limit',
   'creditsChip.usageTitle': 'Usage',
@@ -1083,6 +1086,8 @@ export default {
   'credits.autoTopUp.enable.noChargeNow':
     'Your balance is {{balance}}, above {{threshold}}, so nothing is charged now. Auto top-up runs once it drops to {{threshold}}.',
   'credits.autoTopUp.enable.noPaymentMethod': 'Add a card first',
+  'credits.autoTopUp.enable.openSetupFailed':
+    "Couldn't open payment method setup. Check your connection and try again.",
   'credits.autoTopUp.enable.overflowNote':
     'This also turns on "{{overflow}}". Without it, requests stop at your plan limits and auto top-up never runs.',
   'credits.autoTopUp.enable.paymentMethod': 'Payment method',
@@ -1094,12 +1099,23 @@ export default {
   'credits.autoTopUp.enable.waitingForPaymentMethod':
     'Add the card in the new tab, then come back here to turn it on.',
   'credits.autoTopUp.recommended': 'Recommended',
+  'credits.autoTopUp.saveFailed':
+    "Couldn't save auto top-up settings. Check your connection and try again.",
   'credits.autoTopUp.setupAndEnable': 'Add card and turn on',
   'credits.autoTopUp.summary': 'Refill to {{target}} when the balance is at or below {{threshold}}',
   'credits.autoTopUp.summaryMonthly': 'Charged this month: {{amount}} / {{limit}}',
   'credits.autoTopUp.summaryNoCard':
     'Add a card to refill the balance automatically, so requests keep going after your limits run out',
   'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
+  'credits.autoTopUp.turnOffFailed': "Couldn't turn off auto top-up. Try again.",
+  'credits.costEstimateHint.saveFailedRetry':
+    "Couldn't save the alert threshold. Check your connection and try again.",
+  'credits.dedicatedBudget.saveFailed':
+    "Couldn't save the dedicated budget. Check your connection and try again.",
+  'credits.memberBudget.saveFailed':
+    "Couldn't save the member budget. Check your connection and try again.",
+  'credits.teamBudget.saveFailed':
+    "Couldn't save the team budget. Check your connection and try again.",
   'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
   'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
   'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',

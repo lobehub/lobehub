@@ -311,7 +311,6 @@
   "updateArgs.form.add": "إضافة عنصر",
   "updateArgs.form.key": "مفتاح الحقل",
   "updateArgs.form.value": "قيمة الحقل",
-  "updateArgs.formValidationFailed": "فشل التحقق من صحة النموذج، يرجى التحقق من تنسيق المعلمات",
   "updateArgs.keyRequired": "لا يمكن أن يكون مفتاح الحقل فارغًا",
   "updateArgs.stringifyError": "تعذر تحويل المعلمات إلى سلسلة، يرجى التحقق من تنسيق المعلمات"
 }
