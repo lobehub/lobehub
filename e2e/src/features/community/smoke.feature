@@ -17,6 +17,12 @@ Feature: Community Smoke Tests
     Then the page should load without errors
     And I should see the page body
     And I should see the search bar
+    And I should see assistant cards
+
+  @COMMUNITY-SMOKE-006 @P0
+  Scenario: Load the community Agents under Public
+    Given I navigate to "/marketplace/agent?tab=public"
+    Then the page should load without errors
     And I should see the assistant category "programming"
     And I should see assistant cards
 
