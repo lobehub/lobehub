@@ -1,0 +1,36 @@
+---
+title: Using NagaAI in LobeHub
+description: Connect LobeHub to NagaAI with an API key and use the models it serves.
+tags:
+  - LobeHub
+  - NagaAI
+  - API Key
+  - Model gateway
+---
+
+# Using NagaAI in LobeHub
+
+[NagaAI](https://naga.ac) is an API gateway that serves models from many vendors on one OpenAI-compatible endpoint, with model ids in `vendor/model` form. It is an independent gateway, not the model vendors' own API.
+
+<Steps>
+  ### Step 1: Create an API key
+
+  - Sign in at [naga.ac](https://naga.ac)
+  - Open [API Keys](https://naga.ac/dashboard/api-keys) and select **Create API key**
+
+  ### Step 2: Configure NagaAI in LobeHub
+
+  - Open **App Settings → AI Providers** and find `NagaAI`
+  - Enter the API key and turn on the provider switch
+  - Click **Check** to verify the connection
+  - Click **Fetch models** to load the current model list, then enable the models you want
+
+  <Callout type={'warning'}>
+    Usage is billed by NagaAI per token. Current prices are on the
+    [NagaAI models page](https://naga.ac/models).
+  </Callout>
+</Steps>
+
+## API mode
+
+Chats and structured output are sent to the Responses API at `https://api.naga.ac/v1/responses`. The model list comes from `https://api.naga.ac/v1/models`; only models that serve the Responses API are listed.

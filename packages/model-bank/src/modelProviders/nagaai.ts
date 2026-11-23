@@ -19,7 +19,6 @@ const NagaAI: ModelProviderCard = {
     },
     sdkType: 'openai',
     showModelFetcher: true,
-    supportResponsesApi: true,
   },
   url: 'https://naga.ac',
 };

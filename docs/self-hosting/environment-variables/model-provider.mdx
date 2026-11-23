@@ -918,4 +918,27 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## NagaAI
+
+### `NAGAAI_API_KEY`
+
+- Type: Optional; users can instead enter their key in provider settings.
+- Description: The API key created on the NagaAI API Keys page.
+- Default: -
+- Example: `your-nagaai-api-key`
+
+### `NAGAAI_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the NagaAI API address.
+- Default: `https://api.naga.ac/v1`
+- Example: `https://your-proxy.example.com/v1`
+
+### `NAGAAI_MODEL_LIST`
+
+- Type: Optional
+- Description: Controls the NagaAI model list with the shared [model list syntax][model-list]: `+` adds a model, `-` hides one, `model_id=display_name` renames one; separate entries with commas.
+- Default: `-`
+- Example: `-all,+anthropic/claude-sonnet-5.5,+google/gemini-3.5-flash`
+
 [model-list]: /docs/self-hosting/advanced/model-list
