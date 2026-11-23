@@ -14,8 +14,10 @@ import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
+  backoffPollInterval,
   hasPendingInterventions,
   INTERVENTION_REFRESH_INTERVAL,
+  pendingInterventionKey,
 } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
@@ -242,6 +244,7 @@ export class MessageTranscriptActionImpl {
     // card that arrived over the stream) was deduped for the whole 30s list
     // window and another device's answer showed up that late. Each tick
     // re-reads the interval: the pending set changes without a render.
+    const bucket = messageMapKey(context);
     const revalidateRef = useRef(result.revalidate);
     revalidateRef.current = result.revalidate;
     const validatingRef = useRef(result.isValidating);
@@ -254,11 +257,23 @@ export class MessageTranscriptActionImpl {
           : refreshInterval;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let cancelled = false;
+      /** Start of the current uninterrupted polling run; drives the backoff. */
+      let pollingSince: number | undefined;
+      /** Cards pending when `pollingSince` was set; a newly raised card restarts the fast window. */
+      let pollingFor: string | undefined;
       const next = () => {
         // A read still in flight when the effect re-ran must not restart this chain.
         if (cancelled) return;
-        const interval = intervalOf();
-        if (interval > 0) timer = setTimeout(tick, interval);
+        const base = intervalOf();
+        if (base <= 0) return;
+        // Read from the store, not a subscription: a re-render here would
+        // reorder this hook against the sync it drives.
+        const pendingCards = pendingInterventionKey(this.#get().dbMessagesMap[bucket] ?? []);
+        if (pollingSince === undefined || pollingFor !== pendingCards) {
+          pollingSince = Date.now();
+          pollingFor = pendingCards;
+        }
+        timer = setTimeout(tick, backoffPollInterval(base, Date.now() - pollingSince));
       };
       const tick = () => {
         const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
@@ -282,7 +297,6 @@ export class MessageTranscriptActionImpl {
       this.#api,
       operationSelectors.isAgentRuntimeRunningByContext(context),
     );
-    const bucket = messageMapKey(context);
     const wasStreamingRef = useRef({ bucket, running: isStreaming });
     useEffect(() => {
       if (

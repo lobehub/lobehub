@@ -2,6 +2,26 @@ import type { ChatTopic, UIChatMessage } from '@lobechat/types';
 
 export const INTERVENTION_REFRESH_INTERVAL = 2000;
 
+/** How long a pending card polls at the base interval before backing off. */
+export const INTERVENTION_FAST_POLL_WINDOW = 5 * 60_000;
+/** Ceiling of the backed-off poll interval. */
+export const INTERVENTION_MAX_REFRESH_INTERVAL = 30_000;
+
+/**
+ * Poll interval after `elapsed` ms of continuous polling. An answer from
+ * another device normally lands within minutes, so the first window keeps the
+ * base interval; after that the interval doubles every minute up to the
+ * ceiling. A card whose run already died stays `pending` in the database
+ * forever, and without this backoff an open tab re-read the whole transcript
+ * every 2 s all day (one desktop client fetched a 4.5 MB page ~17k times a day).
+ * Focus revalidation still refreshes immediately when the user returns.
+ */
+export const backoffPollInterval = (base: number, elapsed: number) => {
+  if (base <= 0 || elapsed < INTERVENTION_FAST_POLL_WINDOW) return base;
+  const doublings = 1 + Math.floor((elapsed - INTERVENTION_FAST_POLL_WINDOW) / 60_000);
+  return Math.max(base, Math.min(base * 2 ** doublings, INTERVENTION_MAX_REFRESH_INTERVAL));
+};
+
 /** A missing operation marker can still mean the continuation is starting. */
 export const isInterventionRunActive = (topic: ChatTopic | null) =>
   !!topic?.metadata?.runningOperation ||
@@ -19,6 +39,22 @@ export const hasPendingInterventions = (messages: UIChatMessage[]) =>
       !message.id.startsWith('tmp_') &&
       intervention(message)?.status === 'pending',
   );
+
+/**
+ * Ids of the unanswered cards, joined into a stable string so a selector only
+ * changes when a card is raised or answered. A newly raised card restarts the
+ * fast poll window of `backoffPollInterval`.
+ */
+export const pendingInterventionKey = (messages: UIChatMessage[]) =>
+  messages
+    .filter(
+      (message) =>
+        message.role === 'tool' &&
+        !message.id.startsWith('tmp_') &&
+        intervention(message)?.status === 'pending',
+    )
+    .map((message) => message.id)
+    .join(',');
 
 const isTerminal = (status: string | undefined) =>
   status === 'approved' || status === 'rejected' || status === 'aborted';

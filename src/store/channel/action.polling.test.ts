@@ -208,6 +208,25 @@ describe('Channel in-progress refresh without gateway notifications', () => {
     expect(channelService.detail).toHaveBeenCalledTimes(calls);
   });
 
+  // Regression: the page header and the conversation both mount this view, each on its own
+  // timer, and every extra mount doubled the fast poll.
+  it('shares one fast poll between views mounted on the same channel', async () => {
+    response = detail({ messages: [message('pending')] });
+    const cache = new Map();
+    const shared = ({ children }: PropsWithChildren) =>
+      createElement(SWRConfig, {
+        children,
+        value: { isOnline: () => true, isVisible: () => true, provider: () => cache },
+      });
+    renderHook(() => channelActions.useFetchDetail(params), { wrapper: shared });
+    await tick(1000);
+    renderHook(() => channelActions.useFetchDetail(params), { wrapper: shared });
+    await tick(0);
+    const calls = vi.mocked(channelService.detail).mock.calls.length;
+    await tick(10 * CHANNEL_ACTIVE_REFRESH_MS);
+    expect(vi.mocked(channelService.detail).mock.calls.length - calls).toBeLessThanOrEqual(11);
+  });
+
   it('does not fetch a disabled view', async () => {
     renderHook(() => channelActions.useFetchDetail(null), { wrapper });
     await tick(5000);

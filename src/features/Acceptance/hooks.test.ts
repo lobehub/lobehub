@@ -86,14 +86,42 @@ describe('Verify data hooks', () => {
     });
   });
 
-  it('polls fastest before an acceptance exists, then keeps it live until it settles', () => {
-    expect(getAcceptanceBySubjectRefreshInterval(undefined)).toBe(2000);
-    expect(getAcceptanceBySubjectRefreshInterval(null)).toBe(2000);
+  it('checks for a missing acceptance slowly, then keeps one live until it settles', () => {
+    // Regression: a missing acceptance was polled every 2s for as long as the page stayed open.
+    expect(getAcceptanceBySubjectRefreshInterval(undefined)).toBe(10_000);
+    expect(getAcceptanceBySubjectRefreshInterval(null)).toBe(10_000);
     // A task page left open through a goal loop would otherwise keep rendering
     // whatever state it first saw, all the way through delivery.
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'verifying' })).toBe(5000);
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'delivered' })).toBe(5000);
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'accepted' })).toBe(0);
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'closed' })).toBe(0);
+  });
+
+  // Regression: the task page mounts the state row and the acceptance section on the same
+  // subject, and each polled it on its own timer.
+  it('shares one poll between readers of the same subject', async () => {
+    vi.useFakeTimers();
+    try {
+      const getAcceptanceBySubject = vi
+        .spyOn(verifyService, 'getAcceptanceBySubject')
+        .mockResolvedValue({ id: 'a1', status: 'verifying' } as never);
+      const wrapper = createSWRWrapper(new Map());
+      renderHook(() => useAcceptanceBySubject('task', 'T-shared'), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      renderHook(() => useAcceptanceBySubject('task', 'T-shared'), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      const calls = getAcceptanceBySubject.mock.calls.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50_000);
+      });
+      expect(getAcceptanceBySubject.mock.calls.length - calls).toBeLessThanOrEqual(11);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

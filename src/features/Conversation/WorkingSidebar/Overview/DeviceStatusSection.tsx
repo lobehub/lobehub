@@ -111,18 +111,20 @@ const DeviceStatusSection = memo<DeviceStatusSectionProps>(({ active, deviceId }
   // Removed, or not visible in this workspace: nothing to describe.
   if (!device) return null;
 
-  return <DeviceStatusContent data={data} device={device} error={error} />;
+  return <DeviceStatusContent active={active} data={data} device={device} error={error} />;
 });
 
 DeviceStatusSection.displayName = 'OverviewDeviceStatusSection';
 
 interface DeviceStatusContentProps {
+  /** Whether the sidebar is showing; a hidden one stops polling. */
+  active: boolean;
   data?: DeviceMetricSeries;
   device: DeviceListItem;
   error?: unknown;
 }
 
-const DeviceStatusContent = ({ data, device, error }: DeviceStatusContentProps) => {
+const DeviceStatusContent = ({ active, data, device, error }: DeviceStatusContentProps) => {
   const { t } = useTranslation('setting');
   const activityText = useDeviceActivityText(device);
   const { gap } = useDensityTokens();
@@ -166,7 +168,7 @@ const DeviceStatusContent = ({ data, device, error }: DeviceStatusContentProps) 
             <Text fontSize={12} type={'secondary'}>
               {t('devices.card.runningTopics')}
             </Text>
-            <DeviceRunningSummaryValue deviceId={device.deviceId} />
+            <DeviceRunningSummaryValue active={active} deviceId={device.deviceId} />
           </Flexbox>
         </div>
 

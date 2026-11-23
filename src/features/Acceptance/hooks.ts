@@ -32,8 +32,21 @@ const VERIFY_REPORT_SWR_CONFIG = {
  */
 const TERMINAL_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed']);
 
+/**
+ * Most subjects never get an acceptance, so a missing one is checked every 10s rather than
+ * every 2s: an open task page used to read it ~40k times a day.
+ */
+export const ACCEPTANCE_ABSENT_REFRESH_MS = 10_000;
+
+/**
+ * Readers on one task page (state row, acceptance section, result portal) mount together and
+ * poll the same subject on their own timers; `useClientDataSWR` dedupes nothing by default.
+ * Kept short so a read left by the slower absent poll does not swallow the first live one.
+ */
+export const ACCEPTANCE_POLL_DEDUPE_MS = 1500;
+
 export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
-  if (!acceptance) return 2000;
+  if (!acceptance) return ACCEPTANCE_ABSENT_REFRESH_MS;
   const status = (acceptance as { status?: string }).status;
   return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
 };
@@ -120,7 +133,7 @@ export interface AcceptanceBySubjectSync {
  * The optional acceptance aggregate attached to a task/topic/document subject,
  * read from the verify store's replica of `acceptanceBySubjectMap`. A subject
  * can mount before its first Verify Run creates the aggregate, so the sync
- * polls fastest until one exists and then keeps it live until it settles.
+ * checks for one and then keeps it live until it settles.
  */
 export const useAcceptanceBySubject = (
   subjectType: CreatableAcceptanceSubjectType,
@@ -131,6 +144,7 @@ export const useAcceptanceBySubject = (
   const data = useVerifyStore((s) => (key ? s.acceptanceBySubjectMap[key] : undefined));
 
   const sync = useFetchAcceptanceBySubject(subjectType, subjectId, {
+    dedupingInterval: ACCEPTANCE_POLL_DEDUPE_MS,
     refreshInterval: getAcceptanceBySubjectRefreshInterval(data),
   });
 
