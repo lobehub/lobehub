@@ -1,4 +1,8 @@
-import { type FollowUpMode, type InterfaceDensity, resolveFollowUpMode } from '@lobechat/types';
+import {
+  DEFAULT_FOLLOW_UP_BEHAVIOR,
+  type FollowUpBehavior,
+  type InterfaceDensity,
+} from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
@@ -49,15 +53,9 @@ const interfaceDensity = (s: UserStore): InterfaceDensity =>
 const workflowStreamingExpandLevel = (s: UserStore) =>
   generalConfig(s).expandWorkflowWhileStreaming ? 'full' : 'collapsed';
 
-/**
- * What a message sent during a run does. `legacy` (lab off) keeps the
- * behavior from before the setting existed; the setting defaults to steer.
- */
-const followUpBehavior = (s: UserStore): FollowUpMode =>
-  resolveFollowUpMode(
-    s.preference.lab?.enableBetterCodingExperience,
-    generalConfig(s).followUpBehavior,
-  );
+/** What a message sent during a run does; defaults to steer. */
+const followUpBehavior = (s: UserStore): FollowUpBehavior =>
+  generalConfig(s).followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR;
 
 export const userGeneralSettingsSelectors = {
   animationMode,

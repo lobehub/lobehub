@@ -76,25 +76,14 @@ describe('settingsSelectors', () => {
   });
 
   describe('followUpBehavior', () => {
-    it('should stay on the legacy behavior while the lab is off, whatever is stored', () => {
-      const s: UserState = merge(initialState, {
-        settings: { general: { followUpBehavior: 'queue' } },
-      });
-
-      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('legacy');
+    it('should default to steer', () => {
+      expect(userGeneralSettingsSelectors.followUpBehavior(initialState as UserStore)).toBe(
+        'steer',
+      );
     });
 
-    it('should default to steer with the lab on', () => {
+    it('should read the stored setting', () => {
       const s: UserState = merge(initialState, {
-        preference: { lab: { enableBetterCodingExperience: true } },
-      });
-
-      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('steer');
-    });
-
-    it('should read the stored setting with the lab on', () => {
-      const s: UserState = merge(initialState, {
-        preference: { lab: { enableBetterCodingExperience: true } },
         settings: { general: { followUpBehavior: 'queue' } },
       });
 

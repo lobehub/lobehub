@@ -179,7 +179,7 @@ describe('startQueuedFollowUp', () => {
     assertCanUseAgentRunConversation.mockResolvedValue(undefined);
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
     findMessageById.mockResolvedValue(undefined);
-    readFollowUpMode.mockResolvedValue('legacy');
+    readFollowUpMode.mockResolvedValue('steer');
   });
 
   it('starts only the oldest follow-up in Queue mode; the rest wait for that turn to end', async () => {

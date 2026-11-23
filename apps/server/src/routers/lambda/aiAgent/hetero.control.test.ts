@@ -64,7 +64,7 @@ beforeEach(() => {
   mocks.getRedisServiceClient.mockResolvedValue(createHeteroControlFakeRedis());
   mocks.operation = mainRun;
   mocks.takeHeteroSteer.mockResolvedValue(undefined);
-  mocks.readFollowUpMode.mockResolvedValue('legacy');
+  mocks.readFollowUpMode.mockResolvedValue('steer');
 });
 
 describe('waitHeteroSteer and the Follow-up behavior', () => {
@@ -86,14 +86,14 @@ describe('waitHeteroSteer and the Follow-up behavior', () => {
     expect(mocks.takeHeteroSteer).not.toHaveBeenCalled();
   });
 
-  it('asks for a merged steer in Steer mode', async () => {
+  it('takes a steer for the live session in Steer mode', async () => {
     mocks.readFollowUpMode.mockResolvedValue('steer');
 
     await caller.waitHeteroSteer({ blockMs: 1, operationId: 'op-1' });
 
     expect(mocks.takeHeteroSteer).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ mode: 'steer', operationId: 'op-1' }),
+      expect.objectContaining({ operationId: 'op-1' }),
     );
   });
 });
