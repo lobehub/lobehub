@@ -142,7 +142,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.messagePerson,
       description:
-        "Message one person for your requester, e.g. when asked to let someone know once you are done. It is posted in your requester's one-on-one conversation with that person, as your requester's message marked as sent by you, and the person is notified. No Agent answers there and nothing comes back to you. Get userId from listPeople; if several people match the name, ask your requester instead of guessing. Not for your requester: your final answer reaches them.",
+        "Message one person for your requester, e.g. when asked to let someone know once you are done. If the person can talk to you themselves (a fellow workspace member, or your owner), it is posted as your own message in your direct conversation with them, where their reply wakes you as their request. Otherwise it is posted in your requester's one-on-one conversation with them, marked as sent by you, and nothing comes back to you. Either way the person is notified. Get userId from listPeople; if several people match the name, ask your requester instead of guessing. Not for your requester: your final answer reaches them.",
       parameters: {
         type: 'object',
         additionalProperties: false,

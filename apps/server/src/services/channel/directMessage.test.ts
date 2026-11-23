@@ -1,14 +1,16 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { notifyChannelDirectMessages } from './directMessage';
+import { notifyChannelAgentDirectMessage, notifyChannelDirectMessages } from './directMessage';
 
-const { after, notifyChannelDirectMessage } = vi.hoisted(() => ({
+const { after, notifyChannelAgentMessage, notifyChannelDirectMessage } = vi.hoisted(() => ({
   after: vi.fn(),
+  notifyChannelAgentMessage: vi.fn(),
   notifyChannelDirectMessage: vi.fn(),
 }));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after }));
 vi.mock('@/business/server/channel-message/notifyActivity', () => ({
+  notifyChannelAgentMessage,
   notifyChannelDirectMessage,
 }));
 
@@ -98,6 +100,32 @@ describe('notifyChannelDirectMessages', () => {
     notifyChannelDirectMessage.mockRejectedValue(new Error('down'));
     notifyChannelDirectMessages(dbReturning([conversation]), { userId: 'opener' }, message);
 
+    await expect(runScheduled()).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
+
+describe('notifyChannelAgentDirectMessage', () => {
+  beforeEach(() => vi.resetAllMocks());
+  const params = {
+    agentId: 'agent',
+    channelId: 'channel',
+    messageId: 'message',
+    recipientUserId: 'person',
+  };
+
+  it('pings the person after the response', async () => {
+    notifyChannelAgentDirectMessage(params);
+    expect(notifyChannelAgentMessage).not.toHaveBeenCalled();
+    await runScheduled();
+    expect(notifyChannelAgentMessage).toHaveBeenCalledWith(params);
+  });
+
+  it('never fails the send when the notification does', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    notifyChannelAgentMessage.mockRejectedValue(new Error('down'));
+    notifyChannelAgentDirectMessage(params);
     await expect(runScheduled()).resolves.toBeUndefined();
     expect(error).toHaveBeenCalled();
     error.mockRestore();

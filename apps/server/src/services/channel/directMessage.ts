@@ -1,7 +1,11 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { and, eq } from 'drizzle-orm';
 
-import { notifyChannelDirectMessage } from '@/business/server/channel-message/notifyActivity';
+import {
+  notifyChannelAgentMessage,
+  type NotifyChannelAgentMessageParams,
+  notifyChannelDirectMessage,
+} from '@/business/server/channel-message/notifyActivity';
 import { notificationsMutedSql } from '@/database/repositories/channel/notificationMute';
 import { channelMembers, channels } from '@/database/schemas';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -65,6 +69,26 @@ export const notifyChannelDirectMessages = (
         channelId: message.channelId,
         error,
         messageId: message.id,
+      });
+    }
+  });
+};
+
+/**
+ * Ping a person about a message an Agent wrote to them in their direct conversation with it
+ * (`ChannelMessagingService.messagePerson`), the way a person's message in a conversation between
+ * two people pings the other. Runs after the response and never fails the send; the business slot
+ * is a no-op outside Cloud.
+ */
+export const notifyChannelAgentDirectMessage = (params: NotifyChannelAgentMessageParams) => {
+  after(async () => {
+    try {
+      await notifyChannelAgentMessage(params);
+    } catch (error) {
+      console.error('[channel] Failed to send Agent message notification', {
+        channelId: params.channelId,
+        error,
+        messageId: params.messageId,
       });
     }
   });
