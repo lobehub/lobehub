@@ -53,7 +53,13 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
     );
   }
 
-  if (items.length === 0) return <Empty search={Boolean(keywords?.trim())} />;
+  if (items.length === 0)
+    return (
+      <Empty
+        action={null}
+        description={keywords?.trim() ? t('skillStore.emptySearch') : t('skillStore.marketEmpty')}
+      />
+    );
 
   const hasReachedEnd = totalPages !== undefined && page >= totalPages;
 

@@ -33,7 +33,12 @@ describe('AgentShareModel coverage edges', () => {
     });
     await serverDB.insert(agents).values([
       { id: agentId, slug: 'ascov-agent-slug', title: 'ascov agent', userId },
-      { id: unsharedAgentId, slug: 'ascov-unshared-slug', userId },
+      {
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+        id: unsharedAgentId,
+        slug: 'ascov-unshared-slug',
+        userId,
+      },
       { id: workspaceAgentId, slug: 'ascov-workspace-slug', userId, workspaceId },
       {
         id: nullListsAgentId,
@@ -133,21 +138,41 @@ describe('AgentShareModel coverage edges', () => {
     it('keeps the stored config when the patch carries no defined field', async () => {
       const model = new AgentShareModel(serverDB, userId);
       await model.create(agentId);
-      await model.updateConfig(agentId, { maxTurnsPerTopic: 7, showModelInfo: true });
+      await model.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
+        maxMessagesPerVisitor: 7,
+      });
 
       const updated = await model.updateConfig(agentId, {
-        maxTurnsPerTopic: undefined,
-        showModelInfo: undefined,
+        allowCreatorViewSessions: undefined,
+        maxMessagesPerVisitor: undefined,
       });
 
       expect(updated?.shareConfig).toMatchObject({
-        maxTurnsPerTopic: 7,
-        showModelInfo: true,
+        allowCreatorViewSessions: true,
+        maxMessagesPerVisitor: 7,
         slug: 'ascov-agent-slug',
       });
 
       const empty = await model.updateConfig(agentId, {});
-      expect(empty?.shareConfig).toMatchObject({ maxTurnsPerTopic: 7, showModelInfo: true });
+      expect(empty?.shareConfig).toMatchObject({
+        allowCreatorViewSessions: true,
+        maxMessagesPerVisitor: 7,
+      });
+    });
+  });
+
+  describe('listedInMarket', () => {
+    it('reads back the owner’s market listing from the update and the share status', async () => {
+      const model = new AgentShareModel(serverDB, userId);
+      await model.create(agentId);
+
+      const listed = await model.updateConfig(agentId, { listedInMarket: true });
+      expect(listed?.shareConfig.listedInMarket).toBe(true);
+      expect((await model.getByAgentId(agentId))?.shareConfig.listedInMarket).toBe(true);
+
+      await model.updateConfig(agentId, { listedInMarket: false });
+      expect((await model.getByAgentId(agentId))?.shareConfig.listedInMarket).toBe(false);
     });
   });
 
@@ -177,6 +202,24 @@ describe('AgentShareModel coverage edges', () => {
   });
 
   describe('findByShareId', () => {
+    it('returns the Agent harness so visitor grants can follow it', async () => {
+      const share = await new AgentShareModel(serverDB, userId).create(unsharedAgentId, 'link');
+
+      const found = await AgentShareModel.findByShareId(serverDB, share.id);
+
+      expect(found?.agentAgencyConfig).toEqual({
+        heterogeneousProvider: { type: 'claude-code' },
+      });
+      expect(
+        (
+          await AgentShareModel.findByShareId(
+            serverDB,
+            (await new AgentShareModel(serverDB, userId).create(agentId, 'link')).id,
+          )
+        )?.agentAgencyConfig ?? null,
+      ).toBeNull();
+    });
+
     it('falls back to empty lists when the agent stores null tags and opening questions', async () => {
       const share = await new AgentShareModel(serverDB, userId).create(nullListsAgentId, 'link');
 

@@ -82,7 +82,7 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
 
         const newUserName = profile.userName || profile.namespace;
         if (newUserName && newUserName !== currentUserName) {
-          navigate(`/community/user/${newUserName}`, { replace: true });
+          navigate(`/marketplace/user/${newUserName}`, { replace: true });
         }
       });
     },

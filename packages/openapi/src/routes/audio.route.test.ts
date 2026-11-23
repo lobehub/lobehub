@@ -41,21 +41,29 @@ const requestAs = (apiKeyScopes: string[], allowRbac = true) => {
 };
 
 describe('POST /audio/speech access', () => {
-  it('accepts a key holding model:invoke', async () => {
-    const res = await requestAs(['model:invoke']);
+  it('accepts a key holding generation:write', async () => {
+    const res = await requestAs(['generation:write']);
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('audio/mpeg');
   });
 
-  it('rejects a key without model:invoke', async () => {
-    const res = await requestAs(['chat:read']);
+  it('keeps accepting keys issued with model:invoke before generation:write existed', async () => {
+    const res = await requestAs(['model:invoke']);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a key without a generation scope', async () => {
+    for (const scopes of [['chat:read'], ['generation:read']]) {
+      const res = await requestAs(scopes);
+
+      expect(res.status).toBe(403);
+    }
   });
 
   it('rejects an issuer without the model invoke permission, whatever the key scope', async () => {
-    const res = await requestAs(['model:invoke'], false);
+    const res = await requestAs(['generation:write'], false);
 
     expect(res.status).toBe(403);
   });

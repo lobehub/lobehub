@@ -1,84 +1,46 @@
 'use client';
 
 import { type CredType } from '@lobechat/types';
-import { Steps, useModalContext } from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
-import { type FC, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useModalContext } from '@lobehub/ui';
+import { type FC } from 'react';
 
 import { type CredsApi } from '../useCredsApi';
-import CredTypeSelector from './CredTypeSelector';
 import FileCredForm from './FileCredForm';
 import KVCredForm from './KVCredForm';
 import OAuthCredForm from './OAuthCredForm';
 
-const styles = stylex.create({ steps: { marginBlockEnd: '24px' } });
-
 export interface CreateCredModalContentProps {
   credsApi: CredsApi;
   onSuccess?: () => void;
+  /** Picked from the "New credential" menu before the modal opens. */
+  type: CredType;
 }
 
-const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ credsApi, onSuccess }) => {
-  const { t } = useTranslation('setting');
+const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ credsApi, onSuccess, type }) => {
   const { close } = useModalContext();
-  const [step, setStep] = useState(0);
-  const [credType, setCredType] = useState<CredType | null>(null);
-
-  const handleTypeSelect = (type: CredType) => {
-    setCredType(type);
-    setStep(1);
-  };
-
-  const handleBack = () => {
-    setStep(0);
-    setCredType(null);
-  };
 
   const handleSuccess = () => {
     onSuccess?.();
     close();
   };
 
-  const renderForm = () => {
-    switch (credType) {
-      case 'kv-env':
-      case 'kv-header': {
-        return (
-          <KVCredForm
-            credsApi={credsApi}
-            type={credType}
-            onBack={handleBack}
-            onSuccess={handleSuccess}
-          />
-        );
-      }
-      case 'oauth': {
-        return <OAuthCredForm credsApi={credsApi} onBack={handleBack} onSuccess={handleSuccess} />;
-      }
-      case 'file': {
-        return <FileCredForm credsApi={credsApi} onBack={handleBack} onSuccess={handleSuccess} />;
-      }
-      default: {
-        return null;
-      }
+  switch (type) {
+    case 'kv-env':
+    case 'kv-header': {
+      return (
+        <KVCredForm credsApi={credsApi} type={type} onCancel={close} onSuccess={handleSuccess} />
+      );
     }
-  };
-
-  return (
-    <>
-      <Steps
-        className={stylex.props(styles.steps).className}
-        current={step}
-        items={[
-          { title: t('creds.createModal.selectType') },
-          { title: t('creds.createModal.fillForm') },
-        ]}
-      />
-
-      {step === 0 ? <CredTypeSelector onSelect={handleTypeSelect} /> : renderForm()}
-    </>
-  );
+    case 'oauth': {
+      return <OAuthCredForm credsApi={credsApi} onCancel={close} onSuccess={handleSuccess} />;
+    }
+    case 'file': {
+      return <FileCredForm credsApi={credsApi} onCancel={close} onSuccess={handleSuccess} />;
+    }
+    default: {
+      return null;
+    }
+  }
 };
 
 export default CreateCredModalContent;

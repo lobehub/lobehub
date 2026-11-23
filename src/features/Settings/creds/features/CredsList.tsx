@@ -14,6 +14,7 @@ import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
+import { type CredFilter, filterCreds } from './credFilter';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
 import MarketSignInGate from './MarketSignInGate';
@@ -26,13 +27,18 @@ const styles = stylex.create({
   empty: { paddingBlock: '48px', paddingInline: '0' },
 });
 
+interface CredsListProps {
+  /** The vault toolbar's search and type filter; every row when omitted. */
+  filter?: CredFilter;
+}
+
 /**
  * The caller's personal credentials, on the personal settings page. Each row
  * can be shared into the caller's workspaces (see {@link openShareCredModal});
  * the workspace page lists workspace credentials through `WorkspaceCredsList`.
  */
-const CredsList: FC = () => {
-  const { t } = useTranslation('setting');
+const CredsList: FC<CredsListProps> = ({ filter = {} }) => {
+  const { t } = useTranslation(['setting', 'common']);
   const { isAuthenticated } = useMarketAuth();
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const workspaces = useWorkspaces();
@@ -42,6 +48,7 @@ const CredsList: FC = () => {
   });
 
   const credentials = data?.data ?? [];
+  const visibleCredentials = filterCreds(credentials, filter);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -93,7 +100,13 @@ const CredsList: FC = () => {
           onRetry={() => refetch()}
         >
           <Flexbox gap={0}>
-            {credentials.map((cred) => (
+            {visibleCredentials.length === 0 && (
+              <Empty
+                className={stylex.props(styles.empty).className}
+                description={t('visibilityFilter.empty', { ns: 'common' })}
+              />
+            )}
+            {visibleCredentials.map((cred) => (
               <CredItem
                 canManage={canManageCredentials}
                 cred={cred}

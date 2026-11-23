@@ -16,6 +16,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { ArtboardManifest } from '@lobechat/builtin-tool-artboard';
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
@@ -57,6 +58,7 @@ import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
+import { WorkManifest } from '@lobechat/builtin-tool-work';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import {
   type AgentPluginEntry,
@@ -106,13 +108,6 @@ export const getUserDisabledToolIds = (
     ? disabled.filter((id) => !alwaysOnToolIds.includes(id))
     : disabled;
 };
-
-/**
- * Tool IDs to exclude from defaults when in manual skill-activate mode.
- * These are the tool/skill discovery tools that should be disabled when user wants precise control.
- * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
- */
-export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
 
 /**
  * Tool IDs allowed when the agent runs in chat mode
@@ -274,7 +269,24 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   // API of the tool is blocked. See the allowed-builtins section of
   // `shareGate/README.md`.
   SkillsManifest.identifier,
+  // `lobe-work`: on in every visitor run without a creator grant (see
+  // {@link AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS}). Its runtime takes the run
+  // (operation, topic, tool call) from the execution context only, writes under
+  // the share scope pinned to the visitor topic (`resolveRunWorkAccessScope`),
+  // and changes or deletes only Works this conversation created. Collection images
+  // must be the creator's images the visitor conversation produced or showed
+  // in a tool result (`resolveAgentWorkCollectionItems`).
+  // See the allowed-builtins section of `shareGate/README.md`.
+  WorkManifest.identifier,
 ]);
+
+/**
+ * Builtins every share visitor run gets without an owner grant: the server
+ * implies their grant (`resolveEffectiveShareToolGrants`) and enables them
+ * (`getShareGrantActivatedPluginIds`). The owner share-settings picker leaves
+ * them out, since a toggle there would change nothing.
+ */
+export const AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS = new Set<string>([WorkManifest.identifier]);
 
 /**
  * Subset of {@link AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS} whose server-side
@@ -462,6 +474,15 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    // On demand: hidden and absent from the defaults, but discoverable, so the activator enables
+    // it when the agent has a collection or a published link to show. A share visitor's run gets it
+    // without a creator grant (see `shareGate/grants.ts`): its Works stay in the visitor's topic.
+    hidden: true,
+    identifier: WorkManifest.identifier,
+    manifest: WorkManifest,
+    type: 'builtin',
+  },
+  {
     hidden: true,
     identifier: KnowledgeBaseManifest.identifier,
     manifest: KnowledgeBaseManifest,
@@ -597,6 +618,15 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    // Server tool discovery adds it to project conversations only; it has no
+    // client executor, so it must never be pinned or discovered.
+    discoverable: false,
+    hidden: true,
+    identifier: ArtboardManifest.identifier,
+    manifest: ArtboardManifest,
+    type: 'builtin',
+  },
+  {
     // Opt-in: pin it in the Tools popover, or the activator enables it when a
     // user asks for monitoring — not a default so ordinary turns stay lean.
     identifier: DashboardManifest.identifier,
@@ -650,10 +680,24 @@ export const onDemandBuiltinToolIds = builtinTools
   .map((tool) => tool.identifier);
 const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
 
-/** An installed tool is not permission to offer it to every agent. */
-export const getUnselectedBuiltinToolIds = (available: Iterable<string>) => {
+/** An old library uninstall stays in effect until the agent explicitly chooses the tool. */
+export const getLegacyDisabledBuiltinToolIds = (
+  uninstalled: readonly string[],
+  overrides: readonly string[],
+) => uninstalled.filter((id) => isOnDemandBuiltinTool(id) && !overrides.includes(id));
+
+/** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
+export const getUnavailableBuiltinToolIds = (
+  available: Iterable<string>,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+  uninstalled: readonly string[] = [],
+  overrides: readonly string[] = [],
+) => {
+  const legacyDisabled = getLegacyDisabledBuiltinToolIds(uninstalled, overrides);
+  if (resolveToolMode(chatConfig) === 'agent') return legacyDisabled;
+
   const allowed = new Set(available);
-  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id) || legacyDisabled.includes(id));
 };
 export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
 
@@ -662,12 +706,46 @@ const recommendedBuiltinIds = new Set(
 );
 
 /**
- * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
+ * Non-selectable, non-recommended tools that require installation from the Skill Store.
  * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
  */
 export const defaultUninstalledBuiltinTools = builtinTools
-  .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
+  .filter(
+    (t) =>
+      !t.hidden && !isOnDemandBuiltinTool(t.identifier) && !recommendedBuiltinIds.has(t.identifier),
+  )
   .map((t) => t.identifier);
+
+/**
+ * Minimal view of `settings.tool` covering just the builtin-tool install slots.
+ * Typed locally so the helpers accept the loosened shape returned by
+ * `getUserState()` while still spreading the rest of `tool` through at runtime.
+ */
+export interface UninstalledBuiltinToolsScope {
+  uninstalledBuiltinTools?: string[];
+  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
+}
+
+/**
+ * Resolve the uninstalled-builtin-tools list for the active scope.
+ *
+ * - Personal context (`workspaceId == null`) → the user's personal list.
+ * - Workspace context → the per-workspace list; a workspace with no stored
+ *   entry falls back to the default seed (a clean default state), never the
+ *   user's personal customization.
+ *
+ * `undefined` (never configured) maps to the default seed in both scopes.
+ */
+export const resolveUninstalledBuiltinTools = (
+  tool: UninstalledBuiltinToolsScope | null | undefined,
+  workspaceId?: string | null,
+): string[] => {
+  const stored = workspaceId
+    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
+    : tool?.uninstalledBuiltinTools;
+
+  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+};
 
 const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
 

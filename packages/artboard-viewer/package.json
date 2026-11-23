@@ -1,0 +1,10 @@
+{
+  "name": "@lobechat/artboard-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/finalize.mjs",
+    "test": "vitest"
+  }
+}

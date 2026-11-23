@@ -5,6 +5,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const {
   mockCreateOperation,
@@ -97,6 +98,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([])),
     };
   }),
 }));
@@ -218,7 +220,9 @@ const createBaseAgentConfig = (overrides: Record<string, any> = {}) => ({
 
 describe('AiAgentService.execAgent - device tool pipeline ()', () => {
   let service: AiAgentService;
-  const mockDb = {} as any;
+  const mockDb = {
+    query: { userSettings: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+  } as never;
   const userId = 'test-user-id';
 
   beforeEach(() => {
@@ -284,29 +288,29 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     ).toBeDefined();
   });
 
-  it.each([undefined, ['lobe-computer-use']])(
-    'gates Computer Use discovery on reported support %j',
-    async (supportedTools) => {
+  it.each([
+    { discoverable: false, supportedTools: undefined },
+    { discoverable: false, supportedTools: [] },
+    { discoverable: true, supportedTools: [AuvManifest.identifier] },
+  ])(
+    'gates default Computer Use discovery on reported support $supportedTools',
+    async ({ discoverable, supportedTools }) => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
       mockQueryDeviceList.mockResolvedValue([
         { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
       ]);
       mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools });
-      // Computer Use is opt-in per agent; the device report gates it after that.
       mockGetAgentConfig.mockResolvedValue(
-        createBaseAgentConfig({
-          agencyConfig: { executionTarget: 'local' },
-          plugins: [{ identifier: AuvManifest.identifier, mode: 'auto' }],
-        }),
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
       );
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
       const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;
-      expect(Boolean(map[AuvManifest.identifier])).toBe(Boolean(supportedTools));
+      expect(Boolean(map[AuvManifest.identifier])).toBe(discoverable);
     },
   );
 
-  it('keeps Computer Use out for an agent that has not turned it on, even on a supporting device', async () => {
+  it('keeps explicitly disabled Computer Use out even on a supporting device', async () => {
     const { deviceGateway } = await import('@/server/services/deviceGateway');
     vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
     mockQueryDeviceList.mockResolvedValue([
@@ -314,7 +318,10 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     ]);
     mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools: [AuvManifest.identifier] });
     mockGetAgentConfig.mockResolvedValue(
-      createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
+      createBaseAgentConfig({
+        agencyConfig: { executionTarget: 'local' },
+        plugins: [{ identifier: AuvManifest.identifier, mode: 'disabled' }],
+      }),
     );
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
     const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;

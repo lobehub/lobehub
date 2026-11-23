@@ -1,6 +1,8 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import type * as UI from '@lobehub/ui';
+import { AGENT_AVATAR_COLORS, cssVar } from '@lobehub/ui';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   AGENT_COVER_PATTERNS,
@@ -9,6 +11,19 @@ import {
   pickDominantColor,
   seedCoverColor,
 } from './coverColor';
+
+const traits = vi.hoisted(() => ({ color: undefined as string | undefined }));
+vi.mock('@lobehub/ui', async (original) => {
+  const ui = await original<typeof UI>();
+  return {
+    ...ui,
+    // A test can pin the generated character's color; otherwise the real traits apply.
+    getAgentAvatarTraits: (id: string) => {
+      const real = ui.getAgentAvatarTraits(id);
+      return traits.color ? { ...real, color: traits.color } : real;
+    },
+  };
+});
 
 const agent = (overrides: Partial<SidebarAgentItem> = {}): SidebarAgentItem => ({
   id: 'agt_1',
@@ -66,13 +81,36 @@ describe('coverImageSrc', () => {
     );
     expect(coverImageSrc(agent({ avatar: '🤖' }))).toBeUndefined();
     expect(coverImageSrc(agent({ avatar: DEFAULT_AVATAR }))).toBeUndefined();
+    expect(coverImageSrc(agent({ avatar: 'agent-avatar:rocket:cyan' }))).toBeUndefined();
     expect(coverImageSrc(agent({ avatar: null }))).toBeUndefined();
   });
 });
 
 describe('seedCoverColor', () => {
+  it('wears the color of a picked character, not the one the id derives', () => {
+    expect(seedCoverColor(agent({ avatar: 'agent-avatar:rocket:green' }))).toBe(cssVar.green);
+    expect(seedCoverColor(agent({ avatar: 'agent-avatar:cat:red', id: 'agt_2' }))).toBe(cssVar.red);
+  });
+
   it('is stable per agent id', () => {
     expect(seedCoverColor(agent())).toBe(seedCoverColor(agent({ title: 'Renamed' })));
+  });
+
+  it('maps every color the installed avatar palette has, including red, green and cyan', () => {
+    for (const color of [...AGENT_AVATAR_COLORS, 'red', 'green', 'cyan']) {
+      traits.color = color;
+      expect(seedCoverColor(agent()), color).toMatch(/\S/);
+    }
+    traits.color = 'red';
+    expect(seedCoverColor(agent())).toBe(cssVar.red);
+    traits.color = undefined;
+  });
+
+  // `@lobehub/ui` grows the palette in minor releases; a color not listed yet must not break.
+  it('falls back to gray for a color it does not know yet', () => {
+    traits.color = 'lime';
+    expect(seedCoverColor(agent())).toBe(cssVar.gray);
+    traits.color = undefined;
   });
 });
 

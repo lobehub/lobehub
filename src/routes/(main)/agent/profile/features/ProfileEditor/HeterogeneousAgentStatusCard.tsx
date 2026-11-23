@@ -48,6 +48,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { binaryService } from '@/services/electron/binary';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const COMMAND_LINE_HEIGHT = 28;
 const SERVER_DEFAULT_PROVIDER_VALUE = 'server-default';
@@ -55,8 +56,8 @@ const USER_PROVIDER_VALUE_PREFIX = 'provider:';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    padding-block: 16px 4px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding} 4px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -64,7 +65,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   cardHeader: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: flex-start;
     justify-content: space-between;
   `,
@@ -107,7 +108,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   detailRow: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
 
     min-height: 48px;
@@ -145,7 +146,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 999px;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
   `,
   commandInputWrap: css`
     display: flex;
@@ -163,7 +164,7 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 100%;
     height: ${COMMAND_LINE_HEIGHT}px;
     padding-block: 0;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 999px;
 
@@ -178,7 +179,7 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 20px;
     color: ${cssVar.colorText};
   `,

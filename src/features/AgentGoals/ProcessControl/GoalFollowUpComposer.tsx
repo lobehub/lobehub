@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
+import { densityVars } from '@/styles/densityVars';
 
 import { useFoldableComposer } from './useFoldableComposer';
 
@@ -37,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     justify-content: center;
 
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
   `,
   // Open, the input sits over a fade so the result text scrolling underneath
   // never collides with the box.
@@ -56,11 +57,11 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 40px;
-    padding-inline: 16px 20px;
+    padding-inline: ${densityVars.cardPadding} 20px;
     border: 1px solid color-mix(in srgb, ${cssVar.colorBorderSecondary} 60%, transparent);
     border-radius: 999px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextSecondary};
 
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 75%, transparent);

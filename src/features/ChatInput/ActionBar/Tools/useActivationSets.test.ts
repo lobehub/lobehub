@@ -3,41 +3,35 @@ import { describe, expect, it } from 'vitest';
 import { resolveImplicitMode } from './librarySkillPolicy';
 import { resolveActivationSets } from './useActivationSets';
 
-const resolve = (rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlugins']) =>
+const resolve = (
+  rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlugins'],
+  discoverBuiltins = true,
+) =>
   resolveActivationSets({
+    connectedConnectorIds: ['gmail', 'slack', 'linear'],
     connectorIds: ['gmail', 'slack', 'linear'],
-    librarySkillIds: ['excalidraw'],
-    // What `getActivePluginIds` yields: the entries that carry a pin.
-    pinnedIds: (rawPlugins ?? []).flatMap((entry) =>
-      typeof entry === 'string' ? [entry] : entry.mode === 'pinned' ? [entry.identifier] : [],
-    ),
+    discoverBuiltins,
     rawPlugins,
   });
 
 describe('resolveActivationSets', () => {
-  it('lists a connector the agent never turned on under Disabled', () => {
-    const { checkedSet, disabledIdSet } = resolve([]);
+  it('puts inherited connectors and configurable builtins under Auto in agent mode', () => {
+    const { disabledIdSet } = resolve([]);
 
-    expect([...disabledIdSet]).toEqual(
-      expect.arrayContaining(['excalidraw', 'gmail', 'linear', 'slack', 'lobe-skill-store']),
-    );
-    expect(checkedSet.size).toBe(0);
+    expect([...disabledIdSet]).toEqual([]);
+    expect(disabledIdSet.has('lobe-creds')).toBe(false);
   });
 
-  it('lists a connector that is on under Auto: neither Pinned nor Disabled', () => {
-    const { checkedSet, disabledIdSet } = resolve([{ identifier: 'gmail', mode: 'auto' }]);
+  it('lists a connector that is on under Auto', () => {
+    const { disabledIdSet } = resolve([{ identifier: 'gmail', mode: 'auto' }]);
 
-    expect(checkedSet.has('gmail')).toBe(false);
     expect(disabledIdSet.has('gmail')).toBe(false);
   });
 
-  it('never lists a connector under Pinned, even one pinned before the two-state switch', () => {
-    const { checkedSet, disabledIdSet } = resolve(['gmail', 'lobe-image-generation']);
+  it('treats legacy pinned entries as Auto (not Disabled)', () => {
+    const { disabledIdSet } = resolve(['gmail', 'lobe-image-generation']);
 
-    expect(checkedSet.has('gmail')).toBe(false);
     expect(disabledIdSet.has('gmail')).toBe(false);
-    // Legacy pins on configurable builtins also mean on demand.
-    expect(checkedSet.has('lobe-image-generation')).toBe(false);
     expect(disabledIdSet.has('lobe-image-generation')).toBe(false);
   });
 
@@ -47,10 +41,18 @@ describe('resolveActivationSets', () => {
     expect(disabledIdSet.has('slack')).toBe(true);
   });
 
-  it('writes Auto explicitly for a connector, since no entry means off', () => {
+  it('treats connectors as opt-in when discoverBuiltins is false (custom / chat mode)', () => {
+    const { disabledIdSet, optInIds } = resolve([{ identifier: 'gmail', mode: 'auto' }], false);
+
+    expect(disabledIdSet.has('gmail')).toBe(false);
+    expect(disabledIdSet.has('slack')).toBe(true);
+    expect(resolveImplicitMode('slack', optInIds)).toBe('disabled');
+  });
+
+  it('inherits Auto for a connector in agent mode', () => {
     const { optInIds } = resolve([]);
 
-    expect(resolveImplicitMode('gmail', optInIds)).toBe('disabled');
-    expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('disabled');
+    expect(resolveImplicitMode('gmail', optInIds)).toBe('auto');
+    expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('auto');
   });
 });

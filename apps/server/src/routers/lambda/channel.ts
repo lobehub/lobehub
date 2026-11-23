@@ -69,7 +69,7 @@ const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
-  /** Without a Channel, the people a new Channel in this workspace can start with. */
+  /** Without a Channel, the people a new Channel in this scope can start with. */
   userCandidates: channelProcedure
     .input(z.object({ channelId: channelId.optional(), search: z.string().max(100).optional() }))
     .query(async ({ ctx, input }) => ({
@@ -117,6 +117,18 @@ export const channelRouter = router({
         input.memberId,
         input.environment,
       ),
+      success: true,
+    })),
+  /** Requests to run Channel Agents on the caller's private devices, for them to decide. */
+  deviceGrants: channelProcedure.query(async ({ ctx }) => ({
+    data: await ctx.channelService.deviceGrants(),
+    success: true,
+  })),
+  /** Only the device owner named on the grant may decide it. */
+  decideDeviceGrant: channelProcedure
+    .input(z.object({ decision: z.enum(['approve', 'reject', 'revoke']), grantId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.decideDeviceGrant(input.grantId, input.decision),
       success: true,
     })),
   /** The channel's reply strategy and each Agent member's own, as stored; admins only. */
@@ -236,12 +248,46 @@ export const channelRouter = router({
       z.object({
         before: z.number().int().positive().optional(),
         channelId,
+        /**
+         * The client opens a reply's canvas beside the Channel. Released clients without a canvas
+         * view omit it and keep canvases off the cards.
+         */
+        includeCanvasWorks: z.boolean().optional(),
+        /**
+         * The client renders the opt-in Work types (files, collections) on reply cards. Released
+         * desktop clients without them omit it and keep receiving only the types they know.
+         */
+        includeFileWorks: z.boolean().optional(),
         limit: z.number().int().min(1).max(100).optional(),
         threadId: threadId.nullish(),
       }),
     )
     .query(async ({ ctx, input }) => ({
       data: await ctx.channelService.detail(input.channelId, input),
+      success: true,
+    })),
+  /**
+   * Visitors' conversations with the caller's shared Agent, for its owner to read; empty unless
+   * the share lets the owner read visitor conversations.
+   */
+  shareVisitors: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitors(input.agentId),
+      success: true,
+    })),
+  /** A visitor's run topic with its transcript, read-only for the shared Agent's owner. */
+  shareVisitorTopic: channelProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitorTopic(input.topicId),
+      success: true,
+    })),
+  /** The run topics of visitors' conversations with the caller's shared Agent, by visitor. */
+  shareVisitorTopics: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitorTopics(input.agentId),
       success: true,
     })),
   /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
@@ -312,18 +358,28 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.markRead(input.channelId, input.sequence),
       success: true,
     })),
+  /**
+   * Turns the caller's own push notifications for the conversation off or on. Personal: Agents
+   * still reply (see `setMemberMuted` for that) and other members are untouched.
+   */
+  setNotificationsMuted: externalChannelProcedure
+    .input(z.object({ channelId, muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setNotificationsMuted(input.channelId, input.muted),
+      success: true,
+    })),
   /** Pins or unpins the conversation atop the caller's own list. */
   setPinned: externalChannelProcedure
     .input(z.object({ channelId, pinned: z.boolean() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
+      data: await ctx.channelService.setPinned(input.channelId, input.pinned),
       success: true,
     })),
   /** Files the conversation under one of the caller's own sections; null returns it to the built-in one. */
   moveToSection: externalChannelProcedure
     .input(z.object({ channelId, sectionId: sectionId.nullable() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.moveToSection(input.channelId, input.sectionId),
+      data: await ctx.channelService.moveToSection(input.channelId, input.sectionId),
       success: true,
     })),
   /** Hides the conversation from the caller's own list until its next message, or shows it again. */
@@ -421,6 +477,13 @@ export const channelRouter = router({
       await ctx.channelService.removeThread(input.channelId, input.threadId);
       return { success: true };
     }),
+  /** Runs a failed reply again in the conversation it stopped in; see `retryJob` for a fresh start. */
+  resumeJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.resumeJob(input.channelId, input.jobId);
+      return { success: true };
+    }),
   retryJob: channelProcedure
     .input(z.object({ channelId, jobId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -436,6 +499,13 @@ export const channelRouter = router({
   send: externalChannelProcedure
     .input(
       z.object({
+        /** Share a contact as a card; the server writes the content and the card snapshot. */
+        card: z
+          .discriminatedUnion('type', [
+            z.object({ type: z.literal('user'), userId: z.string().min(1) }),
+            z.object({ agentId: z.string().min(1), type: z.literal('agent') }),
+          ])
+          .optional(),
         channelId,
         content: z.string().max(CHANNEL_LIMITS.contentLength),
         fileIds: z.array(z.string().min(1)).max(CHANNEL_LIMITS.attachments).optional(),

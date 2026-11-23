@@ -24,6 +24,8 @@ export const WORKSPACE_MIRRORED_ROOT_SEGMENTS: ReadonlySet<string> = new Set([
   'goals',
   'group',
   'image',
+  // Formerly `community`, which stays mirrored as a redirect route.
+  'marketplace',
   'memory',
   'music',
   'page',

@@ -12,8 +12,12 @@ vi.mock('@/business/server/channel-message/notifyActivity', () => ({
   notifyChannelDirectMessage,
 }));
 
-const dbReturning = (rows: { ownerId: string | null; peerUserId: string | null }[]) => {
-  const limit = vi.fn().mockResolvedValue(rows);
+/** The conversation lookup, then the recipient's own member row (muted or not). */
+const dbReturning = (
+  rows: { ownerId: string | null; peerUserId: string | null }[],
+  recipient: { muted: boolean }[] = [{ muted: false }],
+) => {
+  const limit = vi.fn().mockResolvedValueOnce(rows).mockResolvedValueOnce(recipient);
   return { select: () => ({ from: () => ({ where: () => ({ limit }) }) }) } as never;
 };
 
@@ -61,6 +65,16 @@ describe('notifyChannelDirectMessages', () => {
     expect(notifyChannelDirectMessage).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: 'opener', recipientUserId: 'peer' }),
     );
+  });
+
+  it('skips a recipient who muted the conversation for themself', async () => {
+    notifyChannelDirectMessages(
+      dbReturning([conversation], [{ muted: true }]),
+      { userId: 'opener' },
+      message,
+    );
+    await runScheduled();
+    expect(notifyChannelDirectMessage).not.toHaveBeenCalled();
   });
 
   it('skips personal Channels that are not between two people', async () => {

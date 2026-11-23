@@ -74,6 +74,10 @@ export const listSchema = z.object({
   parentTaskId: z.string().trim().min(1).nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   projectId: z.string().optional(),
+  // Attach each row's latest N runs (`recentRuns`) and whether an unresolved
+  // urgent brief holds its automation back (`awaitingHuman`). Opt-in: only the
+  // scheduled tasks table reads them, and they cost two extra queries.
+  recentRuns: z.number().int().min(1).max(10).optional(),
   // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
   // caller, 'created' → tasks the caller created. Always resolved against
   // `ctx.userId` so the endpoint never filters by an arbitrary member.

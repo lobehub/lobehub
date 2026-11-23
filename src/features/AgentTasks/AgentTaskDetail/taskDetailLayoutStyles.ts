@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 // The sidebar takes 272px (rail + gap) off the reading column for the whole
 // page, so it only appears once that column still has room for prose.
 export const TASK_DETAIL_SIDEBAR_MIN_WIDTH = 880;
@@ -25,7 +27,7 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 16px;
+    row-gap: ${densityVars.sectionGap};
     padding-block-start: 24px;
 
     @container task-detail (width >= ${TASK_DETAIL_SIDEBAR_MIN_WIDTH}px) {

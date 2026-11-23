@@ -3,6 +3,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, type LucideIcon } from 'lucide-react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   done: {
     backgroundColor: `color-mix(in srgb, ${cssVar.colorSuccess} 6%, ${cssVar.colorBgContainer})`,
@@ -30,7 +32,7 @@ const styles = stylex.create({
     gap: 6,
     minWidth: 0,
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     textAlign: 'start',
   },
   title: {

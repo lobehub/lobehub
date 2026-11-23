@@ -100,7 +100,7 @@ const WorkspaceDetailPage = memo<WorkspaceDetailPageProps>(({ mobile }) => {
 
   const handleEditWorkspaceProfile = useCallback(() => {
     if (marketOrganizationProfile) {
-      navigate('/community/workspace/settings');
+      navigate('/marketplace/workspace/settings');
       return;
     }
 

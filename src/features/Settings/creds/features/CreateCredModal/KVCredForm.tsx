@@ -1,25 +1,20 @@
 'use client';
 
-import { Button, Flexbox, Input, InputPassword, TextArea, toast } from '@lobehub/ui';
+import { Button, Input, TextArea, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { credErrorKey } from '../credError';
+import CredFormFooter from '../CredFormFooter';
+import KVPairsField from '../KVPairsField';
 import { createExtras, type CredsApi } from '../useCredsApi';
-
-const styles = stylex.create({
-  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
-  kvPair: { display: 'flex', gap: '8px', alignItems: 'flex-start' },
-});
 
 interface KVCredFormProps {
   credsApi: CredsApi;
   disabled?: boolean;
-  onBack: () => void;
+  onCancel: () => void;
   onSuccess: () => void;
   type: 'kv-env' | 'kv-header';
 }
@@ -31,7 +26,7 @@ interface FormValues {
   name: string;
 }
 
-const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onSuccess }) => {
+const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onCancel, onSuccess }) => {
   const { t } = useTranslation('setting');
   const form = useForm<FormValues>({
     initialValues: { kvPairs: [{ key: '', value: '' }] } as FormValues,
@@ -78,7 +73,15 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
 
   return (
     <Form form={form} layout="vertical">
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
+        <Input
+          disabled={disabled}
+          placeholder={type === 'kv-env' ? 'OpenAI API Key' : 'Internal API Token'}
+        />
+      </Form.Field>
+
       <Form.Field
+        desc={t('creds.form.keyDesc')}
         label={t('creds.form.key')}
         name="key"
         required={t('creds.form.keyRequired')}
@@ -86,60 +89,10 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
           value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
         }
       >
-        <Input disabled={disabled} placeholder="e.g., openai" />
+        <Input disabled={disabled} placeholder={type === 'kv-env' ? 'openai' : 'internal-api'} />
       </Form.Field>
 
-      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
-        <Input disabled={disabled} placeholder="e.g., OpenAI API Key" />
-      </Form.Field>
-
-      <Form.Field label={t('creds.form.values')}>
-        <Form.List name="kvPairs">
-          {({ fields, add, remove }) => (
-            <Flexbox gap={8}>
-              {fields.map(({ key, index }) => (
-                <div {...stylex.props(styles.kvPair)} key={key}>
-                  <div style={{ flex: 1 }}>
-                    <Form.Field bare name={`kvPairs.${index}.key`}>
-                      <Input
-                        disabled={disabled}
-                        placeholder={type === 'kv-env' ? 'ENV_VAR_NAME' : 'Header-Name'}
-                      />
-                    </Form.Field>
-                  </div>
-                  <div style={{ flex: 2 }}>
-                    <Form.Field bare name={`kvPairs.${index}.value`}>
-                      <InputPassword
-                        autoComplete="new-password"
-                        disabled={disabled}
-                        placeholder={t('creds.form.valuePlaceholder')}
-                      />
-                    </Form.Field>
-                  </div>
-                  {fields.length > 1 && (
-                    <Button
-                      disabled={disabled}
-                      icon={Minus}
-                      size="small"
-                      type="text"
-                      onClick={() => remove(index)}
-                    />
-                  )}
-                </div>
-              ))}
-              <Button
-                block
-                disabled={disabled}
-                icon={Plus}
-                type="dashed"
-                onClick={() => add({ key: '', value: '' })}
-              >
-                {t('creds.form.addPair')}
-              </Button>
-            </Flexbox>
-          )}
-        </Form.List>
-      </Form.Field>
+      <KVPairsField disabled={disabled} type={type} />
 
       <Form.Field label={t('creds.form.description')} name="description">
         <TextArea
@@ -149,8 +102,8 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
         />
       </Form.Field>
 
-      <div {...stylex.props(styles.footer)}>
-        <Button onClick={onBack}>{t('creds.form.back')}</Button>
+      <CredFormFooter>
+        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
         <Button
           disabled={disabled}
           htmlType="submit"
@@ -159,7 +112,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
         >
           {t('creds.form.submit')}
         </Button>
-      </div>
+      </CredFormFooter>
     </Form>
   );
 };

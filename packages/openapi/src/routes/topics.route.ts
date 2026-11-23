@@ -3,6 +3,12 @@ import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import {
+  CREATE_TOPIC_EXAMPLE,
+  example,
+  TOPIC_EXAMPLE,
+  TOPIC_LIST_EXAMPLE,
+} from '../common/examples';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { TopicController } from '../controllers';
@@ -29,7 +35,12 @@ const TopicsRoutes = new Hono();
 // GET /api/v1/topics - Get topic list (supports pagination and agent/group filtering)
 TopicsRoutes.get(
   '/',
-  routeDoc({ data: TopicListSchema, summary: 'List topics', tags: ['topics'] }),
+  routeDoc({
+    data: TopicListSchema,
+    responseExample: TOPIC_LIST_EXAMPLE,
+    summary: 'List topics',
+    tags: ['topics'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('TOPIC_READ'),
@@ -45,7 +56,13 @@ TopicsRoutes.get(
 // POST /api/v1/topics - Create a new topic
 TopicsRoutes.post(
   '/',
-  routeDoc({ data: TopicSchema, summary: 'Create a topic', tags: ['topics'] }),
+  routeDoc({
+    data: TopicSchema,
+    requestExample: example(TopicCreateRequestSchema, CREATE_TOPIC_EXAMPLE),
+    responseExample: TOPIC_EXAMPLE,
+    summary: 'Create a topic',
+    tags: ['topics'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('TOPIC_CREATE'),

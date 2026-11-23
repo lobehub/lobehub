@@ -29,13 +29,14 @@ import { clientSkillCatalog } from './clientSkillCatalog';
 
 const createService = (discoverableIds?: string[]): ActivatorRuntimeService => ({
   getActivatedToolIds: () => [],
-  getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
+  getToolManifests: async (identifiers: string[], run): Promise<ToolManifestInfo[]> => {
     const s = getToolStoreState();
 
     // Only allow activation of tools that passed discovery filters
-    // (discoverable, platform-available, not internal/hidden)
+    // (discoverable, platform-available, not internal/hidden) for the
+    // conversation the activation runs in
     const discoverable = new Set(
-      discoverableIds ?? toolSelectors.availableToolsForDiscovery(s).map((t) => t.identifier),
+      discoverableIds ?? toolSelectors.availableToolsForDiscovery(s, run).map((t) => t.identifier),
     );
     const allowedIds = identifiers.filter((id) => discoverable.has(id));
 
@@ -151,11 +152,12 @@ const createService = (discoverableIds?: string[]): ActivatorRuntimeService => (
   // variants. Reuses `getToolManifests` on the same
   // `availableToolsForDiscovery` allowlist so scoping and manifest mapping
   // cannot drift between the two paths.
-  async listToolManifests(): Promise<ToolManifestInfo[]> {
+  async listToolManifests(run): Promise<ToolManifestInfo[]> {
     const s = getToolStoreState();
     const discoveryIds =
-      discoverableIds ?? toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
-    return this.getToolManifests(discoveryIds);
+      discoverableIds ??
+      toolSelectors.availableToolsForDiscovery(s, run).map((tool) => tool.identifier);
+    return this.getToolManifests(discoveryIds, run);
   },
   markActivated: () => {},
 });

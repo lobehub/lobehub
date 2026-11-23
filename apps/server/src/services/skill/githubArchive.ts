@@ -9,7 +9,8 @@ export interface GitHubSkillDirectory {
 
 const ignored = new Set(['.git', 'node_modules', '__MACOSX']);
 
-export async function readGitHubArchive(buffer: Buffer, basePath = '') {
+export async function readGitHubArchive(buffer: Buffer, basePath: string | string[] = '') {
+  const pathsToRead = Array.isArray(basePath) ? basePath : [basePath];
   let count = 0;
   let size = 0;
   const files = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
@@ -20,7 +21,7 @@ export async function readGitHubArchive(buffer: Buffer, basePath = '') {
           if (++count > 50_000)
             throw new SkillParseError('Repository exceeds the file-count limit');
           const relative = entry.name.slice(entry.name.indexOf('/') + 1);
-          if (basePath && !relative.startsWith(basePath + '/')) return false;
+          if (!pathsToRead.some((path) => !path || relative.startsWith(path + '/'))) return false;
           size += entry.originalSize;
           if (size > 128 * 1024 * 1024)
             throw new SkillParseError('Repository exceeds the archive scan limit');

@@ -1,6 +1,9 @@
 import type * as childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import type * as os from 'node:os';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,6 +117,8 @@ describe('spawnAgent — Antigravity', () => {
       '--output-format',
       'stream-json',
       '--dangerously-skip-permissions',
+      '--settings',
+      '{"agentMode":"","allowNonWorkspaceAccess":true,"enableTerminalSandbox":false}',
       '--conversation',
       'agy-session',
     ]);
@@ -126,5 +131,124 @@ describe('spawnAgent — Antigravity', () => {
       events.filter((event) => event.type === 'stream_chunk' && event.data.chunkType === 'text'),
     ).toHaveLength(1);
     expect(events.some((event) => event.type === 'error')).toBe(false);
+  });
+
+  it('steers a follow-up with an image without closing the live session', async ({
+    onTestFinished,
+  }) => {
+    const fake = createFakeProc({
+      stdoutChunks: [
+        JSON.stringify({ event: 'init', conversation_id: 'agy-live', init: {} }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 0,
+            step_type: 'user_input',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 1,
+            step_type: 'agent_response',
+            text_delta: 'first',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'result',
+          result: {
+            conversation_id: 'agy-live',
+            num_turns: 1,
+            response: 'first',
+            status: 'SUCCESS',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 2,
+            step_type: 'user_input',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-live',
+            state: 'DONE',
+            step_index: 3,
+            step_type: 'agent_response',
+            text_delta: 'steered',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'result',
+          result: {
+            conversation_id: 'agy-live',
+            num_turns: 2,
+            response: 'steered',
+            status: 'SUCCESS',
+          },
+        }) + '\n',
+      ],
+    });
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const cacheDir = await mkdtemp(path.join(tmpdir(), 'agy-steer-test-'));
+    onTestFinished(() => rm(cacheDir, { force: true, recursive: true }));
+    const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ', 'base64');
+    const handle = await spawnAgent({
+      agentType: 'antigravity',
+      inputOptions: { cacheDir },
+      liveInput: true,
+      operationId: 'op-agy-live',
+      prompt: 'initial',
+    });
+
+    expect(handle.sendUserMessage).toBeDefined();
+    expect(handle.supportsSteerImages).not.toBe(false);
+    expect(fake.proc.stdin.end).not.toHaveBeenCalled();
+
+    await expect(
+      handle.sendUserMessage!(
+        [
+          { text: 'follow up', type: 'text' },
+          {
+            source: { data: image.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { uuid: 'steer-1' },
+      ),
+    ).resolves.toBe(true);
+    const {
+      event,
+      message: { content },
+    } = JSON.parse(fake.stdinWrites[1]);
+    expect(event).toBe('user');
+    expect(content).toContain('follow up');
+    const filePath = JSON.parse(content.match(/^- (".+")$/m)![1]);
+    expect(await readFile(filePath)).toEqual(image);
+
+    fake.start();
+    const events = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'step_complete' &&
+          event.data.phase === 'user_message' &&
+          event.data.uuid === 'steer-1',
+      ),
+    ).toBe(true);
+    expect(events.some((event) => event.type === 'agent_runtime_end')).toBe(true);
+    expect(fake.proc.stdin.end).toHaveBeenCalled();
   });
 });

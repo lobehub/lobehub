@@ -74,7 +74,9 @@ describe('GatewayConnectionService system_info_request', () => {
     // Probe that bundled runtime instead of a potentially older global lh binary.
     getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
     execFileMock.mockResolvedValue({
-      stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+      stdout: JSON.stringify({
+        supportedAgentRuntimes: ['codex-app-server-v1', 'codex-collaboration-mode-v1', 'future'],
+      }),
     });
     const client = createClient();
     await service['handleSystemInfoRequest'](client, {
@@ -86,7 +88,10 @@ describe('GatewayConnectionService system_info_request', () => {
       expect.objectContaining({
         result: {
           success: true,
-          systemInfo: expect.objectContaining({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+          // The Plan switch capability passes through; one this build does not know does not.
+          systemInfo: expect.objectContaining({
+            supportedAgentRuntimes: ['codex-app-server-v1', 'codex-collaboration-mode-v1'],
+          }),
         },
       }),
     );

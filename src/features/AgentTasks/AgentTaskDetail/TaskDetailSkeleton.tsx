@@ -7,6 +7,7 @@ import SkeletonBar from '@/components/Skeleton/Bar';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { densityVars } from '@/styles/densityVars';
 
 import { TASK_DETAIL_PAGE_WIDTH, taskDetailLayoutStyles as layout } from './taskDetailLayoutStyles';
 
@@ -23,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   control: css`
     height: 32px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

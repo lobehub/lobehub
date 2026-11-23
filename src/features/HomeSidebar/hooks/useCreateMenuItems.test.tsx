@@ -190,7 +190,7 @@ describe('useCreateMenuItems', () => {
     });
 
     expect(stopPropagation).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/community/agent');
+    expect(navigateMock).toHaveBeenCalledWith('/marketplace/agent');
   });
 
   it('opens the agent list on the Private tab for the private bucket', async () => {

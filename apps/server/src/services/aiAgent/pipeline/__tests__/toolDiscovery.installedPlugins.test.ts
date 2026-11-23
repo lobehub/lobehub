@@ -1,8 +1,12 @@
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
+import { isToolEnabledByFeatureFlags } from '@lobechat/builtin-tools/featureGates';
 import { type LobeToolManifest, ToolResolver } from '@lobechat/context-engine';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -83,7 +87,10 @@ const run = (options: RunOptions = {}) => {
     {
       agentDocumentsService: { hasDocuments: vi.fn().mockResolvedValue(false) },
       composioService: { getComposioManifests: vi.fn().mockResolvedValue([]) },
-      connectorModel: { resolveByIdentifiers: vi.fn().mockResolvedValue([]) },
+      connectorModel: {
+        resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+        resolveToolSets: toolSetsFrom(),
+      },
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
         queryByConnector: vi.fn().mockResolvedValue([]),
@@ -143,22 +150,53 @@ const MANUAL = { chatConfig: { skillActivateMode: 'manual' } };
 
 describe('Agent first-turn tool payload', () => {
   it.each([
-    { expected: ['lobe-user-memory', 'lobe-web-browsing'], memory: true, search: true },
-    { expected: ['lobe-user-memory'], memory: true, search: false },
-    { expected: ['lobe-web-browsing'], memory: false, search: true },
-    { expected: [], memory: false, search: false },
+    {
+      discoverable: ['lobe-user-memory'],
+      enabled: ['lobe-activator', 'lobe-skills', 'lobe-web-browsing'],
+      explicitlyActivatable: ['lobe-user-memory', 'lobe-web-browsing'],
+      memory: true,
+      offeredCount: 9,
+      search: true,
+    },
+    {
+      discoverable: ['lobe-user-memory'],
+      enabled: ['lobe-activator', 'lobe-skills'],
+      explicitlyActivatable: ['lobe-user-memory'],
+      memory: true,
+      offeredCount: 6,
+      search: false,
+    },
+    {
+      discoverable: [],
+      enabled: ['lobe-activator', 'lobe-skills', 'lobe-web-browsing'],
+      explicitlyActivatable: ['lobe-web-browsing'],
+      memory: false,
+      offeredCount: 9,
+      search: true,
+    },
+    {
+      discoverable: [],
+      enabled: ['lobe-activator', 'lobe-skills'],
+      explicitlyActivatable: [],
+      memory: false,
+      offeredCount: 6,
+      search: false,
+    },
   ])(
-    'only lists available capabilities (memory=$memory, search=$search)',
-    async ({ expected, memory, search }) => {
+    'preloads web browsing when enabled and defers other available capabilities (memory=$memory, search=$search)',
+    async ({ discoverable, enabled, explicitlyActivatable, memory, offeredCount, search }) => {
       const result = await run({
         chatConfig: { searchMode: search ? 'auto' : 'off' },
         memoryEnabled: memory,
       });
-      const loaders = ['lobe-activator', 'lobe-skills'];
       const capabilities = ['lobe-user-memory', 'lobe-web-browsing'];
-      expect(result.toolsResult.enabledToolIds.toSorted()).toEqual(loaders);
-      expect(offeredToolNames(result)).toHaveLength(6);
-      expect(availableToolIds(result.toolManifestMap, loaders).toSorted()).toEqual(expected);
+      expect(result.toolsResult.enabledToolIds.toSorted()).toEqual(enabled);
+      expect(offeredToolNames(result)).toHaveLength(offeredCount);
+      expect(
+        availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)
+          .filter((id) => capabilities.includes(id))
+          .toSorted(),
+      ).toEqual(discoverable);
       const activated = result.toolsEngine!.generateToolsDetailed({
         context: { isExplicitActivation: true },
         model: 'test-model',
@@ -173,22 +211,41 @@ describe('Agent first-turn tool payload', () => {
           'lobe-mcp-events',
         ],
       });
-      expect(activated.enabledToolIds.toSorted()).toEqual(expected);
+      expect(activated.enabledToolIds.toSorted()).toEqual(explicitlyActivatable);
     },
   );
 });
 
-describe('discoverTools — installed plugins are opt-in per agent', () => {
-  it('only offers a configurable builtin to discovery when this agent opted in', async () => {
-    const id = 'lobe-skill-store';
-    expect((await run()).toolManifestMap[id]).toBeUndefined();
-    const on = await run({ autoSkillIds: [id] });
-    expect(availableToolIds(on.toolManifestMap, on.toolsResult.enabledToolIds)).toContain(id);
-    expect(on.toolsResult.enabledToolIds).not.toContain(id);
+describe('discoverTools — installed plugin discovery', () => {
+  // This server fixture has no device and no optional feature flags.
+  const availableBuiltins = onDemandBuiltinToolIds.filter(
+    (id) => id !== AuvManifest.identifier && isToolEnabledByFeatureFlags(id, {}),
+  );
+  it.each(availableBuiltins)('defers %s until activation and respects opt-out', async (id) => {
+    const result = await run();
+    expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
+      id,
+    );
+    expect(result.toolsResult.enabledToolIds).not.toContain(id);
+    expect(offeredToolNames(result).filter((name) => name.startsWith(`${id}____`))).toEqual([]);
+    const activate = (engine: typeof result.toolsEngine) =>
+      engine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [id],
+      });
+    const activated = activate(result.toolsEngine);
+    expect(activated.enabledToolIds).toEqual([id]);
+    expect(offeredToolNames(activated)).toContainEqual(expect.stringMatching(`^${id}____`));
+    const off = await run({ disabledPluginIds: [id] });
+    expect(off.toolManifestMap[id]).toBeUndefined();
+    expect(activate(off.toolsEngine).enabledToolIds).not.toContain(id);
   });
 
-  it('keeps an installed plugin the agent never turned on out of the run', async () => {
-    const result = await run();
+  it('keeps a disabled installed plugin out of the run', async () => {
+    const result = await run({ disabledPluginIds: [FEISHU] });
 
     expect(result.toolManifestMap[FEISHU]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(FEISHU);
@@ -199,6 +256,7 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   });
 
   it.each([
+    { label: 'inherits', options: {} },
     { label: 'turned on', options: ON },
     { label: 'turned on with an old manual preference', options: { ...ON, ...MANUAL } },
     { label: 'pinned with an old manual preference', options: { ...MANUAL, plugins: [FEISHU] } },
@@ -242,7 +300,7 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   });
 
   it('keeps an installed plugin that is off out of a manual-mode run', async () => {
-    const result = await run(MANUAL);
+    const result = await run({ ...MANUAL, disabledPluginIds: [FEISHU] });
 
     expect(result.toolManifestMap[FEISHU]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(FEISHU);

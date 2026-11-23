@@ -6,11 +6,13 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import { marketplaceAppPath } from '@/features/Marketplace/paths';
 import { messengerService } from '@/services/messenger';
 import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentSelect from '../../AgentSelect';
 import { type MessengerPlatform, PlatformBrandIcon } from '../../constants';
@@ -34,9 +36,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 14px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 6%),
-      0 4px 12px rgb(0 0 0 / 4%);
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   card: css`
     width: 100%;
@@ -57,7 +57,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   iconRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: center;
 
@@ -65,7 +65,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   infoRow: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
     justify-content: space-between;
 
@@ -81,12 +81,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   successBubble: css`
-    color: #fff;
-    background: #22c55e;
+    color: ${cssVar.colorTextLightSolid};
+    background: ${cssVar.colorSuccess};
   `,
   warningBlock: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
   `,
@@ -303,7 +303,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
                 />
               )}
               <Text style={{ fontSize: 12 }} type="secondary">
-                {t('verify.confirm.defaultAgentHint')}
+                {t('verify.confirm.defaultAgentMarketplaceHint')}
               </Text>
             </Flexbox>
           </Flexbox>
@@ -353,10 +353,10 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platform, platf
           </Button>
         )}
         {/* Mirror the Slack/Discord install callback's landing page so every
-            platform's flow ends back on its Messenger settings tab. */}
+            platform's flow ends back on its Marketplace app. */}
         <Button
           block
-          href={`/settings/messenger/${platform}`}
+          href={marketplaceAppPath(platform)}
           size="large"
           type={openBotUrl ? 'default' : 'primary'}
         >

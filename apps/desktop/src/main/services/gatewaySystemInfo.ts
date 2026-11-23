@@ -6,6 +6,7 @@ import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
 import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type { DeviceSystemInfo } from '@lobechat/device-gateway-client';
 import type { RuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
+import { CODEX_COLLABORATION_MODE_RUNTIME } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { app } from 'electron';
 
@@ -44,9 +45,11 @@ export const collectBundledCliAgentRuntimes = async (): Promise<string[]> => {
     );
     const result: unknown = JSON.parse(stdout);
     if (!isRecord(result) || !Array.isArray(result.supportedAgentRuntimes)) return [];
-    return result.supportedAgentRuntimes.includes('codex-app-server-v1')
-      ? ['codex-app-server-v1']
-      : [];
+    // Forward only the native runtimes this build knows how to dispatch.
+    return result.supportedAgentRuntimes.filter(
+      (runtime): runtime is string =>
+        runtime === 'codex-app-server-v1' || runtime === CODEX_COLLABORATION_MODE_RUNTIME,
+    );
   } catch (error) {
     logger.debug('Bundled CLI native capability probe unavailable', error);
     return [];

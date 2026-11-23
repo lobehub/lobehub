@@ -2,6 +2,7 @@ import {
   agentDisplayName,
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
+  channelMessageReplyError,
 } from '@lobechat/types';
 import { and, asc, count, desc, eq, gt, inArray, isNull, lt, lte, or } from 'drizzle-orm';
 
@@ -15,10 +16,13 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { findThread, memberNotMuted } from './delivery';
+import { replyErrorNote } from './manifest';
+import { notReplyError } from './replyError';
 import { resolveRouting } from './routing';
 import { audit, withChannelLock } from './transaction';
 
@@ -140,7 +144,7 @@ export class ChannelRoutingRepository {
       const candidateQuery = tx
         .select({
           agentId: agents.id,
-          agentTitle: agents.title,
+          agentTitle: agentTitleSql(),
           model: agents.model,
           ownerId: agents.userId,
           provider: agents.provider,
@@ -186,11 +190,12 @@ export class ChannelRoutingRepository {
         .select({
           agentId: channelMessages.agentId,
           agentName: agents.name,
-          agentTitle: agents.title,
+          agentTitle: agentTitleSql(),
           content: channelMessages.content,
           createdAt: channelMessages.createdAt,
           fullName: users.fullName,
           id: channelMessages.id,
+          metadata: channelMessages.metadata,
           routingStatus: channelMessages.routingStatus,
           userId: channelMessages.userId,
           username: users.username,
@@ -235,6 +240,8 @@ export class ChannelRoutingRepository {
               eq(channelMessages.channelId, channelId),
               eq(channelMessages.agentId, candidate.agentId),
               eq(channelMessages.routingStatus, 'reply'),
+              // A failed reply's card is not the Agent speaking here.
+              notReplyError(),
               lt(channelMessages.sequence, message.sequence),
               branch,
             ),
@@ -289,15 +296,19 @@ export class ChannelRoutingRepository {
         hasAttachments: attachments.has(messageId),
         history: history.reverse().map((line) => {
           const isAgent = isAgentAuthored(line);
+          const author = isAgent
+            ? line.agentId
+              ? agentDisplayName({ name: line.agentName, title: line.agentTitle }, 'Agent')
+              : CHANNEL_DELETED_AGENT_NAME
+            : line.fullName || line.username || CHANNEL_DELETED_USER_NAME;
           return {
             at: line.createdAt.getTime(),
-            author: isAgent
-              ? line.agentId
-                ? agentDisplayName({ name: line.agentName, title: line.agentTitle }, 'Agent')
-                : CHANNEL_DELETED_AGENT_NAME
-              : line.fullName || line.username || CHANNEL_DELETED_USER_NAME,
+            author,
             authorId: (isAgent ? line.agentId : line.userId) ?? undefined,
-            content: line.content.slice(0, 1500),
+            content:
+              isAgent && channelMessageReplyError(line.metadata)
+                ? replyErrorNote(author)
+                : line.content.slice(0, 1500),
             id: line.id,
             isAgent,
           };

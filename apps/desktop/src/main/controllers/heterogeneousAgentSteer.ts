@@ -82,6 +82,14 @@ export const steerAgentSession = async (
     return live.send(plan.stdin, params.messageId) ? accepted : rejected;
   }
 
+  if (session.agentType === 'antigravity') {
+    const live = session.liveInput;
+    if (!live) return session.process ? unsupported : rejected;
+    if (!live.isOpen) return rejected;
+    const plan = await buildAgentInput('antigravity', promptInput, { cacheDir });
+    return live.send(plan.stdin, params.messageId) ? accepted : rejected;
+  }
+
   if (session.appServerSession) {
     const plan = await buildAgentInput('codex', promptInput, { cacheDir });
     const outcome = await session.appServerSession.steer(

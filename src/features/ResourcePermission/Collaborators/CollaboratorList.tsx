@@ -18,14 +18,15 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import UserAvatar from '@/components/UserAvatar';
 import type { PermissionResourceType, ResourceCollaborator } from '@/services/resourcePermission';
+import { densityVars } from '@/styles/densityVars';
 
 import { useAccessLevelOptions } from '../useAccessLevelOptions';
 import { useResourceCollaborators } from '../useResourceCollaborators';
 
 const styles = createStaticStyles(({ css }) => ({
   empty: css`
-    padding-block: 12px;
-    font-size: 14px;
+    padding-block: ${densityVars.contentGap};
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextDescription};
   `,
   row: css`

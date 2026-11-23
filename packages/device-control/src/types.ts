@@ -17,10 +17,6 @@ export interface ProjectSkillItem {
   description?: string;
   /** SKILL.md declares that the model must not invoke this skill automatically. */
   disableModelInvocation?: boolean;
-  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
-  fileCount: number;
-  /** Relative paths (within `skillDir`) of all regular files, sorted, capped. */
-  files: string[];
   name: string;
   /** Absolute path to the SKILL.md file. */
   path: string;
@@ -510,6 +506,7 @@ export type HeterogeneousAgentModelCatalog =
   | {
       error: {
         code:
+          | 'auth_required'
           | 'cli_not_found'
           | 'command_failed'
           | 'device_unavailable'

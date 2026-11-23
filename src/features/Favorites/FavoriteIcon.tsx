@@ -1,7 +1,7 @@
 'use client';
 
 import type { FavoriteType } from '@lobechat/types';
-import { Avatar, cssVar, Icon } from '@lobehub/ui';
+import { cssVar, Icon } from '@lobehub/ui';
 import {
   BotIcon,
   FileTextIcon,
@@ -15,6 +15,8 @@ import {
   UsersIcon,
 } from 'lucide-react';
 import { memo } from 'react';
+
+import Avatar from '@/components/Avatar';
 
 const TYPE_ICONS: Record<FavoriteType, LucideIcon> = {
   agent: BotIcon,

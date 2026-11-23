@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getBreakoutPredicate,
   isBreakoutTool,
+  isDeliverableTool,
   isImageBearingTool,
   isImageOutputTool,
   isImageReadTool,
@@ -176,5 +177,21 @@ describe('getBreakoutPredicate', () => {
   it('breaks out MCP App views only behind the runtime flag', () => {
     expect(getBreakoutPredicate({ showImageReads: false })(mcpApp)).toBe(false);
     expect(getBreakoutPredicate({ enableMcpApps: true, showImageReads: false })(mcpApp)).toBe(true);
+  });
+});
+
+describe('Codex proposed plan', () => {
+  const plan = { apiName: 'proposed_plan', id: 'plan-1', identifier: 'codex' } as any;
+
+  it('is the turn deliverable, so a finished turn keeps it out of the fold', () => {
+    expect(isDeliverableTool(plan)).toBe(true);
+    expect(isDeliverableTool({ ...plan, apiName: 'command_execution' })).toBe(false);
+  });
+
+  it('breaks out of a collapsed run whatever the image setting', () => {
+    expect(isBreakoutTool(plan)).toBe(true);
+    expect(getBreakoutPredicate({ showImageReads: false })(plan)).toBe(true);
+    expect(getBreakoutPredicate({ enableMcpApps: true })(plan)).toBe(true);
+    expect(getBreakoutPredicate({})({ ...plan, identifier: 'claude-code' })).toBe(false);
   });
 });

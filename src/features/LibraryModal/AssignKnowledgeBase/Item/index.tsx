@@ -7,6 +7,8 @@ import { memo, type ReactNode } from 'react';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { buildFilePath, buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { type KnowledgeItem, KnowledgeType } from '@/types/knowledgeBase';
 
 import Actions from './Action';
@@ -29,7 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     margin: 0 !important;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1;
   `,
 }));
@@ -68,13 +70,16 @@ const PluginItem = memo<PluginItemProps>(
           .filter(Boolean)
           .join(' · ');
 
+    const compact = useInterfaceDensity() === 'compact';
+    const iconSize = compact ? 28 : 40;
+
     return (
       <Flexbox
         horizontal
         align={'center'}
         gap={8}
         justify={'space-between'}
-        paddingBlock={12}
+        paddingBlock={compact ? 6 : 12}
         paddingInline={16}
         style={{ position: 'relative' }}
       >
@@ -89,7 +94,7 @@ const PluginItem = memo<PluginItemProps>(
             fileType={fileType}
             locked={memberRestricted}
             name={name}
-            size={{ file: 40, repo: 40 }}
+            size={{ file: iconSize, repo: iconSize }}
             type={type}
           />
           <Flexbox flex={1} gap={4} style={{ overflow: 'hidden', position: 'relative' }}>

@@ -77,6 +77,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { useEvalStore } from '@/store/eval';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   forgetExperimentLaunch,
@@ -102,11 +103,11 @@ const styles = stylex.create({
   // One contender per row, the same outline and radius as the page's inputs.
   row: {
     display: 'flex',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

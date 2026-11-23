@@ -25,6 +25,7 @@ import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
 import TableOfContents, { TOC_RAIL_GUTTER } from '@/features/PageEditor/TableOfContents';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useDocumentStore } from '@/store/document';
+import { densityVars } from '@/styles/densityVars';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
@@ -41,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow: auto;
     flex: 1;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   contentFull: css`
     /* Width is handled by WideScreenContainer; keep only the scroll host. */

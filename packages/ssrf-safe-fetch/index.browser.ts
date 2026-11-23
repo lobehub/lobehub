@@ -54,3 +54,17 @@ export const ssrfSafeFetch = async (
 ): Promise<Response> => {
   return fetch(url, options);
 };
+
+/**
+ * Browser parity stub. In the browser the origin enforces connectivity, so
+ * this only validates that the URL parses.
+ */
+export const assertSsrfSafeUrl = async (url: string, _ssrfOptions?: SSRFOptions): Promise<void> => {
+  if (!URL.canParse(url)) throw new TypeError(`Invalid URL: ${url}`);
+};
+
+/**
+ * Browser parity stub. Agents are a Node.js transport concept; the browser
+ * never constructs one, so this always returns `undefined`.
+ */
+export const ssrfSafeAgent = (_url: string, _ssrfOptions?: SSRFOptions) => undefined;

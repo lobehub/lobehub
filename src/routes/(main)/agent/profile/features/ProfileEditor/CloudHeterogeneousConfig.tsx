@@ -32,11 +32,12 @@ import {
 import { usePermission } from '@/hooks/usePermission';
 import { refreshScopedCreds, useCredsForContext, usePersonalCreds } from '@/hooks/useScopedCreds';
 import { deleteClaudeCodeToken, saveClaudeCodeToken } from '@/services/claudeCodeToken';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    padding-block: 16px 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding} 12px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

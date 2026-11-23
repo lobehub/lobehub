@@ -185,6 +185,7 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client that started this run renders `file` Works, so the pushed
    * `uiMessages` snapshots and `message_patch` revisions may carry them.

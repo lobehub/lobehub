@@ -253,6 +253,54 @@ describe('imageRouter', () => {
   });
 
   describe('createImage', () => {
+    it('preserves passthrough GIF size for an unrelated custom model', async () => {
+      const params = { prompt: 'custom GIF fixture', outputFormat: 'gif', size: '768x768' };
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await caller.createImage(
+        createDefaultInput({ model: 'custom-gif-model', provider: 'fal', params }),
+      );
+
+      expect((mockInsertValues[0] as { config: unknown }).config).toEqual(params);
+      expect(mockAsyncCallerCreateImage.mock.lastCall?.[0].params).toEqual(params);
+    });
+
+    it.each(['gif', 'png'])(
+      'records only effective dimensions for %s API submissions',
+      async (outputFormat) => {
+        const params = {
+          prompt: 'synthetic image fixture',
+          outputFormat,
+          size: '1536x1024',
+          frameCount: 9,
+        };
+        mockGetAiProviderModelList.mockResolvedValue([
+          {
+            id: 'gpt-image-2.6-flare',
+            parameters: {
+              prompt: { default: '' },
+              outputFormat: { default: 'png', enum: ['png', 'gif'] },
+              size: { default: '1024x1024', enum: ['1024x1024', '1536x1024'] },
+              frameCount: { default: 9 },
+            },
+            type: 'image',
+          },
+        ]);
+        const caller = imageRouter.createCaller(createMockCtx());
+
+        await caller.createImage(
+          createDefaultInput({ model: 'gpt-image-2.6-flare', provider: 'openai', params }),
+        );
+
+        const expectedConfig =
+          outputFormat === 'gif' ? { prompt: params.prompt, outputFormat, frameCount: 9 } : params;
+        expect(mockInsertValues[0]).toMatchObject({ config: expectedConfig });
+        expect((mockInsertValues[0] as { config: unknown }).config).toEqual(expectedConfig);
+        expect(mockAsyncCallerCreateImage.mock.lastCall?.[0].params).toEqual(expectedConfig);
+        expect(params.size).toBe('1536x1024');
+      },
+    );
+
     describe('default model selection', () => {
       const imageModel = (providerId: string, id: string) => ({
         abilities: {},

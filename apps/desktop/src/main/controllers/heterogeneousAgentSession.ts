@@ -7,6 +7,7 @@ import type { AskUserBridge, AskUserBridgeOptions } from '@lobechat/heterogeneou
 import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protocol';
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
+  AntigravityLiveInput,
   ClaudeAgentSdkSession,
   ClaudeCodeLiveInput,
   CodexThreadSession,
@@ -38,7 +39,9 @@ import {
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
+  CodexCollaborationMode,
   HeterogeneousServerDefaultApiConfig,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
 } from '@lobechat/types';
 import { app as electronApp } from 'electron';
@@ -60,6 +63,11 @@ export interface SendPromptParams {
   agentId?: string;
   /** Assistant row this run streams into — recorded so recovery can scope to its branch. */
   assistantMessageId?: string;
+  /**
+   * (Codex, Better Coding Experience lab) The Plan switch: the collaboration
+   * mode every native app-server turn sends. Absent sends none.
+   */
+  collaborationMode?: CodexCollaborationMode;
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
   imageList?: HeterogeneousAgentImageAttachment[];
   /**
@@ -68,6 +76,12 @@ export interface SendPromptParams {
    * reach the renderer they must already carry the operation they belong to.
    */
   operationId: string;
+  /**
+   * (Claude Code, Better Coding Experience lab) Permission mode the run starts
+   * in; Claude Code then asks before acting as the mode requires and each
+   * request raises a card. Absent: every action is allowed, as before the lab.
+   */
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   /**
    * Do not spawn the CLI. Instead, read the last turn of the session's on-disk
@@ -143,8 +157,8 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
-  /** Open input of a Claude Code CLI run (kept open for every run, like `lh hetero exec`). */
-  liveInput?: ClaudeCodeLiveInput;
+  /** Open input of a live CLI run (Claude Code or Antigravity). */
+  liveInput?: AntigravityLiveInput | ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -842,6 +856,16 @@ export interface StopSessionParams {
 }
 
 export interface GetSessionInfoParams {
+  sessionId: string;
+}
+
+export interface SetPermissionModeParams {
+  mode: HeteroPermissionMode;
+  sessionId: string;
+}
+
+export interface SetCollaborationModeParams {
+  mode: CodexCollaborationMode;
   sessionId: string;
 }
 

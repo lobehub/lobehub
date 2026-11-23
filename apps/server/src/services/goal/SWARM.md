@@ -5,20 +5,20 @@ Status: design, not built. Builds on Goal marks (`marks.ts`, commit 0f5d9bb672a)
 ## Why
 
 A Goal today plans a task graph and verifies each Task. That fits building and migrating;
-it fits badly when the work is *optimising one score against an evaluator* — tune a model,
+it fits badly when the work is _optimising one score against an evaluator_ — tune a model,
 raise a benchmark, cut a latency — where progress is "submit, read the score, change,
 submit again".
 
 We measured it on EdgeBench (`k12_math_recommendation`, Kimi Code, 2 h wall clock; harness
 and raw data in `~/CodeProjects/edgebench-eval`, see its `RESULTS.md`):
 
-| Shape | runs | score @2h (mean) | @30m | output tokens |
-|---|---|---|---|---|
-| Single Kimi session | 7 | 33.6 (sd 4.5) | — | 133k |
-| Today's Goal (planner splits into serial tasks) | 1 | 21.8 | 16.2 | 219k |
-| 3 independent sessions, keep the best | 2 | 37.0 | 34.2 | 607k |
-| 3 lanes + marks (no coordination) | 1 | 34.7 | 34.2 | 374k |
-| 3 lanes + marks + coordinator | 3 | 37.4 | 26.5 | 409k |
+| Shape                                           | runs | score @2h (mean) | @30m | output tokens |
+| ----------------------------------------------- | ---- | ---------------- | ---- | ------------- |
+| Single Kimi session                             | 7    | 33.6 (sd 4.5)    | —    | 133k          |
+| Today's Goal (planner splits into serial tasks) | 1    | 21.8             | 16.2 | 219k          |
+| 3 independent sessions, keep the best           | 2    | 37.0             | 34.2 | 607k          |
+| 3 lanes + marks (no coordination)               | 1    | 34.7             | 34.2 | 374k          |
+| 3 lanes + marks + coordinator                   | 3    | 37.4             | 26.5 | 409k          |
 
 What this says:
 
@@ -47,19 +47,19 @@ A Swarm Goal is an optimisation Goal:
 - **N lanes**: parallel copies of the workspace, one long-running Task each.
 
 It is not a replacement for planned Goals. Builds, migrations and anything without a
-scoring command keep today's planner. A planner may *propose* swarm mode when the
+scoring command keep today's planner. A planner may _propose_ swarm mode when the
 requirement names a metric and an evaluator.
 
 ## Concepts
 
-| Concept | What it is | Built on |
-|---|---|---|
-| Lane | An independent copy of the workspace, plus the time-boxed Task that works in it | `experiment` container node; per-topic working directory |
-| Evaluator | A command run inside a lane that prints a score (plain number, `TOTAL_SCORE n`, or JSON `{score, valid, summary, metrics}`) | new `lh goal evaluate` |
-| Objective series | One metric series per Goal; each evaluation is a point tagged with lane, run and code fingerprint | metric series and observations (`metric` router, north-star criteria) |
-| Leaderboard | Each lane's best and latest valid score, the leader, time since the last new best | derived from the objective series |
-| Directive | A coordinator instruction addressed to one lane | new mark kind `directive` |
-| Champion | The best-scoring lane state when the run ends; promoted back to the root workspace | — |
+| Concept          | What it is                                                                                                                  | Built on                                                              |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Lane             | An independent copy of the workspace, plus the time-boxed Task that works in it                                             | `experiment` container node; per-topic working directory              |
+| Evaluator        | A command run inside a lane that prints a score (plain number, `TOTAL_SCORE n`, or JSON `{score, valid, summary, metrics}`) | new `lh goal evaluate`                                                |
+| Objective series | One metric series per Goal; each evaluation is a point tagged with lane, run and code fingerprint                           | metric series and observations (`metric` router, north-star criteria) |
+| Leaderboard      | Each lane's best and latest valid score, the leader, time since the last new best                                           | derived from the objective series                                     |
+| Directive        | A coordinator instruction addressed to one lane                                                                             | new mark kind `directive`                                             |
+| Champion         | The best-scoring lane state when the run ends; promoted back to the root workspace                                          | —                                                                     |
 
 ## User flow
 
@@ -154,13 +154,13 @@ The policy is a pure function over the leaderboard, the lane fingerprints and th
 It runs in the goal tick every 10 minutes, or on each new point, rate-limited. It was
 prototyped as `harness/coordinator.py` in `~/CodeProjects/edgebench-eval`.
 
-| Signal | Condition (defaults) | Action |
-|---|---|---|
-| Leaderboard | every tick | refresh the single leaderboard mark, which is pinned in prompts |
-| Converged | two lanes share a fingerprint | keep one, give the others new directions |
-| Stagnant | no new global best for 25 min (scaled to the timebox) | new directions for every lane |
-| Lagging | a lane is more than 3 points or 10% behind the leader after 30% of the timebox | adopt the leader, then a direction |
-| Warm-up | before the first valid score in any lane | none: lanes start free to get a runnable version fast |
+| Signal      | Condition (defaults)                                                           | Action                                                          |
+| ----------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Leaderboard | every tick                                                                     | refresh the single leaderboard mark, which is pinned in prompts |
+| Converged   | two lanes share a fingerprint                                                  | keep one, give the others new directions                        |
+| Stagnant    | no new global best for 25 min (scaled to the timebox)                          | new directions for every lane                                   |
+| Lagging     | a lane is more than 3 points or 10% behind the leader after 30% of the timebox | adopt the leader, then a direction                              |
+| Warm-up     | before the first valid score in any lane                                       | none: lanes start free to get a runnable version fast           |
 
 Directions come from one system-model call per decision. Its inputs are the task
 requirement, the leaderboard, recent marks and the lanes that need a direction, and it
@@ -197,16 +197,13 @@ The `signature` column planned for pain detection stays a separate change.
 
 ## Delivery plan
 
-All of it sits behind the Agent Lab gate (`useAgentLabGate`) until the benchmark target
-below holds.
-
-| PR | Content | Depends on |
-|---|---|---|
-| 1 | Goal marks (done, 0f5d9bb672a) | — |
-| 2 | `config.objective`, `lh goal set-objective` / `evaluate` / `objective`, objective series with lane metadata, operation-token write path, leaderboard read model, `<goal_objective>` prompt section, per-machine evaluation lock (built) | 1 |
-| 3 | `config.swarm`, lane containers, per-lane directory (device) / per-lane sandbox, graded-archive upload and `lane adopt`, timeboxed lane Tasks, deadline wrap-up and champion | 2 |
-| 4 | Coordinator policy in tick, `directive` marks, prompt pinning | 3 |
-| 5 | Goal page leaderboard and champion promote (web) | 2 (reads), 4 |
+| PR  | Content                                                                                                                                                                                                                                 | Depends on   |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | Goal marks (done, 0f5d9bb672a)                                                                                                                                                                                                          | —            |
+| 2   | `config.objective`, `lh goal set-objective` / `evaluate` / `objective`, objective series with lane metadata, operation-token write path, leaderboard read model, `<goal_objective>` prompt section, per-machine evaluation lock (built) | 1            |
+| 3   | `config.swarm`, lane containers, per-lane directory (device) / per-lane sandbox, graded-archive upload and `lane adopt`, timeboxed lane Tasks, deadline wrap-up and champion                                                            | 2            |
+| 4   | Coordinator policy in tick, `directive` marks, prompt pinning                                                                                                                                                                           | 3            |
+| 5   | Goal page leaderboard and champion promote (web)                                                                                                                                                                                        | 2 (reads), 4 |
 
 Each PR's acceptance includes the EdgeBench harness on `k12_math_recommendation`
 (3 lanes, 2 h, Kimi Code). The bar for removing the Lab gate is:

@@ -36,7 +36,7 @@ export type PluginResolution =
   | { status: 'unknown'; suggestions: string[] };
 
 export interface PluginResolverDeps {
-  connectorModel: Pick<ConnectorModel, 'resolveAll'>;
+  connectorModel: Pick<ConnectorModel, 'queryAvailableForAgent'>;
   pluginModel: Pick<PluginModel, 'findById' | 'query'>;
 }
 
@@ -70,9 +70,18 @@ export const resolvePluginIdentifier = async (
 
   // A connector shadows a same-named installed plugin, but only once it is
   // enabled and connected — a disabled or disconnected row contributes no tools.
-  const connectors = await deps.connectorModel.resolveAll(options.agentId);
-  const connector = connectors.find((c) => c.identifier === identifier);
-  if (connector) return connectorResolution(connector);
+  // Checked against what the target agent loads in its own conversation, so an
+  // owner's private connector counts on their private agent: no topic is
+  // involved in editing a configuration.
+  // An MCP connector may have several rows the agent loads, each its own tool
+  // set (the shared one and its owner's private one): any usable one serves.
+  const connectors = await deps.connectorModel.queryAvailableForAgent(options.agentId);
+  const matching = connectors.filter((c) => c.identifier === identifier);
+  if (matching.length > 0)
+    return (
+      matching.map(connectorResolution).find((resolution) => resolution.status === 'loadable') ??
+      connectorResolution(matching[0])
+    );
 
   const installed = await deps.pluginModel.findById(identifier);
   if (installed) {
@@ -247,9 +256,11 @@ export const resolveOrInstallMarketPlugin = async (
     ]);
     const run = runnable.find((c) => c.identifier === identifier);
     if (run?.agentId === options.agentId) return resolveExisting();
-    const own = configurable.find((c) => c.identifier === identifier);
-    if (own && own.id !== run?.id)
-      return { installedNow: false, resolution: connectorResolution(own) };
+    // Beside (or instead of) the shared row, the owner's own rows are tool
+    // sets of their own: answer from every row the agent loads (any usable one
+    // serves) rather than install a shared row over them.
+    if (configurable.some((c) => c.identifier === identifier && c.id !== run?.id))
+      return resolveExisting();
   }
 
   let manifest: unknown;

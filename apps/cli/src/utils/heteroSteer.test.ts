@@ -207,6 +207,23 @@ describe('withHeteroSteer', () => {
     expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
   });
 
+  it('omits acceptsImages when the handle declares supportsSteerImages: false', async () => {
+    const { client, wait } = createClient([]);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage: async () => true, supportsSteerImages: false },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(wait).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(wait.mock.calls[0][0]).not.toHaveProperty('acceptsImages');
+  });
+
   it('gives a refused message back and stops polling', async () => {
     const { client, giveBack, wait } = createClient([{ content: 'hi', messageId: 'msg-1' }]);
     const stream = createStream();

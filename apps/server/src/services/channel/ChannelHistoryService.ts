@@ -1,9 +1,7 @@
 import type { ChannelReadMessageParams, ChannelReadMessagesParams } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
-import { ChannelHistoryRepository } from '@/database/repositories/channel';
-import { files } from '@/database/schemas';
+import { channelAttachments, ChannelHistoryRepository } from '@/database/repositories/channel';
 import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 
@@ -31,18 +29,7 @@ export class ChannelHistoryService {
     await assertChannelEnabled(this.userId);
     const result = await this.repository.readMessage(this.operationId, params);
     const ids = result.message.fileIds ?? [];
-    const shared = ids.length
-      ? await this.db
-          .select({
-            id: files.id,
-            name: files.name,
-            fileType: files.fileType,
-            size: files.size,
-            url: files.url,
-          })
-          .from(files)
-          .where(inArray(files.id, ids))
-      : [];
+    const shared = await channelAttachments(this.db, ids);
     const fileService = new FileService(this.db, this.userId, this.workspaceId);
     return {
       ...result,

@@ -49,6 +49,7 @@ export type WorkingSidebarTab =
   | 'review'
   | 'search'
   | 'skills'
+  | 'tools'
   | 'web'
   | (string & {});
 
@@ -56,6 +57,11 @@ export const CANVAS_TAB_PREFIX = 'canvas:';
 export const canvasTabKey = (canvasId: string) => `${CANVAS_TAB_PREFIX}${canvasId}`;
 export const canvasIdOfTab = (tab: string) =>
   tab.startsWith(CANVAS_TAB_PREFIX) ? tab.slice(CANVAS_TAB_PREFIX.length) : undefined;
+
+export const ARTBOARD_TAB_PREFIX = 'artboard:';
+export const artboardTabKey = (artboardId: string) => `${ARTBOARD_TAB_PREFIX}${artboardId}`;
+export const artboardIdOfTab = (tab: string) =>
+  tab.startsWith(ARTBOARD_TAB_PREFIX) ? tab.slice(ARTBOARD_TAB_PREFIX.length) : undefined;
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
@@ -73,11 +79,12 @@ export enum SettingsTabs {
   Appearance = 'appearance',
   Automations = 'automations',
   Billing = 'billing',
-  /** @deprecated Use Appearance instead */
+  /** @deprecated Use Conversation instead */
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
+  Conversation = 'conversation',
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
@@ -85,12 +92,10 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
-  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
   Memory = 'memory',
-  Messenger = 'messenger',
   Notification = 'notification',
   OAuthApps = 'oauth-apps',
   // business

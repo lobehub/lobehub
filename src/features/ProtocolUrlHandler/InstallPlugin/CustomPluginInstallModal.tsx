@@ -94,7 +94,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           identifier: schema.identifier,
           name: schema.name,
         });
-        await togglePlugin(schema.identifier);
+        await togglePlugin(schema.identifier, true);
         toast.success(t('protocolInstall.messages.installSuccess', { name: schema.name }));
 
         onComplete?.();

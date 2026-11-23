@@ -14,6 +14,8 @@ import { t } from 'i18next';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   hint: { fontSize: '12px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
   inlineCode: {
@@ -25,7 +27,7 @@ const styles = stylex.create({
   },
   secret: {
     paddingBlock: '4px',
-    paddingInlineStart: '12px',
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
     paddingInlineEnd: '4px',
     borderWidth: '1px',
     borderStyle: 'solid',

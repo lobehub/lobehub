@@ -1,11 +1,12 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { Bot, Lock, MessageSquareText, Users, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import type { SidebarAgentItem } from '@/database/repositories/home';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';

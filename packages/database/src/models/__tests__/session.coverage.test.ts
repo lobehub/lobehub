@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, agentsToSessions, sessions, users } from '../../schemas';
+import { agents, agentsToSessions, messages, sessions, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { SessionModel } from '../session';
 
@@ -111,11 +111,11 @@ describe('SessionModel coverage', () => {
     });
   });
 
-  describe('deleteShellsByIds', () => {
+  describe('deleteEmptyShellsByIds', () => {
     it('does nothing for no ids', async () => {
       await serverDB.insert(sessions).values({ id: 'sc-shell', userId });
 
-      await sessionModel.deleteShellsByIds([]);
+      await sessionModel.deleteEmptyShellsByIds([]);
 
       expect(await findSession('sc-shell')).toBeDefined();
     });
@@ -126,10 +126,28 @@ describe('SessionModel coverage', () => {
         { id: 'sc-foreign', userId: otherUserId },
       ]);
 
-      await sessionModel.deleteShellsByIds(['sc-shell', 'sc-foreign']);
+      await sessionModel.deleteEmptyShellsByIds(['sc-shell', 'sc-foreign']);
 
       expect(await findSession('sc-shell')).toBeUndefined();
       expect(await findSession('sc-foreign')).toBeDefined();
+    });
+
+    it('keeps a shell that still holds session-only topics or messages', async () => {
+      await serverDB.insert(sessions).values([
+        { id: 'sc-with-topic', userId },
+        { id: 'sc-with-message', userId },
+        { id: 'sc-empty', userId },
+      ]);
+      await serverDB.insert(topics).values({ id: 'sc-topic', sessionId: 'sc-with-topic', userId });
+      await serverDB
+        .insert(messages)
+        .values({ id: 'sc-message', role: 'user', sessionId: 'sc-with-message', userId });
+
+      await sessionModel.deleteEmptyShellsByIds(['sc-with-topic', 'sc-with-message', 'sc-empty']);
+
+      expect(await findSession('sc-with-topic')).toBeDefined();
+      expect(await findSession('sc-with-message')).toBeDefined();
+      expect(await findSession('sc-empty')).toBeUndefined();
     });
   });
 });

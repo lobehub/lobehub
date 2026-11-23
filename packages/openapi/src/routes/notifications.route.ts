@@ -67,7 +67,6 @@ NotificationRoutes.get(
   '/settings',
   routeDoc({
     data: NotificationSettingsResponseSchema,
-    operationId: 'getNotificationSettings',
     summary: 'Get notification delivery settings',
     tags: ['notifications'],
   }),
@@ -83,7 +82,6 @@ NotificationRoutes.patch(
   routeDoc({
     data: NotificationSettingsResponseSchema,
     description: 'Answers with the merged settings now stored for the scope.',
-    operationId: 'updateNotificationSettings',
     summary: 'Update notification delivery settings',
     tags: ['notifications'],
   }),
@@ -99,7 +97,6 @@ NotificationRoutes.get(
   '/unread-count',
   routeDoc({
     data: NotificationUnreadCountSchema,
-    operationId: 'getUnreadNotificationCount',
     summary: 'Get the unread notification count',
     tags: ['notifications'],
   }),
@@ -112,7 +109,7 @@ NotificationRoutes.get(
   '/counts',
   routeDoc({
     data: z.array(NotificationCategoryCountSchema),
-    operationId: 'getNotificationCounts',
+    operationId: 'notifications.getCounts',
     summary: 'Get per-category notification counts',
     tags: ['notifications'],
   }),
@@ -127,7 +124,7 @@ NotificationRoutes.post(
     data: NotificationAcknowledgementSchema,
     // Nothing to report back: the body is the success envelope without `data`.
     envelope: false,
-    operationId: 'markNotificationsRead',
+    operationId: 'notifications.markRead',
     summary: 'Mark notifications as read',
     tags: ['notifications'],
   }),
@@ -144,7 +141,7 @@ NotificationRoutes.post(
     data: NotificationAcknowledgementSchema,
     // Nothing to report back: the body is the success envelope without `data`.
     envelope: false,
-    operationId: 'markAllNotificationsRead',
+    operationId: 'notifications.markAllRead',
     summary: 'Mark every notification as read',
     tags: ['notifications'],
   }),
@@ -160,7 +157,7 @@ NotificationRoutes.post(
     data: NotificationAcknowledgementSchema,
     // Nothing to report back: the body is the success envelope without `data`.
     envelope: false,
-    operationId: 'archiveAllNotifications',
+    operationId: 'notifications.archiveAll',
     summary: 'Archive every notification',
     tags: ['notifications'],
   }),
@@ -176,7 +173,7 @@ NotificationRoutes.post(
     data: NotificationAcknowledgementSchema,
     // Nothing to report back: the body is the success envelope without `data`.
     envelope: false,
-    operationId: 'archiveNotification',
+    operationId: 'notifications.archive',
     summary: 'Archive a notification',
     tags: ['notifications'],
   }),

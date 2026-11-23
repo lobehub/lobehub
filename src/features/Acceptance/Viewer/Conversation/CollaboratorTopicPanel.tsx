@@ -1,13 +1,14 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { ActionIcon, Avatar, Button, Flexbox, Text, TextArea, toast } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text, TextArea, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PanelRightClose } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import {
   type ConversationContext,
   ConversationProvider,

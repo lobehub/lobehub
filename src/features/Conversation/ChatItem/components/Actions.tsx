@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -13,10 +13,11 @@ import type { ChatItemProps } from '../type';
 export interface ActionsProps {
   actionAddon?: ChatItemProps['actionAddon'];
   actions: ChatItemProps['actions'];
+  leading?: ReactNode;
   placement?: ChatItemProps['placement'];
 }
 
-const Actions = memo<ActionsProps>(({ actionAddon, placement, actions }) => {
+const Actions = memo<ActionsProps>(({ actionAddon, leading, placement, actions }) => {
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
@@ -31,6 +32,7 @@ const Actions = memo<ActionsProps>(({ actionAddon, placement, actions }) => {
         alignSelf: isUser ? 'flex-end' : 'flex-start',
       }}
     >
+      {leading}
       {!isUser && actionAddon}
       {actions && (
         <Flexbox horizontal align={'center'} role="menubar" {...stylex.props(revealStyles.menubar)}>

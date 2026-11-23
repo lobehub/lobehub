@@ -21,6 +21,7 @@ import { mutate } from '@/libs/swr';
 import { matchDomain, workKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { revalidateConversationMessages } from '@/services/message/replica';
+import { workTypeOptIn } from '@/services/workTypeOptIn';
 import { topicPullRequestsResource } from '@/store/work/projection';
 
 /** One cursor page of the workspace-wide Work list (resource page 产物 gallery). */
@@ -72,7 +73,7 @@ class WorkService {
     threadId?: string | null;
     topicId?: string | null;
   }): Promise<WorkListItem[]> =>
-    lambdaClient.work.listByConversation.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByConversation.query({ ...params, ...workTypeOptIn() });
 
   listByWorkspace = async (params: {
     cursor?: string | null;
@@ -82,19 +83,19 @@ class WorkService {
     type?: ListedWorkType | null;
     visibility?: WorkVisibility;
   }): Promise<WorkSummaryPage> =>
-    lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByWorkspace.query({ ...params, ...workTypeOptIn() });
 
   listByRootOperation = async (params: {
     limit?: number;
     rootOperationId?: string | null;
   }): Promise<WorkVersionEventItem[]> =>
-    lambdaClient.work.listByRootOperation.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByRootOperation.query({ ...params, ...workTypeOptIn() });
 
   listByRootOperations = async (params: {
     limit?: number;
     rootOperationIds?: string[] | null;
   }): Promise<WorkVersionEventMap> =>
-    lambdaClient.work.listByRootOperations.query({ ...params, includeFileWorks: true });
+    lambdaClient.work.listByRootOperations.query({ ...params, ...workTypeOptIn() });
 
   listVersions = async (workId: string): Promise<WorkVersionItem[]> =>
     lambdaClient.work.listVersions.query({ workId });

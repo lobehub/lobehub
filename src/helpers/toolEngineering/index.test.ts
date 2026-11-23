@@ -19,10 +19,19 @@ afterEach(() => {
   desktopEnv.enabled = false;
 });
 
+vi.mock(import('@/store/tool/slices/builtin/projection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runtimeUninstalledBuiltinTools: () => [],
+}));
+
 // Mock the store and helper dependencies
+let mockConnectors: any[] = [];
+// No conversation listing here: the local lists stand in (see index.runConnectors.test.ts)
+vi.mock('@/services/runConnectors', () => ({ getRunConnectors: () => undefined }));
+
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
-    connectors: [],
+    connectors: mockConnectors,
     // The rows behind `installedPluginManifestList`: an installed plugin is a
     // connector, so the agent's on/off switch applies to it.
     get installedPlugins() {
@@ -210,6 +219,8 @@ vi.mock('@/store/serverConfig', () => ({
     featureFlags: mockFeatureFlags,
     serverConfig: mockServerConfig,
   }),
+  // Connector manifests ask whether MCP Apps are on (`buildClientConnectorManifests`)
+  serverConfigSelectors: { enableMcpApps: () => false },
 }));
 
 let mockIsCanUseFC = true;
@@ -234,6 +245,8 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
 }));
 
+let mockCurrentAgentVisibility: 'private' | 'public' | undefined;
+
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     currentAgentConfig: () => ({
@@ -245,6 +258,7 @@ vi.mock('@/store/agent/selectors', () => ({
     }),
     currentAgentDisabledPlugins: () => mockCurrentAgentDisabledPlugins,
     currentAgentPlugins: () => mockCurrentAgentPlugins,
+    currentAgentVisibility: () => mockCurrentAgentVisibility,
     hasEnabledKnowledgeBases: () => false,
   },
   agentChatConfigSelectors: {
@@ -298,6 +312,8 @@ describe('toolEngineering', () => {
     mockImageOutputSupport = false;
     mockServerConfig = {};
     mockFeatureFlags = {};
+    mockConnectors = [];
+    mockCurrentAgentVisibility = undefined;
   });
 
   describe('feature-flagged tools', () => {
@@ -624,10 +640,6 @@ describe('toolEngineering', () => {
         skipDefaultTools: true,
         toolIds: ['lobe-agent'],
       };
-      expect(
-        createAgentToolsEngine(model).generateToolsDetailed(activation).enabledToolIds,
-      ).toEqual([]);
-      mockCurrentAgentAutoPlugins = ['lobe-agent'];
       const engine = createAgentToolsEngine(model);
 
       expect(engine.generateToolsDetailed({ ...model, toolIds: [] }).enabledToolIds).not.toContain(
@@ -661,7 +673,7 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toEqual([]);
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-agent',
-        reason: 'not_found',
+        reason: 'incompatible',
       });
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-web-browsing',
@@ -866,7 +878,136 @@ describe('toolEngineering', () => {
     });
   });
 
-  describe('connectors are opt-in per agent', () => {
+  describe('private (私人) workspace connectors', () => {
+    const connector = (identifier: string, visibility: 'private' | 'public') => ({
+      credentials: null,
+      id: `${identifier}-id`,
+      identifier,
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: `https://${identifier}.example.com/mcp`,
+      metadata: null,
+      name: identifier,
+      sourceType: 'custom',
+      status: 'connected',
+      tools: [
+        {
+          crudType: 'read',
+          description: 'Search',
+          displayName: 'Search',
+          id: `${identifier}-search`,
+          inputSchema: { properties: {}, type: 'object' },
+          permission: 'auto',
+          toolName: 'search',
+          userConnectorId: `${identifier}-id`,
+        },
+      ],
+      visibility,
+    });
+
+    const enabledConnectorIds = (manifestContext?: { isSubAgent?: boolean; scope?: string }) => {
+      mockConnectors = [connector('ws-linear', 'public'), connector('my-notion', 'private')];
+      mockCurrentAgentPlugins = ['ws-linear', 'my-notion'];
+      return (
+        createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' }, undefined, manifestContext)
+          // A connector that is on reaches the model through the activator
+          .generateToolsDetailed({
+            context: { isExplicitActivation: true },
+            model: 'gpt-4',
+            provider: 'openai',
+            toolIds: ['ws-linear', 'my-notion'],
+          })
+          .enabledToolIds.filter((id) => id.startsWith('ws-linear') || id.startsWith('my-notion'))
+          .sort()
+      );
+    };
+
+    it('keeps them away from a workspace agent', () => {
+      mockCurrentAgentVisibility = 'public';
+
+      expect(enabledConnectorIds()).toEqual(['ws-linear']);
+    });
+
+    it("offers them in a private agent's own conversation", () => {
+      mockCurrentAgentVisibility = 'private';
+
+      // A private row is a tool set of its own, under its row-suffixed prefix
+      expect(enabledConnectorIds({ scope: 'main' })).toEqual(['my-notion-mynotion', 'ws-linear']);
+    });
+
+    it.each([
+      { scope: 'group' },
+      { scope: 'group_agent' },
+      { isSubAgent: true, scope: 'sub_agent' },
+    ])('keeps them out of a private agent run in %o', (manifestContext) => {
+      mockCurrentAgentVisibility = 'private';
+
+      expect(enabledConnectorIds(manifestContext)).toEqual(['ws-linear']);
+    });
+
+    describe('a private and a shared row of one identifier', () => {
+      // The owner's private connection and the workspace's shared one of the
+      // same identifier, each with its own tool list
+      const withTool = (visibility: 'private' | 'public', toolName: string) => {
+        const row = connector('team-docs', visibility);
+        return {
+          ...row,
+          id: `team-docs-${visibility}`,
+          tools: [{ ...row.tools[0], id: `${visibility}-tool`, toolName }],
+        };
+      };
+      const privateRow = withTool('private', 'search_mine');
+      const sharedRow = withTool('public', 'search_team');
+
+      const toolNames = (rows: unknown[], manifestContext?: { scope?: string }) => {
+        mockConnectors = rows;
+        mockCurrentAgentPlugins = ['team-docs'];
+        return createAgentToolsEngine(
+          { model: 'gpt-4', provider: 'openai' },
+          undefined,
+          manifestContext,
+        )
+          .generateToolsDetailed({
+            context: { isExplicitActivation: true },
+            model: 'gpt-4',
+            provider: 'openai',
+            toolIds: ['team-docs'],
+          })
+          .tools?.map((tool) => tool.function.name);
+      };
+
+      it('offers the private agent both rows, each under its own prefix, in either list order', () => {
+        // Regression: both rows reached the identifier-keyed manifest map and
+        // the last one won, so the model could get one row's schema while the
+        // server ran the other. Each row is now its own tool set.
+        mockCurrentAgentVisibility = 'private';
+
+        for (const rows of [
+          [privateRow, sharedRow],
+          [sharedRow, privateRow],
+        ]) {
+          expect(
+            toolNames(rows, { scope: 'main' })?.filter((name) => name.includes('search')),
+          ).toEqual(
+            expect.arrayContaining([
+              'team-docs____search_team____mcp',
+              'team-docs-teamdocs____search_mine____mcp',
+            ]),
+          );
+        }
+      });
+
+      it("builds a workspace agent's manifest from the shared row", () => {
+        mockCurrentAgentVisibility = 'public';
+
+        const names = toolNames([privateRow, sharedRow]);
+        expect(names?.some((name) => name.includes('search_team'))).toBe(true);
+        expect(names?.some((name) => name.includes('search_mine'))).toBe(false);
+      });
+    });
+  });
+
+  describe('connector discovery', () => {
     const connectorManifest = {
       api: [
         {
@@ -898,9 +1039,9 @@ describe('toolEngineering', () => {
       mockInstalledPluginManifestList = () => [connectorManifest];
     });
 
-    it('keeps a connector the agent never turned on out of reach, even for the activator', () => {
+    it('offers an unconfigured connector only after activation', () => {
       expect(generate().enabledToolIds).toEqual([]);
-      expect(generate({ explicit: true }).enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
     });
 
     it('leaves a connector that is on to the activator instead of invoking it up front', () => {
@@ -957,7 +1098,7 @@ describe('toolEngineering', () => {
         { model: 'gpt-4', provider: 'openai' },
         undefined,
         undefined,
-        { runAgent: { plugins: [] } },
+        { runAgent: { plugins: [{ identifier: 'gmail-mcp', mode: 'disabled' }] } },
       ).generateToolsDetailed({
         context: { isExplicitActivation: true },
         model: 'gpt-4',

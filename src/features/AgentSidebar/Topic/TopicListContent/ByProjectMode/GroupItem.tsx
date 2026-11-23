@@ -34,6 +34,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import TailMarquee from '@/components/TailMarquee';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
@@ -79,6 +80,7 @@ const FOLDER_SUB_GROUP_MODES = SUB_GROUP_MODES.filter((mode) => mode !== 'byDevi
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const { id, title, children, deviceId: groupDeviceId } = group;
+  const metrics = useNavItemMetrics();
   const scope = useTopicListScope();
   const navigate = useWorkspaceAwareNavigate();
   // `project-id:` groups merge every directory of one project — resolve the
@@ -336,8 +338,14 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     <AccordionItem value={id}>
       <AccordionHeader className={'accordion-header'}>
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: 4 }}>
-          <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
-            <Center flex="none" height={24} width={28}>
+          <Flexbox
+            horizontal
+            align="center"
+            gap={metrics.gap}
+            height={24}
+            style={{ overflow: 'hidden' }}
+          >
+            <Center flex="none" height={24} width={metrics.iconBox}>
               {project ? (
                 <ProjectAvatar
                   avatar={project.projectAvatar}
@@ -354,7 +362,11 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
               )}
             </Center>
             {project ? (
-              <Text ellipsis fontSize={14} style={{ color: cssVar.colorText, flex: 1 }}>
+              <Text
+                ellipsis
+                fontSize={metrics.fontSize}
+                style={{ color: cssVar.colorText, flex: 1 }}
+              >
                 {scope ? (
                   title
                 ) : (
@@ -390,7 +402,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
               <TailMarquee
                 style={{
                   color: cssVar.colorTextSecondary,
-                  fontSize: 14,
+                  fontSize: metrics.fontSize,
                   // Beside a device tag, hug the name instead of filling the row,
                   // so it stays next to its icon and the tag follows it.
                   ...(deviceLabel && { flex: '0 1 auto' }),

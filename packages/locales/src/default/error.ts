@@ -21,6 +21,9 @@ export default {
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',
   'fetchError.title': 'Request failed',
+  'import.github.access':
+    'Couldn’t open this repository or branch. Check the link and your GitHub account’s access.',
+  'import.github.connect': 'Private repositories need a GitHub account with read access.',
   'import.importConfigFile.description': 'Error reason: {{reason}}',
   'import.importConfigFile.title': 'Import Failed',
   'import.incompatible.description':
@@ -318,6 +321,7 @@ export default {
   'upload.desc': 'Details: {{detail}}',
   'upload.fileOnlySupportInServerMode':
     'The current deployment mode does not support uploading non-image files. To upload files in {{ext}} format, please switch to server database deployment or use the {{cloud}} service.',
+  'upload.fileTooLarge': 'This file is over the {{max}} upload limit and can’t be uploaded.',
   'upload.networkError':
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
   'upload.serviceUnavailable':
@@ -340,6 +344,8 @@ export default {
   'upload.permissionDenied': "You don't have permission to upload files in this workspace.",
   'upload.storageLimitExceeded':
     'Your file storage has reached the plan limit. Please upgrade your plan or delete unused files to free up space.',
+  'upload.storageRejected':
+    'The file storage service rejected the upload ({{detail}}). Please try again later.',
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',

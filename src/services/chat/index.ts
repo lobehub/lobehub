@@ -1,5 +1,5 @@
 import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
-import { getUnselectedBuiltinToolIds, getUserDisabledToolIds } from '@lobechat/builtin-tools';
+import { getUnavailableBuiltinToolIds, getUserDisabledToolIds } from '@lobechat/builtin-tools';
 import {
   REQUEST_AGENT_ID_HEADER,
   REQUEST_OPERATION_ID_HEADER,
@@ -16,6 +16,7 @@ import {
   ChatErrorType,
   type ChatMessageError,
   getAutoPluginIds,
+  getBuiltinOverrides,
   getOptedInPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -35,6 +36,8 @@ import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { getToolStoreState } from '@/store/tool';
+import { runtimeUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
@@ -74,6 +77,7 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
    * budget is spent (planned by `shouldCompress`).
    */
   attachmentPreviewFileIds?: string[];
+  discoveryExcludedToolIds?: string[];
   discoveryManifests?: Record<string, LobeToolManifest>;
   groupId?: string;
   messages: UIChatMessage[];
@@ -156,6 +160,7 @@ class ChatService {
       groupId,
       additionalContexts,
       attachmentPreviewFileIds,
+      discoveryExcludedToolIds,
       discoveryManifests,
       topicId,
       resolvedAgentConfig,
@@ -236,16 +241,18 @@ class ChatService {
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
       autoSkillIds: getAutoPluginIds(agentConfig.plugins),
-      // A connector the agent has not turned on is off for it, so it leaves the
-      // discovery list too; one this turn already enabled (an @-mention) stays.
+      // Apply the executing agent's connector preferences and scope to discovery.
       disabledPluginIds: [
         ...getUserDisabledToolIds(agentConfig.plugins, chatConfig),
-        ...getUnselectedBuiltinToolIds([
-          ...getOptedInPluginIds(agentConfig.plugins),
-          ...(enabledToolIds ?? []),
-        ]),
+        ...getUnavailableBuiltinToolIds(
+          [...getOptedInPluginIds(agentConfig.plugins), ...(enabledToolIds ?? [])],
+          chatConfig,
+          // A running conversation already has a scope-filtered manifest map.
+          discoveryManifests ? [] : runtimeUninstalledBuiltinTools(getToolStoreState()),
+          getBuiltinOverrides(agentConfig.plugins),
+        ),
         ...resolveAgentConnectorActivation(
-          { chatConfig, plugins: agentConfig.plugins },
+          { id: targetAgentId, chatConfig, plugins: agentConfig.plugins },
           enabledToolIds,
         ).offIds,
       ],
@@ -263,6 +270,7 @@ class ChatService {
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
+      discoveryExcludedToolIds,
       discoveryManifests,
       manifests: enabledManifests,
       messages: messagesForContext,

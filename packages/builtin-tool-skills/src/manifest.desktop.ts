@@ -6,7 +6,7 @@ import {
   manifestMeta,
   readReferenceApi,
 } from './manifest.base';
-import { systemPrompt } from './systemRole';
+import { systemPrompt } from './systemRole.desktop';
 import { SkillsApiName, SkillsIdentifier } from './types';
 
 export const SkillsManifest: BuiltinToolManifest = {
