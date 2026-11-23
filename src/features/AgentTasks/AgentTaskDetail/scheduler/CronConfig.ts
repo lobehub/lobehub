@@ -136,6 +136,22 @@ export const parseCronPattern = (
 };
 
 /**
+ * Replace a single field in a standard 5-field cron expression while preserving
+ * all other fields (for example, weekday qualifiers such as `FRI#2` or `5L`).
+ * Returns `null` when the pattern is not a 5-field expression.
+ */
+export const updateCronPatternField = (
+  cronPattern: string,
+  fieldIndex: 0 | 1 | 2 | 3 | 4,
+  value: string,
+): string | null => {
+  const parts = cronPattern.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  parts[fieldIndex] = value;
+  return parts.join(' ');
+};
+
+/**
  * Build cron pattern (minute hour day month weekday) from editable schedule info.
  */
 export const buildCronPattern = (
@@ -157,7 +173,10 @@ export const buildCronPattern = (
       return `${minute} ${hour} * * *`;
     }
     case 'weekly': {
-      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : '0,1,2,3,4,5,6';
+      const days =
+        weekdays && weekdays.length > 0
+          ? [...weekdays].sort((a, b) => a - b).join(',')
+          : '0,1,2,3,4,5,6';
       return `${minute} ${hour} * * ${days}`;
     }
   }

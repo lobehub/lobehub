@@ -1,10 +1,27 @@
 import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
-import { buildCronPattern, getMinuteChoices, parseCronPattern } from './CronConfig';
+import {
+  buildCronPattern,
+  getMinuteChoices,
+  parseCronPattern,
+  updateCronPatternField,
+} from './CronConfig';
 import { formatScheduleDescription } from './helpers';
 
 const time = (hour: number, minute: number) => dayjs().hour(hour).minute(minute);
+
+describe('updateCronPatternField', () => {
+  it('updates only the requested cron field and preserves qualifiers', () => {
+    expect(updateCronPatternField('30 9 * * FRI#2', 1, '10')).toBe('30 10 * * FRI#2');
+    expect(updateCronPatternField('30 9 * * 5L', 0, '0')).toBe('0 9 * * 5L');
+    expect(updateCronPatternField('30  9  *  *  MON-FRI', 1, '8')).toBe('30 8 * * MON-FRI');
+  });
+
+  it('returns null for non-5-field expressions', () => {
+    expect(updateCronPatternField('invalid', 1, '10')).toBeNull();
+  });
+});
 
 describe('buildCronPattern', () => {
   it('keeps the exact minute for every frequency', () => {
