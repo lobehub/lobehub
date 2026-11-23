@@ -398,14 +398,16 @@ const resolvePlacement = async ({
  * private one), or one that asks for nothing.
  */
 const resolveInitialization = async ({
+  placement,
   serverDB,
   topicId,
   userId,
   workspaceId,
 }: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
-  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
-  SandboxInitialization | undefined
-> => {
+  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'> & {
+    /** Where the run works, as {@link resolvePlacement} decided. */
+    placement: Pick<SandboxSessionConfig, 'drive' | 'mode'>;
+  }): Promise<SandboxInitialization | undefined> => {
   try {
     const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
       topicId,
@@ -441,6 +443,23 @@ const resolveInitialization = async ({
         );
         return undefined;
       }
+    }
+
+    // Every member can browse the workspace's public drive, so a private
+    // environment's checkout and setup output must not land in a folder there:
+    // it is applied on a personal drive or in a temporary sandbox only.
+    if (
+      workspaceId &&
+      placement.mode === 'drive' &&
+      placement.drive === 'public' &&
+      environment.visibility !== 'public'
+    ) {
+      log(
+        'Not applying private environment %s in a public-drive folder on topic %s',
+        environmentId,
+        topicId,
+      );
+      return undefined;
     }
 
     const initialization = toSandboxInitialization(environment);
@@ -484,7 +503,12 @@ export const resolveSandboxSessionConfig = async (
   const { serverDB, topicId } = input;
   if (!serverDB || !topicId || config.mode === 'persistent') return config;
 
-  const initialization = await resolveInitialization({ ...input, serverDB, topicId });
+  const initialization = await resolveInitialization({
+    ...input,
+    placement: config,
+    serverDB,
+    topicId,
+  });
 
   return initialization ? { ...config, initialization } : config;
 };

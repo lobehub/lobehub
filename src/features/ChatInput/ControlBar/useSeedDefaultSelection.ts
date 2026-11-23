@@ -15,13 +15,32 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
 import {
   getRememberedSandboxDirectory,
+  getRememberedSandboxDirectoryEnvironment,
   getRememberedSandboxRepository,
 } from './rememberedSandboxDirectory';
 
 /**
+ * The drive default with the environment picked together with that folder, so
+ * a folder and its environment come back together — and only together: an
+ * environment from elsewhere would skip its setup in a folder that has files.
+ */
+const driveDefault = (
+  scope: { userId?: string | null; workspaceId?: string | null },
+  agentId: string,
+) => {
+  const remembered = getRememberedSandboxDirectory(scope, agentId);
+  const folder = resolveDefaultSandboxSelection(scope.workspaceId, remembered);
+  const environmentId = remembered
+    ? getRememberedSandboxDirectoryEnvironment(scope, agentId)
+    : undefined;
+  return environmentId ? { ...folder, environmentId } : folder;
+};
+
+/**
  * Give a conversation that does not exist yet the plan's default place to
  * work: an account with a drive keeps its files unless it says otherwise, in the
- * folder the agent's last conversation was put in when there is one. Only
+ * folder the agent's last conversation was put in when there is one, set up
+ * from the environment it used. Only
  * fills an empty slot — a pick, including the temporary sandbox, stays — and
  * only before the topic exists, so a conversation already running never moves.
  * Sending consumes the slot, and the next new conversation is seeded again.
@@ -46,13 +65,7 @@ export const useSeedDefaultSelection = (
   useEffect(() => {
     if (!eligible) return;
 
-    setSandboxDefaultSelection(
-      agentId,
-      resolveDefaultSandboxSelection(
-        workspaceId,
-        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
-      ),
-    );
+    setSandboxDefaultSelection(agentId, driveDefault({ userId, workspaceId }, agentId));
     return () => setSandboxDefaultSelection(agentId);
   }, [agentId, eligible, hasTopic, userId, workspaceId]);
 
@@ -64,20 +77,14 @@ export const useSeedDefaultSelection = (
     const pending = getPendingSandboxSelection(agentId);
     if (pending && !isSeededSandboxSelection(pending)) return;
 
-    seedPendingSandboxSelection(
-      agentId,
-      resolveDefaultSandboxSelection(
-        workspaceId,
-        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
-      ),
-    );
+    seedPendingSandboxSelection(agentId, driveDefault({ userId, workspaceId }, agentId));
   }, [agentId, entitled, hasTopic, userId, workspaceId]);
 };
 
 /**
  * The temporary sandbox's counterpart: a conversation that does not exist yet,
- * for an agent whose new conversations start in the temporary sandbox, starts
- * from the repository the agent's last temporary sandbox used — or from none,
+ * for an agent whose new conversations start with the drive off, starts
+ * from the environment the agent's last conversation used — or from none,
  * which is the temporary sandbox's own default and needs nothing filled in.
  *
  * Filled in as a default rather than a pick, the same as the folder: a pick

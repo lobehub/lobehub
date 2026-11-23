@@ -59,18 +59,22 @@ export const useProjectSandboxEnvironments = (
  * workspace's shared environments. Only the list in use is fetched.
  */
 export const useSandboxEnvironmentList = ({
+  enabled = true,
   projectId,
   sharedAgent,
   workspaceId,
 }: {
+  /** Whether the list is needed yet; nothing is fetched until it is. */
+  enabled?: boolean;
   projectId?: string;
   sharedAgent: boolean;
   workspaceId?: string | null;
 }): SandboxEnvironmentList => {
-  const shared = useSWR(projectId ? null : ['sandbox-environment-chip', workspaceId ?? ''], () =>
-    environmentService.listEnvironments(),
+  const shared = useSWR(
+    enabled && !projectId ? ['sandbox-environment-chip', workspaceId ?? ''] : null,
+    () => environmentService.listEnvironments(),
   );
-  const project = useProjectSandboxEnvironments(projectId, sharedAgent);
+  const project = useProjectSandboxEnvironments(projectId, sharedAgent, enabled);
 
   if (projectId) return project;
 
