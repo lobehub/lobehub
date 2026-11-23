@@ -1,4 +1,6 @@
 // @vitest-environment node
+import type * as SSRFSafeFetchModule from '@lobechat/ssrf-safe-fetch';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +14,11 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
 }));
+
+vi.mock('@lobechat/ssrf-safe-fetch', async (importOriginal) => {
+  const mod = await importOriginal<typeof SSRFSafeFetchModule>();
+  return { ...mod, ssrfSafeFetch: vi.fn() };
+});
 
 // Polyfill File for Node environment
 if (typeof File === 'undefined') {
@@ -608,9 +615,9 @@ describe('createOpenAICompatibleImage', () => {
         ],
       };
 
-      // Mock fetch for image download
+      // Mock the SSRF-safe download for the input image
       const mockArrayBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
-      global.fetch = vi.fn().mockResolvedValue({
+      vi.mocked(ssrfSafeFetch).mockResolvedValue({
         ok: true,
         arrayBuffer: async () => mockArrayBuffer,
         headers: {
