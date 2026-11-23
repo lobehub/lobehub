@@ -50,9 +50,10 @@ const getLimits = () => ({
 });
 
 /**
- * Needs both Redis (the counters) and QStash (somewhere durable to wait). Without them, as on
- * most self-hosted servers, tasks start directly and the per-process parse queue applies.
- * Setting either limit to 0 turns admission off.
+ * Needs Redis (the counters) and QStash (somewhere durable to wait), including both signing
+ * keys: without them the queue route rejects every delivery and queued tasks would never run.
+ * Otherwise, as on most self-hosted servers, tasks start directly and the per-process parse
+ * queue applies. Setting either limit to 0 turns admission off.
  */
 export const isFileTaskAdmissionEnabled = () => {
   const { globalLimit, scopeLimit } = getLimits();
@@ -61,6 +62,8 @@ export const isFileTaskAdmissionEnabled = () => {
     scopeLimit > 0 &&
     globalLimit > 0 &&
     Boolean(process.env.QSTASH_TOKEN) &&
+    Boolean(process.env.QSTASH_CURRENT_SIGNING_KEY) &&
+    Boolean(process.env.QSTASH_NEXT_SIGNING_KEY) &&
     Boolean(getBaseUrl()) &&
     getRedisConfig().enabled
   );

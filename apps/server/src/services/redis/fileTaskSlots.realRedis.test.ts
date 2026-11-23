@@ -104,6 +104,19 @@ describe.skipIf(!url)('fileTaskSlots redis domain (real Redis)', () => {
     await domain.release('lapse', 'next');
   });
 
+  it('does not revive a lapsed lease that another scope already swept', async () => {
+    await domain.acquire('revive-a', 'dead', { ...limits, ttlMs: 20 });
+    await domain.acquire('revive-a', 'alive', limits);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    await domain.acquire('revive-b', 'other', limits);
+
+    await domain.renew('revive-a', 'dead', 60_000);
+
+    expect(await raw.zscore(globalKey(), 'dead')).toBeNull();
+    await domain.release('revive-a', 'alive');
+    await domain.release('revive-b', 'other');
+  });
+
   it('keeps a renewed lease alive past its first expiry', async () => {
     const short = { ...limits, scopeLimit: 1, ttlMs: 40 };
     await domain.acquire('renew', 'live', short);

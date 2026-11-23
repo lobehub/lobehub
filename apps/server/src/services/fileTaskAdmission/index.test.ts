@@ -243,6 +243,8 @@ describe('file task admission', () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     process.env.QSTASH_TOKEN = 'test-token';
+    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'current-key');
+    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', 'next-key');
     h.fileEnv.FILE_TASK_GLOBAL_CONCURRENCY = 80;
     h.fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY = 20;
     h.files.clear();
@@ -255,6 +257,7 @@ describe('file task admission', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     if (originalToken === undefined) delete process.env.QSTASH_TOKEN;
     else process.env.QSTASH_TOKEN = originalToken;
   });
@@ -330,6 +333,19 @@ describe('file task admission', () => {
     expect(parseFileToChunks).toHaveBeenCalledTimes(30);
     expect(h.publish).not.toHaveBeenCalled();
     expect(h.slots.global.size).toBe(0);
+  });
+
+  it('starts directly when the queue route could not verify a delivery', async () => {
+    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', '');
+    const { parseFileToChunks } = installRoutes();
+    const fileIds = seedFiles(30);
+    const service = new ChunkService({} as any, 'user', 'ws-1');
+
+    await Promise.all(fileIds.map((id) => service.asyncParseFileToChunks(id)));
+    await settleTriggers();
+
+    expect(parseFileToChunks).toHaveBeenCalledTimes(30);
+    expect(h.publish).not.toHaveBeenCalled();
   });
 
   it('sends tasks to the queue while Redis is down instead of fanning out', async () => {

@@ -29,9 +29,14 @@ redis.call('PEXPIREAT', KEYS[2], ARGV[3])
 return { 1, scopeActive + 1, globalActive + 1 }
 `;
 
-/** KEYS = scope slots, global slots; ARGV = holder, expiresAt. Never recreates a lapsed lease. */
+/**
+ * KEYS = scope slots, global slots; ARGV = holder, expiresAt, now. A lapsed lease can linger in
+ * its scope set after another scope swept it from the global one, so presence alone is not
+ * enough: renewing it would put back a slot that has already been given away.
+ */
 const RENEW_SCRIPT = `
-if not redis.call('ZSCORE', KEYS[1], ARGV[1]) then return 0 end
+local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+if not score or tonumber(score) <= tonumber(ARGV[3]) then return 0 end
 redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
 redis.call('ZADD', KEYS[2], ARGV[2], ARGV[1])
 redis.call('PEXPIREAT', KEYS[1], ARGV[2])
@@ -113,8 +118,9 @@ export const fileTaskSlots = {
     const redis = await getClient();
     if (!redis) return;
 
+    const now = Date.now();
     await redis
-      .eval(RENEW_SCRIPT, 2, ...slotKeys(scope), holderId, String(Date.now() + ttlMs))
+      .eval(RENEW_SCRIPT, 2, ...slotKeys(scope), holderId, String(now + ttlMs), String(now))
       .catch(() => undefined);
   },
 };
