@@ -31,6 +31,16 @@ describe('shareRefusalOf', () => {
     ).toEqual({ errorType: ChatErrorType.ShareSpendLimitExceeded, owner });
   });
 
+  // A visitor refused a local Agent was told to ask its creator, with no way to reach them.
+  it('offers the owner as a contact when their machine needs their permission', () => {
+    expect(
+      shareRefusalOf(
+        detail({ errorType: ChatErrorType.ShareHeterogeneousAgentUnsupported, status: 'failed' }),
+        'msg',
+      ),
+    ).toEqual({ errorType: ChatErrorType.ShareHeterogeneousAgentUnsupported, owner });
+  });
+
   it('only explains a message that is too long, which the visitor fixes themselves', () => {
     expect(
       shareRefusalOf(
