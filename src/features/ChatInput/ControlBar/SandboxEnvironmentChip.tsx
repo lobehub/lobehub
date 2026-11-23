@@ -23,7 +23,14 @@ import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacem
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
 interface SandboxEnvironmentChipProps {
-  onChange: (selection: SandboxSelection) => Promise<void>;
+  /**
+   * Saves a pick. `environment` is the environment picked, for what the list
+   * the parent holds may not know yet — one just created.
+   */
+  onChange: (
+    selection: SandboxSelection,
+    options?: { environment?: SandboxRepositoryOption },
+  ) => Promise<void>;
   /** Whether the conversation keeps its files on the drive (and the plan has one). */
   onDrive: boolean;
   /**
@@ -78,7 +85,7 @@ const SandboxEnvironmentChip = memo<SandboxEnvironmentChipProps>(
 
     const pick = async (environment?: SandboxRepositoryOption) => {
       try {
-        await onChange(selectionWithEnvironment(base, environment));
+        await onChange(selectionWithEnvironment(base, environment), { environment });
       } catch {
         // The topic kept its place; said rather than left looking changed.
         toast.error(t('sandboxEnvironment.saveFailed'));

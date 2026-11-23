@@ -171,12 +171,26 @@ vi.mock('../SandboxEnvironmentChip', () => ({
     projectId,
     value,
   }: {
-    onChange: (s: SandboxSelection) => Promise<void>;
+    onChange: (
+      s: SandboxSelection,
+      options?: { environment?: { id: string; name: string; visibility?: string } },
+    ) => Promise<void>;
     projectId?: string;
     value: SandboxSelection;
   }) => (
     <div>
       <span data-testid="project">{projectId ?? ''}</span>
+      {/* A published environment just created: not in the list this render holds. */}
+      <button
+        onClick={() =>
+          onChange(
+            { ...value, environmentId: 'env_new', workingDirectory: 'new-env' },
+            { environment: { id: 'env_new', name: 'New', visibility: 'public' } },
+          ).catch(() => {})
+        }
+      >
+        create-public-env
+      </button>
       <button
         onClick={() =>
           onChange(
@@ -375,6 +389,22 @@ describe('SandboxStorageSection — T-14158', () => {
     expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
       'topic-1',
       expect.objectContaining({ sandboxEnvironmentId: undefined, sandboxWorkingDirectory: 'team' }),
+    );
+  });
+
+  it('keeps a published environment just created on a public-drive folder', async () => {
+    state.workspaceId = 'ws-1';
+    render(<SandboxStorageSection agentId={AGENT} />);
+    send('topic-1');
+    await act(async () => fireEvent.click(screen.getByText('pick-public-folder')));
+
+    await act(async () => fireEvent.click(screen.getByText('create-public-env')));
+    expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        sandboxEnvironmentId: 'env_new',
+        sandboxWorkingDirectory: 'new-env',
+      }),
     );
   });
 

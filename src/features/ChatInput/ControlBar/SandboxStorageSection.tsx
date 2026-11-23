@@ -21,6 +21,7 @@ import {
   projectStartEnvironmentId,
   selectionWithDrive,
 } from './sandboxEnvironmentOptions';
+import type { SandboxRepositoryOption } from './SandboxRepositoryMenu';
 import {
   setPrefersTemporarySandbox,
   usePrefersTemporarySandbox,
@@ -108,11 +109,18 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   // folder there: the server would not apply it, and the chip would name a
   // setup that never runs.
   const pick = useCallback(
-    async (picked: SandboxSelection) => {
+    async (
+      picked: SandboxSelection,
+      { environment: given }: { environment?: SandboxRepositoryOption } = {},
+    ) => {
       // An environment whose visibility is not known — the list still loading
       // or failed — is treated as private: it is only known to be published
-      // once the list says so.
-      const environment = environments.find((item) => item.id === picked.environmentId);
+      // once the list, or the pick itself (one just created, which this
+      // render's list cannot hold yet), says so.
+      const environment =
+        given?.id === picked.environmentId
+          ? given
+          : environments.find((item) => item.id === picked.environmentId);
       const next =
         picked.environmentId &&
         environment?.visibility !== 'public' &&
