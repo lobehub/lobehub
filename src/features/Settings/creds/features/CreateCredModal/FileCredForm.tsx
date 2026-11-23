@@ -116,7 +116,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
             </span>
             <Button
               size="small"
-              type="text"
+              type="fill"
               onClick={() => {
                 setFileHashId(null);
                 setFileName('');
@@ -153,7 +153,9 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
       </Form.Field>
 
       <CredFormFooter>
-        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+        <Button type="fill" onClick={onCancel}>
+          {t('creds.form.cancel')}
+        </Button>
         <Button
           disabled={!fileHashId || disabled}
           htmlType="submit"

@@ -103,7 +103,9 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onCancel, o
       </Form.Field>
 
       <CredFormFooter>
-        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+        <Button type="fill" onClick={onCancel}>
+          {t('creds.form.cancel')}
+        </Button>
         <Button
           disabled={disabled}
           htmlType="submit"

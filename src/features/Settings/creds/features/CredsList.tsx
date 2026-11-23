@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Empty, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Empty, Flexbox, Tag } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { Share2 } from 'lucide-react';
@@ -33,8 +33,9 @@ interface CredsListProps {
 }
 
 /**
- * The caller's personal credentials, on the personal settings page. Each row
- * can be shared into the caller's workspaces (see {@link openShareCredModal});
+ * The caller's personal credentials, on the personal settings page. A row
+ * opens its detail, which edits, removes or shares it into the caller's
+ * workspaces (see {@link openShareCredModal});
  * the workspace page lists workspace credentials through `WorkspaceCredsList`.
  */
 const CredsList: FC<CredsListProps> = ({ filter = {} }) => {
@@ -64,22 +65,26 @@ const CredsList: FC<CredsListProps> = ({ filter = {} }) => {
     createEditCredModal({ cred, credsApi, onSuccess: () => refetch() });
   };
 
-  const handleView = (cred: UserCredSummary) => {
-    createViewCredModal({ cred, credsApi });
-  };
-
   // Self-hosted deployments have no workspaces to share into.
-  const shareItems = (cred: UserCredSummary) =>
-    workspaces.length > 0
-      ? [
-          {
-            icon: <Icon icon={Share2} />,
-            key: 'share',
-            label: t('creds.share.menu'),
-            onClick: () => openShareCredModal(cred),
-          },
-        ]
-      : [];
+  const handleOpen = (cred: UserCredSummary) =>
+    createViewCredModal({
+      actions:
+        workspaces.length > 0
+          ? [
+              {
+                icon: Share2,
+                key: 'share',
+                label: t('creds.share.menu'),
+                onClick: () => openShareCredModal(cred),
+              },
+            ]
+          : [],
+      canReadValues: canManageCredentials,
+      cred,
+      credsApi,
+      onDelete: canManageCredentials ? (id) => deleteMutation.mutateAsync(id) : undefined,
+      onEdit: canManageCredentials ? handleEdit : undefined,
+    });
 
   return (
     <MarketSignInGate>
@@ -108,18 +113,14 @@ const CredsList: FC<CredsListProps> = ({ filter = {} }) => {
             )}
             {visibleCredentials.map((cred) => (
               <CredItem
-                canManage={canManageCredentials}
                 cred={cred}
-                extraMenuItems={shareItems(cred)}
                 key={cred.id}
                 tags={
                   !!cred.shares?.length && (
                     <Tag>{t('creds.share.badge', { count: cred.shares.length })}</Tag>
                   )
                 }
-                onDelete={(id) => deleteMutation.mutate(id)}
-                onEdit={canManageCredentials ? handleEdit : undefined}
-                onView={handleView}
+                onClick={handleOpen}
               />
             ))}
           </Flexbox>

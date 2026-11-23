@@ -207,7 +207,11 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
                   {scopeLabel(sharedVisibility.get(workspace.id)!)}
                 </Tag>
               </Flexbox>
-              <Button size={'small'} onClick={() => handleRevoke(workspace.id, workspace.name)}>
+              <Button
+                size={'small'}
+                type={'fill'}
+                onClick={() => handleRevoke(workspace.id, workspace.name)}
+              >
                 {tSetting('creds.share.revoke')}
               </Button>
             </Flexbox>

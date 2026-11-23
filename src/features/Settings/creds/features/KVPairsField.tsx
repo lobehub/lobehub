@@ -77,7 +77,7 @@ const KVPairsField: FC<KVPairsFieldProps> = ({ disabled, hint, type }) => {
                 disabled={disabled}
                 icon={Plus}
                 size={'small'}
-                type={'text'}
+                type={'fill'}
                 onClick={() => add({ key: '', value: '' })}
               >
                 {type === 'kv-env' ? t('creds.form.addEnvVar') : t('creds.form.addHeader')}
