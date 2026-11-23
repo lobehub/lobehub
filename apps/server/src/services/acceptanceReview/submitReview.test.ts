@@ -139,6 +139,45 @@ describe('submitReviewRound', () => {
     expect(task.instruction).not.toContain('rectDocument');
   });
 
+  it('stores the submitted overall feedback in the Task description', async () => {
+    const feedback = 'Spacing feels tight overall\nGive the cards room to breathe';
+    const { taskId } = await submitReviewRound(serverDB, { userId, workspaceId: null }, reviewId, {
+      feedback,
+    });
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, taskId));
+    expect(task.description).toBe(feedback);
+  });
+
+  it('keeps long feedback in the Task instruction when the description reaches its limit', async () => {
+    const prefix = `${'评'.repeat(253)}🌱`;
+    const feedback = `${prefix}还有更多反馈`;
+    const { taskId } = await submitReviewRound(serverDB, { userId, workspaceId: null }, reviewId, {
+      feedback,
+    });
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, taskId));
+    expect(task.description).toBe(`${prefix}…`);
+    expect(task.instruction).toContain(feedback);
+  });
+
+  it.each([undefined, ''])(
+    'leaves the Task description empty for feedback %j',
+    async (feedback) => {
+      const { taskId } = await submitReviewRound(
+        serverDB,
+        { userId, workspaceId: null },
+        reviewId,
+        {
+          feedback,
+        },
+      );
+
+      const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, taskId));
+      expect(task.description).toBeNull();
+    },
+  );
+
   it('hands the Agent every mark with its page and geometry when the run starts', async () => {
     await submit();
 

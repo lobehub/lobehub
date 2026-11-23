@@ -24,6 +24,16 @@ export interface ReviewActor {
 
 const REVIEW_REQUIREMENT =
   'Fix every review mark and provide a verifiable preview with evidence for each mark.';
+const TASK_DESCRIPTION_LIMIT = 255;
+
+const buildRoundDescription = (feedback?: string) => {
+  if (!feedback) return undefined;
+
+  const characters = Array.from(feedback);
+  return characters.length > TASK_DESCRIPTION_LIMIT
+    ? `${characters.slice(0, TASK_DESCRIPTION_LIMIT - 1).join('')}…`
+    : feedback;
+};
 
 export const submitReviewRound = async (
   db: LobeChatDatabase,
@@ -77,6 +87,7 @@ export const submitReviewRound = async (
             acceptanceReview: { reviewId },
             verify: { enabled: true, requirement: REVIEW_REQUIREMENT },
           },
+          description: buildRoundDescription(input.feedback),
           instruction: buildRoundInstruction(reviewer, round, marks, input.feedback),
           name: buildRoundName(reviewer, round, marks),
           projectId: project.id,
