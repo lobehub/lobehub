@@ -32,7 +32,7 @@ interface PlanModeSwitchProps {
 }
 
 /**
- * The composer's Codex Plan switch (Better Coding Experience lab). Not a
+ * The composer's Codex Plan switch. Not a
  * permission mode: Codex keeps allowing every action; in plan it proposes a
  * plan instead of carrying the request out.
  */

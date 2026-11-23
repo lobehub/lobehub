@@ -10,8 +10,6 @@
   "features.artifactDeployment.title": "Artifact 部署",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
-  "features.betterCodingExperience.desc": "一组实验功能，改进智能体与你一起写代码、运行和审查代码的体验。",
-  "features.betterCodingExperience.title": "更好的编码体验",
   "features.claudeCodeSdk.desc": "通过 Claude Agent SDK 运行 Claude Code 会话，替代 CLI 进程方式，提供更丰富的流式输出与会话控制。",
   "features.claudeCodeSdk.title": "Claude Code SDK 运行时",
   "features.codexAppServer.desc": "通过桌面端或已连接设备的 App Server 运行 Codex，支持交互提问与原生回合控制。对后续运行生效。",

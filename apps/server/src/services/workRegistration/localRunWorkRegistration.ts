@@ -54,7 +54,7 @@ export const registerShellWorksForLocalRun = async (params: {
   anchorMessageId: string;
   messageIds: string[];
   messageModel: MessageModel;
-  /** Better Coding Experience pull request linking; see `registerShellWorks`. */
+  /** Pull request linking; see `registerShellWorks`. */
   pullRequestLinking?: ShellPullRequestLinking;
   topicId: string;
   workModel: WorkModel;

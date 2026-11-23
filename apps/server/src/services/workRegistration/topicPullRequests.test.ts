@@ -2,16 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { linkPushedPullRequests, listTopicPullRequestsWithStatus } from './topicPullRequests';
 
-const { getUserPreference, listByIdentities, listOpenByHeadRefs } = vi.hoisted(() => ({
-  getUserPreference: vi.fn(),
+const { listByIdentities, listOpenByHeadRefs } = vi.hoisted(() => ({
   listByIdentities: vi.fn(),
   listOpenByHeadRefs: vi.fn(),
-}));
-
-vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn(function () {
-    return { getUserPreference };
-  }),
 }));
 
 vi.mock('@/database/models/scm', () => ({
@@ -246,16 +239,7 @@ describe('linkPushedPullRequests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    getUserPreference.mockResolvedValue({ lab: { enableBetterCodingExperience: true } });
     listOpenByHeadRefs.mockResolvedValue([]);
-  });
-
-  it('does nothing while the lab is off', async () => {
-    getUserPreference.mockResolvedValue({ lab: {} });
-    const models = createModels();
-
-    expect(await link(models)).toEqual({ status: 'skipped' });
-    expect(models.messageModel.findToolMessageIdByToolCallId).not.toHaveBeenCalled();
   });
 
   it('prefers the GitHub App rows for the pushed branch', async () => {

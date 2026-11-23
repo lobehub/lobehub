@@ -17,10 +17,7 @@ import { parseGitPushResult, type WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 
-import {
-  createShellPullRequestLinking,
-  isBetterCodingExperienceEnabled,
-} from './pullRequestLinking';
+import { createShellPullRequestLinking } from './pullRequestLinking';
 import { readShellCommandRecord } from './shellWorkRegistration';
 import { parsePullRequestUrl } from './topicPullRequestLinks';
 
@@ -171,8 +168,7 @@ export type LinkPushedPullRequestsResult =
 const PULL_URL_RE = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)\/?$/i;
 
 /**
- * Link the pull requests a `git push` updated, right after the push (Better
- * Coding Experience). The server re-reads the push from the persisted tool
+ * Link the pull requests a `git push` updated, right after the push. The server re-reads the push from the persisted tool
  * message — the client only names which call it was — and takes the
  * repository and branches from git's own report. Which pull request heads the
  * branch comes from, in order:
@@ -193,10 +189,6 @@ export const linkPushedPullRequests = async (params: {
   workModel: WorkModel;
   workspaceId?: string | null;
 }): Promise<LinkPushedPullRequestsResult> => {
-  if (!(await isBetterCodingExperienceEnabled(params.db, params.userId))) {
-    return { status: 'skipped' };
-  }
-
   const messageId = await params.messageModel.findToolMessageIdByToolCallId(params.toolCallId);
   if (!messageId) return { status: 'pending' };
   const [record] = await params.messageModel.listMessagePluginsByIds({

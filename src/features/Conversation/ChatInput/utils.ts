@@ -1,7 +1,7 @@
 import { getSlicedMessages } from '@lobechat/context-engine';
 import type {
   ConversationContext,
-  FollowUpMode,
+  FollowUpBehavior,
   OpenAIChatMessage,
   UIChatMessage,
 } from '@lobechat/types';
@@ -89,12 +89,12 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
  */
 export const getQueuedHintKey = ({
   count,
-  mode = 'legacy',
+  mode,
   waitsForRunEnd,
 }: {
   count: number;
-  /** The Follow-up behavior in effect (`legacy` while its lab is off). */
-  mode?: FollowUpMode;
+  /** The user's Follow-up behavior. */
+  mode: FollowUpBehavior;
   waitsForRunEnd: boolean;
 }) => {
   const merged = count > 1;
@@ -103,16 +103,9 @@ export const getQueuedHintKey = ({
   if (mode === 'queue')
     return merged ? 'inputQueue.queuedOneByOneHint' : 'inputQueue.queuedRunEndHint';
   // Steer: joins the running turn, unless this run cannot take one mid-run.
-  if (mode === 'steer') {
-    if (waitsForRunEnd)
-      return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
-    return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
-  }
-
   if (waitsForRunEnd)
-    return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';
-
-  return merged ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint';
+    return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
+  return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
 };
 
 const isSupportedChatInputMessage = (

@@ -74,7 +74,7 @@ export interface WorkingDirGitState {
   activeWorktree?: string;
   /**
    * True when {@link activeWorktree} was created by the app on the topic's
-   * first send (Better Coding Experience "New worktree"), not picked by the
+   * first send ("New worktree"), not picked by the
    * user. Such a worktree belongs to this one conversation — the record a
    * later cleanup keys on. Ownership only: where a CLI session starts is
    * {@link WorkingDirConfig.sessionPath}, which outlives a later move.
@@ -98,7 +98,7 @@ export interface WorkingDirGitState {
   isWorktree?: boolean;
   /**
    * A branch this conversation created — the worktree branch made on its first
-   * send (Better Coding Experience), or one its agent created
+   * send, or one its agent created
    * (`git switch -c`, `git worktree add -b`). Only while the topic is on it does
    * the run end ask GitHub which PR the branch has: another branch may carry
    * someone else's PR.

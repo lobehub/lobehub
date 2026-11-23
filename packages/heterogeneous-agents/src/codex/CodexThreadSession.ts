@@ -97,7 +97,7 @@ interface ThreadNameSetParams {
 export interface CodexThreadTurnOptions {
   askUserBridge?: AskUserBridge;
   /**
-   * Codex Plan switch (Better Coding Experience): the collaboration mode every
+   * Codex Plan switch: the collaboration mode every
    * native turn of this run sends. Omitted sends none, exactly as before. Codex
    * keeps the mode on the thread, so it stays until a turn sends another.
    */

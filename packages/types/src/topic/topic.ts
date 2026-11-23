@@ -257,7 +257,7 @@ export interface ChatTopicMetadata {
    */
   heteroEffort?: HeterogeneousReasoningEffort;
   /**
-   * Claude Code permission mode of this topic (Better Coding Experience lab):
+   * Claude Code permission mode of this topic:
    * what its next run starts in, and the mode Claude Code last reported, so a
    * switch Claude Code made itself (leaving plan mode) sticks.
    */
@@ -271,7 +271,7 @@ export interface ChatTopicMetadata {
    */
   heteroPermissionModeReportPending?: string | null;
   /**
-   * Codex Plan switch of this topic (Better Coding Experience lab). Absent
+   * Codex Plan switch of this topic. Absent
    * until the user first turns it on: such a topic sends no collaboration
    * mode at all. Once set, every native turn sends `plan` (true) or
    * `default` (false) explicitly. Codex keeps the mode on the thread, so only
@@ -379,7 +379,7 @@ export interface ChatTopicMetadata {
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
-   * Better Coding Experience: PR links kept on the topic (found on its own
+   * PR links kept on the topic (found on its own
    * branch, or linked by hand) and the PRs removed from its lists. Server-owned —
    * written only by the `work.*TopicPullRequest` endpoints, never by a client
    * metadata patch.

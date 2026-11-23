@@ -1135,9 +1135,7 @@ export default {
   'inputQueue.edit': 'Edit',
   'inputQueue.enqueueRejected': 'Queue is full. Try again after the current run finishes.',
   'inputQueue.queuedHint': 'Sends when the current step finishes',
-  'inputQueue.queuedMergeHint': 'Merged and sent when the current step finishes',
   'inputQueue.queuedRunEndHint': 'Sends when the current run finishes',
-  'inputQueue.queuedRunEndMergeHint': 'Merged and sent when the current run finishes',
   'inputQueue.queuedOneByOneHint': 'Sent one at a time after the current run finishes',
   'inputQueue.steerDeliveryUnknownHint':
     'Couldn’t confirm the agent got this. Send it again or delete it',

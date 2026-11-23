@@ -6,7 +6,6 @@ const chatMocks = vi.hoisted(() => ({
   topics: {} as Record<string, { metadata?: Record<string, any> }>,
   updateTopicMetadata: vi.fn(),
 }));
-const labMocks = vi.hoisted(() => ({ betterCoding: true }));
 const linkMocks = vi.hoisted(() => ({ linkPushedPullRequests: vi.fn(async () => []) }));
 const gsMocks = vi.hoisted(() => ({ revalidateGitStatus: vi.fn() }));
 
@@ -20,10 +19,6 @@ vi.mock('@/store/chat/selectors', () => ({
 vi.mock('@/services/git', () => ({ gitService: { listGitWorktrees: vi.fn() } }));
 vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
-}));
-vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableBetterCodingExperience: () => labMocks.betterCoding },
 }));
 vi.mock('../pushedPullRequests', () => linkMocks);
 
@@ -39,10 +34,9 @@ const PUSH = {
   ].join('\n'),
 };
 
-describe('recordGitCommandEffects — Better Coding Experience', () => {
+describe('recordGitCommandEffects — pushes and own branches', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    labMocks.betterCoding = true;
     chatMocks.topics = { t1: topic() };
   });
 
@@ -103,27 +97,10 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
     );
   });
 
-  it('does not link without the call id, or with the lab off', async () => {
+  it('does not link without the call id', async () => {
     await recordGitCommandEffects({ ...PUSH, topicId: 't1' });
-    labMocks.betterCoding = false;
-    await recordGitCommandEffects({ ...PUSH, toolCallId: 'call-push', topicId: 't1' });
 
     expect(linkMocks.linkPushedPullRequests).not.toHaveBeenCalled();
-  });
-
-  it('keeps binding gh pr create while the lab is off', async () => {
-    labMocks.betterCoding = false;
-
-    await recordGitCommandEffects({
-      command: 'gh pr create --title "Fix"',
-      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
-      topicId: 't1',
-    });
-
-    expect(
-      chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git.github.pullRequest
-        .number,
-    ).toBe(456);
   });
 
   it('links a push whose result repeats the ref table under Stdout and Stderr', async () => {

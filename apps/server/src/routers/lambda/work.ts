@@ -23,7 +23,7 @@ import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/ser
 import { deleteCanvas } from '@/server/services/canvas/delete';
 import {
   AgentWorkRunError,
-  isBetterCodingExperienceEnabled,
+  createShellPullRequestLinking,
   linkPushedPullRequests,
   linkTopicPullRequest,
   listTopicPullRequestsWithStatus,
@@ -31,7 +31,6 @@ import {
   registerShellWorksForLocalRun,
   resolveAgentWorkFile,
   resolveAgentWorkRun,
-  resolveShellPullRequestLinking,
   setTopicPullRequestDismissed,
 } from '@/server/services/workRegistration';
 
@@ -461,7 +460,7 @@ export const workRouter = router({
         anchorMessageId: input.anchorMessageId,
         messageIds: input.messageIds,
         messageModel: ctx.messageModel,
-        pullRequestLinking: await resolveShellPullRequestLinking({
+        pullRequestLinking: createShellPullRequestLinking({
           db: ctx.serverDB,
           topicId: input.topicId,
           userId: ctx.userId,
@@ -473,7 +472,7 @@ export const workRouter = router({
       }),
     ),
 
-  // Better Coding Experience: the GitHub pull requests a topic's Work rows
+  // The GitHub pull requests a topic's Work rows
   // link, with the GitHub App's state where an installation tracks the repo.
   listTopicPullRequests: workProcedure
     .input(z.object({ topicId: z.string().min(1) }))
@@ -540,7 +539,7 @@ export const workRouter = router({
     };
   }),
 
-  // Better Coding Experience: link the pull requests a `git push` tool call
+  // Link the pull requests a `git push` tool call
   // updated, right after it ran. The push itself is re-read from the persisted
   // tool message; see `linkPushedPullRequests` for what the device may add.
   linkPushedPullRequests: skillWorkProcedureWrite
@@ -576,7 +575,7 @@ export const workRouter = router({
       }),
     ),
 
-  // Better Coding Experience: keep a PR on the topic itself — found on the
+  // Keep a PR on the topic itself — found on the
   // topic's own branch at run end (`branch`), or pasted by the person
   // (`manual`). A topic link only drives the topic's PR lists: unlike a Work
   // row it is never read by the SCM links, so a client-named PR cannot make a
@@ -601,9 +600,6 @@ export const workRouter = router({
       if (!parsed) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a GitHub pull request URL' });
       }
-      if (!(await isBetterCodingExperienceEnabled(ctx.serverDB, ctx.userId))) {
-        return { identifier: parsed.identifier, linked: false };
-      }
       const linked = await linkTopicPullRequest(ctx.topicModel, input.topicId, {
         ...(input.headRefName ? { headRefName: input.headRefName } : {}),
         identifier: parsed.identifier,
@@ -616,7 +612,7 @@ export const workRouter = router({
       return { identifier: parsed.identifier, linked };
     }),
 
-  // Better Coding Experience: remove a PR from the topic's lists (or bring it
+  // Remove a PR from the topic's lists (or bring it
   // back). Its Work rows stay; only the topic's view of them changes.
   setTopicPullRequestDismissed: workProcedure
     .use(withScopedPermission('topic:update'))

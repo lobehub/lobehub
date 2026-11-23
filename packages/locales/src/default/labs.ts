@@ -16,9 +16,6 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
-  'features.betterCodingExperience.desc':
-    'A set of experiments that improve how agents write, run and review code with you.',
-  'features.betterCodingExperience.title': 'Better Coding Experience',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',

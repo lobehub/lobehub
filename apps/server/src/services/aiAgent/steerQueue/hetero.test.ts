@@ -127,20 +127,8 @@ describe('canSteerHeteroRun', () => {
 });
 
 describe('takeHeteroSteer', () => {
-  it('hands out the first follow-up and returns the rest to the queue', async () => {
-    mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2)]);
-
-    await expect(take()).resolves.toEqual({ content: 'prompt a', messageId: 'msg-a' });
-
-    // `b` goes back; `a` stays in the leased batch until Claude Code picks it up.
-    const [, drained, returned] = mocks.settle.mock.calls[0];
-    expect(returned).toEqual(['b']);
-    expect(mocks.deliveries.get('msg-a')).toContain(`"drainId":"${drained}"`);
-  });
-
-  describe('Steer mode', () => {
-    const steer = () =>
-      takeHeteroSteer(ctx, { agentId: 'agt-1', mode: 'steer', operationId: 'op-1', scope });
+  describe('merging', () => {
+    const steer = take;
 
     it('merges every leading follow-up that can join into one message', async () => {
       mocks.drain.mockResolvedValue([
@@ -222,7 +210,6 @@ describe('takeHeteroSteer', () => {
         acceptsImageAttachments: true,
         acceptsImages: true,
         agentId: 'agt-1',
-        mode: 'steer',
         operationId: 'op-1',
         scope,
       });
@@ -284,7 +271,7 @@ describe('takeHeteroSteer', () => {
     const image = { id: 'file_1', url: 'https://bucket.example.com/files/1.png?X-Amz-Signature=s' };
 
     it('hands them over with the text when the session takes images', async () => {
-      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted }), followUp('b', 2)]);
+      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted })]);
       mocks.resolveInlineImages.mockResolvedValue([image]);
 
       await expect(
@@ -292,7 +279,6 @@ describe('takeHeteroSteer', () => {
       ).resolves.toEqual({ content: pasted, imageList: [image], messageId: 'msg-a' });
 
       expect(mocks.resolveInlineImages).toHaveBeenCalledWith(ctx, pasted);
-      expect(mocks.settle.mock.calls[0][2]).toEqual(['b']);
       expect(mocks.deliveries.has('msg-a')).toBe(true);
     });
 
