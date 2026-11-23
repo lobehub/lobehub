@@ -1,6 +1,6 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MarketAgentAction from './MarketAgentAction';
@@ -20,16 +20,23 @@ const FeaturedAgentCard = memo<{ agent: MarketAgentSummary }>(({ agent }) => {
   const { t } = useTranslation('discover');
   const openAgent = useOpenAgent('new');
   const open = () => openAgent(agent.id);
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <MarketCard gap={8} onClick={open}>
+    <MarketCard gap={8} onClick={open} onHoverChange={setHovered}>
       <Flexbox
         horizontal
         align={'flex-start'}
         justify={'space-between'}
         {...stylex.props(styles.head)}
       >
-        <MarketAgentAvatar avatar={agent.avatar} size={48} title={agent.title} />
+        <MarketAgentAvatar
+          avatar={agent.avatar}
+          followPointer={hovered}
+          identifier={agent.id}
+          size={48}
+          title={agent.title}
+        />
         <span {...stylex.props(styles.action)} onClick={(event) => event.stopPropagation()}>
           <MarketAgentAction id={agent.id} title={agent.title} onAdded={open} />
         </span>
