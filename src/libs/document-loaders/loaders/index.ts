@@ -36,8 +36,8 @@ export class ChunkingLoader {
 
       switch (type) {
         case 'code': {
-          const ext = filename.split('.').pop();
-          return await CodeLoader(text(), ext!);
+          const extension = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+          return await CodeLoader(text(), extension);
         }
 
         case 'ppt': {
@@ -57,6 +57,11 @@ export class ChunkingLoader {
         }
 
         case 'doc': {
+          const { extractDocText } = await import('@lobechat/file-loaders/src/loaders/doc');
+          return await TextLoader(await extractDocText(Buffer.from(content)));
+        }
+
+        case 'docx': {
           return await DocxLoader(blob());
         }
 

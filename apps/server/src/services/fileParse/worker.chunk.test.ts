@@ -57,6 +57,16 @@ const buildDenseWorkbook = async (rows: number) => {
 };
 
 describe('chunking in the parse worker', () => {
+  it('extracts a legacy binary Word document before splitting it', async () => {
+    const content = await readFile(
+      here('../../../../../packages/file-loaders/src/loaders/doc/fixtures/test.doc'),
+    );
+
+    const chunks = await chunkContentInWorker('report.DOC', content);
+
+    expect(chunks.map((chunk) => chunk.pageContent).join('\n')).toContain('简单报告');
+  });
+
   it('keeps chunk content, row metadata and cell semantics identical to the in-process loader', async () => {
     const workbook = new Workbook();
     const pricing = workbook.addWorksheet('Pricing');
