@@ -102,10 +102,12 @@ describe('resolveUserEndpointSsrfPolicy', () => {
     ]);
   });
 
-  it('denies link-local even when self-hosted deployments allow private addresses', () => {
+  it('denies link-local and NAT64 even when self-hosted deployments allow private addresses', () => {
     expect(resolveUserEndpointSsrfPolicy().denyIPAddressList).toEqual([
       '169.254.0.0/16',
       'fe80::/10',
+      '64:ff9b::/96',
+      '64:ff9b:1::/48',
     ]);
   });
 });

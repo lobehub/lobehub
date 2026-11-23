@@ -54,10 +54,12 @@ export const resolveUserEndpointSsrfPolicy = (): SSRFOptions => ({
   /**
    * Link-local stays denied even when a self-hosted deployment allows private
    * endpoints: an open-registration instance must not hand every user a path
-   * to the cloud metadata service (169.254.169.254). `SSRF_ALLOW_IP_ADDRESS_LIST`
-   * still wins for an operator who genuinely needs a link-local endpoint.
+   * to the cloud metadata service (169.254.169.254). The NAT64 prefixes cover
+   * the same destinations in translated form on NAT64 networks.
+   * `SSRF_ALLOW_IP_ADDRESS_LIST` still wins for an operator who genuinely
+   * needs such an endpoint.
    */
-  denyIPAddressList: ['169.254.0.0/16', 'fe80::/10'],
+  denyIPAddressList: ['169.254.0.0/16', 'fe80::/10', '64:ff9b::/96', '64:ff9b:1::/48'],
 });
 
 interface GuardScope {
@@ -168,7 +170,9 @@ const wrapNodeRequest = (
     }
 
     if (scope.blocked) {
-      const request = new http.ClientRequest({});
+      // Return a pre-failed request — a bare `new ClientRequest({})` would
+      // still open a socket to localhost:80.
+      const request = new http.ClientRequest({ createConnection: () => new net.Socket() });
       queueMicrotask(() => request.destroy(scope.blocked));
       return request;
     }

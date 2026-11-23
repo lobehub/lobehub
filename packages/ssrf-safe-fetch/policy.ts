@@ -80,18 +80,62 @@ export const isSSRFBlockedError = (error: unknown): boolean => !!findSSRFBlocked
  */
 export const resolveAgentOptions = (ssrfOptions?: SSRFOptions): RequestFilteringAgentOptions => {
   const allowPrivate = ssrfOptions?.allowPrivateIPAddress ?? envAllowPrivate();
-  return {
+  const options: RequestFilteringAgentOptions = {
     allowIPAddressList: ssrfOptions?.allowIPAddressList ?? envAllowIPAddressList(),
     allowMetaIPAddress: allowPrivate,
     allowPrivateIPAddress: allowPrivate,
     denyIPAddressList: ssrfOptions?.denyIPAddressList ?? [],
+    // The agent's built-in list matching never unwraps an IPv4-mapped IPv6
+    // target, so `::ffff:169.254.169.254` would sidestep the deny list. The
+    // filter receives the normalized (unwrapped) address and re-runs the same
+    // policy on it.
+    filter: (address, { host, family }) => {
+      try {
+        assertAddressAllowed(address, host ?? address, family, options);
+        return true;
+      } catch {
+        return false;
+      }
+    },
   };
+  return options;
 };
 
 export const envAllowPrivate = () => process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1';
 
 export const envAllowIPAddressList = () =>
   process.env.SSRF_ALLOW_IP_ADDRESS_LIST?.split(',').filter(Boolean) ?? [];
+
+// Mirrors request-filtering-agent's toParsableAddress: the OS reads "::8.8.8.8"
+// as the IPv4-compatible address ::808:808 while ipaddr.js reads it as the
+// IPv4-mapped ::ffff:808:808 — rewrite the notation so the checked address is
+// the address actually connected to.
+const IPV4_COMPATIBLE_DOTTED_NOTATION = /^::(?=\d+\.\d+\.\d+\.\d+(?:%.*)?$)/;
+const toParsableAddress = (address: string) =>
+  address.replace(IPV4_COMPATIBLE_DOTTED_NOTATION, '0:0:0:0:0:0:');
+
+// Mirrors request-filtering-agent's getRange: IANA allocates only 2000::/3 as
+// IPv6 global unicast, so an IPv6 address ipaddr.js reports as "unicast"
+// outside it (e.g. deprecated ranges, NAT64 64:ff9b::/96) is not public.
+const IPV6_GLOBAL_UNICAST_RANGE = ipaddr.parseCIDR('2000::/3');
+const getRange = (parsed: ipaddr.IPv4 | ipaddr.IPv6) => {
+  const range = parsed.range();
+  if (
+    range === 'unicast' &&
+    parsed.kind() === 'ipv6' &&
+    // eslint-disable-next-line unicorn/prefer-regexp-test -- ipaddr.js API, not String.prototype.match
+    !parsed.match(IPV6_GLOBAL_UNICAST_RANGE)
+  ) {
+    return 'reserved';
+  }
+  return range;
+};
+
+/** `parsed` when it is an IPv4-mapped IPv6 address, unwrapped to its IPv4 form. */
+const unwrappedIPv4 = (parsed: ipaddr.IPv4 | ipaddr.IPv6) =>
+  parsed instanceof ipaddr.IPv6 && parsed.isIPv4MappedAddress()
+    ? parsed.toIPv4Address()
+    : undefined;
 
 /** Whether `address` (raw or parsed) matches an IP or CIDR entry of `ipAddressList`. */
 export const matchIPAddressList = (
@@ -101,12 +145,18 @@ export const matchIPAddressList = (
 ) => {
   for (const ipOrCIDR of ipAddressList) {
     if (net.isIP(ipOrCIDR) !== 0) {
-      if (ipOrCIDR === address) return true;
+      // An IPv4-mapped IPv6 literal is the same destination as its IPv4 form;
+      // match both so `::ffff:169.254.169.254` cannot sidestep the list.
+      if (ipOrCIDR === address || unwrappedIPv4(parsed)?.toString() === ipOrCIDR) return true;
       continue;
     }
     try {
-      // eslint-disable-next-line unicorn/prefer-regexp-test -- ipaddr.js API, not String.prototype.match
-      if (parsed.match(ipaddr.parseCIDR(ipOrCIDR))) return true;
+      const cidr = ipaddr.parseCIDR(ipOrCIDR);
+      // `parsed.match` throws on a family mismatch, so pick the comparison
+      // target first: an IPv4-mapped IPv6 target matches IPv4 entries in its
+      // unwrapped form.
+      const target = cidr[0].kind() === parsed.kind() ? parsed : unwrappedIPv4(parsed);
+      if (target?.match(cidr)) return true;
     } catch {
       // Invalid CIDR entries are ignored, matching request-filtering-agent behavior.
     }
@@ -140,7 +190,7 @@ export const assertAddressAllowed = (
 ): void => {
   if (net.isIP(address) === 0) return;
 
-  const parsed = ipaddr.parse(address);
+  const parsed = ipaddr.parse(toParsableAddress(address));
 
   if (
     options.allowIPAddressList?.length &&
@@ -149,7 +199,7 @@ export const assertAddressAllowed = (
     return;
   }
 
-  const range = parsed.range();
+  const range = getRange(parsed);
   const where = `DNS lookup ${address}(family:${family}, host:${host}) is not allowed`;
   const fields = { address, hostname: host };
 

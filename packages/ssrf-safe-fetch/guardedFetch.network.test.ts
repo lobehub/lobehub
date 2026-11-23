@@ -159,6 +159,9 @@ describe('validateSsrfAddress', () => {
 
     expect(validateSsrfAddress('169.254.169.254', policy)).toBeInstanceOf(SSRFBlockedError);
     expect(validateSsrfAddress('fe80::1', policy)).toBeInstanceOf(SSRFBlockedError);
+    // IPv4-mapped IPv6 forms of the same link-local destination
+    expect(validateSsrfAddress('::ffff:a9fe:a9fe', policy)).toBeInstanceOf(SSRFBlockedError);
+    expect(validateSsrfAddress('::ffff:169.254.169.254', policy)).toBeInstanceOf(SSRFBlockedError);
     expect(validateSsrfAddress('10.0.0.1', policy)).toBeUndefined();
     expect(
       validateSsrfAddress('169.254.169.254', {
