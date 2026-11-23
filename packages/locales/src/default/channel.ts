@@ -360,4 +360,5 @@ export default {
   'mentionInvite.confirmAgentProject':
     'It is not in the project “{{project}}” yet: it joins the project first, then this channel.',
   'mentionInvite.confirmOk': 'Invite and mention',
+  'openDirect.unavailable': "This Agent's conversation can't be opened right now.",
 };

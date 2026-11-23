@@ -178,7 +178,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
           ...marketplaceAppAndMcpRoutes,
           {
             element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/skill'),
+              // Mobile keeps the one-column catalog; the desktop route has the two-column Skills page.
+              () => import('@/features/Marketplace/Catalog/SkillCatalog'),
               'Mobile > Discover > List > Skill',
             ),
             handle: {
