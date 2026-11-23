@@ -1684,6 +1684,9 @@ export default {
   'connectAgent.create.stepDevice':
     'Step 1 of 3 · Pick the machine your agents run on — it will be scanned automatically.',
   'connectAgent.create.stepAgents': 'Step 2 of 3 · {{device}}',
+  'connectAgent.create.stepAgentsInline': 'Step 1 of 2 · {{device}}',
+  'connectAgent.create.stepConfirmInline': 'Step 2 of 2 · Name it for your agent list',
+  'connectAgent.create.switchDevice': 'Run on',
   'connectAgent.create.stepConfirm': 'Step 3 of 3 · Name it for your agent list',
   'connectAgent.create.thisDevice': 'This device',
   'connectAgent.create.connectedDevices': 'Connected devices',
