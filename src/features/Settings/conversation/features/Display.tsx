@@ -16,13 +16,14 @@ import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/se
 import { FontSizeControl } from './FontSize';
 import LinkIconPreview from './LinkIconPreview';
 
-/** How messages render: text size and link icons. */
+/** How messages render: text size, link icons and the per-reply usage row. */
 const Display = memo(() => {
   const { t } = useTranslation('setting');
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
   const enableMessageLinkIcon = useUserStore(
     (s) => settingsSelectors.currentSettings(s).general.enableMessageLinkIcon ?? true,
   );
+  const showMessageUsage = useUserStore(userGeneralSettingsSelectors.showMessageUsage);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const form = useForm();
@@ -60,6 +61,23 @@ const Display = memo(() => {
         label: (
           <SettingsSearchAnchor id={'conversation-link-icon'}>
             {t('settingChatAppearance.linkIcon.title')}
+          </SettingsSearchAnchor>
+        ),
+        minWidth: undefined,
+      },
+      {
+        children: (
+          <Switch
+            checked={showMessageUsage}
+            onChange={(checked) =>
+              save(() => setSettings({ general: { showMessageUsage: checked } }))
+            }
+          />
+        ),
+        desc: t('settingChatAppearance.showMessageUsage.desc'),
+        label: (
+          <SettingsSearchAnchor id={'conversation-message-usage'}>
+            {t('settingChatAppearance.showMessageUsage.title')}
           </SettingsSearchAnchor>
         ),
         minWidth: undefined,

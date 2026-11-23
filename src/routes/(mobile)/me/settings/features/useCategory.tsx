@@ -32,7 +32,6 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
   Agent = 'agent',
@@ -57,7 +56,8 @@ export const useCategory = (): CategoryGroup[] => {
   const { t } = useTranslation(['setting', 'auth', 'subscription']);
   const { hideDocs, showApiKeyManage, showProvider } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  // Advanced only holds gateway mode on mobile; without it the page is empty.
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(() => {
@@ -122,12 +122,13 @@ export const useCategory = (): CategoryGroup[] => {
 
     const system: CategoryItem[] = [
       makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
-      makeItem({
-        icon: EllipsisIcon,
-        key: SettingsTabs.Advanced,
-        label: t('setting:tab.advanced'),
-      }),
-      (showApiKeyManage || isDevMode) &&
+      enableGatewayMode &&
+        makeItem({
+          icon: EllipsisIcon,
+          key: SettingsTabs.Advanced,
+          label: t('setting:tab.advanced'),
+        }),
+      showApiKeyManage &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
       enableOAuthApps &&
         makeItem({
@@ -155,8 +156,8 @@ export const useCategory = (): CategoryGroup[] => {
     hideDocs,
     showApiKeyManage,
     showProvider,
-    isDevMode,
     enableOAuthApps,
+    enableGatewayMode,
     navigate,
   ]);
 };

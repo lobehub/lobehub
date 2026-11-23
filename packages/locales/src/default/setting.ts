@@ -1703,6 +1703,9 @@ export default {
   'settingChatAppearance.showImageReadPreview.desc':
     'When off, tool calls that read an image fold in with the other calls and stay collapsed until clicked.',
   'settingChatAppearance.showImageReadPreview.title': 'Show Image Reads on Their Own',
+  'settingChatAppearance.showMessageUsage.desc':
+    'Show the model that wrote each reply and the tokens it used, below the reply.',
+  'settingChatAppearance.showMessageUsage.title': 'Show model and token usage',
   'settingChatAppearance.title': 'Chat Appearance',
   'settingChatAppearance.transitionMode.desc': 'Choose how chat messages appear',
   'settingChatAppearance.transitionMode.options.fadeIn': 'Fade In',
@@ -1711,9 +1714,6 @@ export default {
   'settingChatAppearance.transitionMode.options.none.value': 'None',
   'settingChatAppearance.transitionMode.options.smooth': 'Smooth',
   'settingChatAppearance.transitionMode.title': 'Transition Animation',
-  'settingCommon.devMode.desc':
-    'Show technical details and manual controls for chats, models, and local tools. This does not change model responses.',
-  'settingCommon.devMode.title': 'Advanced tools',
   'settingCommon.lang.autoMode': 'Follow System',
   'settingCommon.lang.title': 'Language',
   'settingCommon.liteMode.desc': 'Simplify the interface and hide advanced features',
@@ -2301,7 +2301,6 @@ When I am ___, I need ___
   'systemAgent.verify.title': 'Task Acceptance',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
-  'tab.advanced.appUpdates.title': 'App updates',
   'tab.advanced.gatewayMode.desc':
     'Run supported agent tasks through the cloud Gateway by default. Individual agents can override this from the chat menu.',
   'tab.advanced.gatewayMode.title': 'Gateway Mode',

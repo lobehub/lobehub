@@ -8,7 +8,6 @@ export const DEFAULT_COMMON_SETTINGS: UserGeneralConfig = {
   fontSize: 14,
   highlighterTheme: 'lobe-theme',
   interfaceDensity: 'loose',
-  isDevMode: false,
   isLiteMode: false,
   mermaidTheme: 'lobe-theme',
   telemetry: true,

@@ -115,20 +115,13 @@ describe('settings useCategory', () => {
     expect(keys).not.toContain(SettingsTabs.Provider);
   });
 
-  it('lists API Key once when both of its flags are on', () => {
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        general: { ...initialUserStoreState.preference.general, isDevMode: true },
-      },
-    });
-
-    const { result } = renderHook(() => useCategory(), {
+  const renderWithApiKeyFlag = (showApiKeyManage: boolean) =>
+    renderHook(() => useCategory(), {
       wrapper: ({ children }: { children: ReactNode }) => (
         <Provider
           createStore={() =>
             initServerConfigStore({
-              featureFlags: { ...mapFeatureFlagsEnvToState({}), showApiKeyManage: true },
+              featureFlags: { ...mapFeatureFlagsEnvToState({}), showApiKeyManage },
               serverConfig: { aiProvider: {}, telemetry: {} },
             })
           }
@@ -136,10 +129,42 @@ describe('settings useCategory', () => {
           {children}
         </Provider>
       ),
-    });
-    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
+    }).result.current.flatMap((group) => group.items.map((item) => item.key));
 
-    expect(keys.filter((key) => key === SettingsTabs.APIKey)).toHaveLength(1);
+  it('lists API Key once when the deployment enables it', () => {
+    expect(renderWithApiKeyFlag(true).filter((key) => key === SettingsTabs.APIKey)).toHaveLength(1);
+  });
+
+  // The retired Advanced Tools switch used to reveal API Key past the
+  // deployment flag; a value still stored for it must not.
+  it('hides API Key when the deployment disables it, even with the retired switch stored', () => {
+    useUserStore.setState({
+      settings: { general: { isDevMode: true } },
+    } as unknown as Parameters<typeof useUserStore.setState>[0]);
+
+    expect(renderWithApiKeyFlag(false)).not.toContain(SettingsTabs.APIKey);
+  });
+
+  // With Advanced Tools gone, gateway mode is all Advanced holds on the web.
+  it('lists Advanced on the web only when gateway mode is available', () => {
+    const keysWithGateway = (enableGatewayMode: boolean) =>
+      renderHook(() => useCategory(), {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <Provider
+            createStore={() =>
+              initServerConfigStore({
+                featureFlags: mapFeatureFlagsEnvToState({}),
+                serverConfig: { aiProvider: {}, enableGatewayMode, telemetry: {} },
+              })
+            }
+          >
+            {children}
+          </Provider>
+        ),
+      }).result.current.flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keysWithGateway(false)).not.toContain(SettingsTabs.Advanced);
+    expect(keysWithGateway(true)).toContain(SettingsTabs.Advanced);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

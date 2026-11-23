@@ -22,7 +22,6 @@ describe('settingsSelectors', () => {
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
         interfaceDensity: 'loose',
-        isDevMode: false,
         isLiteMode: false,
         mermaidTheme: 'lobe-theme',
         telemetry: true,
@@ -42,6 +41,28 @@ describe('settingsSelectors', () => {
       const result = userGeneralSettingsSelectors.fontSize(s as UserStore);
 
       expect(result).toBe(12);
+    });
+  });
+
+  describe('showMessageUsage', () => {
+    it('is off when nothing was chosen', () => {
+      expect(userGeneralSettingsSelectors.showMessageUsage(initialState as UserStore)).toBe(false);
+    });
+
+    it('keeps it on for people who had the retired Advanced Tools switch on', () => {
+      const s = merge(initialState, {
+        settings: { general: { isDevMode: true } },
+      }) as unknown as UserStore;
+
+      expect(userGeneralSettingsSelectors.showMessageUsage(s)).toBe(true);
+    });
+
+    it('lets the explicit choice win over the retired switch', () => {
+      const s = merge(initialState, {
+        settings: { general: { isDevMode: true, showMessageUsage: false } },
+      }) as unknown as UserStore;
+
+      expect(userGeneralSettingsSelectors.showMessageUsage(s)).toBe(false);
     });
   });
 
