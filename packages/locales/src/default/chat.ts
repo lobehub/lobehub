@@ -1058,14 +1058,21 @@ export default {
   'inbox.title': 'Lobe AI',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
-  'input.agentRunFeeUnfunded.desc':
-    'Each agent run carries a fee, even on your own API key. Top up or upgrade your plan, then send again.',
+  'input.agentRunFeeUnfunded.desc': 'Top up or upgrade your plan, then send again.',
   'input.agentRunFeeUnfunded.descOverflow':
-    'Each agent run carries a fee, even on your own API key. Your balance covers it: use your balance, then send again.',
-  'input.agentRunFeeUnfunded.descSubscribe':
-    'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
-  'input.agentRunFeeUnfunded.descTopUp':
-    'Each agent run carries a fee, even on your own API key. Top up, then send again.',
+    'Your balance covers this run. Use your balance, then send again.',
+  'input.agentRunFeeUnfunded.descSubscribe': 'Subscribe to a plan, then send again.',
+  'input.agentRunFeeUnfunded.descTopUp': 'Top up, then send again.',
+  'input.agentRunFeeUnfunded.free.desc':
+    'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs.',
+  'input.agentRunFeeUnfunded.free.descNoReset':
+    'Upgrade to {{plan}} for model usage and more agent runs.',
+  'input.agentRunFeeUnfunded.free.descOwnKey':
+    'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
+  'input.agentRunFeeUnfunded.free.descOwnKeyNoReset':
+    'Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
+  'input.agentRunFeeUnfunded.free.title': 'You’ve used this month’s free credits',
+  'input.agentRunFeeUnfunded.free.upgrade': 'Upgrade plan',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',

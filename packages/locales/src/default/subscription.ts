@@ -670,6 +670,7 @@ export default {
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
   'plans.plan.pro.desc': 'For professionals who rely on AI every day',
+  'plans.recommended': 'Recommended',
   'plans.restoreSubscription': 'Restore subscription',
   'plans.restoreSubscriptionError': 'Could not restore your subscription',
   'plans.restoreSubscriptionSuccess': 'Subscription has been restored',
