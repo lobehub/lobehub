@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -111,7 +112,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const [title, setTitle] = useState('');
     /** Create failure, shown above the footer buttons: the modal stays open with the user's draft. */
-    const [submitError, setSubmitError] = useState('');
+    const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
     const [priority, setPriority] = useState(defaultPriority);
     const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
     const labelRegistry = useTaskStore(taskLabelSelectors.labels);
@@ -215,7 +216,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
       if (!instruction && !title.trim() && !hasFiles) return;
 
-      setSubmitError('');
+      setSubmitError(null);
       const editorJson = editor?.getDocument?.('json') as unknown;
 
       // Only present when the user pinned a run location / directory —
@@ -250,7 +251,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         }
       } catch (error) {
         console.error(error);
-        setSubmitError(t('createTask.createFailedRetry'));
+        setSubmitError(toInlineError(t('createTask.createFailedRetry'), error));
       }
     }, [
       activeWorkspaceId,
@@ -343,7 +344,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             onKeyDown={handleTitleKeyDown}
             onChange={(e) => {
               setTitle(e.target.value);
-              setSubmitError('');
+              setSubmitError(null);
             }}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
@@ -378,7 +379,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
         {submitError && (
           <div style={{ flexShrink: 0, padding: '0 16px 8px' }}>
-            <InlineErrorText>{submitError}</InlineErrorText>
+            <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
           </div>
         )}
 

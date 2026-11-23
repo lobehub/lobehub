@@ -20,6 +20,7 @@ import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import type { DashboardListItem, DashboardSettingsPatch } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
@@ -87,7 +88,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
   const [pickedSchedule, setPickedSchedule] = useState<BoardScheduleChoice>();
   const [saving, setSaving] = useState(false);
   /** Save failure, shown above the footer buttons: the modal stays open with the user's edits. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   // Home boards outside a workspace are personal: there is no one to share with.
   const showVisibility = !!dashboard.workspaceId;
@@ -120,7 +121,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
 
   const handleSave = async () => {
     if (!trimmedTitle || saving) return;
-    setError('');
+    setError(null);
     setSaving(true);
     try {
       const patch: DashboardSettingsPatch = {};
@@ -150,7 +151,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
       close();
     } catch (err) {
       console.error('[dashboard] settings save failed', err);
-      setError(t('form.saveFailedRetry'));
+      setError(toInlineError(t('form.saveFailedRetry'), err));
     } finally {
       setSaving(false);
     }
@@ -173,7 +174,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         variant={'filled'}
         onChange={(value) => {
           setPickedSchedule(value as BoardScheduleChoice);
-          setError('');
+          setError(null);
         }}
       />
     );
@@ -191,7 +192,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
             value={title}
             onChange={(event) => {
               setTitle(event.target.value);
-              setError('');
+              setError(null);
             }}
           />
         </Field>
@@ -203,7 +204,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
             value={description}
             onChange={(event) => {
               setDescription(event.target.value);
-              setError('');
+              setError(null);
             }}
           />
         </Field>
@@ -218,7 +219,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
               ]}
               onChange={(value) => {
                 setVisibility(value as DashboardVisibility);
-                setError('');
+                setError(null);
               }}
             />
           </Field>
@@ -238,7 +239,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         >
           {renderSchedule()}
         </Field>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

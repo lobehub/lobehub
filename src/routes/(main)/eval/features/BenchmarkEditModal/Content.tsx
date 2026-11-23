@@ -6,6 +6,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useEvalStore } from '@/store/eval';
 
 export interface BenchmarkEditContentProps {
@@ -33,10 +34,10 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
   const updateBenchmark = useEvalStore((s) => s.updateBenchmark);
 
   /** Save failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const handleFinish = async (values: any) => {
-    setError('');
+    setError(null);
     onLoadingChange?.(true);
     try {
       await updateBenchmark({
@@ -49,7 +50,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       onSuccess?.();
     } catch (cause) {
       console.error('Failed to update eval benchmark:', cause);
-      setError(t('benchmark.edit.failedRetry'));
+      setError(toInlineError(t('benchmark.edit.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -61,7 +62,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       name: benchmark.name,
     },
     onSubmit: handleFinish,
-    onValuesChange: () => setError(''),
+    onValuesChange: () => setError(null),
   });
 
   return (
@@ -77,7 +78,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
       </Form.Field>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import {
   ConnectorConnectionMarketAuthRequiredError,
   ConnectorConnectionPopupBlockedError,
@@ -26,7 +27,7 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
   const edit = usePermission('edit_own_content');
   const { connect, isConnecting, isAllConnected } = useConnectorConnection(github);
   const startedHere = useRef(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<InlineErrorState | null>(null);
 
   useEffect(() => {
     if (startedHere.current && isAllConnected) {
@@ -45,10 +46,13 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
       if (error instanceof ConnectorConnectionMarketAuthRequiredError) return;
       console.error('[GithubImportRecovery] Failed to connect GitHub:', error);
       setConnectError(
-        t(
-          error instanceof ConnectorConnectionPopupBlockedError
-            ? 'common:taskTemplate.action.connect.popupBlocked'
-            : 'agentSkillModal.github.connectFailedRetry',
+        toInlineError(
+          t(
+            error instanceof ConnectorConnectionPopupBlockedError
+              ? 'common:taskTemplate.action.connect.popupBlocked'
+              : 'agentSkillModal.github.connectFailedRetry',
+          ),
+          error,
         ),
       );
     }
@@ -86,7 +90,9 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
           )
         }
       />
-      {connectError && <InlineErrorText>{connectError}</InlineErrorText>}
+      {connectError && (
+        <InlineErrorText detail={connectError.detail}>{connectError.summary}</InlineErrorText>
+      )}
     </Flexbox>
   );
 };

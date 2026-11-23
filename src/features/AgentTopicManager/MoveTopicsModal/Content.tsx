@@ -18,6 +18,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -74,7 +75,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
 
   const [step, setStep] = useState<Step>('pick');
   const [search, setSearch] = useState('');
-  const [moveError, setMoveError] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<InlineErrorState | null>(null);
   const [target, setTarget] = useState<{ id: string; title: string } | null>(null);
 
   const batchMoveTopicsToAgent = useChatStore((s) => s.batchMoveTopicsToAgent);
@@ -174,7 +175,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
       setStep('done');
     } catch (error) {
       console.error('[MoveTopics] move failed:', error);
-      setMoveError(t('management.moveModal.moveFailedRetry'));
+      setMoveError(toInlineError(t('management.moveModal.moveFailedRetry'), error));
       setStep('confirm');
     } finally {
       setCanDismissByClickOutside?.(true);
@@ -231,7 +232,9 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
     return (
       <Flexbox gap={20} padding={24}>
         <Text>{t('management.moveModal.confirmContent', { count, title: target?.title })}</Text>
-        {moveError && <InlineErrorText>{moveError}</InlineErrorText>}
+        {moveError && (
+          <InlineErrorText detail={moveError.detail}>{moveError.summary}</InlineErrorText>
+        )}
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button onClick={() => setStep('pick')}>{t('management.moveModal.back')}</Button>
           <Button type={'primary'} onClick={handleConfirm}>

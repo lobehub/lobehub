@@ -7,6 +7,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 
 import { credErrorKey } from '../credError';
 import CredFormFooter from '../CredFormFooter';
@@ -63,7 +64,7 @@ const KVCredForm: FC<KVCredFormProps> = ({
    * Create failures (including Market's 409 slot conflicts) render above the submit row: the
    * modal stays open and the user's next move is on this form, not behind a corner toast.
    */
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -91,7 +92,7 @@ const KVCredForm: FC<KVCredFormProps> = ({
     },
     onError: (error) => {
       console.error('[KVCredForm] Create failed:', error);
-      setSubmitError(t(credErrorKey(error, 'creds.errors.createFailed')));
+      setSubmitError(toInlineError(t(credErrorKey(error, 'creds.errors.createFailed')), error));
     },
     onSuccess: () => {
       onSuccess();
@@ -101,7 +102,7 @@ const KVCredForm: FC<KVCredFormProps> = ({
   const handleSubmit = (values: FormValues) => {
     if (disabled) return;
 
-    setSubmitError('');
+    setSubmitError(null);
     createMutation.mutate(values);
   };
 
@@ -136,7 +137,9 @@ const KVCredForm: FC<KVCredFormProps> = ({
         />
       </Form.Field>
 
-      {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
+      {submitError && (
+        <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+      )}
 
       <CredFormFooter>
         <Button type="fill" onClick={onCancel}>

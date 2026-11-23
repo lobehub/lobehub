@@ -17,6 +17,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
 import { memoryExtractionService } from '@/services/userMemory/extraction';
 
@@ -28,7 +29,7 @@ const DateRangeContent = memo(() => {
   const [range, setRange] = useState<DayjsDateRangeValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
   /** Request failure, shown above the buttons: the modal stays open with the chosen range. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | undefined>();
 
   const disabledDate = useCallback((current: Dayjs) => current.isAfter(dayjs(), 'day'), []);
 
@@ -44,7 +45,7 @@ const DateRangeContent = memo(() => {
   );
 
   const handleSubmit = async () => {
-    setError('');
+    setError(undefined);
     setSubmitting(true);
     try {
       const [from, to] = range ?? [null, null];
@@ -58,7 +59,7 @@ const DateRangeContent = memo(() => {
       close();
     } catch (err) {
       console.error(err);
-      setError(t('analysis.toast.failed'));
+      setError(toInlineError(t('analysis.toast.failed'), err));
     } finally {
       setSubmitting(false);
     }
@@ -76,14 +77,14 @@ const DateRangeContent = memo(() => {
           value={range}
           onChange={(value) => {
             setRange(value);
-            setError('');
+            setError(undefined);
           }}
         />
         <Text fontSize={12} type={'secondary'}>
           {footerNote}
         </Text>
       </Flexbox>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={submitting} onClick={close}>
           {t('analysis.modal.cancel')}

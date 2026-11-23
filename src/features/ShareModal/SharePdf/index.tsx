@@ -5,6 +5,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { densityVars } from '@/styles/densityVars';
 
 import ExportLayout from '../components/ExportLayout';
@@ -67,7 +68,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<InlineErrorState | null>(null);
   const { t } = useTranslation(['chat', 'common']);
 
   const { downloadPdf, error, isEmpty, loading, messageCount, pdfData, regenerate } =
@@ -78,8 +79,8 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
     try {
       await downloadPdf();
       toast.success(t('shareModal.downloadSuccess'));
-    } catch {
-      setDownloadError(t('shareModal.downloadFailedRetry'));
+    } catch (cause) {
+      setDownloadError(toInlineError(t('shareModal.downloadFailedRetry'), cause));
     }
   };
 
@@ -99,7 +100,7 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
       }
       meta={
         downloadError ? (
-          <InlineErrorText>{downloadError}</InlineErrorText>
+          <InlineErrorText detail={downloadError.detail}>{downloadError.summary}</InlineErrorText>
         ) : (
           [t('shareModal.meta.messages', { count: messageCount }), '.pdf'].join(' · ')
         )

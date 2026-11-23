@@ -30,6 +30,7 @@ import {
 } from '@/business/client/services/communityWorkspaceProfile';
 import AvatarUpload from '@/components/AvatarUpload';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useFileStore } from '@/store/file';
 import type { DiscoverUserInfo } from '@/types/discover';
 
@@ -89,8 +90,8 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
    * open, so a corner toast would sit far from the avatar / banner / Save button.
    */
   const [avatarError, setAvatarError] = useState('');
-  const [bannerError, setBannerError] = useState('');
-  const [saveError, setSaveError] = useState('');
+  const [bannerError, setBannerError] = useState<InlineErrorState | null>(null);
+  const [saveError, setSaveError] = useState<InlineErrorState | null>(null);
   const isSetup = !user.namespace;
 
   // Live namespace-availability check (setup only — the handle is immutable once
@@ -176,9 +177,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
 
   const handleBannerUpload = useCallback(
     async (file: File) => {
-      setBannerError('');
+      setBannerError(null);
       if (file.size > MAX_FILE_SIZE) {
-        setBannerError(t('user.workspaceProfile.errors.fileTooLarge'));
+        setBannerError(toInlineError(t('user.workspaceProfile.errors.fileTooLarge')));
         return;
       }
 
@@ -186,7 +187,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          setBannerError(t('user.workspaceProfile.errors.uploadFailedRetry'));
+          setBannerError(toInlineError(t('user.workspaceProfile.errors.uploadFailedRetry')));
           return;
         }
         const url = result.url.startsWith('/')
@@ -195,7 +196,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         setBannerUrl(url);
       } catch (error) {
         console.error('[WorkspaceProfileModal] Banner upload failed:', error);
-        setBannerError(t('user.workspaceProfile.errors.uploadFailedRetry'));
+        setBannerError(toInlineError(t('user.workspaceProfile.errors.uploadFailedRetry'), error));
       } finally {
         setBannerUploading(false);
       }
@@ -213,7 +214,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     // The namespace field already shows the red "taken" status and the Save button is disabled.
     if (isSetup && namespaceAvailability === 'taken') return;
 
-    setSaveError('');
+    setSaveError(null);
     setLoading(true);
     try {
       const profile = {
@@ -246,7 +247,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         // Rendered as the red status under the namespace field (namespaceStatusNode)
         setNamespaceAvailability('taken');
       } else {
-        setSaveError(t('user.workspaceProfile.errors.saveFailed'));
+        setSaveError(toInlineError(t('user.workspaceProfile.errors.saveFailed'), error));
       }
     } finally {
       setLoading(false);
@@ -334,7 +335,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
                 </Center>
               </div>
             </Upload>
-            {bannerError && <InlineErrorText>{bannerError}</InlineErrorText>}
+            {bannerError && (
+              <InlineErrorText detail={bannerError.detail}>{bannerError.summary}</InlineErrorText>
+            )}
             {bannerUrl && (
               <Flexbox horizontal align="center" gap={8} justify="flex-end">
                 <Text
@@ -457,7 +460,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         />
       </Form>
 
-      {saveError && <InlineErrorText>{saveError}</InlineErrorText>}
+      {saveError && (
+        <InlineErrorText detail={saveError.detail}>{saveError.summary}</InlineErrorText>
+      )}
       <Flexbox horizontal gap={8} justify="flex-end">
         <Button disabled={loading} onClick={close}>
           {t('user.workspaceProfile.cancel')}

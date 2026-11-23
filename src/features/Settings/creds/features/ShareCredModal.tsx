@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { densityTokens } from '@/styles/density.stylex';
 
@@ -77,7 +78,7 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
    * Share / revoke failures (including Market's 409 slot conflicts) render above the Share
    * button: the modal stays open, so the user picks another target or visibility right here.
    */
-  const [shareError, setShareError] = useState('');
+  const [shareError, setShareError] = useState<InlineErrorState | null>(null);
 
   const sharedVisibility = useMemo(
     () =>
@@ -153,7 +154,7 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
     const target = workspaces.find((w) => w.id === effectiveTargetId);
     if (!target) return;
 
-    setShareError('');
+    setShareError(null);
     setSharing(true);
     try {
       await createWorkspaceLambdaClient(target.id).market.creds.share.mutate({
@@ -165,7 +166,7 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
       toast.success(tSetting('creds.share.success', { name: target.name }));
     } catch (error) {
       console.error('[ShareCredModal] Share failed:', error);
-      setShareError(tSetting(credErrorKey(error, 'creds.share.error')));
+      setShareError(toInlineError(tSetting(credErrorKey(error, 'creds.share.error')), error));
     } finally {
       setSharing(false);
     }
@@ -181,11 +182,11 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
           await createWorkspaceLambdaClient(workspaceId).market.creds.unshare.mutate({
             id: credId,
           });
-          setShareError('');
+          setShareError(null);
           await refetch();
         } catch (error) {
           console.error('[ShareCredModal] Revoke failed:', error);
-          setShareError(tSetting(credErrorKey(error, 'creds.share.error')));
+          setShareError(toInlineError(tSetting(credErrorKey(error, 'creds.share.error')), error));
         }
       },
       title: tSetting('creds.share.revokeConfirmTitle', { name }),
@@ -249,7 +250,7 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
               value={effectiveTargetId}
               onChange={(value) => {
                 setTargetId(value as string);
-                setShareError('');
+                setShareError(null);
               }}
             />
           </Flexbox>
@@ -264,12 +265,14 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
               value={visibility}
               onChange={(value) => {
                 setVisibility(value as Visibility);
-                setShareError('');
+                setShareError(null);
               }}
             />
           </Flexbox>
 
-          {shareError && <InlineErrorText>{shareError}</InlineErrorText>}
+          {shareError && (
+            <InlineErrorText detail={shareError.detail}>{shareError.summary}</InlineErrorText>
+          )}
 
           <Flexbox horizontal justify={'flex-end'}>
             <Button

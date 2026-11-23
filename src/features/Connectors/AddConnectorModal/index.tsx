@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { ConnectorSourceType } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
@@ -85,7 +86,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
   const [clientSecret, setClientSecret] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   // Pre-fill form when opening in edit mode
   useEffect(() => {
@@ -140,7 +141,9 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
     if (!popup) {
       setSubmitError(
-        t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+        toInlineError(
+          t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+        ),
       );
       return;
     }
@@ -219,9 +222,12 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
       // does not linger beside the inline error.
       if (!popup.closed) popup.close();
       setSubmitError(
-        t(
-          'connector.add.failedRetry',
-          "Couldn't save the connector. Check the server URL and your network, then try again.",
+        toInlineError(
+          t(
+            'connector.add.failedRetry',
+            "Couldn't save the connector. Check the server URL and your network, then try again.",
+          ),
+          error,
         ),
       );
     } finally {
@@ -245,7 +251,9 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
       popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
       if (!popup) {
         setSubmitError(
-          t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+          toInlineError(
+            t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+          ),
         );
         return;
       }
@@ -319,9 +327,12 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
       console.error('[AddConnector] Failed to update connector:', error);
       if (popup && !popup.closed) popup.close();
       setSubmitError(
-        t(
-          'connector.add.failedRetry',
-          "Couldn't save the connector. Check the server URL and your network, then try again.",
+        toInlineError(
+          t(
+            'connector.add.failedRetry',
+            "Couldn't save the connector. Check the server URL and your network, then try again.",
+          ),
+          error,
         ),
       );
     } finally {
@@ -422,7 +433,9 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
             </div>
           )}
         </div>
-        {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
+        {submitError && (
+          <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+        )}
       </div>
     </ImperativeModal>
   );

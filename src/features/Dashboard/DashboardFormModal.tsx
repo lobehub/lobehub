@@ -16,6 +16,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useDashboardStore } from '@/store/dashboard';
 
 interface DashboardFormProps {
@@ -30,19 +31,19 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   /** Submit failure, shown above the footer buttons: the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const trimmed = title.trim();
 
   const handleSubmit = async () => {
     if (!trimmed || loading) return;
-    setError('');
+    setError(null);
     setLoading(true);
     try {
       await onSubmit({ description: description.trim() || undefined, title: trimmed });
       close();
     } catch (err) {
       console.error('[dashboard] form submit failed', err);
-      setError(t('form.saveFailedRetry'));
+      setError(toInlineError(t('form.saveFailedRetry'), err));
     } finally {
       setLoading(false);
     }
@@ -64,7 +65,7 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
             onPressEnter={() => void handleSubmit()}
             onChange={(event) => {
               setTitle(event.target.value);
-              setError('');
+              setError(null);
             }}
           />
         </Flexbox>
@@ -80,7 +81,7 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

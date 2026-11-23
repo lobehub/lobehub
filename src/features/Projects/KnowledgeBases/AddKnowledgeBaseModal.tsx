@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 import { useProjectStore } from '@/store/project';
@@ -26,7 +27,7 @@ function AddKnowledgeBaseContent({ existingIds, projectId, visibility }: AddKnow
   const [search, setSearch] = useState('');
   const [added, setAdded] = useState<string[]>(existingIds);
   const [pendingId, setPendingId] = useState<string>();
-  const [addError, setAddError] = useState<string | null>(null);
+  const [addError, setAddError] = useState<InlineErrorState | null>(null);
   const addProjectKnowledgeBases = useProjectStore((s) => s.addProjectKnowledgeBases);
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
   const { error, isHydrated, isValidating, revalidate } = useFetchKnowledgeBaseList(visibility);
@@ -48,7 +49,7 @@ function AddKnowledgeBaseContent({ existingIds, projectId, visibility }: AddKnow
       setAdded((ids) => [...ids, knowledgeBaseId]);
     } catch (error) {
       console.error('Failed to add project knowledge base', error);
-      setAddError(t('knowledgeBases.addFailedRetry'));
+      setAddError(toInlineError(t('knowledgeBases.addFailedRetry'), error));
     } finally {
       setPendingId(undefined);
     }
@@ -64,7 +65,7 @@ function AddKnowledgeBaseContent({ existingIds, projectId, visibility }: AddKnow
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      {addError && <InlineErrorText>{addError}</InlineErrorText>}
+      {addError && <InlineErrorText detail={addError.detail}>{addError.summary}</InlineErrorText>}
       {error && !list ? (
         <AsyncError error={error} onRetry={() => revalidate()} />
       ) : loading ? (

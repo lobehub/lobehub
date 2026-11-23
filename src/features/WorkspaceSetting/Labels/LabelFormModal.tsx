@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useHomeStore } from '@/store/home';
 
 import { DEFAULT_LABEL_COLOR, isValidLabelColor, LABEL_COLOR_PRESETS } from './constants';
@@ -62,14 +63,14 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
    * user must change), any other failure shows above the footer buttons.
    */
   const [nameError, setNameError] = useState('');
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useState<InlineErrorState | null>(null);
 
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed || loading) return;
 
     setNameError('');
-    setSaveError('');
+    setSaveError(null);
     setLoading(true);
     try {
       if (label) {
@@ -101,7 +102,7 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
         return;
       }
       console.error('Failed to save label:', error);
-      setSaveError(t('workspaceSetting.labels.form.saveFailedRetry'));
+      setSaveError(toInlineError(t('workspaceSetting.labels.form.saveFailedRetry'), error));
     } finally {
       setLoading(false);
     }
@@ -162,7 +163,9 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
             />
           </Flexbox>
         </Flexbox>
-        {saveError && <InlineErrorText>{saveError}</InlineErrorText>}
+        {saveError && (
+          <InlineErrorText detail={saveError.detail}>{saveError.summary}</InlineErrorText>
+        )}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

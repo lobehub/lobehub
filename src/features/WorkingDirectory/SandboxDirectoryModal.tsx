@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { SandboxStorageUpgradeGuide } from '@/business/client/features/SandboxStorageUpsell';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useSandboxDriveEntitlement } from '@/hooks/useSandboxDriveEntitlement';
 
 import { confirmPick } from './confirmPick';
@@ -49,7 +50,7 @@ const SandboxDirectoryContent = ({
   const { close } = useModalContext();
   const { entitled } = useSandboxDriveEntitlement();
   const [saving, setSaving] = useState(false);
-  const [pickError, setPickError] = useState<string | null>(null);
+  const [pickError, setPickError] = useState<InlineErrorState | null>(null);
   const [drive, setDrive] = useState<SandboxDrive>(
     isWorkspace ? (initialDrive ?? 'public') : 'personal',
   );
@@ -113,13 +114,15 @@ const SandboxDirectoryContent = ({
             close,
             fail: (error) => {
               console.error('[SandboxDirectory] Failed to pick folder:', error);
-              setPickError(tDevice('workingDirectory.drive.pickFailedRetry'));
+              setPickError(toInlineError(tDevice('workingDirectory.drive.pickFailedRetry'), error));
             },
           });
           setSaving(false);
         }}
       />
-      {pickError && <InlineErrorText>{pickError}</InlineErrorText>}
+      {pickError && (
+        <InlineErrorText detail={pickError.detail}>{pickError.summary}</InlineErrorText>
+      )}
     </Flexbox>
   );
 };

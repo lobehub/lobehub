@@ -5,6 +5,7 @@ import { useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import KeyValueEditor from '@/components/KeyValueEditor';
 import MCPStdioCommandInput from '@/components/MCPStdioCommandInput';
 import ArgsInput from '@/features/PluginDevModal/MCPManifestForm/ArgsInput';
@@ -163,9 +164,9 @@ const Settings = ({
   const [connectionLoading, setConnectionLoading] = useState(false);
   const [isEditingConnection, setIsEditingConnection] = useState(false);
   /** Connection save failure, shown above the form's buttons: the form stays in edit mode with the user's input. */
-  const [connectionError, setConnectionError] = useState('');
+  const [connectionError, setConnectionError] = useState<InlineErrorState | null>(null);
   /** Env save failure, shown above the form's buttons: the editor keeps the user's variables. */
-  const [envError, setEnvError] = useState('');
+  const [envError, setEnvError] = useState<InlineErrorState | null>(null);
 
   const [updatePluginSettings, updateInstallPlugin] = useToolStore((s) => [
     s.updatePluginSettings,
@@ -186,7 +187,7 @@ const Settings = ({
   });
 
   const handleConnectionSubmit = async (values: ConnectionValues) => {
-    setConnectionError('');
+    setConnectionError(null);
     setConnectionLoading(true);
     try {
       await updateInstallPlugin(identifier!, values);
@@ -195,21 +196,21 @@ const Settings = ({
       setIsEditingConnection(false);
     } catch (error) {
       console.error('Connection update failed:', error);
-      setConnectionError(t('settings.messages.connectionUpdateFailedRetry'));
+      setConnectionError(toInlineError(t('settings.messages.connectionUpdateFailedRetry'), error));
     } finally {
       setConnectionLoading(false);
     }
   };
 
   const handleEnvSubmit = async (values: EnvValues) => {
-    setEnvError('');
+    setEnvError(null);
     setLoading(true);
     try {
       await updatePluginSettings(identifier!, values.env || {}, { override: true });
       toast.success(t('settings.messages.envUpdateSuccess'));
     } catch (error) {
       console.error('Settings update failed:', error);
-      setEnvError(t('settings.messages.envUpdateFailedRetry'));
+      setEnvError(toInlineError(t('settings.messages.envUpdateFailedRetry'), error));
     } finally {
       setLoading(false);
     }
@@ -225,18 +226,18 @@ const Settings = ({
   });
 
   const resetEnvForm = () => {
-    setEnvError('');
+    setEnvError(null);
     envForm.reset({ env: pluginSettings });
   };
 
   const handleStartEdit = () => {
-    setConnectionError('');
+    setConnectionError(null);
     connectionForm.reset(getConnectionValues());
     setIsEditingConnection(true);
   };
 
   const handleCancelEdit = () => {
-    setConnectionError('');
+    setConnectionError(null);
     connectionForm.reset(getConnectionValues());
     setIsEditingConnection(false);
   };
@@ -358,7 +359,11 @@ const Settings = ({
                     </Form.Field>
                   </>
                 )}
-                {connectionError && <InlineErrorText>{connectionError}</InlineErrorText>}
+                {connectionError && (
+                  <InlineErrorText detail={connectionError.detail}>
+                    {connectionError.summary}
+                  </InlineErrorText>
+                )}
                 <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={connectionLoading} type="primary">
                     {t('common:save')}
@@ -387,7 +392,9 @@ const Settings = ({
                   keyPlaceholder="VARIABLE_NAME"
                 />
               </Form.Field>
-              {envError && <InlineErrorText>{envError}</InlineErrorText>}
+              {envError && (
+                <InlineErrorText detail={envError.detail}>{envError.summary}</InlineErrorText>
+              )}
               {!hideFooter && (
                 <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={loading} type="primary">

@@ -15,6 +15,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import BenchmarkStandardFields, {
   type BenchmarkStandard,
   isCompleteStandard,
@@ -51,13 +52,13 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
   const [standard, setStandard] = useState<BenchmarkStandard>({ protocol: DEFAULT_PROTOCOL });
   const [saving, setSaving] = useState(false);
   /** Create failure shown above the buttons; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const submit = async () => {
     const trimmed = name.trim();
     const { judge, protocol } = standard;
     if (!trimmed || !judge || !isCompleteStandard(standard) || picked.length === 0) return;
-    setError('');
+    setError(null);
     setSaving(true);
     try {
       const created = (await createBenchmark({
@@ -80,7 +81,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
       onCreated?.(id);
     } catch (cause) {
       console.error('Failed to create Lobe Bench benchmark:', cause);
-      setError(t('lobeBench.benchmark.create.failedRetry'));
+      setError(toInlineError(t('lobeBench.benchmark.create.failedRetry'), cause));
     } finally {
       setSaving(false);
     }
@@ -98,7 +99,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           onPressEnter={submit}
           onChange={(e) => {
             setName(e.target.value);
-            setError('');
+            setError(null);
           }}
         />
       </Flexbox>
@@ -111,7 +112,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           value={description}
           onChange={(e) => {
             setDescription(e.target.value);
-            setError('');
+            setError(null);
           }}
         />
       </Flexbox>
@@ -119,7 +120,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
         value={standard}
         onChange={(next) => {
           setStandard(next);
-          setError('');
+          setError(null);
         }}
       />
       <Flexbox gap={6}>
@@ -139,7 +140,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
               }))}
               onChange={(value) => {
                 setPicked(value as string[]);
-                setError('');
+                setError(null);
               }}
             />
             <Text fontSize={12} type={'secondary'}>
@@ -152,7 +153,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           </Text>
         )}
       </Flexbox>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
         <Button

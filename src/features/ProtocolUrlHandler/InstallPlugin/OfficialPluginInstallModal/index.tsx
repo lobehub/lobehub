@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import DetailLoading from '@/features/MCP/MCPDetail/Loading';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -29,7 +30,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     const { t } = useTranslation(['plugin', 'common']);
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
-    const [installError, setInstallError] = useState<string | null>(null);
+    const [installError, setInstallError] = useState<InlineErrorState | null>(null);
 
     // Fetch MCP plugin details
     const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
@@ -59,7 +60,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     };
     const handleError = (error: unknown) => {
       console.error('Official plugin installation error:', error);
-      setInstallError(t('protocolInstall.messages.installFailedRetry'));
+      setInstallError(toInlineError(t('protocolInstall.messages.installFailedRetry'), error));
     };
     const { confirm, dismiss, loading } = useProtocolPluginInstall({
       cancel,
@@ -119,7 +120,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         {renderContent()}
         {installError && (
           <div style={{ marginTop: 12 }}>
-            <InlineErrorText>{installError}</InlineErrorText>
+            <InlineErrorText detail={installError.detail}>{installError.summary}</InlineErrorText>
           </div>
         )}
       </ImperativeModal>

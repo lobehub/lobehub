@@ -20,18 +20,18 @@ describe('useAddTaskForm', () => {
     act(() => result.current.setTitle('Ship it'));
     await act(() => result.current.submit());
 
-    expect(result.current.error).toBe('goalProcess.addTask.failed');
+    expect(result.current.error).toEqual({ detail: 'boom', summary: 'goalProcess.addTask.failed' });
     expect(result.current.title).toBe('Ship it');
     expect(result.current.busy).toBe(false);
     expect(onDone).not.toHaveBeenCalled();
 
     act(() => result.current.setTitle('Ship it now'));
-    expect(result.current.error).toBe('');
+    expect(result.current.error).toBeNull();
 
     await act(() => result.current.submit());
-    expect(result.current.error).toBe('goalProcess.addTask.failed');
+    expect(result.current.error).toEqual({ detail: 'boom', summary: 'goalProcess.addTask.failed' });
     act(() => result.current.setDescription('More detail'));
-    expect(result.current.error).toBe('');
+    expect(result.current.error).toBeNull();
   });
 
   it('submits the trimmed title and finishes on success', async () => {
@@ -47,6 +47,6 @@ describe('useAddTaskForm', () => {
 
     expect(onAdd).toHaveBeenCalledWith('Ship it', undefined);
     expect(onDone).toHaveBeenCalledTimes(1);
-    expect(result.current.error).toBe('');
+    expect(result.current.error).toBeNull();
   });
 });

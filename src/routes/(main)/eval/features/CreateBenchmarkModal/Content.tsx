@@ -6,6 +6,7 @@ import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
@@ -30,10 +31,10 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
   const createBenchmark = useEvalStore((s) => s.createBenchmark);
 
   /** Submit failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const handleFinish = async (values: any) => {
-    setError('');
+    setError(null);
     onLoadingChange?.(true);
     try {
       const result = await createBenchmark({
@@ -48,7 +49,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
       }
     } catch (cause) {
       console.error('Failed to create eval benchmark:', cause);
-      setError(t('benchmark.create.failedRetry'));
+      setError(toInlineError(t('benchmark.create.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -56,7 +57,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
 
   const form = useForm({
     onSubmit: handleFinish,
-    onValuesChange: () => setError(''),
+    onValuesChange: () => setError(null),
   });
   const nameValue = useWatch(form, 'name');
 
@@ -91,7 +92,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
       <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
       </Form.Field>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

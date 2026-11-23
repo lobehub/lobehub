@@ -19,6 +19,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
 import { densityVars } from '@/styles/densityVars';
 
@@ -133,10 +134,10 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
   );
 
   /** Submit failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | undefined>();
 
   const handleFinish = async (values: any) => {
-    setError('');
+    setError(undefined);
     onLoadingChange?.(true);
     try {
       await agentEvalService.updateDataset({
@@ -161,7 +162,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       onSuccess?.();
     } catch (cause) {
       console.error('Failed to update eval dataset:', cause);
-      setError(t('dataset.edit.failedRetry'));
+      setError(toInlineError(t('dataset.edit.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -182,7 +183,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       name: dataset.name,
     },
     onSubmit: handleFinish,
-    onValuesChange: () => setError(''),
+    onValuesChange: () => setError(undefined),
   });
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -296,7 +297,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
           </Flexbox>
         ))}
       </Flexbox>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

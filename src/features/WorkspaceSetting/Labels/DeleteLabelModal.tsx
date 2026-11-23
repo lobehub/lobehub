@@ -14,6 +14,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useHomeStore } from '@/store/home';
 
 /** The word the user must type to arm the Delete button (mirrors Linear). */
@@ -39,7 +40,7 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<InlineErrorState | null>(null);
 
   const armed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_WORD;
 
@@ -53,7 +54,7 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
       close();
     } catch (error) {
       console.error('Failed to delete label:', error);
-      setActionError(t('workspaceSetting.labels.delete.failedRetry'));
+      setActionError(toInlineError(t('workspaceSetting.labels.delete.failedRetry'), error));
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
       close();
     } catch (error) {
       console.error('Failed to archive label:', error);
-      setActionError(t('workspaceSetting.labels.archive.failedRetry'));
+      setActionError(toInlineError(t('workspaceSetting.labels.archive.failedRetry'), error));
     } finally {
       setArchiving(false);
     }
@@ -96,7 +97,9 @@ const DeleteLabelContent = memo<DeleteLabelContentProps>(({ label }) => {
             setActionError(null);
           }}
         />
-        {actionError && <InlineErrorText>{actionError}</InlineErrorText>}
+        {actionError && (
+          <InlineErrorText detail={actionError.detail}>{actionError.summary}</InlineErrorText>
+        )}
       </Flexbox>
       {/* Archive and Delete both mutate the same label, so each locks the other
           out — `loading` alone only disables the button that owns it. */}

@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AgentAvatar from '@/components/AgentAvatar';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
@@ -106,7 +107,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
   const isDatasetMode = !!datasetId && !!datasetName;
   /** Create failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const form = useForm<RunCreateFormValues>({
     initialValues: {
       datasetId: datasetId && !isDatasetMode ? datasetId : undefined,
@@ -114,7 +115,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       maxSteps: DEFAULT_MAX_STEPS,
       timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
     },
-    onValuesChange: () => setError(''),
+    onValuesChange: () => setError(null),
   });
   const kValue = useWatch(form, 'k') ?? 1;
 
@@ -183,7 +184,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       const { valid } = await form.validate();
       if (!valid) return;
       const values = form.getValues();
-      setError('');
+      setError(null);
       onLoadingChange?.(true);
       try {
         const maxSteps = values.maxSteps ?? DEFAULT_MAX_STEPS;
@@ -212,7 +213,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       } catch (cause) {
         // createRun failure: keep the modal open and show the reason inline for retry.
         console.error('Failed to create eval run:', cause);
-        setError(t('run.create.failedRetry'));
+        setError(toInlineError(t('run.create.failedRetry'), cause));
       } finally {
         onLoadingChange?.(false);
       }
@@ -376,7 +377,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
           },
         ]}
       />
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

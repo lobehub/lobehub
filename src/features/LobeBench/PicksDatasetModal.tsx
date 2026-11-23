@@ -6,6 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { createDataset, renameDataset } from '@/features/LobeBench/datasetCases';
 import { type LobeBenchCase } from '@/features/LobeBench/useLobeBench';
 
@@ -44,10 +45,10 @@ const CreateDatasetForm = memo<CreateDatasetFormProps>(
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
     /** Create failure shown above the buttons; the modal stays open with the user's input. */
-    const [error, setError] = useState('');
+    const [error, setError] = useState<InlineErrorState | null>(null);
 
     const submit = async () => {
-      setError('');
+      setError(null);
       setSaving(true);
       try {
         const datasetName = name.trim() || t('lobeBench.picks.defaultName');
@@ -57,7 +58,7 @@ const CreateDatasetForm = memo<CreateDatasetFormProps>(
         onDone?.({ id: created.id, name: datasetName });
       } catch (cause) {
         console.error('Failed to create Lobe Bench dataset:', cause);
-        setError(t('lobeBench.picks.createFailedRetry'));
+        setError(toInlineError(t('lobeBench.picks.createFailedRetry'), cause));
       } finally {
         setSaving(false);
       }
@@ -75,14 +76,14 @@ const CreateDatasetForm = memo<CreateDatasetFormProps>(
             onPressEnter={submit}
             onChange={(e) => {
               setName(e.target.value);
-              setError('');
+              setError(null);
             }}
           />
           <Text fontSize={12} type={'secondary'}>
             {t('lobeBench.picks.fixed')}
           </Text>
         </Flexbox>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button onClick={close}>{t('common.cancel')}</Button>
           <Button loading={saving} type={'primary'} onClick={submit}>
@@ -116,12 +117,12 @@ const RenameDatasetForm = memo<RenameDatasetFormProps>(({ dataset, onSaved }) =>
   const [name, setName] = useState(dataset.name);
   const [saving, setSaving] = useState(false);
   /** Rename failure shown above the buttons; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    setError('');
+    setError(null);
     setSaving(true);
     try {
       await renameDataset(dataset, trimmed);
@@ -129,7 +130,7 @@ const RenameDatasetForm = memo<RenameDatasetFormProps>(({ dataset, onSaved }) =>
       close();
     } catch (cause) {
       console.error('Failed to rename Lobe Bench dataset:', cause);
-      setError(t('lobeBench.picks.renameFailedRetry'));
+      setError(toInlineError(t('lobeBench.picks.renameFailedRetry'), cause));
     } finally {
       setSaving(false);
     }
@@ -144,10 +145,10 @@ const RenameDatasetForm = memo<RenameDatasetFormProps>(({ dataset, onSaved }) =>
         onPressEnter={submit}
         onChange={(e) => {
           setName(e.target.value);
-          setError('');
+          setError(null);
         }}
       />
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
         <Button disabled={!name.trim()} loading={saving} type={'primary'} onClick={submit}>

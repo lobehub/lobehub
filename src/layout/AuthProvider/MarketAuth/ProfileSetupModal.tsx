@@ -22,6 +22,7 @@ import { z } from 'zod';
 import EmojiPicker from '@/components/EmojiPicker';
 import ImperativeModal from '@/components/ImperativeModal';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -107,8 +108,8 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
      * open, so a corner toast would sit far from the avatar / banner / footer buttons.
      */
     const [avatarError, setAvatarError] = useState('');
-    const [bannerError, setBannerError] = useState('');
-    const [submitError, setSubmitError] = useState('');
+    const [bannerError, setBannerError] = useState<InlineErrorState | null>(null);
+    const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
     // Banner state
     const [bannerUrl, setBannerUrl] = useState<string | null>(null);
@@ -217,9 +218,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     // Handle banner upload
     const handleBannerUpload = useCallback(
       async (file: File) => {
-        setBannerError('');
+        setBannerError(null);
         if (file.size > MAX_FILE_SIZE) {
-          setBannerError(t('profileSetup.errors.fileTooLarge'));
+          setBannerError(toInlineError(t('profileSetup.errors.fileTooLarge')));
           return;
         }
 
@@ -231,7 +232,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
           }
         } catch (error) {
           console.error('[ProfileSetupModal] Banner upload failed:', error);
-          setBannerError(t('profileSetup.errors.uploadFailed'));
+          setBannerError(toInlineError(t('profileSetup.errors.uploadFailed'), error));
         } finally {
           setBannerUploading(false);
         }
@@ -246,9 +247,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
 
     const doSubmit = useCallback(async () => {
       // If not in automatic authorization mode, need to validate accessToken
-      setSubmitError('');
+      setSubmitError(null);
       if (!enableMarketTrustedClient && !accessToken) {
-        setSubmitError(t('profileSetup.errors.notAuthenticated'));
+        setSubmitError(toInlineError(t('profileSetup.errors.notAuthenticated')));
         return;
       }
 
@@ -328,7 +329,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
             // Shown under the User ID field; form.setErrors clears it when the user edits it
             form.setErrors({ userName: t('profileSetup.errors.usernameTaken') });
           } else {
-            setSubmitError(t('profileSetup.errors.updateFailed'));
+            setSubmitError(toInlineError(t('profileSetup.errors.updateFailed'), error));
           }
         }
       } finally {
@@ -566,7 +567,11 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                       </Center>
                     </div>
                   </Upload>
-                  {bannerError && <InlineErrorText>{bannerError}</InlineErrorText>}
+                  {bannerError && (
+                    <InlineErrorText detail={bannerError.detail}>
+                      {bannerError.summary}
+                    </InlineErrorText>
+                  )}
                   {bannerUrl && (
                     <Flexbox horizontal align="center" gap={8} justify="flex-end">
                       <Text
@@ -640,7 +645,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
               </Form.Field>
             </>
           )}
-          {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
+          {submitError && (
+            <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+          )}
         </Form>
       </ImperativeModal>
     );

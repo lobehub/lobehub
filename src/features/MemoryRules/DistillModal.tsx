@@ -39,6 +39,7 @@ import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { openLibraryFilePicker } from '@/features/LibraryModal/FilePicker';
 import {
   type DistillCandidate,
@@ -195,7 +196,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
   /** Upload, read or save failure, shown above the footer buttons: the modal stays open with the user's picks. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const recentPages = useRecentPages(tab === 'document');
   const pages = recentPages.items;
@@ -230,20 +231,20 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       : picked;
 
   const switchTab = (next: SourceTab) => {
-    setError('');
+    setError(null);
     setTab(next);
     setPicked(undefined);
   };
 
   const upload = async (file: File) => {
-    setError('');
+    setError(null);
     setUploading(true);
     try {
       const uploaded = await uploadWithProgress({ file });
       if (uploaded) setPicked({ name: file.name, source: { id: uploaded.id, type: 'file' } });
     } catch (err) {
       console.error('[MemoryRules] material upload failed:', err);
-      setError(t('rules.distill.uploadFailedRetry'));
+      setError(toInlineError(t('rules.distill.uploadFailedRetry'), err));
     } finally {
       setUploading(false);
     }
@@ -251,7 +252,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
 
   const read = async () => {
     if (!source) return;
-    setError('');
+    setError(null);
     setStep('reading');
     try {
       const next = await expertiseService.distillRules({
@@ -278,7 +279,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       setStep('review');
     } catch (err) {
       console.error('[MemoryRules] distill failed:', err);
-      setError(t('rules.distill.readFailed'));
+      setError(toInlineError(t('rules.distill.readFailed'), err));
       setStep('pick');
     }
   };
@@ -290,7 +291,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
 
   const save = async () => {
     if (!result || kept.length === 0 || saving) return;
-    setError('');
+    setError(null);
     setSaving(true);
     try {
       const saved = await expertiseService.commitDistilledRules({
@@ -319,7 +320,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       close();
     } catch (err) {
       console.error('[MemoryRules] distill save failed:', err);
-      setError(t('rules.saveFailedRetry'));
+      setError(toInlineError(t('rules.saveFailedRetry'), err));
     } finally {
       setSaving(false);
     }
@@ -611,7 +612,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
 
       {error && (
         <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
-          <InlineErrorText>{error}</InlineErrorText>
+          <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>
         </div>
       )}
 

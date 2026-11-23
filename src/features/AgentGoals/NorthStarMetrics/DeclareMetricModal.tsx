@@ -16,6 +16,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useGoalStore } from '@/store/goal';
 
 /**
@@ -37,14 +38,14 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
     const [target, setTarget] = useState(initial ? String(initial.target) : '');
     const [busy, setBusy] = useState(false);
     /** Declare failure, shown above the submit button: the modal stays open with the user's input. */
-    const [error, setError] = useState('');
+    const [error, setError] = useState<InlineErrorState | null>(null);
 
     const submit = async () => {
       const trimmedKey = key.trim();
       const parsedTarget = Number(target);
       if (!trimmedKey || !Number.isFinite(parsedTarget) || busy) return;
       setBusy(true);
-      setError('');
+      setError(null);
       try {
         await declareGoalMetric(goalId, {
           key: trimmedKey,
@@ -56,7 +57,7 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
       } catch (err) {
         // Keep the form open — a silent close would be indistinguishable from success.
         console.error('[NorthStar] failed to declare metric:', err);
-        setError(t('goalProcess.northStar.declare.failedRetry'));
+        setError(toInlineError(t('goalProcess.northStar.declare.failedRetry'), err));
       } finally {
         setBusy(false);
       }
@@ -75,7 +76,7 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
             value={key}
             onChange={(e) => {
               setKey(e.target.value);
-              setError('');
+              setError(null);
             }}
           />
         </Flexbox>
@@ -113,12 +114,12 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
               onPressEnter={() => void submit()}
               onChange={(e) => {
                 setTarget(e.target.value);
-                setError('');
+                setError(null);
               }}
             />
           </Flexbox>
         </Flexbox>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
         <Flexbox horizontal justify={'flex-end'}>
           <Button
             disabled={!key.trim() || !Number.isFinite(Number(target)) || target.trim() === ''}

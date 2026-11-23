@@ -51,7 +51,7 @@ const AddTaskContent = memo<AddTaskContentProps>(({ onAdd }) => {
           onChange={(e) => setDescription(e.target.value)}
         />
       </Flexbox>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={() => close()}>{t('cancel', { ns: 'common' })}</Button>
         <Button

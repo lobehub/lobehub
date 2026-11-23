@@ -13,6 +13,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
@@ -39,7 +40,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
   /** Name validation, shown under the input it is about. */
   const [nameError, setNameError] = useState('');
   /** Create failure, shown above the footer buttons: the modal stays open with the typed name. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const handleCreate = async () => {
     // Enter fires as fast as the user repeats it — a second pass while `addGroup`
@@ -49,7 +50,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
     if (input.length === 0 || input.length > 20 || input.trim() === '')
       return setNameError(t('sessionGroup.tooLong'));
 
-    setError('');
+    setError(null);
     setLoading(true);
     try {
       const groupId = await addGroup(input, visibility);
@@ -61,7 +62,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
       // Without this, a rejected create/move leaves the button stuck
       // on loading and the modal open with no explanation.
       console.error('Failed to create category:', err);
-      setError(t('sessionGroup.createFailedRetry'));
+      setError(toInlineError(t('sessionGroup.createFailedRetry'), err));
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
           onChange={(e) => {
             setInput(e.target.value);
             setNameError('');
-            setError('');
+            setError(null);
           }}
         />
         {nameError && (
@@ -88,7 +89,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
             {nameError}
           </Text>
         )}
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

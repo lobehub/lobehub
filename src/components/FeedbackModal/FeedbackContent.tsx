@@ -9,6 +9,7 @@ import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import TextArea from '@/components/TextArea';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
@@ -42,7 +43,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
    * a failed submit shows above the Submit button, not in a corner toast.
    */
   const [screenshotError, setScreenshotError] = useState('');
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const userEmail = useUserStore(userProfileSelectors.email);
@@ -83,7 +84,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
       if (!valid) return;
       const values = form.getValues();
       setLoading(true);
-      setSubmitError('');
+      setSubmitError(null);
 
       await lambdaClient.market.submitFeedback.mutate({
         clientInfo: {
@@ -104,7 +105,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
       close();
     } catch (error: any) {
       console.error('[FeedbackModal] Submission failed:', error);
-      setSubmitError(t('feedback.errors.submitFailed'));
+      setSubmitError(toInlineError(t('feedback.errors.submitFailed'), error));
     } finally {
       setLoading(false);
     }
@@ -204,7 +205,9 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
         {isDesktop && <DiagnosticsField />}
       </Form>
 
-      {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
+      {submitError && (
+        <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+      )}
       <Flexbox horizontal gap={8} justify="flex-end">
         <Button onClick={handleCancel}>{t('cancel')}</Button>
         <Button icon={<Icon icon={Send} />} loading={loading} type="primary" onClick={handleSubmit}>

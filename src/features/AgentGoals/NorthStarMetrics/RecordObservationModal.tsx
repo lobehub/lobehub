@@ -14,6 +14,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useGoalStore } from '@/store/goal';
 
 /**
@@ -30,13 +31,13 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string; metri
     const [value, setValue] = useState('');
     const [busy, setBusy] = useState(false);
     /** Record failure, shown above the submit button: the modal stays open with the typed value. */
-    const [error, setError] = useState('');
+    const [error, setError] = useState<InlineErrorState | null>(null);
 
     const submit = async () => {
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || value.trim() === '' || busy) return;
       setBusy(true);
-      setError('');
+      setError(null);
       try {
         // The clause's display name rides along so the series created by the
         // first observation carries it too.
@@ -44,7 +45,7 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string; metri
         close();
       } catch (err) {
         console.error('[NorthStar] failed to record observation:', err);
-        setError(t('goalProcess.northStar.record.failedRetry'));
+        setError(toInlineError(t('goalProcess.northStar.record.failedRetry'), err));
       } finally {
         setBusy(false);
       }
@@ -63,11 +64,11 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string; metri
             onPressEnter={() => void submit()}
             onChange={(e) => {
               setValue(e.target.value);
-              setError('');
+              setError(null);
             }}
           />
         </Flexbox>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
         <Flexbox horizontal justify={'flex-end'}>
           <Button
             disabled={!Number.isFinite(Number(value)) || value.trim() === ''}

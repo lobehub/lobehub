@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import GeneratingBorder from '@/components/GeneratingBorder';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { createGoalModal } from '@/features/AgentGoals/CreateGoalModal';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
@@ -153,7 +154,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
   const [instruction, setInstruction] = useState('');
   /** Create failure, shown above the footer buttons: the composer keeps the draft so the user can retry. */
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
   const [hasAttachments, setHasAttachments] = useState(false);
   // Where this task will run, if not simply wherever the assignee agent runs.
   // Undefined = inherit; it is only sent when the user actually pinned
@@ -413,7 +414,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (!canCreateTask) return;
     const lexicalEditor = editor?.getLexicalEditor?.();
     if (!lexicalEditor) return;
-    setSubmitError('');
+    setSubmitError(null);
     lexicalEditor.getEditorState().read(() => {
       setInstruction($getRoot().getTextContent());
     });
@@ -489,7 +490,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       // `createTask` keeps its rejecting contract (other callers rely on `catch`);
       // handle the composer's own failure here so it isn't silent, keeping the
       // draft intact (the reset only runs on success).
-      setSubmitError('');
+      setSubmitError(null);
       try {
         const config = execution ? { execution: toTaskExecutionConfigPatch(execution) } : undefined;
         const result = await createTask({
@@ -566,7 +567,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           }
         }
         console.error(error);
-        setSubmitError(t('createTask.createFailedRetry'));
+        setSubmitError(toInlineError(t('createTask.createFailedRetry'), error));
       }
     },
     [
@@ -826,7 +827,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         </Flexbox>
         {submitError && (
           <div style={{ padding: '0 16px 8px' }}>
-            <InlineErrorText>{submitError}</InlineErrorText>
+            <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
           </div>
         )}
         <Flexbox

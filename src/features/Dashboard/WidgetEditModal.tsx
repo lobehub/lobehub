@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useDashboardStore } from '@/store/dashboard';
 
 /** Longest widget title and metric definition the API accepts. */
@@ -35,7 +36,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
   const [description, setDescription] = useState(widget.description ?? '');
   const [saving, setSaving] = useState(false);
   /** Save failure, shown above the footer buttons: the modal stays open with the user's edits. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const trimmedTitle = title.trim();
 
   const handleSave = async () => {
@@ -49,7 +50,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
       close();
       return;
     }
-    setError('');
+    setError(null);
     setSaving(true);
     try {
       await updateWidget(widget.id, patch);
@@ -57,7 +58,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
       close();
     } catch (err) {
       console.error('[dashboard] widget edit failed', err);
-      setError(t('widget.saveFailedRetry'));
+      setError(toInlineError(t('widget.saveFailedRetry'), err));
     } finally {
       setSaving(false);
     }
@@ -78,7 +79,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             onPressEnter={() => void handleSave()}
             onChange={(event) => {
               setTitle(event.target.value);
-              setError('');
+              setError(null);
             }}
           />
         </Flexbox>
@@ -95,7 +96,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

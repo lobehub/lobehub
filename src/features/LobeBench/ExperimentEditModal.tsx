@@ -16,6 +16,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { isLobeBenchMeta } from '@/features/LobeBench/lobeBench';
 import { agentEvalService } from '@/services/agentEval';
 
@@ -38,10 +39,10 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
   const [question, setQuestion] = useState(meta?.question ?? '');
   const [saving, setSaving] = useState(false);
   /** Save failure shown above the buttons; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const submit = async () => {
-    setError('');
+    setError(null);
     setSaving(true);
     try {
       const trimmedName = name.trim();
@@ -61,7 +62,7 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
       close();
     } catch (cause) {
       console.error('Failed to save Lobe Bench experiment:', cause);
-      setError(t('lobeBench.experiment.edit.failedRetry'));
+      setError(toInlineError(t('lobeBench.experiment.edit.failedRetry'), cause));
     } finally {
       setSaving(false);
     }
@@ -77,7 +78,7 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
           value={name}
           onChange={(e) => {
             setName(e.target.value);
-            setError('');
+            setError(null);
           }}
         />
       </Flexbox>
@@ -90,11 +91,11 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
           value={question}
           onChange={(e) => {
             setQuestion(e.target.value);
-            setError('');
+            setError(null);
           }}
         />
       </Flexbox>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
         <Button loading={saving} type={'primary'} onClick={submit}>

@@ -17,6 +17,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -45,10 +46,10 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
   const { close } = useModalContext();
 
   /** Save failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | undefined>();
 
   const handleFinish = async (values: any) => {
-    setError('');
+    setError(undefined);
     onLoadingChange?.(true);
     try {
       const tags = values.tags
@@ -82,7 +83,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
       close();
     } catch (cause) {
       console.error('Failed to update eval test case:', cause);
-      setError(t('testCase.edit.failedRetry'));
+      setError(toInlineError(t('testCase.edit.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -99,7 +100,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
       tags: testCase.metadata?.tags?.join(', '),
     },
     onSubmit: handleFinish,
-    onValuesChange: () => setError(''),
+    onValuesChange: () => setError(undefined),
   });
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -197,7 +198,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
           },
         ]}
       />
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

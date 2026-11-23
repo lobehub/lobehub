@@ -18,6 +18,7 @@ import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { agentEvalService } from '@/services/agentEval';
 import { densityVars } from '@/styles/densityVars';
 
@@ -136,10 +137,10 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
   const [identifierTouched, setIdentifierTouched] = useState(false);
 
   /** Submit failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const handleFinish = async (values: any) => {
-    setError('');
+    setError(null);
     onLoadingChange?.(true);
     try {
       const result = await agentEvalService.createDataset({
@@ -165,13 +166,13 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
       });
     } catch (cause) {
       console.error('Failed to create eval dataset:', cause);
-      setError(t('dataset.create.failedRetry'));
+      setError(toInlineError(t('dataset.create.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
   };
 
-  const form = useForm({ onSubmit: handleFinish, onValuesChange: () => setError('') });
+  const form = useForm({ onSubmit: handleFinish, onValuesChange: () => setError(null) });
   const nameValue = useWatch(form, 'name');
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -310,7 +311,7 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
           </Flexbox>
         )}
       </Flexbox>
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

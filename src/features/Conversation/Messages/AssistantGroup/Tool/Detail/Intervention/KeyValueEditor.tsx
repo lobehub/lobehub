@@ -7,6 +7,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 
 const styles = stylex.create({
   form: {
@@ -70,10 +71,10 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
 
   const [updating, setUpdating] = useState(false);
   /** Failure of the save itself, shown above the buttons; validation errors show on their own fields. */
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useState<InlineErrorState | null>(null);
   const handleFinish = async () => {
     setUpdating(true);
-    setSaveError('');
+    setSaveError(null);
     try {
       // Invalid fields (empty / duplicate key) render their own error, so nothing else is shown.
       const { valid } = await form.validate();
@@ -83,7 +84,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
       await onFinish?.(record);
     } catch (error) {
       console.error('Failed to save tool arguments:', error);
-      setSaveError(t('updateArgs.saveFailed'));
+      setSaveError(toInlineError(t('updateArgs.saveFailed'), error));
     } finally {
       setUpdating(false);
     }
@@ -160,7 +161,11 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                 />
               </Flexbox>
             ))}
-            {saveError && <InlineErrorText style={{ marginTop: 8 }}>{saveError}</InlineErrorText>}
+            {saveError && (
+              <InlineErrorText detail={saveError.detail} style={{ marginTop: 8 }}>
+                {saveError.summary}
+              </InlineErrorText>
+            )}
             <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginTop: 8 }}>
               <Button
                 icon={<Icon icon={LucidePlus} />}

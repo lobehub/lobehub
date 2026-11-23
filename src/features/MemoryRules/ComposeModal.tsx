@@ -37,6 +37,7 @@ import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { expertiseService, type RuleDraft, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 
@@ -125,7 +126,7 @@ const ComposeContent = ({
   const [compilability, setCompilability] = useState<Compilability>('not-compilable');
   const [busy, setBusy] = useState(false);
   /** Save failure, shown above the footer buttons: the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const [tick, setTick] = useState(0);
 
   const group = groups.find((g) => g.id === groupId);
@@ -185,9 +186,9 @@ const ComposeContent = ({
 
   const submit = async () => {
     if (!title.trim() || busy) return;
-    setError('');
+    setError(null);
     if (!groupId && !newGroup) {
-      setError(t('rules.compose.needGroup'));
+      setError(toInlineError(t('rules.compose.needGroup')));
       return;
     }
     setBusy(true);
@@ -210,7 +211,7 @@ const ComposeContent = ({
       close();
     } catch (err) {
       console.error('[MemoryRules] rule save failed:', err);
-      setError(t('rules.saveFailedRetry'));
+      setError(toInlineError(t('rules.saveFailedRetry'), err));
     } finally {
       setBusy(false);
     }
@@ -321,7 +322,7 @@ const ComposeContent = ({
 
       {error && (
         <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
-          <InlineErrorText>{error}</InlineErrorText>
+          <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>
         </div>
       )}
 

@@ -20,6 +20,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { isDuplicateLabelNameError } from '@/features/WorkspaceSetting/Labels/errors';
 import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors } from '@/store/task/selectors';
@@ -72,7 +73,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
    */
   const [nameError, setNameError] = useState('');
   const [groupError, setGroupError] = useState('');
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useState<InlineErrorState | null>(null);
 
   const handleSave = async () => {
     const trimmed = name.trim();
@@ -81,7 +82,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
 
     setNameError('');
     setGroupError('');
-    setSaveError('');
+    setSaveError(null);
     setLoading(true);
     try {
       if (label) {
@@ -115,7 +116,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
         setGroupError(t('taskLabels.form.groupConflict'));
       } else {
         console.error('Failed to save task label:', error);
-        setSaveError(t('taskLabels.form.saveFailedRetry'));
+        setSaveError(toInlineError(t('taskLabels.form.saveFailedRetry'), error));
       }
     } finally {
       setLoading(false);
@@ -187,7 +188,9 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
             ))}
           </Flexbox>
         </Flexbox>
-        {saveError && <InlineErrorText>{saveError}</InlineErrorText>}
+        {saveError && (
+          <InlineErrorText detail={saveError.detail}>{saveError.summary}</InlineErrorText>
+        )}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

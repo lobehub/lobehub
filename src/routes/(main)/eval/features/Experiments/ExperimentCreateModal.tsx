@@ -17,6 +17,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { benchmarkSelectors, useEvalStore } from '@/store/eval';
 import { createFormModal } from '@/utils/createFormModal';
 
@@ -43,14 +44,14 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
     useFetchBenchmarks();
 
     /** Save failure shown below the form; the modal stays open with the user's input. */
-    const [error, setError] = useState('');
+    const [error, setError] = useState<InlineErrorState | undefined>();
 
     const handleSubmit = async (values: {
       benchmarkIds: string[];
       description?: string;
       name: string;
     }) => {
-      setError('');
+      setError(undefined);
       onLoadingChange(true);
       try {
         const result = experiment
@@ -63,7 +64,10 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
       } catch (cause) {
         console.error('Failed to save eval experiment:', cause);
         setError(
-          experiment ? t('experiment.edit.failedRetry') : t('experiment.create.failedRetry'),
+          toInlineError(
+            experiment ? t('experiment.edit.failedRetry') : t('experiment.create.failedRetry'),
+            cause,
+          ),
         );
       } finally {
         onLoadingChange(false);
@@ -79,7 +83,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
           }
         : undefined,
       onSubmit: handleSubmit,
-      onValuesChange: () => setError(''),
+      onValuesChange: () => setError(undefined),
     });
 
     return (
@@ -110,7 +114,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
             }))}
           />
         </Form.Field>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Form>
     );
   },

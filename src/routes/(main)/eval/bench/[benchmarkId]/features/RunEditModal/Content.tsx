@@ -23,6 +23,7 @@ import { useParams } from 'react-router';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AgentAvatar from '@/components/AgentAvatar';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
@@ -73,7 +74,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   /** Save failure shown below the form; the modal stays open with the user's input. */
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const canChangeConfig = run?.status === 'idle';
   const isFinished = run?.status === 'completed';
@@ -142,7 +143,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   );
 
   const handleFinish = async (values: any) => {
-    setError('');
+    setError(null);
     onLoadingChange?.(true);
     try {
       const config: EvalRunInputConfig = {};
@@ -162,7 +163,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
       close();
     } catch (cause) {
       console.error('Failed to update eval run:', cause);
-      setError(t('run.edit.failedRetry'));
+      setError(toInlineError(t('run.edit.failedRetry'), cause));
     } finally {
       onLoadingChange?.(false);
     }
@@ -177,7 +178,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
       timeoutMinutes: run.config?.timeout ? run.config.timeout / 60_000 : undefined,
     },
     onSubmit: handleFinish,
-    onValuesChange: () => setError(''),
+    onValuesChange: () => setError(null),
   });
   const kValue = useWatch(form, 'k') ?? 1;
 
@@ -302,7 +303,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
           },
         ]}
       />
-      {error && <InlineErrorText>{error}</InlineErrorText>}
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
     </Form>
   );
 };

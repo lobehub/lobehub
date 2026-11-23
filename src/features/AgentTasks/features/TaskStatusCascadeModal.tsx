@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { densityVars } from '@/styles/densityVars';
 
 import { STATUS_META } from './taskStatusMeta';
@@ -67,7 +68,7 @@ export const useCascadeApply = (onApply: (includeSubtasks: boolean) => Promise<v
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
   const [loadingAction, setLoadingAction] = useState<'all' | 'parent' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   const handleApply = async (includeSubtasks: boolean) => {
     setLoadingAction(includeSubtasks ? 'all' : 'parent');
@@ -77,7 +78,7 @@ export const useCascadeApply = (onApply: (includeSubtasks: boolean) => Promise<v
       close();
     } catch (error) {
       console.error('[TaskStatusCascadeModal] Failed to apply status change:', error);
-      setError(t('taskDetail.statusCascade.applyFailedRetry'));
+      setError(toInlineError(t('taskDetail.statusCascade.applyFailedRetry'), error));
     } finally {
       setLoadingAction(null);
     }
@@ -152,7 +153,7 @@ const TaskStatusCascadeModalContent = ({
             );
           })}
         </ScrollArea>
-        {error && <InlineErrorText>{error}</InlineErrorText>}
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <Flexbox horizontal className={styles.actions} gap={8} justify={'space-between'}>
         <Button disabled={!!loadingAction} onClick={handleCancel}>

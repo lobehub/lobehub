@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -28,7 +29,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
     const [selectedPlugins, setSelectedPlugins] = useState<Set<string>>(() => new Set());
     const [selectedSkills, setSelectedSkills] = useState<Set<string>>(() => new Set());
     const [isClaiming, setIsClaiming] = useState(false);
-    const [claimError, setClaimError] = useState<string | null>(null);
+    const [claimError, setClaimError] = useState<InlineErrorState | null>(null);
 
     useEffect(() => {
       if (!open) {
@@ -97,9 +98,12 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
       } catch (error) {
         console.error('[ClaimResources] Failed to claim:', error);
         setClaimError(
-          t('claimResources.failedRetry', {
-            defaultValue: "Couldn't claim these resources. Check your network and try again.",
-          }),
+          toInlineError(
+            t('claimResources.failedRetry', {
+              defaultValue: "Couldn't claim these resources. Check your network and try again.",
+            }),
+            error,
+          ),
         );
       } finally {
         setIsClaiming(false);
@@ -227,7 +231,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
 
         {claimError && (
           <div style={{ marginTop: 12 }}>
-            <InlineErrorText>{claimError}</InlineErrorText>
+            <InlineErrorText detail={claimError.detail}>{claimError.summary}</InlineErrorText>
           </div>
         )}
       </ImperativeModal>
