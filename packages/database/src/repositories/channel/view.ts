@@ -1,6 +1,7 @@
 import {
   type AgentDeviceOverride,
   type ChannelDeviceGrantCard,
+  channelMessageConnector,
   channelMessageDeletedAt,
   channelMessageDeviceGrant,
   channelMessageEditedAt,
@@ -140,6 +141,8 @@ export const publicMessage = (
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
     card: contactCardOf(message.metadata) ?? null,
+    // An Agent asking the reader to connect a connector it needs.
+    connector: (isAgent && channelMessageConnector(message.metadata)) || null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
