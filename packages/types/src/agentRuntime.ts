@@ -306,6 +306,12 @@ export const AgentRuntimeErrorType = {
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
   /**
+   * The provider base URL resolves to a private / reserved network address that
+   * the server is not allowed to reach (SSRF protection). The endpoint is only
+   * reachable from the user's own device.
+   */
+  ProviderBaseURLBlocked: 'ProviderBaseURLBlocked',
+  /**
    * The model can only be reached from the user's own device, and no open
    * LobeHub client picked up the request (no client declared it can run this
    * provider, or none claimed the call in time). Retrying once a client is

@@ -1,0 +1,193 @@
+import dns from 'node:dns';
+import net from 'node:net';
+
+import { Agent, buildConnector } from 'undici';
+
+import type { SSRFOptions } from './policy';
+import { assertAddressAllowed, SSRFBlockedError } from './policy';
+
+/**
+ * A WHATWG-compatible `fetch` that refuses connections to private or reserved
+ * addresses, built on Node's undici stack instead of node-fetch.
+ *
+ * Unlike `ssrfSafeFetch` (which swaps in a node-fetch response), the response
+ * here is the undici `Response` streaming untouched, so the returned function
+ * can be handed to SDK clients (`new OpenAI({ fetch })`, `new Anthropic({ fetch
+ * })`) for streaming chat completions without changing body semantics.
+ */
+
+/** Check one resolved address against the policy. Returns the block, if any. */
+export const validateSsrfAddress = (
+  address: string,
+  policy: SSRFOptions,
+  hostname?: string,
+): SSRFBlockedError | undefined => {
+  try {
+    assertAddressAllowed(address, hostname ?? address, undefined, {
+      allowIPAddressList: policy.allowIPAddressList ?? [],
+      allowMetaIPAddress: policy.allowPrivateIPAddress ?? false,
+      allowPrivateIPAddress: policy.allowPrivateIPAddress ?? false,
+      denyIPAddressList: [],
+    });
+    return undefined;
+  } catch (error) {
+    return error instanceof SSRFBlockedError ? error : new SSRFBlockedError(String(error));
+  }
+};
+
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | dns.LookupAddress[],
+  family?: number,
+) => void;
+
+/**
+ * A `dns.lookup` replacement that rejects the connection when any resolved
+ * address is blocked. Because the socket connects to exactly what this
+ * returned, there is no window for DNS rebinding between check and use.
+ */
+const createGuardedLookup =
+  (policy: SSRFOptions) =>
+  (hostname: string, options: dns.LookupOptions, callback: LookupCallback) => {
+    dns.lookup(hostname, options, (error, address, family) => {
+      if (error) return callback(error, address, family);
+
+      const resolved = Array.isArray(address) ? address : [{ address, family }];
+      for (const entry of resolved) {
+        const blocked = validateSsrfAddress(entry.address, policy, hostname);
+        if (blocked) return callback(blocked, address, family);
+      }
+
+      callback(null, address, family);
+    });
+  };
+
+const stripBrackets = (hostname: string) => hostname.replaceAll(/^\[|\]$/g, '');
+
+/**
+ * An undici dispatcher whose every connection — including each redirect hop —
+ * is validated against the policy after DNS resolution and before connecting.
+ */
+export const createSsrfSafeDispatcher = (policy: SSRFOptions) => {
+  const connector = buildConnector({ lookup: createGuardedLookup(policy) } as any);
+
+  return new Agent({
+    connect: (options, callback) => {
+      // IP literals never reach `lookup`, so validate them here
+      const host = stripBrackets(options.hostname);
+      if (net.isIP(host)) {
+        const blocked = validateSsrfAddress(host, policy);
+        if (blocked) return callback(blocked, null);
+      }
+
+      connector(options, callback);
+    },
+  });
+};
+
+const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'];
+
+/** Node only routes fetch through `HTTP(S)_PROXY` when `NODE_USE_ENV_PROXY=1` */
+const isEnvProxyActive = () =>
+  process.env.NODE_USE_ENV_PROXY === '1' && PROXY_ENV_KEYS.some((key) => !!process.env[key]);
+
+const resolveRequestUrl = (input: RequestInfo | URL) =>
+  new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+
+/**
+ * With an egress proxy the socket goes to the proxy, so connection-time checks
+ * would validate the proxy's address instead of the target. Fall back to an
+ * application-layer resolution check. This leaves a DNS-rebinding window;
+ * deployments with a proxy should enforce a private-network ACL on the proxy
+ * itself.
+ */
+const assertResolvedTargetAllowed = async (url: URL, policy: SSRFOptions) => {
+  const hostname = stripBrackets(url.hostname);
+  const addresses = net.isIP(hostname)
+    ? [{ address: hostname, family: undefined }]
+    : await dns.promises.lookup(hostname, { all: true });
+
+  for (const { address } of addresses) {
+    const blocked = validateSsrfAddress(address, policy, hostname);
+    if (blocked) throw new TypeError('fetch failed', { cause: blocked });
+  }
+};
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
+
+/**
+ * Proxy mode cannot rely on the dispatcher to vet redirect hops, so follow
+ * redirects manually and re-check every target before requesting it.
+ */
+const fetchThroughEnvProxy = async (
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  policy: SSRFOptions,
+  baseFetch: typeof fetch,
+) => {
+  const followRedirects = (init?.redirect ?? 'follow') === 'follow';
+  let url = resolveRequestUrl(input);
+  let method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+  let request: { init?: RequestInit; input: RequestInfo | URL } = {
+    init: followRedirects ? { ...init, redirect: 'manual' } : init,
+    input,
+  };
+
+  for (let hop = 0; ; hop++) {
+    await assertResolvedTargetAllowed(url, policy);
+
+    const response = await baseFetch(request.input, request.init);
+    const location = response.headers.get('location');
+    if (!followRedirects || !REDIRECT_STATUSES.has(response.status) || !location) return response;
+
+    await response.body?.cancel();
+    if (hop >= MAX_REDIRECTS) {
+      throw new TypeError('fetch failed', { cause: new Error('Too many redirects') });
+    }
+
+    // Mirror fetch's redirect semantics: 303, and 301/302 after a POST, become a body-less GET
+    const switchToGet =
+      (response.status === 303 && method !== 'HEAD') ||
+      ((response.status === 301 || response.status === 302) && method === 'POST');
+    if (switchToGet) method = 'GET';
+
+    url = new URL(location, url);
+    request = {
+      init: switchToGet ? { ...request.init, body: undefined, method } : request.init,
+      input: url.href,
+    };
+  }
+};
+
+export interface CreateSsrfSafeFetchOptions {
+  /** The fetch to wrap; defaults to the global fetch at call time */
+  fetch?: typeof fetch;
+}
+
+/**
+ * Build a WHATWG-compatible `fetch` that refuses to connect to private or
+ * reserved addresses. Unlike `ssrfSafeFetch`, the response body is streamed
+ * untouched, so it can be handed to SDKs (`new OpenAI({ fetch })`) for
+ * streaming chat completions.
+ *
+ * `maxContentLength` in {@link SSRFOptions} does not apply here: the undici
+ * response streams straight through.
+ */
+export const createSsrfSafeFetch = (
+  policy: SSRFOptions = {},
+  options: CreateSsrfSafeFetchOptions = {},
+): typeof fetch => {
+  const getBaseFetch = () => options.fetch ?? globalThis.fetch;
+
+  if (policy.allowPrivateIPAddress)
+    return ((input, init) => getBaseFetch()(input, init)) as typeof fetch;
+
+  const dispatcher = createSsrfSafeDispatcher(policy);
+
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (isEnvProxyActive()) return fetchThroughEnvProxy(input, init, policy, getBaseFetch());
+
+    return getBaseFetch()(input, { ...init, dispatcher } as RequestInit);
+  }) as typeof fetch;
+};

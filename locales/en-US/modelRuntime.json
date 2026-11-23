@@ -40,6 +40,7 @@
   "OllamaServiceUnavailable": "Ollama service is unavailable. Please check if Ollama is running properly or if the cross-origin configuration of Ollama is set correctly.",
   "OperationInactivityTimeout": "The agent operation was idle for too long and was terminated. Please retry the request.",
   "PermissionDenied": "Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.",
+  "ProviderBaseURLBlocked": "The {{provider}} endpoint points to a private or local network address, which the server is not allowed to reach for security reasons. This address only works from your own device — use a publicly reachable endpoint instead.",
   "ProviderBizError": "Error requesting {{provider}} service, please troubleshoot or retry based on the following information",
   "ProviderContentPolicyViolation": "The provider blocked this request or its output due to content policy. Please revise your prompt and try again.",
   "ProviderNetworkError": "Connection to the provider timed out or was dropped. Please check your network and try again.",

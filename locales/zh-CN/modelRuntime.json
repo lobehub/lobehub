@@ -40,6 +40,7 @@
   "OllamaServiceUnavailable": "Ollama服务不可用。请检查Ollama是否正常运行或Ollama的跨域配置是否正确设置。",
   "OperationInactivityTimeout": "代理操作闲置时间过长，已被终止。请重试请求。",
   "PermissionDenied": "抱歉，您没有权限访问此服务。请检查您的密钥是否具有必要的访问权限。",
+  "ProviderBaseURLBlocked": "{{provider}} 的服务地址指向私有或本地网络，出于安全原因服务端不允许访问。该地址只能从你自己的设备访问，请改用可公网访问的服务地址。",
   "ProviderBizError": "请求{{provider}}服务时发生错误，请根据以下信息进行排查或重试。",
   "ProviderContentPolicyViolation": "供应商因内容政策拦截了此请求或其输出。请修改提示词后重试。",
   "ProviderNetworkError": "与提供商的连接超时或被中断。请检查您的网络并重试。",
