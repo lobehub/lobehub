@@ -389,6 +389,25 @@ describe('shareRouter', () => {
       expect(listFeaturedWorks).not.toHaveBeenCalled();
     });
 
+    it('reads a sandbox operation token as signed out, even for the owner', async () => {
+      const caller = shareRouter.createCaller(
+        await createContextInner({
+          oidcAuth: { purpose: 'hetero-operation', sub: 'owner-user' } as any,
+          userId: 'owner-user',
+        }),
+      );
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        ownerWorkspaceSlug: null,
+      });
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ shareId: 'agent-share-1' }),
+        null,
+      );
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
     it('resolves by slug, returns only visitor-safe metadata, and counts the view', async () => {
       const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
 

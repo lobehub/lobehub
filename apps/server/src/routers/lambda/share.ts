@@ -174,11 +174,16 @@ export const shareRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
       }
 
-      AgentShareModel.assertShareAccess(share, ctx.userId);
+      // A public procedure skips `oidcAuth`, which confines a sandbox
+      // `hetero-operation` token to its own routes. Read such a caller as
+      // signed out so the token cannot unlock the owner's private shares.
+      const viewerId = ctx.oidcAuth?.purpose === 'hetero-operation' ? null : ctx.userId;
 
-      const isOwner = share.ownerId === ctx.userId;
+      AgentShareModel.assertShareAccess(share, viewerId);
 
-      if (!isOwner && ctx.userId) {
+      const isOwner = !!viewerId && share.ownerId === viewerId;
+
+      if (!isOwner && viewerId) {
         // Owner previews are not counted: userViewCount tracks signed-in
         // visitor page views (PV, not deduplicated visitors). Anonymous loads
         // are not counted either, so an unauthenticated client cannot inflate
