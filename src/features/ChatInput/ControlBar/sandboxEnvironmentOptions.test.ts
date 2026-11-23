@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   environmentChipState,
   environmentFolderName,
+  environmentMenuNotes,
   environmentSettingsPath,
   isOnPublicDrive,
   pickableEnvironments,
@@ -125,6 +126,27 @@ describe('environmentFolderName', () => {
   it('never produces a name the server refuses as a working directory', () => {
     expect(environmentFolderName({ id: 'x1', name: '~tools' })).toBe('tools-x1');
     expect(environmentFolderName({ id: '', name: '~.~' })).toBe('environment');
+  });
+});
+
+// T-14791: what an environment checks out in a public-drive folder stays
+// visible to every member, even after the environment is made private.
+describe('environmentMenuNotes', () => {
+  it('says a public-drive folder stays visible to every member', () => {
+    expect(environmentMenuNotes({ onDrive: true, onPublicDrive: true })).toEqual([
+      'sandboxEnvironment.driveHint',
+      'sandboxEnvironment.publicDriveHint',
+    ]);
+  });
+
+  it('says nothing about the public drive on a personal-drive folder', () => {
+    expect(environmentMenuNotes({ onDrive: true, onPublicDrive: false })).toEqual([
+      'sandboxEnvironment.driveHint',
+    ]);
+  });
+
+  it('adds no drive note off the drive', () => {
+    expect(environmentMenuNotes({ onDrive: false, onPublicDrive: false })).toEqual([]);
   });
 });
 

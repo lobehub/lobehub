@@ -2306,6 +2306,7 @@
   "sandboxEnvironment.missing": "环境不可用",
   "sandboxEnvironment.noRepository": "无仓库",
   "sandboxEnvironment.none": "不使用环境",
+  "sandboxEnvironment.publicDriveHint": "公共网盘的文件夹所有成员可见：环境在这里克隆和生成的文件，之后即使把环境设为私有也不会被撤回。",
   "sandboxEnvironment.retry": "重试",
   "sandboxEnvironment.saveFailed": "无法更改环境，请重试。",
   "sandboxEnvironment.title": "环境",

@@ -13,6 +13,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 
 import {
   environmentChipState,
+  environmentMenuNotes,
   environmentSettingsPath,
   repositorySlug,
   selectionWithEnvironment,
@@ -33,6 +34,12 @@ interface SandboxEnvironmentChipProps {
   ) => Promise<void>;
   /** Whether the conversation keeps its files on the drive (and the plan has one). */
   onDrive: boolean;
+  /**
+   * Whether the folder is on a workspace's public drive, which every member
+   * browses: what an environment checks out there stays visible to them, even
+   * after the environment is made private.
+   */
+  onPublicDrive?: boolean;
   /**
    * The project this conversation belongs to. It runs in the project's own
    * environment, so that is the only one offered, and managed on the
@@ -56,7 +63,7 @@ interface SandboxEnvironmentChipProps {
  * person already works in would silently skip it.
  */
 const SandboxEnvironmentChip = memo<SandboxEnvironmentChipProps>(
-  ({ onChange, onDrive, projectId, sharedAgent = false, value }) => {
+  ({ onChange, onDrive, onPublicDrive = false, projectId, sharedAgent = false, value }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
@@ -126,9 +133,13 @@ const SandboxEnvironmentChip = memo<SandboxEnvironmentChipProps>(
       <SandboxRepositoryMenu
         environments={environments}
         failed={failed}
-        footnote={onDrive ? t('sandboxEnvironment.driveHint') : undefined}
         loaded={loaded}
         none={{ active: !value.environmentId, onPick: () => void pick() }}
+        footnote={
+          environmentMenuNotes({ onDrive, onPublicDrive })
+            .map((key) => t(key))
+            .join(' ') || undefined
+        }
         selectedId={value.environmentId}
         // A project has exactly one environment, edited on its settings: there
         // is no second one to add from here.

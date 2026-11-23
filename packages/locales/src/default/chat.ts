@@ -4762,6 +4762,8 @@ export default {
   'sandboxDrive.toggle': 'Keep files on cloud drive',
   'sandboxEnvironment.driveHint':
     'On the cloud drive, an environment is set up only in an empty folder, so picking one switches to a folder named after it.',
+  'sandboxEnvironment.publicDriveHint':
+    "Folders on the workspace's public drive are visible to every member: what an environment checks out or generates here stays visible even if the environment is made private later.",
   'sandboxDrive.building': '{{name}} · building',
   'sandboxDrive.title': 'Cloud drive',
   'sandboxDrive.browseOther': 'Choose another folder…',

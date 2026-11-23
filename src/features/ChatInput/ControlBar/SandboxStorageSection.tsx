@@ -205,6 +205,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
         value={selection}
         onChange={pick}
         onDrive={entitled && isPersistentSelection(selection)}
+        onPublicDrive={entitled && isOnPublicDrive(selection, workspaceId)}
       />
     </Flexbox>
   );

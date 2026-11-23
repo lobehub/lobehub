@@ -2306,6 +2306,7 @@
   "sandboxEnvironment.missing": "Environment unavailable",
   "sandboxEnvironment.noRepository": "No repository",
   "sandboxEnvironment.none": "No environment",
+  "sandboxEnvironment.publicDriveHint": "Folders on the workspace's public drive are visible to every member: what an environment checks out or generates here stays visible even if the environment is made private later.",
   "sandboxEnvironment.retry": "Retry",
   "sandboxEnvironment.saveFailed": "Could not change the environment. Try again.",
   "sandboxEnvironment.title": "Environment",
