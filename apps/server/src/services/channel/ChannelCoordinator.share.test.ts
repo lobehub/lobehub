@@ -301,6 +301,30 @@ describe('dispatching a contact’s shared Agent', () => {
     });
   });
 
+  // The visitor pressed Stop after the reply was reserved but before its run started.
+  it.each([
+    [{ share }, 1],
+    [{ runtime: 'native' }, 0],
+  ])('counts a reply stopped before its run started (%o)', async (config, calls) => {
+    executions.retireReservation.mockResolvedValue('interrupted');
+    const row = { config, operation: { userId: 'owner' } };
+    const query = Object.assign(Promise.resolve([row]), {
+      from: () => query,
+      innerJoin: () => query,
+      where: () => query,
+    });
+    await new ChannelCoordinator({ select: () => query } as never).stopWriters([
+      { channelId: 'channel', id: 'job', operationId: 'op' },
+    ]);
+
+    expect(recordShareRunResult).toHaveBeenCalledTimes(calls);
+    if (calls)
+      expect(recordShareRunResult).toHaveBeenCalledWith({
+        outcome: 'interrupted',
+        stage: 'admission',
+      });
+  });
+
   it('counts nothing when another worker already settled the reservation', async () => {
     checkSpend.mockResolvedValue({ allowed: false });
     executions.retireReservation.mockResolvedValue(false);

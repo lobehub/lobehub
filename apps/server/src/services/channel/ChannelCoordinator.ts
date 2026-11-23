@@ -670,7 +670,12 @@ export class ChannelCoordinator {
         .innerJoin(channelJobs, eq(channelJobs.operationId, agentOperations.id))
         .where(eq(agentOperations.id, job.operationId));
       if (!row?.operation.userId) continue;
-      if (await this.executions.retireReservation(job.channelId, job.id)) continue;
+      const retired = await this.executions.retireReservation(job.channelId, job.id);
+      if (retired) {
+        // A reply stopped before its run started never reaches the runtime's count.
+        if (row.config?.share) countShareAdmission(retired);
+        continue;
+      }
       // Cancellation must not release the writer while a dispatcher can still submit
       // its network request. An operation result alone does not prove device exit.
       const [current] = await this.db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
