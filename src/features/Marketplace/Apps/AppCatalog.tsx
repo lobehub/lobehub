@@ -33,8 +33,8 @@ import {
   hasAppConnection,
   isAppCategory,
 } from './catalog';
-import { useAppSummary } from './useAppSummary';
 import OfficialMcpItem from './OfficialMcpItem';
+import { useAppSummary } from './useAppSummary';
 import { useMarketplaceApps } from './useMarketplaceApps';
 
 /** `?connect=1` on an app's page starts connecting it as the page opens. */
