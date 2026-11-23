@@ -101,12 +101,94 @@ export const environmentSettingsPath = (projectId?: string) =>
   projectId ? getProjectSettingsPath(projectId, 'environments') : '/settings/environments';
 
 /**
- * Where a conversation works once a repository is picked: a fresh temporary
- * sandbox the repository is cloned into. A repository is only cloned into an
- * empty folder, so it never inherits the folder the conversation was on, and
- * it is never checked out on the drive — the persistent sandbox is for keeping
- * a folder of the drive, not a repository.
+ * The folder an environment is set up in when the conversation keeps its files
+ * on the drive: one of its own, named after the repository it checks out (or
+ * the environment itself), at the top of the drive. The server creates it on
+ * the first run, so it is empty when the environment is applied — an
+ * environment is only set up in an empty folder — and the next conversation
+ * that picks it finds the checkout already there.
  */
-export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
-  environmentId: environment.id,
+export const environmentFolderName = (environment: {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+  name: string;
+}): string => {
+  const base = repositorySlug(environment)?.split('/').pop() || environment.name;
+  // A single path segment the drive accepts: no separators, no leading dot
+  // (hidden, and `.`/`..` are not folders), no surrounding whitespace.
+  const name = base
+    .replaceAll(/[/\\]+/g, '-')
+    .trim()
+    .replace(/^\.+/, '')
+    .slice(0, 64)
+    .trim();
+  return name || 'environment';
+};
+
+/**
+ * The selection once the drive is switched on or off. Off is the temporary
+ * sandbox, still set up from the environment it had. On keeps the
+ * environment too: in the environment's own folder when there is one, so it
+ * is set up in an empty folder, and otherwise in `defaultFolder` — the folder
+ * the agent's last conversation used, or the plan's default.
+ */
+export const selectionWithDrive = (
+  selection: SandboxSelection,
+  enabled: boolean,
+  {
+    defaultFolder,
+    environment,
+  }: {
+    defaultFolder: Pick<SandboxSelection, 'drive' | 'workingDirectory'>;
+    environment?: Parameters<typeof environmentFolderName>[0];
+  },
+): SandboxSelection => {
+  const { environmentId } = selection;
+  if (!enabled) return environmentId ? { environmentId } : {};
+
+  const folder =
+    environmentId && environment
+      ? { drive: defaultFolder.drive, workingDirectory: environmentFolderName(environment) }
+      : defaultFolder;
+  return environmentId ? { ...folder, environmentId } : { ...folder };
+};
+
+/**
+ * The selection once an environment (or none) is picked. On the drive, an
+ * environment moves the conversation into that environment's own folder, so
+ * it is set up rather than skipped in a folder that already holds files;
+ * none keeps the folder. Off the drive only the environment changes. A
+ * legacy environment directory is replaced either way.
+ */
+export const selectionWithEnvironment = (
+  selection: SandboxSelection,
+  environment?: Parameters<typeof environmentFolderName>[0] & { id: string },
+): SandboxSelection => {
+  const onDrive = !!selection.instanceId || selection.workingDirectory !== undefined;
+  if (!onDrive) return environment ? { environmentId: environment.id } : {};
+
+  if (!environment) {
+    if (selection.instanceId) return {};
+    return selection.drive
+      ? { drive: selection.drive, workingDirectory: selection.workingDirectory }
+      : { workingDirectory: selection.workingDirectory };
+  }
+
+  return {
+    ...(selection.drive && { drive: selection.drive }),
+    environmentId: environment.id,
+    workingDirectory: environmentFolderName(environment),
+  };
+};
+
+/**
+ * The selection once a folder of the drive is picked: the environment stays,
+ * and is set up there if the folder is empty.
+ */
+export const selectionWithFolder = (
+  selection: SandboxSelection,
+  folder: Pick<SandboxSelection, 'drive' | 'workingDirectory'>,
+): SandboxSelection => ({
+  ...(folder.drive && { drive: folder.drive }),
+  ...(selection.environmentId && { environmentId: selection.environmentId }),
+  workingDirectory: folder.workingDirectory,
 });

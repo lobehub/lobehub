@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   environmentChipState,
+  environmentFolderName,
   environmentSettingsPath,
   pickableEnvironments,
   projectStartEnvironmentId,
-  repositorySelection,
   repositorySlug,
+  selectionWithDrive,
+  selectionWithEnvironment,
+  selectionWithFolder,
 } from './sandboxEnvironmentOptions';
 
 const environments = [
@@ -84,11 +87,96 @@ describe('environmentSettingsPath', () => {
   });
 });
 
-describe('repositorySelection', () => {
-  const repo = { id: 'env-repo', name: 'lobehub-biz/agent-mail' };
+const repoEnv = {
+  configuration: {
+    sources: [{ kind: 'git' as const, url: 'https://github.com/lobehub/lobe-write.git' }],
+  },
+  id: 'env-repo',
+  name: 'Writer',
+};
+const plainEnv = { id: 'env-plain', name: 'Data tools' };
 
-  it('clones a repository into a temporary sandbox', () => {
-    expect(repositorySelection(repo)).toEqual({ environmentId: 'env-repo' });
+describe('environmentFolderName', () => {
+  it("is named after the environment's repository", () => {
+    expect(environmentFolderName(repoEnv)).toBe('lobe-write');
+  });
+
+  it('is named after the environment without a repository', () => {
+    expect(environmentFolderName(plainEnv)).toBe('Data tools');
+  });
+
+  it('is always one visible path segment', () => {
+    expect(environmentFolderName({ name: '../a/b' })).toBe('-a-b');
+    expect(environmentFolderName({ name: ' .hidden ' })).toBe('hidden');
+    expect(environmentFolderName({ name: '..' })).toBe('environment');
+  });
+});
+
+// T-14791: the drive and the environment are two options of one cloud sandbox.
+describe('selectionWithDrive', () => {
+  const defaultFolder = { drive: 'personal' as const, workingDirectory: 'notes' };
+
+  it('keeps the environment when the drive is switched off', () => {
+    expect(
+      selectionWithDrive({ environmentId: 'env-repo', workingDirectory: 'lobe-write' }, false, {
+        defaultFolder,
+      }),
+    ).toEqual({ environmentId: 'env-repo' });
+    expect(selectionWithDrive({ workingDirectory: 'notes' }, false, { defaultFolder })).toEqual({});
+  });
+
+  it("switches on into the environment's own folder, so it is set up in an empty one", () => {
+    expect(
+      selectionWithDrive({ environmentId: 'env-repo' }, true, {
+        defaultFolder,
+        environment: repoEnv,
+      }),
+    ).toEqual({ drive: 'personal', environmentId: 'env-repo', workingDirectory: 'lobe-write' });
+  });
+
+  it('switches on into the default folder without an environment', () => {
+    expect(selectionWithDrive({}, true, { defaultFolder })).toEqual(defaultFolder);
+  });
+});
+
+describe('selectionWithEnvironment', () => {
+  it('only changes the environment off the drive', () => {
+    expect(selectionWithEnvironment({}, repoEnv)).toEqual({ environmentId: 'env-repo' });
+    expect(selectionWithEnvironment({ environmentId: 'env-repo' })).toEqual({});
+  });
+
+  it("moves a drive conversation into the environment's own folder", () => {
+    expect(
+      selectionWithEnvironment({ drive: 'personal', workingDirectory: 'notes' }, repoEnv),
+    ).toEqual({ drive: 'personal', environmentId: 'env-repo', workingDirectory: 'lobe-write' });
+  });
+
+  it('keeps the folder when the environment is cleared on the drive', () => {
+    expect(
+      selectionWithEnvironment({ environmentId: 'env-repo', workingDirectory: 'lobe-write' }),
+    ).toEqual({ workingDirectory: 'lobe-write' });
+  });
+
+  it('replaces a legacy environment directory', () => {
+    expect(selectionWithEnvironment({ instanceId: 'inst-1' }, plainEnv)).toEqual({
+      environmentId: 'env-plain',
+      workingDirectory: 'Data tools',
+    });
+    expect(selectionWithEnvironment({ instanceId: 'inst-1' })).toEqual({});
+  });
+});
+
+describe('selectionWithFolder', () => {
+  it('keeps the environment when a folder is picked', () => {
+    expect(
+      selectionWithFolder(
+        { environmentId: 'env-repo', instanceId: 'inst-1' },
+        {
+          drive: 'public',
+          workingDirectory: 'team',
+        },
+      ),
+    ).toEqual({ drive: 'public', environmentId: 'env-repo', workingDirectory: 'team' });
   });
 });
 

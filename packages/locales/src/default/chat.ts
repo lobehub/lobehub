@@ -1024,15 +1024,8 @@ export default {
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
-  'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
-  'heteroAgent.executionTarget.persistentSandboxDesc':
-    'Keeps results and work on your drive, for everyday tasks',
-  'heteroAgent.executionTarget.temporarySandbox': 'Temporary Sandbox',
-  'heteroAgent.executionTarget.temporarySandboxDesc':
-    'Discarded after use, for coding and one-off data processing',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
-  'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
@@ -1836,7 +1829,6 @@ export default {
   'gatewayMode.cardTitle': 'Agent Gateway Mode',
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
-  'sandboxStorage.ephemeral': 'Temporary working directory',
   'sandboxStorage.persistentUpsell': 'Persistent working directory',
   'sandboxStorage.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxStorage.setUpEnvironment': 'Set up an environment',
@@ -4753,9 +4745,6 @@ export default {
   'sandboxEnvironment.none': 'No environment',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
-  'sandboxDrive.pickerTitle': 'Work location',
-  'sandboxDrive.pickerInfoTooltip':
-    'A temporary directory is cleaned up with the sandbox. A folder on your cloud drive is kept across conversations. An environment is set up before the first command.',
   'sandboxEnvironment.title': 'Environment',
   'sandboxEnvironment.hint':
     'Its repositories are cloned, setup runs and its variables are set before the first command.',
@@ -4765,6 +4754,14 @@ export default {
   'sandboxEnvironment.retry': 'Retry',
   'sandboxEnvironment.saveFailed': 'Could not change the environment. Try again.',
   'sandboxDrive.root': 'Root',
+  'sandboxDrive.off': 'Temporary',
+  'sandboxDrive.offDesc': 'Off: a temporary sandbox, cleaned up after use',
+  'sandboxDrive.onDesc': 'Files are kept across conversations',
+  'sandboxDrive.setupSkipped':
+    "This folder already has files, so the environment won't be set up in it.",
+  'sandboxDrive.toggle': 'Keep files on cloud drive',
+  'sandboxEnvironment.driveHint':
+    'On the cloud drive, an environment is set up only in an empty folder, so picking one switches to a folder named after it.',
   'sandboxDrive.building': '{{name}} · building',
   'sandboxDrive.title': 'Cloud drive',
   'sandboxDrive.browseOther': 'Choose another folder…',

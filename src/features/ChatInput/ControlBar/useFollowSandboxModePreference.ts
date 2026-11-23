@@ -9,28 +9,24 @@ import {
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
 
 /**
- * What a conversation not started yet should drop when the agent's sandbox
- * mode changes under it — typically from another tab, whose pick only reaches
- * this one through the storage event:
+ * What a conversation not started yet should drop when the agent's drive
+ * preference changes under it — typically from another tab, whose switch only
+ * reaches this one through the storage event: a default seeded the other way
+ * — on the drive while it is now off, or off it while it is now on.
  *
- * - now temporary — the drive default seeded here before the change;
- * - now persistent — a bare temporary sandbox, which is all the temporary
- *   mode ever leaves behind.
- *
- * Anything else was picked for this conversation (a folder, a repository) and
- * stays. Dropping the slot lets the seeding that follows fill it the new way.
+ * Anything picked for this conversation (the drive switch, a folder, an
+ * environment) stays. Dropping the slot lets the seeding that follows fill it
+ * the new way.
  */
 export const staleForMode = (pending: SandboxSelection, temporary: boolean): boolean =>
-  temporary
-    ? isSeededSandboxSelection(pending) && isPersistentSelection(pending)
-    : !isPersistentSelection(pending) && !pending.environmentId;
+  isSeededSandboxSelection(pending) && isPersistentSelection(pending) === temporary;
 
 /**
  * Keep a conversation that has not started yet in step with the agent's
  * sandbox mode. Acts on a change of the preference only — never on mount, and
  * never when what changed is whose preference it is (another agent, workspace
  * or user reusing this composer), which only moves the baseline. A member who
- * cannot pick the mode in the environment menu is not moved by it either. Must
+ * cannot pick the mode is not moved by it either. Must
  * run before the default is seeded, so an emptied slot is filled in the same
  * pass.
  */
@@ -42,7 +38,7 @@ export const useFollowSandboxModePreference = (
     scopeKey,
     temporary,
   }: {
-    /** Whether the mode is picked in the environment menu for this member. */
+    /** Whether this member can switch the drive. */
     enabled: boolean;
     hasTopic: boolean;
     /** Whose preference `temporary` is: user, workspace and agent. */
