@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { confirmModal, Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
+import { Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
 import { EyeOffIcon, GlobeIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 
+import { confirmCredModal } from './confirmCredModal';
 import { isOwnCredRow, isWriteOnlyCredRow, workspaceCredRowAccess } from './credAccess';
 import { credErrorKey } from './credError';
 import { type CredFilter, filterCreds } from './credFilter';
@@ -80,7 +81,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
       : credsApi.setVisibility!(cred.id, next);
 
   const handlePublish = (cred: UserCredSummary) =>
-    confirmModal({
+    confirmCredModal({
       content: <VisibilityConfirmContent variant={'publish'} />,
       okText: t('creds.visibility.publish'),
       onOk: () => run(() => changeVisibility(cred, 'public')),
@@ -88,18 +89,18 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
     });
 
   const handleMakePrivate = (cred: UserCredSummary) =>
-    confirmModal({
+    confirmCredModal({
       content: <VisibilityConfirmContent variant={'makePrivate'} />,
-      okButtonProps: { danger: true },
+      danger: true,
       okText: t('makePrivate.confirm.ok', { ns: 'common' }),
       onOk: () => run(() => changeVisibility(cred, 'private')),
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
 
   const handleUnshare = (cred: UserCredSummary) =>
-    confirmModal({
+    confirmCredModal({
       content: t('creds.share.unshareConfirmDesc'),
-      okButtonProps: { danger: true },
+      danger: true,
       okText: t('creds.share.revoke'),
       onOk: () => run(() => lambdaClient.market.creds.unshare.mutate({ id: cred.id })),
       title: t('creds.share.unshareConfirmTitle'),

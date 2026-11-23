@@ -5,7 +5,6 @@ import {
   ActionIcon,
   Alert,
   Button,
-  confirmModal,
   CopyButton,
   Flexbox,
   Icon,
@@ -21,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
 
+import { confirmCredModal } from '../confirmCredModal';
 import { type CredsApi } from '../useCredsApi';
 
 // The theme's card border (light: colorFill, dark: colorFillSecondary), the
@@ -129,7 +129,7 @@ const SecretRow: FC<{ name: string; value: string }> = ({ name, value }) => {
 
 /** A row-specific action (share, publish, unshare…) offered in the detail footer. */
 export interface CredDetailAction {
-  /** Danger actions sit on the left beside Remove; the rest before Edit. */
+  /** Danger actions sit on the left beside Remove (red fill); the rest before Edit. */
   danger?: boolean;
   icon?: LucideIcon;
   key: string;
@@ -153,7 +153,7 @@ export interface ViewCredModalContentProps {
 /**
  * A vault item opened from its row: its fields as one bordered list (a
  * key-value item's stored values included, masked), with Remove on the left of
- * the footer and Edit / Done on the right.
+ * the footer and Edit / Done on the right. Every button but Done is the fill variant.
  */
 const ViewCredModalContent: FC<ViewCredModalContentProps> = ({
   actions = [],
@@ -178,9 +178,9 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({
 
   const handleRemove = () => {
     if (!onDelete) return;
-    confirmModal({
+    confirmCredModal({
       content: t('creds.actions.deleteConfirm.content'),
-      okButtonProps: { danger: true },
+      danger: true,
       okText: t('creds.actions.deleteConfirm.ok'),
       onOk: async () => {
         try {
@@ -204,7 +204,7 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({
       danger={action.danger}
       icon={action.icon ? <Icon icon={action.icon} /> : undefined}
       key={action.key}
-      type={action.danger ? 'text' : 'fill'}
+      type={'fill'}
       onClick={runAction(action)}
     >
       {action.label}
@@ -255,9 +255,9 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({
       )}
 
       <div {...stylex.props(styles.footer)}>
-        <Flexbox horizontal align={'center'} gap={4}>
+        <Flexbox horizontal align={'center'} gap={8}>
           {onDelete && (
-            <Button danger type={'text'} onClick={handleRemove}>
+            <Button danger type={'fill'} onClick={handleRemove}>
               {t('creds.actions.remove')}
             </Button>
           )}
