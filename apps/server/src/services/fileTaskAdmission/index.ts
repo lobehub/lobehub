@@ -28,12 +28,16 @@ const LEASE_RENEW_MS = 60_000;
  * at the workspace limit; past it, a task whose message was lost surfaces as a retryable timeout.
  */
 const QUEUE_DEADLINE_MS = 24 * 60 * 60 * 1000;
-/** One delivery stays well inside the function limit, whether it waits for a slot or a task. */
-const DELIVERY_BUDGET_MS = 50_000;
-/** Keeps the function alive long enough for a late-admitted request to leave. */
-const MIN_TRIGGER_HOLD_MS = 5000;
-const SLOT_POLL_MS = 2000;
+/**
+ * A delivery waits this long for a slot, then this long for the route to answer, so it fits the
+ * 10-second function limit of the smallest Vercel plan with room for a cold start.
+ */
+const SLOT_WAIT_MS = 3000;
+const TRIGGER_HOLD_MS = 3000;
+const SLOT_POLL_MS = 1000;
 const REQUEUE_DELAY_SECONDS = 10;
+/** Deliveries per workspace in each window, so a full workspace cannot churn its backlog. */
+const QUEUE_RATE_PERIOD = '10s';
 
 export const FILE_TASK_QUEUE_RETRIES = 5;
 
@@ -105,11 +109,13 @@ const publishQueuedFileTask = async (task: FileTaskRef, delaySeconds?: number) =
   await new OtelQstashClient({ token: process.env.QSTASH_TOKEN! }).publishJSON({
     body: task,
     ...(delaySeconds ? { delay: delaySeconds } : {}),
-    // Paces a queued import without polling. While Redis is down this is the only limit left: it
-    // caps deliveries in progress, so it bounds how fast tasks start rather than how many run.
+    // Paces a queued import. While Redis is down this is the only limit left: it bounds how fast
+    // a workspace's tasks start rather than how many run.
     flowControl: {
       key: `file-task.${scope.replace(':', '.')}`,
       parallelism: fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY,
+      period: QUEUE_RATE_PERIOD,
+      rate: fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY,
     },
     ...(bypassSecret ? { headers: { 'x-vercel-protection-bypass': bypassSecret } } : {}),
     retries: FILE_TASK_QUEUE_RETRIES,
@@ -208,7 +214,7 @@ export const processQueuedFileTask = async (
   if (!current || !queuedUntil || isSettled(current.status)) return 'skipped';
 
   const scope = getFileTaskScope(task.userId, task.workspaceId);
-  const deadline = Date.now() + DELIVERY_BUDGET_MS;
+  const deadline = Date.now() + SLOT_WAIT_MS;
 
   // Turning admission off has to drain what is already queued: a limit of 0 would never admit it.
   const acquireSlot = async (): Promise<FileTaskSlotAcquireResult> =>
@@ -216,11 +222,9 @@ export const processQueuedFileTask = async (
       ? redisService.fileTaskSlots.acquire(scope, task.taskId, getLimits())
       : { status: 'unavailable' };
 
-  // Waiting here keeps this delivery's flow-control slot, so a full workspace does not cycle its
-  // whole backlog through QStash.
   let lease = await acquireSlot();
   while (lease.status === 'full' && Date.now() < deadline) {
-    await sleep(SLOT_POLL_MS + Math.random() * 500);
+    await sleep(SLOT_POLL_MS + Math.random() * 250);
     lease = await acquireSlot();
   }
 
@@ -254,10 +258,7 @@ export const processQueuedFileTask = async (
     // request still in flight is not sent again, because it may yet run and a second copy would
     // duplicate chunks. If it was lost, the status poll fails the task and the user can retry.
     new Promise<{ failed: false }>((resolve) => {
-      holdTimer = setTimeout(
-        () => resolve({ failed: false }),
-        Math.max(deadline - Date.now(), MIN_TRIGGER_HOLD_MS),
-      );
+      holdTimer = setTimeout(() => resolve({ failed: false }), TRIGGER_HOLD_MS);
     }),
   ]);
   clearTimeout(holdTimer);

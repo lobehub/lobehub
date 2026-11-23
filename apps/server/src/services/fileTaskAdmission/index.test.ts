@@ -17,7 +17,7 @@ interface FakeTask {
 interface PublishedMessage {
   body: { fileId: string; kind: 'embedding' | 'parse'; taskId: string; userId: string };
   delay?: number;
-  flowControl: { key: string; parallelism: number };
+  flowControl: { key: string; parallelism: number; period: string; rate: number };
 }
 
 const h = vi.hoisted(() => ({
@@ -171,12 +171,26 @@ const installRoutes = () => {
 
 /** A QStash stand-in that keeps messages durably and honors delay and flow-control parallelism. */
 const installQueue = () => {
-  const flows = new Map<string, { active: number; ready: PublishedMessage[] }>();
+  const flows = new Map<
+    string,
+    { active: number; ready: PublishedMessage[]; sent: number; windowEnd: number }
+  >();
   let published = 0;
 
   const pump = (key: string) => {
     const flow = flows.get(key)!;
     while (flow.ready.length > 0 && flow.active < flow.ready[0].flowControl.parallelism) {
+      const { period, rate } = flow.ready[0].flowControl;
+      const now = Date.now();
+      if (now >= flow.windowEnd) {
+        flow.sent = 0;
+        flow.windowEnd = now + Number.parseInt(period) * 1000;
+      }
+      if (flow.sent >= rate) {
+        setTimeout(() => pump(key), flow.windowEnd - now);
+        return;
+      }
+      flow.sent++;
       const message = flow.ready.shift()!;
       flow.active++;
       processQueuedFileTask(message.body as any, { finalAttempt: false })
@@ -193,7 +207,7 @@ const installQueue = () => {
   h.publish.mockImplementation(async (message: PublishedMessage) => {
     published++;
     const { key } = message.flowControl;
-    if (!flows.has(key)) flows.set(key, { active: 0, ready: [] });
+    if (!flows.has(key)) flows.set(key, { active: 0, ready: [], sent: 0, windowEnd: 0 });
     setTimeout(
       () => {
         flows.get(key)!.ready.push(message);
@@ -279,8 +293,8 @@ describe('file task admission', () => {
     expect(stats.started).toBe(1000);
     expect(new Set(parseFileToChunks.mock.calls.map(([input]) => input.taskId)).size).toBe(1000);
     expect(h.slots.global.size).toBe(0);
-    // Waiting holds the delivery, so the backlog does not cycle through QStash.
-    expect(queue.published()).toBeLessThan(1500);
+    // The delivery rate keeps a waiting backlog from cycling through QStash.
+    expect(queue.published()).toBeLessThan(10_000);
   }, 60_000);
 
   it('applies the deployment-wide limit across workspaces', async () => {
