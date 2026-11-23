@@ -147,11 +147,7 @@ export class AntigravityLiveInput {
       return;
     }
 
-    if (
-      message.event === 'step_update' &&
-      message.step_update &&
-      typeof message.step_update === 'object'
-    ) {
+    if (message.event === 'step_update' && message.step_update && typeof message.step_update === 'object') {
       const step = message.step_update;
       const conversationId =
         typeof step.conversation_id === 'string' && step.conversation_id

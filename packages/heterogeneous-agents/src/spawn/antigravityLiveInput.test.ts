@@ -86,9 +86,7 @@ describe('AntigravityLiveInput', () => {
       '{"event":"step_update","step_update":{"conversation_id":"child-conv","step_index":1,"state":"DONE","step_type":"user_input"}}\n',
     );
     // Parent turn 1 completes: stdin must stay open because u-steer is still pending
-    live.observe(
-      '{"event":"result","result":{"conversation_id":"parent-conv","status":"SUCCESS"}}\n',
-    );
+    live.observe('{"event":"result","result":{"conversation_id":"parent-conv","status":"SUCCESS"}}\n');
 
     expect(live.isOpen).toBe(true);
     expect(live.takeSteerUuid()).toBe('u-steer');
@@ -103,9 +101,7 @@ describe('resolveAntigravityLiveRuntimeEnd', () => {
       reason: 'complete',
       transport: 'cli-live',
     });
-    expect(
-      resolveAntigravityLiveRuntimeEnd({ ok: false, status: 'ERROR' }, cleanExit),
-    ).toBeUndefined();
+    expect(resolveAntigravityLiveRuntimeEnd({ ok: false, status: 'ERROR' }, cleanExit)).toBeUndefined();
     expect(resolveAntigravityLiveRuntimeEnd(undefined, cleanExit)).toBeUndefined();
     expect(
       resolveAntigravityLiveRuntimeEnd({ ok: true }, { ...cleanExit, code: 1 }),
