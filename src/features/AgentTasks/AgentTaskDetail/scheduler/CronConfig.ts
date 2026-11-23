@@ -1,3 +1,4 @@
+import { parseCronWeekdays } from '@lobechat/utils/cronEval';
 import { type Dayjs } from 'dayjs';
 
 export type ScheduleType = 'daily' | 'hourly' | 'weekly';
@@ -102,7 +103,7 @@ export const parseCronPattern = (
   triggerMinute: number;
   weekdays?: number[];
 } => {
-  const parts = cronPattern.split(' ');
+  const parts = cronPattern.trim().split(/\s+/);
   if (parts.length !== 5) {
     return { scheduleType: 'daily', triggerHour: 0, triggerMinute: 0 };
   }
@@ -123,11 +124,31 @@ export const parseCronPattern = (
   const triggerHour = Number.parseInt(hour);
 
   if (weekday !== '*') {
-    const weekdays = weekday.split(',').map((d) => Number.parseInt(d));
-    return { scheduleType: 'weekly', triggerHour, triggerMinute, weekdays };
+    return {
+      scheduleType: 'weekly',
+      triggerHour,
+      triggerMinute,
+      weekdays: parseCronWeekdays(cronPattern),
+    };
   }
 
   return { scheduleType: 'daily', triggerHour, triggerMinute };
+};
+
+/**
+ * Replace a single field in a standard 5-field cron expression while preserving
+ * all other fields (for example, weekday qualifiers such as `FRI#2` or `5L`).
+ * Returns `null` when the pattern is not a 5-field expression.
+ */
+export const updateCronPatternField = (
+  cronPattern: string,
+  fieldIndex: 0 | 1 | 2 | 3 | 4,
+  value: string,
+): string | null => {
+  const parts = cronPattern.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  parts[fieldIndex] = value;
+  return parts.join(' ');
 };
 
 /**
@@ -152,7 +173,10 @@ export const buildCronPattern = (
       return `${minute} ${hour} * * *`;
     }
     case 'weekly': {
-      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : '0,1,2,3,4,5,6';
+      const days =
+        weekdays && weekdays.length > 0
+          ? [...weekdays].sort((a, b) => a - b).join(',')
+          : '0,1,2,3,4,5,6';
       return `${minute} ${hour} * * ${days}`;
     }
   }
