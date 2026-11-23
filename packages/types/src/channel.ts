@@ -449,6 +449,17 @@ export type ChannelMemberGrantStatus = 'approved' | 'pending' | 'rejected' | 're
 
 export type ChannelMemberGrantRevokeReason = 'device_owner_left' | 'revoked_by_owner';
 
+/**
+ * An Agent owner's consent for other people in a Channel to run their Agent, billed to the owner.
+ * Its scope narrows from the whole Channel to one person, one Thread, or one person in one Thread.
+ */
+export type ChannelAgentGrantStatus = 'approved' | 'pending' | 'rejected' | 'revoked';
+
+export type ChannelAgentGrantRevokeReason =
+  'agent_removed' | 'grantee_left' | 'owner_left' | 'revoked_by_owner';
+
+export type ChannelAgentGrantMetadata = Record<string, unknown>;
+
 export interface ChannelContextMessage {
   /** `id` is the actual user/Agent id, or NULL after author deletion. */
   author: { id: string | null; name: string; type: ChannelMemberActorType };

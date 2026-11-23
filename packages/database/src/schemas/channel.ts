@@ -1,4 +1,7 @@
 import type {
+  ChannelAgentGrantMetadata,
+  ChannelAgentGrantRevokeReason,
+  ChannelAgentGrantStatus,
   ChannelAuditDetails,
   ChannelConfig,
   ChannelExecutionConfig,
@@ -297,6 +300,74 @@ export const channelMemberGrants = pgTable(
   ],
 );
 
+/**
+ * An Agent owner's consent for others in the Channel to run their Agent member as the owner, at
+ * the owner's cost. `granteeMemberId` and `threadId` narrow the scope; leaving both empty covers
+ * the whole Channel, and a reply runs when any live grant matches its requester and Thread.
+ * A changed scope is a new row, so a decision never carries over to a scope the owner did not see.
+ */
+export const channelAgentGrants = pgTable(
+  'channel_agent_grants',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    channelId: text('channel_id')
+      .references(() => channels.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** The Agent member the grant lets others run. */
+    memberId: uuid('member_id').notNull(),
+    /** Agent owner who approves, rejects or revokes, and who pays for the runs. */
+    ownerId: text('owner_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Person the grant covers; empty covers everyone in the Channel. */
+    granteeMemberId: uuid('grantee_member_id'),
+    /** Thread the grant covers; empty covers the main timeline and every Thread. */
+    threadId: text('thread_id'),
+    /** Person who asked for it; empty when the owner granted it themselves. */
+    requestedByMemberId: uuid('requested_by_member_id'),
+
+    status: text('status').$type<ChannelAgentGrantStatus>().notNull().default('pending'),
+    decidedAt: timestamptz('decided_at'),
+    revokedAt: timestamptz('revoked_at'),
+    revokeReason: text('revoke_reason').$type<ChannelAgentGrantRevokeReason>(),
+    metadata: jsonb('metadata').$type<ChannelAgentGrantMetadata>().default({}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // One live grant per scope; decided-against and revoked rows stay as history.
+    uniqueIndex('channel_agent_grants_live_scope_unique')
+      .on(
+        t.memberId,
+        sql`coalesce(${t.granteeMemberId}::text, '')`,
+        sql`coalesce(${t.threadId}, '')`,
+      )
+      .where(sql`${t.status} IN ('pending', 'approved')`),
+    index('channel_agent_grants_owner_status_idx').on(t.ownerId, t.status),
+    index('channel_agent_grants_grantee_idx').on(t.granteeMemberId),
+    foreignKey({
+      columns: [t.channelId, t.memberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_agent_grants_member_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.channelId, t.granteeMemberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_agent_grants_grantee_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.channelId, t.requestedByMemberId],
+      foreignColumns: [channelMembers.channelId, channelMembers.id],
+      name: 'channel_agent_grants_requester_fk',
+    }),
+    foreignKey({
+      columns: [t.channelId, t.threadId],
+      foreignColumns: [channelThreads.channelId, channelThreads.id],
+      name: 'channel_agent_grants_thread_fk',
+    }).onDelete('cascade'),
+  ],
+);
+
 export const channelAudit = pgTable(
   'channel_audit',
   {
@@ -570,6 +641,8 @@ export type ChannelMemberItem = typeof channelMembers.$inferSelect;
 export type ChannelSectionItem = typeof channelSections.$inferSelect;
 export type NewChannelMember = typeof channelMembers.$inferInsert;
 export type ChannelMemberGrantItem = typeof channelMemberGrants.$inferSelect;
+export type ChannelAgentGrantItem = typeof channelAgentGrants.$inferSelect;
+export type NewChannelAgentGrant = typeof channelAgentGrants.$inferInsert;
 export type ChannelThreadItem = typeof channelThreads.$inferSelect;
 export type ChannelMessageItem = typeof channelMessages.$inferSelect;
 export type NewChannelMessage = typeof channelMessages.$inferInsert;
