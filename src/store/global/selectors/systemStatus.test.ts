@@ -15,6 +15,7 @@ import {
   reorderSidebarItems,
   routeOverlayWrites,
   setSidebarSectionHidden,
+  SIDEBAR_ACCORDION_KEYS,
   SIDEBAR_SPACER_ID,
   systemStatusSelectors,
 } from './systemStatus';
@@ -348,14 +349,14 @@ describe('systemStatusSelectors', () => {
         'goals',
         'project',
         'dashboard',
+        'resource',
+        'image',
+        'community',
         'favorites',
         'recents',
         'agent',
         'channels',
         SIDEBAR_SPACER_ID,
-        'image',
-        'community',
-        'resource',
       ]);
     });
 
@@ -395,6 +396,52 @@ describe('systemStatusSelectors', () => {
       ]);
     });
 
+    it.each([
+      ['April', ['pages', 'recents', 'agent', 'community', 'resource', 'memory']],
+      [
+        'June',
+        [
+          'tasks',
+          'pages',
+          'recents',
+          'agent',
+          SIDEBAR_SPACER_ID,
+          'image',
+          'community',
+          'resource',
+          'memory',
+        ],
+      ],
+      [
+        'August',
+        [
+          'tasks',
+          'resource',
+          'recents',
+          'private',
+          'agent',
+          SIDEBAR_SPACER_ID,
+          'image',
+          'community',
+          'pages',
+          'memory',
+        ],
+      ],
+    ])('should move every link of the former %s default above the sections', (_, stored) => {
+      const items = systemStatusSelectors.sidebarItems(null)(
+        merge(initialState, { status: { sidebarItems: stored } }),
+      );
+      const firstSection = items.findIndex((key) => SIDEBAR_ACCORDION_KEYS.has(key));
+
+      expect(items.slice(items.indexOf(SIDEBAR_SPACER_ID) + 1)).toEqual([]);
+      // They land in default order, below the links that lead the list.
+      expect(items.indexOf('tasks')).toBeLessThan(items.indexOf('resource'));
+      expect(items.indexOf('project')).toBeLessThan(items.indexOf('image'));
+      expect(items.indexOf('resource')).toBeLessThan(items.indexOf('image'));
+      expect(items.indexOf('image')).toBeLessThan(items.indexOf('community'));
+      expect(items.indexOf('community')).toBeLessThan(firstSection);
+    });
+
     it('should keep Generation and Plugins pinned at the bottom once saved that way', () => {
       // A layout saved after the move no longer lists `memory`.
       const stored = ['tasks', 'recents', 'agent', SIDEBAR_SPACER_ID, 'image', 'community'];
@@ -406,12 +453,12 @@ describe('systemStatusSelectors', () => {
     });
 
     it('should leave a hand-arranged bottom group in place and only drop Memory', () => {
-      const stored = ['recents', 'agent', SIDEBAR_SPACER_ID, 'resource', 'image', 'memory'];
+      const stored = ['recents', 'agent', SIDEBAR_SPACER_ID, 'tasks', 'image', 'memory'];
       const items = systemStatusSelectors.sidebarItems(null)(
         merge(initialState, { status: { sidebarItems: stored } }),
       );
       const spacerIdx = items.indexOf(SIDEBAR_SPACER_ID);
-      expect(items.slice(spacerIdx + 1)).toEqual(['resource', 'image']);
+      expect(items.slice(spacerIdx + 1)).toEqual(['tasks', 'image']);
       expect(items).not.toContain('memory');
     });
 
