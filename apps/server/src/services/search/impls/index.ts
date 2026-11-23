@@ -1,3 +1,4 @@
+import { AimlApiImpl } from './aimlapi';
 import { AnspireImpl } from './anspire';
 import { BochaImpl } from './bocha';
 import { BraveImpl } from './brave';
@@ -16,6 +17,7 @@ import { type SearchServiceImpl } from './type';
  * Available search service implementations
  */
 export enum SearchImplType {
+  AimlApi = 'aimlapi',
   Anspire = 'anspire',
   Bocha = 'bocha',
   Brave = 'brave',
@@ -37,6 +39,10 @@ export const createSearchServiceImpl = (
   type: SearchImplType = SearchImplType.SearXNG,
 ): SearchServiceImpl => {
   switch (type) {
+    case SearchImplType.AimlApi: {
+      return new AimlApiImpl();
+    }
+
     case SearchImplType.Anspire: {
       return new AnspireImpl();
     }
