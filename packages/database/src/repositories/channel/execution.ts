@@ -176,13 +176,15 @@ export class ChannelExecutionRepository {
 
   /**
    * Retire only an untouched reservation, racing recordStart on the operation row itself.
-   * `failure` records why dispatch refused it, for a reason the requester can act on.
+   * `failure` records why dispatch refused it, for a reason the requester can act on. Returns
+   * the status the operation ended in (`interrupted` when the reply was cancelled meanwhile),
+   * or `false` when there was no untouched reservation to retire.
    */
   retireReservation = async (
     channelId: string,
     jobId: string,
     failure?: { message: string; type?: string },
-  ) =>
+  ): Promise<'error' | 'interrupted' | false> =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId, true);
       if (!job.operationId || !job.writerHeld) return false;
@@ -204,7 +206,7 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await audit(tx, channelId, 'reservation_retired', job.id, { status });
-      return true;
+      return status;
     });
 
   /** Writes back a routing decision for `attempt`; null when the result is stale. */
