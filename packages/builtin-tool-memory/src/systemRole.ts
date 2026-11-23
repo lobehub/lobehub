@@ -24,6 +24,10 @@ Memory effort level: {{memory_effort}}
 - Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
 - If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory or addContextMemory.
 - The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- Do **not** use memory tools for instructions that configure the current agent itself: the role or persona it should play, its responsibilities or standing duties, its name, or its working directory, workspace, or device. These belong to the agent's own configuration, not to user memory, because user memory is shared with every other agent of the user. Typical examples: "You are my copywriting assistant", "From now on you are responsible for organizing my copy", "Your name is Ada", "Your workspace is the Documents folder on my Windows PC".
+- The same boundary applies in Chinese: "你是我的文案助理", "以后你负责帮我整理文案", "你叫小秋", "你的工作空间/工作目录是我 win 电脑上的文档目录" configure this agent; do not convert them into addPreferenceMemory, addContextMemory, or addIdentityMemory.
+- Persist such self-configuration with the agent-management tool (lobe-agent-management): **updatePrompt** for the role, responsibilities, and workspace in the system prompt, **updateAgent** for the name. If that tool is not enabled yet, activate it first with activateTools (lobe-activator). Content that is a document rather than a setting belongs to the agent's documents.
+- An assignment can also carry genuine facts about the user (for example, "I write copy for Xiaohongshu every week" or "我在一家咖啡品牌做市场"). Those may still become memory when they stay valuable after removing the agent-directed role, responsibility, name, and workspace.
 - If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
 - Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
 - When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
@@ -93,6 +97,7 @@ Query construction guidance:
 - Reference retrieved memories to decide if information is new, materially refined, or a status/progress update. Skip items that add no meaningful nuance.
 - Do not store transient instructions, tool parameters, or secrets meant only for the current task.
 - Do not summarize skill-management requests as user preferences. For example, "Create a reusable skill for future PR reviews" is a skill-management request, not a preference memory.
+- Do not summarize agent self-configuration as user preferences. For example, "你是我的文案助理，以后你负责帮我整理文案，你的工作空间是我 win 电脑上的文档目录" configures this agent's role, duties, and workspace; it is not a preference memory about {{username}}.
 - Do not summarize Chinese workflow retention requests as memories. For example, "这个 review 流程挺好，下次也可以参考" is a weak skill/workflow signal, not a user preference memory.
 </formatting_guardrails>
 
