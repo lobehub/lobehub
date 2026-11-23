@@ -85,6 +85,11 @@ export default {
   'creditsChip.balance': 'Balance {{amount}}',
   'creditsChip.viewDetails': 'View details',
   'creditsChip.viewUsage': 'View usage',
+  'creditsChip.memberBudget.tooltip': 'Your budget in this workspace',
+  'creditsChip.workspace.sharedNote':
+    "You have no budget limit of your own. Requests use the workspace's shared balance.",
+  'creditsChip.workspace.title': 'Workspace balance',
+  'creditsChip.workspace.tooltip': "Workspace's shared balance",
   'creditsChip.balanceInUse': 'In use',
   'creditsChip.balanceNote.limit': 'Monthly limit reached. Requests now use your balance.',
   'creditsChip.balanceNote.plan': 'Plan limit reached. Requests now use your balance.',
