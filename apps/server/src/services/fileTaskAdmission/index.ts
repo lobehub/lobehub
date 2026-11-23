@@ -45,7 +45,11 @@ const QUEUE_PATH = '/api/workflows/file-task/dispatch';
 const TRIGGER_ERROR_MESSAGE =
   'trigger chunk embedding async task error. Please make sure the APP_URL is available from your server. You can check the proxy config or WAF blocking';
 
-const getBaseUrl = () => appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
+/**
+ * QStash calls back from outside the deployment, so this cannot be `INTERNAL_APP_URL`, which is
+ * `localhost` in the documented Docker setup.
+ */
+const getQueueBaseUrl = () => process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL;
 
 const getLimits = () => ({
   globalLimit: fileEnv.FILE_TASK_GLOBAL_CONCURRENCY,
@@ -68,7 +72,7 @@ export const isFileTaskAdmissionEnabled = () => {
     Boolean(process.env.QSTASH_TOKEN) &&
     Boolean(process.env.QSTASH_CURRENT_SIGNING_KEY) &&
     Boolean(process.env.QSTASH_NEXT_SIGNING_KEY) &&
-    Boolean(getBaseUrl()) &&
+    Boolean(getQueueBaseUrl()) &&
     getRedisConfig().enabled
   );
 };
@@ -119,7 +123,7 @@ const publishQueuedFileTask = async (task: QueuedFileTask, delaySeconds?: number
     },
     ...(bypassSecret ? { headers: { 'x-vercel-protection-bypass': bypassSecret } } : {}),
     retries: FILE_TASK_QUEUE_RETRIES,
-    url: new URL(QUEUE_PATH, getBaseUrl()).toString(),
+    url: new URL(QUEUE_PATH, getQueueBaseUrl()).toString(),
   });
 };
 

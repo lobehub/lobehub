@@ -38,7 +38,9 @@ vi.mock('@lobechat/observability-otel/modules/file-task-admission', () => ({
   recordFileTaskAdmission: vi.fn(),
   recordFileTaskGlobalActive: h.recordGlobalActive,
 }));
-vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.test' } }));
+vi.mock('@/envs/app', () => ({
+  appEnv: { APP_URL: 'https://app.test', INTERNAL_APP_URL: 'http://localhost:3210' },
+}));
 vi.mock('@/envs/file', () => ({ fileEnv: h.fileEnv }));
 vi.mock('@/envs/redis', () => ({ getRedisConfig: () => ({ enabled: true }) }));
 vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
@@ -378,6 +380,10 @@ describe('file task admission', () => {
 
     expect(parseFileToChunks).not.toHaveBeenCalled();
     expect(h.publish).toHaveBeenCalledTimes(1);
+    // QStash cannot reach the in-container address.
+    expect(h.publish.mock.calls[0][0].url).toBe(
+      'https://app.test/api/workflows/file-task/dispatch',
+    );
   });
 
   it('marks the task failed when it can be neither started nor queued', async () => {
