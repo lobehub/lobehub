@@ -2227,6 +2227,7 @@
   "resource.artifacts.history.previewHint": "选择一个修订版进行预览。",
   "resource.artifacts.history.restore": "恢复",
   "resource.artifacts.history.restoreError": "恢复修订版失败",
+  "resource.artifacts.history.restoreFailedRetry": "无法恢复到该修订版，请检查网络后重试。",
   "resource.artifacts.history.restoreSuccess": "已切换到 v{{from}}",
   "resource.artifacts.history.restoreTo": "恢复到 v{{revision}}",
   "resource.artifacts.history.revisionCount": "{{count}} 个修订版",

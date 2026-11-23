@@ -2227,6 +2227,7 @@
   "resource.artifacts.history.previewHint": "Select a revision to preview.",
   "resource.artifacts.history.restore": "Restore",
   "resource.artifacts.history.restoreError": "Failed to restore revision",
+  "resource.artifacts.history.restoreFailedRetry": "Couldn't restore this revision. Check your network and try again.",
   "resource.artifacts.history.restoreSuccess": "Switched to v{{from}}",
   "resource.artifacts.history.restoreTo": "Restore to v{{revision}}",
   "resource.artifacts.history.revisionCount": "{{count}} revisions",

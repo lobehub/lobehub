@@ -4777,6 +4777,8 @@ export default {
   'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
   'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
   'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
+  'resource.artifacts.history.restoreFailedRetry':
+    "Couldn't restore this revision. Check your network and try again.",
   'taskLabel.add': 'Add labels',
   'taskLabel.anyInGroup': 'Any {{name}}',
   'taskLabel.createFailed': 'Failed to create label',
