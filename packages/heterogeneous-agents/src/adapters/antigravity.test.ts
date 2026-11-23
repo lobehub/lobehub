@@ -138,6 +138,45 @@ describe('AntigravityAdapter', () => {
     expect(events[0].data.toolsCalling[0].arguments).toBe('{}');
   });
 
+  it('matches a tool completion without a name to its existing step', () => {
+    const adapter = new AntigravityAdapter();
+    const events = [
+      init,
+      tool(3, {
+        state: 'ACTIVE',
+        tool_info: { name: 'view_file', parameters: { path: 'marker.txt' } },
+      }),
+      tool(3, { tool_info: { output: 'file contents' } }),
+      step(4, { text_delta: 'hello\n' }),
+      result(),
+    ].flatMap((raw) => adapter.adapt(raw));
+
+    expect(events.filter((e) => e.type === 'tool_result').map((e) => e.data)).toEqual([
+      { content: 'file contents', isError: false, toolCallId: 'agy_conv-1_3' },
+    ]);
+    expect(text(events)).toBe('hello\n');
+    expect(events.filter((e) => e.type === 'error')).toEqual([]);
+  });
+
+  it('reports a missing tool completion even when the turn succeeds', () => {
+    const adapter = new AntigravityAdapter();
+    const events = [
+      init,
+      tool(3, { state: 'ACTIVE' }),
+      step(4, { text_delta: 'hello\n' }),
+      result(),
+    ].flatMap((raw) => adapter.adapt(raw));
+
+    expect(events.find((e) => e.type === 'tool_result')?.data).toMatchObject({
+      isError: true,
+      toolCallId: 'agy_conv-1_3',
+    });
+    expect(events.find((e) => e.type === 'error')?.data).toMatchObject({
+      code: 'incomplete_tool_result',
+    });
+    expect(text(events)).toBe('hello\n');
+  });
+
   it('starts an interrupted tool before settling it', () => {
     const adapter = new AntigravityAdapter();
     adapter.adapt(init);
