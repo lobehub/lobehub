@@ -83,7 +83,7 @@
   "response.DeviceGatewayNotConfigured": "无法连接到运行此助理的设备。请先连接设备，或在服务端配置设备网关，然后重试。",
   "response.DeviceResponseTimeout": "设备未及时响应，可能已离线或休眠，也可能仍在启动本次运行。请确认设备已连接、且没有正在进行的本次运行后，再重试。",
   "response.ExceededContextWindowCloud": "当前对话内容过长，无法继续处理。请编辑最后一条消息减少输入内容或者删除一些消息重试。",
-  "response.FreePlanLimit": "当前套餐不支持该功能。请升级到付费套餐后继续。",
+  "response.FreePlanLimit": "免费额度已用完。充值或升级套餐后继续，也可以改用自己 API Key 的模型。",
   "response.GoogleAIBlockReason.BLOCKLIST": "内容包含被屏蔽的词语。请重新措辞后再试。",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "生成的图像因安全原因被屏蔽。请尝试修改您的请求。",
   "response.GoogleAIBlockReason.LANGUAGE": "请求的语言不受支持。请尝试使用支持的语言。",
