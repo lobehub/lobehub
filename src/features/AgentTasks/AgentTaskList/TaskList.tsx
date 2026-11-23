@@ -170,7 +170,8 @@ const TaskGroupHeader = memo<{
   }, [createDefaults, createScope]);
 
   return (
-    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
+    // Top-level groups sit 4px apart, like Linear's stacked group headers.
+    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 4 }}>
       <div {...stylex.props(styles.header)}>
         <AccordionRoot
           indicatorPlacement={'start'}
