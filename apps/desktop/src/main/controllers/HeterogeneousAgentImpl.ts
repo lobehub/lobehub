@@ -2516,7 +2516,7 @@ export default class HeterogeneousAgentCtr {
           session.liveInput = undefined;
           if (code === 0) broadcastStreamEvents(pipeline.validateCompletion());
           const liveEnd = endLiveCliRun(pipeline, liveInput, { code, sawError, signal });
-          if (code === 0 || liveEnd.length > 0) {
+          if (pipeline.resolveExitCode(code) === 0 || liveEnd.length > 0) {
             broadcastStreamEvents(liveEnd);
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
