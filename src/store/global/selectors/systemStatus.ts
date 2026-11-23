@@ -315,6 +315,8 @@ export const normalizeLegacyExpandedKeys = (keys: string[]): string[] => {
 const FORMER_BOTTOM_LINKS = new Set(['image', 'community']);
 /** Memory left the sidebar for Settings; only layouts saved before that still list it. */
 const RETIRED_MEMORY_KEY = 'memory';
+/** Everything earlier defaults kept below the spacer, besides Memory. `pages` is retired. */
+const FORMER_DEFAULT_BOTTOM_KEYS = new Set(['community', 'image', 'pages', 'resource']);
 
 const arraysEqual = (a: string[], b: string[]): boolean => {
   if (a === b) return true;
@@ -345,22 +347,20 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
   return [...withoutSpacer.slice(0, insertAt), SIDEBAR_SPACER_ID, ...withoutSpacer.slice(insertAt)];
 };
 
-// Generation and Plugins moved above the accordion. A layout saved before that
-// still lists `memory`, which no saved layout contains afterwards, so the move
-// runs once per layout and never undoes a later choice to pin them at the bottom.
-// A bottom group holding anything else was arranged by hand and stays.
-const migrateFormerBottomLinks = (order: string[]): string[] => {
+// Generation, Plugins and Docs moved above the accordion. A layout saved before
+// that still lists `memory`, which no saved layout contains afterwards, so the
+// move runs once per layout and never undoes a later choice to keep them below.
+// A bottom group holding anything else was arranged by hand and stays. The links
+// are only dropped here: the backfill puts them back in their default order.
+const dropFormerDefaultBottom = (order: string[]): string[] => {
   if (!order.includes(RETIRED_MEMORY_KEY)) return order;
 
   const without = order.filter((k) => k !== RETIRED_MEMORY_KEY);
   const spacerIndex = without.indexOf(SIDEBAR_SPACER_ID);
   const bottom = without.slice(spacerIndex + 1);
-  if (bottom.length === 0 || !bottom.every((k) => FORMER_BOTTOM_LINKS.has(k))) return without;
-
-  const top = without.slice(0, spacerIndex + 1);
-  const accordionStart = top.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
-  const insertAt = accordionStart === -1 ? spacerIndex : accordionStart;
-  return [...top.slice(0, insertAt), ...bottom, ...top.slice(insertAt)];
+  return bottom.length > 0 && bottom.every((k) => FORMER_DEFAULT_BOTTOM_KEYS.has(k))
+    ? without.slice(0, spacerIndex + 1)
+    : without;
 };
 
 // Projects used to be an accordion listing every project; it is now a single
@@ -407,10 +407,10 @@ const withChannelsAfterAgent = (order: string[]): string[] => {
 
 const withAllKnownKeys = (order: string[]): string[] => {
   const nextOrder = withChannelsAfterAgent(liftProjectOutOfAccordion(order));
-  const present = new Set(nextOrder);
+  const withSpacer = dropFormerDefaultBottom(normalizeSpacerPosition(nextOrder));
+  const present = new Set(withSpacer);
   const missing = DEFAULT_SIDEBAR_ITEMS.filter((k) => k !== SIDEBAR_SPACER_ID && !present.has(k));
 
-  const withSpacer = migrateFormerBottomLinks(normalizeSpacerPosition(nextOrder));
   if (missing.length === 0) return withSpacer;
 
   const spacerIdx = withSpacer.indexOf(SIDEBAR_SPACER_ID);
