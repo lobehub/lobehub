@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "このURLは利用可能です",
   "user.workspaceProfile.fields.namespace.checking": "利用可能性を確認中…",
   "user.workspaceProfile.fields.namespace.placeholder": "workspace-handle",
+  "user.workspaceProfile.fields.namespace.taken": "このURLはすでに使用されています",
   "user.workspaceProfile.fields.websiteUrl": "ウェブサイト",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "ワークスペースのウェブサイトリンク",
   "user.workspaceProfile.optional.toggle": "詳細設定",

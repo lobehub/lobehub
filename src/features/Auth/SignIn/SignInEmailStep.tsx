@@ -16,6 +16,7 @@ import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
+import InlineErrorText from '@/components/InlineErrorText';
 import AuthCard from '@/features/AuthCard';
 import AuthAgreement from '@/features/AuthShell/AuthAgreement';
 
@@ -163,13 +164,11 @@ export const SignInEmailStep = ({
             );
           })}
           {socialErrorProvider && (
-            <Alert
-              showIcon
-              type="error"
-              title={t('betterAuth.signin.socialFailed', {
+            <InlineErrorText>
+              {t('betterAuth.signin.socialFailed', {
                 provider: getProviderName(socialErrorProvider),
               })}
-            />
+            </InlineErrorText>
           )}
           {showEmailForm && divider}
         </Flexbox>
@@ -233,7 +232,7 @@ export const SignInEmailStep = ({
         />
       )}
       {isSocialOnly && sendError && (
-        <Alert showIcon style={{ marginTop: 12 }} title={sendError} type="error" />
+        <InlineErrorText style={{ marginTop: 12 }}>{sendError}</InlineErrorText>
       )}
       {isSocialOnly && (
         <Text align={'center'} fontSize={13} style={{ marginTop: 12 }} type={'secondary'}>

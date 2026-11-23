@@ -7,7 +7,6 @@ import {
 } from '@lobechat/types';
 import {
   ActionIcon,
-  Alert,
   Button,
   createModal,
   createStaticStyles,
@@ -37,6 +36,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
 import { expertiseService, type RuleDraft, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 
@@ -321,7 +321,7 @@ const ComposeContent = ({
 
       {error && (
         <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
-          <Alert showIcon title={error} type="error" />
+          <InlineErrorText>{error}</InlineErrorText>
         </div>
       )}
 

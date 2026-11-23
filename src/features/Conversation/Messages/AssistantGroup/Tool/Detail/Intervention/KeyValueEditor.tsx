@@ -1,10 +1,12 @@
-import { ActionIcon, Alert, Button, Flexbox, Icon, Input } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Input } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
 
 const styles = stylex.create({
   form: {
@@ -158,9 +160,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                 />
               </Flexbox>
             ))}
-            {saveError && (
-              <Alert showIcon style={{ marginTop: 8 }} title={saveError} type="error" />
-            )}
+            {saveError && <InlineErrorText style={{ marginTop: 8 }}>{saveError}</InlineErrorText>}
             <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginTop: 8 }}>
               <Button
                 icon={<Icon icon={LucidePlus} />}

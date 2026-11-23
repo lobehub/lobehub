@@ -1,7 +1,8 @@
-import { Alert, Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { MailCheck, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import AuthCard from '@/features/AuthCard';
 
 export type SentEmailType = 'magicLink' | 'resetPassword';
@@ -68,7 +69,7 @@ export const SignInEmailSentStep = ({
         >
           {t('betterAuth.signin.emailSent.resend')}
         </Button>
-        {sendError && <Alert showIcon title={sendError} type="error" />}
+        {sendError && <InlineErrorText>{sendError}</InlineErrorText>}
       </Flexbox>
     </AuthCard>
   );

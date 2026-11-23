@@ -6,7 +6,6 @@ import type {
   InboundWebhookItemWithSecret,
 } from '@lobechat/types';
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -27,6 +26,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
 import { KeyReveal } from './KeyReveal';
@@ -181,7 +181,7 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
           {t(autoApprove ? 'webhook.form.autoApprove.onHint' : 'webhook.form.autoApprove.offHint')}
         </span>
       </Flexbox>
-      {error && <Alert showIcon title={error} type="error" />}
+      {error && <InlineErrorText>{error}</InlineErrorText>}
       <Button block loading={saving} type={'primary'} onClick={submit}>
         {t(item ? 'webhook.form.save' : 'webhook.form.create')}
       </Button>

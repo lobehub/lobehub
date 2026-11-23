@@ -3,7 +3,6 @@
 import type { ExpertiseEnforcement } from '@lobechat/types';
 import {
   ActionIcon,
-  Alert,
   Button,
   Checkbox,
   createModal,
@@ -39,6 +38,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
 import { openLibraryFilePicker } from '@/features/LibraryModal/FilePicker';
 import {
   type DistillCandidate,
@@ -611,7 +611,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
 
       {error && (
         <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
-          <Alert showIcon title={error} type="error" />
+          <InlineErrorText>{error}</InlineErrorText>
         </div>
       )}
 

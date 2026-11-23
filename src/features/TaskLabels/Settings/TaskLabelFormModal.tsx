@@ -5,7 +5,6 @@ import {
   type TaskLabelWithUsage,
 } from '@lobechat/types';
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -20,6 +19,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { isDuplicateLabelNameError } from '@/features/WorkspaceSetting/Labels/errors';
 import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors } from '@/store/task/selectors';
@@ -187,7 +187,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
             ))}
           </Flexbox>
         </Flexbox>
-        {saveError && <Alert showIcon title={saveError} type={'error'} />}
+        {saveError && <InlineErrorText>{saveError}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

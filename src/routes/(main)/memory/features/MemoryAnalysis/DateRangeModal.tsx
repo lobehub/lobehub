@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Alert,
   Button,
   createModal,
   DayjsDateRangePicker as DateRangePicker,
@@ -17,6 +16,7 @@ import { t as i18nT } from 'i18next';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
 import { memoryExtractionService } from '@/services/userMemory/extraction';
 
@@ -83,7 +83,7 @@ const DateRangeContent = memo(() => {
           {footerNote}
         </Text>
       </Flexbox>
-      {error && <Alert showIcon title={error} type="error" />}
+      {error && <InlineErrorText>{error}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={submitting} onClick={close}>
           {t('analysis.modal.cancel')}

@@ -1,10 +1,12 @@
 'use client';
 
-import { Alert, Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
+import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
 
 import { credErrorKey } from '../credError';
 import CredFormFooter from '../CredFormFooter';
@@ -120,9 +122,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
           title={isUploading ? t('creds.file.uploading') : t('creds.form.uploadHint')}
           onFiles={([file]) => handleUpload(file)}
         />
-        {uploadError && (
-          <Alert showIcon style={{ marginTop: 8 }} title={uploadError} type="error" />
-        )}
+        {uploadError && <InlineErrorText style={{ marginTop: 8 }}>{uploadError}</InlineErrorText>}
         {fileName && (
           <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 8 }}>
             <span>
@@ -166,7 +166,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onS
         />
       </Form.Field>
 
-      {submitError && <Alert showIcon title={submitError} type="error" />}
+      {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
 
       <CredFormFooter>
         <Button type="fill" onClick={onCancel}>

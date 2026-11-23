@@ -1,6 +1,8 @@
-import { Alert, Block, Button, Flexbox, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Text } from '@lobehub/ui';
 import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
 
 import { useVerifyEmail } from './useVerifyEmail';
 
@@ -27,7 +29,7 @@ export const VerifyEmailContent = ({ email, callbackUrl }: VerifyEmailContentPro
       >
         {t('betterAuth.verifyEmail.resend.button')}
       </Button>
-      {resendError && <Alert showIcon title={resendError} type="error" />}
+      {resendError && <InlineErrorText>{resendError}</InlineErrorText>}
     </Flexbox>
   );
 };

@@ -1,9 +1,10 @@
-import { Alert, Button, Icon, InputPassword, Text } from '@lobehub/ui';
+import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
 import { Form, type FormInstance } from '@lobehub/ui/form';
 import { Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import AuthCard from '@/features/AuthCard';
 
 export interface SignInPasswordStepProps {
@@ -100,7 +101,7 @@ export const SignInPasswordStep = ({
           {t('betterAuth.signin.forgotPassword')}
         </a>
       </Text>
-      {sendError && <Alert showIcon style={{ marginTop: 12 }} title={sendError} type="error" />}
+      {sendError && <InlineErrorText style={{ marginTop: 12 }}>{sendError}</InlineErrorText>}
     </AuthCard>
   );
 };

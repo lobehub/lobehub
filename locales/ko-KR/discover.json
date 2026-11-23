@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "이 URL은 사용 가능합니다",
   "user.workspaceProfile.fields.namespace.checking": "사용 가능 여부 확인 중…",
   "user.workspaceProfile.fields.namespace.placeholder": "workspace-handle",
+  "user.workspaceProfile.fields.namespace.taken": "이 URL은 이미 사용 중입니다",
   "user.workspaceProfile.fields.websiteUrl": "웹사이트",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "작업 공간 웹사이트 링크",
   "user.workspaceProfile.optional.toggle": "추가 설정",

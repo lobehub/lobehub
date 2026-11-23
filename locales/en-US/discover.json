@@ -834,6 +834,7 @@
   "user.workspaceProfile.fields.namespace.available": "This URL is available",
   "user.workspaceProfile.fields.namespace.checking": "Checking availability…",
   "user.workspaceProfile.fields.namespace.placeholder": "workspace-handle",
+  "user.workspaceProfile.fields.namespace.taken": "This URL is already taken. Try a different handle.",
   "user.workspaceProfile.fields.websiteUrl": "Website",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Workspace website link",
   "user.workspaceProfile.optional.toggle": "More settings",

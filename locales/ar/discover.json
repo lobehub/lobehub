@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "هذا العنوان متاح",
   "user.workspaceProfile.fields.namespace.checking": "جارٍ التحقق من التوفر...",
   "user.workspaceProfile.fields.namespace.placeholder": "معرف-المساحة",
+  "user.workspaceProfile.fields.namespace.taken": "هذا العنوان مستخدم بالفعل",
   "user.workspaceProfile.fields.websiteUrl": "الموقع الإلكتروني",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "رابط موقع مساحة العمل",
   "user.workspaceProfile.optional.toggle": "إعدادات إضافية",

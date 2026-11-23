@@ -2,7 +2,6 @@
 
 import type { WidgetLevelFilter } from '@lobechat/types';
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -16,6 +15,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useDashboardStore } from '@/store/dashboard';
 
 interface DashboardFormProps {
@@ -80,7 +80,7 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

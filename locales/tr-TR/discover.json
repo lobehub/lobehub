@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "Bu URL kullanılabilir",
   "user.workspaceProfile.fields.namespace.checking": "Kullanılabilirlik kontrol ediliyor…",
   "user.workspaceProfile.fields.namespace.placeholder": "çalışma-alanı-kullanıcı-adı",
+  "user.workspaceProfile.fields.namespace.taken": "Bu URL zaten alınmış",
   "user.workspaceProfile.fields.websiteUrl": "Web Sitesi",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Çalışma alanı web sitesi bağlantısı",
   "user.workspaceProfile.optional.toggle": "Daha fazla ayar",

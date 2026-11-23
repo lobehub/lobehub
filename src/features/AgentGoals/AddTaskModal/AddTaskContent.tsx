@@ -1,8 +1,10 @@
 'use client';
 
-import { Alert, Button, Flexbox, Input, Text, TextArea, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Input, Text, TextArea, useModalContext } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
 
 import { useAddTaskForm } from './useAddTaskForm';
 
@@ -49,7 +51,7 @@ const AddTaskContent = memo<AddTaskContentProps>(({ onAdd }) => {
           onChange={(e) => setDescription(e.target.value)}
         />
       </Flexbox>
-      {error && <Alert showIcon title={error} type="error" />}
+      {error && <InlineErrorText>{error}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={() => close()}>{t('cancel', { ns: 'common' })}</Button>
         <Button

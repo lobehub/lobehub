@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "Questo URL è disponibile",
   "user.workspaceProfile.fields.namespace.checking": "Verifica disponibilità…",
   "user.workspaceProfile.fields.namespace.placeholder": "handle-spazio-di-lavoro",
+  "user.workspaceProfile.fields.namespace.taken": "Questo URL è già stato preso",
   "user.workspaceProfile.fields.websiteUrl": "Sito Web",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Link al sito web dello spazio di lavoro",
   "user.workspaceProfile.optional.toggle": "Altre impostazioni",

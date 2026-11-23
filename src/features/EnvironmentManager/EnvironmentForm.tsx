@@ -4,7 +4,6 @@ import { layoutRepositorySources, repositoryFolderName } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
-  Alert,
   Button,
   createStaticStyles,
   cssVar,
@@ -28,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import InlineErrorText from '@/components/InlineErrorText';
 import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
 import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
 import { densityVars } from '@/styles/densityVars';
@@ -498,7 +498,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
             ))}
           </Flexbox>
         )}
-        {repositoryError && <Alert showIcon title={repositoryError} type={'error'} />}
+        {repositoryError && <InlineErrorText>{repositoryError}</InlineErrorText>}
         {pickingRepository ? (
           <Flexbox gap={8}>
             <GithubRepositoryPicker onChange={addRepository} />

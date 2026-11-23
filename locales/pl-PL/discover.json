@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "Ten URL jest dostępny",
   "user.workspaceProfile.fields.namespace.checking": "Sprawdzanie dostępności…",
   "user.workspaceProfile.fields.namespace.placeholder": "uchwyt-przestrzeni-roboczej",
+  "user.workspaceProfile.fields.namespace.taken": "Ten URL jest już zajęty",
   "user.workspaceProfile.fields.websiteUrl": "Strona internetowa",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Link do strony internetowej przestrzeni roboczej",
   "user.workspaceProfile.optional.toggle": "Więcej ustawień",

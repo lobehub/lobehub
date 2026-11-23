@@ -4,6 +4,8 @@ import { Button, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+
 interface ModuleSaveBarProps {
   dirty: boolean;
   disabled?: boolean;
@@ -51,11 +53,7 @@ export const ModuleSaveBar = memo<ModuleSaveBarProps>(
             {t('channel.module.save')}
           </Button>
         </Flexbox>
-        {dirty && error && (
-          <Text fontSize={12} role={'alert'} type={'danger'}>
-            {error}
-          </Text>
-        )}
+        {dirty && error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
     );
   },

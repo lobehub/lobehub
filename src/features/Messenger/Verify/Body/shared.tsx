@@ -1,11 +1,12 @@
 'use client';
 
-import { Alert, Block, Button, createStaticStyles, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import InlineErrorText from '@/components/InlineErrorText';
 import { marketplaceAppPath } from '@/features/Marketplace/paths';
 import { messengerService } from '@/services/messenger';
 import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
@@ -317,7 +318,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
         )}
 
         {confirmError && (
-          <Alert showIcon style={{ width: '100%' }} title={confirmError} type="error" />
+          <InlineErrorText style={{ width: '100%' }}>{confirmError}</InlineErrorText>
         )}
 
         <Button

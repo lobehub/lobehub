@@ -1,12 +1,14 @@
 'use client';
 
-import { Alert, Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea } from '@lobehub/ui';
+import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
 
 import { credErrorKey } from '../credError';
 import CredFormFooter from '../CredFormFooter';
@@ -151,7 +153,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
         />
       </Form.Field>
 
-      {submitError && <Alert showIcon title={submitError} type="error" />}
+      {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
 
       <CredFormFooter>
         <Button type="fill" onClick={onCancel}>

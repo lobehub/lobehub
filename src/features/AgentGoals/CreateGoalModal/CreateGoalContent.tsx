@@ -7,7 +7,6 @@ import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
-  Alert,
   Button,
   confirmModal,
   createStaticStyles,
@@ -35,6 +34,7 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -806,7 +806,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         <div
           style={{ flexShrink: 0, paddingBlock: '8px 0', paddingInline: densityVars.cardPadding }}
         >
-          <Alert showIcon title={createError} type="error" />
+          <InlineErrorText>{createError}</InlineErrorText>
         </div>
       )}
 

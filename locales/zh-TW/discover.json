@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "此 URL 可用",
   "user.workspaceProfile.fields.namespace.checking": "正在檢查可用性…",
   "user.workspaceProfile.fields.namespace.placeholder": "工作區代號",
+  "user.workspaceProfile.fields.namespace.taken": "此 URL 已被使用",
   "user.workspaceProfile.fields.websiteUrl": "網站",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "工作區網站連結",
   "user.workspaceProfile.optional.toggle": "更多設定",

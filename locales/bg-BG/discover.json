@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "Този URL е наличен",
   "user.workspaceProfile.fields.namespace.checking": "Проверка на наличността...",
   "user.workspaceProfile.fields.namespace.placeholder": "име-на-работното-пространство",
+  "user.workspaceProfile.fields.namespace.taken": "Този URL вече е зает",
   "user.workspaceProfile.fields.websiteUrl": "Уебсайт",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Линк към уебсайта на работното пространство",
   "user.workspaceProfile.optional.toggle": "Още настройки",

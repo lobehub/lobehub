@@ -2,7 +2,6 @@
 
 import type { GoalMetricComparison, GoalMetricCriterion } from '@lobechat/types';
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -16,6 +15,7 @@ import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useGoalStore } from '@/store/goal';
 
 /**
@@ -118,7 +118,7 @@ const DeclareMetricContent = memo<{ goalId: string; initial?: GoalMetricCriterio
             />
           </Flexbox>
         </Flexbox>
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
         <Flexbox horizontal justify={'flex-end'}>
           <Button
             disabled={!key.trim() || !Number.isFinite(Number(target)) || target.trim() === ''}

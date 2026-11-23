@@ -1,16 +1,8 @@
-import {
-  Alert,
-  Button,
-  cssVar,
-  Flexbox,
-  Input,
-  ModalFooter,
-  Text,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Input, ModalFooter, Text, useModalContext } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
@@ -227,7 +219,7 @@ const CreateFromGithubContent = () => {
           onChange={changeRepositories}
           onConnect={connectGithub}
         />
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

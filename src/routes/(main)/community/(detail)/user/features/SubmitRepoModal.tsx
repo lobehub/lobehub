@@ -1,11 +1,12 @@
 'use client';
 
-import { Alert, Flexbox, Input, Text, toast } from '@lobehub/ui';
+import { Flexbox, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
+import InlineErrorText from '@/components/InlineErrorText';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { isGithubRepoUrl } from './githubRepoUrl';
@@ -103,7 +104,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
             {t('user.submitRepoHint')}
           </Text>
         </Flexbox>
-        {error && <Alert showIcon style={{ marginTop: 12 }} title={error} type="error" />}
+        {error && <InlineErrorText style={{ marginTop: 12 }}>{error}</InlineErrorText>}
       </ImperativeModal>
     );
   },

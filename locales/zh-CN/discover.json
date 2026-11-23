@@ -834,6 +834,7 @@
   "user.workspaceProfile.fields.namespace.available": "该URL可用",
   "user.workspaceProfile.fields.namespace.checking": "正在检查可用性…",
   "user.workspaceProfile.fields.namespace.placeholder": "workspace-handle",
+  "user.workspaceProfile.fields.namespace.taken": "该地址已被占用，请换一个标识。",
   "user.workspaceProfile.fields.websiteUrl": "网站",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "工作区网站链接",
   "user.workspaceProfile.optional.toggle": "更多设置",

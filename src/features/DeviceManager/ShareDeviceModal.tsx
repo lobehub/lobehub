@@ -2,7 +2,6 @@
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
 import {
-  Alert,
   Button,
   confirmModal,
   createModal,
@@ -22,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import InlineErrorText from '@/components/InlineErrorText';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import { densityVars } from '@/styles/densityVars';
@@ -286,7 +286,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
 
       {shareError && (
         <Flexbox paddingBlock={'0 12px'} paddingInline={24}>
-          <Alert showIcon title={shareError} type="error" />
+          <InlineErrorText>{shareError}</InlineErrorText>
         </Flexbox>
       )}
 

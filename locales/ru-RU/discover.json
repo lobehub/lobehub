@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "Этот URL доступен",
   "user.workspaceProfile.fields.namespace.checking": "Проверка доступности…",
   "user.workspaceProfile.fields.namespace.placeholder": "идентификатор-рабочего-пространства",
+  "user.workspaceProfile.fields.namespace.taken": "Этот URL уже занят",
   "user.workspaceProfile.fields.websiteUrl": "Веб-сайт",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Ссылка на веб-сайт рабочего пространства",
   "user.workspaceProfile.optional.toggle": "Дополнительные настройки",

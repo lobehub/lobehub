@@ -2,7 +2,6 @@
 
 import {
   ActionIcon,
-  Alert,
   Button,
   createModal,
   createStaticStyles,
@@ -21,6 +20,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
 import { expertiseService, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 import { densityVars } from '@/styles/densityVars';
@@ -264,7 +264,7 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
 
       {error && (
         <div style={{ paddingBlock: '0 10px', paddingInline: 20 }}>
-          <Alert showIcon title={error} type="error" />
+          <InlineErrorText>{error}</InlineErrorText>
         </div>
       )}
 

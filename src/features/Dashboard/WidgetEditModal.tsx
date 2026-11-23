@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -16,6 +15,7 @@ import { t as translate } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useDashboardStore } from '@/store/dashboard';
 
 /** Longest widget title and metric definition the API accepts. */
@@ -95,7 +95,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

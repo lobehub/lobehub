@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Alert,
   Center,
   confirmModal,
   cssVar,
@@ -22,6 +21,7 @@ import { z } from 'zod';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import ImperativeModal from '@/components/ImperativeModal';
+import InlineErrorText from '@/components/InlineErrorText';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -566,7 +566,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                       </Center>
                     </div>
                   </Upload>
-                  {bannerError && <Alert showIcon title={bannerError} type="error" />}
+                  {bannerError && <InlineErrorText>{bannerError}</InlineErrorText>}
                   {bannerUrl && (
                     <Flexbox horizontal align="center" gap={8} justify="flex-end">
                       <Text
@@ -640,7 +640,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
               </Form.Field>
             </>
           )}
-          {submitError && <Alert showIcon title={submitError} type="error" />}
+          {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
         </Form>
       </ImperativeModal>
     );

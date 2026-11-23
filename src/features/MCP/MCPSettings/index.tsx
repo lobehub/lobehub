@@ -1,9 +1,10 @@
-import { Alert, Button, createStaticStyles, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import KeyValueEditor from '@/components/KeyValueEditor';
 import MCPStdioCommandInput from '@/components/MCPStdioCommandInput';
 import ArgsInput from '@/features/PluginDevModal/MCPManifestForm/ArgsInput';
@@ -357,7 +358,7 @@ const Settings = ({
                     </Form.Field>
                   </>
                 )}
-                {connectionError && <Alert showIcon title={connectionError} type="error" />}
+                {connectionError && <InlineErrorText>{connectionError}</InlineErrorText>}
                 <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={connectionLoading} type="primary">
                     {t('common:save')}
@@ -386,7 +387,7 @@ const Settings = ({
                   keyPlaceholder="VARIABLE_NAME"
                 />
               </Form.Field>
-              {envError && <Alert showIcon title={envError} type="error" />}
+              {envError && <InlineErrorText>{envError}</InlineErrorText>}
               {!hideFooter && (
                 <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={loading} type="primary">

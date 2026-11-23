@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "URL này có sẵn",
   "user.workspaceProfile.fields.namespace.checking": "Đang kiểm tra tính khả dụng…",
   "user.workspaceProfile.fields.namespace.placeholder": "tên-định-danh-không-gian",
+  "user.workspaceProfile.fields.namespace.taken": "URL này đã được sử dụng",
   "user.workspaceProfile.fields.websiteUrl": "Trang web",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Liên kết trang web không gian làm việc",
   "user.workspaceProfile.optional.toggle": "Cài đặt thêm",

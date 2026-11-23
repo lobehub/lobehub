@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button } from '@lobehub/ui';
+import { Button } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { AnimatePresence } from 'motion/react';
@@ -8,6 +8,7 @@ import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
@@ -104,7 +105,7 @@ const SaveBar = memo<SaveBarProps>(({ error, isDirty, isSaving, onReset, onSave 
         >
           {error && (
             <div {...stylex.props(styles.error)}>
-              <Alert showIcon title={error} type="error" />
+              <InlineErrorText>{error}</InlineErrorText>
             </div>
           )}
           <div {...stylex.props(styles.pill)}>

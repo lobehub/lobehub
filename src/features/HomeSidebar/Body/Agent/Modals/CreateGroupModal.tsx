@@ -1,5 +1,4 @@
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -13,6 +12,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
@@ -88,7 +88,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
             {nameError}
           </Text>
         )}
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

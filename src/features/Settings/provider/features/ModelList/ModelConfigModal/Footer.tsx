@@ -1,10 +1,11 @@
 'use client';
 
-import { Alert, Button, Flexbox, ModalFooter, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, ModalFooter, useModalContext } from '@lobehub/ui';
 import { type FormInstance } from '@lobehub/ui/form';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useAiInfraStore } from '@/store/aiInfra';
 
 import { pickModelConfigFormValues } from './utils';
@@ -28,7 +29,7 @@ const ModelConfigFooter = memo<ModelConfigFooterProps>(({ formRef, id, showDeplo
 
   return (
     <Flexbox gap={8}>
-      {error && <Alert showIcon title={error} type="error" />}
+      {error && <InlineErrorText>{error}</InlineErrorText>}
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button

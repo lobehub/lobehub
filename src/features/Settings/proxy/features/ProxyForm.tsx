@@ -1,20 +1,12 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import {
-  Alert,
-  Button,
-  Flexbox,
-  Input,
-  InputPassword,
-  RadioGroup,
-  Switch,
-  toast,
-} from '@lobehub/ui';
+import { Button, Flexbox, Input, InputPassword, RadioGroup, Switch, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/form';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import ProxySkeleton from '@/components/Skeleton/Settings/tabs/Proxy';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -317,12 +309,9 @@ const ProxyForm = () => {
               </Button>
             </Flexbox>
             {testError && (
-              <Alert
-                showIcon
-                description={testError.detail}
-                title={`${t('proxy.testFailed')}. ${t('proxy.testFailedHint')}`}
-                type="error"
-              />
+              <InlineErrorText detail={testError.detail}>
+                {`${t('proxy.testFailed')}. ${t('proxy.testFailedHint')}`}
+              </InlineErrorText>
             )}
           </Flexbox>
         ),

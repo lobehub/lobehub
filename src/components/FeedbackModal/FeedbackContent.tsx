@@ -2,22 +2,13 @@
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import {
-  Alert,
-  Button,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  toast,
-  Upload,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Input, Text, toast, Upload, useModalContext } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import TextArea from '@/components/TextArea';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
@@ -213,7 +204,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
         {isDesktop && <DiagnosticsField />}
       </Form>
 
-      {submitError && <Alert showIcon title={submitError} type="error" />}
+      {submitError && <InlineErrorText>{submitError}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify="flex-end">
         <Button onClick={handleCancel}>{t('cancel')}</Button>
         <Button icon={<Icon icon={Send} />} loading={loading} type="primary" onClick={handleSubmit}>

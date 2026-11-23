@@ -2,7 +2,6 @@
 
 import type { DashboardVisibility, WidgetLevelFilter } from '@lobechat/types';
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -20,6 +19,7 @@ import { t as translate } from 'i18next';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import type { DashboardListItem, DashboardSettingsPatch } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
@@ -238,7 +238,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         >
           {renderSchedule()}
         </Field>
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

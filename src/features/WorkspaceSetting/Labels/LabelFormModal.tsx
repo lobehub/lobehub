@@ -1,19 +1,12 @@
 import { type AgentLabelListItem } from '@lobechat/types';
-import {
-  Alert,
-  Button,
-  createModal,
-  Flexbox,
-  Input,
-  ModalFooter,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, createModal, Flexbox, Input, ModalFooter, useModalContext } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useHomeStore } from '@/store/home';
 
 import { DEFAULT_LABEL_COLOR, isValidLabelColor, LABEL_COLOR_PRESETS } from './constants';
@@ -169,7 +162,7 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
             />
           </Flexbox>
         </Flexbox>
-        {saveError && <Alert showIcon title={saveError} type={'error'} />}
+        {saveError && <InlineErrorText>{saveError}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

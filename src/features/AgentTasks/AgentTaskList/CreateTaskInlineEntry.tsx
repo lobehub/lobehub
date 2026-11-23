@@ -5,7 +5,6 @@ import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/t
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
-  Alert,
   Block,
   Button,
   cssVar,
@@ -22,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import GeneratingBorder from '@/components/GeneratingBorder';
+import InlineErrorText from '@/components/InlineErrorText';
 import { createGoalModal } from '@/features/AgentGoals/CreateGoalModal';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
@@ -826,7 +826,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         </Flexbox>
         {submitError && (
           <div style={{ padding: '0 16px 8px' }}>
-            <Alert showIcon title={submitError} type="error" />
+            <InlineErrorText>{submitError}</InlineErrorText>
           </div>
         )}
         <Flexbox

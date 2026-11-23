@@ -262,10 +262,13 @@ describe('ProxyForm', () => {
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
-      expect(screen.getByText('connect ECONNREFUSED')).toBeInTheDocument();
       expect(screen.getByText('proxy.testFailed. proxy.testFailedHint')).toBeInTheDocument();
       expect(toastErrorMock).not.toHaveBeenCalled();
     });
+    // The raw provider message stays folded until the user asks for it.
+    expect(screen.queryByText('connect ECONNREFUSED')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'asyncState.showDetails' }));
+    expect(screen.getByText('connect ECONNREFUSED')).toBeInTheDocument();
   });
 
   it('shows a failed Save in the Save bar instead of a toast, and keeps the changes', async () => {

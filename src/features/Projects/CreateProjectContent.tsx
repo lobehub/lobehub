@@ -1,7 +1,8 @@
-import { Alert, Button, Flexbox, Input, ModalFooter, Text, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Input, ModalFooter, Text, useModalContext } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -218,7 +219,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
         <Text fontSize={12} type="secondary">
           {t('create.afterCreateHint')}
         </Text>
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

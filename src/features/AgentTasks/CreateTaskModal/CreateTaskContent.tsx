@@ -5,7 +5,6 @@ import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
-  Alert,
   Block,
   Button,
   confirmModal,
@@ -20,6 +19,7 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import InlineErrorText from '@/components/InlineErrorText';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -378,7 +378,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
         {submitError && (
           <div style={{ flexShrink: 0, padding: '0 16px 8px' }}>
-            <Alert showIcon title={submitError} type="error" />
+            <InlineErrorText>{submitError}</InlineErrorText>
           </div>
         )}
 

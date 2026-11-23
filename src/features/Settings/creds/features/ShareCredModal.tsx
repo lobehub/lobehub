@@ -2,7 +2,6 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -21,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import InlineErrorText from '@/components/InlineErrorText';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { densityTokens } from '@/styles/density.stylex';
 
@@ -269,7 +269,7 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
             />
           </Flexbox>
 
-          {shareError && <Alert showIcon title={shareError} type={'error'} />}
+          {shareError && <InlineErrorText>{shareError}</InlineErrorText>}
 
           <Flexbox horizontal justify={'flex-end'}>
             <Button

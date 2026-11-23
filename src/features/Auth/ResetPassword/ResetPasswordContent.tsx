@@ -1,7 +1,9 @@
-import { Alert, Block, Button, Icon, InputPassword, Text } from '@lobehub/ui';
+import { Block, Button, Icon, InputPassword, Text } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
 
 import { useResetPassword } from './useResetPassword';
 
@@ -81,9 +83,7 @@ export const ResetPasswordContent = ({
           }
         />
       </Form.Field>
-      {formError && (
-        <Alert showIcon style={{ marginBlockEnd: 12 }} title={formError} type="error" />
-      )}
+      {formError && <InlineErrorText style={{ marginBlockEnd: 12 }}>{formError}</InlineErrorText>}
       <Button block htmlType="submit" loading={loading} size="large" type="primary">
         {t('betterAuth.resetPassword.submit')}
       </Button>

@@ -707,6 +707,7 @@
   "user.workspaceProfile.fields.namespace.available": "Deze URL is beschikbaar",
   "user.workspaceProfile.fields.namespace.checking": "Beschikbaarheid controleren…",
   "user.workspaceProfile.fields.namespace.placeholder": "werkruimte-handle",
+  "user.workspaceProfile.fields.namespace.taken": "Deze URL is al in gebruik",
   "user.workspaceProfile.fields.websiteUrl": "Website",
   "user.workspaceProfile.fields.websiteUrl.placeholder": "Link naar werkruimtewebsite",
   "user.workspaceProfile.optional.toggle": "Meer instellingen",

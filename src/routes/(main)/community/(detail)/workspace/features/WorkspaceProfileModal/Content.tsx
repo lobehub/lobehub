@@ -3,7 +3,6 @@
 import { OFFICIAL_URL } from '@lobechat/const';
 import {
   Accordion,
-  Alert,
   Button,
   Center,
   cssVar,
@@ -30,6 +29,7 @@ import {
   updateCommunityWorkspaceProfile,
 } from '@/business/client/services/communityWorkspaceProfile';
 import AvatarUpload from '@/components/AvatarUpload';
+import InlineErrorText from '@/components/InlineErrorText';
 import { useFileStore } from '@/store/file';
 import type { DiscoverUserInfo } from '@/types/discover';
 
@@ -134,7 +134,14 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     return (
       <Flexbox horizontal align="center" gap={6} style={{ color, fontSize: 12 }}>
         {namespaceAvailability === 'checking' && <Spin size={13} />}
-        {t(`user.workspaceProfile.fields.namespace.${namespaceAvailability}` as any)}
+        {
+          // Static keys, so type-check fails if a status loses its copy.
+          {
+            available: t('user.workspaceProfile.fields.namespace.available'),
+            checking: t('user.workspaceProfile.fields.namespace.checking'),
+            taken: t('user.workspaceProfile.fields.namespace.taken'),
+          }[namespaceAvailability]
+        }
       </Flexbox>
     );
   }, [isSetup, namespaceAvailability, t]);
@@ -327,7 +334,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
                 </Center>
               </div>
             </Upload>
-            {bannerError && <Alert showIcon title={bannerError} type="error" />}
+            {bannerError && <InlineErrorText>{bannerError}</InlineErrorText>}
             {bannerUrl && (
               <Flexbox horizontal align="center" gap={8} justify="flex-end">
                 <Text
@@ -450,7 +457,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         />
       </Form>
 
-      {saveError && <Alert showIcon title={saveError} type="error" />}
+      {saveError && <InlineErrorText>{saveError}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify="flex-end">
         <Button disabled={loading} onClick={close}>
           {t('user.workspaceProfile.cancel')}

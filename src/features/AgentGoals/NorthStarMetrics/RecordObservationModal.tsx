@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Alert,
   Button,
   createModal,
   Flexbox,
@@ -14,6 +13,7 @@ import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useGoalStore } from '@/store/goal';
 
 /**
@@ -67,7 +67,7 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string; metri
             }}
           />
         </Flexbox>
-        {error && <Alert showIcon title={error} type="error" />}
+        {error && <InlineErrorText>{error}</InlineErrorText>}
         <Flexbox horizontal justify={'flex-end'}>
           <Button
             disabled={!Number.isFinite(Number(value)) || value.trim() === ''}
