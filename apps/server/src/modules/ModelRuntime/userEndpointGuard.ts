@@ -161,7 +161,7 @@ const wrapNodeRequest = (
 ) => {
   const original = module[method] as (...args: unknown[]) => http.ClientRequest;
 
-  module[method] = function (...args: unknown[]) {
+  module[method] = function (this: unknown, ...args: unknown[]) {
     const scope = scopeStorage.getStore();
     const hostname = scope && getNodeRequestHostname(args);
 
