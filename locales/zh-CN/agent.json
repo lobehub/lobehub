@@ -733,6 +733,7 @@
   "share.settings.limits.monthlySpendLimit": "每月消耗上限",
   "share.settings.limits.monthlySpendLimitHint": "本月该助手的消耗达到上限后，访客将无法继续运行。按自然月统计，每月 1 日（UTC）重置。",
   "share.settings.limits.monthlySpendLimitUnit": "美元",
+  "share.settings.limits.saved": "限制已保存",
   "share.settings.limits.title": "使用限制",
   "share.settings.limits.workspaceDesc": "访客的每次运行都会从工作区预算扣费，不会扣访客余额，也不占用创建者或其他成员的个人额度。每个智能体的这些上限始终生效，你可以调整数值，但不能关闭。",
   "share.settings.link.changeModel": "更换模型",
