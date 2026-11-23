@@ -10,8 +10,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text, toast } from '@lobehub/ui';
-import { CheckIcon, PlusIcon } from 'lucide-react';
+import { ActionIcon, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +21,8 @@ import {
   RowTouchSensor,
   suppressNextClick,
 } from '@/features/HomeSidebar/Body/sortableRow';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 
 import { agentSectionStyles, SidebarMiniCard } from './SidebarAgentsSection';
@@ -112,6 +114,16 @@ const RecommendedAgentsSection = memo<RecommendedAgentsSectionProps>(
   ({ canEdit, isListed, items, onToggleSidebar }) => {
     const { t } = useTranslation('common');
     const updateRecommendedAgents = useHomeStore((s) => s.updateRecommendedAgents);
+    const collapsed = useGlobalStore(systemStatusSelectors.agentListRecommendedSectionCollapsed);
+    const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+    const toggleCollapsed = useCallback(
+      () =>
+        updateSystemStatus(
+          { agentListRecommendedSectionCollapsed: !collapsed },
+          'toggleAgentListRecommendedSection',
+        ),
+      [collapsed, updateSystemStatus],
+    );
     const ids = useMemo(() => items.map((item) => item.id), [items]);
 
     const sensors = useSensors(
@@ -140,7 +152,14 @@ const RecommendedAgentsSection = memo<RecommendedAgentsSectionProps>(
 
     return (
       <Flexbox className={agentSectionStyles.container} data-testid={'recommended-agents'} gap={12}>
-        <Flexbox gap={2}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={agentSectionStyles.header}
+          gap={8}
+          justify={'space-between'}
+          onClick={toggleCollapsed}
+        >
           <Flexbox horizontal align={'center'} gap={8}>
             <Text fontSize={13} weight={500}>
               {t('agentViewAll.recommendedSection.title')}
@@ -149,13 +168,20 @@ const RecommendedAgentsSection = memo<RecommendedAgentsSectionProps>(
               {items.length}
             </Text>
           </Flexbox>
-          <Text fontSize={12} type={'secondary'}>
-            {canEdit
-              ? t('agentViewAll.recommendedSection.adminHint')
-              : t('agentViewAll.recommendedSection.hint')}
-          </Text>
+          <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+            <Text fontSize={12} type={'secondary'}>
+              {collapsed
+                ? t('agentViewAll.sidebarSection.expand')
+                : t('agentViewAll.sidebarSection.collapse')}
+            </Text>
+            <Icon
+              color={cssVar.colorTextSecondary}
+              icon={collapsed ? ChevronDownIcon : ChevronUpIcon}
+              size={14}
+            />
+          </Flexbox>
         </Flexbox>
-        {items.length === 0 ? (
+        {collapsed ? null : items.length === 0 ? (
           <Text fontSize={12} type={'secondary'}>
             {t('agentViewAll.recommendedSection.empty')}
           </Text>

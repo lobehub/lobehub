@@ -191,7 +191,7 @@ const SidebarAgentsSection = memo<SidebarAgentsSectionProps>(({ items, onToggleS
   const toggle = useCallback(
     () =>
       updateSystemStatus(
-        { agentListSidebarSectionCollapsed: !collapsed },
+        { agentListSidebarSectionExpanded: collapsed },
         'toggleAgentListSidebarSection',
       ),
     [collapsed, updateSystemStatus],

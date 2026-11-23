@@ -31,10 +31,6 @@ export default {
   'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
   'agentViewAll.recommendedSection.title': 'Recommended agents',
-  'agentViewAll.recommendedSection.hint':
-    'Recommended by your workspace admins. Add the ones you use to your sidebar.',
-  'agentViewAll.recommendedSection.adminHint':
-    'Every member sees these here, and new members start with them in their sidebar. Drag to reorder.',
   'agentViewAll.recommendedSection.empty':
     'No recommended agents yet. Use “Add to recommended agents” in an agent’s menu.',
   'agentViewAll.sidebarSection.collapse': 'Fold',
