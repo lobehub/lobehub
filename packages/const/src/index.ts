@@ -7,6 +7,7 @@ export * from './apiKeyScope';
 export * from './bot';
 export * from './composio';
 export * from './connectorCatalog';
+export * from './connectorCategory';
 export * from './currency';
 export * from './desktop';
 export * from './desktopGlobalShortcuts';
