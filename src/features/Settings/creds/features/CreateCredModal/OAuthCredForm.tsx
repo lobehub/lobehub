@@ -97,7 +97,9 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
       <Flexbox gap={16}>
         <Empty description={t('creds.oauth.noConnections')} />
         <CredFormFooter>
-          <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+          <Button type="fill" onClick={onCancel}>
+            {t('creds.form.cancel')}
+          </Button>
         </CredFormFooter>
       </Flexbox>
     );
@@ -142,7 +144,9 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
       </Form.Field>
 
       <CredFormFooter>
-        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+        <Button type="fill" onClick={onCancel}>
+          {t('creds.form.cancel')}
+        </Button>
         <Button
           disabled={disabled}
           htmlType="submit"

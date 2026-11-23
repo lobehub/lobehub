@@ -1,8 +1,8 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { confirmModal, Empty, Flexbox, Icon, Tag, toast, Tooltip } from '@lobehub/ui';
-import { EyeOffIcon, GlobeIcon, Link2Off } from 'lucide-react';
+import { confirmModal, Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
+import { EyeOffIcon, GlobeIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +22,7 @@ import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
 import { type CredsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
+import { type CredDetailAction } from './ViewCredModal/Content';
 
 type Visibility = 'private' | 'public';
 
@@ -127,11 +128,11 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
         {visibleCredentials.map((cred) => {
           const access = workspaceCredRowAccess(cred, { isAdmin, myAccountId });
           const writeOnly = isWriteOnlyCredRow(cred);
-          const extraMenuItems = [
+          const actions: CredDetailAction[] = [
             ...(access.publish
               ? [
                   {
-                    icon: <Icon icon={GlobeIcon} />,
+                    icon: GlobeIcon,
                     key: 'publish',
                     label: t('creds.visibility.publish'),
                     onClick: () => handlePublish(cred),
@@ -141,7 +142,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
             ...(access.makePrivate
               ? [
                   {
-                    icon: <Icon icon={EyeOffIcon} />,
+                    icon: EyeOffIcon,
                     key: 'makePrivate',
                     label: t('makePrivate', { ns: 'common' }),
                     onClick: () => handleMakePrivate(cred),
@@ -152,7 +153,6 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
               ? [
                   {
                     danger: true,
-                    icon: <Icon icon={Link2Off} />,
                     key: 'unshare',
                     label: t('creds.share.revoke'),
                     onClick: () => handleUnshare(cred),
@@ -163,9 +163,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
 
           return (
             <CredItem
-              canManage={access.manage}
               cred={cred}
-              extraMenuItems={extraMenuItems}
               key={cred.id}
               titleSuffix={cred.visibility === 'private' && <PrivateLockIcon />}
               tags={
@@ -183,22 +181,23 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
                   )
                 )
               }
-              onDelete={access.manage ? handleDelete : undefined}
-              onEdit={
-                access.manage
-                  ? (cred) =>
-                      createEditCredModal({
-                        cred,
-                        credsApi,
-                        onSuccess: () => refetch(),
-                        writeOnly,
-                      })
-                  : undefined
-              }
-              onView={
-                access.manage && !writeOnly
-                  ? (cred) => createViewCredModal({ cred, credsApi })
-                  : undefined
+              onClick={() =>
+                createViewCredModal({
+                  actions,
+                  canReadValues: access.manage && !writeOnly,
+                  cred,
+                  credsApi,
+                  onDelete: access.manage ? handleDelete : undefined,
+                  onEdit: access.manage
+                    ? () =>
+                        createEditCredModal({
+                          cred,
+                          credsApi,
+                          onSuccess: () => refetch(),
+                          writeOnly,
+                        })
+                    : undefined,
+                })
               }
             />
           );
