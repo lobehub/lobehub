@@ -629,6 +629,7 @@ export default {
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
+  'plans.limits.agentRunCredit.ownKey': 'Use your own API key',
   'plans.limits.agentRunCredit.runs': '{{runs}} agent start fees/mo',
   'plans.limits.agentRunCredit.tooltip':
     'Pays only the start fee of agent tasks. Model calls while a task runs are billed separately: LobeHub adds nothing for models on your own API key, and LobeHub-hosted models draw on your free allowance and top-ups.',
@@ -1043,9 +1044,9 @@ export default {
   'credits.budgetPage.allocate.title': 'Shared allowances',
   'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
   'credits.budgetPage.limit.title': 'Spending limits',
+  'plans.usageHero.agentRunCredit.desc': 'Monthly start fees, models extra',
+  'plans.usageHero.agentRunCredit.title': '{{runs}} tasks',
   'plans.usageHero.comparedTo5h': '5-hour limit of {{plan}}',
-  'plans.usageHero.ownKey.desc': 'Hosted models not included',
-  'plans.usageHero.ownKey.title': 'Your own API key',
   'balance.hobbyQuotaDesc':
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
   'balance.subscriptionQuota': 'Subscription usage',
