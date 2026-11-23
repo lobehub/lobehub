@@ -760,7 +760,7 @@
   "devices.share.detailLabel": "已共享到的工作区",
   "devices.share.done": "完成",
   "devices.share.empty": "您还没有加入任何工作区。",
-  "devices.share.failedRetry": "无法分享 {{name}}，请确认设备在线后重试。",
+  "devices.share.failedRetry": "无法将设备分享到 {{name}}，请确认设备在线后重试。",
   "devices.share.goToTarget": "前往 {{name}}",
   "devices.share.menu": "共享到工作区…",
   "devices.share.modalDesc": "选择要将此设备共享到的工作区。设备在线时，成员可以向它派发智能体任务。",

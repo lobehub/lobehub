@@ -37,14 +37,17 @@ export interface DeviceShareErrorView {
  * (often English, e.g. a PRECONDITION_FAILED when the device dropped offline)
  * kept as folded detail rather than shown as the summary.
  */
-export const getDeviceShareErrorView = (error: unknown, name: string): DeviceShareErrorView => {
+export const getDeviceShareErrorView = (
+  error: unknown,
+  workspaceName: string,
+): DeviceShareErrorView => {
   const data = (error as { data?: { errorData?: { code?: unknown } } } | null)?.data;
   if (data?.errorData?.code === DEVICE_BOUND_TO_FIXED_AGENT)
-    return { summary: `${name}: ${t('devices.errors.boundToFixedAgent', { ns: 'setting' })}` };
+    return { summary: t('devices.errors.boundToFixedAgent', { ns: 'setting' }) };
 
   const message = (error as { message?: unknown } | null)?.message;
   return {
     detail: typeof message === 'string' && message.trim() ? message : undefined,
-    summary: t('devices.share.failedRetry', { name, ns: 'setting' }),
+    summary: t('devices.share.failedRetry', { name: workspaceName, ns: 'setting' }),
   };
 };

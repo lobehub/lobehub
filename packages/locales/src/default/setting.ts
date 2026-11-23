@@ -5460,7 +5460,7 @@ When I am ___, I need ___
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
   'creds.file.uploadFailedRetry': 'File upload failed. Check the file and try again.',
   'devices.share.failedRetry':
-    "Couldn't share {{name}}. Make sure the device is online, then try again.",
+    "Couldn't share this device to {{name}}. Make sure the device is online, then try again.",
   'environments.form.addRepository': 'Add repository',
   'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
   'environments.form.noVariables': 'No variables',

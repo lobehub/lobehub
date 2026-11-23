@@ -43,7 +43,7 @@ describe('getDeviceShareErrorView', () => {
     const error = trpcError('fixed', { code: DEVICE_BOUND_TO_FIXED_AGENT });
 
     expect(getDeviceShareErrorView(error, 'Mac')).toEqual({
-      summary: 'Mac: setting:devices.errors.boundToFixedAgent',
+      summary: 'setting:devices.errors.boundToFixedAgent',
     });
   });
 

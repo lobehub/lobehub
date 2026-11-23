@@ -760,7 +760,7 @@
   "devices.share.detailLabel": "Shared to workspaces",
   "devices.share.done": "Done",
   "devices.share.empty": "You haven't joined any workspace yet.",
-  "devices.share.failedRetry": "Couldn't share {{name}}. Make sure the device is online, then try again.",
+  "devices.share.failedRetry": "Couldn't share this device to {{name}}. Make sure the device is online, then try again.",
   "devices.share.goToTarget": "Go to {{name}}",
   "devices.share.menu": "Share to Workspace…",
   "devices.share.modalDesc": "Pick a workspace to share this device into. Members can dispatch agent runs to it while it stays online.",

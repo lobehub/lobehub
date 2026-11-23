@@ -7,6 +7,8 @@ import { CircleAlert } from 'lucide-react';
 import { type CSSProperties, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useRevealOnMount } from './useRevealOnMount';
+
 const styles = stylex.create({
   detail: {
     backgroundColor: cssVar.colorFillQuaternary,
@@ -65,10 +67,11 @@ interface InlineErrorTextProps {
 const InlineErrorText = memo<InlineErrorTextProps>(({ children, detail, style }) => {
   const { t } = useTranslation('error');
   const [open, setOpen] = useState(false);
+  const rootRef = useRevealOnMount<HTMLDivElement>();
   const { className, style: rootStyle } = stylex.props(styles.root);
 
   return (
-    <div className={className} role={'alert'} style={{ ...rootStyle, ...style }}>
+    <div className={className} ref={rootRef} role={'alert'} style={{ ...rootStyle, ...style }}>
       <div {...stylex.props(styles.error)}>
         <span {...stylex.props(styles.icon)}>
           <Icon icon={CircleAlert} size={12} />
