@@ -1,11 +1,12 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { formatUsageValue, formatUsd } from '@lobechat/utils';
-import { Center, cssVar, Divider, Flexbox, Icon, Popover } from '@lobehub/ui';
-import { BadgeCent, CoinsIcon } from 'lucide-react';
+import { Button, Center, cssVar, Divider, Flexbox, Icon, Popover } from '@lobehub/ui';
+import { ArrowLeftRight, BadgeCent, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -30,6 +31,7 @@ interface TokenDetailProps {
 
 const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provider }) => {
   const { t } = useTranslation('chat');
+  const isMobile = useIsMobile();
 
   // Use systemStatus to manage short-format display state
   const isShortFormat = useGlobalStore(systemStatusSelectors.tokenDisplayFormatShort);
@@ -152,7 +154,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
   return (
     <Popover
       placement={'top'}
-      trigger="hover"
+      trigger={isMobile ? 'click' : 'hover'}
       content={
         <Flexbox gap={8} style={{ minWidth: 200 }}>
           {modelCard && <ModelCard {...modelCard} provider={provider} />}
@@ -190,9 +192,9 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                 <TokenProgress showIcon data={outputDetails} formatValue={formatValue} />
               </Flexbox>
             )}
-            <Flexbox>
+            <Flexbox gap={4}>
               <TokenProgress showIcon data={totalDetail} formatValue={formatValue} />
-              <Divider style={{ marginBlock: 8 }} />
+              <Divider style={{ marginBlock: 6 }} />
               {cacheRate && (
                 <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                   <div style={{ color: cssVar.colorTextSecondary }}>
@@ -207,6 +209,30 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                 </div>
                 <div style={VALUE_STYLE}>{detailTotal}</div>
               </Flexbox>
+              {!isShowCredit && (
+                <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+                  <div style={{ color: cssVar.colorTextSecondary }}>
+                    {t('messages.tokenDetails.format.title')}
+                  </div>
+                  <Button
+                    aria-label={t('messages.tokenDetails.format.title')}
+                    aria-pressed={isShortFormat}
+                    data-testid="token-format-toggle"
+                    icon={ArrowLeftRight}
+                    size={'small'}
+                    style={{ fontSize: 12, height: 22, paddingInline: 8 }}
+                    type={'fill'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
+                    }}
+                  >
+                    {isShortFormat
+                      ? t('messages.tokenDetails.format.compact')
+                      : t('messages.tokenDetails.format.full')}
+                  </Button>
+                </Flexbox>
+              )}
               {isShowCredit && (
                 <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                   <div style={{ color: cssVar.colorTextSecondary }}>
@@ -246,12 +272,16 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         horizontal
         gap={2}
         style={{ cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
-        onClick={(e) => {
-          // Prevent Popover from closing and toggle the format
-          e.preventDefault();
-          e.stopPropagation();
-          updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
-        }}
+        onClick={
+          isMobile || isShowCredit
+            ? undefined
+            : (e) => {
+                // Prevent Popover from closing and toggle the format
+                e.preventDefault();
+                e.stopPropagation();
+                updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
+              }
+        }
       >
         <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />
         <AnimatedNumber
