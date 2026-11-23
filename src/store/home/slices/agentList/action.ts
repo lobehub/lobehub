@@ -110,6 +110,7 @@ export class AgentListActionImpl {
   readonly #agentList;
   readonly #agents;
   #pinnedOrderQueue: Promise<unknown> = Promise.resolve();
+  #recommendedQueue: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -207,11 +208,29 @@ export class AgentListActionImpl {
     );
     const next = ids.filter((id) => available.has(id));
 
-    await this.#agentList.optimistic(
-      AGENT_LIST_KEY,
-      (data) => (data ? { ...data, recommendedIds: next } : data),
-      () => homeService.updateRecommendedAgents(next),
-    );
+    // Each save replaces the whole list, so saves run one after another: two
+    // quick drags reach the server in the order they were made. A save still
+    // queued when the cache scope changes is dropped (see reorderPinnedAgents).
+    const scope = cacheScope.get();
+    try {
+      await this.#agentList.optimistic(
+        AGENT_LIST_KEY,
+        (data) => (data ? { ...data, recommendedIds: next } : data),
+        () => {
+          const operation = this.#recommendedQueue
+            .catch(() => undefined)
+            .then(async () => {
+              if (cacheScope.get() !== scope) throw new ScopeChangedError();
+              await homeService.updateRecommendedAgents(next);
+            });
+          this.#recommendedQueue = operation;
+          return operation;
+        },
+      );
+    } catch (error) {
+      if (error instanceof ScopeChangedError) return;
+      throw error;
+    }
   };
 
   /** Fetch orchestration only; read the list through `homeAgentListSelectors`. */

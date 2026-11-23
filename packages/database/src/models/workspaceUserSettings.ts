@@ -16,6 +16,82 @@ import { workspaceMembers, workspaceUserSettings } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 
 /**
+ * `patch` merged on top of `current`. Top-level keys replace; per-agent and
+ * per-item maps merge one level deeper (see the comments inside).
+ */
+const mergePreferencePatch = (
+  current: WorkspaceUserPreference,
+  patch: Partial<WorkspaceUserPreference>,
+): WorkspaceUserPreference => {
+  // Per-agent override maps merge one level deeper: clients patch a single
+  // agent's leaf from a local copy that may be stale or empty (for example a
+  // picker used before the preference fetch settles). A top-level replace
+  // would silently drop this user's choices for every other agent.
+  // Individual per-agent entries still replace wholesale.
+  return {
+    ...current,
+    ...patch,
+    ...(patch.agentDeviceOverrides
+      ? {
+          agentDeviceOverrides: {
+            ...current.agentDeviceOverrides,
+            ...patch.agentDeviceOverrides,
+          },
+        }
+      : {}),
+    ...(patch.agentModelOverrides
+      ? {
+          agentModelOverrides: {
+            ...current.agentModelOverrides,
+            ...patch.agentModelOverrides,
+          },
+        }
+      : {}),
+    ...(patch.notification
+      ? { notification: mergeNotificationSettings(current.notification, patch.notification) }
+      : {}),
+    ...(patch.agentModeOverrides
+      ? {
+          agentModeOverrides: {
+            ...current.agentModeOverrides,
+            ...patch.agentModeOverrides,
+          },
+        }
+      : {}),
+    ...(patch.sidebarAgentVisibilityOverrides
+      ? {
+          sidebarAgentVisibilityOverrides: {
+            ...current.sidebarAgentVisibilityOverrides,
+            ...patch.sidebarAgentVisibilityOverrides,
+          },
+        }
+      : {}),
+    // Deprecated, but still merged: the fields stay on the API, so a client
+    // from before the shared-sidebar change can still patch a single item.
+    // A top-level replace would let one such write shred the rest of that
+    // user's saved map — which is exactly the data the deprecation promises
+    // to leave intact for a rollback. Drop these two once the fields leave
+    // `WorkspaceUserPreference`.
+    ...(patch.sidebarGroupAssignments
+      ? {
+          sidebarGroupAssignments: {
+            ...current.sidebarGroupAssignments,
+            ...patch.sidebarGroupAssignments,
+          },
+        }
+      : {}),
+    ...(patch.sidebarPinnedOverrides
+      ? {
+          sidebarPinnedOverrides: {
+            ...current.sidebarPinnedOverrides,
+            ...patch.sidebarPinnedOverrides,
+          },
+        }
+      : {}),
+  };
+};
+
+/**
  * Per-user preferences scoped to a specific workspace — the workspace-scoped
  * counterpart to `UserSettingsModel`. Rows live in `workspace_user_settings`
  * (PK `(workspaceId, userId)`) and cascade with either identity anchor.
@@ -67,98 +143,21 @@ export class WorkspaceUserSettingsModel {
 
   /**
    * Merge `patch` on top of the caller's current preference and persist the
-   * result via UPSERT. The merge is done at the application layer (read →
-   * merge → write) because only the caller writes their own row, so the
-   * lost-update surface is limited to the same user racing themselves in
-   * multiple tabs — an acceptable trade for simple code.
+   * result. Read → merge → write runs under the row lock (see
+   * {@link mutatePreference}), so it never interleaves with the server's own
+   * writes to the same row — for example the one-time sidebar setup on the
+   * first read — nor with the caller's other tabs.
    *
    * The first call for a `(workspace, user)` pair creates the row; subsequent
    * calls update the `preference` column in place, replacing the whole jsonb
    * with the newly merged object (so setting a top-level key to `undefined`
    * in the patch is a no-op — pass an explicit `{}` to clear it).
    */
-  updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
-    const current = await this.getPreference();
-    // Per-agent override maps merge one level deeper: clients patch a single
-    // agent's leaf from a local copy that may be stale or empty (for example a
-    // picker used before the preference fetch settles). A top-level replace
-    // would silently drop this user's choices for every other agent.
-    // Individual per-agent entries still replace wholesale.
-    const next: WorkspaceUserPreference = {
-      ...current,
-      ...patch,
-      ...(patch.agentDeviceOverrides
-        ? {
-            agentDeviceOverrides: {
-              ...current.agentDeviceOverrides,
-              ...patch.agentDeviceOverrides,
-            },
-          }
-        : {}),
-      ...(patch.agentModelOverrides
-        ? {
-            agentModelOverrides: {
-              ...current.agentModelOverrides,
-              ...patch.agentModelOverrides,
-            },
-          }
-        : {}),
-      ...(patch.notification
-        ? { notification: mergeNotificationSettings(current.notification, patch.notification) }
-        : {}),
-      ...(patch.agentModeOverrides
-        ? {
-            agentModeOverrides: {
-              ...current.agentModeOverrides,
-              ...patch.agentModeOverrides,
-            },
-          }
-        : {}),
-      ...(patch.sidebarAgentVisibilityOverrides
-        ? {
-            sidebarAgentVisibilityOverrides: {
-              ...current.sidebarAgentVisibilityOverrides,
-              ...patch.sidebarAgentVisibilityOverrides,
-            },
-          }
-        : {}),
-      // Deprecated, but still merged: the fields stay on the API, so a client
-      // from before the shared-sidebar change can still patch a single item.
-      // A top-level replace would let one such write shred the rest of that
-      // user's saved map — which is exactly the data the deprecation promises
-      // to leave intact for a rollback. Drop these two once the fields leave
-      // `WorkspaceUserPreference`.
-      ...(patch.sidebarGroupAssignments
-        ? {
-            sidebarGroupAssignments: {
-              ...current.sidebarGroupAssignments,
-              ...patch.sidebarGroupAssignments,
-            },
-          }
-        : {}),
-      ...(patch.sidebarPinnedOverrides
-        ? {
-            sidebarPinnedOverrides: {
-              ...current.sidebarPinnedOverrides,
-              ...patch.sidebarPinnedOverrides,
-            },
-          }
-        : {}),
-    };
-    const [row] = await this.db
-      .insert(workspaceUserSettings)
-      .values({
-        preference: next,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      })
-      .onConflictDoUpdate({
-        set: { preference: next, updatedAt: new Date() },
-        target: [workspaceUserSettings.workspaceId, workspaceUserSettings.userId],
-      })
-      .returning();
-    return row;
-  };
+  updatePreference = async (patch: Partial<WorkspaceUserPreference>) =>
+    this.mutatePreference((current) => {
+      const next = mergePreferencePatch(current, patch);
+      return { next, result: { preference: next } };
+    });
 
   /**
    * Turn the composer's "New worktree" switch on or off for one directory and
@@ -261,11 +260,22 @@ export class WorkspaceUserSettingsModel {
     });
   };
 
-  /** Read → change → write this member's preference under the row lock. */
+  /**
+   * Read → change → write this member's preference under the row lock. The
+   * row is created first when missing: `FOR UPDATE` locks nothing on an
+   * absent row, so two first writes would otherwise both read `{}` and the
+   * later upsert would drop the earlier one's change.
+   */
   private mutatePreference = async <T>(
     change: (current: WorkspaceUserPreference) => { next: WorkspaceUserPreference; result: T },
   ): Promise<T> =>
     this.db.transaction(async (trx) => {
+      await trx
+        .insert(workspaceUserSettings)
+        .values({ preference: {}, userId: this.userId, workspaceId: this.workspaceId })
+        .onConflictDoNothing({
+          target: [workspaceUserSettings.workspaceId, workspaceUserSettings.userId],
+        });
       const [row] = await trx
         .select({ preference: workspaceUserSettings.preference })
         .from(workspaceUserSettings)

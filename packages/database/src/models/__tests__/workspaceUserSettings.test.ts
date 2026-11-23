@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { users, workspaceMembers, workspaces, workspaceUserSettings } from '../../schemas';
@@ -288,6 +288,32 @@ describe('WorkspaceUserSettingsModel', () => {
 
       expect(await model.initializeSidebar({})).toEqual({});
       expect(await model.get()).toBeUndefined();
+    });
+
+    it('never loses the first setup to a preference write that read before it', async () => {
+      const setup = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      const write = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+      // The setup commits right after the write has read the (still empty)
+      // preference — the interleaving two concurrent first writes can take.
+      // A write that reads under the row lock never gives the setup that
+      // chance; the setup then simply runs after it.
+      const read = write.getPreference;
+      let setupRan = false;
+      vi.spyOn(write, 'getPreference').mockImplementation(async () => {
+        const stale = await read();
+        await setup.initializeSidebar({ listIds: ['rec-1'] });
+        setupRan = true;
+        return stale;
+      });
+
+      await write.updatePreference({ sidebarPinnedItemIds: ['mine'] });
+      if (!setupRan) await setup.initializeSidebar({ listIds: ['rec-1'] });
+
+      expect(await setup.getPreference()).toEqual({
+        sidebarAgentVisibilityOverrides: { 'rec-1': true },
+        sidebarInitialized: true,
+        sidebarPinnedItemIds: ['mine'],
+      });
     });
 
     it('marks the member as set up when nothing can ever be added', async () => {
