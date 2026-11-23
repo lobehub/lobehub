@@ -151,8 +151,8 @@ export const registerShellWorks = async (params: {
   cumulativeUsage: WorkVersionCumulativeUsage | null;
   operationId: string;
   /**
-   * Better Coding Experience pull request linking; omitted (lab off) the scan
-   * registers exactly what it always did.
+   * Pull request linking; omitted (a share visitor's run) the scan registers
+   * only what the commands name.
    */
   pullRequestLinking?: ShellPullRequestLinking;
   records: ShellWorkScanRecord[];

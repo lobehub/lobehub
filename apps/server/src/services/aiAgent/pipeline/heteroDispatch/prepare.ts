@@ -202,16 +202,16 @@ export const prepareHeteroRun = async (
     traceHeteroStage('topic', () => deps.topicModel.findById(topicId)),
   ]);
   const topicRepos: string[] = topic?.metadata?.repos ?? [];
-  const permissionModePromise = resolveDispatchPermissionMode(deps.db, deps.userId, {
+  const permissionMode = resolveDispatchPermissionMode({
     heteroType,
     topicMetadata: topic?.metadata,
-  }).then(async (mode) => {
-    // An `lh` that never reports the mode back is flagged when the run ends.
-    await expectPermissionModeReport(deps.topicModel, { mode, operationId, topicId }).catch(
-      (error) => log('execAgent: permission mode report marker failed: %O', error),
-    );
-    return mode;
   });
+  // An `lh` that never reports the mode back is flagged when the run ends.
+  const permissionModeReportPromise = expectPermissionModeReport(deps.topicModel, {
+    mode: permissionMode,
+    operationId,
+    topicId,
+  }).catch((error) => log('execAgent: permission mode report marker failed: %O', error));
 
   const collaborationModePromise = resolveDispatchCollaborationMode(deps.db, deps.userId, {
     heteroType,
@@ -395,6 +395,7 @@ export const prepareHeteroRun = async (
         )
       : undefined;
 
+  await permissionModeReportPromise;
   const heteroParams = {
     agentType: heteroType,
     assistantMessageId,
@@ -412,7 +413,7 @@ export const prepareHeteroRun = async (
     imageList: heteroImageList,
     jwt: operationJwt,
     operationId,
-    permissionMode: await permissionModePromise,
+    permissionMode,
     // The CLI receives only the request: `/goal` is already in the system
     // context, and Claude Code's own `/goal` command would otherwise take it.
     // Non-image attachments have no content block a CLI accepts, so they ride

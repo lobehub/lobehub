@@ -23,7 +23,7 @@ import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
-import { resolveShellPullRequestLinking } from './pullRequestLinking';
+import { createShellPullRequestLinking } from './pullRequestLinking';
 import { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 import { registerShellWorks } from './shellWorkRegistration';
 
@@ -447,7 +447,7 @@ export const registerWorksForOperation = async (
   // links pull requests into them.
   const pullRequestLinking = params.agentShareVisitor
     ? undefined
-    : await resolveShellPullRequestLinking({
+    : createShellPullRequestLinking({
         db: serverDB,
         topicId,
         userId,
