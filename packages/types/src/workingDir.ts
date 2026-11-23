@@ -89,7 +89,15 @@ export interface WorkingDirGitState {
   branch?: string;
   /** True when the effective working directory is currently detached. */
   detached?: boolean;
-  /** GitHub-specific branch metadata such as linked PR and check status. */
+  /**
+   * GitHub-specific branch metadata such as linked PR and check status.
+   *
+   * @deprecated Nothing in this app reads it: a topic's PRs come from its Work
+   * rows (`work.listTopicPullRequests`). Kept in the schema because released
+   * desktop clients still write and read this snapshot — dropping it from
+   * `workingDirConfigSchema` would strip it from their writes. Branch changes
+   * still clear it so those clients never show another branch's PR.
+   */
   github?: WorkingDirGithubState;
   /**
    * True when the effective working directory is a linked worktree rather than
@@ -217,6 +225,7 @@ export const workingDirConfigSchema = z.object({
       autoCreatedAt: z.string().optional(),
       branch: z.string().optional(),
       detached: z.boolean().optional(),
+      // Deprecated: see `WorkingDirGitState.github`.
       github: z
         .object({
           extraPullRequestCount: z.number().optional(),

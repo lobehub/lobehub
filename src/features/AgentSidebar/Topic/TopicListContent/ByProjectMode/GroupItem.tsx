@@ -15,7 +15,6 @@ import {
   Icon,
   Tag,
   Text,
-  toast,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
@@ -60,8 +59,8 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { getTopicWorkingDirectorySourcePath } from '@/utils/client/topic';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
+import { archiveMergedPullRequestTopics } from '../../archiveMergedPullRequestTopics';
 import { useTopicListScope } from '../../TopicListScope';
-import { getMergedPullRequestTopics } from '../../utils/mergedPullRequestTopics';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 import { useStartTopicInDirectory } from '../useStartTopicInDirectory';
 import { indicatorStyles, useCollapsedIndicators } from './CollapsedIndicators';
@@ -258,22 +257,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
             ? 'actions.archiveMergedPullRequestsOwn'
             : 'actions.archiveMergedPullRequests',
         ),
-        onClick: async () => {
-          const merged = getMergedPullRequestTopics(
-            children,
-            activeWorkspaceId ? (currentUserId ?? null) : undefined,
-          );
-          if (merged.length === 0) {
-            toast.info(t('actions.archiveMergedPullRequestsNone'));
-            return;
-          }
-          const { refreshTopic, updateTopicStatus } = useChatStore.getState();
-          await Promise.all(
-            merged.map(({ id }) => updateTopicStatus({ status: 'completed', topicId: id })),
-          );
-          await refreshTopic();
-          toast.success(t('actions.archiveMergedPullRequestsSuccess', { count: merged.length }));
-        },
+        onClick: () =>
+          archiveMergedPullRequestTopics({
+            ownerId: activeWorkspaceId ? (currentUserId ?? null) : undefined,
+            t,
+            topics: children,
+          }),
       },
     ],
     [activeWorkspaceId, canEditTopic, children, currentUserId, t],

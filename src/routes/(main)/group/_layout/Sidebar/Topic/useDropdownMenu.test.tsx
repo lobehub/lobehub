@@ -24,7 +24,7 @@ const chatStoreMock = vi.hoisted(() => ({
   updateTopicStatus: vi.fn(),
 }));
 
-const messageMock = vi.hoisted(() => ({ info: vi.fn(), success: vi.fn() }));
+const messageMock = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn(), success: vi.fn() }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspaceMock.activeWorkspaceId,
@@ -69,16 +69,58 @@ vi.mock('@/hooks/usePermission', () => ({
 }));
 
 vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      activeGroupId: 'group-1',
-      importTopic: vi.fn(),
-      removeGroupTopics: removeGroupTopicsMock,
-      removeUnstarredTopic: removeUnstarredTopicMock,
-      refreshTopic: chatStoreMock.refreshTopic,
-      topics: chatStoreMock.topics,
-      updateTopicStatus: chatStoreMock.updateTopicStatus,
-    }),
+  useChatStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        activeGroupId: 'group-1',
+        importTopic: vi.fn(),
+        removeGroupTopics: removeGroupTopicsMock,
+        removeUnstarredTopic: removeUnstarredTopicMock,
+        refreshTopic: chatStoreMock.refreshTopic,
+        topics: chatStoreMock.topics,
+        updateTopicStatus: chatStoreMock.updateTopicStatus,
+      }),
+    { getState: () => chatStoreMock },
+  ),
+}));
+
+// Each topic's linked PRs come from its Work rows; a fixture's `prStatus`
+// stands for one linked PR in that state.
+vi.mock('@/services/work', () => ({
+  workService: {
+    listTopicsPullRequests: vi.fn(async (ids: string[]) =>
+      Object.fromEntries(
+        chatStoreMock.topics.flatMap((topic) =>
+          ids.includes(topic.id as string) && topic.prStatus
+            ? [
+                [
+                  topic.id,
+                  [
+                    {
+                      identifier: 'lobehub/lobehub#1',
+                      linkedAt: new Date('2026-11-20T00:00:00Z'),
+                      number: 1,
+                      repoFullName: 'lobehub/lobehub',
+                      scm: null,
+                      source: 'created',
+                      status: topic.prStatus,
+                      title: null,
+                      url: null,
+                      vouched: true,
+                      workId: 'work-1',
+                    },
+                  ],
+                ],
+              ]
+            : [],
+        ),
+      ),
+    ),
+  },
+}));
+
+vi.mock('@/store/device/gitReview/store', () => ({
+  useGitReviewStore: { getState: () => ({ gitPullRequestDetailMap: {} }) },
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -149,17 +191,13 @@ describe('group useTopicActionsDropdownMenu', () => {
     chatStoreMock.topics = [
       {
         id: 'own-merged',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
-        },
+        prStatus: 'merged',
         status: 'active',
         userId: 'user-1',
       },
       {
         id: 'other-merged',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
-        },
+        prStatus: 'merged',
         status: 'active',
         userId: 'user-2',
       },
@@ -227,17 +265,13 @@ describe('group useTopicActionsDropdownMenu', () => {
     chatStoreMock.topics = [
       {
         id: 'own-merged',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
-        },
+        prStatus: 'merged',
         status: 'active',
         userId: 'user-1',
       },
       {
         id: 'other-merged',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
-        },
+        prStatus: 'merged',
         status: 'active',
         userId: 'user-2',
       },
@@ -264,32 +298,22 @@ describe('group useTopicActionsDropdownMenu', () => {
     chatStoreMock.topics = [
       {
         id: 'merged',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
-        },
+        prStatus: 'merged',
         status: 'active',
       },
       {
         id: 'open',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'OPEN' } } } },
-        },
+        prStatus: 'open',
         status: 'active',
       },
       {
         id: 'completed',
-        metadata: {
-          workingDirectoryConfig: {
-            git: { github: { pullRequest: { mergedAt: '2026-07-10T00:00:00Z' } } },
-          },
-        },
+        prStatus: 'merged',
         status: 'completed',
       },
       {
         id: 'unread',
-        metadata: {
-          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
-        },
+        prStatus: 'merged',
         status: 'unread',
       },
     ];

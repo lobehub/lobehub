@@ -2,6 +2,7 @@
   "actions.addNewTopic": "开启新话题",
   "actions.addNewTopicInProject": "在 {{directory}} 中开启新话题",
   "actions.archiveMergedPullRequests": "归档 PR 已合并的话题",
+  "actions.archiveMergedPullRequestsFailed": "无法检查哪些话题的 PR 已合并，请检查网络后重试",
   "actions.archiveMergedPullRequestsNone": "没有找到 PR 已合并的话题",
   "actions.archiveMergedPullRequestsOwn": "归档我创建且 PR 已合并的话题",
   "actions.archiveMergedPullRequestsSuccess_one": "已归档 {{count}} 个 PR 已合并的话题",
