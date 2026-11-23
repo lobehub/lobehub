@@ -361,6 +361,23 @@ describe('SandboxStorageSection — T-14158', () => {
     );
   });
 
+  it('drops an environment not known to be published when a public-drive folder is picked', async () => {
+    state.workspaceId = 'ws-1';
+    render(<SandboxStorageSection agentId={AGENT} />);
+    send('topic-1');
+    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+    act(() => {
+      state.environmentsLoaded = false;
+      commit();
+    });
+
+    await act(async () => fireEvent.click(screen.getByText('pick-public-folder')));
+    expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
+      'topic-1',
+      expect.objectContaining({ sandboxEnvironmentId: undefined, sandboxWorkingDirectory: 'team' }),
+    );
+  });
+
   // The drive is switched on into the environment's own folder, named after
   // it: until the list says what the environment is, the switch waits.
   it('holds the drive switch while the picked environment is not known yet', async () => {

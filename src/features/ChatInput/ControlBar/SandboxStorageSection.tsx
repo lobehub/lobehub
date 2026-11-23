@@ -104,13 +104,19 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   // usable anywhere.
   //
   // Every member can browse the workspace's public drive, so a private
-  // environment is not carried into a folder there — the server would not
-  // apply it either, and the chip would name a setup that never runs.
+  // environment — or one not known to be published — is not carried into a
+  // folder there: the server would not apply it, and the chip would name a
+  // setup that never runs.
   const pick = useCallback(
     async (picked: SandboxSelection) => {
+      // An environment whose visibility is not known — the list still loading
+      // or failed — is treated as private: it is only known to be published
+      // once the list says so.
       const environment = environments.find((item) => item.id === picked.environmentId);
       const next =
-        environment && environment.visibility !== 'public' && isOnPublicDrive(picked, workspaceId)
+        picked.environmentId &&
+        environment?.visibility !== 'public' &&
+        isOnPublicDrive(picked, workspaceId)
           ? { ...picked, environmentId: undefined }
           : picked;
       await setSelection(next);
