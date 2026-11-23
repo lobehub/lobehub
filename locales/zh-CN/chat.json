@@ -2568,6 +2568,7 @@
   "tab.engine": "引擎",
   "tab.environment": "执行环境",
   "tab.goalsAndTasks": "任务与目标",
+  "tab.group.advanced": "进阶配置",
   "tab.group.identity": "身份",
   "tab.group.setup": "配置",
   "tab.group.shape": "塑造",

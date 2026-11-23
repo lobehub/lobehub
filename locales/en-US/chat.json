@@ -2568,6 +2568,7 @@
   "tab.engine": "Engine",
   "tab.environment": "Environment",
   "tab.goalsAndTasks": "Tasks and goals",
+  "tab.group.advanced": "Advanced",
   "tab.group.identity": "Identity",
   "tab.group.setup": "Configure",
   "tab.group.shape": "Shape",
