@@ -1471,11 +1471,10 @@ export default {
   'settingAgent.tools.type.plugin': 'Plugin or skill',
   'settingAgent.tools.type.skill': 'Skill',
   'settingAgent.driver.groupCli': 'Heterogeneous agent · local CLI',
-  'settingAgent.driver.groupHarness': 'Built by LobeHub',
+  'settingAgent.driver.groupHarness': 'Built-in',
   'settingAgent.driver.groupRemote': 'Heterogeneous agent · remote platform',
   'settingAgent.driver.harness': 'LobeHub',
-  'settingAgent.driver.brings.harness':
-    "LobeHub's own harness: you choose the model, tools and instruction.",
+  'settingAgent.driver.brings.harness': 'You choose the model, tools, and instruction.',
   'settingAgent.driver.brings.hetero':
     'Brings its own model, tools and instruction; you set where it runs.',
   'settingAgent.driver.switchBackHarness': 'The core instruction and tools take effect again.',
