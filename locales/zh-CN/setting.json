@@ -2952,6 +2952,8 @@
   "workspace.auditLog.actions.budget.member_override_created": "创建成员预算覆盖",
   "workspace.auditLog.actions.budget.member_override_removed": "移除成员预算覆盖",
   "workspace.auditLog.actions.budget.member_override_updated": "更新成员预算覆盖",
+  "workspace.auditLog.actions.budget.model_policy_removed": "删除模型档位规则",
+  "workspace.auditLog.actions.budget.model_policy_updated": "更新模型档位规则",
   "workspace.auditLog.actions.budget.pool_created": "创建专项额度",
   "workspace.auditLog.actions.budget.pool_deleted": "删除专项额度",
   "workspace.auditLog.actions.budget.pool_updated": "更新专项额度",

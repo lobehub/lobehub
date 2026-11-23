@@ -10,7 +10,7 @@ import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { ProductLogo } from '@/components/Branding';
 import { CONNECTABLE_PROVIDERS, getConnectableProvider } from '@/features/ConnectAgent/providers';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
@@ -89,7 +89,7 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const defaults = useUserStore(settingsSelectors.defaultAgentConfig);
   const { isShared } = useAgentShareSupported(agentId);
-  const enabledChatModels = useEnabledChatModels();
+  const enabledChatModels = useSelectableChatModels();
 
   const harnessName = t('settingAgent.driver.harness');
   const current = heterogeneousProvider?.type ?? HARNESS;
