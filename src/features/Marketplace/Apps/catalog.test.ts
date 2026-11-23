@@ -1,4 +1,4 @@
-import { getConnectorCatalog } from '@lobechat/const';
+import { getConnectorCatalog, OFFICIAL_MCP_SERVERS } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import type { MessengerPlatformItem } from '@/store/messenger/projection';
@@ -89,5 +89,35 @@ describe('marketplace apps', () => {
     expect(toolsOnly.find((app) => app.id === 'slack')?.category).toBe('chat');
     expect(toolsOnly.find((app) => app.id === 'whatsapp')?.category).toBe('chat');
     expect(toolsOnly.every((app) => !app.channel)).toBe(true);
+  });
+
+  it('lists official MCP servers without replacing a LobeHub or Composio app', () => {
+    const notion = { ...OFFICIAL_MCP_SERVERS[0], identifier: 'notion', label: 'Notion MCP' };
+    const apps = buildMarketplaceApps({
+      ...inputs,
+      isOfficialMcpConnected: (id) => id === 'sentry',
+      officialMcpServers: [...OFFICIAL_MCP_SERVERS, notion],
+    });
+    const notionApps = apps.filter((app) => app.id === 'notion');
+    expect(notionApps).toHaveLength(1);
+    expect(notionApps[0].tool).toBeDefined();
+    expect(notionApps[0].officialMcp).toBeUndefined();
+    const sentry = apps.find((app) => app.id === 'sentry')!;
+    expect(sentry).toMatchObject({ category: 'developer', toolConnected: true });
+    expect(sentry.tool).toBeUndefined();
+    expect(hasAppConnection(sentry)).toBe(true);
+    expect(getInlineConnectTool(sentry, true)).toBeUndefined();
+  });
+
+  it('keeps official MCP identifiers unique and clear of the existing catalogs', () => {
+    const ids = OFFICIAL_MCP_SERVERS.map((server) => server.identifier);
+    const taken = new Set(
+      getConnectorCatalog({ composio: true, lobehub: true }).map((item) =>
+        item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
+      ),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.filter((id) => taken.has(id))).toEqual([]);
+    for (const server of OFFICIAL_MCP_SERVERS) expect(new URL(server.url).protocol).toBe('https:');
   });
 });
