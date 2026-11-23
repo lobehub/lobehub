@@ -27,6 +27,7 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { useInterfaceDensity } from '@/styles/density';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
@@ -54,6 +55,9 @@ import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualM
 import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
 import { useClosestScrollParent } from './useClosestScrollParent';
+
+/** Space above a non-first top-level group header; Compact stacks them like Linear. */
+const GROUP_GAP = { compact: 4, loose: 16 } as const;
 
 /** Scope inherited by tasks created from a group header. */
 export interface TaskListCreateScope {
@@ -158,6 +162,7 @@ const TaskGroupHeader = memo<{
   onToggle: (key: string) => void;
 }>(({ createScope, item, onToggle }) => {
   const { t } = useTranslation('chat');
+  const density = useInterfaceDensity();
   const sub = item.kind === 'subGroup';
   const createDefaults = !createScope
     ? undefined
@@ -170,8 +175,7 @@ const TaskGroupHeader = memo<{
   }, [createDefaults, createScope]);
 
   return (
-    // Top-level groups sit 4px apart, like Linear's stacked group headers.
-    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 4 }}>
+    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : GROUP_GAP[density] }}>
       <div {...stylex.props(styles.header)}>
         <AccordionRoot
           indicatorPlacement={'start'}
