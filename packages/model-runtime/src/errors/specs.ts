@@ -792,6 +792,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Provider connection check failed during setup.',
   },
+  [AgentRuntimeErrorType.ProviderBaseURLBlocked]: {
+    code: AgentRuntimeErrorType.ProviderBaseURLBlocked,
+    numericId: 9006,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'User-supplied provider base URL resolves to a private / reserved address the server may not reach (SSRF protection).',
+  },
   [AgentRuntimeErrorType.ClientLlmExecutorUnavailable]: {
     code: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
     numericId: 9007,

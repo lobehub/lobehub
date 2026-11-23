@@ -79,6 +79,8 @@ export default {
     'The agent operation was idle for too long and was terminated. Please retry the request.',
   PermissionDenied:
     'Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.',
+  ProviderBaseURLBlocked:
+    'The {{provider}} endpoint points to a private or local network address, which the server is not allowed to reach for security reasons. This address only works from your own device — use a publicly reachable endpoint instead.',
   ProviderBizError:
     'Error requesting {{provider}} service, please troubleshoot or retry based on the following information',
   ProviderContentPolicyViolation:
