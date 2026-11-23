@@ -1,524 +1,336 @@
-<div align="center"><a name="readme-top"></a>
+# LuGod AI
 
-[![][image-banner]][vercel-link]
+> 基于 [LobeHub](https://github.com/lobehub/lobehub) 二次开发的个人 AI 助手工作台，品牌已定制为 **LuGod AI**。
+> A customized fork of [LobeHub](https://github.com/lobehub/lobehub), rebranded as **LuGod AI**.
 
-# LobeHub
-
-**Super-Agents on Your Team**
-
-Add super-agents to the chats your team already uses.<br/>
-They take on work by themselves and get better every week.
-
-**English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
-
-<!-- SHIELD GROUP -->
-
-[![][github-release-shield]][github-release-link]
-[![][docker-release-shield]][docker-release-link]
-[![][vercel-shield]][vercel-link]
-[![][discord-shield]][discord-link]<br/>
-[![][codecov-shield]][codecov-link]
-[![][github-action-test-shield]][github-action-test-link]
-[![][github-action-release-shield]][github-action-release-link]
-[![][github-releasedate-shield]][github-releasedate-link]<br/>
-[![][github-contributors-shield]][github-contributors-link]
-[![][github-forks-shield]][github-forks-link]
-[![][github-stars-shield]][github-stars-link]
-[![][github-issues-shield]][github-issues-link]
-[![][github-license-shield]][github-license-link]<br>
-
-**Share LobeHub Repository**
-
-[![][share-x-shield]][share-x-link]
-[![][share-telegram-shield]][share-telegram-link]
-[![][share-whatsapp-shield]][share-whatsapp-link]
-[![][share-reddit-shield]][share-reddit-link]
-[![][share-weibo-shield]][share-weibo-link]
-[![][share-mastodon-shield]][share-mastodon-link]
-[![][share-linkedin-shield]][share-linkedin-link]
-
-<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
-[![](https://vercel.com/oss/program-badge.svg)](https://vercel.com/oss)
-
-</div>
-
-<details>
-<summary><kbd>Table of contents</kbd></summary>
-
-#### TOC
-
-- [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
-- [✨ Features](#-features)
-  - [From new hire to one of the team](#from-new-hire-to-one-of-the-team)
-  - [`Day 1` Welcome to the team](#day-1-welcome-to-the-team)
-  - [`Week 1` Its first task](#week-1-its-first-task)
-  - [`Month 1–2` Settling in as the team grows](#month-12-settling-in-as-the-team-grows)
-  - [`Month 3` It passes its review](#month-3-it-passes-its-review)
-  - [Bring them onto your team](#bring-them-onto-your-team)
-- [🧩 Marketplace](#-marketplace)
-- [📖 Documentation](#-documentation)
-- [🛳 Self Hosting](#-self-hosting)
-  - [`A` Docker Compose (recommended)](#a-docker-compose-recommended)
-  - [`B` One-click deploy](#b-one-click-deploy)
-- [⌨️ Local Development](#️-local-development)
-- [🤝 Contributing](#-contributing)
-- [❤️ Sponsor](#️-sponsor)
-- [🔬 Research](#-research)
-
-####
-
-<br/>
-
-</details>
-
-<br/>
-
-<https://github.com/user-attachments/assets/0a33365f-b786-48b5-9ed6-f8af7927bccb>
-
-## 👋🏻 Getting Started & Join Our Community
-
-We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC.
-
-Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
-
-| [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?launch=lobehub-2&embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | We are live on Product Hunt! We are thrilled to bring LobeHub to the world. If you believe in a future where humans and agents co-evolve, please support our journey. |
-| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![][discord-shield-badge]][discord-link]                                                                                                                                                                                                                          | Join our Discord community! This is where you can connect with developers and other enthusiastic users of LobeHub.                                                    |
-
-> \[!IMPORTANT]
->
-> **Star Us**, You will receive all release notifications from GitHub without any delay \~ ⭐️
-
-[![][image-star]][github-stars-link]
-
-<details>
-  <summary><kbd>Star History</kbd></summary>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
-    <img width="100%" src="https://api.star-history.com/svg?repos=lobehub%2Flobehub&type=Date">
-  </picture>
-</details>
-
-## ✨ Features
-
-<div align="center">
-
-### From new hire to one of the team
-
-See what Lobe AI gets done, from its first day in your team chat onward.
-
-<sub>WHAT MAKES A SUPER-AGENT</sub>
-
-</div>
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>🔌 Flexible access</b><br/>
-      Plug in any IM app, agent or model, all in one place.
-    </td>
-    <td width="50%" valign="top">
-      <b>⚡ Parallel work</b><br/>
-      Runs several tasks at once, so you don't have to chase each one.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <b>🙋 Finds its own work</b><br/>
-      Takes on the tasks that suit it, without someone passing messages along.
-    </td>
-    <td width="50%" valign="top">
-      <b>📈 Gets more expert</b><br/>
-      The more you use it, the faster an agent builds up its expertise.
-    </td>
-  </tr>
-</table>
-
-### `Day 1` Welcome to the team
-
-You add it to your team chat and ask it to read up. By lunch it has gone through the history and said hello to everyone.
-
-![Before it starts, it reads up](https://hub-apac-1.lobeobjects.space/blog/assets/ed6fc1ef1e21e4add545c1e83c32fcb4.webp)
-
-![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://hub-apac-1.lobeobjects.space/blog/assets/a1c721a3cbe9cb8ec0f515217322b514.webp)
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-### `Week 1` Its first task
-
-Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes it on, and you only step in once, to accept the result.
-
-![Picks it up: nobody tags it, and it takes the request anyway](https://hub-apac-1.lobeobjects.space/blog/assets/b0c761a9084a5958d4205e5d056fa3ae.webp)
-
-![Hands it in: you check the evidence, accept, and the PR merges](https://hub-apac-1.lobeobjects.space/blog/assets/b8635a2bf3b600697068d70690a62438.webp)
-
-![Reports back: it replies in the original thread](https://hub-apac-1.lobeobjects.space/blog/assets/3e187a7e1fd004238163b58e20c59817.webp)
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-### `Month 1–2` Settling in as the team grows
-
-Everyone now has their own agent, and design, releases and docs each have a dedicated one. Lobe AI is still learning when to speak up and when to stay quiet.
-
-![One brief every morning](https://hub-apac-1.lobeobjects.space/blog/assets/c4e5bac0c35f840d9476256996e93e49.webp)
-
-![It's learning when to speak up](https://hub-apac-1.lobeobjects.space/blog/assets/bc065ed83d1ab0862aea98a7216ff787.webp)
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-### `Month 3` It passes its review
-
-When it started, it got about half of these right. Now it rarely misses, and every correction you gave it has become a lesson it keeps.
-
-![What it has learned](https://hub-apac-1.lobeobjects.space/blog/assets/82c6818a9dc6fa27cf5aea75a092b448.webp)
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-<div align="center">
-
-### Bring them onto your team
-
-Start with one, and add more when you need them.
-
-[**Try LobeHub Cloud**][vercel-link] · [**Self-host it**](#-self-hosting)
-
-![enterprise](https://github.com/user-attachments/assets/ff924737-7d3f-410e-a310-d1f44291e7c7)
-
-Contact: <business@lobehub.com>
-
-</div>
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 🧩 Marketplace
-
-Find agents, MCP servers and skills on [lobehub.com][official-site], add them to your workspace, or publish your own.
-
-| Market                                | What you'll find                                                                                                   |
-| :------------------------------------ | :----------------------------------------------------------------------------------------------------------------- |
-| [**🤖 Agents**][market-agents]        | Ready-to-use agents for writing, Q\&A, images, video, voice and workflows. Add one to your workspace and adapt it. |
-| [**🔌 MCP Servers**][market-mcp]      | MCP servers rated on activity, stability and community feedback, so you can pick ones you can trust.               |
-| [**🧠 Skills**][market-skills]        | Agent skills in the open `SKILL.md` format. They also work in Claude Code, Codex CLI and ChatGPT.                  |
-| [**🎨 AI / LLM Icons**][market-icons] | A free icon set for major AI brands and models, with SVG, PNG and vector downloads.                                |
-
-**Publish your own**
-
-- **Agents**: submit one from its settings in LobeHub. The [Creator Reward Program][creator-program] features a community agent every two weeks.
-
-- **MCP servers**: ask your agent to `Read https://lobehub.com/publish-mcp/skill.md and follow the instructions to publish my MCP server to the LobeHub Marketplace`, or use the CLI:
-
-  ```bash
-  npx -y @lobehub/market-cli login
-  npx -y @lobehub/market-cli plugin submit https://github.com/OWNER/REPOSITORY
-  ```
-
-- **Skills**: submit a GitHub repository from the [Skills marketplace][market-skills].
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 📖 Documentation
-
-All documentation lives at [lobehub.com/docs](https://lobehub.com/docs/usage/start):
-
-| Section                                                                                 | What's covered                                                                               |
-| :-------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- |
-| [Get LobeHub](https://lobehub.com/docs/usage/getting-started/get-lobehub)               | Web, macOS, Windows, Linux and mobile apps, and where work runs                              |
-| [Lobe AI](https://lobehub.com/docs/usage/getting-started/lobe-ai)                       | The built-in agent: chat, code, research and write with no setup                             |
-| [Agents](https://lobehub.com/docs/usage/getting-started/agent)                          | System role, model, skills, connectors, web search, resources and memory                     |
-| [Agent Team](https://lobehub.com/docs/usage/agent/agent-team)                           | Several agents working together: sequential, parallel, iterative or debate                   |
-| [Connect External Agents](https://lobehub.com/docs/usage/agent/connect-external-agents) | Bring in Claude Code, Codex, OpenClaw, Hermes and more, with project context and permissions |
-| [Tasks](https://lobehub.com/docs/usage/getting-started/task)                            | Delegate work, track status, follow up in comments, run once or on a schedule                |
-| [Memory](https://lobehub.com/docs/usage/getting-started/memory)                         | Structured memories you can review, edit and delete                                          |
-| [Pages](https://lobehub.com/docs/usage/getting-started/page)                            | Write long documents with agents, in Markdown                                                |
-| [Resource Library](https://lobehub.com/docs/usage/getting-started/resource)             | Documents, generated images and drafts your agents can answer from                           |
-| [Channels](https://lobehub.com/docs/usage/channels/overview)                            | Your own bots on Discord, Slack, Telegram, LINE, QQ, WeChat, Feishu and Lark                 |
-| [Messenger](https://lobehub.com/docs/usage/messenger/overview)                          | Chat with your agents through LobeHub's bot on Telegram, Slack, Discord and WeChat           |
-| [GitHub Integration](https://lobehub.com/docs/usage/integrations/github)                | Track agents' pull requests; merging accepts the work, failed checks go back to the agent    |
-| [Marketplace](https://lobehub.com/docs/usage/community/overview)                        | Community agents, MCP servers and skills                                                     |
-| [Model Providers](https://lobehub.com/docs/usage/providers)                             | Setup guides for 40+ providers, inference platforms and local models                         |
-| [Self-Hosting](https://lobehub.com/docs/self-hosting/start)                             | Docker Compose, Vercel and other deployment platforms                                        |
-| [Environment Variables](https://lobehub.com/docs/self-hosting/environment-variables)    | Every configuration option, including model providers                                        |
-| [Authentication](https://lobehub.com/docs/self-hosting/auth)                            | Sign-in with Better Auth and SSO providers such as Auth0                                     |
-| [Development](https://lobehub.com/docs/development/start)                               | Tech stack, local setup and contribution guidelines                                          |
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 🛳 Self Hosting
-
-Run LobeHub on your own infrastructure and keep your data with you. The full guide is in [📘 Build your own LobeHub][docs-self-hosting].
-
-### `A` Docker Compose (recommended)
-
-[![][docker-release-shield]][docker-release-link]
-[![][docker-size-shield]][docker-size-link]
-[![][docker-pulls-shield]][docker-pulls-link]
-
-Starts LobeHub with PostgreSQL, Redis, RustFS file storage, SearXNG search and the agent gateway. Runs on Linux and macOS, or on Windows through [WSL 2](https://aka.ms/wsl).
-
-```bash
-mkdir lobehub && cd lobehub
-bash <(curl -fsSL https://lobe.li/setup.sh) -l en
-docker compose up -d
-```
-
-Then open <http://localhost:3210>. Ports, LAN and domain modes, and upgrades are covered in the [📘 Docker Compose guide][docs-docker].
-
-### `B` One-click deploy
-
-Vercel needs a PostgreSQL database, S3-compatible storage and a few secrets before you deploy. The [📘 Vercel guide][docs-vercel] walks through each one.
-
-<div align="center">
-
-|           Deploy with Vercel            |                     Deploy with Zeabur                      |                     Deploy with Sealos                      |                       Deploy with RepoCloud                       |                         Deploy with Alibaba Cloud                         |
-| :-------------------------------------: | :---------------------------------------------------------: | :---------------------------------------------------------: | :---------------------------------------------------------------: | :-----------------------------------------------------------------------: |
-| [![][deploy-button-image]][deploy-link] | [![][deploy-on-zeabur-button-image]][deploy-on-zeabur-link] | [![][deploy-on-sealos-button-image]][deploy-on-sealos-link] | [![][deploy-on-repocloud-button-image]][deploy-on-repocloud-link] | [![][deploy-on-alibaba-cloud-button-image]][deploy-on-alibaba-cloud-link] |
-
-</div>
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## ⌨️ Local Development
-
-You can use GitHub Codespaces for online development:
-
-[![][codespaces-shield]][codespaces-link]
-
-Or clone it for local development:
-
-```fish
-$ git clone https://github.com/lobehub/lobehub.git
-$ cd lobehub
-$ pnpm install
-$ bun run dev       # Full-stack (Next.js + Vite SPA)
-$ bun run dev:spa   # SPA frontend only (port 9876)
-```
-
-> **Debug Proxy**: After running `dev:spa`, the terminal prints a proxy URL like
-> `https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876`.
-> Open it to develop locally against the production backend with HMR — a
-> development convenience, not a place to verify a change.
-
-If you would like to learn more details, please feel free to look at our [📘 Development Guide][docs-dev-guide].
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 🤝 Contributing
-
-Contributions of all types are more than welcome; if you are interested in contributing code, feel free to check out our GitHub [Issues][github-issues-link] and [Projects][github-project-link] to get stuck in to show us what you're made of.
-
-> \[!TIP]
->
-> We are creating a technology-driven forum, fostering knowledge interaction and the exchange of ideas that may culminate in mutual inspiration and collaborative innovation.
->
-> Help us make LobeHub better. Welcome to provide product design feedback, user experience discussions directly to us.
->
-> **Principal Maintainers:** [@arvinxx](https://github.com/arvinxx) [@canisminor1990](https://github.com/canisminor1990)
-
-[![][pr-welcome-shield]][pr-welcome-link]
-[![][submit-agents-shield]][submit-agents-link]
-[![][publish-mcp-shield]][publish-mcp-link]
-
-<a href="https://github.com/lobehub/lobehub/graphs/contributors" target="_blank">
-  <table>
-    <tr>
-      <th colspan="2">
-        <br><img src="https://contrib.rocks/image?repo=lobehub/lobehub"><br><br>
-      </th>
-    </tr>
-    <tr>
-      <td>
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/compose-org-active-contributors/thumbnail.png?activity=active&period=past_28_days&owner_id=131470832&repo_ids=643445235&image_size=2x3&color_scheme=dark">
-          <img src="https://next.ossinsight.io/widgets/official/compose-org-active-contributors/thumbnail.png?activity=active&period=past_28_days&owner_id=131470832&repo_ids=643445235&image_size=2x3&color_scheme=light">
-        </picture>
-      </td>
-      <td rowspan="2">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/compose-org-participants-growth/thumbnail.png?activity=active&period=past_28_days&owner_id=131470832&repo_ids=643445235&image_size=4x7&color_scheme=dark">
-          <img src="https://next.ossinsight.io/widgets/official/compose-org-participants-growth/thumbnail.png?activity=active&period=past_28_days&owner_id=131470832&repo_ids=643445235&image_size=4x7&color_scheme=light">
-        </picture>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/compose-org-active-contributors/thumbnail.png?activity=new&period=past_28_days&owner_id=131470832&repo_ids=643445235&image_size=2x3&color_scheme=dark">
-          <img src="https://next.ossinsight.io/widgets/official/compose-org-active-contributors/thumbnail.png?activity=new&period=past_28_days&owner_id=131470832&repo_ids=643445235&image_size=2x3&color_scheme=light">
-        </picture>
-      </td>
-    </tr>
-  </table>
-</a>
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## ❤️ Sponsor
-
-Every bit counts and your one-time donation sparkles in our galaxy of support! You're a shooting star, making a swift and bright impact on our journey. Thank you for believing in us – your generosity guides us toward our mission, one brilliant flash at a time.
-
-<a href="https://opencollective.com/lobehub" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/lobehub/.github/blob/main/static/sponsor-dark.png?raw=true">
-    <img  src="https://github.com/lobehub/.github/blob/main/static/sponsor-light.png?raw=true">
-  </picture>
-</a>
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 🔬 Research
-
-- **[📊 MCPMark][mcpmark]:** A stress-testing benchmark for MCP. Its tasks are realistic, multi-step and verifiable, covering file systems, databases, Playwright browser automation, GitHub and more. Built by EVAL SYS, LobeHub and the National University of Singapore, and open source under Apache-2.0.
-- **[📄 Research paper][mcpmark-paper]:** Read our research paper on Hugging Face Papers.
-- **[🧪 EVAL SYS][eval-sys]:** An evaluation systems organization, one of the teams behind MCPMark.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+[中文](#中文) | [English](#english)
 
 ---
 
-<details><summary><h4>📝 License</h4></summary>
+## 中文
 
-[![][fossa-license-shield]][fossa-license-link]
+### 项目介绍
 
-</details>
+本仓库是 [Lugod01/lobehub](https://github.com/Lugod01/lobehub)（`canary` 分支，版本 2.3.3），以上游 LobeHub 为基座，做了品牌与视觉层的定制，同时在本地跑通了完整开发环境（Next.js 主站 + Vite 前端 + PostgreSQL + Redis）。
 
-Copyright © 2026 [LobeHub][profile-link]. <br />
-This project is [LobeHub Community License](./LICENSE) licensed.
+与上游的差别只有以下几处，业务逻辑、模型接入、插件体系均保持上游原样：
 
-<!-- LINK GROUP -->
+| 定制项 | 位置 | 说明 |
+| --- | --- | --- |
+| 应用名称 `LuGod AI` | [branding.ts](packages/business/const/src/branding.ts) | `BRANDING_NAME`，驱动浏览器标题、登录页文案、PWA 图标、页脚水印 |
+| 自有 Logo | [public/branding/lugod-ai.png](public/branding/lugod-ai.png) | `BRANDING_LOGO_URL`，512×512，侧边栏 / 登录页 / 启动闪屏共用 |
+| 深紫主题 | [purple-theme.css](src/styles/purple-theme.css) | 覆盖 `@lobehub/ui` 的 `--lobe-color-*` 变量，底色 `#150b2e`，主色 `#8b5cf6` |
+| 首页「快速开始」卡片 | [QuickStartCard.tsx](src/features/Home/QuickStartCard.tsx) | 输入框上方三步引导：选择 AI 模型 → 输入问题 → 获取回答 |
+| 首页标语 | [locales/zh-CN/home.json](locales/zh-CN/home.json) | 问候语统一为「你的专属AI助手」 |
 
-[back-to-top]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
-[blog]: https://lobehub.com/blog
-[changelog]: https://lobehub.com/changelog
-[codecov-link]: https://codecov.io/gh/lobehub/lobehub
-[codecov-shield]: https://img.shields.io/codecov/c/github/lobehub/lobehub?labelColor=black&style=flat-square&logo=codecov&logoColor=white
-[codespaces-link]: https://codespaces.new/lobehub/lobehub
-[codespaces-shield]: https://github.com/codespaces/badge.svg
-[creator-program]: https://lobehub.com/creator
-[deploy-button-image]: https://vercel.com/button
-[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub&env=APP_URL,DATABASE_URL,KEY_VAULTS_SECRET,AUTH_SECRET,JWKS_KEY&envDescription=Database%2C%20encryption%20and%20sign-in%20variables%20LobeHub%20needs%20on%20Vercel.%20Add%20S3%20storage%20variables%20for%20file%20uploads.&envLink=https%3A%2F%2Flobehub.com%2Fdocs%2Fself-hosting%2Fplatform%2Fvercel&project-name=lobehub&repository-name=lobehub
-[deploy-on-alibaba-cloud-button-image]: https://service-info-public.oss-cn-hangzhou.aliyuncs.com/computenest-en.svg
-[deploy-on-alibaba-cloud-link]: https://computenest.console.aliyun.com/service/instance/create/default?type=user&ServiceName=LobeHub%E7%A4%BE%E5%8C%BA%E7%89%88
-[deploy-on-repocloud-button-image]: https://d16t0pc4846x52.cloudfront.net/deploylobe.svg
-[deploy-on-repocloud-link]: https://repocloud.io/details/?app_id=248
-[deploy-on-sealos-button-image]: https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg
-[deploy-on-sealos-link]: https://template.usw.sealos.io/deploy?templateName=lobehub-db
-[deploy-on-zeabur-button-image]: https://zeabur.com/button.svg
-[deploy-on-zeabur-link]: https://zeabur.com/templates/VZGGTI
-[discord-link]: https://discord.gg/AYFPHvv2jT
-[discord-shield]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square
-[discord-shield-badge]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=for-the-badge
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square&sort=semver
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
-[docs]: https://lobehub.com/docs/usage/start
-[docs-dev-guide]: https://lobehub.com/docs/development/start
-[docs-docker]: https://lobehub.com/docs/self-hosting/platform/docker-compose
-[docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
-[docs-vercel]: https://lobehub.com/docs/self-hosting/platform/vercel
-[eval-sys]: https://github.com/eval-sys
-[fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
-[fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
-[github-action-release-link]: https://github.com/lobehub/lobehub/actions/workflows/release.yml
-[github-action-release-shield]: https://img.shields.io/github/actions/workflow/status/lobehub/lobehub/release.yml?label=release&labelColor=black&logo=githubactions&logoColor=white&style=flat-square
-[github-action-test-link]: https://github.com/lobehub/lobehub/actions/workflows/test.yml
-[github-action-test-shield]: https://img.shields.io/github/actions/workflow/status/lobehub/lobehub/test.yml?label=test&labelColor=black&logo=githubactions&logoColor=white&style=flat-square
-[github-contributors-link]: https://github.com/lobehub/lobehub/graphs/contributors
-[github-contributors-shield]: https://img.shields.io/github/contributors/lobehub/lobehub?color=c4f042&labelColor=black&style=flat-square
-[github-forks-link]: https://github.com/lobehub/lobehub/network/members
-[github-forks-shield]: https://img.shields.io/github/forks/lobehub/lobehub?color=8ae8ff&labelColor=black&style=flat-square
-[github-issues-link]: https://github.com/lobehub/lobehub/issues
-[github-issues-shield]: https://img.shields.io/github/issues/lobehub/lobehub?color=ff80eb&labelColor=black&style=flat-square
-[github-license-link]: https://github.com/lobehub/lobehub/blob/main/LICENSE
-[github-license-shield]: https://img.shields.io/badge/license-apache%202.0-white?labelColor=black&style=flat-square
-[github-project-link]: https://github.com/lobehub/lobehub/projects
-[github-release-link]: https://github.com/lobehub/lobehub/releases
-[github-release-shield]: https://img.shields.io/github/v/release/lobehub/lobehub?color=369eff&labelColor=black&logo=github&style=flat-square
-[github-releasedate-link]: https://github.com/lobehub/lobehub/releases
-[github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
-[github-stars-link]: https://github.com/lobehub/lobehub/stargazers
-[github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
-[image-banner]: https://hub-apac-1.lobeobjects.space/blog/assets/8beb20539c0fdd1b8fbbc6a07f293a78.webp
-[image-star]: https://hub-apac-1.lobeobjects.space/blog/assets/893e882a8231960b5a729d691b8a40b3.webp
-[issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
-[market-agents]: https://lobehub.com/agent
-[market-icons]: https://lobehub.com/icons
-[market-mcp]: https://lobehub.com/mcp
-[market-skills]: https://lobehub.com/skills
-[mcpmark]: https://mcpmark.ai
-[mcpmark-paper]: https://huggingface.co/papers/2509.24002
-[official-site]: https://lobehub.com
-[pr-welcome-link]: https://github.com/lobehub/lobehub/pulls
-[pr-welcome-shield]: https://img.shields.io/badge/🤯_pr_welcome-%E2%86%92-ffcb47?labelColor=black&style=for-the-badge
-[profile-link]: https://github.com/lobehub
-[publish-mcp-link]: https://lobehub.com/mcp
-[publish-mcp-shield]: https://img.shields.io/badge/🔌/🏪_publish_mcp-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
-[share-linkedin-link]: https://linkedin.com/feed
-[share-linkedin-shield]: https://img.shields.io/badge/-share%20on%20linkedin-black?labelColor=black&logo=linkedin&logoColor=white&style=flat-square
-[share-mastodon-link]: https://mastodon.social/share?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source,%20extensible%20%28Function%20Calling%29,%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https://github.com/lobehub/lobehub%20#chatbot%20#chatGPT%20#openAI
-[share-mastodon-shield]: https://img.shields.io/badge/-share%20on%20mastodon-black?labelColor=black&logo=mastodon&logoColor=white&style=flat-square
-[share-reddit-link]: https://www.reddit.com/submit?title=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
-[share-reddit-shield]: https://img.shields.io/badge/-share%20on%20reddit-black?labelColor=black&logo=reddit&logoColor=white&style=flat-square
-[share-telegram-link]: https://t.me/share/url"?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
-[share-telegram-shield]: https://img.shields.io/badge/-share%20on%20telegram-black?labelColor=black&logo=telegram&logoColor=white&style=flat-square
-[share-weibo-link]: http://service.weibo.com/share/share.php?sharesource=weibo&title=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
-[share-weibo-shield]: https://img.shields.io/badge/-share%20on%20weibo-black?labelColor=black&logo=sinaweibo&logoColor=white&style=flat-square
-[share-whatsapp-link]: https://api.whatsapp.com/send?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub%20%23chatbot%20%23chatGPT%20%23openAI
-[share-whatsapp-shield]: https://img.shields.io/badge/-share%20on%20whatsapp-black?labelColor=black&logo=whatsapp&logoColor=white&style=flat-square
-[share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
-[share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
-[submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
-[submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
-[vercel-link]: https://app.lobehub.com
-[vercel-shield]: https://img.shields.io/badge/vercel-online-55b467?labelColor=black&logo=vercel&style=flat-square
+> 上游原始 README 已保留在 [README.upstream.md](README.upstream.md)，其中包含完整的部署、Docker、桌面端、插件开发等官方文档。
+
+### 功能列表
+
+保留上游全部能力：
+
+- **多模型对话**：OpenAI / Azure OpenAI / Anthropic / Google / 本地 Ollama 等，通过统一的 Provider 体系接入
+- **AI Agent**：自建助手、插件调用、多轮工具链、Agent 市场
+- **知识库与文件**：文档上传、RAG 检索、图片理解
+- **插件 / MCP**：Function Call 与 MCP 工具接入
+- **多端**：Web、桌面端（Electron）、移动端、Share 分享页、Workbench
+- **账号体系**：邮箱密码注册登录（better-auth），支持 SSO、邮件验证开关
+- **中文优先**：默认简体中文界面，语言包位于 `locales/`
+
+本次定制带来的界面变化：
+
+- 全局深紫深色配色（含登录页、侧边栏、聊天区、滚动条）
+- 品牌名与 Logo 全站一致为 LuGod AI
+- 首页聊天输入区上方新增三步骤「快速开始」引导卡片，窄屏自动叠为单列
+
+### 环境要求
+
+| 组件 | 版本 | 备注 |
+| --- | --- | --- |
+| Node.js | 22+（本机实测 26.13.0） | 建议用 `node -v` 确认 |
+| pnpm | 12.4.1 | 由 `package.json` 的 `packageManager` 固定 |
+| PostgreSQL | 17 | 需 `pgvector`、`pg_search`，推荐 `paradedb/paradedb:latest-pg17` |
+| Redis | 7 | 缓存与会话 |
+| Docker Desktop | 任意较新版本 | 仅用于起 PostgreSQL / Redis |
+
+### 安装步骤
+
+#### 1. 克隆仓库
+
+```bash
+git clone https://github.com/Lugod01/lobehub.git
+cd lobehub
+git checkout canary
+```
+
+#### 2. 安装依赖
+
+```bash
+pnpm install --ignore-scripts
+```
+
+必须带 `--ignore-scripts`。原因有两个，都是上游脚本在 Windows 上的已知问题：
+
+- `ffmpeg-static`、`workerd` 的 postinstall 会从 GitHub Releases 下载二进制，国内网络容易卡死；跳过脚本后二进制若缺失，可单独执行 `node node_modules/ffmpeg-static/install.js`
+- `prepare` 脚本含 Linux shell 语法（`> /dev/null`），在 Windows 上必然报错
+
+注意：仓库根目录**没有** `pnpm-lock.yaml`（上游只跟踪 `apps/desktop/pnpm-lock.yaml`），且 `pnpm-workspace.yaml` 中 `lockfile: false`、`resolutionMode: highest`，每次安装解析出的次版本可能不同，属预期行为。
+
+#### 3. 启动数据库
+
+本机实际使用独立容器，刻意避开 5432 / 6379，避免与其它环境冲突：
+
+```bash
+docker run -d --name lobehub2-postgres \
+  -e POSTGRES_PASSWORD=your-password \
+  -e POSTGRES_DB=lobechat_dev2 \
+  -p 5433:5432 paradedb/paradedb:latest-pg17
+
+docker run -d --name lobehub2-redis -p 6380:6379 redis:7-alpine
+```
+
+也可以直接用仓库自带编排（会占用 5432 / 6379）：
+
+```bash
+pnpm dev:docker        # postgresql + redis + rustfs + searxng
+pnpm dev:docker:down   # 停止
+```
+
+#### 4. 配置环境变量
+
+新建 `.env.development.local`（该文件已被 `.gitignore` 忽略，不会进版本库）：
+
+```dotenv
+APP_URL=http://localhost:3011
+
+DATABASE_URL=postgresql://postgres:your-password@localhost:5433/lobechat_dev2
+DATABASE_DRIVER=node
+
+REDIS_URL=redis://localhost:6380
+REDIS_PREFIX=lobechat
+REDIS_TLS=0
+
+# 32 字节随机串（base64），用于加密存储的密钥
+KEY_VAULTS_SECRET=<随机串>
+AUTH_SECRET=<随机串>
+
+# 本地开发常需要访问内网服务，放开 SSRF 限制
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=1
+LLM_VISION_IMAGE_USE_BASE64=1
+```
+
+生成随机串（PowerShell）：
+
+```powershell
+$b = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+[Convert]::ToBase64String($b)
+```
+
+#### 5. 执行数据库迁移
+
+```bash
+pnpm db:migrate
+```
+
+该脚本自带 `MIGRATION_DB=1`，会按 `DATABASE_URL` 建表（约 240 张表）并安装 `pg_search` / `vector` / `pg_ivm` 等扩展。
+
+#### 6. 启动
+
+```bash
+# 默认 3010（Next）+ 9876（Vite）
+pnpm dev
+
+# 需要换端口时（本机实际用法）
+PORT=3011 SPA_PORT=9877 pnpm dev
+```
+
+`pnpm dev` 会并行启动 `next dev` 与 `vite`，两者端口分别取 `PORT` / `SPA_PORT`，被占用时自动顺延。**注意：上游脚本内部调用 `bunx`，若本机 `bun` 是坏的占位程序，需要先安装可用的 Bun，或手动分别执行 `npx next dev -p 3011` 与 `npx vite --port 9877`。**
+
+### 使用说明
+
+#### 访问
+
+| 地址 | 用途 |
+| --- | --- |
+| http://localhost:3011 | 主站（Next.js） |
+| http://localhost:9877 | 前端静态资源（Vite，随主站自动加载，无需单独打开） |
+
+#### 注册与登录
+
+首次打开会跳转 `/signin`。邮箱密码注册默认开启（`AUTH_DISABLE_EMAIL_PASSWORD` 未设置即为启用），注册后直接可用，无需邮箱验证。若要关闭注册，在环境变量里设 `AUTH_DISABLE_EMAIL_PASSWORD=1`。
+
+#### 开始聊天
+
+1. 进入首页，输入区上方可见「快速开始」卡片：选择 AI 模型 / 输入问题 / 获取回答
+2. 在设置里填入模型服务商的 API Key（OpenAI、Anthropic、DeepSeek 等任选其一）
+3. 回到首页，选择模型后直接在输入框提问即可；不配 Key 也能正常打开界面，只是无法真正对话
+
+#### 桌面一键启停（Windows，可选）
+
+`%LOCALAPPDATA%\LobeHubDev2\` 下提供了静默启停脚本，桌面已放置对应的 bat：
+
+| 文件 | 作用 |
+| --- | --- |
+| `启动LobeHub-Fork.bat` | 启动 PostgreSQL 5433、Redis 6380，后台拉起 Next 3011 与 Vite 9877，不额外弹命令行窗口 |
+| `停止LobeHub-Fork.bat` | 结束端口占用进程与隐藏包装进程，停止两个容器，释放全部端口 |
+
+重复双击启动是幂等的（已在运行则跳过，PID 不变）。运行日志位于 `%LOCALAPPDATA%\LobeHubDev2\logs\dev.log`。
+
+#### 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| `pnpm install` 长时间无响应 | 多为 `ffmpeg-static` / `workerd` 在拉 GitHub 二进制，Ctrl+C 后用 `--ignore-scripts` 重装 |
+| 页面全白、控制台无报错 | 开发服务器重启后浏览器缓存了旧模块图，`Ctrl+Shift+R` 或换无痕窗口 |
+| 迁移报扩展缺失 | 确认用的是 `paradedb` 镜像，而不是官方 `postgres` 镜像 |
+| 端口被占用 | Next / Vite 会自动顺延端口，以日志里打印的实际端口为准 |
+| 登录页 404 或样式缺失 | 确认 Vite（9877）已启动，主站依赖它提供 SPA 资源 |
+
+### 与上游同步
+
+```bash
+git remote add upstream https://github.com/lobehub/lobehub.git
+git fetch upstream
+git merge upstream/canary
+```
+
+定制集中在品牌常量、主题 CSS、首页组件与语言包，冲突面很小。
+
+---
+
+## English
+
+### Overview
+
+This repository is a personal fork of [LobeHub](https://github.com/lobehub/lobehub) (`canary` branch, version 2.3.3), rebranded as **LuGod AI**. Only branding and visual layers are customized; the agent framework, provider adapters and plugin system stay identical to upstream.
+
+| Customization | Location | Notes |
+| --- | --- | --- |
+| App name `LuGod AI` | [branding.ts](packages/business/const/src/branding.ts) | `BRANDING_NAME`, drives page title, auth copy, PWA icons, footer watermark |
+| Custom logo | [public/branding/lugod-ai.png](public/branding/lugod-ai.png) | `BRANDING_LOGO_URL`, 512×512, shared by sidebar, auth pages and boot shell |
+| Deep purple theme | [purple-theme.css](src/styles/purple-theme.css) | Overrides `@lobehub/ui` `--lobe-color-*` tokens; base `#150b2e`, primary `#8b5cf6` |
+| Quick start card | [QuickStartCard.tsx](src/features/Home/QuickStartCard.tsx) | Three-step guide above the home input: choose a model, ask a question, get an answer |
+| Home headline | [locales/zh-CN/home.json](locales/zh-CN/home.json) | Greeting replaced with 「你的专属AI助手」 |
+
+The upstream documentation is preserved in [README.upstream.md](README.upstream.md) (deployment, Docker, desktop app, plugin development).
+
+### Features
+
+Everything from upstream is retained:
+
+- Multi-provider chat: OpenAI, Azure OpenAI, Anthropic, Google, local Ollama, and more
+- AI agents with tool calling, plugin ecosystem and agent marketplace
+- Knowledge base, document upload, RAG retrieval and vision input
+- Function Call and MCP tool integration
+- Multi-platform: Web, Electron desktop, mobile, share pages, workbench
+- Email/password auth via better-auth, optional SSO and email verification
+- Localized UI (Simplified Chinese by default)
+
+Fork-specific UI differences: a global dark purple palette (auth pages, sidebar, chat area, scrollbars), consistent LuGod AI branding, and the new three-step quick start card on the home screen.
+
+### Requirements
+
+| Component | Version | Notes |
+| --- | --- | --- |
+| Node.js | 22+ (verified on 26.13.0) | Check with `node -v` |
+| pnpm | 12.4.1 | Pinned by `packageManager` |
+| PostgreSQL | 17 | Requires `pgvector` and `pg_search`; `paradedb/paradedb:latest-pg17` recommended |
+| Redis | 7 | Cache and sessions |
+| Docker Desktop | Recent version | Only to run PostgreSQL / Redis |
+
+### Installation
+
+```bash
+git clone https://github.com/Lugod01/lobehub.git
+cd lobehub
+git checkout canary
+
+# Install dependencies (postinstall must be skipped, see note below)
+pnpm install --ignore-scripts
+```
+
+`--ignore-scripts` is required on Windows: `ffmpeg-static` and `workerd` postinstall steps download binaries from GitHub Releases (often stalls behind the GFW), and the `prepare` script uses Linux shell syntax (`> /dev/null`) which fails on Windows. If the ffmpeg binary is missing afterwards, run `node node_modules/ffmpeg-static/install.js`.
+
+There is no root `pnpm-lock.yaml` upstream (only `apps/desktop/pnpm-lock.yaml` is tracked) and the workspace config sets `lockfile: false` with `resolutionMode: highest`, so minor versions may differ between installs. That is expected.
+
+Start the databases (deliberately mapped to 5433 / 6380 to avoid conflicts):
+
+```bash
+docker run -d --name lobehub2-postgres \
+  -e POSTGRES_PASSWORD=your-password \
+  -e POSTGRES_DB=lobechat_dev2 \
+  -p 5433:5432 paradedb/paradedb:latest-pg17
+
+docker run -d --name lobehub2-redis -p 6380:6379 redis:7-alpine
+
+# or use the bundled compose file (binds 5432 / 6379)
+pnpm dev:docker
+```
+
+Create `.env.development.local` (git-ignored):
+
+```dotenv
+APP_URL=http://localhost:3011
+
+DATABASE_URL=postgresql://postgres:your-password@localhost:5433/lobechat_dev2
+DATABASE_DRIVER=node
+
+REDIS_URL=redis://localhost:6380
+REDIS_PREFIX=lobechat
+REDIS_TLS=0
+
+KEY_VAULTS_SECRET=<32-byte random, base64>
+AUTH_SECRET=<32-byte random, base64>
+
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=1
+LLM_VISION_IMAGE_USE_BASE64=1
+```
+
+Then migrate and start:
+
+```bash
+pnpm db:migrate      # creates ~240 tables plus required extensions
+pnpm dev             # Next 3010 + Vite 9876 by default
+
+# custom ports (what this machine uses)
+PORT=3011 SPA_PORT=9877 pnpm dev
+```
+
+`pnpm dev` spawns `next dev` and `vite` in parallel, honoring `PORT` and `SPA_PORT` (auto-incrementing when busy). Note that upstream wires these through `bunx`; if `bun` on your machine is a broken stub, install a working Bun or run `npx next dev -p 3011` and `npx vite --port 9877` manually.
+
+### Usage
+
+| URL | Purpose |
+| --- | --- |
+| http://localhost:3011 | Main application (Next.js) |
+| http://localhost:9877 | Frontend assets (Vite, loaded automatically by the main app) |
+
+Open the site, sign up with any email and password (email/password auth is enabled by default; there is no email verification unless `AUTH_EMAIL_VERIFICATION` is set). On the home screen you will see the quick start card above the input: choose a model, ask a question, get an answer. Add a provider API key in settings to actually chat — the UI loads fine without one.
+
+On Windows, `启动LobeHub-Fork.bat` and `停止LobeHub-Fork.bat` on the desktop start and stop the whole stack silently (services run in the background, no extra console windows, idempotent restarts). Logs: `%LOCALAPPDATA%\LobeHubDev2\logs\dev.log`.
+
+Troubleshooting:
+
+| Symptom | Fix |
+| --- | --- |
+| `pnpm install` hangs | Usually `ffmpeg-static` / `workerd` downloading from GitHub; abort and reinstall with `--ignore-scripts` |
+| Blank page with clean console | Browser cached the previous module graph; hard reload with `Ctrl+Shift+R` or use a private window |
+| Migration complains about missing extensions | Make sure you run the `paradedb` image, not plain `postgres` |
+| Login page 404 or unstyled | Vite (9877) is not running; the main app serves SPA assets from it |
+
+### Staying in sync
+
+```bash
+git remote add upstream https://github.com/lobehub/lobehub.git
+git fetch upstream
+git merge upstream/canary
+```
+
+Customizations are limited to branding constants, one theme stylesheet, home page components and locale files, so merge conflicts should be rare.
+
+---
+
+## License
+
+MIT, inherited from [LobeHub](https://github.com/lobehub/lobehub).
