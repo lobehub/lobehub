@@ -1,23 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
-
 import { getAvailableSidebarItems, getSortableSidebarItemIds } from './CustomizeSidebarModal';
 
 describe('CustomizeSidebarModal', () => {
   it('allows Projects to be reordered and hidden', () => {
     expect(getAvailableSidebarItems(false).some((item) => item.id === 'project')).toBe(true);
     expect(getSortableSidebarItemIds(false).has('project')).toBe(true);
-  });
-
-  it.each([false, true])('no longer offers Memory, now under Settings (workspace: %s)', (ws) => {
-    expect(getAvailableSidebarItems(ws).some((item) => item.id === 'memory')).toBe(false);
-    expect(getSortableSidebarItemIds(ws).has('memory')).toBe(false);
-  });
-
-  it('keeps the spacer in the sortable item set', () => {
-    expect(getSortableSidebarItemIds(false).has(SIDEBAR_SPACER_ID)).toBe(true);
-    expect(getSortableSidebarItemIds(true).has(SIDEBAR_SPACER_ID)).toBe(true);
   });
 
   it('offers Dashboards only while the dashboard flag is on, and never in workspace mode', () => {

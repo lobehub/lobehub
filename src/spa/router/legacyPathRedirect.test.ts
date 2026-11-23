@@ -1,6 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import type { RouteObject } from 'react-router';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
@@ -13,7 +12,7 @@ import {
   legacySettingsMarketplaceRedirects,
   marketplaceIndexRoute,
 } from './marketplaceRoutes';
-import { legacyMemoryRedirects } from './memoryRoutes';
+import { legacyMemoryRedirects, settingsMemoryChildren } from './memoryRoutes';
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -164,29 +163,40 @@ describe('legacy URL redirects', () => {
 });
 
 describe('legacyMemoryRedirects', () => {
-  const targetOf = (route: RouteObject) => (route.element as { props: { to: string } }).props.to;
-
-  it('forwards every old memory page to its Settings section', () => {
-    const targets = legacyMemoryRedirects.map((route) => [
-      route.index ? '' : route.path,
-      targetOf(route),
-    ]);
-
-    expect(targets).toEqual(
-      expect.arrayContaining([
-        ['', '/settings/memory/overview'],
-        ['identities', '/settings/memory/identities'],
-        ['preferences', '/settings/memory/preferences'],
-        ['contexts', '/settings/memory/contexts'],
-        ['activities', '/settings/memory/activities'],
-        ['rules', '/settings/memory/rules'],
-      ]),
+  const renderMemoryAt = (url: string) => {
+    const memory = { children: legacyMemoryRedirects, path: 'memory' };
+    const router = createMemoryRouter(
+      [
+        {
+          children: [
+            memory,
+            {
+              // Static like the real sections, so they outrank `:workspaceSlug/memory/*`.
+              children: settingsMemoryChildren.map(({ path }) => ({ element: currentUrl, path })),
+              path: 'settings/memory',
+            },
+            { children: [memory], path: ':workspaceSlug' },
+          ],
+          path: '/',
+        },
+      ],
+      { initialEntries: [url] },
     );
-  });
+    render(createElement(RouterProvider, { router }));
+  };
 
-  it('keeps the detail query of a deep link', () => {
-    expect(
-      buildLegacyRedirectPath('/settings/memory/preferences', { search: '?preferenceId=p1' }),
-    ).toBe('/settings/memory/preferences?preferenceId=p1');
+  it.each([
+    ['/memory', '/settings/memory/overview'],
+    ['/memory/identities', '/settings/memory/identities'],
+    ['/memory/contexts', '/settings/memory/contexts'],
+    ['/memory/activities', '/settings/memory/activities'],
+    ['/memory/rules', '/settings/memory/rules'],
+    // A deep link keeps the detail it opens.
+    ['/memory/preferences?preferenceId=p1#top', '/settings/memory/preferences?preferenceId=p1#top'],
+    // Memory is personal, so a workspace-prefixed link drops the prefix.
+    ['/acme/memory/identities', '/settings/memory/identities'],
+  ])('%s → %s', (from, to) => {
+    renderMemoryAt(from);
+    expect(screen.getByTestId('url').textContent).toBe(to);
   });
 });

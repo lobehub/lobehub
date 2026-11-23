@@ -457,7 +457,6 @@ export default {
   'navPanel.showMoreTeamPinned': 'Show {{count}} more',
   'navPanel.teamPinned': 'Pinned for team',
   'navPanel.teamPinnedHint': 'Pinned by admins for everyone in this workspace',
-  'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',
