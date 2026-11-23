@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   fileEnv: { FILE_TASK_GLOBAL_CONCURRENCY: 80, FILE_TASK_WORKSPACE_CONCURRENCY: 20 },
   files: new Map<string, any>(),
   publish: vi.fn(),
+  recordAdmission: vi.fn(),
   recordGlobalActive: vi.fn(),
   redisAvailable: { value: true },
   slots: {
@@ -35,7 +36,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/observability-otel/modules/file-task-admission', () => ({
-  recordFileTaskAdmission: vi.fn(),
+  recordFileTaskAdmission: h.recordAdmission,
   recordFileTaskGlobalActive: h.recordGlobalActive,
 }));
 vi.mock('@/envs/app', () => ({
@@ -247,6 +248,9 @@ const drain = async (isDone: () => boolean, maxSimulatedMs = 6 * 60 * 60 * 1000)
 
 const settleTriggers = () => vi.advanceTimersByTimeAsync(0);
 
+const decisionCount = (decision: string) =>
+  h.recordAdmission.mock.calls.filter(([metric]) => metric.decision === decision).length;
+
 const allSucceeded = (fileIds: string[]) => () =>
   fileIds.every((id) => {
     const file = h.files.get(id);
@@ -301,6 +305,10 @@ describe('file task admission', () => {
     expect(stats.started).toBe(1000);
     expect(new Set(parseFileToChunks.mock.calls.map(([input]) => input.taskId)).size).toBe(1000);
     expect(h.slots.global.size).toBe(0);
+    expect(decisionCount('admitted')).toBe(20);
+    expect(decisionCount('queued')).toBe(980);
+    expect(decisionCount('dequeued')).toBe(980);
+    expect(decisionCount('rejected')).toBe(0);
     // The delivery rate keeps a waiting backlog from cycling through QStash.
     expect(queue.published()).toBeLessThan(10_000);
   }, 60_000);
@@ -399,6 +407,40 @@ describe('file task admission', () => {
     const [task] = fileTasks([second], 'chunkTaskId');
     expect(task.status).toBe(AsyncTaskStatus.Error);
     expect(task.error.name).toBe(AsyncTaskErrorType.TaskTriggerError);
+    expect(decisionCount('rejected')).toBe(1);
+  });
+
+  it('writes one structured log line per decision with current and limit values', async () => {
+    h.fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY = 1;
+    installRoutes();
+    h.publish.mockResolvedValue({ messageId: 'message' });
+    const [first, second] = seedFiles(2);
+    const service = new ChunkService({} as any, 'user', 'ws-1');
+
+    await service.asyncParseFileToChunks(first);
+    await service.asyncParseFileToChunks(second);
+
+    const lines = vi.mocked(console.info).mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(lines).toEqual([
+      expect.objectContaining({
+        decision: 'admitted',
+        event: 'file_task.admission',
+        fileId: first,
+        globalActive: 1,
+        globalLimit: 80,
+        kind: 'parse',
+        scope: 'workspace:ws-1',
+        scopeActive: 1,
+        scopeLimit: 1,
+      }),
+      expect.objectContaining({
+        decision: 'queued',
+        event: 'file_task.admission',
+        fileId: second,
+        globalActive: 1,
+        scopeActive: 1,
+      }),
+    ]);
   });
 
   describe('queue delivery', () => {

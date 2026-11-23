@@ -147,10 +147,16 @@ export const admitFileTask = async (
   }
 
   // Written before publishing: a delivery can arrive before the publish call returns.
+  const active = lease.status === 'full' ? lease : undefined;
   const queuedUntil = queueDeadline();
-  await asyncTaskModel.markFileTaskQueued(task.taskId, queuedUntil);
-  await publishQueuedFileTask({ ...task, queuedUntil: queuedUntil.toISOString() });
-  report('queued', task, lease.status === 'full' ? lease : undefined);
+  try {
+    await asyncTaskModel.markFileTaskQueued(task.taskId, queuedUntil);
+    await publishQueuedFileTask({ ...task, queuedUntil: queuedUntil.toISOString() });
+  } catch (error) {
+    report('rejected', task, active);
+    throw error;
+  }
+  report('queued', task, active);
 
   return { queued: true };
 };
