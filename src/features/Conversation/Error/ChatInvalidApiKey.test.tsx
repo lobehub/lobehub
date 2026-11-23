@@ -15,6 +15,7 @@ vi.mock('@lobechat/business-const', async (importOriginal) => ({
   BRANDING_LOGO_URL: '/branding/private-logo.png',
   BRANDING_NAME: 'Private Workspace',
   BRANDING_PROVIDER: 'lobehub',
+  BRANDING_PROVIDER_DISPLAY_ID: 'managed-upstream',
 }));
 vi.mock('../store', () => ({
   useConversationStore: (selector: (state: object) => unknown) => selector({ deleteMessage }),
@@ -52,5 +53,16 @@ describe('API-key error cards', () => {
     expect(navigate).toHaveBeenCalledWith('/settings/provider/lobehub');
     expect(onNavigate).toHaveBeenCalledOnce();
     expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('maps the branded display provider id back to the runtime provider settings route', async () => {
+    render(<ChatInvalidAPIKey id="error-message" provider="managed-upstream" />);
+
+    expect(await screen.findByRole('img', { name: 'Private Workspace' })).toHaveAttribute(
+      'src',
+      '/branding/private-logo.png',
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(navigate).toHaveBeenCalledWith('/settings/provider/lobehub');
   });
 });

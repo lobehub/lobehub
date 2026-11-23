@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { REQUEST_TOPIC_ID_HEADER, REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import {
+  getProviderDisplayIdentifier,
+  REQUEST_TOPIC_ID_HEADER,
+  REQUEST_TRIGGER_HEADER,
+} from '@lobechat/const';
 import { type LobeRuntimeAI } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
@@ -226,7 +230,7 @@ describe('POST handler', () => {
       expect(await response.json()).toEqual({
         body: {
           error: { modelType: 'chat', requestedModel: 'beta-model' },
-          provider: BRANDING_PROVIDER,
+          provider: getProviderDisplayIdentifier(BRANDING_PROVIDER),
         },
         errorType: ChatErrorType.LobeHubModelDeprecated,
       });

@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { sanitizeErrorPayloadForDisplay } from '@lobechat/const/errorBranding';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { getErrorCodeSpec } from '@lobechat/model-runtime/errors';
@@ -98,19 +99,22 @@ const getErrorDetails = (error?: ChatMessageError | null) => {
 
   const body = getBusinessErrorDetailsBody(error);
   const rawErrorMessage = getRawErrorMessage(error);
-  if (!rawErrorMessage) return body;
+  if (!rawErrorMessage) return sanitizeErrorPayloadForDisplay(body);
   if (isRecord(body)) {
-    if (!('detail' in body)) return { ...body, message: rawErrorMessage };
+    if (!('detail' in body))
+      return sanitizeErrorPayloadForDisplay({ ...body, message: rawErrorMessage });
 
     const { detail, ...rest } = body;
     // A message that only repeats the raw detail adds nothing to the block.
-    return detail === rawErrorMessage
-      ? { ...rest, detail: parseJsonDetail(detail) }
-      : { ...rest, detail: parseJsonDetail(detail), message: rawErrorMessage };
+    return sanitizeErrorPayloadForDisplay(
+      detail === rawErrorMessage
+        ? { ...rest, detail: parseJsonDetail(detail) }
+        : { ...rest, detail: parseJsonDetail(detail), message: rawErrorMessage },
+    );
   }
-  if (body !== undefined) return { body, message: rawErrorMessage };
+  if (body !== undefined) return sanitizeErrorPayloadForDisplay({ body, message: rawErrorMessage });
 
-  return { message: rawErrorMessage };
+  return sanitizeErrorPayloadForDisplay({ message: rawErrorMessage });
 };
 
 const loading = () => (

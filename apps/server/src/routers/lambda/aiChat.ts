@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
+import { sanitizeBrandErrorText } from '@lobechat/const/errorBranding';
 import { getErrorCodeSpec, StructuredOutputError } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
@@ -101,10 +102,11 @@ const createRuntimeTRPCError = (
     return new TRPCError({
       cause: error,
       code: getTRPCErrorCodeFromStatus(runtimeStatus),
-      message:
+      message: sanitizeBrandErrorText(
         typeof errorType === 'string'
           ? errorType
           : (getRuntimeErrorMessage(error) ?? `Request failed (${runtimeStatus})`),
+      ),
     });
   }
 
@@ -120,7 +122,9 @@ const createRuntimeTRPCError = (
     return new TRPCError({
       cause: error,
       code: getTRPCErrorCodeFromStatus(status),
-      message: error instanceof Error ? error.message : `Provider error (${status})`,
+      message: sanitizeBrandErrorText(
+        error instanceof Error ? error.message : `Provider error (${status})`,
+      ),
     });
   }
 

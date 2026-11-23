@@ -1,3 +1,4 @@
+import { toRuntimeProviderId } from '@lobechat/const/errorBranding';
 import { Button } from '@lobehub/ui';
 import { ModelProvider } from 'model-bank/modelProvider';
 import { memo } from 'react';
@@ -30,7 +31,7 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
         <Button
           type={'primary'}
           onClick={() => {
-            navigate(urlJoin('/settings/provider', provider || 'all'));
+            navigate(urlJoin('/settings/provider', toRuntimeProviderId(provider) || 'all'));
             deleteMessage(id);
           }}
         >

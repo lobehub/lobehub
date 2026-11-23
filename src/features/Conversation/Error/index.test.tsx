@@ -1,4 +1,5 @@
 import type * as lobechatConstModule from '@lobechat/const';
+import { getProviderDisplayIdentifier } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type * as lobechatTypesModule from '@lobechat/types';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
@@ -932,5 +933,33 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('The provider rejected the tool count.')).toBeInTheDocument();
     expect(screen.queryByText('modelRuntime:ExceededToolLimit')).not.toBeInTheDocument();
+  });
+
+  it('sanitizes persisted default provider and upstream lobehub keys in Show Details', () => {
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: {
+              code: 'request_rejected',
+              lobehub_trace: 'trace-secret',
+              message: 'IP 124.174.70.116 is not allowed to access',
+              provider: 'lobehub',
+              type: 'ai_hub_error',
+            },
+            message: 'IP 124.174.70.116 is not allowed to access',
+            type: AgentRuntimeErrorType.UpstreamHttpError,
+          } as any,
+          id: 'msg-upstream-http-error',
+        }}
+      />,
+    );
+
+    const expectedProvider = getProviderDisplayIdentifier('lobehub');
+    const details = getErrorDetails(/"code": "request_rejected"/).textContent ?? '';
+    expect(details).toContain(`"provider": "${expectedProvider}"`);
+    if (expectedProvider !== 'lobehub') {
+      expect(details).not.toContain('lobehub');
+    }
   });
 });

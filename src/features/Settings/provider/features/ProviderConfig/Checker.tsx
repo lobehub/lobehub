@@ -1,5 +1,6 @@
 'use client';
 
+import { sanitizeErrorPayloadForDisplay } from '@lobechat/const/errorBranding';
 import { type ChatMessageError } from '@lobechat/types';
 import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
@@ -54,7 +55,7 @@ const Error = memo<{ error: ChatMessageError }>(({ error }) => {
               variant={'borderless'}
               wrap={true}
             >
-              {JSON.stringify(error.body || error, null, 2)}
+              {JSON.stringify(sanitizeErrorPayloadForDisplay(error.body || error), null, 2)}
             </Highlighter>
           </Flexbox>
         }

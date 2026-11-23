@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  sanitizeBrandErrorText,
+  sanitizeErrorPayloadForDisplay,
+} from '@lobechat/const/errorBranding';
 import { Alert, createStaticStyles, Flexbox, Highlighter } from '@lobehub/ui';
 import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -47,17 +51,17 @@ const getErrorContent = (error: Record<string, any> | undefined): string | null 
   // Try common error structures
   // 1. error.error.body (TRPC style)
   if (error.error?.body) {
-    return JSON.stringify(error.error.body, null, 2);
+    return JSON.stringify(sanitizeErrorPayloadForDisplay(error.error.body), null, 2);
   }
 
   // 2. error.body (direct body)
   if (error.body && typeof error.body === 'object') {
-    return JSON.stringify(error.body, null, 2);
+    return JSON.stringify(sanitizeErrorPayloadForDisplay(error.body), null, 2);
   }
 
   // 3. error.message (if it's not "[object Object]")
   if (error.message && typeof error.message === 'string' && error.message !== '[object Object]') {
-    return error.message;
+    return sanitizeBrandErrorText(error.message);
   }
 
   // 4. If error itself is an object with meaningful content, stringify it
@@ -71,7 +75,11 @@ const getErrorContent = (error: Record<string, any> | undefined): string | null 
     });
 
     if (meaningfulEntries.length > 0) {
-      return JSON.stringify(Object.fromEntries(meaningfulEntries), null, 2);
+      return JSON.stringify(
+        sanitizeErrorPayloadForDisplay(Object.fromEntries(meaningfulEntries)),
+        null,
+        2,
+      );
     }
   }
 

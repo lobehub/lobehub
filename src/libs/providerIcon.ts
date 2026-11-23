@@ -1,4 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isBrandedProviderId } from '@lobechat/const/errorBranding';
 /* eslint-disable no-restricted-imports -- the lazy wrapper in @/components/LobeIcons is the only importer */
 import {
   ProviderCombine as LobeProviderCombine,
@@ -27,8 +27,7 @@ if (
 // Stored provider IDs remain unchanged in private deployments. Apply branding
 // at the shared resolver, including error cards and combined wordmarks, rather
 // than requiring every consumer to remember a separate branded component.
-const isBrandedProvider = (provider?: string) =>
-  isCustomBranding && provider?.toLowerCase() === BRANDING_PROVIDER.toLowerCase();
+const isBrandedProvider = (provider?: string) => isCustomBranding && isBrandedProviderId(provider);
 
 // Do not turn these back into `export { ... }` re-exports: with rolldown's
 // strictExecutionOrder (rolldown 1.2.12) the icon modules' init wrappers are

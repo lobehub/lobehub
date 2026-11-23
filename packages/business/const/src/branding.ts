@@ -70,6 +70,19 @@ export const BRANDING_EMAIL = {
 export const BRANDING_PROVIDER = 'lobehub';
 
 /**
+ * User-facing identifier for the default built-in provider (`BRANDING_PROVIDER`,
+ * internal id `'lobehub'`). Presentation and external error surfaces only:
+ * persisted DB rows (`agents.provider`, `messages.provider`, `ai_providers.id`,
+ * `ai_models.provider_id`), runtime config keys and internal routing keep
+ * `BRANDING_PROVIDER`, so no data migration is required.
+ *
+ * Empty upstream (keeps `'lobehub'` / `BRANDING_NAME`). A white-label
+ * distribution whose managed upstream has its own provider name (distinct from
+ * `BRANDING_NAME` and future custom providers) sets this slot.
+ */
+export const BRANDING_PROVIDER_DISPLAY_ID: string = '';
+
+/**
  * Builtin tool and skill identifiers start with `lobe-`. A distribution that
  * sets this namespace shows `<namespace>-<name>` wherever the UI prints one
  * (tool popovers, tool-call titles, error fallbacks). Presentation only: agent

@@ -12,6 +12,7 @@ export * from './desktopGlobalShortcuts';
 export * from './discover';
 export * from './editor';
 export * from './empty';
+export * from './errorBranding';
 export * from './fetch';
 export * from './file';
 export * from './heterogeneousAgent';

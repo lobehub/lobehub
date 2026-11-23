@@ -24,3 +24,7 @@ export {
   type ErrorCategory,
   type ErrorSeverity,
 } from './taxonomy';
+export {
+  sanitizeBrandErrorText,
+  sanitizeErrorPayloadForDisplay,
+} from '@lobechat/const/errorBranding';

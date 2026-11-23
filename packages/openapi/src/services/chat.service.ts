@@ -1,6 +1,7 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { mergeModelRuntimeHooks } from '@lobechat/model-runtime';
+import { sanitizeBrandErrorText } from '@lobechat/model-runtime/errors';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
@@ -454,7 +455,9 @@ export class ChatService extends BaseService {
         model,
         provider,
       });
-      throw this.createCommonError(`聊天对话失败: ${this.extractErrorMessage(error)}`);
+      throw this.createCommonError(
+        `聊天对话失败: ${sanitizeBrandErrorText(this.extractErrorMessage(error))}`,
+      );
     }
   }
 

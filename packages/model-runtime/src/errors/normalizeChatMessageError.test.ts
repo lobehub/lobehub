@@ -1,7 +1,10 @@
+import { BRANDING_NAME, getProviderDisplayIdentifier } from '@lobechat/const';
 import { DATABASE_ERROR_PUBLIC_MESSAGE } from '@lobechat/utils/queryError';
 import { describe, expect, it } from 'vitest';
 
 import { normalizeChatMessageError } from './normalizeChatMessageError';
+
+const expectedDefaultProvider = getProviderDisplayIdentifier('lobehub');
 
 describe('normalizeChatMessageError', () => {
   it.each([
@@ -60,7 +63,7 @@ describe('normalizeChatMessageError', () => {
       body: {
         budget: { budgetTypeAtError: 'workspace' },
         error: { message: 'Payment required', status: 402 },
-        provider: 'lobehub',
+        provider: expectedDefaultProvider,
       },
       type: 'InsufficientQuota',
     });
@@ -75,7 +78,11 @@ describe('normalizeChatMessageError', () => {
       message: 'LLM stream error: Provider timed out',
     });
 
-    expect(result.body).toMatchObject({ ...providerBody, traceId: 'trace-1' });
+    expect(result.body).toMatchObject({
+      message: 'Provider timed out',
+      provider: expectedDefaultProvider,
+      traceId: 'trace-1',
+    });
   });
 
   it('keeps hook display fields on a typed stream error payload', () => {
@@ -87,8 +94,34 @@ describe('normalizeChatMessageError', () => {
       type: 'ProviderBizError',
     });
 
-    expect(result.body).toEqual({ ...providerBody, traceId: 'trace-1' });
+    expect(result.body).toEqual({
+      code: 500,
+      message: 'Internal error',
+      provider: expectedDefaultProvider,
+      traceId: 'trace-1',
+    });
     expect(result).not.toHaveProperty('_responseBody');
+  });
+
+  it('sanitizes upstream lobehub keys, default provider, and brand text on custom builds', () => {
+    const result = normalizeChatMessageError({
+      error: {
+        code: 'request_rejected',
+        lobehub_request_id: 'req-1',
+        message: 'IP blocked by LobeHub proxy',
+        type: 'ai_hub_error',
+      },
+      errorType: 'ProviderBizError',
+      provider: 'lobehub',
+    });
+
+    expect(result.body).toEqual({
+      code: 'request_rejected',
+      message: `IP blocked by ${BRANDING_NAME} proxy`,
+      provider: expectedDefaultProvider,
+      type: 'ai_hub_error',
+    });
+    expect(result.message).toBe(`IP blocked by ${BRANDING_NAME} proxy`);
   });
 
   it('keeps hook display fields on a plain Error', () => {

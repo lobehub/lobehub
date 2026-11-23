@@ -1,12 +1,12 @@
-import { BRANDING_NAME } from '@lobechat/business-const/branding';
+import { BRANDING_NAME, BRANDING_PROVIDER_DISPLAY_ID } from '@lobechat/business-const/branding';
 
 import type { ModelProviderCard } from '../types';
 
 /**
  * The branded first-party provider. Display metadata follows the business
  * branding slot: OSS/cloud keep the LobeHub identity, while custom-branding
- * distributions (BRANDING_NAME override) get their own name and drop the
- * LobeHub marketing copy/links automatically.
+ * distributions (BRANDING_NAME / BRANDING_PROVIDER_DISPLAY_ID override) get
+ * their own provider name and drop the LobeHub marketing copy/links automatically.
  */
 // @ts-ignore -- under a custom BRANDING_NAME tsc narrows this to a literal type
 // with no overlap and flags the comparison; the runtime check is the point.
@@ -24,7 +24,7 @@ const LobeHub: ModelProviderCard = {
       }),
   enabled: true,
   id: 'lobehub',
-  name: BRANDING_NAME,
+  name: BRANDING_PROVIDER_DISPLAY_ID || BRANDING_NAME,
   settings: {
     modelEditable: false,
     showAddNewModel: false,

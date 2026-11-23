@@ -1,3 +1,4 @@
+import { sanitizeErrorPayloadForDisplay } from '@lobechat/const/errorBranding';
 import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { getErrorCodeSpec } from '@lobechat/model-runtime/errors/specs';
 import type { ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime/types/error';
@@ -53,7 +54,7 @@ export const createErrorResponse = (
     resolvedStatusCode <= 599;
   const statusCode = isValidStatusCode ? resolvedStatusCode : 500;
 
-  const data: ErrorResponse = { body, errorType };
+  const data: ErrorResponse = { body: sanitizeErrorPayloadForDisplay(body), errorType };
 
   if (!isValidStatusCode) {
     console.error(

@@ -53,6 +53,9 @@ vi.mock('@/const/settings', () => ({
   DEFAULT_SYSTEM_AGENT_CONFIG: {},
 }));
 vi.mock('@lobechat/model-runtime', () => ({ mergeModelRuntimeHooks: vi.fn() }));
+vi.mock('@lobechat/model-runtime/errors', () => ({
+  sanitizeBrandErrorText: (text: string) => text,
+}));
 vi.mock('@lobechat/types', () => ({ RequestTrigger: { Api: 'api' } }));
 vi.mock('@/business/server/model-runtime', () => ({ getBusinessModelRuntimeHooks: vi.fn() }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({

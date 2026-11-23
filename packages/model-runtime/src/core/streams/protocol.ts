@@ -1,3 +1,4 @@
+import { sanitizeErrorPayloadForDisplay } from '@lobechat/const/errorBranding';
 import type {
   ChatCitationItem,
   ModelPerformance,
@@ -429,9 +430,10 @@ export const createSSEProtocolTransformer = (
       const buffers = Array.isArray(result) ? result : [result];
 
       buffers.forEach(({ type, id, data }) => {
+        const serializedData = type === 'error' ? sanitizeErrorPayloadForDisplay(data) : data;
         controller.enqueue(`id: ${id}\n`);
         controller.enqueue(`event: ${type}\n`);
-        controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+        controller.enqueue(`data: ${JSON.stringify(serializedData)}\n\n`);
 
         // mark terminal when receiving any of these events
         if (type === 'stop' || type === 'usage' || type === 'error') hasTerminalEvent = true;

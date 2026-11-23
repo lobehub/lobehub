@@ -1,4 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isBrandedProviderId } from '@lobechat/const/errorBranding';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
@@ -14,7 +14,12 @@ export const isMemberBudgetExceeded = (error?: ChatMessageError | null) =>
 
 export const getBusinessErrorDetailsBody = (error: ChatMessageError) => {
   const { body } = error;
-  if (isRecord(body) && body.provider === BRANDING_PROVIDER && isMemberBudgetExceeded(error)) {
+  if (
+    isRecord(body) &&
+    typeof body.provider === 'string' &&
+    isBrandedProviderId(body.provider) &&
+    isMemberBudgetExceeded(error)
+  ) {
     return omit(body, ['provider']);
   }
 

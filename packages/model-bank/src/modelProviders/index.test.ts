@@ -1,3 +1,4 @@
+import { BRANDING_NAME, BRANDING_PROVIDER_DISPLAY_ID } from '@lobechat/business-const/branding';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { type ModelProviderCard } from '../types';
@@ -7,6 +8,7 @@ import {
   isProviderDisableBrowserRequest,
   isProviderFetchOnClient,
   isProviderOAuthDeviceFlow,
+  LobeHubProviderCard,
 } from './index';
 
 describe('model provider predicates', () => {
@@ -55,6 +57,11 @@ describe('model provider predicates', () => {
   it('resolves a provider id to its display name and falls back to the id', () => {
     expect(getProviderDisplayName('enabled-provider')).toBe('Test Provider');
     expect(getProviderDisplayName('not-exists')).toBe('not-exists');
+  });
+
+  it('uses BRANDING_PROVIDER_DISPLAY_ID (or BRANDING_NAME) for the default built-in provider card', () => {
+    expect(LobeHubProviderCard.id).toBe('lobehub');
+    expect(LobeHubProviderCard.name).toBe(BRANDING_PROVIDER_DISPLAY_ID || BRANDING_NAME);
   });
 
   it('detects OAuth device flow providers', () => {

@@ -1,3 +1,7 @@
+import {
+  sanitizeBrandErrorText,
+  sanitizeErrorPayloadForDisplay,
+} from '@lobechat/const/errorBranding';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { containsQueryDetail, DATABASE_ERROR_PUBLIC_MESSAGE } from '@lobechat/utils/queryError';
@@ -191,8 +195,24 @@ const redactQueryDetail = (formatted: ChatMessageError): ChatMessageError => {
   };
 };
 
+const sanitizeBrandError = (formatted: ChatMessageError): ChatMessageError => {
+  const body = sanitizeErrorPayloadForDisplay(formatted.body);
+  const message =
+    typeof formatted.message === 'string'
+      ? sanitizeBrandErrorText(formatted.message)
+      : formatted.message;
+
+  if (body === formatted.body && message === formatted.message) return formatted;
+
+  return {
+    ...formatted,
+    ...(body === undefined ? {} : { body }),
+    ...(message === undefined ? {} : { message }),
+  };
+};
+
 const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError =>
-  redactQueryDetail(classify(formatted));
+  sanitizeBrandError(redactQueryDetail(classify(formatted)));
 
 /**
  * Normalize an arbitrary thrown value into `ChatMessageError`, then attach

@@ -1,3 +1,4 @@
+import { sanitizeBrandErrorText } from '@lobechat/const/errorBranding';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType } from '@lobechat/types';
 
@@ -40,7 +41,17 @@ interface CategorizedImageGenerationError {
   errorType: AsyncTaskErrorType;
 }
 
-export const categorizeImageGenerationError = ({
+export const categorizeImageGenerationError = (
+  options: CategorizeImageGenerationErrorOptions,
+): CategorizedImageGenerationError => {
+  const result = categorizeImageGenerationErrorRaw(options);
+  return {
+    ...result,
+    errorMessage: sanitizeBrandErrorText(result.errorMessage),
+  };
+};
+
+const categorizeImageGenerationErrorRaw = ({
   error,
   isAborted,
   isEditingImage,

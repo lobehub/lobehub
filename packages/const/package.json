@@ -8,6 +8,7 @@
     "./bot": "./src/bot.ts",
     "./currency": "./src/currency.ts",
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
+    "./errorBranding": "./src/errorBranding.ts",
     "./goal": "./src/goal.ts",
     "./hotkeys": "./src/hotkeys.ts",
     "./media": "./src/media.ts",

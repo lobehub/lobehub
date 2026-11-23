@@ -1,3 +1,4 @@
+import { sanitizeErrorPayloadForDisplay } from '@lobechat/const/errorBranding';
 import type { ErrorResponse, ErrorType } from '@lobechat/types';
 
 import { getErrorCodeSpec } from '../errors';
@@ -19,7 +20,7 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
 export const createErrorResponse = (errorType: ILobeAgentRuntimeErrorType, body?: any) => {
   const statusCode = getStatus(errorType);
 
-  const data: ErrorResponse = { body, errorType };
+  const data: ErrorResponse = { body: sanitizeErrorPayloadForDisplay(body), errorType };
 
   if (typeof statusCode !== 'number' || statusCode < 200 || statusCode > 599) {
     console.error(

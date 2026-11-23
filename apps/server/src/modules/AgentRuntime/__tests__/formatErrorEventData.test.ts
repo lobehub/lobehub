@@ -1,9 +1,12 @@
+import { getProviderDisplayIdentifier } from '@lobechat/const';
 import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { DATABASE_ERROR_PUBLIC_MESSAGE } from '@lobechat/utils/queryError';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatErrorEventData } from '../formatErrorEventData';
+
+const expectedDefaultProvider = getProviderDisplayIdentifier('lobehub');
 
 describe('formatErrorEventData', () => {
   let consoleError: ReturnType<typeof vi.spyOn>;
@@ -119,7 +122,7 @@ describe('formatErrorEventData', () => {
       expect(out).toMatchObject({
         body: {
           message: 'Payment required',
-          provider: 'lobehub',
+          provider: expectedDefaultProvider,
           status: 402,
           traceId: 'trace-402',
         },
@@ -143,7 +146,7 @@ describe('formatErrorEventData', () => {
       expect(out).toMatchObject({
         body: {
           message: 'Payment required',
-          provider: 'lobehub',
+          provider: expectedDefaultProvider,
           status: 402,
           traceId: 'trace-402',
         },
@@ -189,7 +192,7 @@ describe('formatErrorEventData', () => {
       const out = formatErrorEventData(new ErrorClass(undefined, diagnostics), 'call_llm');
 
       expect(out).toMatchObject({
-        body: { diagnostics },
+        body: { diagnostics: { ...diagnostics, provider: expectedDefaultProvider } },
         errorType,
         phase: 'call_llm',
       });
@@ -206,7 +209,7 @@ describe('formatErrorEventData', () => {
       const out = formatErrorEventData(err, 'llm_execution');
 
       expect(out).toMatchObject({
-        body: { provider: 'lobehub', traceId: 'trace-1' },
+        body: { provider: expectedDefaultProvider, traceId: 'trace-1' },
         error: 'got status: RESOURCE_EXHAUSTED',
         errorType: AgentRuntimeErrorType.StreamChunkError,
       });
