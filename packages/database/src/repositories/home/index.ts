@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   type SidebarAgentItem,
   type SidebarAgentLabel,
@@ -20,8 +21,14 @@ import {
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
-import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
+import {
+  isInboxAgentIdentity,
+  keywordMatchesInboxTitle,
+  listedAgentWhere,
+  normalizeInboxAgentMeta,
+} from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { ilikeContains } from '../../utils/like';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -91,7 +98,7 @@ export class HomeRepository {
     includeLabels = true,
     includeGroups = true,
   ): Promise<SidebarAgentListResponse> {
-    // 1. Query all non-virtual agents.
+    // 1. Query all non-virtual agents, plus the scope's inbox (Lobe AI).
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
     //    private rows via the workspace-aware predicate.
@@ -122,7 +129,7 @@ export class HomeRepository {
             workspaceId: agents.workspaceId,
             visibility: agents.visibility,
           }),
-          not(eq(agents.virtual, true)),
+          listedAgentWhere(),
         ),
       )
       .orderBy(desc(agents.updatedAt));
@@ -465,8 +472,14 @@ export class HomeRepository {
       }),
     ];
 
-    // Sort all items by updatedAt descending
-    allItems.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    // Sort all items by updatedAt descending. The inbox (LobeAI) leads its
+    // bucket: its row is rarely updated, so by recency alone the default
+    // Agent would sink below the page-size cut and vanish from the sidebar.
+    allItems.sort(
+      (a, b) =>
+        Number(isInboxAgentIdentity(b)) - Number(isInboxAgentIdentity(a)) ||
+        b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
 
     // Categorize: pinned / grouped / ungrouped, split by visibility. Pinned
     // wins over grouping, but stays within its visibility bucket — a pinned
@@ -585,10 +598,28 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, agents),
-            not(eq(agents.virtual, true)),
-            agentCandidateIds
-              ? inJsonStringArray(agents.id, agentCandidateIds)
-              : sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
+            or(
+              and(
+                not(eq(agents.virtual, true)),
+                agentCandidateIds
+                  ? inJsonStringArray(agents.id, agentCandidateIds)
+                  : sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
+              ),
+              // The inbox is a virtual row the search index skips, so it is matched by name
+              // here. Its stored title is usually blank and shown as Lobe AI, so a blank
+              // title also matches that default name.
+              and(
+                eq(agents.slug, INBOX_SESSION_ID),
+                or(
+                  ilikeContains(agents.title, keyword.trim()),
+                  ilikeContains(agents.name, keyword.trim()),
+                  ilikeContains(agents.description, keyword.trim()),
+                  keywordMatchesInboxTitle(keyword)
+                    ? sql`nullif(trim(${agents.title}), '') is null`
+                    : undefined,
+                ),
+              ),
+            ),
           ),
         )
         .orderBy(desc(agents.updatedAt)),
@@ -638,6 +669,7 @@ export class HomeRepository {
           id: a.id,
           name: a.name,
           pinned: a.pinned ?? false,
+          slug: a.slug,
           title: meta.title,
           type: 'agent' as const,
           updatedAt: a.updatedAt,

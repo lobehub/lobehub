@@ -347,13 +347,15 @@ const AgentViewAllPage = memo(() => {
   );
 
   const filteredItems = useMemo(() => {
-    const query = keyword.trim().toLowerCase();
+    // Case and spacing are ignored, so "lobeai" still finds "Lobe AI".
+    const fold = (value?: string | null) => value?.toLowerCase().replaceAll(/\s+/g, '') ?? '';
+    const query = fold(keyword);
     let matched = query
       ? items.filter(
           (item) =>
-            item.name?.toLowerCase().includes(query) ||
-            item.title?.toLowerCase().includes(query) ||
-            item.description?.toLowerCase().includes(query),
+            fold(item.name).includes(query) ||
+            fold(item.title).includes(query) ||
+            fold(item.description).includes(query),
         )
       : items;
 

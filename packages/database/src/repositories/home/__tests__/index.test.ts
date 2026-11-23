@@ -721,6 +721,26 @@ describe('HomeRepository', () => {
       expect(result).toHaveLength(0);
     });
 
+    it('should find the inbox agent by its default name, ignoring case and spacing', async () => {
+      await clientDB.insert(Schema.agents).values({
+        id: 'search-inbox',
+        slug: 'inbox',
+        userId,
+        virtual: true,
+      });
+
+      for (const keyword of ['LobeAI', 'lobe ai', 'Lobe']) {
+        const result = await homeRepo.searchAgents(keyword);
+        expect(result.map((a) => a.id)).toContain('search-inbox');
+      }
+
+      const [inbox] = await homeRepo.searchAgents('LobeAI');
+      expect(inbox).toMatchObject({ slug: 'inbox', title: 'Lobe AI' });
+      expect((await homeRepo.searchAgents('Searchable')).map((a) => a.id)).not.toContain(
+        'search-inbox',
+      );
+    });
+
     describe('agents.pinned is the only search pin source', () => {
       it('should ignore sessions.pinned when agents.pinned is null', async () => {
         // Create legacy agent with pinned on session only

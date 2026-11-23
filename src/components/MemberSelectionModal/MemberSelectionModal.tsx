@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
+import { isBuiltinAgentSlug } from '@/features/AddAgentMemberModal/selectAddableAgents';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -246,8 +247,11 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     const useFetchAgentList = useHomeStore((s) => s.useFetchAgentList);
     useFetchAgentList(open && isLogin);
+    // Builtins (Lobe AI) are listed in the sidebar but can never join a group.
     const agents = useHomeStore((s) =>
-      homeAgentListSelectors.allAgents(s).filter((item) => item.type === 'agent'),
+      homeAgentListSelectors
+        .allAgents(s)
+        .filter((item) => item.type === 'agent' && !isBuiltinAgentSlug(item.slug)),
     );
 
     const handleAgentToggle = (agentId: string) => {

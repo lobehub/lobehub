@@ -464,6 +464,34 @@ describe('useAgentDropdownMenu', () => {
     ]);
   });
 
+  it('keeps Lobe AI (the inbox) organizable but never deletable, copyable or transferable', () => {
+    mocks.canEditResource = true;
+    mocks.canManage = true;
+    mocks.canManageResource = true;
+    mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'inbox-agent',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        slug: 'inbox',
+        title: 'Lobe AI',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    const keys = getMenuKeys(result.current());
+    expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar', 'rename', 'moveGroup']));
+    expect(keys).not.toContain('delete');
+    expect(keys).not.toContain('duplicate');
+    expect(keys).not.toContain('copy-agent');
+    expect(keys).not.toContain('permission');
+    expect(keys).not.toContain('visibility');
+  });
+
   it('hides the Permission shortcut from a non-author member who can configure the agent', () => {
     mocks.canEditResource = true;
 

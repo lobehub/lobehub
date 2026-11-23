@@ -59,7 +59,7 @@ SubHeader.displayName = 'WorkspaceAgentSubHeader';
 
 /**
  * The merged workspace "Agents" section body (replacing the former separate
- * "Workspace" and "Private" accordions): Inbox → my pins → team pins (fixed,
+ * "Workspace" and "Private" accordions): my pins → team pins (fixed,
  * set by owners/admins for everyone) → folders → the rest. Personal pins come
  * first so the agents a member chose stay at the top instead of being pushed
  * down by the (possibly long) team list. Private rows
@@ -77,6 +77,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     isLogin: !!isLogin,
   });
 
+  const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
   const navigate = useWorkspaceAwareNavigate();
   const [teamExpanded, setTeamExpanded] = useState(false);
@@ -115,11 +116,18 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     [agentPageSize, resolved],
   );
 
+  // Signed-in lists carry Lobe AI (the inbox) as an ordinary item from the
+  // server, so it can be pinned, hidden and found again like any Agent. The
+  // standalone entry covers the moments no list row exists: a signed-out
+  // visitor, the first load, and a list cached or fetched before the inbox row.
+  const showStandaloneInbox = !hideInbox && (contentState !== 'ready' || !hasInboxAgent);
+
+  if (contentState === 'inbox') return showStandaloneInbox ? <InboxItem /> : null;
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem />}
-        {contentState === 'loading' && <SkeletonList rows={3} />}
+        {showStandaloneInbox && <InboxItem />}
+        <SkeletonList rows={3} />
       </>
     );
 
@@ -127,7 +135,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
 
   return (
     <>
-      {!hideInbox && <InboxItem />}
+      {showStandaloneInbox && <InboxItem />}
       {myPinned.length > 0 && (
         <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
           <SubHeader

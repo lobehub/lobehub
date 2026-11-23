@@ -1,3 +1,5 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
+
 import { type SidebarAgentItem, type SidebarGroup } from '@/database/repositories/home';
 import { type HomeStore } from '@/store/home/store';
 
@@ -96,6 +98,14 @@ const allAgents = (s: HomeStore): SidebarAgentItem[] => {
 };
 
 /**
+ * Whether the loaded list carries Lobe AI (the inbox). It can be missing from a
+ * list cached before the server started returning it, or one fetched before
+ * the inbox row was first created.
+ */
+const hasInboxAgent = (s: HomeStore): boolean =>
+  allAgents(s).some((item) => item.slug === INBOX_SESSION_ID);
+
+/**
  * Agents every workspace member can see: the sidebar list without the
  * current user's private bucket.
  */
@@ -134,6 +144,7 @@ export const homeAgentListSelectors = {
   allAgents,
   getAgentById,
   hasCustomAgents,
+  hasInboxAgent,
   hasPrivateAgents,
   isAgentListConfirmed,
   isAgentListInit,

@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   agentRenameField,
   SessionDefaultGroup,
@@ -148,11 +149,14 @@ export const useAgentDropdownMenu = ({
   // Delete also opens to a workspace Admin on another member's shared agent
   // (server `canManage`); the confirmation then warns that someone else created
   // it, and the server only accepts the delete with that acknowledgment.
-  const canDelete = canManage || canManageResource;
+  // Lobe AI (the inbox) is listed like any Agent, but it is the scope's
+  // built-in default: it cannot be deleted, handed over or moved elsewhere.
+  const isInbox = slug === INBOX_SESSION_ID;
+  const canDelete = !isInbox && (canManage || canManageResource);
 
   // Cross-workspace Transfer to… / Copy to… items (null when workspace
   // feature is off or the viewer lacks permission for this agent)
-  const transferMenuItems = useAgentTransferMenuItem(
+  const agentTransferMenuItems = useAgentTransferMenuItem(
     id,
     {
       avatar,
@@ -163,11 +167,15 @@ export const useAgentDropdownMenu = ({
   );
   // Ownership handover to a workspace member (recipient must accept) — a
   // separate entry from the cross-scope "Move to…" above.
-  const transferToMemberItem = useAgentTransferToMemberMenuItem(
+  const agentTransferToMemberItem = useAgentTransferToMemberMenuItem(
     id,
     { avatar, backgroundColor, title },
     { userId, visibility },
   );
+
+  const transferMenuItems = isInbox ? null : agentTransferMenuItems;
+  const transferToMemberItem = isInbox ? null : agentTransferToMemberItem;
+  const canManagePermission = !isInbox && canManageResource;
 
   const copyAgentIdItem = useCopyAgentIdMenuItem(id);
 
@@ -262,7 +270,8 @@ export const useAgentDropdownMenu = ({
               },
             ]
           : []),
-        ...(canCreate
+        // A copy of Lobe AI would come out nameless: its stored title is blank.
+        ...(canCreate && !isInbox
           ? [
               {
                 icon: <Icon icon={LucideCopy} />,
@@ -446,7 +455,7 @@ export const useAgentDropdownMenu = ({
               // Permissions live on their own page now — the sidebar keeps a
               // shortcut so creators and workspace owners don't have to open
               // the Agent first.
-              ...(activeWorkspaceId && canManageResource
+              ...(activeWorkspaceId && canManagePermission
                 ? [
                     { type: 'divider' as const },
                     {
@@ -503,8 +512,9 @@ export const useAgentDropdownMenu = ({
       canCreate,
       canConfigure,
       canEdit,
-      canManageResource,
+      canManagePermission,
       canDelete,
+      isInbox,
       navigate,
       pinned,
       id,
