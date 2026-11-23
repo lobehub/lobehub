@@ -231,8 +231,15 @@ export const processQueuedFileTask = async (
     return 'deferred';
   }
 
-  // A lost claim leaves the lease alone: the delivery that won may be running under it.
-  if (!(await asyncTaskModel.claimQueuedFileTask(task.taskId))) return 'skipped';
+  if (!(await asyncTaskModel.claimQueuedFileTask(task.taskId))) {
+    // Leases are keyed by task, so the delivery that won may be running under this one. Only a
+    // lease this delivery just took for a task that already finished has nobody behind it.
+    if (lease.status === 'acquired') {
+      const latest = await asyncTaskModel.findById(task.taskId);
+      if (!latest || isSettled(latest.status)) await releaseFileTaskAdmission(scope, task.taskId);
+    }
+    return 'skipped';
+  }
 
   const admissionScope = lease.status === 'unavailable' ? undefined : scope;
   report('dequeued', task, lease.status === 'unavailable' ? undefined : lease);
@@ -243,7 +250,9 @@ export const processQueuedFileTask = async (
       () => ({ failed: false as const }),
       (error: unknown) => ({ error, failed: true as const }),
     ),
-    // A long task outlives this delivery: the async route keeps running and holds the lease.
+    // A long task outlives this delivery: the async route keeps running and holds the lease. A
+    // request still in flight is not sent again, because it may yet run and a second copy would
+    // duplicate chunks. If it was lost, the status poll fails the task and the user can retry.
     new Promise<{ failed: false }>((resolve) => {
       holdTimer = setTimeout(
         () => resolve({ failed: false }),

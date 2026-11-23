@@ -408,6 +408,38 @@ describe('file task admission', () => {
       expect(parseFileToChunks).toHaveBeenCalledTimes(1);
     });
 
+    describe('when another delivery wins the claim during the wait for a slot', () => {
+      const waitThenLoseClaim = async (status: string) => {
+        h.fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY = 1;
+        h.slots.scopes.set('workspace:ws-1', new Set(['other']));
+        h.slots.global.add('other');
+        const task = queuedTask();
+
+        const delivery = processQueuedFileTask(ref, { finalAttempt: false });
+        await vi.advanceTimersByTimeAsync(0);
+
+        task.metadata = {};
+        task.status = status;
+        h.slots.scopes.get('workspace:ws-1')!.delete('other');
+        h.slots.global.delete('other');
+        await vi.advanceTimersByTimeAsync(3000);
+
+        await expect(delivery).resolves.toBe('skipped');
+      };
+
+      it('gives back the slot it took for a task that already finished', async () => {
+        await waitThenLoseClaim(AsyncTaskStatus.Success);
+
+        expect(h.slots.global.size).toBe(0);
+      });
+
+      it('keeps the slot while the winning delivery may be running under it', async () => {
+        await waitThenLoseClaim(AsyncTaskStatus.Processing);
+
+        expect(h.slots.global.has(ref.taskId)).toBe(true);
+      });
+    });
+
     it('goes back in the queue when no slot opens within the delivery', async () => {
       h.fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY = 1;
       h.slots.scopes.set('workspace:ws-1', new Set(['other']));
