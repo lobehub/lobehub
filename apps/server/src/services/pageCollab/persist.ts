@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { DocumentWriteSource } from '@lobechat/types';
 import debug from 'debug';
+import * as Y from 'yjs';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { withHeadlessEditorLock } from '@/server/services/agentDocuments/headlessEditor';
@@ -113,5 +114,10 @@ export const persistPageState = async (
     ...(title ? { title } : {}),
   });
   await redisService.pageCollab.rememberProjectedBody(documentId, bodyDigest(editorData));
+  // A conditional write accepts the room only while it is still at this state.
+  await redisService.pageCollab.rememberPersistedRoomState(
+    documentId,
+    Y.encodeStateVectorFromUpdate(state),
+  );
   return true;
 };

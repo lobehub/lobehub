@@ -15,7 +15,7 @@
   "discover.providers.description": "Explore leading model providers OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
   "discover.providers.title": "Provider Marketplace",
   "discover.search": "Search",
-  "discover.title": "Marketplace",
+  "discover.title": "Plugins",
   "image.description": "{{appName}} brings you the best experience with GPT Image, Flux, Midjourney, and Stable Diffusion",
   "image.title": "AI Art",
   "plugins.description": "Search, charts, academic tools, image/video/voice generation, workflows—add Skills to your Agents.",

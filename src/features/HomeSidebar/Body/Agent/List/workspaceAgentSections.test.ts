@@ -55,6 +55,18 @@ describe('isListedInWorkspaceSidebar', () => {
     );
   });
 
+  it('lists the shared Lobe AI for every member until they hide it', () => {
+    const inbox = item('inbox-agent', 'public', '2026-01-01', { slug: 'inbox' });
+
+    expect(isListedInWorkspaceSidebar(inbox, membership)).toBe(true);
+    expect(
+      isListedInWorkspaceSidebar(inbox, {
+        ...membership,
+        visibilityOverrides: { 'inbox-agent': false },
+      }),
+    ).toBe(false);
+  });
+
   it('leaves a teammate’s shared row on the Agents page until the member adds it', () => {
     expect(isListedInWorkspaceSidebar(item('t', 'public', '2026-01-01'), membership)).toBe(false);
   });
@@ -176,5 +188,19 @@ describe('resolveWorkspaceAgentSections', () => {
     });
 
     expect(ids(sections.myPinned)).toEqual(['p']);
+  });
+});
+
+describe('resolveWorkspaceAgentSections with Lobe AI', () => {
+  it('leads the rest with Lobe AI even when other rows are newer', () => {
+    const sections = resolveWorkspaceAgentSections({
+      ...base,
+      ungrouped: [
+        item('newer', 'public', '2026-03-01', mine),
+        item('inbox-agent', 'public', '2020-01-01', { slug: 'inbox' }),
+      ],
+    });
+
+    expect(ids(sections.rest)).toEqual(['inbox-agent', 'newer']);
   });
 });

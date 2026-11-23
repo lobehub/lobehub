@@ -7,12 +7,16 @@ import {
   DEFAULT_CHANNEL_TITLE,
 } from './defaultChannel';
 
-const { ChannelServiceCtor, createDefault, createDirect, getFlags } = vi.hoisted(() => ({
-  ChannelServiceCtor: vi.fn(),
-  createDefault: vi.fn(),
-  createDirect: vi.fn(),
-  getFlags: vi.fn(),
-}));
+const { ChannelServiceCtor, createDefault, createDirect, getFlags, onAgentCreated } = vi.hoisted(
+  () => ({
+    ChannelServiceCtor: vi.fn(),
+    createDefault: vi.fn(),
+    createDirect: vi.fn(),
+    getFlags: vi.fn(),
+    onAgentCreated: vi.fn(),
+  }),
+);
+vi.mock('@/business/server/channel/onAgentCreated', () => ({ onAgentCreated }));
 vi.mock('@/server/featureFlags', () => ({ getServerFeatureFlagsStateFromRuntimeConfig: getFlags }));
 vi.mock('./ChannelService', () => ({
   ChannelService: vi.fn(function (...args: unknown[]) {
@@ -78,6 +82,7 @@ describe('createAgentDirectChannel', () => {
     vi.clearAllMocks();
     getFlags.mockResolvedValue({ enableChannels: true });
     createDirect.mockResolvedValue({ channel: { id: 'chn_1' } });
+    onAgentCreated.mockResolvedValue(undefined);
   });
 
   it.each([false, undefined])(
@@ -88,6 +93,7 @@ describe('createAgentDirectChannel', () => {
       expect(getFlags).toHaveBeenCalledWith('owner');
       expect(ChannelServiceCtor).not.toHaveBeenCalled();
       expect(createDirect).not.toHaveBeenCalled();
+      expect(onAgentCreated).not.toHaveBeenCalled();
     },
   );
 
@@ -113,6 +119,37 @@ describe('createAgentDirectChannel', () => {
       expect.any(String),
       expect.objectContaining({ agentId: 'agt_main', userId: 'owner' }),
     );
+    error.mockRestore();
+  });
+
+  it('hands the new Agent to the onAgentCreated slot after its direct Channel', async () => {
+    await createAgentDirectChannel({ ...params, workspaceId: 'ws_1' });
+    expect(onAgentCreated).toHaveBeenCalledWith({
+      agentId: 'agt_main',
+      db,
+      userId: 'owner',
+      workspaceId: 'ws_1',
+    });
+    expect(createDirect.mock.invocationCallOrder[0]).toBeLessThan(
+      onAgentCreated.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('still runs the slot when the direct Channel fails, and reports each failure', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    createDirect.mockRejectedValue(new Error('connection reset'));
+    onAgentCreated.mockRejectedValue(new Error('seed failed'));
+    await expect(createAgentDirectChannel(params)).resolves.toBeUndefined();
+    expect(onAgentCreated).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledTimes(2);
+    error.mockRestore();
+  });
+
+  it('skips the slot when the flag cannot be read', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getFlags.mockRejectedValue(new Error('config unavailable'));
+    await expect(createAgentDirectChannel(params)).resolves.toBeUndefined();
+    expect(onAgentCreated).not.toHaveBeenCalled();
     error.mockRestore();
   });
 });

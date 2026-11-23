@@ -1,5 +1,6 @@
 import type {
   ChannelAgentExchange,
+  ChannelConnectorRequest,
   ChannelContextMessage,
   ChannelExecutionConfig,
   ChannelHistoryMessage,
@@ -19,6 +20,7 @@ import {
   agentDisplayName,
   channelAgentExchange,
   channelMessageVia,
+  connectorRequestText,
   RequestTrigger,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
@@ -39,10 +41,11 @@ import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
-import { activeMembers, findThread } from './delivery';
+import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
-import { withChannelLock } from './transaction';
+import { channelUserNameSql } from './nickname';
+import { audit, withChannelLock } from './transaction';
 import { OPEN_JOB_STATUSES } from './writer';
 
 const EXCERPT_LENGTH = 2000;
@@ -50,6 +53,13 @@ const EXCERPT_LENGTH = 2000;
 const SUMMARY_LENGTH = 300;
 /** Latest steps of a running reply shown in a Thread summary. */
 const ACTIVITY_STEPS = 3;
+
+/** Runs the requester started themselves, which may message for them without a Channel job. */
+const DIRECT_RUN_TRIGGERS = new Set<RequestTrigger>([
+  RequestTrigger.Bot,
+  RequestTrigger.Chat,
+  RequestTrigger.Scheduled,
+]);
 
 const clip = (text: string | null | undefined, length = SUMMARY_LENGTH) => {
   const value = (text ?? '').trim();
@@ -271,16 +281,17 @@ export class ChannelHistoryRepository {
   /**
    * Who a run relays as, and from where. A Channel run relays from its Channel and request
    * (`currentRun`, all its checks). A run with no Channel job may only be the requester's own
-   * live bot run, and only when the caller says so (`allowBotRun`): the bot's owner asked their
-   * Agent from an IM platform to post into one of their Channels. Only a caller holding that run's
-   * `channel:message` token, minted only for an owner's bot message, may set it; the trigger is
-   * checked again here so no other run without a Channel can relay.
+   * live direct run, and only when the caller says so (`allowDirectRun`): the requester asked
+   * their Agent, in a chat (sent or scheduled) or as the bot's owner on an IM platform, to message
+   * someone or post into one of their Channels. Only a caller holding that run's `channel:message`
+   * token, minted only for those runs, may set it; the trigger is checked again here so no
+   * server-started run without a Channel can relay.
    */
   relaySource = async (
     operationId: string,
-    { allowBotRun = false }: { allowBotRun?: boolean } = {},
+    { allowDirectRun = false }: { allowDirectRun?: boolean } = {},
   ): Promise<{
-    /** The Channel run, with what {@link currentRun} reads; absent for a bot run. */
+    /** The Channel run, with what {@link currentRun} reads; absent for a direct run. */
     channelRun?: Awaited<ReturnType<ChannelHistoryRepository['currentRun']>>;
     origin?: { channelId: string; threadId: string | null };
     requestVia?: ChannelMessageVia;
@@ -291,7 +302,7 @@ export class ChannelHistoryRepository {
       .from(channelJobs)
       .where(eq(channelJobs.operationId, operationId))
       .limit(1);
-    if (job || !allowBotRun) {
+    if (job || !allowDirectRun) {
       const run = await this.currentRun(operationId);
       return {
         channelRun: run,
@@ -319,7 +330,7 @@ export class ChannelHistoryRepository {
       !operation?.agentId ||
       operation.userId !== this.userId ||
       operation.workspaceId !== this.workspaceId ||
-      operation.trigger !== RequestTrigger.Bot
+      !DIRECT_RUN_TRIGGERS.has(operation.trigger as RequestTrigger)
     )
       throw new ChannelError('NOT_FOUND', 'Channel operation not found');
     if (operation.status !== 'running')
@@ -451,7 +462,7 @@ export class ChannelHistoryRepository {
         },
         request: channelMessages.content,
         requesterName: channelMembers.name,
-        requesterFullName: users.fullName,
+        requesterFullName: channelUserNameSql(channelMembers.channelId, channelMembers.userId),
         requesterMemberId: channelJobs.requesterMemberId,
         status: channelJobs.status,
       })
@@ -585,6 +596,42 @@ export class ChannelHistoryRepository {
       };
     });
   };
+
+  /**
+   * Posts the live run's card asking its requester to connect a connector, in the conversation
+   * the run is in (its Thread, or the main timeline). Stored like a reply that answers no request,
+   * so it wakes no one and the run's own reply still lands after it. `requestKey` makes a retried
+   * call return the card it already posted. A shared Agent runs as its owner, whose connectors the
+   * visitor cannot connect, so it cannot ask.
+   */
+  postConnectorRequest = async (
+    operationId: string,
+    request: Omit<ChannelConnectorRequest, 'agentId'>,
+    requestKey: string,
+  ) =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [existing] = await tx
+        .select()
+        .from(channelMessages)
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.requestKey, requestKey)),
+        )
+        .limit(1);
+      if (existing) return existing;
+
+      const connector: ChannelConnectorRequest = { ...request, agentId: manifest.self.agentId };
+      const message = await appendMessage(tx, {
+        agentId: manifest.self.agentId,
+        channelId,
+        content: connectorRequestText(connector),
+        metadata: { connector },
+        requestKey,
+        routingStatus: 'reply',
+        threadId: manifest.threadId,
+      });
+      await audit(tx, channelId, 'agent_posted', manifest.self.memberId, { messageId: message.id });
+      return message;
+    });
 
   readMessages = async (
     operationId: string,

@@ -90,7 +90,6 @@
   "proxy.port": "Puerto",
   "proxy.resetButton": "Restablecer",
   "proxy.saveButton": "Guardar",
-  "proxy.saveFailed": "Error al guardar: {{error}}",
   "proxy.saveSuccess": "Configuración del proxy guardada correctamente",
   "proxy.server": "Dirección del servidor",
   "proxy.testButton": "Probar conexión",

@@ -90,7 +90,6 @@
   "proxy.port": "پورت",
   "proxy.resetButton": "بازنشانی",
   "proxy.saveButton": "ذخیره",
-  "proxy.saveFailed": "ذخیره‌سازی ناموفق بود: {{error}}",
   "proxy.saveSuccess": "تنظیمات پروکسی با موفقیت ذخیره شد",
   "proxy.server": "آدرس سرور",
   "proxy.testButton": "آزمایش اتصال",

@@ -78,6 +78,12 @@ export const AGENT_CHAT_TOPIC_PAGE_URL = (agentId: string, topicId: string, mobi
   return urlJoin('/agent', agentId, topicId, 'page');
 };
 
+/**
+ * Visitors' conversations with the shared Agent, opened from its Share settings. Lands on the
+ * newest visitor topic, with the visitors listed in the sidebar.
+ */
+export const AGENT_SHARE_VISITORS_URL = (agentId: string) => urlJoin('/agent', agentId, 'visitor');
+
 /** A share visitor's run topic, opened read-only by the shared Agent's owner. */
 export const AGENT_SHARE_VISITOR_TOPIC_URL = (agentId: string, topicId: string) =>
   urlJoin('/agent', agentId, 'visitor', topicId);

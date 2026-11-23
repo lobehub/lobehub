@@ -45,7 +45,7 @@ export interface HeterogeneousAgentBuildPlanParams {
    */
   mcpConfigPath?: string;
   /**
-   * (Claude Code) Better Coding Experience permission mode. Absent: every
+   * (Claude Code) Permission mode. Absent: every
    * action is allowed.
    */
   permissionMode?: HeteroPermissionMode;

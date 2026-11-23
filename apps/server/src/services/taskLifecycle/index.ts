@@ -25,7 +25,11 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
+import {
+  DEFAULT_BRIEF_ACTIONS,
+  RequestTrigger,
+  TASK_AUTOMATION_FAILURE_FUSE,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -74,12 +78,8 @@ const log = debug('task-lifecycle');
 const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
 const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 
-// Consecutive automation-tick 'error' reasons after which we pause the task /
-// stop re-arming and let the urgent brief surface for human attention. A single
-// transient upstream hiccup (429 / network / upstream 500) must NOT permanently
-// stop a recurring task — only this many *consecutive* failures do. Hardcoded
-// for now; move to task.config later if it needs to be tunable per-task.
-const AUTOMATION_FAILURE_FUSE = 3;
+// Hardcoded for now; move to task.config later if it needs to be tunable per-task.
+const AUTOMATION_FAILURE_FUSE = TASK_AUTOMATION_FAILURE_FUSE;
 
 export interface TopicCompleteParams {
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the

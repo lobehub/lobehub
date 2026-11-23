@@ -8,8 +8,9 @@ import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/components/AgentAvatar';
+import AgentAvatar, { isGeneratedAgentAvatar } from '@/components/AgentAvatar';
 import PrivateLockIcon from '@/components/PrivateLockIcon';
+import { useAgentAvatarActivity } from '@/features/AgentAvatarActivity/useAgentAvatarActivity';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -23,7 +24,9 @@ import { useAgentModal } from '../../ModalProvider';
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
+import { useAgentVisibilityMenu } from './useAgentVisibilityMenu';
 import { useAgentDropdownMenu } from './useDropdownMenu';
+import VisibilityLockAction from './VisibilityLockAction';
 
 const styles = stylex.create({
   badge: {
@@ -104,6 +107,10 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
 
   // Separate loading state from chat store - only show loading for this specific agent
   const isLoading = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
+  // The row's hover wakes the character; a run plays on it without a hover.
+  const { avatar: avatarActivity, hover: rowHover } = useAgentAvatarActivity(id);
+  // A generated character acts the run out, so only an emoji or image needs the spinner.
+  const showRunningBadge = isLoading && !isGeneratedAgentAvatar(avatarUrl);
 
   // Name-first label with fallback (see agentDisplayName)
   const displayTitle = agentDisplayName(item, t('untitledAgent'));
@@ -116,7 +123,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   // Memoize event handlers
   const handleMouseEnter = useCallback(() => {
     prefetchAgent(id);
-  }, [id, prefetchAgent]);
+    rowHover.onMouseEnter();
+  }, [id, prefetchAgent, rowHover]);
 
   const handleDoubleClick = useCallback(() => {
     openAgentInNewWindow(id);
@@ -171,6 +179,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
 
     const avatarNode = (
       <AgentAvatar
+        {...avatarActivity}
         agentId={id}
         avatar={avatarUrl}
         background={backgroundColor || undefined}
@@ -190,7 +199,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
       >
         <span {...stylex.props(styles.wrapper)}>
           {avatarNode}
-          {isLoading ? (
+          {showRunningBadge ? (
             <span {...stylex.props(styles.runningBadge)}>
               <Spin size={9} style={{ color: 'inherit' }} />
             </span>
@@ -202,7 +211,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     );
   }, [
     isUpdating,
-    isLoading,
+    showRunningBadge,
+    avatarActivity,
     id,
     avatarUrl,
     backgroundColor,
@@ -227,15 +237,20 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     visibility,
   });
 
+  // The lock is the same door as the menu's Visibility row: whoever may change
+  // the scope can open it from the lock on hover.
+  const visibilityMenu = useAgentVisibilityMenu({ id, slug, userId, visibility });
+  const showVisibilityLock = isPrivate && visibilityMenu.canChange;
+
   return (
     <WorkspaceLink
       aria-label={displayTitle}
       to={agentUrl}
       onClick={onNavigate}
       onMouseEnter={handleMouseEnter}
+      onMouseLeave={rowHover.onMouseLeave}
     >
       <NavItem
-        actions={<Actions dropdownMenu={dropdownMenu} />}
         className={className}
         contextMenuItems={dropdownMenu}
         disabled={isUpdating}
@@ -244,6 +259,18 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
         icon={avatarIcon}
         key={id}
         style={style}
+        actions={
+          // Two direct children widen the hover overlay (NavItem counts them),
+          // so the resting lock fades under the clickable one.
+          showVisibilityLock ? (
+            <>
+              <VisibilityLockAction options={visibilityMenu.options} />
+              <Actions dropdownMenu={dropdownMenu} />
+            </>
+          ) : (
+            <Actions dropdownMenu={dropdownMenu} />
+          )
+        }
         title={
           roleTag ? (
             <>

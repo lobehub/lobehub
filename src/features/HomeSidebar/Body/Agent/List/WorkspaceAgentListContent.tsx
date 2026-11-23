@@ -21,6 +21,7 @@ import CreateAgentButton from '../CreateAgentButton';
 import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
+import { liftInboxRow, withoutInboxInGroups } from './inboxRow';
 import SessionList from './List';
 import SortableList from './SortableList';
 import { useWorkspaceAgentSections } from './useWorkspaceAgentSections';
@@ -59,7 +60,7 @@ SubHeader.displayName = 'WorkspaceAgentSubHeader';
 
 /**
  * The merged workspace "Agents" section body (replacing the former separate
- * "Workspace" and "Private" accordions): Inbox → my pins → team pins (fixed,
+ * "Workspace" and "Private" accordions): Lobe AI → my pins → team pins (fixed,
  * set by owners/admins for everyone) → folders → the rest. Personal pins come
  * first so the agents a member chose stay at the top instead of being pushed
  * down by the (possibly long) team list. Private rows
@@ -77,6 +78,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     isLogin: !!isLogin,
   });
 
+  const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
   const navigate = useWorkspaceAwareNavigate();
   const [teamExpanded, setTeamExpanded] = useState(false);
@@ -88,7 +90,22 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     s.reorderMyPinned,
   ]);
 
-  const resolved = useWorkspaceAgentSections();
+  const sectionsWithInbox = useWorkspaceAgentSections();
+  // Lobe AI (the inbox) leads the sidebar wherever its row sits — a pin, a
+  // folder or the rest — so it is taken out of the sections and rendered first.
+  const { inboxItem, resolved } = useMemo(() => {
+    const folders = withoutInboxInGroups(sectionsWithInbox.folders);
+    const { inbox, lists } = liftInboxRow({
+      myPinned: sectionsWithInbox.myPinned,
+      rest: sectionsWithInbox.rest,
+      teamPinned: sectionsWithInbox.teamPinned,
+    });
+
+    return {
+      inboxItem: inbox ?? folders.inbox,
+      resolved: { ...lists, folders: folders.groups },
+    };
+  }, [sectionsWithInbox]);
   const { teamPinned } = resolved;
   const teamOverflow = teamPinned.length > TEAM_PINNED_VISIBLE_LIMIT;
   const visibleTeamPinned =
@@ -115,11 +132,18 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     [agentPageSize, resolved],
   );
 
+  // Signed-in lists carry Lobe AI (the inbox) as an ordinary item from the
+  // server, so it can be pinned, hidden and found again like any Agent. The
+  // standalone entry covers the moments no list row exists: a signed-out
+  // visitor, the first load, and a list cached or fetched before the inbox row.
+  const showStandaloneInbox = !hideInbox && (contentState !== 'ready' || !hasInboxAgent);
+
+  if (contentState === 'inbox') return showStandaloneInbox ? <InboxItem /> : null;
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem />}
-        {contentState === 'loading' && <SkeletonList rows={3} />}
+        {showStandaloneInbox && <InboxItem />}
+        <SkeletonList rows={3} />
       </>
     );
 
@@ -127,7 +151,8 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
 
   return (
     <>
-      {!hideInbox && <InboxItem />}
+      {showStandaloneInbox && <InboxItem />}
+      {inboxItem && <SessionList dataSource={[inboxItem]} />}
       {myPinned.length > 0 && (
         <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
           <SubHeader

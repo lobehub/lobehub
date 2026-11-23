@@ -21,6 +21,8 @@ import type {
   TurnPlanUpdatedNotification,
   TurnStartedNotification,
 } from '../codex/protocol';
+import type { PlanDeltaNotification } from '../codex/protocol/experimental/v2/PlanDeltaNotification';
+import { CODEX_PROPOSED_PLAN_API_NAME, type CodexProposedPlanState } from '../codexPlanMode';
 import type { HeteroErrorKind } from '../errors/specs';
 import type {
   HeterogeneousAgentEvent,
@@ -49,6 +51,7 @@ type McpToolItem = Extract<ThreadItem, { type: 'mcpToolCall' }>;
 type DynamicToolItem = Extract<ThreadItem, { type: 'dynamicToolCall' }>;
 type CollabToolItem = Extract<ThreadItem, { type: 'collabAgentToolCall' }>;
 type WebSearchItem = Extract<ThreadItem, { type: 'webSearch' }>;
+type PlanItem = Extract<ThreadItem, { type: 'plan' }>;
 type ToolItem =
   CollabToolItem | CommandItem | DynamicToolItem | FileChangeItem | McpToolItem | WebSearchItem;
 
@@ -386,6 +389,8 @@ export class CodexAppServerAdapter {
   private readonly pendingTools = new Map<string, ToolCallPayload>();
   private readonly streamedAgentText = new Map<string, string>();
   private readonly streamedCommandOutput = new Map<string, StreamedOutput>();
+  /** Plan-mode plans (`item/plan/delta`) streamed so far, by item id. */
+  private readonly streamedPlans = new Map<string, string>();
   private readonly streamedReasoning = new Set<string>();
   private readonly toolStateSequence = new Map<string, number>();
   private stepToolCalls: ToolCallPayload[] = [];
@@ -483,6 +488,9 @@ export class CodexAppServerAdapter {
       case 'turn/plan/updated': {
         return this.handlePlanUpdated(rawParams as TurnPlanUpdatedNotification);
       }
+      case 'item/plan/delta': {
+        return this.handleProposedPlanDelta(rawParams as PlanDeltaNotification);
+      }
       case 'thread/tokenUsage/updated': {
         const { tokenUsage } = rawParams as ThreadTokenUsageUpdatedNotification;
         const cumulativeUsage = toUsage(tokenUsage.total);
@@ -536,6 +544,7 @@ export class CodexAppServerAdapter {
 
   private handleItemStarted({ item }: ItemStartedNotification): HeterogeneousAgentEvent[] {
     if (item.type === 'userMessage') return this.handleSteeredUserMessage(item);
+    if (item.type === 'plan') return this.startProposedPlan(item);
     if (!isToolItem(item)) return [];
     const opening = this.openStepAfterSteer();
     this.hasToolActivity = true;
@@ -584,6 +593,7 @@ export class CodexAppServerAdapter {
       }
       return message.text ? this.emitText(message.id, message.text) : [];
     }
+    if (item.type === 'plan') return this.completeProposedPlan(item);
     if (item.type === 'reasoning') {
       const reasoningItem = item as ReasoningItem;
       if (this.streamedReasoning.delete(reasoningItem.id)) return [];
@@ -674,6 +684,75 @@ export class CodexAppServerAdapter {
     return this.pendingTools.has(params.itemId)
       ? [this.toolState(params.itemId, { message: params.message, status: 'inProgress' })]
       : [];
+  }
+
+  /**
+   * A plan-mode plan (`ThreadItem { type: 'plan' }`) shows as a `proposed_plan`
+   * tool: `item/plan/delta` only streams its text, the completed item is the
+   * plan of record (Codex does not promise the deltas add up to it).
+   */
+  private startProposedPlan(item: PlanItem): HeterogeneousAgentEvent[] {
+    if (this.pendingTools.has(item.id)) return [];
+    const opening = this.openStepAfterSteer();
+    const payload: ToolCallPayload = {
+      apiName: CODEX_PROPOSED_PLAN_API_NAME,
+      arguments: '{}',
+      id: item.id,
+      identifier: CODEX_IDENTIFIER,
+      type: 'default',
+    };
+    this.hasToolActivity = true;
+    this.pendingTools.set(item.id, payload);
+    this.stepToolCalls.push(payload);
+    this.streamedPlans.set(item.id, item.text ?? '');
+    return [
+      ...opening,
+      this.makeEvent('stream_chunk', {
+        chunkType: 'tools_calling',
+        toolsCalling: [...this.stepToolCalls],
+      }),
+      this.makeEvent('tool_start', { toolCallId: item.id }),
+    ];
+  }
+
+  private handleProposedPlanDelta(params: PlanDeltaNotification): HeterogeneousAgentEvent[] {
+    if (!params.delta || !this.pendingTools.has(params.itemId)) return [];
+    const text = `${this.streamedPlans.get(params.itemId) ?? ''}${params.delta}`;
+    this.streamedPlans.set(params.itemId, text);
+    return [
+      this.toolState(params.itemId, {
+        plan: { completed: false, text },
+      } satisfies CodexProposedPlanState),
+    ];
+  }
+
+  private completeProposedPlan(item: PlanItem): HeterogeneousAgentEvent[] {
+    this.streamedPlans.delete(item.id);
+    const payload = this.pendingTools.get(item.id) ?? {
+      apiName: CODEX_PROPOSED_PLAN_API_NAME,
+      arguments: '{}',
+      id: item.id,
+      identifier: CODEX_IDENTIFIER,
+      type: 'default' as const,
+    };
+    const events = this.pendingTools.has(item.id) ? [] : this.startLateTool(payload);
+    this.pendingTools.delete(item.id);
+    const pluginState: CodexProposedPlanState = { plan: { completed: true, text: item.text } };
+    events.push(
+      this.makeEvent('tool_result', {
+        content: item.text,
+        isError: false,
+        pluginState,
+        toolCallId: item.id,
+      } satisfies ToolResultData),
+      this.makeEvent('tool_end', {
+        isSuccess: true,
+        payload: { toolCalling: payload },
+        result: { content: item.text, state: pluginState, success: true },
+        toolCallId: item.id,
+      }),
+    );
+    return events;
   }
 
   private handlePlanUpdated(params: TurnPlanUpdatedNotification): HeterogeneousAgentEvent[] {

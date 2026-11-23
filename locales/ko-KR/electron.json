@@ -90,7 +90,6 @@
   "proxy.port": "포트",
   "proxy.resetButton": "재설정",
   "proxy.saveButton": "저장",
-  "proxy.saveFailed": "저장 실패: {{error}}",
   "proxy.saveSuccess": "프록시 설정이 성공적으로 저장되었습니다",
   "proxy.server": "서버 주소",
   "proxy.testButton": "연결 테스트",

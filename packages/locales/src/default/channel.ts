@@ -189,6 +189,7 @@ export default {
   'status.failed': 'Reply failed',
   'status.cancelled': 'Stopped',
   'status.silent': 'Stayed quiet',
+  'status.merged': 'Answered with an earlier message',
   'blocked.awaiting_primary': 'Waiting for another Agent to reply first',
   'blocked.device_approval_pending': 'Waiting for device approval',
   'blocked.device_offline': 'Waiting for device to connect',
@@ -359,4 +360,5 @@ export default {
   'mentionInvite.confirmAgentProject':
     'It is not in the project “{{project}}” yet: it joins the project first, then this channel.',
   'mentionInvite.confirmOk': 'Invite and mention',
+  'openDirect.unavailable': "This Agent's conversation can't be opened right now.",
 };

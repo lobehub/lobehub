@@ -76,6 +76,12 @@ export interface WorkspaceUserPreference {
    */
   heteroPermissionModeDirs?: HeteroPermissionModeDir[];
   /**
+   * Directories (`getWorktreeModeKey`) where this member last left the Codex
+   * Plan switch on, which a new Codex topic there starts with. Most recent
+   * first and capped; written only through `workspaceUserSettings.setHeteroPlanModeDir`.
+   */
+  heteroPlanModeDirs?: string[];
+  /**
    * This member's notification preferences for workspace-scoped scenarios
    * (the `workspace` category of the scenario registry). Same shape as the
    * personal `user_settings.notification` bag; missing = every workspace
@@ -190,11 +196,6 @@ export const UserGuideSchema = z.object({
 export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
-  /**
-   * one switch for the experiments that improve how agents write and work with
-   * code; every coding-experience improvement reads this flag
-   */
-  enableBetterCodingExperience: z.boolean().optional(),
   /**
    * enable agent identity: give an agent its own mail address
    */
@@ -353,6 +354,12 @@ export interface UserPreference {
    * schema for the same reason as `worktreeModeDirs`.
    */
   heteroPermissionModeDirs?: HeteroPermissionModeDir[];
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.heteroPlanModeDirs};
+   * written only through `user.setHeteroPlanModeDir`, absent from the schema
+   * for the same reason as `worktreeModeDirs`.
+   */
+  heteroPlanModeDirs?: string[];
   hideSyncAlert?: boolean;
   /**
    * lab experimental features

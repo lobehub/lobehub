@@ -119,7 +119,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 AskUserQuestionIntervention.displayName = 'CCAskUserQuestionIntervention';
 
 /**
- * A Claude Code permission request (Better Coding Experience) carries a
+ * A Claude Code permission request carries a
  * `claudeCodePermission` detail beside the AskUserQuestion-shaped question:
  * it gets its own card, which never counts down — Claude Code waits.
  */

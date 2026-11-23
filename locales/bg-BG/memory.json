@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Материалът е дълъг; прочетено е само началото му.",
   "rules.distill.untitled": "Без заглавие",
   "rules.distill.upload": "Качете файл",
-  "rules.distill.uploadFailed": "Не можа да се качи файлът.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint или обикновен текст",
   "rules.enforcement.block": "Блокиране",
   "rules.enforcement.blockDesc": "Ще задържи доставката, докато не я одобрите. Все още не е в сила: засега само напомня",

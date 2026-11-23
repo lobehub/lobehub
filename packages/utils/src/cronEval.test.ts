@@ -7,6 +7,7 @@ import {
   isCronOccurrence,
   isExecutionTime,
   isPreciseSchedulePattern,
+  parseCronWeekdays,
   snapScheduleToStandardMinute,
   validateCronPattern,
   validateScheduleUpdate,
@@ -579,5 +580,20 @@ describe('snapScheduleToStandardMinute', () => {
   it('leaves standard and interval patterns alone', () => {
     expect(snapScheduleToStandardMinute('30 9 * * *')).toBe('30 9 * * *');
     expect(snapScheduleToStandardMinute('*/15 * * * *')).toBe('*/15 * * * *');
+  });
+});
+
+describe('parseCronWeekdays', () => {
+  it('expands weekday names, ranges, lists, steps, and Sunday alias 7', () => {
+    expect(parseCronWeekdays('30 9 * * MON-FRI')).toEqual([1, 2, 3, 4, 5]);
+    expect(parseCronWeekdays('30 9 * * 1-5/2')).toEqual([1, 3, 5]);
+    expect(parseCronWeekdays('30 9 * * 6-7')).toEqual([0, 6]);
+  });
+
+  it('returns an empty array for qualified or invalid weekday fields', () => {
+    expect(parseCronWeekdays('30 9 * * FRI#2')).toEqual([]);
+    expect(parseCronWeekdays('30 9 * * 5L')).toEqual([]);
+    expect(parseCronWeekdays('30 9 * * MON-INVALID')).toEqual([]);
+    expect(parseCronWeekdays('invalid')).toEqual([]);
   });
 });

@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 
 import { type LobeChatDatabase } from '@lobechat/database';
 import { parseDataUri } from '@lobechat/model-runtime';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
@@ -197,7 +198,7 @@ export class VideoGenerationService {
       return tempVideoPath;
     }
 
-    const response = await fetch(url, {
+    const response = await ssrfSafeFetch(url, {
       headers: options?.headers,
       signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
     });

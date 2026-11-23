@@ -13,7 +13,7 @@ import { selectionStyles } from '@/features/Conversation/MessageForward/selectio
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
@@ -116,7 +116,6 @@ const AssistantMessage = memo<AssistantMessageProps>(
       useSetMessageItemActionElementPortialContext();
     const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
 
-    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
     const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
     const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
@@ -177,7 +176,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
         }
         actions={
           <>
-            {isDevMode && branch && (
+            {branch && (
               <MessageBranch
                 activeBranchIndex={branch.activeBranchIndex}
                 count={branch.count}

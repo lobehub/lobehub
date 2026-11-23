@@ -6,13 +6,10 @@ import { gitService } from '@/services/git';
 import type { ChatStore } from '@/store/chat/store';
 import {
   canReadTopicGitTransport,
-  mergeWorkingDirGithubState,
+  mergeWorkingDirGitBranch,
   resolveTopicGitTransport,
-  toWorkingDirGithubState,
 } from '@/store/chat/utils/topicWorkingDirGit';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
-import { getUserStoreState } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { topicSelectors } from '../../../topic/selectors';
 
@@ -22,7 +19,7 @@ import { topicSelectors } from '../../../topic/selectors';
  * (local machine only) a filesystem probe. Deliberately NOT read off the topic's
  * stored `workingDirectoryConfig.repoType`: legacy topics persist only
  * `workingDirectory` with no config, so a config-based gate would skip them and
- * never refresh their branch/PR snapshot.
+ * never refresh their branch snapshot.
  */
 const resolveRepoType = async (params: {
   isLocalDevice: boolean;
@@ -40,10 +37,10 @@ const resolveRepoType = async (params: {
 };
 
 /**
- * Capture the working directory's live branch + linked PR onto the topic's
- * `workingDirectoryConfig` at SEND time.
+ * Capture the working directory's live branch and its remote ref onto the
+ * topic's `workingDirectoryConfig` at SEND time.
  *
- * This is the sole writer of the branch/PR snapshot into topic metadata. It used
+ * This is the sole send-time writer of the branch snapshot into topic metadata. It used
  * to live as a reactive effect in the ControlBar's `GitStatus`, but that fired on
  * every mount — so merely OPENING a topic re-stamped it with whatever branch the
  * shared working directory happened to be on, clobbering the historical snapshot.
@@ -51,8 +48,8 @@ const resolveRepoType = async (params: {
  * chat branch reflects the last-used active branch; sending a message updates
  * it") and leaves `GitStatus` a pure live display of the current directory.
  *
- * Fire-and-forget: the `gh pr list` leg is slow (8s timeout), so callers must not
- * await it on the send path. It only ever patches topic metadata, idempotently.
+ * Fire-and-forget: the device reads may be slow, so callers must not await it on
+ * the send path. It only ever patches topic metadata, idempotently.
  */
 export const snapshotTopicWorkingDirGit = async (
   get: () => ChatStore,
@@ -71,8 +68,8 @@ export const snapshotTopicWorkingDirGit = async (
   // a remote read needs a `deviceId`. Neither → nothing to probe.
   if (!canReadTopicGitTransport({ deviceId })) return;
 
-  // Branch/PR snapshot is only meaningful for a GitHub repo — mirror GitStatus's
-  // `isGithub` gate (non-github repos never show a PR chip). Resolve it live (the
+  // The branch snapshot is only kept for a GitHub repo — mirror GitStatus's
+  // `isGithub` gate. Resolve it live (the
   // config's own `repoType` may be absent on legacy topics); the stored value is
   // still a valid fast path when present.
   const repoType =
@@ -85,24 +82,14 @@ export const snapshotTopicWorkingDirGit = async (
   // No branch ref to query (unprobed / detached HEAD) → leave the prior snapshot.
   if (!branch || detached) return;
 
-  // Better Coding Experience links PRs only through the agent's own commands
-  // (server Work rows), so the send records the branch and its remote ref but
-  // no longer asks `gh` which PR the branch has.
-  const betterCoding = labPreferSelectors.enableBetterCodingExperience(getUserStoreState());
-  const prData = betterCoding
-    ? undefined
-    : await gitService.getLinkedPullRequest({ branch, deviceId, path });
-  const github = toWorkingDirGithubState(prData);
-  if (!github && !betterCoding) return;
-
-  const nextConfig = mergeWorkingDirGithubState({
+  // PRs reach the topic only through the agent's own commands (server Work
+  // rows), so the send records the branch and its remote ref, never which PR
+  // `gh` guesses for the branch.
+  const nextConfig = mergeWorkingDirGitBranch({
     branch,
     currentConfig,
-    github,
     path,
-    // The PR lookup's ref outranks the branch read's: it carries the PR's own head
-    // ref, and it is the only one that lands when the push left no local trace.
-    upstream: prData?.upstream ?? branchInfo?.upstream,
+    upstream: branchInfo?.upstream,
   });
 
   if (isEqual(currentConfig, nextConfig)) return;

@@ -1,6 +1,9 @@
 import type * as childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import type * as os from 'node:os';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,7 +133,9 @@ describe('spawnAgent — Antigravity', () => {
     expect(events.some((event) => event.type === 'error')).toBe(false);
   });
 
-  it('keeps stdin open in liveInput mode and steers follow-up messages into the session', async () => {
+  it('steers a follow-up with an image without closing the live session', async ({
+    onTestFinished,
+  }) => {
     const fake = createFakeProc({
       stdoutChunks: [
         JSON.stringify({ event: 'init', conversation_id: 'agy-live', init: {} }) + '\n',
@@ -194,22 +199,41 @@ describe('spawnAgent — Antigravity', () => {
     });
     nextFakeProc = fake.proc;
     const { spawnAgent } = await import('./spawnAgent');
+    const cacheDir = await mkdtemp(path.join(tmpdir(), 'agy-steer-test-'));
+    onTestFinished(() => rm(cacheDir, { force: true, recursive: true }));
+    const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ', 'base64');
     const handle = await spawnAgent({
       agentType: 'antigravity',
+      inputOptions: { cacheDir },
       liveInput: true,
       operationId: 'op-agy-live',
       prompt: 'initial',
     });
 
     expect(handle.sendUserMessage).toBeDefined();
-    expect(handle.supportsSteerImages).toBe(false);
+    expect(handle.supportsSteerImages).not.toBe(false);
     expect(fake.proc.stdin.end).not.toHaveBeenCalled();
 
-    await expect(handle.sendUserMessage!('follow up', { uuid: 'steer-1' })).resolves.toBe(true);
-    expect(JSON.parse(fake.stdinWrites[1])).toEqual({
-      event: 'user',
-      message: { content: 'follow up' },
-    });
+    await expect(
+      handle.sendUserMessage!(
+        [
+          { text: 'follow up', type: 'text' },
+          {
+            source: { data: image.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { uuid: 'steer-1' },
+      ),
+    ).resolves.toBe(true);
+    const {
+      event,
+      message: { content },
+    } = JSON.parse(fake.stdinWrites[1]);
+    expect(event).toBe('user');
+    expect(content).toContain('follow up');
+    const filePath = JSON.parse(content.match(/^- (".+")$/m)![1]);
+    expect(await readFile(filePath)).toEqual(image);
 
     fake.start();
     const events = [];

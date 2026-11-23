@@ -19,6 +19,7 @@ import {
   SkillResourceError,
   SkillResourceService,
 } from '@/server/services/skill';
+import { resolveVaultGitHubToken, workspaceOwned } from '@/server/services/skill/vaultGitHubToken';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -91,13 +92,30 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
     return market.proxyOAuthRequest(request);
   };
 
+  // Read lazily: only a repository the anonymous request cannot read asks the Vault.
+  const githubToken = async () => {
+    const { marketAccessToken, marketUserInfo } = await resolveMarketUserContext(ctx);
+    const market = new MarketService({
+      accessToken: marketAccessToken ?? ctx.marketAccessToken,
+      userInfo: marketUserInfo,
+    }).market;
+    return resolveVaultGitHubToken([
+      market.creds,
+      ...(workspaceId ? [workspaceOwned(market.organizations.creds({ workspaceId }))] : []),
+    ]);
+  };
+
   return opts.next({
     ctx: {
       githubProxy,
+      githubToken,
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
-      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId, { githubProxy }),
+      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId, {
+        githubProxy,
+        githubToken,
+      }),
       skillModel,
     },
   });
@@ -120,6 +138,7 @@ const skillWriteProcedure = skillProcedure
       ctx: {
         skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
           githubProxy: ctx.githubProxy,
+          githubToken: ctx.githubToken,
           workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
         }),
       },

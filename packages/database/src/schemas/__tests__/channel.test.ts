@@ -7,6 +7,7 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agentOperations,
   agents,
+  channelAgentGrants,
   channelJobs,
   channelMemberGrants,
   channelMembers,
@@ -433,6 +434,95 @@ describe('channel schema', () => {
       await expect(
         serverDB.insert(channelMemberGrants).values({ ...grant, workingDirectory: '/other' }),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('agent grants', () => {
+    const createGuest = async (channelId: string) => {
+      const [guest] = await serverDB
+        .insert(channelMembers)
+        .values({ actorType: 'user', channelId, role: 'member', userId: otherId })
+        .returning();
+      return guest;
+    };
+
+    const createThread = async (channelId: string, authorMemberId: string, sequence: number) => {
+      const root = await createMessage(channelId, authorMemberId, sequence);
+      const [thread] = await serverDB
+        .insert(channelThreads)
+        .values({ channelId, rootMessageId: root.id, rootSequence: sequence })
+        .returning();
+      return thread;
+    };
+
+    it('keeps one live grant per scope and history for decided ones', async () => {
+      const { agent, channel, owner } = await createChannel();
+      const guest = await createGuest(channel.id);
+      const thread = await createThread(channel.id, owner.id, 1);
+      const base = { channelId: channel.id, memberId: agent.id, ownerId };
+
+      const [whole] = await serverDB.insert(channelAgentGrants).values(base).returning();
+      expect(whole.status).toBe('pending');
+      expect(whole.metadata).toEqual({});
+      await expect(serverDB.insert(channelAgentGrants).values(base)).rejects.toThrow();
+
+      // Each narrower scope is its own grant.
+      await expect(
+        serverDB.insert(channelAgentGrants).values([
+          { ...base, granteeMemberId: guest.id },
+          { ...base, threadId: thread.id },
+          { ...base, granteeMemberId: guest.id, threadId: thread.id },
+        ]),
+      ).resolves.toBeDefined();
+      await expect(
+        serverDB
+          .insert(channelAgentGrants)
+          .values({ ...base, granteeMemberId: guest.id, threadId: thread.id }),
+      ).rejects.toThrow();
+
+      // A revoked grant frees its scope for a fresh request.
+      await serverDB
+        .update(channelAgentGrants)
+        .set({ revokeReason: 'revoked_by_owner', revokedAt: new Date(), status: 'revoked' })
+        .where(eq(channelAgentGrants.id, whole.id));
+      await expect(serverDB.insert(channelAgentGrants).values(base)).resolves.toBeDefined();
+    });
+
+    it('binds the member, grantee and Thread to the same channel', async () => {
+      const { agent, channel } = await createChannel('First');
+      const other = await createChannel('Second');
+      const strangerThread = await createThread(other.channel.id, other.owner.id, 1);
+      const base = { channelId: channel.id, memberId: agent.id, ownerId };
+
+      await expect(
+        serverDB.insert(channelAgentGrants).values({ ...base, memberId: other.agent.id }),
+      ).rejects.toThrow();
+      await expect(
+        serverDB.insert(channelAgentGrants).values({ ...base, granteeMemberId: other.owner.id }),
+      ).rejects.toThrow();
+      await expect(
+        serverDB.insert(channelAgentGrants).values({ ...base, threadId: strangerThread.id }),
+      ).rejects.toThrow();
+    });
+
+    it('drops grants with the grantee or the Thread they cover', async () => {
+      const { agent, channel, owner } = await createChannel();
+      const guest = await createGuest(channel.id);
+      const thread = await createThread(channel.id, owner.id, 1);
+      const base = { channelId: channel.id, memberId: agent.id, ownerId };
+      await serverDB.insert(channelAgentGrants).values([
+        { ...base, granteeMemberId: guest.id },
+        { ...base, threadId: thread.id },
+      ]);
+
+      await serverDB.delete(channelMembers).where(eq(channelMembers.id, guest.id));
+      await serverDB.delete(channelThreads).where(eq(channelThreads.id, thread.id));
+
+      const rest = await serverDB
+        .select()
+        .from(channelAgentGrants)
+        .where(eq(channelAgentGrants.channelId, channel.id));
+      expect(rest).toHaveLength(0);
     });
   });
 

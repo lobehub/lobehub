@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   createStaticStyles,
   cx,
   type DropdownItem,
@@ -14,6 +13,7 @@ import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({

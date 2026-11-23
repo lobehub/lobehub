@@ -19,8 +19,6 @@ import {
   hasCompletedAssistantText,
   isAudioOnlyFirstUserMessage,
 } from '@/store/chat/utils/topicTitle';
-import { getUserStoreState } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { toTitleText } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -404,17 +402,12 @@ export const buildRunLifecycle = (
       // Same for the topic's linked PRs: a queued follow-up skips the
       // completion notification, not these. The run's gh / push commands were
       // linked by the completion Work scan before the run reported its end; only
-      // a mounted list (Better Coding Experience PR chip / sidebar) refetches.
+      // a mounted list (the PR chip / sidebar) refetches.
       if (adapter.runScope !== 'sub_agent') {
         void workService.refreshTopicPullRequests(topicId).catch(() => {});
         // A PR someone opened on the topic's own branch — looked up before a
         // queued turn can move the topic off that branch.
-        if (
-          disposition === 'success' &&
-          topicId &&
-          agentId &&
-          labPreferSelectors.enableBetterCodingExperience(getUserStoreState())
-        )
+        if (disposition === 'success' && topicId && agentId)
           void linkOwnBranchPullRequest(get, { agentId, topicId });
       }
 

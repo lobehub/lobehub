@@ -21,11 +21,13 @@ import {
   Input,
   type ModalInstance,
   ScrollArea,
+  Select,
   Text,
   TextArea,
   Tooltip,
   useModalContext,
 } from '@lobehub/ui';
+import { Surface } from '@lobehub/ui/dashboard';
 import { t as i18nT } from 'i18next';
 import {
   ArrowLeft,
@@ -43,6 +45,10 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import AsyncError from '@/components/AsyncError';
 import CommandLine from '@/components/CommandLine';
 import { DOWNLOAD_URL } from '@/const/url';
+import CreateVisibilityField, {
+  type CreateVisibility,
+  useCreateVisibility,
+} from '@/features/CreateVisibilityField';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
@@ -105,12 +111,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 50%;
 
     background: ${cssVar.colorTextQuaternary};
-  `,
-  emptyCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
   `,
   emptyHero: css`
     padding-block: 24px;
@@ -178,12 +178,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
 
     background: ${cssVar.colorFillSecondary};
-  `,
-  groupList: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
   `,
   iconBox: css`
     display: flex;
@@ -275,6 +269,9 @@ interface CreatedAgent {
   version?: string;
 }
 
+/** The device switch's value for this computer; device ids are never empty. */
+const LOCAL_TARGET_VALUE = '';
+
 const SectionLabel = memo<{ children: ReactNode }>(({ children }) => (
   <Text fontSize={12} style={{ paddingInline: 4 }} type={'secondary'}>
     {children}
@@ -298,16 +295,17 @@ const SkeletonRow = memo<{ squareIcon?: boolean; width: number }>(({ squareIcon,
 ));
 
 const ScrollableAgentList = memo<{ children: ReactNode }>(({ children }) => (
-  <ScrollArea
-    disableContentFit
-    scrollFade
-    className={styles.groupList}
-    scrollbarProps={{ className: styles.agentListScrollbar }}
-    thumbProps={{ className: styles.agentListThumb }}
-    viewportProps={{ className: styles.agentListViewport }}
-  >
-    {children}
-  </ScrollArea>
+  <Surface padded={false}>
+    <ScrollArea
+      disableContentFit
+      scrollFade
+      scrollbarProps={{ className: styles.agentListScrollbar }}
+      thumbProps={{ className: styles.agentListThumb }}
+      viewportProps={{ className: styles.agentListViewport }}
+    >
+      {children}
+    </ScrollArea>
+  </Surface>
 ));
 
 ScrollableAgentList.displayName = 'ScrollableAgentList';
@@ -393,8 +391,18 @@ interface ConnectAgentContentProps {
 }
 
 const ConnectAgentContent = memo<ConnectAgentContentProps>(
-  ({ groupId, initialDevice, onTitleChange, showOpenChat = true, visibility }) => {
+  ({
+    groupId,
+    initialDevice,
+    onTitleChange,
+    showOpenChat = true,
+    visibility: initialVisibility,
+  }) => {
     const { t } = useTranslation('chat');
+    // Same "Private / Workspace" field as the create-agent form; the caller's
+    // value is only where it starts.
+    const visibilityState = useCreateVisibility({ groupId, visibility: initialVisibility });
+    const visibility = visibilityState.value;
     const { close, setCanDismissByClickOutside } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
@@ -411,9 +419,16 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       initialDevice && isListableDevice(initialDevice, restrictToWorkspaceDevices)
         ? initialDevice
         : undefined;
-    const [step, setStep] = useState(preselected ? 1 : 0);
+    // On desktop the wizard opens straight on an agent list (this computer's,
+    // unless a device was preselected); other devices are a switch above it.
+    const deviceInline = isDesktop;
+    const [step, setStep] = useState(preselected || deviceInline ? 1 : 0);
     const [target, setTarget] = useState<ScanTarget | null>(() =>
-      preselected ? { device: preselected, kind: 'device' } : null,
+      preselected
+        ? { device: preselected, kind: 'device' }
+        : deviceInline
+          ? { kind: 'local' }
+          : null,
     );
     const [selectedTypes, setSelectedTypes] = useState<HeterogeneousAgentType[]>([]);
     const [profiles, setProfiles] = useState<
@@ -440,9 +455,15 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       mutate: refetchDevices,
     } = useDeviceList();
 
+    // This computer is offered as "This computer" already, so its gateway row is left out.
     const listedDevices = useMemo(
-      () => (devices ?? []).filter((d) => isListableDevice(d, restrictToWorkspaceDevices)),
-      [devices, restrictToWorkspaceDevices],
+      () =>
+        (devices ?? []).filter(
+          (d) =>
+            isListableDevice(d, restrictToWorkspaceDevices) &&
+            !(isDesktop && d.deviceId === currentDeviceId),
+        ),
+      [currentDeviceId, devices, restrictToWorkspaceDevices],
     );
     const onlineDevices = listedDevices.filter((d) => d.online);
     // Rows painted from the persisted list until the server confirms presence:
@@ -513,17 +534,47 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       [currentDeviceId, profiles, target],
     );
 
+    const defaultSingleName = useCallback(
+      (nextVisibility?: CreateVisibility) => {
+        if (!single) return '';
+        const profile = isRemoteHeterogeneousType(single.type) ? profiles[single.type] : undefined;
+        const productTitle = profile?.title ?? single.title;
+        return (
+          heteroAgentDefaultName({
+            productTitle,
+            visibility: nextVisibility,
+            workspaceId: activeWorkspaceId,
+          }) ?? productTitle
+        );
+      },
+      [activeWorkspaceId, profiles, single],
+    );
+
     const goConfirm = useCallback(() => {
       if (!single) return;
       const profile = isRemoteHeterogeneousType(single.type) ? profiles[single.type] : undefined;
-      const productTitle = profile?.title ?? single.title;
-      setName(
-        heteroAgentDefaultName({ productTitle, visibility, workspaceId: activeWorkspaceId }) ??
-          productTitle,
-      );
+      setName(defaultSingleName(visibility));
       setDescription(profile?.description ?? '');
       setStep(2);
-    }, [activeWorkspaceId, profiles, single, visibility]);
+    }, [defaultSingleName, profiles, single, visibility]);
+
+    // The default name says whose agent a workspace agent is ("Ann's Codex"),
+    // so switching visibility on the confirm step re-derives a name the user
+    // has not edited.
+    const confirmVisibilityState = useMemo(
+      () => ({
+        ...visibilityState,
+        setValue: (next: CreateVisibility) => {
+          setName((current) =>
+            current === defaultSingleName(visibilityState.value)
+              ? defaultSingleName(next)
+              : current,
+          );
+          visibilityState.setValue(next);
+        },
+      }),
+      [defaultSingleName, visibilityState],
+    );
 
     const buildCreateParams = useCallback(
       (provider: ConnectableProvider, overrides?: { description?: string; name?: string }) => {
@@ -617,7 +668,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       return (
         <Flexbox gap={8} paddingBlock={'16px 8px'}>
           {showOpenChat && <SectionLabel>{t('connectAgent.create.doneHint')}</SectionLabel>}
-          <div className={styles.groupList}>
+          <Surface padded={false}>
             {done.map((agent) => (
               <div className={`${styles.row} ${styles.rowStatic}`} key={agent.agentId}>
                 <agent.provider.brand.Avatar size={32} />
@@ -638,7 +689,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 )}
               </div>
             ))}
-          </div>
+          </Surface>
           <Flexbox horizontal justify={'flex-end'} style={{ paddingBlockStart: 8 }}>
             <Button type={'primary'} onClick={close}>
               {t('connectAgent.create.done')}
@@ -664,7 +715,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         <Flexbox gap={16} paddingBlock={'16px 8px'}>
           <SectionLabel>{t('connectAgent.create.stepDevice')}</SectionLabel>
           {showEmpty ? (
-            <div className={styles.emptyCard}>
+            <Surface padded={false}>
               <Flexbox align={'center'} className={styles.emptyHero} gap={10}>
                 <span className={styles.heroIcon}>
                   <Icon icon={LaptopIcon} size={26} />
@@ -725,13 +776,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                   {t('connectAgent.create.refresh')}
                 </Button>
               </Flexbox>
-            </div>
+            </Surface>
           ) : (
             <Flexbox gap={16}>
               {isDesktop && (
                 <Flexbox gap={6}>
                   <SectionLabel>{t('connectAgent.create.thisDevice')}</SectionLabel>
-                  <div className={styles.groupList}>
+                  <Surface padded={false}>
                     <DeviceRow
                       icon={<Icon icon={LaptopIcon} size={18} />}
                       statusText={t('connectAgent.create.online')}
@@ -739,7 +790,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                       title={t('connectAgent.create.localDevice')}
                       onClick={() => pickTarget({ kind: 'local' })}
                     />
-                  </div>
+                  </Surface>
                 </Flexbox>
               )}
               {deviceListState !== 'empty' && (
@@ -756,7 +807,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                       {t('connectAgent.create.refresh')}
                     </Button>
                   </Flexbox>
-                  <div className={styles.groupList}>
+                  <Surface padded={false}>
                     {deviceListState === 'error' ? (
                       <AsyncError
                         error={deviceListError}
@@ -786,7 +837,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                         />
                       ))
                     )}
-                  </div>
+                  </Surface>
                 </Flexbox>
               )}
               {isDesktop && deviceListState === 'empty' && (
@@ -811,7 +862,12 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               its height — no jump when the scan settles */}
           <Flexbox horizontal align={'center'} justify={'space-between'} style={{ minHeight: 28 }}>
             <SectionLabel>
-              {t('connectAgent.create.stepAgents', { device: targetLabel })}
+              {t(
+                deviceInline
+                  ? 'connectAgent.create.stepAgentsInline'
+                  : 'connectAgent.create.stepAgents',
+                { device: targetLabel },
+              )}
             </SectionLabel>
             {!(scanState.status === 'success' && detectedCount === 0) &&
               scanState.status !== 'error' && (
@@ -826,6 +882,52 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 </Button>
               )}
           </Flexbox>
+
+          {deviceInline && listedDevices.length > 0 && (
+            <Flexbox horizontal align={'center'} gap={8} style={{ paddingInline: 4 }}>
+              <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+                {t('connectAgent.create.switchDevice')}
+              </Text>
+              <Select
+                aria-label={t('connectAgent.create.switchDevice')}
+                popupMatchSelectWidth={false}
+                size={'small'}
+                style={{ minWidth: 180 }}
+                value={target.kind === 'device' ? target.device.deviceId : LOCAL_TARGET_VALUE}
+                options={[
+                  {
+                    label: (
+                      <Flexbox horizontal align={'center'} gap={8}>
+                        <Icon icon={LaptopIcon} size={14} />
+                        {t('connectAgent.create.localDevice')}
+                      </Flexbox>
+                    ),
+                    value: LOCAL_TARGET_VALUE,
+                  },
+                  ...listedDevices.map((device) => ({
+                    disabled: !device.online,
+                    label: (
+                      <Flexbox horizontal align={'center'} gap={8}>
+                        {getDeviceIcon(device.platform, 14)}
+                        <span>{deviceLabel(device)}</span>
+                        {!device.online && (
+                          <Text fontSize={12} type={'secondary'}>
+                            {t('connectAgent.create.offline')}
+                          </Text>
+                        )}
+                      </Flexbox>
+                    ),
+                    value: device.deviceId,
+                  })),
+                ]}
+                onChange={(value: string) => {
+                  if (value === LOCAL_TARGET_VALUE) return pickTarget({ kind: 'local' });
+                  const device = listedDevices.find((d) => d.deviceId === value);
+                  if (device) pickTarget({ device, kind: 'device' });
+                }}
+              />
+            </Flexbox>
+          )}
 
           {scanning && (
             <Flexbox gap={6}>
@@ -888,6 +990,10 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             </Flexbox>
           )}
 
+          {scanState.status === 'success' && detectedCount > 0 && (
+            <CreateVisibilityField state={visibilityState} />
+          )}
+
           {createError && (
             <Alert
               showIcon
@@ -898,13 +1004,18 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
           )}
 
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-            <Button
-              icon={<Icon icon={ArrowLeft} size={14} />}
-              type={'text'}
-              onClick={() => setStep(0)}
-            >
-              {t('connectAgent.create.back')}
-            </Button>
+            {/* The device step is the switch above when inline: nothing to go back to. */}
+            {deviceInline ? (
+              <span />
+            ) : (
+              <Button
+                icon={<Icon icon={ArrowLeft} size={14} />}
+                type={'text'}
+                onClick={() => setStep(0)}
+              >
+                {t('connectAgent.create.back')}
+              </Button>
+            )}
             <Flexbox horizontal align={'center'} gap={8}>
               {single && (
                 <Button type={'text'} onClick={goConfirm}>
@@ -937,7 +1048,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     if (step === 2 && single) {
       return (
         <Flexbox gap={16} paddingBlock={'16px 8px'}>
-          <SectionLabel>{t('connectAgent.create.stepConfirm')}</SectionLabel>
+          <SectionLabel>
+            {t(
+              deviceInline
+                ? 'connectAgent.create.stepConfirmInline'
+                : 'connectAgent.create.stepConfirm',
+            )}
+          </SectionLabel>
           <Flexbox horizontal align={'center'} gap={12}>
             <single.brand.Avatar size={44} />
             <Flexbox flex={1}>
@@ -956,7 +1073,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <div className={styles.groupList}>
+          <Surface padded={false}>
             <div className={`${styles.row} ${styles.rowStatic}`}>
               <div className={styles.iconBox}>
                 {target?.kind === 'device' ? (
@@ -977,7 +1094,8 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               </Flexbox>
               <Icon color={cssVar.colorSuccess} icon={CheckCircle2} size={16} />
             </div>
-          </div>
+          </Surface>
+          <CreateVisibilityField state={confirmVisibilityState} />
           {createError && (
             <Alert
               showIcon

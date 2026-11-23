@@ -310,7 +310,6 @@ export const startLocalSteer = (
   },
 ): LocalSteer | undefined => {
   const mode = getFollowUpMode();
-  if (mode === 'legacy') return;
 
   const { contextKey, get, operationId } = options;
   if (!supportsLocalSteer(options.agentType, { codexAppServer: options.codexAppServer })) {

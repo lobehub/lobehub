@@ -10,11 +10,7 @@ import { useFetchFavorites } from '@/features/Favorites';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import {
-  reorderSidebarItems,
-  SIDEBAR_ACCORDION_KEYS,
-  SIDEBAR_SPACER_ID,
-} from '@/store/global/selectors/systemStatus';
+import { reorderSidebarItems, SIDEBAR_SPACER_ID } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
 import { favoriteSelectors, homeRecentSelectors } from '@/store/home/selectors';
 import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
@@ -43,7 +39,6 @@ const useSectionRenders = (): ((key: string) => boolean) => {
 
     return (key: string) => {
       switch (key) {
-        case SIDEBAR_SPACER_ID:
         case 'agent': {
           return true;
         }
@@ -109,20 +104,15 @@ export const useSidebarSectionMenuItems = (sectionKey: string): DropdownItem[] =
   );
   const visibleIndex = visibleItems.indexOf(sectionKey);
   const isFirst = visibleIndex <= 0;
-  // The spacer stays flush below the section block, so the block's last
-  // section has nowhere further down to go.
-  const nextVisible = visibleItems[visibleIndex + 1];
-  const isLast =
-    visibleIndex === -1 ||
-    !nextVisible ||
-    (nextVisible === SIDEBAR_SPACER_ID && SIDEBAR_ACCORDION_KEYS.has(sectionKey));
+  const isLast = visibleIndex === -1 || !visibleItems[visibleIndex + 1];
 
   const moveSection = useCallback(
     (direction: 'up' | 'down') => {
       const neighbor = visibleItems[visibleIndex + (direction === 'up' ? -1 : 1)];
       if (visibleIndex === -1 || !neighbor) return;
       // Step one slot at a time so the block rules of `reorderSidebarItems`
-      // (sections stay together, the spacer stays below them) apply on the way.
+      // (sections stay together) apply on the way. The saved spacer renders
+      // nothing and re-anchors below the block, so a step jumps over it.
       const step = direction === 'up' ? -1 : 1;
       const passed = (items: string[]) =>
         direction === 'up'
@@ -131,7 +121,8 @@ export const useSidebarSectionMenuItems = (sectionKey: string): DropdownItem[] =
       let next = sidebarItems;
       for (let guard = 0; guard < sidebarItems.length && !passed(next); guard++) {
         const idx = next.indexOf(sectionKey);
-        const moved = reorderSidebarItems(next, idx, idx + step);
+        const slot = next[idx + step] === SIDEBAR_SPACER_ID ? idx + step * 2 : idx + step;
+        const moved = reorderSidebarItems(next, idx, slot);
         if (moved === next) break;
         next = moved;
       }

@@ -54,6 +54,13 @@ vi.mock('@/features/ChatInput/ControlBar/HeteroDeviceSwitcher', () => ({
   default: () => <div data-testid="hetero-device-switcher" />,
 }));
 
+// The per-agent mode controls have their own tests; here they only take their slot.
+vi.mock('./PermissionMode', () => ({
+  default: () => <div data-testid="hetero-permission-mode" />,
+}));
+vi.mock('./PlanMode', () => ({
+  default: () => <div data-testid="hetero-plan-mode" />,
+}));
 vi.mock('@/features/AgentQuotaCalendar', () => ({
   openQuotaCalendarModal: vi.fn(),
 }));
@@ -274,6 +281,25 @@ describe('HeteroControlBar', () => {
       env: undefined,
     });
     expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('shows the permission mode chip for Claude Code and the Plan switch for Codex', () => {
+    effectiveAgencyConfig.current = {
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+    };
+    const { unmount } = render(<HeteroControlBar />);
+    expect(screen.getByTestId('hetero-permission-mode')).toBeTruthy();
+    expect(screen.queryByTestId('hetero-plan-mode')).toBeNull();
+    unmount();
+
+    effectiveAgencyConfig.current = {
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', command: 'codex', type: 'codex' },
+    };
+    render(<HeteroControlBar />);
+    expect(screen.getByTestId('hetero-plan-mode')).toBeTruthy();
+    expect(screen.queryByTestId('hetero-permission-mode')).toBeNull();
   });
 
   it('shows platform credits instead of Codex quota in API mode', () => {

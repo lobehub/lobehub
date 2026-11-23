@@ -2,7 +2,7 @@ import type { ChannelContextMessage, ChannelSharedAgentAccess } from '@lobechat/
 import { and, desc, eq, gte, inArray, isNull, lt, max, ne } from 'drizzle-orm';
 import pMap from 'p-map';
 
-import type { ChannelJobItem } from '../../schemas';
+import type { ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
   agentOperations,
   agents,
@@ -19,6 +19,7 @@ import { notTrashed } from '../../utils/softDelete';
 import { channelReplyShare } from './agent';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
+import { isMergedBehind } from './merge';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
 import { chooseOpeningLayout } from './openingLayout';
 import { messageStands } from './tombstone';
@@ -228,7 +229,7 @@ export const findOpeningCandidate = async (
   if (!requester?.userId) return;
 
   const [[request], [thread], [channel]] = await Promise.all([
-    db.select(requestColumns).from(channelMessages).where(eq(channelMessages.id, job.messageId)),
+    db.select().from(channelMessages).where(eq(channelMessages.id, job.messageId)),
     job.threadId
       ? db
           .select({ rootSequence: channelThreads.rootSequence })
@@ -241,6 +242,10 @@ export const findOpeningCandidate = async (
       .where(eq(channels.id, channelId)),
   ]);
   if (!request || !channel) return;
+  const share = await channelReplyShare(db, channel, row.agentId, requester.userId);
+  // Answered in the run of the same person's earlier request, which opens for both. A shared
+  // Agent answers each of a visitor's requests in its own run.
+  if (!share && (await isMergedBehind(db, job, request))) return;
   // The request's branch up to the request itself, as the run's manifest will freeze it.
   const manifest = {
     cutoffSequence: request.sequence,
@@ -273,7 +278,7 @@ export const findOpeningCandidate = async (
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
-    share: await channelReplyShare(db, channel, row.agentId, requester.userId),
+    share,
     // Agents asked together share one new Thread under the request instead.
     threads:
       job.threadId || coAddressed.length
@@ -737,9 +742,13 @@ export const findOpeningReply = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   jobId: string,
-): Promise<{ content: string; id: string } | undefined> => {
+): Promise<Pick<ChannelMessageItem, 'content' | 'id' | 'metadata'> | undefined> => {
   const [message] = await db
-    .select({ content: channelMessages.content, id: channelMessages.id })
+    .select({
+      content: channelMessages.content,
+      id: channelMessages.id,
+      metadata: channelMessages.metadata,
+    })
     .from(channelMessages)
     .where(
       and(

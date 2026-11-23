@@ -39,6 +39,7 @@ export default {
   'callback.titles.error': 'Authorization Failed',
   'callback.titles.loading': 'LobeHub Market Authorization',
   'callback.titles.success': 'Authorization Successful',
+  'claimResources.failedRetry': "Couldn't claim these resources. Check your network and try again.",
   'errors.authorizationFailed': 'Authorization failed, please try again.',
   'errors.browserOnly': 'The authorization process can only be initiated in a browser.',
   'errors.codeConsumed': 'The authorization code has already been used. Please try again.',

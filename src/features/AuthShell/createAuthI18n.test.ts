@@ -6,9 +6,9 @@ describe('createAuthI18n', () => {
   it.each([
     [
       'en-US',
-      'This email is still in the account deletion cooldown period. You can sign up again in about 4 days.',
+      'This email belongs to a recently deleted account and can be used again in about 4 days. To sign up now, use a different email.',
     ],
-    ['zh-CN', '该邮箱仍在账号注销冷却期，预计 4 天后可重新注册。'],
+    ['zh-CN', '该邮箱属于刚注销的账号，约 4 天后才能再次使用。如需现在注册，请换一个邮箱。'],
   ])('loads the deleted-account retry copy for %s', async (locale, expected) => {
     const { init, instance } = createAuthI18n(locale);
 

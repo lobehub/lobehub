@@ -5,6 +5,10 @@ import { type AvailableAgentItem } from '@/services/agent';
 
 const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
+/** Builtin agents (Lobe AI) can never join a group: `addAgentsToGroup` refuses them. */
+export const isBuiltinAgentSlug = (slug?: string | null): boolean =>
+  !!slug && builtinAgentSlugs.has(slug);
+
 /**
  * The picker's candidates from the sidebar agent list: agents only (no chat
  * groups, no builtins), most recently updated first like `queryAgents`.
@@ -24,7 +28,7 @@ export const toPickableAgents = (items: SidebarAgentItem[]): AvailableAgentItem[
       backgroundColor: item.backgroundColor ?? null,
       description: item.description ?? null,
       id: item.id,
-      isInbox: !!item.slug && builtinAgentSlugs.has(item.slug),
+      isInbox: isBuiltinAgentSlug(item.slug),
       name: item.name ?? null,
       title: item.title,
     }));

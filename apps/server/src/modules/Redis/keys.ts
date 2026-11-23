@@ -362,6 +362,11 @@ export const RedisKeys = {
      * Full key: lobechat:page_projection:v1:{documentId}
      */
     pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
+    /**
+     * Yjs state vector of the room state a page's stored body was last written from.
+     * Full key: lobechat:page_room_state:v1:{documentId}
+     */
+    pageRoomState: (documentId: string): string => `page_room_state:v1:${documentId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.

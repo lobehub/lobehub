@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 
 import TailMarquee from '@/components/TailMarquee';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { type ChatTopic, type GroupedTopic } from '@/types/topic';
 
 import TopicItem from '../List/Item';
@@ -68,6 +69,7 @@ const TopicSubGroupItem = memo<TopicSubGroupItemProps>(
     tag,
     title,
   }) => {
+    const metrics = useNavItemMetrics();
     const { t } = useTranslation('topic');
     const { t: tProject } = useTranslation('project');
     // A folded section keeps the parent row's running / awaiting / failed
@@ -80,8 +82,14 @@ const TopicSubGroupItem = memo<TopicSubGroupItemProps>(
           {/* Same icon column and gap as the parent row, so the section
               title lines up with the parent name and the topics below. */}
           <AccordionTrigger style={{ paddingBlock: 2, paddingInline: 4 }}>
-            <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
-              <Center flex={'none'} height={24} width={28}>
+            <Flexbox
+              horizontal
+              align="center"
+              gap={metrics.gap}
+              height={24}
+              style={{ overflow: 'hidden' }}
+            >
+              <Center flex={'none'} height={24} width={metrics.iconBox}>
                 {icon}
               </Center>
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>

@@ -90,7 +90,6 @@
   "proxy.port": "Poort",
   "proxy.resetButton": "Resetten",
   "proxy.saveButton": "Opslaan",
-  "proxy.saveFailed": "Opslaan mislukt: {{error}}",
   "proxy.saveSuccess": "Proxy-instellingen succesvol opgeslagen",
   "proxy.server": "Serveradres",
   "proxy.testButton": "Test verbinding",

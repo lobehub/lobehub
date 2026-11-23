@@ -31,17 +31,15 @@ export interface SandboxRepositoryOption {
   description?: string | null;
   id: string;
   name: string;
+  /** `public` once published to the workspace; anything else is its owner's alone. */
+  visibility?: string | null;
 }
 
 interface SandboxRepositoryMenuProps {
   environments: SandboxRepositoryOption[];
   failed: boolean;
   loaded: boolean;
-  /**
-   * A first row for working without a repository. Offered where this menu is
-   * the whole choice — the temporary sandbox, whose folder is always a fresh
-   * empty one — rather than one level under a list of places.
-   */
+  /** A first row for working without an environment. */
   none?: { active: boolean; onPick: () => void };
   /** Adds an environment and picks it. Absent where there is no other one to add — a project's. */
   onAdd?: () => void;
@@ -54,9 +52,8 @@ interface SandboxRepositoryMenuProps {
 }
 
 /**
- * The repositories a conversation can work on, and the way to add one without
- * leaving the composer: the whole menu on the temporary sandbox, one level
- * under the drive's folders on the persistent one.
+ * The environments a conversation can be set up from, and the way to add one
+ * without leaving the composer.
  */
 const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
   ({
@@ -82,7 +79,6 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
             onClick: onManage,
           }}
         />
-        <Text className={stylex.props(styles.hint).className}>{t('sandboxEnvironment.hint')}</Text>
 
         <div {...stylex.props(styles.list)}>
           {none && (

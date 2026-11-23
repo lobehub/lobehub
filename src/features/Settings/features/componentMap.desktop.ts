@@ -10,6 +10,7 @@ import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
 import Automations from '../automations';
+import Conversation from '../conversation';
 import Creds from '../creds';
 import Devices from '../devices';
 import Environments from '../environments';
@@ -36,6 +37,7 @@ export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
   [SettingsTabs.Labs]: Labs,
   [SettingsTabs.Appearance]: Appearance,
+  [SettingsTabs.Conversation]: Conversation,
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
   [SettingsTabs.Memory]: Memory,

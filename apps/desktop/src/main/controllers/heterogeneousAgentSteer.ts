@@ -85,9 +85,7 @@ export const steerAgentSession = async (
   if (session.agentType === 'antigravity') {
     const live = session.liveInput;
     if (!live) return session.process ? unsupported : rejected;
-    // Antigravity stream-json input accepts text only; reject image steers so
-    // they fall back to the next turn instead of terminating the session.
-    if (params.imageList?.length) return rejected;
+    if (!live.isOpen) return rejected;
     const plan = await buildAgentInput('antigravity', promptInput, { cacheDir });
     return live.send(plan.stdin, params.messageId) ? accepted : rejected;
   }

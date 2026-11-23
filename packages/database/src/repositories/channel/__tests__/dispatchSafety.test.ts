@@ -189,7 +189,7 @@ describe('Channel dispatch reservation', () => {
 
   it('fences a dispatcher that resumes after its reservation was retired', async () => {
     const { channel, job, operationId, start } = await reserve();
-    expect(await executions.retireReservation(channel.id, job.id)).toBe(true);
+    expect(await executions.retireReservation(channel.id, job.id)).toBe('error');
     await expect(start()).rejects.toThrow('reservation');
     expect(await jobById(db, job.id)).toMatchObject({ status: 'failed', writerHeld: false });
     expect(await operationById(db, operationId)).toMatchObject({ status: 'error' });

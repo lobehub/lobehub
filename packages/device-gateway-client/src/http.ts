@@ -1,4 +1,9 @@
-import type { DeviceClient, DeviceMetricSample, HeteroPermissionMode } from '@lobechat/types';
+import type {
+  CodexCollaborationMode,
+  DeviceClient,
+  DeviceMetricSample,
+  HeteroPermissionMode,
+} from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -333,6 +338,8 @@ export class GatewayHttpClient {
     claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
+    /** Codex Plan switch; see `AgentRunRequestMessage.collaborationMode`. */
+    collaborationMode?: CodexCollaborationMode;
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */

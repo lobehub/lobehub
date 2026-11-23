@@ -49,6 +49,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { useInterfaceDensity } from '@/styles/density';
 import { densityVars } from '@/styles/densityVars';
+import { getWorkspaceMemberNickname } from '@/utils/workspaceMemberName';
 
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -310,7 +311,12 @@ const AgentViewAllPage = memo(() => {
       if (!profile) continue;
       map.set(member.userId, {
         avatar: profile.avatar,
-        name: profile.fullName || profile.username || profile.email || undefined,
+        name:
+          getWorkspaceMemberNickname(member) ||
+          profile.fullName ||
+          profile.username ||
+          profile.email ||
+          undefined,
       });
     }
     return map;
@@ -347,13 +353,15 @@ const AgentViewAllPage = memo(() => {
   );
 
   const filteredItems = useMemo(() => {
-    const query = keyword.trim().toLowerCase();
+    // Case and spacing are ignored, so "lobeai" still finds "Lobe AI".
+    const fold = (value?: string | null) => value?.toLowerCase().replaceAll(/\s+/g, '') ?? '';
+    const query = fold(keyword);
     let matched = query
       ? items.filter(
           (item) =>
-            item.name?.toLowerCase().includes(query) ||
-            item.title?.toLowerCase().includes(query) ||
-            item.description?.toLowerCase().includes(query),
+            fold(item.name).includes(query) ||
+            fold(item.title).includes(query) ||
+            fold(item.description).includes(query),
         )
       : items;
 
@@ -542,11 +550,14 @@ const AgentViewAllPage = memo(() => {
     createMarketAgentMenuItem,
   } = useCreateMenuItems();
 
-  // Creating from the Private tab lands the item in the private bucket, so
-  // the new row appears in the list the user is currently looking at.
+  // Each tab starts creation in its own bucket, so the new row appears in the
+  // list the user is currently looking at. The create dialogs still show the
+  // choice and let the user change it.
   const createOptions = useMemo(
     () =>
-      activeWorkspaceId && segment === 'private' ? { visibility: 'private' as const } : undefined,
+      activeWorkspaceId
+        ? { visibility: segment === 'private' ? ('private' as const) : ('public' as const) }
+        : undefined,
     [activeWorkspaceId, segment],
   );
 

@@ -87,3 +87,88 @@ it('rejects a connector snapshot that does not match the selected commit', async
     'different commit',
   );
 });
+
+const token = 'ghp_vaulttoken';
+const vaultSource = (vaultToken = vi.fn().mockResolvedValue(token)) =>
+  new GitHubSkillRepository(new GitHub(), proxy, vaultToken);
+const authOf = (init?: RequestInit) => new Headers(init?.headers).get('authorization');
+
+it('resolves a private ref with the Vault token before asking the connector', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(missing())
+    .mockResolvedValueOnce(new Response(commit));
+  vi.stubGlobal('fetch', fetch);
+  const record = vi.spyOn(redisService.gitHubRefs, 'record');
+  expect(await vaultSource().resolveCommit(info)).toEqual({ commit, public: false });
+  expect(authOf(fetch.mock.calls[0][1])).toBeNull();
+  expect(fetch.mock.calls[1][0]).toBe('https://api.github.com/repos/owner/private/commits/HEAD');
+  expect(authOf(fetch.mock.calls[1][1])).toBe(`Bearer ${token}`);
+  expect(record).not.toHaveBeenCalled();
+  expect(proxy).not.toHaveBeenCalled();
+});
+
+it('does not cache a token-resolved ref for everyone in update checks', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValueOnce(missing()).mockResolvedValueOnce(new Response(commit)),
+  );
+  const remember = vi
+    .spyOn(redisService.gitHubRefs, 'remember')
+    .mockImplementation(async (_info, resolve) => resolve());
+  expect(await vaultSource().resolveCommit(info, true)).toEqual({ commit, public: false });
+  expect(remember).toHaveBeenCalledTimes(1);
+});
+
+it('sends the Vault token only to api.github.com when downloading a private archive', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(missing())
+    .mockResolvedValueOnce(new Response(null, { headers: { location: signed }, status: 302 }))
+    .mockResolvedValueOnce(new Response('zip'));
+  vi.stubGlobal('fetch', fetch);
+  expect(await vaultSource().downloadCommitZip(info, commit)).toEqual(Buffer.from('zip'));
+  expect(fetch.mock.calls[1][0]).toBe(
+    `https://api.github.com/repos/owner/private/zipball/${commit}`,
+  );
+  expect(authOf(fetch.mock.calls[1][1])).toBe(`Bearer ${token}`);
+  expect(fetch.mock.calls[2][0]).toBe(signed);
+  expect(authOf(fetch.mock.calls[2][1])).toBeNull();
+  expect(proxy).not.toHaveBeenCalled();
+});
+
+it('falls through to the connector when GitHub rejects the Vault token', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(missing())
+    .mockResolvedValueOnce(new Response(null, { status: 401 }));
+  vi.stubGlobal('fetch', fetch);
+  proxy.mockResolvedValue({ data: snapshot, status: 200 });
+  const vaultToken = vi.fn().mockResolvedValue(token);
+  const repo = vaultSource(vaultToken);
+  expect(await repo.resolveCommit(info)).toEqual({ commit, public: false });
+  expect(proxy).toHaveBeenCalledTimes(1);
+
+  // A rejected token is not retried for the rest of the request.
+  fetch.mockResolvedValueOnce(missing());
+  proxy.mockResolvedValue({ data: snapshot, status: 200 });
+  await repo.resolveCommit(info);
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(vaultToken).toHaveBeenCalledTimes(1);
+});
+
+it('falls through to the connector when the Vault token cannot read the repository', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(missing()));
+  proxy.mockResolvedValue({ data: { error: { code: 'NOT_CONNECTED' } }, status: 403 });
+  await expect(vaultSource().resolveCommit(info)).rejects.toMatchObject({
+    code: 'CONNECT_GITHUB',
+    message: expect.stringContaining('GITHUB_TOKEN'),
+  });
+});
+
+it('does not ask the Vault for a missing ref', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 422 })));
+  const vaultToken = vi.fn();
+  await expect(vaultSource(vaultToken).resolveCommit(info)).rejects.toMatchObject({ status: 422 });
+  expect(vaultToken).not.toHaveBeenCalled();
+});

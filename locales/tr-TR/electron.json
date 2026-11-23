@@ -90,7 +90,6 @@
   "proxy.port": "Port",
   "proxy.resetButton": "Sıfırla",
   "proxy.saveButton": "Kaydet",
-  "proxy.saveFailed": "Kaydetme başarısız: {{error}}",
   "proxy.saveSuccess": "Proxy ayarları başarıyla kaydedildi",
   "proxy.server": "Sunucu Adresi",
   "proxy.testButton": "Bağlantıyı Test Et",

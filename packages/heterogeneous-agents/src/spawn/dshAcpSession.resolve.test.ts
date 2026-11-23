@@ -4,7 +4,12 @@ import { DSH_MIN_VERSION, resolveDshSpawnCommand } from './dshAcpSession';
 
 const { detectValidatedCommand } = vi.hoisted(() => ({ detectValidatedCommand: vi.fn() }));
 
-vi.mock('./resolveCliCommand', () => ({ detectValidatedCommand }));
+// The install-folder sweep and the WSL fallback hand the native result back.
+vi.mock('./resolveCliCommand', () => ({
+  detectInUserBinDirs: async (status: unknown) => status,
+  detectInWslWhenMissing: async (status: unknown) => status,
+  detectValidatedCommandCandidates: detectValidatedCommand,
+}));
 
 describe('resolveDshSpawnCommand', () => {
   beforeEach(() => detectValidatedCommand.mockReset());
@@ -24,7 +29,7 @@ describe('resolveDshSpawnCommand', () => {
       pathEnv: 'C:\\Users\\x\\AppData\\Roaming\\npm;C:\\Windows',
       version: DSH_MIN_VERSION,
     });
-    expect(detectValidatedCommand).toHaveBeenCalledWith('dsh', expect.any(Object), env);
+    expect(detectValidatedCommand).toHaveBeenCalledWith(['dsh'], expect.any(Object), env);
   });
 
   it('falls back to the bare command when detection fails or finds an old CLI', async () => {

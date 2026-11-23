@@ -18,8 +18,6 @@ import { useTranslation } from 'react-i18next';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { densityVars } from '@/styles/densityVars';
 
 import { applyCoreUpdate } from './applyCoreUpdate';
@@ -196,7 +194,6 @@ export const UpdateNotification: React.FC = () => {
     setIsInstalling(false);
     toast.info(tElectron('updater.rendererUpdateDeferred'));
   });
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   useWatchBroadcast('updateReady', (info) => {
     receivedUpdateEvent.current = true;
@@ -244,7 +241,7 @@ export const UpdateNotification: React.FC = () => {
       <div className={styles.installLaterToast}>
         <span>
           {tElectron('updater.updateReady')}
-          {isDevMode ? ` · ${formatCoreVersion(updateInfo.version)}` : ''}
+          {` · ${formatCoreVersion(updateInfo.version)}`}
         </span>
         <BaseButton size={'small'} type={'text'} onClick={() => setUpdateInfo(null)}>
           {tElectron('updater.later')}
@@ -294,7 +291,7 @@ export const UpdateNotification: React.FC = () => {
       <div className={styles.installLaterToast}>
         <span style={{ cursor: 'pointer' }} onClick={() => openUpdateDetailModal(updateInfo)}>
           {tElectron('updater.updateReady')}
-          {isDevMode && updateInfo?.version ? ` · ${updateInfo.version}` : ''}
+          {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
         </span>
         <BaseButton size={'small'} type={'text'} onClick={() => autoUpdateService.installLater()}>
           {tElectron('updater.later')}

@@ -12,7 +12,11 @@ import {
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpServerRequestError } from './acpStdioClient';
 import type { CliCommandStatus, ResolvedHeteroCommand } from './resolveCliCommand';
-import { detectValidatedCommand } from './resolveCliCommand';
+import {
+  detectInUserBinDirs,
+  detectInWslWhenMissing,
+  detectValidatedCommandCandidates,
+} from './resolveCliCommand';
 
 /**
  * DeepSeek Harness over the Agent Client Protocol.
@@ -51,16 +55,26 @@ const isSupportedDshVersion = (version: string | undefined): boolean => {
  * Find a `dsh` that can run LobeHub turns. An older CLI still answers
  * `--version` but has no `acp` profile, so it is reported unavailable here
  * rather than failing every turn after the agent was created.
+ *
+ * `dsh` is installed with `npm i -g`, which puts it in whichever global folder
+ * the user's Node setup has: `%APPDATA%\npm`, an nvm-windows or fnm Node's own
+ * folder, a pnpm / bun / Volta global, often off the PATH this app started
+ * with. Those folders are swept before WSL is asked.
  */
 export const detectDshCommand = async (
   command: string = DSH_COMMAND,
   env?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
-  const status = await detectValidatedCommand(
-    command,
-    { validatePattern: DSH_VERSION_PATTERN },
-    env,
-  );
+  const isDefaultCommand = command.trim() === DSH_COMMAND;
+  const validation = { validatePattern: DSH_VERSION_PATTERN };
+  const nativeStatus = await detectValidatedCommandCandidates([command], validation, env);
+  const status = isDefaultCommand
+    ? await detectInWslWhenMissing(
+        await detectInUserBinDirs(nativeStatus, [DSH_COMMAND], validation, env),
+        [DSH_COMMAND],
+        validation,
+      )
+    : nativeStatus;
   if (!status.available || isSupportedDshVersion(status.version)) return status;
   return {
     ...status,

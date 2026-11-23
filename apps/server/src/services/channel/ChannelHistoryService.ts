@@ -1,13 +1,84 @@
-import type { ChannelReadMessageParams, ChannelReadMessagesParams } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
+import { getOfficialMcpServerById, resolveConnectorCatalogItem } from '@lobechat/const';
+import type {
+  ChannelConnectorRequest,
+  ChannelConnectorRequestResult,
+  ChannelReadMessageParams,
+  ChannelReadMessagesParams,
+  ChannelRequestConnectorParams,
+} from '@lobechat/types';
 import pMap from 'p-map';
 
-import { ChannelHistoryRepository } from '@/database/repositories/channel';
-import { files } from '@/database/schemas';
+import { composioEnv } from '@/config/composio';
+import {
+  channelAttachments,
+  ChannelError,
+  ChannelHistoryRepository,
+} from '@/database/repositories/channel';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import { FileService } from '@/server/services/file';
 
 import { assertChannelEnabled } from './featureGate';
+import { notifyChannel } from './notify';
+
+const IDENTIFIER = /^[\w-]{1,64}$/;
+
+/**
+ * What the card shows for a requested connector: the catalog entry that owns the identifier, the
+ * way the Market renders it, or the given HTTPS server when no catalog has it.
+ */
+export const resolveConnectorRequest = (
+  params: ChannelRequestConnectorParams,
+): Omit<ChannelConnectorRequest, 'agentId'> => {
+  const identifier = params.identifier.trim();
+  if (!IDENTIFIER.test(identifier))
+    throw new ChannelError(
+      'BAD_REQUEST',
+      'A connector identifier uses only letters, digits, "_" and "-"',
+    );
+  const reason = params.reason?.trim().slice(0, 280) || null;
+
+  const catalog = resolveConnectorCatalogItem(identifier, {
+    composio: !!composioEnv.COMPOSIO_API_KEY,
+    lobehub: !!(appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID),
+  });
+  if (catalog) {
+    const name = catalog.type === 'lobehub' ? catalog.provider.label : catalog.serverType.label;
+    return { auth: null, identifier, name, reason, source: catalog.type, url: null };
+  }
+  const official = getOfficialMcpServerById(identifier);
+  if (official)
+    return {
+      auth: null,
+      identifier,
+      name: official.label,
+      reason,
+      source: 'official',
+      url: null,
+    };
+
+  if (!params.url)
+    throw new ChannelError(
+      'NOT_FOUND',
+      `"${identifier}" is not in the connector catalog; pass the MCP server url to ask for it`,
+    );
+  let url: URL;
+  try {
+    url = new URL(params.url);
+  } catch {
+    throw new ChannelError('BAD_REQUEST', 'The connector url is not a valid URL');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password)
+    throw new ChannelError('BAD_REQUEST', 'The connector url must be https, without credentials');
+  return {
+    auth: params.auth === 'none' ? 'none' : 'oauth',
+    identifier,
+    name: params.name?.trim().slice(0, 64) || identifier,
+    reason,
+    source: 'custom',
+    url: url.toString(),
+  };
+};
 
 /** Both the builtin tool and operation-authenticated CLI use this exact read boundary. */
 export class ChannelHistoryService {
@@ -31,18 +102,7 @@ export class ChannelHistoryService {
     await assertChannelEnabled(this.userId);
     const result = await this.repository.readMessage(this.operationId, params);
     const ids = result.message.fileIds ?? [];
-    const shared = ids.length
-      ? await this.db
-          .select({
-            id: files.id,
-            name: files.name,
-            fileType: files.fileType,
-            size: files.size,
-            url: files.url,
-          })
-          .from(files)
-          .where(inArray(files.id, ids))
-      : [];
+    const shared = await channelAttachments(this.db, ids);
     const fileService = new FileService(this.db, this.userId, this.workspaceId);
     return {
       ...result,
@@ -52,5 +112,24 @@ export class ChannelHistoryService {
         { concurrency: 10 },
       ),
     };
+  };
+
+  /**
+   * Posts a card in the run's conversation asking its requester to connect a connector; the
+   * person connects from the card. `requestKey` (the tool call) keeps a retry from posting twice.
+   */
+  requestConnector = async (
+    params: ChannelRequestConnectorParams,
+    requestKey: string,
+  ): Promise<ChannelConnectorRequestResult> => {
+    await assertChannelEnabled(this.userId);
+    const request = resolveConnectorRequest(params);
+    const message = await this.repository.postConnectorRequest(
+      this.operationId,
+      request,
+      `connector:${this.operationId}:${requestKey}`,
+    );
+    await notifyChannel(this.db, message.channelId);
+    return { messageId: message.id, name: request.name, source: request.source };
   };
 }

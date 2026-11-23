@@ -50,7 +50,12 @@ describe('Antigravity Git completion effects', () => {
 
     expect(mocks.updateTopicMetadata).toHaveBeenCalledWith('run-topic', {
       workingDirectoryConfig: {
-        git: { activeWorktree: '/agy-worktree', branch: 'fix/agy', isWorktree: true },
+        git: {
+          activeWorktree: '/agy-worktree',
+          branch: 'fix/agy',
+          isWorktree: true,
+          ownBranch: 'fix/agy',
+        },
         path: '/repo',
       },
     });

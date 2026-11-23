@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import InfoTooltip from '@/components/InfoTooltip';
+import InlineErrorText from '@/components/InlineErrorText';
 import { useClientDataSWR } from '@/libs/swr';
 import { imessageKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
@@ -94,6 +95,7 @@ const CredentialExtras = memo(() => {
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
   const [testing, setTesting] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [bridgeError, setBridgeError] = useState<{ detail?: string; summary: string } | null>(null);
   const [optimisticEnabled, setOptimisticEnabled] = useState<boolean | null>(null);
 
   // Seed the Server URL input from the saved config once it loads, unless the
@@ -185,11 +187,16 @@ const CredentialExtras = memo(() => {
   // starts/stops the bridge immediately, so the toggle reflects the real state.
   const handleToggleEnabled = async (next: boolean) => {
     setToggling(true);
+    setBridgeError(null);
     setOptimisticEnabled(next);
     try {
       await persistConfig(next);
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      console.error('[iMessage] Failed to toggle bridge:', error);
+      setBridgeError({
+        detail: getErrorMessage(error),
+        summary: t('channel.imessage.bridgeToggleFailedRetry'),
+      });
     } finally {
       setOptimisticEnabled(null);
       setToggling(false);
@@ -202,6 +209,7 @@ const CredentialExtras = memo(() => {
 
   const handleTest = async () => {
     setTesting(true);
+    setBridgeError(null);
     try {
       const config = buildBridgeConfig(enabled);
       await imessageBridgeService.testConfig(config);
@@ -209,7 +217,11 @@ const CredentialExtras = memo(() => {
       toast.success(t('channel.imessage.bridgeTestSuccess'));
     } catch (error) {
       setTestStatus('failed');
-      toast.error(`${t('channel.imessage.bridgeTestFailed')}: ${getErrorMessage(error)}`);
+      console.error('[iMessage] Bridge test failed:', error);
+      setBridgeError({
+        detail: getErrorMessage(error),
+        summary: t('channel.imessage.bridgeTestFailedRetry'),
+      });
     } finally {
       setTesting(false);
     }
@@ -266,6 +278,7 @@ const CredentialExtras = memo(() => {
           onChange={(value) => {
             setServerUrlInput(value);
             setServerUrlDirty(true);
+            setBridgeError(null);
             setTestStatus('idle');
           }}
         />
@@ -286,6 +299,7 @@ const CredentialExtras = memo(() => {
           value={passwordInput}
           onChange={(value) => {
             setPasswordInput(value);
+            setBridgeError(null);
             setTestStatus('idle');
           }}
         />
@@ -331,6 +345,9 @@ const CredentialExtras = memo(() => {
             {t('channel.imessage.bridgeTest')}
           </Button>
         </Flexbox>
+        {bridgeError && (
+          <InlineErrorText detail={bridgeError.detail}>{bridgeError.summary}</InlineErrorText>
+        )}
       </Flexbox>
     </Flexbox>
   );

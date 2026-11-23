@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   applyPermissionModeReport,
@@ -10,13 +10,6 @@ import {
   resolveRunPermissionMode,
   setPendingHeteroPermissionMode,
 } from './heteroPermissionMode';
-
-const lab = vi.hoisted(() => ({ on: true }));
-
-vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableBetterCodingExperience: () => lab.on },
-}));
 
 const storeWith = (metadata: Record<string, unknown> | undefined) => {
   const updateTopicMetadata = vi.fn(async () => {});
@@ -30,18 +23,10 @@ const storeWith = (metadata: Record<string, unknown> | undefined) => {
 };
 
 describe('heteroPermissionMode (renderer)', () => {
-  beforeEach(() => {
-    lab.on = true;
-  });
-
-  it('starts local Claude Code runs in the topic mode only with the lab on', () => {
+  it('starts local Claude Code runs in the topic mode, bypassPermissions by default', () => {
     expect(resolveRunPermissionMode('claude-code', { heteroPermissionMode: 'plan' })).toBe('plan');
     expect(resolveRunPermissionMode('claude-code', {})).toBe('bypassPermissions');
     expect(resolveRunPermissionMode('codex', { heteroPermissionMode: 'plan' })).toBeUndefined();
-    lab.on = false;
-    expect(
-      resolveRunPermissionMode('claude-code', { heteroPermissionMode: 'plan' }),
-    ).toBeUndefined();
   });
 
   it('hands the new-topic chip mode to the topic it creates', () => {

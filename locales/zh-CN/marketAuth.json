@@ -27,6 +27,7 @@
   "claimResources.claim": "认领所选",
   "claimResources.description": "我们发现了与你的账户关联的资源，你可以认领它们：",
   "claimResources.error": "认领资源失败，请重试。",
+  "claimResources.failedRetry": "无法认领这些资源，请检查网络后重试。",
   "claimResources.mcpSection": "MCP 服务器",
   "claimResources.selectedCount": "已选择 {{count}} 项",
   "claimResources.skillSection": "Skills",

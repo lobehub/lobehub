@@ -49,6 +49,7 @@ import { createLocalTraceStore } from '../../utils/traceStore';
 import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 import type { HeteroCliArgumentOptions } from './buildExtraArgs';
 import { buildExtraArgs } from './buildExtraArgs';
+import { dispatchedModeSpawnOptions } from './dispatchedModes';
 import { type ResolvedPrompt, resolvePrompt } from './prompt';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
@@ -140,6 +141,7 @@ const spawnAgentOrRuntime = (
       askUserBridge: spawnOpts.askUserBridge,
       clientVersion: cliVersion,
       args: spawnOpts.extraArgs ?? [],
+      collaborationMode: spawnOpts.collaborationMode,
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       env: { ...process.env, ...spawnOpts.env },
@@ -157,20 +159,16 @@ const spawnAgentOrRuntime = (
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
  * without `--resume`.  Two classes of failure:
- *
  *   1. Session file missing (sandbox recycled): the container is ephemeral
  *      (~1 h idle TTL), so a new sandbox has an empty `~/.claude/projects/`
  *      and the stored session id is stale.
- *
  *   2. Context overflow (long conversation): the resumed session carries all
- *      accumulated history; when the combined token count exceeds the model's
- *      context window the API rejects the request immediately after CC
- *      initialises.  Starting fresh (no `--resume`) drops the old history and
- *      lets CC respond to the new prompt alone.
+ *      accumulated history past the model's context window, so the API rejects
+ *      the request right after CC initialises. Starting fresh (no `--resume`)
+ *      drops the old history and lets CC respond to the new prompt alone.
  *
- * Checked against:
- *   - `error` stream events emitted by the CC adapter from CC's result event
- *   - Accumulated stderr output (fallback when CC exits without a result event)
+ * Checked against `error` stream events (from CC's result event) and, when CC
+ * exits without a result event, the accumulated stderr output.
  */
 const RESUME_RETRY_PATTERNS = [
   // Session file missing — sandbox was recycled
@@ -1078,9 +1076,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // input (live steer / background tasks).
     liveInput: options.type === 'claude-code' || options.type === 'antigravity',
     operationId,
-    // Better Coding Experience: Claude Code prompts answered on the bridge's cards.
-    ...(options.type === 'claude-code' &&
-      resolved.permissionMode && { permissionMode: resolved.permissionMode }),
+    // Claude Code permission mode, Codex Plan switch.
+    ...dispatchedModeSpawnOptions(options.type, resolved),
     uploadImage,
   };
 

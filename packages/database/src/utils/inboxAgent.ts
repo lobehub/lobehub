@@ -1,6 +1,6 @@
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { sql } from 'drizzle-orm';
+import { eq, not, or, type SQL, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas';
 
@@ -86,3 +86,25 @@ export const agentTitleSql = () =>
   sql<
     string | null
   >`case when ${agents.slug} = ${INBOX_SESSION_ID} and nullif(trim(${agents.title}), '') is null then ${DEFAULT_INBOX_TITLE} else ${agents.title} end`;
+
+/**
+ * Which Agent rows the agent lists (sidebar, Agents page, search, labels) show: every non-virtual
+ * Agent, plus the inbox. The inbox is `virtual` so it stays out of chat-group supervisor
+ * bookkeeping, but to the user it is an ordinary Agent they can hide and find again. Combine it
+ * with the scope predicate: a scope holds one inbox (the user's own, or the workspace's single
+ * shared one — `agents_slug_workspace_id_unique`).
+ */
+export const listedAgentWhere = (): SQL =>
+  or(not(eq(agents.virtual, true)), eq(agents.slug, INBOX_SESSION_ID)) as SQL;
+
+/** Search text compared loosely: case and whitespace ignored, so "lobe ai" finds "LobeAI". */
+const compactSearchText = (value: string) => value.toLowerCase().replaceAll(/\s+/g, '');
+
+/**
+ * Whether a search keyword names the inbox by its default title. The inbox row usually stores a
+ * blank title and is only shown as `DEFAULT_INBOX_TITLE`, so a column match alone never finds it.
+ */
+export const keywordMatchesInboxTitle = (keyword: string): boolean => {
+  const needle = compactSearchText(keyword);
+  return needle.length > 0 && compactSearchText(DEFAULT_INBOX_TITLE).includes(needle);
+};

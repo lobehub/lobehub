@@ -48,6 +48,8 @@ export default {
   'FileManager.actions.copyUrlError': 'Failed to copy the file link',
   'FileManager.actions.copyUrlSuccess': 'File url copied successfully.',
   'FileManager.actions.createChunkingTask': 'Preparing...',
+  'FileManager.actions.createFolderFailedRetry':
+    "Couldn't create the folder. Check your network and try again.",
   'FileManager.actions.deleteSuccess': 'File deleted successfully.',
   'FileManager.actions.deleteAll': 'Delete All Items',
   'FileManager.actions.deleteAllOwn': 'Delete All Items I Created',
@@ -202,6 +204,11 @@ export default {
   'ModelSelect.staleModel.removed.tag': 'Unavailable',
   'ModelSelect.staleModel.removed.tooltip':
     'This model has been removed from the service. Related features may fail — please choose another model.',
+  'ModelSelect.staleModel.restricted.hint':
+    'Your workspace admin has not opened this model to you, so calls to it are refused. Choose a model below.',
+  'ModelSelect.staleModel.restricted.tag': 'Restricted',
+  'ModelSelect.staleModel.restricted.tooltip':
+    'This model is above the model tier your workspace admin allows you. Please choose another model.',
   'ModelSwitchPanel.byModel': 'By Model',
   'ModelSwitchPanel.byProvider': 'By Provider',
   'ModelSwitchPanel.detail.abilities': 'Abilities',

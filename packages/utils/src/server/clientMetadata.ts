@@ -1,9 +1,12 @@
 import { CLIENT_VERSION_HEADER } from '@lobechat/const';
 
 export type ClientType = 'desktop' | 'mobile' | 'unknown' | 'web';
+/** Which product a desktop client is. Lobot ships its own version line. */
+export type DesktopClientApp = 'lobehub' | 'lobot';
 export type MobileClientPlatform = 'android' | 'ios';
 
 export interface ClientMetadata {
+  app?: DesktopClientApp;
   platform?: MobileClientPlatform;
   type: ClientType;
   version?: string;
@@ -11,6 +14,7 @@ export interface ClientMetadata {
 
 const MAX_CLIENT_VERSION_LENGTH = 128;
 const DESKTOP_USER_AGENT_PATTERN = /\bLobeHub Desktop\/(\S+)/i;
+const LOBOT_DESKTOP_USER_AGENT_PATTERN = /\bLobot Desktop\/(\S+)/i;
 const MOBILE_USER_AGENT_PATTERN = /\bLobeHub-Mobile\/(android|ios)-v(\S+)/i;
 const LEGACY_IOS_USER_AGENT_PATTERNS = [/\bLobeHub-iOS\/(\S+)/i, /\bLobeHub\/(\S+)\s+CFNetwork\//i];
 
@@ -34,9 +38,19 @@ export const parseClientMetadata = (headers: Headers): ClientMetadata => {
     };
   }
 
+  const lobotMatch = userAgent.match(LOBOT_DESKTOP_USER_AGENT_PATTERN);
+  if (lobotMatch) {
+    return {
+      app: 'lobot',
+      type: 'desktop',
+      version: normalizeVersion(lobotMatch[1]),
+    };
+  }
+
   const desktopMatch = userAgent.match(DESKTOP_USER_AGENT_PATTERN);
   if (desktopMatch) {
     return {
+      app: 'lobehub',
       type: 'desktop',
       version: normalizeVersion(desktopMatch[1]),
     };

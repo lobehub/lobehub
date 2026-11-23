@@ -491,6 +491,9 @@ export interface AgentEventAdapter {
    */
   flush: () => HeterogeneousAgentEvent[];
 
+  /** Interpret the native CLI exit code after stdout has fully drained. */
+  resolveExitCode?: (code: number | null) => number | null;
+
   /** The session ID extracted from the agent's init event (for multi-turn resume). */
   sessionId?: string;
 

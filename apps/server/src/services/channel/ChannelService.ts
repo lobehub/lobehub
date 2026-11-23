@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChannelVisibility } from '@lobechat/types';
+import type { ChannelMetadata, ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
@@ -12,6 +12,7 @@ import {
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { onThreadArchived } from '@/business/server/channel/onThreadArchived';
 import { getAddressBook } from '@/business/server/contact/addressBook';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { DeviceModel } from '@/database/models/device';
@@ -24,6 +25,12 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import {
+  projectDefaultChannelMetadata,
+  withDisplayTitle,
+} from '@/database/repositories/channel/displayTitle';
+import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
+import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
 import {
   findShareVisitorTopic,
@@ -31,13 +38,14 @@ import {
   listShareVisitorTopics,
   readShareVisitorChannel,
 } from '@/database/repositories/channel/shareVisitors';
-import { users } from '@/database/schemas';
+import { agents, users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 import { channelContacts } from './contacts';
+import { announceDeviceGrants, refreshDeviceGrantCard } from './deviceGrantCard';
 import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
@@ -98,9 +106,9 @@ export class ChannelService {
       throw new ChannelError('BAD_REQUEST', 'A remote Agent runs on its own host, not a device');
     if (input.deviceId) {
       const device = this.workspaceId
-        ? await this.deviceModel.findWorkspaceDeviceById(input.deviceId)
+        ? await this.workspaceChannelDevice(input.agentId, input.deviceId)
         : await this.deviceModel.findPersonalByDeviceId(input.deviceId);
-      if (!device || (this.workspaceId && device.visibility !== 'public'))
+      if (!device)
         throw new ChannelError(
           'FORBIDDEN',
           'Choose an accessible device shared with this workspace',
@@ -150,6 +158,29 @@ export class ChannelService {
       throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
     }
     return { agentId: input.agentId, config, description: input.description, name: input.name };
+  }
+
+  /**
+   * A workspace device an Agent member may be pointed at in a Channel: one shared with the
+   * workspace, one of the caller's own private devices, or a private device of the Agent's own
+   * owner. A private device runs there only once its owner approves the Channel grant (see
+   * `syncMemberGrant`); picking their own device is that approval.
+   */
+  private async workspaceChannelDevice(agentId: string, deviceId: string) {
+    const visible = await this.deviceModel.findWorkspaceDeviceById(deviceId);
+    if (visible) return visible;
+    const [owner] = await this.db
+      .select({ userId: agents.userId })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1);
+    if (!owner?.userId) return;
+    const device = await new DeviceModel(
+      this.db,
+      owner.userId,
+      this.workspaceId,
+    ).findWorkspaceDeviceById(deviceId);
+    return device?.userId === owner.userId ? device : undefined;
   }
 
   /**
@@ -211,17 +242,20 @@ export class ChannelService {
     });
     // Invited people see the new Channel without waiting for their next poll.
     if (userIds.length) await this.changed(access.channel.id);
-    return access;
+    await announceDeviceGrants(this.db, access.channel.id);
+    return this.withDisplayTitle(access);
   };
 
   /**
    * The Channel a new workspace or project starts with. Callers pass a project they just created
-   * in this scope, so its readability is not checked again.
+   * in this scope, so its readability is not checked again. A project's is marked so clients show
+   * it under the project's name (`displayTitle`); a workspace's carries no mark.
    */
   createDefault = async (input: { agentId: string; projectId?: string; title: string }) => {
     const agentId = await this.defaultChannelAgent(input.agentId);
     return this.repository.create({
       agents: [{ agentId }],
+      ...(input.projectId && { metadata: projectDefaultChannelMetadata() }),
       projectId: input.projectId,
       title: input.title,
     });
@@ -248,7 +282,8 @@ export class ChannelService {
     });
     // Invitees see the new group without waiting for their next poll.
     await this.changed(access.channel.id);
-    return access;
+    await announceDeviceGrants(this.db, access.channel.id);
+    return this.withDisplayTitle(access);
   };
 
   /**
@@ -393,7 +428,7 @@ export class ChannelService {
       );
     }
     const member = await this.repository.addAgent(channelId, agent);
-    await this.changed(channelId);
+    await Promise.all([this.changed(channelId), announceDeviceGrants(this.db, channelId)]);
     return member;
   };
 
@@ -407,14 +442,33 @@ export class ChannelService {
     const { config = {} } = await this.resolveAgent({ ...input, agentId });
     const member = await this.repository.updateAgentEnvironment(channelId, memberId, config);
     // A job blocked on the previous device or directory may be claimable now.
-    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    await Promise.all([
+      wakeChannel(channelId),
+      this.changed(channelId),
+      announceDeviceGrants(this.db, channelId),
+    ]);
     return member;
   };
 
+  /** Requests to run Agents on the caller's private devices in this workspace's Channels. */
+  deviceGrants = () => listDeviceGrants(this.db, this.userId, this.workspaceId ?? null);
+
+  /** The device owner approves, rejects or revokes; a reply waiting on it can start at once. */
+  decideDeviceGrant = async (grantId: string, decision: ChannelDeviceGrantDecision) => {
+    const grant = await decideDeviceGrant(this.db, this.userId, grantId, decision);
+    await Promise.all([
+      wakeChannel(grant.channelId),
+      this.changed(grant.channelId),
+      refreshDeviceGrantCard(this.db, grant),
+    ]);
+    return grant;
+  };
+
+  /** Edits `title` only: a project's default Channel keeps its mark and its project's name. */
   rename = async (channelId: string, title: string) => {
     const channel = await this.repository.rename(channelId, title);
     await this.changed(channelId);
-    return channel;
+    return withDisplayTitle(this.db, channel);
   };
 
   editMessage = async (channelId: string, messageId: string, content: string) => {
@@ -439,7 +493,7 @@ export class ChannelService {
   updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
     const channel = await this.repository.updateVisibility(channelId, visibility);
     await this.changed(channelId);
-    return channel;
+    return withDisplayTitle(this.db, channel);
   };
 
   /** The coordinator physically stops a removed Agent's runs. */
@@ -462,7 +516,7 @@ export class ChannelService {
   join = async (channelId: string) => {
     const access = await this.repository.join(channelId);
     await this.changed(channelId);
-    return access;
+    return this.withDisplayTitle(access);
   };
 
   /**
@@ -479,6 +533,18 @@ export class ChannelService {
     );
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);
+
+  /** Adds `displayTitle` to a Channel handed back to a client; see `withDisplayTitle`. */
+  private withDisplayTitle = async <
+    T extends {
+      channel: { metadata: ChannelMetadata | null; projectId: string | null; title: string };
+    },
+  >(
+    access: T,
+  ) => ({
+    ...access,
+    channel: await withDisplayTitle(this.db, access.channel),
+  });
 
   /** A personal list write that joins an open Channel first; members hear only about a join. */
   private writeMayJoin = async <T>(
@@ -549,10 +615,12 @@ export class ChannelService {
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
     const view = await this.readView(channelId, options);
     const files = new FileService(this.db, this.userId, this.workspaceId);
+    const channel = await withDisplayTitle(this.db, view.channel);
     // The public message's attachment relation grants this read after membership authorization.
     // Do not return private storage keys or route through an unrelated ordinary-chat ACL.
     return {
       ...view,
+      channel,
       attachments: await pMap(
         view.attachments,
         async (file) => ({ ...file, url: await files.getFullFileUrl(file.url, 300) }),
@@ -582,7 +650,20 @@ export class ChannelService {
 
   archiveThread = async (channelId: string, threadId: string) => {
     await this.repository.archiveThread(channelId, threadId);
-    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    await Promise.all([
+      wakeChannel(channelId),
+      this.changed(channelId),
+      // Through the `@/business` slot (default impl is a no-op); a failure is
+      // logged and never fails the archive.
+      onThreadArchived({
+        channelId,
+        threadId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      }).catch((error) =>
+        console.error('[ChannelService] thread-archived follow-up failed (non-fatal):', error),
+      ),
+    ]);
   };
 
   unarchiveThread = async (channelId: string, threadId: string) => {
@@ -620,8 +701,16 @@ export class ChannelService {
     return message;
   };
 
+  /** Runs a failed reply again from the start. */
   retryJob = async (channelId: string, jobId: string) => {
     const job = await this.repository.retryJob(channelId, jobId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return job;
+  };
+
+  /** Runs a failed reply again in the conversation (and CLI session) it stopped in. */
+  resumeJob = async (channelId: string, jobId: string) => {
+    const job = await this.repository.retryJob(channelId, jobId, 'resume');
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return job;
   };

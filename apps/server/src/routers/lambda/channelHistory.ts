@@ -39,9 +39,9 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       const result = await next({
         ctx: {
           channelHistory: new ChannelHistoryService(...args),
-          // The token was checked for this capability above; an owner's bot run carries
-          // `channel:message` without a Channel of its own.
-          channelMessaging: new ChannelMessagingService(...args, { allowBotRun: true }),
+          // The token was checked for this capability above; a user's chat turn or an owner's
+          // bot run carries `channel:message` without a Channel of its own.
+          channelMessaging: new ChannelMessagingService(...args, { allowDirectRun: true }),
         },
       });
       if (!result.ok && result.error.cause instanceof ChannelError)
@@ -117,6 +117,24 @@ export const channelHistoryProcedures = {
     )
     .mutation(({ ctx, input: { requestKey, ...params } }) =>
       ctx.channelMessaging.messagePerson(params, `cli:${requestKey}`),
+    ),
+  /** Posts a card in the run's own conversation asking its requester to connect a connector. */
+  requestConnector: historyProcedure
+    .input(
+      z
+        .object({
+          auth: z.enum(['none', 'oauth']).optional(),
+          identifier: z.string().min(1).max(64),
+          name: z.string().max(64).optional(),
+          reason: z.string().max(280).optional(),
+          /** Repeat it to retry without posting twice. */
+          requestKey: z.string().min(1).max(100),
+          url: z.string().url().max(2048).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { requestKey, ...params } }) =>
+      ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
     ),
   sendMessage: messagingProcedure
     .input(

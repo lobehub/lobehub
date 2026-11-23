@@ -2,10 +2,36 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../../api/client';
+import { isOperationTokenRefusal } from '../../../api/operationTokenFallback';
 import { outputJson } from '../../../utils/format';
+import { log } from '../../../utils/logger';
 import { assertReportLanguage } from '../language';
 
 // ── report ──
+
+/**
+ * What a run can do once its operation token is refused on `report upsert`.
+ *
+ * The refusal is deliberate: the report carries the round's verdict, so the
+ * round's verifier writes it, and `upsertReport` stays off the operation-token
+ * allowlist. A token without `acceptance:evidence` is refused one step earlier,
+ * on the language check's `user.getUserState`, and is no closer to writing it.
+ * A same-account stored login has already been tried by the time the refusal
+ * reaches the command (`operationTokenFallbackLink`), so it is final; a bare
+ * 401 only got retried. The commands below take the run's own operation id,
+ * which the token is bound to.
+ */
+export const reportRefusalGuidance = (runId: string): string[] => {
+  const operation = process.env.LOBEHUB_OPERATION_ID || '<operationId>';
+  return [
+    `This run's token cannot write the report of round ${runId}: a round's report and verdict are written by that round's verifier.`,
+    `  Check for a plan round: lh acceptance plan state ${operation} (it has one when "confirmed" shows a time).`,
+    '  With a plan round, hand in evidence instead:',
+    `    lh acceptance run ingest <reportDir> --operation ${operation}`,
+    `    lh acceptance run result submit --operation ${operation} --item <checkItemId> --type <type> --file <path>`,
+    '  Without one, or if that check is refused too, report the handoff as blocked. Do not retry report upsert.',
+  ];
+};
 
 export interface ReportUpsertOptions {
   content?: string;
@@ -22,20 +48,27 @@ export interface ReportUpsertOptions {
 export async function reportUpsertAction(options: ReportUpsertOptions): Promise<void> {
   const num = (s?: string) => (s === undefined ? undefined : Number.parseInt(s, 10));
   const client = await getTrpcClient();
-  await assertReportLanguage(client, [
-    { path: '--summary', text: options.summary },
-    { path: '--content', text: options.content },
-  ]);
-  const created = await client.verify.upsertReport.mutate({
-    content: options.content,
-    failedChecks: num(options.failed),
-    passedChecks: num(options.passed),
-    summary: options.summary,
-    totalChecks: num(options.total),
-    uncertainChecks: num(options.uncertain),
-    verdict: options.verdict as any,
-    verifyRunId: options.run,
-  });
+  let created: Awaited<ReturnType<typeof client.verify.upsertReport.mutate>>;
+  try {
+    await assertReportLanguage(client, [
+      { path: '--summary', text: options.summary },
+      { path: '--content', text: options.content },
+    ]);
+    created = await client.verify.upsertReport.mutate({
+      content: options.content,
+      failedChecks: num(options.failed),
+      passedChecks: num(options.passed),
+      summary: options.summary,
+      totalChecks: num(options.total),
+      uncertainChecks: num(options.uncertain),
+      verdict: options.verdict as any,
+      verifyRunId: options.run,
+    });
+  } catch (error) {
+    if (!isOperationTokenRefusal(error)) throw error;
+    for (const line of reportRefusalGuidance(options.run)) log.error(line);
+    process.exit(1);
+  }
   if (options.json !== undefined) {
     outputJson(created, typeof options.json === 'string' ? options.json : undefined);
     return;

@@ -17,6 +17,8 @@ export class HumanApprovalAlreadyResolvedError extends Error {
   }
 }
 
+type InterventionStatus = NonNullable<MessagePluginItem['intervention']>['status'];
+
 /** One row of `listToolCallIndexByTopic`. */
 export interface ToolCallIndexItem extends Pick<
   MessagePluginItem,
@@ -525,6 +527,59 @@ export class MessagePluginStore extends MessageScope {
       type: row.type ?? 'default',
       userId: row.userId,
     }));
+  };
+
+  /**
+   * Cheap change probe for a topic that is waiting on approval cards: each
+   * card's intervention status plus a revision that moves whenever the topic
+   * gains, loses or edits a message, or a card's arguments change (plugin rows
+   * do not bump the parent message's `updatedAt`). Lets a waiting client skip
+   * re-reading the whole transcript page while nothing changed.
+   */
+  getInterventionSnapshot = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<{
+    revision: string;
+    statuses: Record<string, InterventionStatus | null>;
+  }> => {
+    const [cards, [topicRow]] = await Promise.all([
+      params.ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .select({
+              argsHash: sql<string>`md5(coalesce(${messagePlugins.arguments}, ''))`,
+              id: messagePlugins.id,
+              status: sql<InterventionStatus | null>`${messagePlugins.intervention}->>'status'`,
+            })
+            .from(messagePlugins)
+            .innerJoin(messages, eq(messagePlugins.id, messages.id))
+            .where(
+              and(
+                inArray(messagePlugins.id, params.ids),
+                eq(messages.topicId, params.topicId),
+                this.ownership(),
+                this.pluginsOwnership(),
+                notShareVisitorMessage(),
+              ),
+            ),
+      this.db
+        .select({
+          count: sql<number>`count(*)::int`,
+          updatedAt: sql<string | null>`max(${messages.updatedAt})::text`,
+        })
+        .from(messages)
+        .where(and(eq(messages.topicId, params.topicId), this.ownership())),
+    ]);
+
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    const statuses = Object.fromEntries(params.ids.map((id) => [id, byId.get(id)?.status ?? null]));
+    const argsHashes = params.ids.map((id) => byId.get(id)?.argsHash ?? '-').join(',');
+
+    return {
+      revision: `${topicRow?.count ?? 0}|${topicRow?.updatedAt ?? ''}|${argsHashes}`,
+      statuses,
+    };
   };
 
   /**
