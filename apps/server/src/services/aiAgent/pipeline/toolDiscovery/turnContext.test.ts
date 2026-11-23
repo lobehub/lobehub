@@ -141,24 +141,38 @@ describe('collectSelectedToolIds', () => {
     ).toEqual([]);
   });
 
-  it('ignores non-user rows, external/bot message content, and malformed metadata', () => {
+  it('ignores non-user rows, external/bot messages, other agents rows, and malformed metadata', () => {
     const history = [
       { metadata: { selectedToolIds: ['from-assistant'] }, role: 'assistant' },
       { metadata: { selectedToolIds: 'not-an-array' }, role: 'user' },
       { metadata: { selectedToolIds: [42, '', 'kept'] }, role: 'user' },
       {
         content: '<mention name="Writer" id="agt_writer" /> From bot sender',
-        metadata: { botSender: { platform: 'discord', userId: 'u1' } },
+        metadata: {
+          botSender: { platform: 'discord', userId: 'u1' },
+          selectedToolIds: ['from-bot'],
+        },
         role: 'user',
       },
       {
         content: '<mention name="Writer" id="agt_writer" /> From external event',
-        metadata: { externalOrigin: { provider: 'github' } },
+        metadata: {
+          externalOrigin: { provider: 'github' },
+          selectedToolIds: ['from-webhook'],
+        },
+        role: 'user',
+      },
+      {
+        agentId: 'agt_supervisor',
+        metadata: { selectedToolIds: ['supervisor-only-connector'] },
         role: 'user',
       },
       { content: 'plain text without mention tags', role: 'user' },
     ];
 
-    expect(collectSelectedToolIds(history)).toEqual(['kept']);
+    expect(collectSelectedToolIds(history, [], { resolvedAgentId: 'agt_member' })).toEqual([
+      'kept',
+    ]);
+    expect(collectSelectedToolIds(history, [], { isInGroupMember: true })).toEqual([]);
   });
 });

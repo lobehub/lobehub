@@ -61,6 +61,7 @@ const extractEditorTurnToolIds = (
 };
 
 export interface HistoryTurnSelectionMessage {
+  agentId?: string | null;
   compressedMessages?: ReadonlyArray<HistoryTurnSelectionMessage> | null;
   content?: unknown;
   editorData?: Record<string, any> | null;
@@ -87,7 +88,18 @@ export interface HistoryTurnSelectionMessage {
 export const collectSelectedToolIds = (
   historyMessages: ReadonlyArray<HistoryTurnSelectionMessage>,
   current: readonly string[] = [],
-  options?: { hasMentionedAgents?: boolean; isGroupConversation?: boolean },
+  options?: {
+    hasMentionedAgents?: boolean;
+    isGroupConversation?: boolean;
+    /**
+     * An in-group member turn (`orchestrationRole === 'member'` without an
+     * isolated `threadId`) shares the group topic's history but is prompted by
+     * an ephemeral supervisor instruction, so it must not inherit the group
+     * supervisor's @-mentioned tools from the shared topic.
+     */
+    isInGroupMember?: boolean;
+    resolvedAgentId?: string;
+  },
 ): string[] => {
   const includeAgentMentions = !options?.isGroupConversation;
   const ids: string[] = [];
@@ -99,6 +111,15 @@ export const collectSelectedToolIds = (
       }
     }
     if (message.role !== 'user') return;
+    if (message.metadata?.botSender || message.metadata?.externalOrigin) return;
+    if (
+      options?.resolvedAgentId &&
+      typeof message.agentId === 'string' &&
+      message.agentId.length > 0 &&
+      message.agentId !== options.resolvedAgentId
+    ) {
+      return;
+    }
 
     const persisted = message.metadata?.selectedToolIds;
     if (Array.isArray(persisted)) {
@@ -106,10 +127,7 @@ export const collectSelectedToolIds = (
         if (typeof id === 'string' && id.length > 0) ids.push(id);
       }
     }
-    const isExternalMessage = Boolean(
-      message.metadata?.botSender || message.metadata?.externalOrigin,
-    );
-    if (!isExternalMessage && message.editorData && typeof message.editorData === 'object') {
+    if (message.editorData && typeof message.editorData === 'object') {
       extractEditorTurnToolIds(
         (message.editorData as Record<string, unknown>).root,
         includeAgentMentions,
@@ -117,7 +135,6 @@ export const collectSelectedToolIds = (
       );
     }
     if (
-      !isExternalMessage &&
       includeAgentMentions &&
       typeof message.content === 'string' &&
       SERIALIZED_AGENT_MENTION_RE.test(message.content)
@@ -126,14 +143,16 @@ export const collectSelectedToolIds = (
     }
   };
 
-  for (const message of historyMessages) {
-    visitMessage(message);
+  if (!options?.isInGroupMember) {
+    for (const message of historyMessages) {
+      visitMessage(message);
+    }
   }
 
   return [
     ...new Set([
       ...ids,
-      ...current,
+      ...current.filter((id): id is string => typeof id === 'string' && id.length > 0),
       ...(includeAgentMentions && options?.hasMentionedAgents ? [AGENT_MANAGEMENT_IDENTIFIER] : []),
     ]),
   ];

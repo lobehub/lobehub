@@ -448,6 +448,24 @@ describe('discoverTools — connector discovery', () => {
     );
   });
 
+  it('does not leak supervisor @-mentioned connectors from shared group history into an in-group member turn', async () => {
+    const result = await run({
+      ...sources,
+      appContext: { groupId: 'group-1', orchestrationRole: 'member' },
+      input: {
+        loadHistoryMessages: vi.fn().mockResolvedValue([
+          {
+            metadata: { selectedToolIds: ['community-mcp'] },
+            role: 'user',
+          },
+          { content: 'Delegating to member', role: 'assistant' },
+        ]),
+      },
+    }).promise;
+
+    expect(result.agentPlugins).not.toContain('community-mcp');
+  });
+
   it('leaves an exact toolset untouched by the agent switches', async () => {
     const result = await run({
       ...sources,

@@ -203,11 +203,16 @@ export const discoverTools = async (
     return historyMessagesCache;
   };
   const isGoalTurn = isGoalPrompt(prompt);
+  const isInGroupMember = appContext?.orchestrationRole === 'member' && !appContext?.threadId;
   const historyMessages =
-    disableTools || exclusivePluginIds || isGoalTurn ? [] : await readHistoryMessages();
+    disableTools || exclusivePluginIds || isGoalTurn || isInGroupMember
+      ? []
+      : await readHistoryMessages();
   const effectiveSelectedToolIds = collectSelectedToolIds(historyMessages, selectedToolIds, {
     hasMentionedAgents,
     isGroupConversation: !!appContext?.groupId,
+    isInGroupMember,
+    resolvedAgentId,
   });
   const toolMode = resolveToolMode(agentConfig.chatConfig);
   const configuredPluginIds =
