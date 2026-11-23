@@ -59,7 +59,7 @@ const renderFooter = async ({
   mockUserState = {
     defaultSettings: {},
     preference: { lab: { enableTopicBugReport: bugReportLab } },
-    settings: { general: { isDevMode: false } },
+    settings: { general: {} },
   };
 
   vi.doMock('@lobechat/const', async (importOriginal) => {
@@ -172,6 +172,25 @@ afterEach(() => {
   vi.doUnmock('@/hooks/useNavLayout');
   vi.doUnmock('@/store/serverConfig');
   vi.doUnmock('@/store/user');
+});
+
+describe('Footer settings entry', () => {
+  // Settings is a frequent destination, so the compact footer gives it its own
+  // icon instead of burying it in the Help menu.
+  it('shows Settings as its own icon, not inside the Help menu', async () => {
+    const user = userEvent.setup();
+    await renderFooter({ hideGitHub: false });
+
+    expect(screen.getByRole('button', { name: 'Settings' }).closest('a')).toHaveAttribute(
+      'href',
+      '/settings',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+    const menu = (await screen.findByText('Docs')).closest('[role="menu"]')!;
+
+    expect(menu.textContent).not.toContain('Settings');
+  }, 20000);
 });
 
 describe('Footer help menu tracking', () => {
@@ -289,8 +308,6 @@ describe('Footer help menu tracking', () => {
     );
 
     expect(sequence).toEqual([
-      'Settings',
-      '|',
       'Invite a friend',
       '|',
       'Docs',
