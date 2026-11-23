@@ -220,10 +220,10 @@ export class AntigravityAdapter implements AgentEventAdapter {
     const info = toRecord(step.tool_info);
     const subagents = toRecord(step.subagent_info);
     const name = pickString(info?.name) ?? pickString(step.tool_name);
-    if (!name && !subagents) return [];
+    let pending = this.pendingTools.get(index);
+    if (!pending && !name && !subagents) return [];
     const events = this.openStream();
     this.toolSinceResponse = true;
-    let pending = this.pendingTools.get(index);
     const args = JSON.stringify(info?.parameters ?? subagents ?? {});
     if (!pending) {
       const payload: ToolCallPayload = {
