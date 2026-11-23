@@ -1156,6 +1156,7 @@ export default {
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
   'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
+  'share.visitor.profile.free': 'Free',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
   'share.visitor.profile.lobotFallback.description':
@@ -1179,6 +1180,7 @@ export default {
     'It runs in the owner Workspace, and every reply is paid from the Workspace budget.',
   'share.visitor.profile.terms.desc':
     'Today these rules only show up as errors once you hit them. Here they are up front.',
+  'share.visitor.profile.terms.free': 'Free to use — doesn’t use your credits.',
   'share.visitor.profile.terms.messages_one': 'You can send up to {{count}} message.',
   'share.visitor.profile.terms.messages_other': 'You can send up to {{count}} messages.',
   'share.visitor.profile.terms.title': 'Before you start',
@@ -1293,6 +1295,7 @@ export default {
   'share.visitor.profile.metrics.durationCaption': 'per operation',
   'share.visitor.profile.metrics.cost': 'Average cost',
   'share.visitor.profile.metrics.costCaption': 'per work · paid by the creator',
+  'share.visitor.profile.metrics.costPerWorkCaption': 'per work',
   'share.visitor.profile.works.title': 'Featured works',
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
