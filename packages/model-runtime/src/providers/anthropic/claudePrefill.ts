@@ -1,5 +1,3 @@
-import type Anthropic from '@anthropic-ai/sdk';
-
 import { shouldDropUnsupportedClaudeAssistantPrefill } from './modelId';
 
 /**
@@ -13,10 +11,10 @@ import { shouldDropUnsupportedClaudeAssistantPrefill } from './modelId';
  * support prefill are left untouched.
  * @see https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prefill-claudes-response
  */
-export const stripUnsupportedClaudeAssistantPrefill = (
+export const stripUnsupportedClaudeAssistantPrefill = <T extends { role: string }>(
   model: string,
-  messages: Anthropic.MessageParam[],
-): Anthropic.MessageParam[] => {
+  messages: T[],
+): T[] => {
   if (!shouldDropUnsupportedClaudeAssistantPrefill(model)) return messages;
 
   let end = messages.length;
