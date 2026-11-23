@@ -9,7 +9,6 @@ import {
   type ModalInstance,
   Segmented,
   Spin,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';
@@ -18,6 +17,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SandboxStorageUpgradeGuide } from '@/business/client/features/SandboxStorageUpsell';
+import InlineErrorText from '@/components/InlineErrorText';
 import { useSandboxDriveEntitlement } from '@/hooks/useSandboxDriveEntitlement';
 
 import { confirmPick } from './confirmPick';
@@ -49,6 +49,7 @@ const SandboxDirectoryContent = ({
   const { close } = useModalContext();
   const { entitled } = useSandboxDriveEntitlement();
   const [saving, setSaving] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [drive, setDrive] = useState<SandboxDrive>(
     isWorkspace ? (initialDrive ?? 'public') : 'personal',
   );
@@ -87,7 +88,10 @@ const SandboxDirectoryContent = ({
               value: 'personal',
             },
           ]}
-          onChange={(value) => setDrive(value as SandboxDrive)}
+          onChange={(value) => {
+            setPickError(null);
+            setDrive(value as SandboxDrive);
+          }}
         />
       )}
       {/* Keyed on the drive, so its navigation starts over: a folder on one
@@ -101,16 +105,21 @@ const SandboxDirectoryContent = ({
         onCancel={close}
         onSelect={async (path) => {
           setSaving(true);
+          setPickError(null);
           await confirmPick({
             // The root is a choice of its own — `.` — distinct from "no
             // folder", which is the temporary sandbox.
             apply: () => onPick({ drive, workingDirectory: path || '.' }),
             close,
-            fail: () => toast.error(tDevice('workingDirectory.drive.pickFailed')),
+            fail: (error) => {
+              console.error('[SandboxDirectory] Failed to pick folder:', error);
+              setPickError(tDevice('workingDirectory.drive.pickFailedRetry'));
+            },
           });
           setSaving(false);
         }}
       />
+      {pickError && <InlineErrorText>{pickError}</InlineErrorText>}
     </Flexbox>
   );
 };

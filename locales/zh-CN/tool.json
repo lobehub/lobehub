@@ -155,6 +155,7 @@
   "connector.add.clientSecret": "OAuth Client Secret（可选）",
   "connector.add.confirm": "添加",
   "connector.add.editTitle": "编辑连接器",
+  "connector.add.failedRetry": "无法保存连接器，请检查服务器地址和网络后重试。",
   "connector.add.name": "名称",
   "connector.add.namePlaceholder": "我的连接器",
   "connector.add.popupBlocked": "请允许此网站打开弹出窗口后重试。",

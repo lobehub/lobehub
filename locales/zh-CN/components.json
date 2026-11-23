@@ -37,6 +37,7 @@
   "FileManager.actions.copyUrlError": "复制文件链接失败",
   "FileManager.actions.copyUrlSuccess": "文件地址复制成功",
   "FileManager.actions.createChunkingTask": "准备中…",
+  "FileManager.actions.createFolderFailedRetry": "无法创建文件夹，请检查网络后重试。",
   "FileManager.actions.deleteAll": "删除全部资源",
   "FileManager.actions.deleteAllOwn": "删除我创建的全部资源",
   "FileManager.actions.deleteSuccess": "文件删除成功",

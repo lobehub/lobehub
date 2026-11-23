@@ -18,6 +18,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import SocialShare from '@/features/SocialShare';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { mutate as globalMutate } from '@/libs/swr';
@@ -51,6 +52,7 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
     const { close } = useModalContext();
     const appOrigin = useAppOrigin();
     const [updating, setUpdating] = useState(false);
+    const [updateError, setUpdateError] = useState<string | null>(null);
 
     const { data, error, isLoading, mutate } = useSWR(
       FILE_SHARE_SETTINGS_KEY(fileId),
@@ -64,12 +66,13 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
     const setVisibility = useCallback(
       async (visibility: FileShareVisibility) => {
         setUpdating(true);
+        setUpdateError(null);
         let next: FileShareSettings | null;
         try {
           next = await lambdaClient.fileShare.updateShareSettings.mutate({ fileId, visibility });
           await globalMutate(FILE_SHARE_SETTINGS_KEY(fileId), next, { revalidate: false });
         } catch {
-          toast.error(t('shareModal.generation.updateError'));
+          setUpdateError(t('shareModal.generation.updateFailedRetry'));
           return;
         } finally {
           setUpdating(false);
@@ -124,6 +127,8 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
             onChange={(checked) => setVisibility(checked ? 'link' : 'private')}
           />
         </Flexbox>
+
+        {updateError && <InlineErrorText>{updateError}</InlineErrorText>}
 
         {shareUrl && (
           <Flexbox horizontal gap={8}>

@@ -57,7 +57,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
       close();
     } catch (err) {
       console.error('[dashboard] widget edit failed', err);
-      setError(t('operationFailed', { ns: 'common' }));
+      setError(t('widget.saveFailedRetry'));
     } finally {
       setSaving(false);
     }

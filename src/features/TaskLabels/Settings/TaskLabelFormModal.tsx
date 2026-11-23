@@ -115,7 +115,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
         setGroupError(t('taskLabels.form.groupConflict'));
       } else {
         console.error('Failed to save task label:', error);
-        setSaveError(t('operationFailed', { ns: 'common' }));
+        setSaveError(t('taskLabels.form.saveFailedRetry'));
       }
     } finally {
       setLoading(false);

@@ -61,7 +61,7 @@ const CreateGroupContent = memo<CreateGroupModalOptions>(({ id, visibility }) =>
       // Without this, a rejected create/move leaves the button stuck
       // on loading and the modal open with no explanation.
       console.error('Failed to create category:', err);
-      setError(t('operationFailed', { ns: 'common' }));
+      setError(t('sessionGroup.createFailedRetry'));
     } finally {
       setLoading(false);
     }

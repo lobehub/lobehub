@@ -15,6 +15,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { isLobeBenchMeta } from '@/features/LobeBench/lobeBench';
 import { agentEvalService } from '@/services/agentEval';
 
@@ -36,8 +37,11 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
   const [name, setName] = useState(experiment.name ?? '');
   const [question, setQuestion] = useState(meta?.question ?? '');
   const [saving, setSaving] = useState(false);
+  /** Save failure shown above the buttons; the modal stays open with the user's input. */
+  const [error, setError] = useState('');
 
   const submit = async () => {
+    setError('');
     setSaving(true);
     try {
       const trimmedName = name.trim();
@@ -55,8 +59,9 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
       toast.success(t('lobeBench.experiment.edit.saved'));
       await onSaved?.();
       close();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('lobeBench.experiment.edit.failed'));
+    } catch (cause) {
+      console.error('Failed to save Lobe Bench experiment:', cause);
+      setError(t('lobeBench.experiment.edit.failedRetry'));
     } finally {
       setSaving(false);
     }
@@ -70,7 +75,10 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
           id={'lobe-bench-experiment-name'}
           placeholder={t('lobeBench.new.name.placeholder')}
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError('');
+          }}
         />
       </Flexbox>
       <Flexbox gap={6}>
@@ -80,9 +88,13 @@ const ExperimentEditForm = memo<ExperimentEditFormProps>(({ experiment, onSaved 
           id={'lobe-bench-experiment-question'}
           placeholder={t('lobeBench.new.question.placeholder')}
           value={question}
-          onChange={(e) => setQuestion(e.target.value)}
+          onChange={(e) => {
+            setQuestion(e.target.value);
+            setError('');
+          }}
         />
       </Flexbox>
+      {error && <InlineErrorText>{error}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
         <Button loading={saving} type={'primary'} onClick={submit}>

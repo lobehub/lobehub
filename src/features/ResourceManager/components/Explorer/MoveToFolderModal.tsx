@@ -13,6 +13,7 @@ import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import FolderTree from '@/features/ResourceManager/components/FolderTree';
 import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
 import { fileService } from '@/services/file';
@@ -35,6 +36,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
     const [loadedFolders, setLoadedFolders] = useState<Set<string>>(() => new Set());
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+    const [createFolderError, setCreateFolderError] = useState<string | null>(null);
 
     const createFolder = useFileStore((s) => s.createFolder);
     const moveItem = useTreeStore((s) => s.moveItem);
@@ -191,6 +193,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
     const handleCreateNewFolder = useCallback(async () => {
       try {
         setIsCreatingFolder(true);
+        setCreateFolderError(null);
 
         // Create folder with default "Untitled" name
         const newFolderId = await createFolder(
@@ -213,7 +216,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
         setSelectedFolderId(newFolderId);
       } catch (error) {
         console.error('Failed to create folder:', error);
-        toast.error(t('FileManager.actions.renameError'));
+        setCreateFolderError(t('FileManager.actions.createFolderFailedRetry'));
       } finally {
         setIsCreatingFolder(false);
       }
@@ -296,6 +299,11 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
               />
             )}
           </Flexbox>
+          {createFolderError && (
+            <div style={{ marginTop: 12 }}>
+              <InlineErrorText>{createFolderError}</InlineErrorText>
+            </div>
+          )}
         </Flexbox>
         <ModalFooter>
           <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

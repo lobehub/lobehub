@@ -621,6 +621,8 @@ export default {
   'agentDocuments.overwriteConfirm.warning':
     'Existing documents with the same filename will be replaced.',
   'agentDocuments.title': 'Agent Documents',
+  'agentSkillModal.github.connectFailedRetry':
+    "Couldn't connect GitHub. Check your network and try again.",
   'analytics.telemetry.desc': 'Help us improve {{appName}} with anonymous usage data',
   'analytics.telemetry.title': 'Send Anonymous Usage Data',
   'analytics.title': 'Analytics',
@@ -5457,6 +5459,8 @@ When I am ___, I need ___
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
   'creds.file.uploadFailedRetry': 'File upload failed. Check the file and try again.',
+  'devices.share.failedRetry':
+    "Couldn't share {{name}}. Make sure the device is online, then try again.",
   'environments.form.addRepository': 'Add repository',
   'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
   'environments.form.noVariables': 'No variables',
@@ -5485,6 +5489,9 @@ When I am ___, I need ___
     "Couldn't save the monthly cap. Check the amount and try again.",
   'storageOverage.disableFailedRetry': "Couldn't disable storage pay-as-you-go. Try again.",
   'storageOverage.enableFailedRetry': "Couldn't enable storage pay-as-you-go. Try again.",
+  'taskLabels.form.saveFailedRetry': "Couldn't save the label. Check your network and try again.",
+  'workspace.billing.paymentMethods.portalFailedRetry':
+    "Couldn't open the billing portal. Check your network and try again.",
   'workspace.billingPage.billing.changeFailedRetry':
     "Couldn't update the subscription. Check your connection and try again.",
   'workspace.billingPage.credits.autoTopUp.saveFailed':
@@ -5594,4 +5601,10 @@ When I am ___, I need ___
   'market.skills.title': 'Skills',
   'market.skills.uninstall': 'Uninstall',
   'market.skills.version': 'Version',
+  'workspaceSetting.labels.archive.failedRetry':
+    "Couldn't archive the label. Check your network and try again.",
+  'workspaceSetting.labels.delete.failedRetry':
+    "Couldn't delete the label. Check your network and try again.",
+  'workspaceSetting.labels.form.saveFailedRetry':
+    "Couldn't save the label. Check your network and try again.",
 };

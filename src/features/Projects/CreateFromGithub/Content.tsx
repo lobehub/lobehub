@@ -139,7 +139,7 @@ const CreateFromGithubContent = () => {
         setForm((current) => ({ ...current, duplicate }));
       } else {
         console.error('Failed to create project from GitHub', err);
-        setError(t('operationFailed', { ns: 'common' }));
+        setError(t('create.failedRetry'));
       }
     } finally {
       setForm((current) => ({ ...current, loading: false }));

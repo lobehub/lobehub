@@ -189,6 +189,8 @@ export default {
   'workingDirectory.branchCheckedOutHere': 'Checked out here',
   'workingDirectory.deviceOutdated':
     'The LobeHub app or lh CLI on this device is too old for this. Update it and try again.',
+  'workingDirectory.drive.pickFailedRetry':
+    "Couldn't switch to this folder. Check your network and try again.",
   'workingDirectory.occupiedBranchConfirm': 'Create branch and send',
   'workingDirectory.occupiedBranchDesc':
     '{{branch}} is checked out in worktree {{name}}, so it cannot be checked out here. A new branch will be created from it instead.',

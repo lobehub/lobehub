@@ -18,6 +18,7 @@ import { CheckIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { agentEvalService } from '@/services/agentEval';
 import { densityVars } from '@/styles/densityVars';
 
@@ -131,7 +132,11 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
     ([, presets]) => presets.length > 0,
   );
 
+  /** Submit failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState('');
+
   const handleFinish = async (values: any) => {
+    setError('');
     onLoadingChange?.(true);
     try {
       await agentEvalService.updateDataset({
@@ -154,8 +159,9 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       toast.success(t('dataset.edit.success'));
       close();
       onSuccess?.();
-    } catch {
-      toast.error(t('dataset.edit.error'));
+    } catch (cause) {
+      console.error('Failed to update eval dataset:', cause);
+      setError(t('dataset.edit.failedRetry'));
     } finally {
       onLoadingChange?.(false);
     }
@@ -176,6 +182,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       name: dataset.name,
     },
     onSubmit: handleFinish,
+    onValuesChange: () => setError(''),
   });
   const evalModeValue = useWatch(form, 'evalMode');
 
@@ -289,6 +296,7 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
           </Flexbox>
         ))}
       </Flexbox>
+      {error && <InlineErrorText>{error}</InlineErrorText>}
     </Form>
   );
 };

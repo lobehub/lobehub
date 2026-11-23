@@ -1,9 +1,10 @@
 import type { TaskTemplateConnectorReference } from '@lobechat/const';
-import { Alert, Button, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ArrowUpRight, LockKeyhole } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import {
   ConnectorConnectionMarketAuthRequiredError,
   ConnectorConnectionPopupBlockedError,
@@ -25,6 +26,7 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
   const edit = usePermission('edit_own_content');
   const { connect, isConnecting, isAllConnected } = useConnectorConnection(github);
   const startedHere = useRef(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   useEffect(() => {
     if (startedHere.current && isAllConnected) {
@@ -35,16 +37,18 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
 
   const authorize = async () => {
     startedHere.current = true;
+    setConnectError(null);
     try {
       await connect();
     } catch (error) {
       startedHere.current = false;
       if (error instanceof ConnectorConnectionMarketAuthRequiredError) return;
-      toast.error(
+      console.error('[GithubImportRecovery] Failed to connect GitHub:', error);
+      setConnectError(
         t(
           error instanceof ConnectorConnectionPopupBlockedError
             ? 'common:taskTemplate.action.connect.popupBlocked'
-            : 'common:taskTemplate.action.connect.error',
+            : 'agentSkillModal.github.connectFailedRetry',
         ),
       );
     }
@@ -52,34 +56,37 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
 
   const showSettings = recovery === 'access' || isAllConnected;
   return (
-    <Alert
-      icon={LockKeyhole}
-      title={t(showSettings ? 'error:import.github.access' : 'error:import.github.connect')}
-      type="warning"
-      action={
-        showSettings ? (
-          <WorkspaceLink
-            rel="noopener noreferrer"
-            target="_blank"
-            to="/settings/connector?open=lobehub-connector%3Agithub"
-          >
-            <Flexbox horizontal align="center" as="span" gap={4}>
-              {t('agentSkillModal.github.connectionSettings')}
-              <Icon icon={ArrowUpRight} size={14} />
-            </Flexbox>
-          </WorkspaceLink>
-        ) : (
-          <Tooltip title={create.reason ?? edit.reason}>
-            <Button
-              disabled={!create.allowed || !edit.allowed}
-              loading={isConnecting}
-              onClick={authorize}
+    <Flexbox gap={8}>
+      <Alert
+        icon={LockKeyhole}
+        title={t(showSettings ? 'error:import.github.access' : 'error:import.github.connect')}
+        type="warning"
+        action={
+          showSettings ? (
+            <WorkspaceLink
+              rel="noopener noreferrer"
+              target="_blank"
+              to="/settings/connector?open=lobehub-connector%3Agithub"
             >
-              {t('environments.github.connect')}
-            </Button>
-          </Tooltip>
-        )
-      }
-    />
+              <Flexbox horizontal align="center" as="span" gap={4}>
+                {t('agentSkillModal.github.connectionSettings')}
+                <Icon icon={ArrowUpRight} size={14} />
+              </Flexbox>
+            </WorkspaceLink>
+          ) : (
+            <Tooltip title={create.reason ?? edit.reason}>
+              <Button
+                disabled={!create.allowed || !edit.allowed}
+                loading={isConnecting}
+                onClick={authorize}
+              >
+                {t('environments.github.connect')}
+              </Button>
+            </Tooltip>
+          )
+        }
+      />
+      {connectError && <InlineErrorText>{connectError}</InlineErrorText>}
+    </Flexbox>
   );
 };

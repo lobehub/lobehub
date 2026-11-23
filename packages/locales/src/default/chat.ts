@@ -3415,6 +3415,10 @@ export default {
   'goalTurn.trigger.first': 'First turn',
   'goalTurn.trigger.settled': 'Work settled',
   'goalTurn.trigger.takeover': 'Takeover',
+  'heteroAgent.claudeQuota.manage.loginFailedRetry':
+    "Sign-in didn't finish. Click Add account to try again.",
+  'heteroAgent.claudeQuota.manage.switchFailedRetry':
+    "Couldn't switch the account. Check your network and try again.",
   'taskList.activeTasks': 'Active Tasks',
   'taskList.all': 'All tasks',
   'taskList.completedTasks.all': 'All',
@@ -4810,4 +4814,11 @@ export default {
   'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
   'sandboxEnvironment.noRepository': 'No repository',
+  'sessionGroup.createFailedRetry':
+    "Couldn't create the category. Check your network and try again.",
+  'shareModal.downloadFailedRetry': "Couldn't download the PDF. Check your network and try again.",
+  'shareModal.generation.updateFailedRetry':
+    "Couldn't update the share link. Check your network and try again.",
+  'taskDetail.statusCascade.applyFailedRetry':
+    "Couldn't update the task status. Check your network and try again.",
 };

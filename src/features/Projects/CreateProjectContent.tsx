@@ -161,7 +161,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
         }));
         return;
       }
-      setError(t('operationFailed', { ns: 'common' }));
+      setError(t('create.failedRetry'));
     } finally {
       updateForm({ loading: false });
     }

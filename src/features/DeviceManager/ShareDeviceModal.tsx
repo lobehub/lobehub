@@ -27,7 +27,7 @@ import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import { densityVars } from '@/styles/densityVars';
 
 import { refreshDeviceList } from './const';
-import { getDeviceActionErrorMessage } from './deviceActionError';
+import { type DeviceShareErrorView, getDeviceShareErrorView } from './deviceActionError';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -84,7 +84,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
   const [visibility, setVisibility] = useState<DeviceVisibility>('private');
   const [sharing, setSharing] = useState(false);
   /** Share failure, shown above the footer buttons: the modal stays open with the chosen workspace and scope. */
-  const [shareError, setShareError] = useState('');
+  const [shareError, setShareError] = useState<DeviceShareErrorView>();
   const [step, setStep] = useState<'done' | 'select-target'>('select-target');
   const [completion, setCompletion] = useState<CompletionState>();
 
@@ -167,7 +167,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
     const target = workspaces.find((w) => w.id === effectiveTargetId);
     if (!target) return;
 
-    setShareError('');
+    setShareError(undefined);
     setSharing(true);
     // Lock dismissal so the mutation can't be interrupted mid-flight.
     setCanDismissByClickOutside?.(false);
@@ -200,9 +200,8 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
       setCompletion({ name: target.name, slug: target.slug });
       setStep('done');
     } catch (error) {
-      // Server messages (e.g. PRECONDITION_FAILED when the device dropped
-      // offline mid-flow) are user-facing; known refusals get localized copy.
-      setShareError(`${target.name}: ${getDeviceActionErrorMessage(error)}`);
+      console.error('[ShareDeviceModal] share failed:', error);
+      setShareError(getDeviceShareErrorView(error, target.name));
     } finally {
       setSharing(false);
       setCanDismissByClickOutside?.(true);
@@ -263,7 +262,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 value={effectiveTargetId}
                 onChange={(value) => {
                   setTargetId(value as string);
-                  setShareError('');
+                  setShareError(undefined);
                 }}
               />
             </Flexbox>
@@ -286,7 +285,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
 
       {shareError && (
         <Flexbox paddingBlock={'0 12px'} paddingInline={24}>
-          <InlineErrorText>{shareError}</InlineErrorText>
+          <InlineErrorText detail={shareError.detail}>{shareError.summary}</InlineErrorText>
         </Flexbox>
       )}
 

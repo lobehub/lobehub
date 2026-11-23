@@ -60,7 +60,7 @@ describe('getSaveErrorToast', () => {
 
   it('uses the plain install error outside the OAuth path', () => {
     expect(getSaveErrorToast(trpcError('BAD_REQUEST', 400, 'bad url'), false)).toEqual({
-      titleKey: 'dev.saveError',
+      titleKey: 'dev.saveFailedRetry',
     });
   });
 });

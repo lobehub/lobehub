@@ -42,7 +42,7 @@ const DashboardForm = memo<DashboardFormProps>(({ onSubmit, submitText }) => {
       close();
     } catch (err) {
       console.error('[dashboard] form submit failed', err);
-      setError(t('operationFailed', { ns: 'common' }));
+      setError(t('form.saveFailedRetry'));
     } finally {
       setLoading(false);
     }

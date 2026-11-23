@@ -10,12 +10,12 @@ import {
   Icon,
   ScrollArea,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { densityVars } from '@/styles/densityVars';
 
 import { STATUS_META } from './taskStatusMeta';
@@ -60,28 +60,30 @@ export interface TaskStatusCascadeItem {
 
 /**
  * Apply-and-close flow shared by the modal buttons: on failure the modal stays
- * open with an error toast so the user can retry or cancel explicitly, instead
+ * open with an inline error so the user can retry or cancel explicitly, instead
  * of the rejection being silently discarded.
  */
 export const useCascadeApply = (onApply: (includeSubtasks: boolean) => Promise<void>) => {
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
   const [loadingAction, setLoadingAction] = useState<'all' | 'parent' | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleApply = async (includeSubtasks: boolean) => {
     setLoadingAction(includeSubtasks ? 'all' : 'parent');
+    setError(null);
     try {
       await onApply(includeSubtasks);
       close();
     } catch (error) {
       console.error('[TaskStatusCascadeModal] Failed to apply status change:', error);
-      toast.error(t('taskDetail.statusCascade.applyFailed'));
+      setError(t('taskDetail.statusCascade.applyFailedRetry'));
     } finally {
       setLoadingAction(null);
     }
   };
 
-  return { handleApply, loadingAction };
+  return { error, handleApply, loadingAction };
 };
 
 const TaskStatusCascadeModalContent = ({
@@ -92,7 +94,7 @@ const TaskStatusCascadeModalContent = ({
 }: TaskStatusCascadeModalContentProps) => {
   const { t } = useTranslation('chat');
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const { handleApply, loadingAction } = useCascadeApply(onApply);
+  const { error, handleApply, loadingAction } = useCascadeApply(onApply);
 
   useEffect(() => {
     setCanDismissByClickOutside(!loadingAction);
@@ -150,6 +152,7 @@ const TaskStatusCascadeModalContent = ({
             );
           })}
         </ScrollArea>
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Flexbox>
       <Flexbox horizontal className={styles.actions} gap={8} justify={'space-between'}>
         <Button disabled={!!loadingAction} onClick={handleCancel}>

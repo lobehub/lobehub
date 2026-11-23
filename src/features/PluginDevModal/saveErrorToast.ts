@@ -29,7 +29,7 @@ export const getSaveErrorToast = (error: unknown, isOAuth: boolean): SaveErrorTo
   }
   if (trpcData?.httpStatus === 403) return { titleKey: 'dev.permissionDenied' };
   if (error instanceof ConnectorOAuthError) return { titleKey: `dev.oauthError.${error.reason}` };
-  if (!isOAuth) return { titleKey: 'dev.saveError' };
+  if (!isOAuth) return { titleKey: 'dev.saveFailedRetry' };
 
   return {
     description: trpcData?.code === 'BAD_REQUEST' && reason ? reason : undefined,

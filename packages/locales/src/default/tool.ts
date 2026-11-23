@@ -184,6 +184,8 @@ export default {
   'connector.add.clientSecret': 'OAuth Client Secret (optional)',
   'connector.add.confirm': 'Add',
   'connector.add.editTitle': 'Edit Connector',
+  'connector.add.failedRetry':
+    "Couldn't save the connector. Check the server URL and your network, then try again.",
   'connector.add.name': 'Name',
   'connector.add.namePlaceholder': 'My connector',
   'connector.add.popupBlocked': 'Please allow popups for this site and try again.',

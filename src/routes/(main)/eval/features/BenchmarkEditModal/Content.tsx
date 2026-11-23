@@ -2,9 +2,10 @@
 
 import { Input, TextArea, toast, useModalContext } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useEvalStore } from '@/store/eval';
 
 export interface BenchmarkEditContentProps {
@@ -31,7 +32,11 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
 
   const updateBenchmark = useEvalStore((s) => s.updateBenchmark);
 
+  /** Save failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState('');
+
   const handleFinish = async (values: any) => {
+    setError('');
     onLoadingChange?.(true);
     try {
       await updateBenchmark({
@@ -42,8 +47,9 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       toast.success(t('benchmark.edit.success'));
       close();
       onSuccess?.();
-    } catch {
-      toast.error(t('benchmark.edit.error'));
+    } catch (cause) {
+      console.error('Failed to update eval benchmark:', cause);
+      setError(t('benchmark.edit.failedRetry'));
     } finally {
       onLoadingChange?.(false);
     }
@@ -55,6 +61,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       name: benchmark.name,
     },
     onSubmit: handleFinish,
+    onValuesChange: () => setError(''),
   });
 
   return (
@@ -70,6 +77,7 @@ const BenchmarkEditContent: FC<BenchmarkEditContentProps> = ({
       <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
       </Form.Field>
+      {error && <InlineErrorText>{error}</InlineErrorText>}
     </Form>
   );
 };

@@ -1123,6 +1123,7 @@ export default {
   'dev.preview.mcp.tools_other': '{{count}} tools',
   'dev.preview.title': 'Skill name preview',
   'dev.saveError': 'Install failed, please try again',
+  'dev.saveFailedRetry': "Couldn't save the connector. Check your network and try again.",
   'dev.saveSuccess': 'Settings saved',
   'dev.tabs.manifest': 'Manifest',
   'dev.tabs.meta': 'Meta info',
@@ -1251,6 +1252,8 @@ export default {
   'protocolInstall.marketplace.verified': 'Verified',
   'protocolInstall.messages.connectionTestFailed': 'Connection test failed',
   'protocolInstall.messages.installError': 'Install failed, retry',
+  'protocolInstall.messages.installFailedRetry':
+    "Couldn't install this plugin. Check your network and try again.",
   'protocolInstall.messages.installSuccess': '{{name}} installed. Enable now or configure later.',
   'protocolInstall.messages.manifestError':
     'Failed to fetch Skill info. Check network or retry later.',

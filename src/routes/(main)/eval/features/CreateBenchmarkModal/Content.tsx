@@ -5,6 +5,7 @@ import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
@@ -28,7 +29,11 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
   const [identifierTouched, setIdentifierTouched] = useState(false);
   const createBenchmark = useEvalStore((s) => s.createBenchmark);
 
+  /** Submit failure shown below the form; the modal stays open with the user's input. */
+  const [error, setError] = useState('');
+
   const handleFinish = async (values: any) => {
+    setError('');
     onLoadingChange?.(true);
     try {
       const result = await createBenchmark({
@@ -41,8 +46,9 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
       if (result?.id) {
         navigate(`/eval/bench/${result.id}`);
       }
-    } catch {
-      toast.error(t('benchmark.create.error'));
+    } catch (cause) {
+      console.error('Failed to create eval benchmark:', cause);
+      setError(t('benchmark.create.failedRetry'));
     } finally {
       onLoadingChange?.(false);
     }
@@ -50,6 +56,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
 
   const form = useForm({
     onSubmit: handleFinish,
+    onValuesChange: () => setError(''),
   });
   const nameValue = useWatch(form, 'name');
 
@@ -84,6 +91,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
       <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
       </Form.Field>
+      {error && <InlineErrorText>{error}</InlineErrorText>}
     </Form>
   );
 };

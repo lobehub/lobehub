@@ -8,13 +8,13 @@ import {
   Select,
   Text,
   TextArea,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import BenchmarkStandardFields, {
   type BenchmarkStandard,
   isCompleteStandard,
@@ -50,11 +50,14 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
   const [picked, setPicked] = useState<string[]>([]);
   const [standard, setStandard] = useState<BenchmarkStandard>({ protocol: DEFAULT_PROTOCOL });
   const [saving, setSaving] = useState(false);
+  /** Create failure shown above the buttons; the modal stays open with the user's input. */
+  const [error, setError] = useState('');
 
   const submit = async () => {
     const trimmed = name.trim();
     const { judge, protocol } = standard;
     if (!trimmed || !judge || !isCompleteStandard(standard) || picked.length === 0) return;
+    setError('');
     setSaving(true);
     try {
       const created = (await createBenchmark({
@@ -68,15 +71,16 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
         name: trimmed,
       })) as { data?: { id?: string }; id?: string };
       const id = created?.id ?? created?.data?.id;
-      if (!id) throw new Error(t('lobeBench.benchmark.create.failed'));
+      if (!id) throw new Error('Benchmark was created without an id');
       await moveDatasets(
         datasets.filter((dataset) => picked.includes(dataset.id)),
         id,
       );
       close();
       onCreated?.(id);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('lobeBench.benchmark.create.failed'));
+    } catch (cause) {
+      console.error('Failed to create Lobe Bench benchmark:', cause);
+      setError(t('lobeBench.benchmark.create.failedRetry'));
     } finally {
       setSaving(false);
     }
@@ -91,8 +95,11 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           id={'lobe-bench-benchmark-name'}
           placeholder={t('lobeBench.benchmark.create.name.placeholder')}
           value={name}
-          onChange={(e) => setName(e.target.value)}
           onPressEnter={submit}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError('');
+          }}
         />
       </Flexbox>
       <Flexbox gap={6}>
@@ -102,10 +109,19 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           id={'lobe-bench-benchmark-description'}
           placeholder={t('lobeBench.benchmark.create.description.placeholder')}
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            setError('');
+          }}
         />
       </Flexbox>
-      <BenchmarkStandardFields value={standard} onChange={setStandard} />
+      <BenchmarkStandardFields
+        value={standard}
+        onChange={(next) => {
+          setStandard(next);
+          setError('');
+        }}
+      />
       <Flexbox gap={6}>
         <Text weight={500}>{t('lobeBench.benchmark.create.datasets')}</Text>
         {datasets.length > 0 ? (
@@ -121,7 +137,10 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
                 })}`,
                 value: dataset.id,
               }))}
-              onChange={(value) => setPicked(value as string[])}
+              onChange={(value) => {
+                setPicked(value as string[]);
+                setError('');
+              }}
             />
             <Text fontSize={12} type={'secondary'}>
               {t('lobeBench.benchmark.create.datasets.hint')}
@@ -133,6 +152,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           </Text>
         )}
       </Flexbox>
+      {error && <InlineErrorText>{error}</InlineErrorText>}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
         <Button

@@ -150,7 +150,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
       close();
     } catch (err) {
       console.error('[dashboard] settings save failed', err);
-      setError(t('operationFailed', { ns: 'common' }));
+      setError(t('form.saveFailedRetry'));
     } finally {
       setSaving(false);
     }

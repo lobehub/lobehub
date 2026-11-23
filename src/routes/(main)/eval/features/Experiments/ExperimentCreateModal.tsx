@@ -13,9 +13,10 @@ import {
 } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { t } from 'i18next';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { benchmarkSelectors, useEvalStore } from '@/store/eval';
 import { createFormModal } from '@/utils/createFormModal';
 
@@ -41,11 +42,15 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
 
     useFetchBenchmarks();
 
+    /** Save failure shown below the form; the modal stays open with the user's input. */
+    const [error, setError] = useState('');
+
     const handleSubmit = async (values: {
       benchmarkIds: string[];
       description?: string;
       name: string;
     }) => {
+      setError('');
       onLoadingChange(true);
       try {
         const result = experiment
@@ -55,13 +60,10 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
         toast.success(experiment ? t('experiment.edit.success') : t('experiment.create.title'));
         close();
         onSuccess?.(result.id);
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : experiment
-              ? t('experiment.edit.error')
-              : t('experiment.create.error'),
+      } catch (cause) {
+        console.error('Failed to save eval experiment:', cause);
+        setError(
+          experiment ? t('experiment.edit.failedRetry') : t('experiment.create.failedRetry'),
         );
       } finally {
         onLoadingChange(false);
@@ -77,6 +79,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
           }
         : undefined,
       onSubmit: handleSubmit,
+      onValuesChange: () => setError(''),
     });
 
     return (
@@ -107,6 +110,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
             }))}
           />
         </Form.Field>
+        {error && <InlineErrorText>{error}</InlineErrorText>}
       </Form>
     );
   },

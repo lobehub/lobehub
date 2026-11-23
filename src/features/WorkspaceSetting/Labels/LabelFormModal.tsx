@@ -101,7 +101,7 @@ const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restore
         return;
       }
       console.error('Failed to save label:', error);
-      setSaveError(t('operationFailed', { ns: 'common' }));
+      setSaveError(t('workspaceSetting.labels.form.saveFailedRetry'));
     } finally {
       setLoading(false);
     }

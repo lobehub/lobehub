@@ -10,7 +10,6 @@ import {
   Icon,
   Spin,
   Text,
-  toast,
   useModalContext,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -18,6 +17,7 @@ import { CircleCheck } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -74,6 +74,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
 
   const [step, setStep] = useState<Step>('pick');
   const [search, setSearch] = useState('');
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [target, setTarget] = useState<{ id: string; title: string } | null>(null);
 
   const batchMoveTopicsToAgent = useChatStore((s) => s.batchMoveTopicsToAgent);
@@ -155,6 +156,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
             id: agent.id,
             title: agentDisplayName(agent, t('untitledAgent', { ns: 'chat' })),
           });
+          setMoveError(null);
           setStep('confirm');
         }}
       />
@@ -162,6 +164,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
 
   const handleConfirm = async () => {
     if (!target) return;
+    setMoveError(null);
     setStep('moving');
     // Lock dismissal so the move can't be interrupted mid-flight.
     setCanDismissByClickOutside?.(false);
@@ -171,7 +174,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
       setStep('done');
     } catch (error) {
       console.error('[MoveTopics] move failed:', error);
-      toast.error(t('management.moveModal.error'));
+      setMoveError(t('management.moveModal.moveFailedRetry'));
       setStep('confirm');
     } finally {
       setCanDismissByClickOutside?.(true);
@@ -228,6 +231,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
     return (
       <Flexbox gap={20} padding={24}>
         <Text>{t('management.moveModal.confirmContent', { count, title: target?.title })}</Text>
+        {moveError && <InlineErrorText>{moveError}</InlineErrorText>}
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button onClick={() => setStep('pick')}>{t('management.moveModal.back')}</Button>
           <Button type={'primary'} onClick={handleConfirm}>

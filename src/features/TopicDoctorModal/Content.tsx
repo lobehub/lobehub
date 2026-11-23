@@ -17,6 +17,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import InlineErrorText from '@/components/InlineErrorText';
 import { messageService } from '@/services/message';
 import { useChatStore } from '@/store/chat';
 import { densityVars } from '@/styles/densityVars';
@@ -40,6 +41,7 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
   const refreshMessages = useChatStore((s) => s.refreshMessages);
 
   const [repairing, setRepairing] = useState(false);
+  const [repairError, setRepairError] = useState<string | null>(null);
 
   const { data, error, isLoading, mutate } = useSWR(['topic-doctor', agentId, topicId], () =>
     messageService.diagnoseTopic({ agentId, topicId }),
@@ -97,13 +99,15 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
 
   const handleRepair = async () => {
     setRepairing(true);
+    setRepairError(null);
     try {
       const { restoredMessageIds } = await messageService.repairTopic({ agentId, topicId });
       await refreshMessages({ agentId: agentId ?? undefined, topicId });
       toast.success(t('doctor.repaired', { count: restoredMessageIds.length }));
       close();
-    } catch {
-      toast.error(t('doctor.repairFailed'));
+    } catch (error) {
+      console.error('[TopicDoctor] Failed to repair topic:', error);
+      setRepairError(t('doctor.repairFailedRetry'));
     } finally {
       setRepairing(false);
     }
@@ -138,6 +142,8 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
           </Flexbox>
         ))}
       </Flexbox>
+
+      {repairError && <InlineErrorText>{repairError}</InlineErrorText>}
 
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
