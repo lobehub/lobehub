@@ -1,7 +1,7 @@
 import dns from 'node:dns';
 import net from 'node:net';
 
-import { Agent, buildConnector } from 'undici';
+import { Agent, buildConnector, EnvHttpProxyAgent, getGlobalDispatcher, ProxyAgent } from 'undici';
 
 import type { SSRFOptions } from './policy';
 import { assertAddressAllowed, SSRFBlockedError } from './policy';
@@ -90,6 +90,19 @@ const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'
 /** Node only routes fetch through `HTTP(S)_PROXY` when `NODE_USE_ENV_PROXY=1` */
 const isEnvProxyActive = () =>
   process.env.NODE_USE_ENV_PROXY === '1' && PROXY_ENV_KEYS.some((key) => !!process.env[key]);
+
+/**
+ * Whether the process proxies requests through a global dispatcher installed
+ * with `setGlobalDispatcher` (the dev server installs an `EnvHttpProxyAgent`
+ * when `HTTP(S)_PROXY` is set — see `libs/better-auth/define-config.ts`). A
+ * per-request `dispatcher` would silently bypass that proxy and break
+ * connectivity for deployments that need it to reach the outside, so those
+ * requests take the application-layer path instead — same as env-proxy mode.
+ */
+const globalDispatcherIsProxy = () => {
+  const dispatcher = getGlobalDispatcher();
+  return dispatcher instanceof ProxyAgent || dispatcher instanceof EnvHttpProxyAgent;
+};
 
 const resolveRequestUrl = (input: RequestInfo | URL) =>
   new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -213,7 +226,9 @@ export const createSsrfSafeFetch = (
   const dispatcher = createSsrfSafeDispatcher(policy);
 
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (isEnvProxyActive()) return fetchThroughEnvProxy(input, init, policy, getBaseFetch());
+    if (isEnvProxyActive() || globalDispatcherIsProxy()) {
+      return fetchThroughEnvProxy(input, init, policy, getBaseFetch());
+    }
 
     return getBaseFetch()(input, { ...init, dispatcher } as RequestInit);
   }) as typeof fetch;

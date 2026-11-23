@@ -323,3 +323,58 @@ describe('createSsrfSafeFetch with an environment proxy (NODE_USE_ENV_PROXY=1)',
     });
   });
 });
+
+describe('createSsrfSafeFetch with an installed global proxy dispatcher', () => {
+  // The dev server installs EnvHttpProxyAgent via setGlobalDispatcher when
+  // HTTP(S)_PROXY is set, WITHOUT NODE_USE_ENV_PROXY. A per-request dispatcher
+  // would bypass that proxy entirely.
+  let proxyHits = 0;
+  let proxy: http.Server;
+
+  beforeAll(async () => {
+    proxy = http.createServer((_req, res) => {
+      res.writeHead(502).end();
+    });
+    // undici's proxy agents CONNECT-tunnel everything; answer the tunnel and
+    // serve the wrapped request ourselves, proving the request took the proxy.
+    proxy.on('connect', (_req, sock) => {
+      proxyHits++;
+      sock.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      sock.once('data', () => {
+        sock.end(
+          'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 16\r\n\r\n{"proxied":true}',
+        );
+      });
+    });
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  });
+
+  afterEach(() => {
+    proxyHits = 0;
+  });
+
+  it('routes through the global proxy dispatcher instead of bypassing it', async () => {
+    const { EnvHttpProxyAgent, getGlobalDispatcher, setGlobalDispatcher } = await import('undici');
+    const previous = getGlobalDispatcher();
+    const proxyUrl = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
+    // `noProxy` overrides any NO_PROXY inherited from the test environment
+    setGlobalDispatcher(
+      new EnvHttpProxyAgent({ httpProxy: proxyUrl, httpsProxy: proxyUrl, noProxy: '' }),
+    );
+
+    try {
+      const res = await createSsrfSafeFetch({ allowIPAddressList: ['127.0.0.1'] })(`${origin}/ok`);
+
+      expect(await res.json()).toEqual({ proxied: true });
+      expect(proxyHits).toBe(1);
+      // the request never reached the target directly
+      expect(hits).toHaveLength(0);
+    } finally {
+      setGlobalDispatcher(previous);
+    }
+  });
+});

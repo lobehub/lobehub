@@ -5,6 +5,9 @@ import { AgentRuntimeError } from '@lobechat/model-runtime';
 import type { SSRFBlockedError, SSRFOptions } from '@lobechat/ssrf-safe-fetch';
 import { createSsrfSafeFetch, findSSRFBlockedError } from '@lobechat/ssrf-safe-fetch';
 import { AgentRuntimeErrorType } from '@lobechat/types';
+import debug from 'debug';
+
+const log = debug('model-runtime:user-endpoint-guard');
 
 /**
  * SSRF guard for model requests sent to user-supplied endpoints (a provider
@@ -105,6 +108,7 @@ const installScopedFetch = () => {
       const blocked = findSSRFBlockedError(error);
       if (!blocked) throw error;
 
+      log('blocked request to %s: %s', hostname, blocked.message);
       scope.blocked = blocked;
       return createBlockedResponse(blocked);
     });
@@ -206,16 +210,4 @@ export const createUserEndpointGuardedRuntime = <T extends object>(params: {
         runInScope(provider, { fetch: guardedFetch, hosts }, () => value.apply(target, args));
     },
   });
-};
-
-/**
- * A standalone SSRF-safe fetch for SDK clients built outside ModelRuntime,
- * e.g. `new OpenAI({ baseURL: userEndpoint, fetch })`. Returns `undefined`
- * when no guard applies so the SDK keeps its default fetch.
- */
-export const getUserEndpointFetch = (endpoint: string | undefined) => {
-  const policy = resolveUserEndpointSsrfPolicy();
-  if (policy.allowPrivateIPAddress || !getEndpointHostname(endpoint)) return;
-
-  return createSsrfSafeFetch(policy);
 };
