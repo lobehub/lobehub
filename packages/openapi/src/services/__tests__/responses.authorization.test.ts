@@ -6,18 +6,22 @@ import { ResponsesService } from '../responses.service';
 const {
   assertAgentMock,
   assertConversationMock,
+  assertParkedAgentMock,
   execAgentMock,
   executeResponseRunMock,
   findTopicMock,
   permissionMock,
+  resolveParkedCallerRunMock,
   resumeParkedClientToolsMock,
 } = vi.hoisted(() => ({
   assertAgentMock: vi.fn(),
   assertConversationMock: vi.fn(),
+  assertParkedAgentMock: vi.fn(),
   execAgentMock: vi.fn(),
   executeResponseRunMock: vi.fn(),
   findTopicMock: vi.fn(),
   permissionMock: vi.fn(),
+  resolveParkedCallerRunMock: vi.fn(),
   resumeParkedClientToolsMock: vi.fn(),
 }));
 
@@ -49,7 +53,9 @@ vi.mock('../client-tool-resume.responses', async (importOriginal) => {
   const actual = await importOriginal<typeof ResumeModule>();
   return {
     ...actual,
+    assertCanResumeParkedRun: assertParkedAgentMock,
     executeResponseRun: executeResponseRunMock,
+    resolveParkedCallerRun: resolveParkedCallerRunMock,
     resumeParkedClientTools: resumeParkedClientToolsMock,
   };
 });
@@ -93,6 +99,8 @@ describe('ResponsesService.run authorization', () => {
     assertAgentMock.mockResolvedValue(undefined);
     assertConversationMock.mockResolvedValue(undefined);
     findTopicMock.mockResolvedValue({ id: 'tpc_1', userId: 'user_2' });
+    resolveParkedCallerRunMock.mockResolvedValue(undefined);
+    assertParkedAgentMock.mockResolvedValue(undefined);
     resumeParkedClientToolsMock.mockResolvedValue(undefined);
     execAgentMock.mockResolvedValue({ operationId: 'op_1', success: true, topicId: 'tpc_1' });
     executeResponseRunMock.mockResolvedValue({ messages: [], status: 'done', stepCount: 1 });
@@ -180,6 +188,40 @@ describe('ResponsesService.run authorization', () => {
       } as any),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(resumeParkedClientToolsMock).not.toHaveBeenCalled();
+  });
+
+  // Regression (security review): the parked run resumes with its operation's
+  // agent, which can differ from `model` — preflight must deny that agent in
+  // read-only checks so the refusal stays an HTTP error, not a failed body.
+  it('rejects a resume whose parked run agent the caller may not use, before resuming', async () => {
+    resolveParkedCallerRunMock.mockResolvedValue({ operationId: 'op_parked' });
+    assertParkedAgentMock.mockRejectedValue(forbidden());
+    resumeParkedClientToolsMock.mockResolvedValue({ operationId: 'op_parked' });
+
+    await expect(
+      buildService().createResponse({
+        input: [{ call_id: 'call_1', output: 'sunny', type: 'function_call_output' }],
+        model: 'agt_1',
+        previous_response_id: 'tpc_1',
+      } as any),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(resumeParkedClientToolsMock).not.toHaveBeenCalled();
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  // Regression (security review): a guard refusal thrown inside the resumed
+  // run (e.g. the parked check racing preflight) must propagate to the
+  // controller's HTTP mapping, not collapse into a 200 `server_error`.
+  it('propagates a refusal thrown mid-resume instead of returning a failed response', async () => {
+    resumeParkedClientToolsMock.mockRejectedValue(forbidden());
+
+    await expect(
+      buildService().createResponse({
+        input: [{ call_id: 'call_1', output: 'sunny', type: 'function_call_output' }],
+        model: 'agt_1',
+        previous_response_id: 'tpc_1',
+      } as any),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('passes the authorized request through to execAgent', async () => {

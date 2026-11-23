@@ -25,10 +25,12 @@ import type {
   Tool,
 } from '../types/responses.type';
 import {
+  assertCanResumeParkedRun,
   ClientToolResumeError,
   executeResponseRun,
   parkedOnToolsReason,
   pendingFunctionCallItems,
+  resolveParkedCallerRun,
   resumeParkedClientTools,
 } from './client-tool-resume.responses';
 
@@ -311,6 +313,31 @@ export class ResponsesService extends BaseService {
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
+
+    // A request carrying tool outputs resumes the run parked on this topic,
+    // which executes the parked operation's agent — not `params.model`. Check
+    // that agent here too, so its denial is an HTTP refusal instead of a
+    // `status: "failed"` body or an SSE event on an already-opened stream.
+    if (previousTopicId && this.extractFunctionCallOutputs(params.input).length > 0) {
+      const parked = await resolveParkedCallerRun({
+        agentRuntimeService: new AgentRuntimeService(this.db, this.userId, {
+          queueService: null,
+          workspaceId: this.workspaceId,
+        }),
+        db: this.db,
+        topicId: previousTopicId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (parked) {
+        await assertCanResumeParkedRun({
+          db: this.db,
+          run: parked,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      }
+    }
   }
 
   /**
@@ -440,6 +467,11 @@ export class ResponsesService extends BaseService {
         usage,
       });
     } catch (error) {
+      // Shared-service refusals (resource guards — including the parked-run
+      // check inside a resume that raced the preflight) are HTTP errors, not
+      // `status: "failed"` response objects.
+      if (error instanceof Error && error.name === 'TRPCError') throw error;
+
       const errorResponseId = this.generateResponseId();
       this.log('error', 'Response creation failed', { error, responseId: errorResponseId });
 
