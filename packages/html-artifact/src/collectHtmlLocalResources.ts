@@ -1,5 +1,5 @@
 import { getFileExtension } from './fileExtension';
-import { findAttribute, findOpeningTag, findTagEnd } from './htmlTagScanner';
+import { findAttribute, findOpeningTag, walkHtmlTags } from './htmlTagScanner';
 import { parentDirectory, resolveLocalResourceHref } from './workspaceHtmlPath';
 
 const ALLOWED_ASSET_EXTENSIONS = new Set([
@@ -276,22 +276,6 @@ export const collectCssResourceHrefs = (css: string): string[] => {
   return hrefs;
 };
 
-const collectInlineStyleHrefs = (html: string): string[] => {
-  const hrefs: string[] = [];
-  const styleTagPattern = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
-  const styleAttrPattern = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
-
-  for (const match of html.matchAll(styleTagPattern)) {
-    hrefs.push(...collectCssResourceHrefs(match[1] ?? ''));
-  }
-
-  for (const match of html.matchAll(styleAttrPattern)) {
-    hrefs.push(...collectCssResourceHrefs(match[1] ?? match[2] ?? ''));
-  }
-
-  return hrefs;
-};
-
 const resolveHtmlResourceBasePath = (
   html: string,
   htmlFilePath: string,
@@ -316,25 +300,6 @@ const resolveHtmlResourceBasePath = (
   const extension = getFileExtension(resolved.absolutePath);
   const directory = extension ? parentDirectory(resolved.absolutePath) : resolved.absolutePath;
   return { remote: false, sourcePath: `${directory}/index.html` };
-};
-
-const walkHtmlTags = (html: string, onTag: (tagName: string, tagText: string) => void) => {
-  const lower = html.toLowerCase();
-  let index = 0;
-
-  while (index < html.length) {
-    const start = lower.indexOf('<', index);
-    if (start === -1) return;
-
-    let nameEnd = start + 1;
-    while (nameEnd < html.length && /[a-z0-9-]/i.test(html[nameEnd])) nameEnd += 1;
-    const tagName = lower.slice(start + 1, nameEnd);
-    const end = findTagEnd(html, start);
-    if (end === -1) return;
-
-    onTag(tagName, html.slice(start, end));
-    index = end;
-  }
 };
 
 export const collectLocalResourceRefs = ({
@@ -393,12 +358,20 @@ export const collectLocalResourceRefs = ({
     pushRef(result, seenRefs, resolved, allowExternalReads);
   };
 
-  walkHtmlTags(content, (tagName, tagText) => {
-    if (!HTML_RESOURCE_TAGS.has(tagName)) return;
-    for (const href of collectTagAttributeHrefs(tagText)) pushHtmlRef(href);
-  });
+  walkHtmlTags(content, ({ body, tagName, text }) => {
+    if (HTML_RESOURCE_TAGS.has(tagName)) {
+      for (const href of collectTagAttributeHrefs(text)) pushHtmlRef(href);
+    }
 
-  for (const href of collectInlineStyleHrefs(content)) pushHtmlRef(href);
+    const inlineStyle = findAttribute(text, 'style')?.value;
+    if (inlineStyle) {
+      for (const href of collectCssResourceHrefs(inlineStyle)) pushHtmlRef(href);
+    }
+
+    if (tagName === 'style' && body) {
+      for (const href of collectCssResourceHrefs(body)) pushHtmlRef(href);
+    }
+  });
 
   return result;
 };
