@@ -137,6 +137,19 @@ describe('AgentOperationModel recovery lookups', () => {
       expect((await model().findById('op-transition'))?.status).toBe('error');
     });
 
+    // Two terminal callbacks for one run can overlap; only one of them may read the live status.
+    it('reports the move out of running to only one of two overlapping writes', async () => {
+      await model().recordStart({ operationId: 'op-overlap' });
+
+      const writes = await Promise.all(
+        [model(), model()].map((m) =>
+          m.recordCompletion('op-overlap', { completionReason: 'error', status: 'error' }),
+        ),
+      );
+
+      expect(writes.map((w) => w?.previousStatus).sort()).toEqual(['error', 'running']);
+    });
+
     it('writes nothing over a different terminal status or another owner’s row', async () => {
       await model().recordStart({ operationId: 'op-settled' });
       await model().recordCompletion('op-settled', { completionReason: 'done', status: 'done' });

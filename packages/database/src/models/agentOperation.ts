@@ -299,33 +299,42 @@ export class AgentOperationModel {
     if (params.interruption !== undefined) updates.interruption = params.interruption;
     if (params.traceS3Key !== undefined) updates.traceS3Key = params.traceS3Key;
 
-    const [row] = await this.db
-      .update(agentOperations)
-      .set(updates)
-      .where(
-        and(
-          eq(agentOperations.id, operationId),
-          or(
-            inArray(agentOperations.status, [
-              'running',
-              'waiting_for_human',
-              'waiting_for_async_tool',
-              'waiting_for_client',
-            ]),
-            eq(agentOperations.status, params.status),
-          ),
-          this.ownership(),
-        ),
-      )
-      .returning({
-        id: agentOperations.id,
-        parentOperationId: agentOperations.parentOperationId,
-        // A sub-select in RETURNING reads the statement's snapshot, which predates this UPDATE.
-        previousStatus: sql<string>`(SELECT prev.status FROM agent_operations prev WHERE prev.id = ${operationId})`,
-        trigger: agentOperations.trigger,
-      });
+    return this.db.transaction(async (tx) => {
+      // Lock the row before reading its status: two overlapping terminal writes would otherwise
+      // both read the status from before either committed, and both look like the first one.
+      const [previous] = await tx
+        .select({ status: agentOperations.status })
+        .from(agentOperations)
+        .where(and(eq(agentOperations.id, operationId), this.ownership()))
+        .for('update');
+      if (!previous) return undefined;
 
-    return row;
+      const [row] = await tx
+        .update(agentOperations)
+        .set(updates)
+        .where(
+          and(
+            eq(agentOperations.id, operationId),
+            or(
+              inArray(agentOperations.status, [
+                'running',
+                'waiting_for_human',
+                'waiting_for_async_tool',
+                'waiting_for_client',
+              ]),
+              eq(agentOperations.status, params.status),
+            ),
+            this.ownership(),
+          ),
+        )
+        .returning({
+          id: agentOperations.id,
+          parentOperationId: agentOperations.parentOperationId,
+          trigger: agentOperations.trigger,
+        });
+
+      return row && { ...row, previousStatus: previous.status };
+    });
   }
 
   /**
