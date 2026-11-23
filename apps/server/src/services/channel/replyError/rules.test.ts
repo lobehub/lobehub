@@ -164,7 +164,9 @@ describe('rule-based reply error cards', () => {
     );
     expect(card.kind).toBe('share_spend_limit');
     expect(card.actions).toEqual([]);
-    expect(card.summary).toBe('Coder 已用完这个分享的用量额度，这次没有回复。');
+    expect(card.summary).toBe(
+      'Coder 已用完这个分享的用量额度，这次没有回复。需要创建者提高额度才能继续。',
+    );
     expect(card.errorType).toBe('ShareSpendLimitExceeded');
   });
 
@@ -180,7 +182,7 @@ describe('rule-based reply error cards', () => {
     expect(card.kind).toBe('share_message_limit');
     expect(card.actions).toEqual([]);
     expect(card.summary).toBe(
-      'Messages to Coder reached the limit its creator set, so it did not reply.',
+      'Messages to Coder reached the limit its creator set, so it did not reply. Its creator needs to raise the limit.',
     );
   });
 
