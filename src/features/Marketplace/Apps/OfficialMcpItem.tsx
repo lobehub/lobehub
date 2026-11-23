@@ -6,10 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
-import SkillListRow, {
-  type CatalogConnectRow,
-  ConnectedStatus,
-} from '@/features/Settings/skill/features/SkillListRow';
+import { ConnectedStatus } from '@/features/Settings/skill/features/SkillListRow';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
@@ -17,15 +14,18 @@ import { ConnectorOAuthError, openConnectorOAuthPopup } from '@/utils/connectorO
 
 import { useCatalogDetailNavigate } from '../Catalog/useCatalogDetailNavigate';
 import { buildInstalledDetailPath } from '../paths';
+import AppRow from './AppRow';
+import type { MarketplaceApp } from './catalog';
 import { connectOfficialMcp } from './connectOfficialMcp';
 
 interface OfficialMcpItemProps {
-  catalogRow: CatalogConnectRow;
+  app: MarketplaceApp;
   server: OfficialMcpServerType;
+  summary: string;
 }
 
 /** A catalog row for a vendor's official MCP server: connect in place, then manage it as a connector. */
-const OfficialMcpItem = memo<OfficialMcpItemProps>(({ catalogRow, server }) => {
+const OfficialMcpItem = memo<OfficialMcpItemProps>(({ app, server, summary }) => {
   const { t } = useTranslation('discover');
   const { t: ts } = useTranslation('setting');
   const navigate = useCatalogDetailNavigate();
@@ -63,9 +63,10 @@ const OfficialMcpItem = memo<OfficialMcpItemProps>(({ catalogRow, server }) => {
   };
 
   return (
-    <SkillListRow
-      {...catalogRow}
-      extra={
+    <AppRow
+      app={app}
+      summary={summary}
+      action={
         connected ? (
           <>
             <ConnectedStatus label={ts('tools.composio.connected')} />
@@ -81,7 +82,7 @@ const OfficialMcpItem = memo<OfficialMcpItemProps>(({ catalogRow, server }) => {
           />
         )
       }
-      onClick={connected ? openDetail : () => void handleConnect()}
+      onOpen={connected ? openDetail : () => void handleConnect()}
     />
   );
 });

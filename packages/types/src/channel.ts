@@ -3,6 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
+import type { ChannelConnectorRequest, ChannelDeviceGrantCard } from './channelMessageCard';
 import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
@@ -938,63 +939,6 @@ export interface ChannelDeviceGrantItem {
   workingDirectory: string;
 }
 
-/**
- * `metadata.deviceGrant` of the message an Agent posts in its direct conversation with a device
- * owner when someone asks to run it on their private device in a Channel. Only `grantId` is
- * authoritative; the rest is the server's snapshot at request time, so the card reads without
- * the Channel.
- */
-export interface ChannelDeviceGrantRequest {
-  agentName: string | null;
-  channelId: string;
-  channelTitle: string;
-  deviceId: string;
-  deviceName: string | null;
-  grantId: string;
-  requesterName: string | null;
-  requesterUserId: string | null;
-  workingDirectory: string;
-}
-
-/** A request card as its reader sees it: `expired` once the grant was replaced or removed. */
-export type ChannelDeviceGrantCard = ChannelDeviceGrantRequest & {
-  status: ChannelMemberGrantStatus | 'expired';
-};
-
-/** `metadata.deviceGrant` of a device request card, or undefined for anything else. */
-export const channelMessageDeviceGrant = (
-  metadata: ChannelMessageMetadata | null | undefined,
-): ChannelDeviceGrantRequest | undefined => {
-  const request = metadata?.deviceGrant as Partial<ChannelDeviceGrantRequest> | undefined;
-  return typeof request?.grantId === 'string' &&
-    typeof request.channelId === 'string' &&
-    typeof request.deviceId === 'string' &&
-    typeof request.workingDirectory === 'string'
-    ? {
-        agentName: request.agentName ?? null,
-        channelId: request.channelId,
-        channelTitle: request.channelTitle ?? '',
-        deviceId: request.deviceId,
-        deviceName: request.deviceName ?? null,
-        grantId: request.grantId,
-        requesterName: request.requesterName ?? null,
-        requesterUserId: request.requesterUserId ?? null,
-        workingDirectory: request.workingDirectory,
-      }
-    : undefined;
-};
-
-/**
- * The stored text of a request card, for every reader that does not render the card: list
- * previews, notifications and the Agent itself. Clients that render cards localize their own.
- */
-export const deviceGrantRequestText = (request: ChannelDeviceGrantRequest) =>
-  `[Device request] ${request.requesterName || 'A member'} asks to run ${
-    request.agentName || 'this Agent'
-  } in "${request.channelTitle}" on ${request.deviceName || request.deviceId} (${
-    request.workingDirectory
-  }).`;
-
 export interface ChannelPublicMember {
   actorType: ChannelMemberActorType;
   agentId: string | null;
@@ -1027,6 +971,8 @@ export interface ChannelPublicMessage {
   };
   /** A person or an Agent shared as a contact card; the content holds its text fallback. */
   card?: ContactCard | null;
+  /** An Agent asking the reader to connect a connector it needs; see {@link ChannelConnectorRequest}. */
+  connector?: ChannelConnectorRequest | null;
   content: string;
   createdAt: Date;
   /**

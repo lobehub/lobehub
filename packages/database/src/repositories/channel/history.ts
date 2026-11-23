@@ -1,5 +1,6 @@
 import type {
   ChannelAgentExchange,
+  ChannelConnectorRequest,
   ChannelContextMessage,
   ChannelExecutionConfig,
   ChannelHistoryMessage,
@@ -19,6 +20,7 @@ import {
   agentDisplayName,
   channelAgentExchange,
   channelMessageVia,
+  connectorRequestText,
   RequestTrigger,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
@@ -39,10 +41,10 @@ import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
-import { activeMembers, findThread } from './delivery';
+import { activeMembers, appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
-import { withChannelLock } from './transaction';
+import { audit, withChannelLock } from './transaction';
 import { OPEN_JOB_STATUSES } from './writer';
 
 const EXCERPT_LENGTH = 2000;
@@ -585,6 +587,42 @@ export class ChannelHistoryRepository {
       };
     });
   };
+
+  /**
+   * Posts the live run's card asking its requester to connect a connector, in the conversation
+   * the run is in (its Thread, or the main timeline). Stored like a reply that answers no request,
+   * so it wakes no one and the run's own reply still lands after it. `requestKey` makes a retried
+   * call return the card it already posted. A shared Agent runs as its owner, whose connectors the
+   * visitor cannot connect, so it cannot ask.
+   */
+  postConnectorRequest = async (
+    operationId: string,
+    request: Omit<ChannelConnectorRequest, 'agentId'>,
+    requestKey: string,
+  ) =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [existing] = await tx
+        .select()
+        .from(channelMessages)
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.requestKey, requestKey)),
+        )
+        .limit(1);
+      if (existing) return existing;
+
+      const connector: ChannelConnectorRequest = { ...request, agentId: manifest.self.agentId };
+      const message = await appendMessage(tx, {
+        agentId: manifest.self.agentId,
+        channelId,
+        content: connectorRequestText(connector),
+        metadata: { connector },
+        requestKey,
+        routingStatus: 'reply',
+        threadId: manifest.threadId,
+      });
+      await audit(tx, channelId, 'agent_posted', manifest.self.memberId, { messageId: message.id });
+      return message;
+    });
 
   readMessages = async (
     operationId: string,

@@ -25,7 +25,7 @@ export interface AgentProfileTabOption {
 }
 
 export type AgentProfileTabGroupKey =
-  'advanced' | 'general' | 'identity' | 'profile' | 'setup' | 'shape';
+  'advanced' | 'general' | 'growth' | 'identity' | 'profile' | 'setup' | 'shape';
 
 export interface AgentProfileTabGroup {
   key: AgentProfileTabGroupKey;
@@ -152,9 +152,10 @@ const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfi
   { key: 'profile', tabs: ['profile'] },
   { key: 'shape', tabs: ['instruction', 'knowledge', 'opening'] },
   { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
-  { key: 'identity', tabs: ['mail', 'channel', 'automations', 'webhook'] },
-  { key: 'advanced', tabs: ['graph'] },
-  { key: 'general', tabs: ['self-evolving', 'statistics', 'permission', 'share'] },
+  { key: 'identity', tabs: ['mail', 'channel'] },
+  { key: 'advanced', tabs: ['automations', 'webhook', 'graph'] },
+  { key: 'growth', tabs: ['self-evolving', 'statistics'] },
+  { key: 'general', tabs: ['permission', 'share'] },
 ];
 
 /** Sidebar sections for the visible tabs; a section with nothing to open is left out. */
