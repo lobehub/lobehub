@@ -118,13 +118,30 @@ describe('buildWslSpawnPlan', () => {
       'Ubuntu',
       '--exec',
       'env',
-      'PATH=/home/me/.nvm/versions/node/v22/bin:/usr/bin',
+      // The binary's own folder first, ahead of the shell PATH.
+      'PATH=/home/me/.local/bin:/home/me/.nvm/versions/node/v22/bin:/usr/bin',
       '/home/me/.local/bin/agent',
       'acp',
       '--mcp-config',
       '/mnt/c/Temp/mcp.json',
       '--workspace=/mnt/c/repo',
     ]);
+  });
+
+  it("puts an nvm CLI's folder on PATH once, and falls back to a default PATH", () => {
+    const nvmCodex = { distro: 'Ubuntu', linuxPath: '/home/me/.nvm/versions/node/v22/bin/codex' };
+
+    expect(buildWslSpawnPlan(nvmCodex, [], undefined, '/usr/bin').args.slice(3, 5)).toEqual([
+      'env',
+      'PATH=/home/me/.nvm/versions/node/v22/bin:/usr/bin',
+    ]);
+    expect(
+      buildWslSpawnPlan(nvmCodex, [], undefined, '/home/me/.nvm/versions/node/v22/bin:/usr/bin')
+        .args[4],
+    ).toBe('PATH=/home/me/.nvm/versions/node/v22/bin:/usr/bin');
+    expect(buildWslSpawnPlan(nvmCodex, [], undefined, undefined).args[4]).toBe(
+      'PATH=/home/me/.nvm/versions/node/v22/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+    );
   });
 
   it('forwards the variables the spawn site set through WSLENV, not argv', () => {
@@ -162,8 +179,25 @@ describe('probe output', () => {
 
     expect(probe.pathEnv).toBe('/home/me/.local/bin:/usr/bin');
     expect([...probe.commands]).toEqual([
-      ['agent', '/home/me/.local/bin/agent'],
-      ['dsh', '/home/me/.nvm/versions/node/v22/bin/dsh'],
+      ['agent', ['/home/me/.local/bin/agent']],
+      ['dsh', ['/home/me/.nvm/versions/node/v22/bin/dsh']],
+    ]);
+  });
+
+  it("keeps every location of a command in order, without Windows' own shims", () => {
+    const probe = parseWslProbeOutput(
+      probeOutput([
+        // WSL appends Windows' PATH: Windows npm's sh shim isn't a Linux CLI.
+        '__LOBEHUB_WSL_CMD__=codex=/mnt/c/Users/me/AppData/Roaming/npm/codex',
+        '__LOBEHUB_WSL_CMD__=codex=/home/me/.nvm/versions/node/v22.3.0/bin/codex',
+        '__LOBEHUB_WSL_CMD__=codex=/home/me/.nvm/versions/node/v22.3.0/bin/codex',
+        '__LOBEHUB_WSL_CMD__=codex=/home/me/.nvm/versions/node/v18.20.0/bin/codex',
+      ]),
+    );
+
+    expect(probe.commands.get('codex')).toEqual([
+      '/home/me/.nvm/versions/node/v22.3.0/bin/codex',
+      '/home/me/.nvm/versions/node/v18.20.0/bin/codex',
     ]);
   });
 
@@ -205,6 +239,9 @@ describe('findWslCommandCandidates', () => {
     ]);
     expect(probe.args).toEqual(expect.arrayContaining(['agent', 'dsh', 'cursor-agent']));
     expect(probe.input).toContain('-ilc');
+    // A plain login shell and the install folders back the interactive shell up.
+    expect(probe.input).toContain('sh -lc');
+    expect(probe.input).toContain('/versions/node');
     // One probe per distro answers every command and the spawn-time PATH.
     await findWslCommandCandidates('dsh');
     await expect(getWslPathEnv('Ubuntu')).resolves.toBe('/home/me/bin:/usr/bin');
@@ -220,6 +257,41 @@ describe('findWslCommandCandidates', () => {
     spawnMock.mockReset();
     await expect(findWslCommandCandidates('agent')).resolves.toEqual([]);
     expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('returns every location of the command, so a broken first one has a fallback', async () => {
+    fakeWsl((args) =>
+      args[0] === '--list'
+        ? { stdout: 'Ubuntu\n' }
+        : {
+            stdout: probeOutput([
+              '__LOBEHUB_WSL_CMD__=codex=/usr/local/bin/codex',
+              '__LOBEHUB_WSL_CMD__=codex=/home/me/.nvm/versions/node/v22.3.0/bin/codex',
+            ]),
+          },
+    );
+
+    await expect(findWslCommandCandidates('codex')).resolves.toEqual([
+      'wsl://Ubuntu/usr/local/bin/codex',
+      'wsl://Ubuntu/home/me/.nvm/versions/node/v22.3.0/bin/codex',
+    ]);
+  });
+
+  it('asks for the distro list again after wsl.exe failed to answer it', async () => {
+    let listed = 0;
+    fakeWsl((args) => {
+      if (args[0] === '--list') {
+        listed += 1;
+        // WSL's service still starting after a reboot.
+        return listed === 1 ? { code: 1 } : { stdout: 'Ubuntu\n' };
+      }
+      return { stdout: probeOutput(['__LOBEHUB_WSL_CMD__=agent=/usr/local/bin/agent']) };
+    });
+
+    await expect(findWslCommandCandidates('agent')).resolves.toEqual([]);
+    await expect(findWslCommandCandidates('agent')).resolves.toEqual([
+      'wsl://Ubuntu/usr/local/bin/agent',
+    ]);
   });
 
   it('retries a distro whose probe failed instead of pinning the failure', async () => {
