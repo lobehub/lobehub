@@ -20,6 +20,7 @@ import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { isSharedLimitFailure, toAsyncTaskErrorType } from '@/server/services/fileParse/failure';
+import { holdFileTaskLease } from '@/server/services/fileTaskAdmission';
 import { resolveFileEmbeddingModel } from '@/server/services/knowledgeBase/fileEmbeddingModel';
 import { type IAsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
@@ -47,6 +48,13 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
     },
   });
 });
+
+/** Holds the slot a task was admitted with until its route finishes, on every exit path. */
+const admittedFileProcedure = fileProcedure.use(async ({ getRawInput, next }) =>
+  holdFileTaskLease((await getRawInput()) as { admissionScope?: string; taskId?: string }, () =>
+    next(),
+  ),
+);
 
 /**
  * Parsing and splitting run on the file-parse worker thread (one at a time per process), but every
@@ -109,10 +117,11 @@ const resolveWorkspaceIdFromFile = async (
 };
 
 export const fileRouter = router({
-  embeddingChunks: fileProcedure
+  embeddingChunks: admittedFileProcedure
     .use(checkEmbeddingUsage)
     .input(
       z.object({
+        admissionScope: z.string().optional(),
         fileId: z.string(),
         taskId: z.string(),
         workspaceId: z.string().optional(),
@@ -271,9 +280,10 @@ export const fileRouter = router({
       }
     }),
 
-  parseFileToChunks: fileProcedure
+  parseFileToChunks: admittedFileProcedure
     .input(
       z.object({
+        admissionScope: z.string().optional(),
         fileId: z.string(),
         taskId: z.string(),
         workspaceId: z.string().optional(),
@@ -480,7 +490,11 @@ export const fileRouter = router({
               // It is network-bound and can run long: free the parse slot first, so it never
               // holds back the files still waiting to be parsed.
               slot.release();
-              await chunkService.asyncEmbeddingFileChunks(input.fileId);
+              if (input.admissionScope) {
+                await chunkService.asyncEmbeddingFileChunks(input.fileId, { inheritedSlot: true });
+              } else {
+                await chunkService.asyncEmbeddingFileChunks(input.fileId);
+              }
             }
 
             return { success: true };

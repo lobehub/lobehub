@@ -7,6 +7,13 @@ import { getChunkingLoaderType } from '@/libs/document-loaders/loaderType';
 import { type ChunkContentParams } from '@/server/modules/ContentChunk';
 import { ContentChunk } from '@/server/modules/ContentChunk';
 import {
+  admitFileTask,
+  type FileTaskRef,
+  prepareFileTaskTrigger,
+  releaseFileTaskAdmission,
+  triggerFileTask,
+} from '@/server/services/fileTaskAdmission';
+import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
@@ -34,7 +41,11 @@ export class ChunkService {
     return this.chunkClient.chunkContent(params);
   }
 
-  async asyncEmbeddingFileChunks(fileId: string) {
+  /**
+   * @param options.inheritedSlot the caller is the parse task of this file and keeps holding its
+   *   slot while embedding runs, so one file counts once and can never wait on itself
+   */
+  async asyncEmbeddingFileChunks(fileId: string, options?: { inheritedSlot?: boolean }) {
     const result = await this.fileModel.findById(fileId);
 
     if (!result) return;
@@ -47,22 +58,27 @@ export class ChunkService {
 
     await this.fileModel.update(fileId, { embeddingTaskId: asyncTaskId });
 
-    // Async router will read keyVaults from DB, no need to pass jwtPayload.
-    // Kept dynamic on purpose: the async router imports this chunk service, so a
-    // static import here would form a real module cycle that `lint:circular`
-    // (madge) rejects. Call-time import breaks the static edge.
-    const { createAsyncCaller } = await import('@/server/routers/async');
-    const asyncCaller = await createAsyncCaller({ userId: this.userId });
+    const task: FileTaskRef = {
+      fileId,
+      kind: 'embedding',
+      taskId: asyncTaskId,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    };
+    let admissionScope: string | undefined;
 
     // trigger embedding task asynchronously
     try {
-      await asyncCaller.file.embeddingChunks({
-        fileId,
-        taskId: asyncTaskId,
-        workspaceId: this.workspaceId,
-      });
+      if (!options?.inheritedSlot) {
+        const admission = await admitFileTask(task, this.asyncTaskModel);
+        if (admission.queued) return asyncTaskId;
+        admissionScope = admission.admissionScope;
+      }
+
+      await triggerFileTask({ ...task, admissionScope });
     } catch (e) {
       console.error('[embeddingFileChunks] error:', e);
+      await releaseFileTaskAdmission(admissionScope, asyncTaskId);
 
       // The async procedure ran and rejected the task itself (for example, a business
       // middleware recorded that the vector quota is full). Keep that error: the generic
@@ -118,27 +134,41 @@ export class ChunkService {
       return asyncTaskId;
     }
 
-    // Async router will read keyVaults from DB, no need to pass jwtPayload.
-    // Kept dynamic on purpose: the async router imports this chunk service, so a
-    // static import here would form a real module cycle that `lint:circular`
-    // (madge) rejects. Call-time import breaks the static edge.
-    const { createAsyncCaller } = await import('@/server/routers/async');
-    const asyncCaller = await createAsyncCaller({ userId: this.userId });
+    const task: FileTaskRef = {
+      fileId,
+      kind: 'parse',
+      taskId: asyncTaskId,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    };
+    let admissionScope: string | undefined;
+
+    const recordTriggerError = async (e: unknown) => {
+      console.error('[ParseFileToChunks] error:', e);
+      await releaseFileTaskAdmission(admissionScope, asyncTaskId);
+
+      await this.asyncTaskModel.update(asyncTaskId, {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.TaskTriggerError,
+          'trigger chunk embedding async task error. Please make sure the APP_URL is available from your server. You can check the proxy config or WAF blocking',
+        ),
+        status: AsyncTaskStatus.Error,
+      });
+    };
+
+    let sendTrigger: () => Promise<unknown>;
+    try {
+      const admission = await admitFileTask(task, this.asyncTaskModel);
+      if (admission.queued) return asyncTaskId;
+      admissionScope = admission.admissionScope;
+      sendTrigger = await prepareFileTaskTrigger({ ...task, admissionScope });
+    } catch (e) {
+      await recordTriggerError(e);
+      return asyncTaskId;
+    }
 
     // trigger parse file task asynchronously
-    asyncCaller.file
-      .parseFileToChunks({ fileId, taskId: asyncTaskId, workspaceId: this.workspaceId })
-      .catch(async (e) => {
-        console.error('[ParseFileToChunks] error:', e);
-
-        await this.asyncTaskModel.update(asyncTaskId, {
-          error: new AsyncTaskError(
-            AsyncTaskErrorType.TaskTriggerError,
-            'trigger chunk embedding async task error. Please make sure the APP_URL is available from your server. You can check the proxy config or WAF blocking',
-          ),
-          status: AsyncTaskStatus.Error,
-        });
-      });
+    sendTrigger().catch(recordTriggerError);
 
     return asyncTaskId;
   }

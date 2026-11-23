@@ -9,6 +9,7 @@ import { botWake } from './botWake';
 import { channelWatch } from './channelWatch';
 import { connectorOAuth } from './connectorOAuth';
 import { deviceSystemInfo } from './deviceSystemInfo';
+import { fileTaskSlots } from './fileTaskSlots';
 import { gitHubRefs } from './gitHubRefs';
 import { heteroControl } from './heteroControl';
 import { inboundWebhook } from './inboundWebhook';
@@ -35,6 +36,7 @@ export const redisService = {
   channelWatch,
   connectorOAuth,
   deviceSystemInfo,
+  fileTaskSlots,
   gitHubRefs,
   heteroControl,
   inboundWebhook,

@@ -417,6 +417,92 @@ describe('AsyncTaskModel', () => {
       expect(updatedTask?.status).toBe(AsyncTaskStatus.Processing);
       expect(updatedTask?.error).toBeNull();
     });
+
+    const insertOldTask = async () => {
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({
+          createdAt: new Date(Date.now() - ASYNC_TASK_TIMEOUT - 1000),
+          status: AsyncTaskStatus.Processing,
+          type: AsyncTaskType.Chunking,
+          userId,
+        })
+        .returning();
+      return task.id;
+    };
+    const readTask = (id: string) =>
+      serverDB.query.asyncTasks.findFirst({ where: eq(asyncTasks.id, id) });
+
+    it('leaves a file task waiting in the queue alone', async () => {
+      const id = await insertOldTask();
+      await asyncTaskModel.markFileTaskQueued(id, new Date(Date.now() + 60_000));
+
+      await asyncTaskModel.checkTimeoutTasks([id]);
+
+      expect((await readTask(id))?.status).toBe(AsyncTaskStatus.Processing);
+    });
+
+    it('expires a queued task once its queue deadline has passed', async () => {
+      const id = await insertOldTask();
+      await asyncTaskModel.markFileTaskQueued(id, new Date(Date.now() - 1000));
+
+      await asyncTaskModel.checkTimeoutTasks([id]);
+
+      expect((await readTask(id))?.status).toBe(AsyncTaskStatus.Error);
+    });
+  });
+
+  describe('claimQueuedFileTask', () => {
+    const insertQueuedTask = async (status = AsyncTaskStatus.Processing) => {
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({
+          createdAt: new Date(Date.now() - ASYNC_TASK_TIMEOUT - 1000),
+          metadata: { keep: true } as any,
+          status,
+          type: AsyncTaskType.Chunking,
+          userId,
+        })
+        .returning();
+      await asyncTaskModel.markFileTaskQueued(task.id, new Date(Date.now() + 60_000));
+      return task.id;
+    };
+
+    it('lets exactly one of several concurrent deliveries claim the task', async () => {
+      const id = await insertQueuedTask();
+
+      const claims = await Promise.all([
+        asyncTaskModel.claimQueuedFileTask(id),
+        asyncTaskModel.claimQueuedFileTask(id),
+        asyncTaskModel.claimQueuedFileTask(id),
+      ]);
+
+      expect(claims.filter(Boolean)).toHaveLength(1);
+    });
+
+    it('restarts the timeout clock and keeps other metadata', async () => {
+      const id = await insertQueuedTask();
+
+      await asyncTaskModel.claimQueuedFileTask(id);
+      await asyncTaskModel.checkTimeoutTasks([id]);
+
+      const task = await serverDB.query.asyncTasks.findFirst({ where: eq(asyncTasks.id, id) });
+      expect(task?.status).toBe(AsyncTaskStatus.Processing);
+      expect(task?.metadata).toEqual({ keep: true });
+    });
+
+    it('refuses a task that already settled', async () => {
+      const id = await insertQueuedTask(AsyncTaskStatus.Error);
+
+      await expect(asyncTaskModel.claimQueuedFileTask(id)).resolves.toBe(false);
+    });
+
+    it("refuses another user's task", async () => {
+      const id = await insertQueuedTask();
+      const otherUser = new AsyncTaskModel(serverDB, 'someone-else');
+
+      await expect(otherUser.claimQueuedFileTask(id)).resolves.toBe(false);
+    });
   });
 
   describe('isUserMemoryExtractionCancellationRequested', () => {
