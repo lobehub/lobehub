@@ -27,7 +27,7 @@ import ImperativeModal from '@/components/ImperativeModal';
 import { isBuiltinAgentSlug } from '@/features/AddAgentMemberModal/selectAddableAgents';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useSelectableChatModels } from '@/hooks/useSelectableChatModels';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
@@ -211,7 +211,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
   }) => {
     const { t } = useTranslation(['chat', 'common']);
     const compact = useInterfaceDensity() === 'compact';
-    const enabledModels = useEnabledChatModels();
+    const enabledModels = useSelectableChatModels();
     const [selectedAgents, setSelectedAgents] = useState<string[]>(preSelectedAgents);
     const [searchTerm, setSearchTerm] = useState('');
 

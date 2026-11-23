@@ -154,9 +154,9 @@ const ModelSelect = memo<ModelSelectProps>(
       const allowedProviderIds = new Set(providerIds);
       return fullEnabledList.filter((provider) => allowedProviderIds.has(provider.id));
     }, [fullEnabledList, providerIds]);
-    // Models a business policy leaves out (e.g. ones a workspace admin has not
-    // opened to this member) are not offered, but a saved selection is still
-    // judged against the full list so it is not mistaken for a removed model.
+    // Models a business policy leaves out (e.g. ones above the tier a workspace
+    // admin allows this member) are not offered; a saved selection of one shows
+    // as `restricted` instead of its raw id or a "removed" warning.
     const { isModelHidden } = useBusinessModelListGuard();
     const selectableList = useMemo(
       () => (modelType === 'chat' ? filterHiddenModels(enabledList, isModelHidden) : enabledList),
@@ -229,6 +229,7 @@ const ModelSelect = memo<ModelSelectProps>(
       return resolveStaleModelState(value, {
         builtinAiModelList,
         enabledList,
+        isModelHidden: modelType === 'chat' ? isModelHidden : undefined,
         modelRedirects,
         modelType,
       });
@@ -236,6 +237,7 @@ const ModelSelect = memo<ModelSelectProps>(
       builtinAiModelList,
       enabledList,
       isInitAiProviderRuntimeState,
+      isModelHidden,
       modelRedirects,
       modelType,
       value,
@@ -306,7 +308,7 @@ const ModelSelect = memo<ModelSelectProps>(
             <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`, { successorName })}>
               <Tag
                 className={STALE_TAG_CLASSNAME}
-                color={status === 'removed' ? 'warning' : undefined}
+                color={status === 'removed' || status === 'restricted' ? 'warning' : undefined}
                 size={'small'}
                 style={{ cursor: 'default', flex: 'none' }}
               >
