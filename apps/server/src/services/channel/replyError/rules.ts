@@ -31,7 +31,7 @@ export type ChannelReplyFailureKind =
   | 'share_message_limit'
   /**
    * A shared Agent spent the usage its share allows. The copy promises no reset: a zero limit
-   * stops visitor runs for good, and a Workspace cap raises the same error.
+   * stops visitor runs for good, and a cap set elsewhere raises the same error.
    */
   | 'share_spend_limit'
   /** The CLI on the device produced no output for too long and was stopped there. */
