@@ -573,6 +573,20 @@ export class AgentQuotaService {
     (await this.deviceBindings.find(agentId, deviceId))?.accountId ?? null;
 
   /**
+   * Accounts with a login recorded on one device: the ones `setDeviceAccount`
+   * accepts there. Only accounts this member can see are returned, so another
+   * member's private login on a shared device stays out of the answer.
+   */
+  listDeviceLoginAccountIds = async (deviceId: string): Promise<string[]> => {
+    const [logins, visible] = await Promise.all([
+      this.logins.listByDevice(deviceId),
+      this.accounts.list(),
+    ]);
+    const visibleIds = new Set(visible.map((account) => account.id));
+    return logins.map((login) => login.accountId).filter((id) => visibleIds.has(id));
+  };
+
+  /**
    * Set (or clear, with `null`) the account an agent uses on one device.
    *
    * An agent-wide pin left over from before choices were per device is first

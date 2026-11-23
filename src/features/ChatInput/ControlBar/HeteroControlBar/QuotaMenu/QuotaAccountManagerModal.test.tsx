@@ -174,6 +174,63 @@ describe('QuotaAccountManager', () => {
 
     expect((await removeItem()).getAttribute('aria-disabled')).not.toBe('true');
   });
+
+  // Regression: on a bound device the manager listed the whole pool, and
+  // picking an account never signed in there failed with "That account isn't
+  // signed in on this device yet. Sign in there first."
+  it('lists only the accounts signed in on the bound device, and switches to one', async () => {
+    const pool = ['a', 'b', 'c', 'd'];
+    vi.mocked(agentQuotaService.listAccounts).mockResolvedValue(pool.map(account));
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue(
+      pool.map((id) => binding(`b-${id}`, id, 'pool')),
+    );
+    // Only `a` and `b` hold a login on device-1; `c` is signed in elsewhere.
+    vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({
+      accountId: null,
+      signedInAccountIds: ['a', 'b'],
+    });
+    const setDeviceAccount = vi
+      .spyOn(agentQuotaService, 'setDeviceAccount')
+      .mockResolvedValue(undefined as never);
+
+    render(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+
+    await waitFor(() =>
+      expect(radioFor('b@example.com').getAttribute('aria-disabled')).not.toBe('true'),
+    );
+    expect(
+      screen.getAllByRole('radio').map((radio) => radio.closest('label')?.textContent),
+    ).toEqual([
+      expect.stringContaining('heteroAgent.claudeQuota.manage.modeAuto'),
+      expect.stringContaining('a@example.com'),
+      expect.stringContaining('b@example.com'),
+    ]);
+    expect(screen.queryByText('c@example.com')).toBeNull();
+    expect(screen.queryByText('d@example.com')).toBeNull();
+
+    fireEvent.click(radioFor('b@example.com'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'heteroAgent.claudeQuota.manage.confirmSwitch' }),
+    );
+
+    await waitFor(() => expect(setDeviceAccount).toHaveBeenCalledWith('agent-1', 'device-1', 'b'));
+    expect(agentQuotaService.getDeviceAccount).toHaveBeenCalledWith('agent-1', 'device-1');
+  });
+
+  it('says so when no account is signed in on the bound device', async () => {
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([binding('b1', 'a1', 'pool')]);
+    vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({
+      accountId: null,
+      signedInAccountIds: [],
+    });
+
+    render(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+
+    await screen.findByText('heteroAgent.claudeQuota.manage.emptyOnDevice');
+    expect(screen.queryByText('a1@example.com')).toBeNull();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.empty')).toBeNull();
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.addHintDevice')).toBeTruthy();
+  });
 });
 
 const localLogin = (externalAccountId: string, configDir: string | null) => ({
@@ -211,7 +268,11 @@ describe('QuotaAccountManager on the desktop', () => {
     vi.spyOn(heterogeneousAgentService, 'getClaudeCodeQuota').mockResolvedValue({
       status: 'unavailable',
     } as never);
-    vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({ accountId: null });
+    // The server's record for this desktop mirrors the logins it synced.
+    vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({
+      accountId: null,
+      signedInAccountIds: ['here'],
+    });
     vi.spyOn(agentQuotaService, 'syncDeviceLogins').mockResolvedValue(undefined as never);
     // The desktop IPC behind this machine's stable device id answers with the
     // id each case sets on `gatewayDeviceInfo`.
@@ -230,33 +291,42 @@ describe('QuotaAccountManager on the desktop', () => {
     vi.restoreAllMocks();
   });
 
-  it('marks an account with no login on this device and keeps it from being picked', async () => {
+  // Regression: every account in the pool was listed, and picking one with no
+  // login here failed with "That account isn't signed in on this device yet".
+  it('lists only the accounts signed in on this desktop', async () => {
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
 
-    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
-    expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
-    expect(radioFor('here@example.com').getAttribute('aria-disabled')).not.toBe('true');
-    expect(screen.getAllByText('heteroAgent.claudeQuota.manage.notSignedIn')).toHaveLength(1);
+    await waitFor(() =>
+      expect(radioFor('here@example.com').getAttribute('aria-disabled')).not.toBe('true'),
+    );
+    expect(screen.queryByText('away@example.com')).toBeNull();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.notSignedIn')).toBeNull();
+    // Auto balance and the one local login.
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
   });
 
-  it('does not judge a remote device’s accounts by this desktop’s logins', async () => {
+  it('lists a remote device’s recorded logins, not this desktop’s', async () => {
     act(() =>
       useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
     );
+    vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({
+      accountId: null,
+      signedInAccountIds: ['away'],
+    });
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
 
-    // The device holds its own logins: `away` may well be signed in there.
-    await screen.findByText('away@example.com');
     await waitFor(() =>
       expect(radioFor('away@example.com').getAttribute('aria-disabled')).not.toBe('true'),
     );
+    // `here` is signed in on this desktop, which says nothing about the device.
+    expect(screen.queryByText('here@example.com')).toBeNull();
     expect(heterogeneousAgentService.listClaudeCodeAccounts).not.toHaveBeenCalled();
-    expect(screen.queryByText('heteroAgent.claudeQuota.manage.notSignedIn')).toBeNull();
     expect(screen.queryByText('heteroAgent.claudeQuota.manage.signIn')).toBeNull();
     // Signing in here would not reach the device, so no local sign-in entry either.
     expect(
       screen.queryByRole('button', { name: /heteroAgent\.claudeQuota\.manage\.add/ }),
     ).toBeNull();
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.addHintDevice')).toBeTruthy();
   });
 
   it('keeps local login checks when bound to this desktop’s own device', async () => {
@@ -266,8 +336,8 @@ describe('QuotaAccountManager on the desktop', () => {
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'this-desktop'} />);
 
     // A gateway run on this device spawns on this desktop's logins.
-    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
-    expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
+    await screen.findByText('here@example.com');
+    expect(screen.queryByText('away@example.com')).toBeNull();
     expect(heterogeneousAgentService.listClaudeCodeAccounts).toHaveBeenCalled();
   });
 
@@ -279,7 +349,10 @@ describe('QuotaAccountManager on the desktop', () => {
       binding('b1', 'here', 'pinned'),
       binding('b2', 'away', 'pool'),
     ]);
-    vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({ accountId: 'away' });
+    vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({
+      accountId: 'away',
+      signedInAccountIds: ['here', 'away'],
+    });
 
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
 
@@ -300,10 +373,10 @@ describe('QuotaAccountManager on the desktop', () => {
 
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
 
-    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
     await waitFor(() =>
       expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto'),
     );
+    expect(screen.queryByText('away@example.com')).toBeNull();
     expect(screen.getByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeTruthy();
   });
 
@@ -397,17 +470,23 @@ describe('QuotaAccountManager on the desktop', () => {
 
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
 
-    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
-    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeTruthy();
+    await screen.findByText('heteroAgent.claudeQuota.manage.autoNoAccount');
     expect(screen.queryByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeNull();
   });
 
-  it('signs the account in on this device from its row', async () => {
+  it('keeps this device’s pick listed while its login is gone, with a way to sign back in', async () => {
+    // The server still holds the pick; this desktop has signed `away` out.
+    vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({
+      accountId: 'away',
+      signedInAccountIds: ['here', 'away'],
+    });
     const login = vi
       .spyOn(heterogeneousAgentService, 'loginClaudeCodeAccount')
       .mockResolvedValue(localLogin('ext-away', '/profiles/away') as never);
 
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
+    expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(await screen.findByText('heteroAgent.claudeQuota.manage.signIn'));
 
     await waitFor(() => expect(login).toHaveBeenCalledWith({ email: 'away@example.com' }));

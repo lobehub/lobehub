@@ -85,7 +85,8 @@ export const quotaDeviceAccountResource = defineReplica<string, QuotaDeviceAccou
   name: 'agentQuotaDeviceAccount',
   persist: { maxEntries: 50 },
   storage: 'indexedDB',
-  version: 1,
+  // v2: entries carry the device's `signedInAccountIds`; v1 rows had none.
+  version: 2,
 });
 
 /** The newest reading per limit bucket of one account, keyed by account id. */

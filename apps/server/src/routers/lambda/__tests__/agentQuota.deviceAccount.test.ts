@@ -37,6 +37,7 @@ vi.mock('@/database/models/agentQuota', () => ({
 }));
 
 const mockGetDeviceAccount = vi.fn();
+const mockListDeviceLoginAccountIds = vi.fn();
 const mockSetDeviceAccount = vi.fn();
 const mockSelectForAgent = vi.fn();
 const mockResolveAgentAvailability = vi.fn();
@@ -47,6 +48,7 @@ vi.mock('@/server/services/agentQuota', async (importOriginal) => {
     AgentQuotaService: vi.fn(function () {
       return {
         getDeviceAccount: mockGetDeviceAccount,
+        listDeviceLoginAccountIds: mockListDeviceLoginAccountIds,
         resolveAgentAvailability: mockResolveAgentAvailability,
         selectForAgent: mockSelectForAgent,
         setDeviceAccount: mockSetDeviceAccount,
@@ -70,20 +72,22 @@ beforeEach(() => {
 describe('agentQuota per-device account choice', () => {
   it('reads and writes the choice on the device row, not the gateway id', async () => {
     mockGetDeviceAccount.mockResolvedValue('acc-1');
+    mockListDeviceLoginAccountIds.mockResolvedValue(['acc-1', 'acc-2']);
 
     await expect(
       caller().getDeviceAccount({ agentId: 'agt-1', deviceId: 'gateway-a' }),
-    ).resolves.toEqual({ accountId: 'acc-1' });
+    ).resolves.toEqual({ accountId: 'acc-1', signedInAccountIds: ['acc-1', 'acc-2'] });
     await caller().setDeviceAccount({ accountId: null, agentId: 'agt-1', deviceId: 'gateway-a' });
 
     expect(mockGetDeviceAccount).toHaveBeenCalledWith('agt-1', 'row-a');
+    expect(mockListDeviceLoginAccountIds).toHaveBeenCalledWith('row-a');
     expect(mockSetDeviceAccount).toHaveBeenCalledWith('agt-1', 'row-a', null);
   });
 
   it('answers Auto for a device it cannot resolve, and refuses to write there', async () => {
     await expect(
       caller().getDeviceAccount({ agentId: 'agt-1', deviceId: 'unknown' }),
-    ).resolves.toEqual({ accountId: null });
+    ).resolves.toEqual({ accountId: null, signedInAccountIds: [] });
     await expect(
       caller().setDeviceAccount({ accountId: 'acc-1', agentId: 'agt-1', deviceId: 'unknown' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });

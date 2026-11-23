@@ -766,6 +766,8 @@ export default {
   'heteroAgent.claudeQuota.calendar.windowUtilization': '{{percent}}% used',
   'heteroAgent.claudeQuota.manage.addHint':
     'Sign in to the Claude Code CLI and the account shows up here automatically.',
+  'heteroAgent.claudeQuota.manage.addHintDevice':
+    'Only accounts signed in on the device this agent runs on are listed. Sign in to Claude Code there, then refresh the quota to add one.',
   'heteroAgent.claudeQuota.manage.autoNoAccount': 'No eligible account — enable one below.',
   'heteroAgent.claudeQuota.manage.autoRoutingTo': 'Now routing to {{account}}',
   'heteroAgent.claudeQuota.manage.confirmSwitch': 'Confirm switch',
@@ -774,6 +776,8 @@ export default {
   'heteroAgent.claudeQuota.manage.edit': 'Edit',
   'heteroAgent.claudeQuota.manage.editTitle': 'Edit account',
   'heteroAgent.claudeQuota.manage.empty': 'No accounts yet.',
+  'heteroAgent.claudeQuota.manage.emptyOnDevice':
+    'No Claude Code account is signed in on this device yet.',
   'heteroAgent.claudeQuota.manage.enable': 'Add to rotation',
   'heteroAgent.claudeQuota.manage.entry': 'Manage',
   'heteroAgent.claudeQuota.manage.labelField': 'Display name',

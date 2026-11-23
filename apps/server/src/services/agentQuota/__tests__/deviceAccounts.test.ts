@@ -182,6 +182,25 @@ describe('AgentQuotaService per-device account choice', () => {
     await expect(service.setDeviceAccount(agentId, deviceA, kept.id)).resolves.toBeUndefined();
   });
 
+  // The switch dialog lists these: only a device's own logins, each one a
+  // pick `setDeviceAccount` accepts there.
+  it('lists the accounts signed in on one device, whatever other devices hold', async () => {
+    const onA = await signedIn('acc-a', deviceA);
+    const onBoth = await signedIn('acc-both', deviceA);
+    await signedIn('acc-both', deviceB);
+    const onB = await signedIn('acc-b', deviceB);
+    await signedIn('acc-nowhere');
+
+    const listed = await service.listDeviceLoginAccountIds(deviceA);
+
+    expect([...listed].sort()).toEqual([onA.id, onBoth.id].sort());
+    expect(listed).not.toContain(onB.id);
+    for (const accountId of listed) {
+      await bindings.upsert({ accountId, agentId, role: QuotaBindingRole.pool });
+      await expect(service.setDeviceAccount(agentId, deviceA, accountId)).resolves.toBeUndefined();
+    }
+  });
+
   it('records a login when a device syncs one ingested without a device', async () => {
     const account = await signedIn('acc-local');
     await bindings.upsert({ accountId: account.id, agentId, role: QuotaBindingRole.pool });
