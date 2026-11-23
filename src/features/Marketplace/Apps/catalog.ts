@@ -1,4 +1,4 @@
-import type { ConnectorCatalogItem } from '@lobechat/const';
+import type { ConnectorCatalogItem, OfficialMcpServerType } from '@lobechat/const';
 
 import type { MessengerPlatformItem } from '@/store/messenger/projection';
 
@@ -21,6 +21,8 @@ export interface MarketplaceApp {
   id: string;
   integrationConnected: boolean;
   name: string;
+  /** A vendor's official remote MCP server, connected as a regular connector. */
+  officialMcp?: OfficialMcpServerType;
   tool?: ConnectorCatalogItem;
   toolConnected: boolean;
 }
@@ -67,13 +69,17 @@ export const buildMarketplaceApps = ({
   integrationConnected,
   installedChannels,
   linkedChannels,
+  officialMcpServers = [],
+  isOfficialMcpConnected = () => false,
   tools,
 }: {
   channels: readonly MessengerPlatformItem[];
   isToolConnected: (tool: ConnectorCatalogItem) => boolean;
   integrationConnected: (id: string) => boolean;
   installedChannels: ReadonlySet<string>;
+  isOfficialMcpConnected?: (identifier: string) => boolean;
   linkedChannels: ReadonlySet<string>;
+  officialMcpServers?: readonly OfficialMcpServerType[];
   tools: readonly ConnectorCatalogItem[];
 }): MarketplaceApp[] => {
   const apps = new Map<string, MarketplaceApp>();
@@ -89,6 +95,21 @@ export const buildMarketplaceApps = ({
       integrationConnected: integrationConnected(id),
       tool,
       toolConnected: isToolConnected(tool),
+    });
+  }
+
+  // Official servers never replace a LobeHub or Composio entry of the same app
+  for (const server of officialMcpServers) {
+    if (apps.has(server.identifier)) continue;
+    apps.set(server.identifier, {
+      category: server.category,
+      channelLinked: false,
+      channelPending: false,
+      id: server.identifier,
+      integrationConnected: false,
+      name: server.label,
+      officialMcp: server,
+      toolConnected: isOfficialMcpConnected(server.identifier),
     });
   }
 

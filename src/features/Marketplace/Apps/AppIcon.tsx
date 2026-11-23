@@ -9,6 +9,7 @@ import type { MarketplaceApp } from './catalog';
 export const AppIcon = ({ app, size = 24 }: { app: MarketplaceApp; size?: number }) => {
   const isDark = useIsDark();
   if (app.channel) return <PlatformBrandIcon platform={app.channel.id} size={size} />;
+  if (app.officialMcp) return <Avatar alt={app.name} avatar={app.officialMcp.icon} size={size} />;
   const BrandIcon =
     app.tool?.type === 'lobehub' ? app.tool.provider.icon : app.tool?.serverType.icon;
   if (!BrandIcon) return null;

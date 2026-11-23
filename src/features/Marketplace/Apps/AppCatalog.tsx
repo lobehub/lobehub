@@ -26,6 +26,7 @@ import { catalogStyles } from '../Catalog/styles';
 import { useCatalogDetailNavigate } from '../Catalog/useCatalogDetailNavigate';
 import { AppIcon } from './AppIcon';
 import { appCategories, getAppHome, getInlineConnectTool, hasAppConnection } from './catalog';
+import OfficialMcpItem from './OfficialMcpItem';
 import { useMarketplaceApps } from './useMarketplaceApps';
 
 export default function AppCatalog() {
@@ -64,7 +65,7 @@ export default function AppCatalog() {
             defaultValue:
               (tool?.type === 'lobehub'
                 ? tool.provider.description
-                : tool?.serverType.description) ?? '',
+                : (tool?.serverType.description ?? app.officialMcp?.description)) ?? '',
           });
       return { ...app, summary };
     })
@@ -148,6 +149,8 @@ export default function AppCatalog() {
                   summary: app.summary,
                   title: app.name,
                 };
+                if (app.officialMcp)
+                  return <OfficialMcpItem catalogRow={row} key={app.id} server={app.officialMcp} />;
                 const tool = getInlineConnectTool(app, lobehubEnabled);
                 if (tool) {
                   const ready = tool.type === 'composio' ? composioReady : lobehubReady;
