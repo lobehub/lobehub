@@ -117,10 +117,10 @@ export interface SpawnAgentOptions {
   operationId: string;
   /**
    * (Claude Code `liveInput` with an `askUserBridge`) The permission mode the
-   * Better Coding Experience lab picked. Claude Code then asks the host before
-   * acting as the mode requires, the bridge raises a card per request, and the
-   * mode Claude Code reports is emitted as `step_complete { phase:
-   * 'permission_mode' }`. Absent: every action is allowed, as before the lab.
+   * topic picked. Claude Code then asks the host before acting as the mode
+   * requires, the bridge raises a card per request, and the mode Claude Code
+   * reports is emitted as `step_complete { phase: 'permission_mode' }`.
+   * Absent: every action is allowed.
    */
   permissionMode?: HeteroPermissionMode;
   /**

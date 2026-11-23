@@ -104,14 +104,14 @@ const coerceJsonPrompt = (
 
 export interface ResolvedPrompt {
   /**
-   * Codex Plan switch (Better Coding Experience lab): the collaboration mode
+   * Codex Plan switch: the collaboration mode
    * a native Codex run sends on every turn.
    */
   collaborationMode?: CodexCollaborationMode;
   /** Human-readable description for the empty-input check. */
   describe: () => string;
   /**
-   * Claude Code permission mode (Better Coding Experience lab) carried by the
+   * Claude Code permission mode carried by the
    * dispatch envelope. An older `lh` ignores it and keeps allowing everything.
    */
   permissionMode?: HeteroPermissionMode;

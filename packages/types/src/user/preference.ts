@@ -197,11 +197,6 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
-   * one switch for the experiments that improve how agents write and work with
-   * code; every coding-experience improvement reads this flag
-   */
-  enableBetterCodingExperience: z.boolean().optional(),
-  /**
    * enable agent identity: give an agent its own mail address
    */
   enableAgentIdentity: z.boolean().optional(),

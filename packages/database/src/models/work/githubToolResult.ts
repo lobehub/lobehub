@@ -534,8 +534,7 @@ const parseGhSegment = (segment: string[], lifecycle: boolean): ParsedGhCommand 
 /** Options for the shell-surface gh normalizer; both are off for the github skill. */
 export interface GithubShellNormalizeOptions {
   /**
-   * Also register `gh pr ready <n>` / `gh pr merge <n>` (Better Coding
-   * Experience): touching a pull request by number ties it to the conversation.
+   * Also register `gh pr ready <n>` / `gh pr merge <n>`: touching a pull request by number ties it to the conversation.
    */
   pullRequestLifecycle?: boolean;
   /**

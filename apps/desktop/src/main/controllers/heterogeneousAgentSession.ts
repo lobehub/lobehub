@@ -64,7 +64,7 @@ export interface SendPromptParams {
   /** Assistant row this run streams into — recorded so recovery can scope to its branch. */
   assistantMessageId?: string;
   /**
-   * (Codex, Better Coding Experience lab) The Plan switch: the collaboration
+   * (Codex) The Plan switch: the collaboration
    * mode every native app-server turn sends. Absent sends none.
    */
   collaborationMode?: CodexCollaborationMode;
@@ -77,9 +77,9 @@ export interface SendPromptParams {
    */
   operationId: string;
   /**
-   * (Claude Code, Better Coding Experience lab) Permission mode the run starts
-   * in; Claude Code then asks before acting as the mode requires and each
-   * request raises a card. Absent: every action is allowed, as before the lab.
+   * (Claude Code) Permission mode the run starts in; Claude Code then asks
+   * before acting as the mode requires and each request raises a card.
+   * Absent (an older renderer): every action is allowed.
    */
   permissionMode?: HeteroPermissionMode;
   prompt: string;

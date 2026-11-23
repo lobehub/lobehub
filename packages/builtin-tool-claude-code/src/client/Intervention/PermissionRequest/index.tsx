@@ -55,8 +55,7 @@ const previewOf = (input: Record<string, unknown> | undefined) => {
 };
 
 /**
- * Claude Code asking before it acts (Better Coding Experience permission
- * modes): a tool it wants to run, entering plan mode, or the plan it wants
+ * Claude Code asking before it acts (permission modes): a tool it wants to run, entering plan mode, or the plan it wants
  * approved. The buttons are Claude Code's own options; a denial or "keep
  * planning" carries the note the user typed, so Claude knows what to do
  * instead. Never times out: Claude Code waits until the user answers or stops

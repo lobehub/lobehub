@@ -1076,7 +1076,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // input (live steer / background tasks).
     liveInput: options.type === 'claude-code' || options.type === 'antigravity',
     operationId,
-    // Better Coding Experience: Claude Code permission mode, Codex Plan switch.
+    // Claude Code permission mode, Codex Plan switch.
     ...dispatchedModeSpawnOptions(options.type, resolved),
     uploadImage,
   };
