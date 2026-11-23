@@ -86,6 +86,14 @@ vi.mock('../useSandboxNetworkToggle', () => ({ useSandboxNetworkToggle: () => vi
 vi.mock('../useTopicAwareTargetSelect', () => ({
   useTopicAwareTargetSelect: () => ({ selectTarget: state.selectTarget, topicDeviceId: undefined }),
 }));
+vi.mock('../useSandboxOptions', () => ({ useSandboxOptions: () => ({}) }));
+// The options are covered by their own tests; here one stands in for any pick.
+vi.mock('../CloudSandboxOptions', () => ({
+  default: ({ onEnsureSandbox }: { onEnsureSandbox: () => Promise<void> }) => (
+    <button onClick={() => void onEnsureSandbox()}>pick-option</button>
+  ),
+}));
+
 const SANDBOX = 'heteroAgent.executionTarget.sandbox';
 
 beforeEach(() => {
@@ -96,23 +104,24 @@ beforeEach(() => {
 // T-14791: one cloud sandbox. Whether it keeps files on the drive and what it
 // is set up from are options below the input, not rows of this menu.
 describe('HeteroDeviceSwitcher — cloud sandbox', () => {
-  it('names the cloud sandbox on the chip and offers it as one row', () => {
+  it('names only the cloud sandbox on the chip and offers it as one row', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.getAllByTestId('chip')[0].textContent).toContain(SANDBOX);
+    expect(screen.getAllByTestId('chip')[0].textContent).toBe(SANDBOX);
+    expect(screen.getByTestId('cloud-sandbox-row')).toBeInTheDocument();
     expect(screen.queryByText('heteroAgent.executionTarget.persistentSandbox')).toBeNull();
     expect(screen.queryByText('heteroAgent.executionTarget.temporarySandbox')).toBeNull();
     expect(screen.queryByTestId('sandbox-group')).toBeNull();
   });
 
-  it('switches to the cloud sandbox from its row', async () => {
+  // Its options live one level down; picking one is picking the sandbox.
+  it('keeps a conversation already in the cloud sandbox where it is when an option is picked', async () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    const rows = screen.getAllByText(SANDBOX);
-    fireEvent.click(rows.at(-1)!);
-    await vi.waitFor(() => expect(state.selectTarget).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByText('pick-option'));
+    await Promise.resolve();
 
-    expect(state.selectTarget.mock.calls[0][0]).toBe('sandbox');
+    expect(state.selectTarget).not.toHaveBeenCalled();
   });
 });
 

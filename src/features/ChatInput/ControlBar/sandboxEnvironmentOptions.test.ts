@@ -3,13 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   environmentChipState,
   environmentFolderName,
-  environmentMenuNotes,
   environmentSettingsPath,
   isOnPublicDrive,
   pickableEnvironments,
   projectStartEnvironmentId,
   repositorySlug,
-  selectionWithDrive,
   selectionWithEnvironment,
   selectionWithFolder,
 } from './sandboxEnvironmentOptions';
@@ -129,27 +127,6 @@ describe('environmentFolderName', () => {
   });
 });
 
-// T-14791: what an environment checks out in a public-drive folder stays
-// visible to every member, even after the environment is made private.
-describe('environmentMenuNotes', () => {
-  it('says a public-drive folder stays visible to every member', () => {
-    expect(environmentMenuNotes({ onDrive: true, onPublicDrive: true })).toEqual([
-      'sandboxEnvironment.driveHint',
-      'sandboxEnvironment.publicDriveHint',
-    ]);
-  });
-
-  it('says nothing about the public drive on a personal-drive folder', () => {
-    expect(environmentMenuNotes({ onDrive: true, onPublicDrive: false })).toEqual([
-      'sandboxEnvironment.driveHint',
-    ]);
-  });
-
-  it('adds no drive note off the drive', () => {
-    expect(environmentMenuNotes({ onDrive: false, onPublicDrive: false })).toEqual([]);
-  });
-});
-
 describe('isOnPublicDrive', () => {
   it('is a workspace folder on the drive every member browses', () => {
     expect(isOnPublicDrive({ workingDirectory: 'team' }, 'ws')).toBe(true);
@@ -160,41 +137,6 @@ describe('isOnPublicDrive', () => {
     expect(isOnPublicDrive({ drive: 'personal', workingDirectory: 'mine' }, 'ws')).toBe(false);
     expect(isOnPublicDrive({ environmentId: 'env' }, 'ws')).toBe(false);
     expect(isOnPublicDrive({ workingDirectory: 'notes' }, null)).toBe(false);
-  });
-});
-
-// T-14791: the drive and the environment are two options of one cloud sandbox.
-describe('selectionWithDrive', () => {
-  const defaultFolder = { drive: 'personal' as const, workingDirectory: 'notes' };
-
-  it('keeps the environment when the drive is switched off', () => {
-    expect(
-      selectionWithDrive(
-        { environmentId: 'env_repo01', workingDirectory: 'lobe-write-repo01' },
-        false,
-        {
-          defaultFolder,
-        },
-      ),
-    ).toEqual({ environmentId: 'env_repo01' });
-    expect(selectionWithDrive({ workingDirectory: 'notes' }, false, { defaultFolder })).toEqual({});
-  });
-
-  it("switches on into the environment's own folder, so it is set up in an empty one", () => {
-    expect(
-      selectionWithDrive({ environmentId: 'env_repo01' }, true, {
-        defaultFolder,
-        environment: repoEnv,
-      }),
-    ).toEqual({
-      drive: 'personal',
-      environmentId: 'env_repo01',
-      workingDirectory: 'lobe-write-repo01',
-    });
-  });
-
-  it('switches on into the default folder without an environment', () => {
-    expect(selectionWithDrive({}, true, { defaultFolder })).toEqual(defaultFolder);
   });
 });
 

@@ -38,8 +38,6 @@ export interface SandboxRepositoryOption {
 interface SandboxRepositoryMenuProps {
   environments: SandboxRepositoryOption[];
   failed: boolean;
-  /** A second note under the hint: how the setup meets a folder on the drive. */
-  footnote?: string;
   loaded: boolean;
   /** A first row for working without an environment. */
   none?: { active: boolean; onPick: () => void };
@@ -61,7 +59,6 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
   ({
     environments,
     failed,
-    footnote,
     loaded,
     none,
     onAdd,
@@ -82,8 +79,6 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
             onClick: onManage,
           }}
         />
-        <Text className={stylex.props(styles.hint).className}>{t('sandboxEnvironment.hint')}</Text>
-        {footnote && <Text className={stylex.props(styles.hint).className}>{footnote}</Text>}
 
         <div {...stylex.props(styles.list)}>
           {none && (

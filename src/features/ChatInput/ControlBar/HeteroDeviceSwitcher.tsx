@@ -50,13 +50,16 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import CloudSandboxOptions from './CloudSandboxOptions';
 import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
+import GroupSubmenu from './GroupSubmenu';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
 import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
+import { useSandboxOptions } from './useSandboxOptions';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
 const styles = stylex.create({
@@ -362,6 +365,18 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     },
     [selectTarget],
   );
+
+  // The cloud sandbox's options — storage and environment — are picked one
+  // level under its row. Asked once the menu could show them.
+  const sandboxOptions = useSandboxOptions(agentId, {
+    enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
+    topicId,
+  });
+  // An option picked while the conversation runs elsewhere moves it to the
+  // cloud sandbox first; the menu stays open for the other option.
+  const ensureSandbox = useCallback(async () => {
+    if (executionTarget !== 'sandbox') await selectTarget('sandbox');
+  }, [executionTarget, selectTarget]);
 
   // Setting up the backend raises an elevation prompt and creates a dedicated
   // OS account, so it only ever happens on this explicit click. The popover
@@ -712,24 +727,34 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
-      {/* The cloud sandbox is one row: whether it keeps its files on the drive,
-          and the environment it is set up from, are options on the chips
-          below the input once it is picked. */}
-      <OptionRow
-        compact
-        active={isActive('sandbox')}
-        disabled={!supportsSandbox}
-        icon={<ExecutionTargetIcon target={'sandbox'} />}
-        label={t('heteroAgent.executionTarget.sandbox')}
-        desc={
-          supportsSandbox
-            ? undefined
-            : t('heteroAgent.executionTarget.sandboxUnsupported', {
-                name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined,
-              })
-        }
-        onClick={() => void handleSelect('sandbox')}
-      />
+      {/* One cloud sandbox, its options one level down: whether it keeps its
+          files on the drive (and where), and the environment it is set up
+          from. A runtime that cannot use it gets a disabled row saying why. */}
+      {supportsSandbox ? (
+        <GroupSubmenu
+          active={isActive('sandbox')}
+          icon={<ExecutionTargetIcon target={'sandbox'} />}
+          label={t('heteroAgent.executionTarget.sandbox')}
+          testId={'cloud-sandbox-row'}
+        >
+          <CloudSandboxOptions
+            options={sandboxOptions}
+            onClose={() => setOpen(false)}
+            onEnsureSandbox={ensureSandbox}
+          />
+        </GroupSubmenu>
+      ) : (
+        <OptionRow
+          compact
+          disabled
+          icon={<ExecutionTargetIcon target={'sandbox'} />}
+          label={t('heteroAgent.executionTarget.sandbox')}
+          desc={t('heteroAgent.executionTarget.sandboxUnsupported', {
+            name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined,
+          })}
+          onClick={() => {}}
+        />
+      )}
       {/* This machine, fenced: writes confined to the working
           directory, network denied unless the switch opens the registry
           allowlist. Shown even when the host can't provide a sandbox — disabled,

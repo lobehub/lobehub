@@ -145,54 +145,6 @@ export const isOnPublicDrive = (selection: SandboxSelection, workspaceId?: strin
   selection.drive !== 'personal';
 
 /**
- * The notes the environment menu adds for where the conversation works, as
- * locale keys in reading order: on the drive, that setup only runs in an
- * empty folder; on a workspace's public drive, that what an environment
- * checks out there stays visible to every member, even once it is made
- * private — the folder is an ordinary one, and nothing removes it.
- */
-export const environmentMenuNotes = ({
-  onDrive,
-  onPublicDrive,
-}: {
-  onDrive: boolean;
-  onPublicDrive: boolean;
-}): ('sandboxEnvironment.driveHint' | 'sandboxEnvironment.publicDriveHint')[] => {
-  if (!onDrive) return [];
-  return onPublicDrive
-    ? ['sandboxEnvironment.driveHint', 'sandboxEnvironment.publicDriveHint']
-    : ['sandboxEnvironment.driveHint'];
-};
-
-/**
- * The selection once the drive is switched on or off. Off is the temporary
- * sandbox, still set up from the environment it had. On keeps the
- * environment too: in the environment's own folder when there is one, so it
- * is set up in an empty folder, and otherwise in `defaultFolder` — the folder
- * the agent's last conversation used, or the plan's default.
- */
-export const selectionWithDrive = (
-  selection: SandboxSelection,
-  enabled: boolean,
-  {
-    defaultFolder,
-    environment,
-  }: {
-    defaultFolder: Pick<SandboxSelection, 'drive' | 'workingDirectory'>;
-    environment?: Parameters<typeof environmentFolderName>[0];
-  },
-): SandboxSelection => {
-  const { environmentId } = selection;
-  if (!enabled) return environmentId ? { environmentId } : {};
-
-  const folder =
-    environmentId && environment
-      ? { drive: defaultFolder.drive, workingDirectory: environmentFolderName(environment) }
-      : defaultFolder;
-  return environmentId ? { ...folder, environmentId } : { ...folder };
-};
-
-/**
  * The selection once an environment (or none) is picked. On the drive, an
  * environment moves the conversation into that environment's own folder, so
  * it is set up rather than skipped in a folder that already holds files;

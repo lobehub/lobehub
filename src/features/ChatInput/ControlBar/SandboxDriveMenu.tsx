@@ -2,11 +2,11 @@
 
 import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { SANDBOX_DRIVE_ROOT } from '@lobechat/builtin-tool-cloud-sandbox';
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FolderIcon, FolderOpenIcon, HomeIcon, ServerIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { FolderIcon, FolderOpenIcon, HardDriveIcon, HomeIcon, TimerIcon } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -14,9 +14,14 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 import OptionRow from './OptionRow';
-import SubmenuHeader from './SubmenuHeader';
 
 const styles = stylex.create({
+  divider: {
+    height: 1,
+    marginBlock: 4,
+    marginInline: 8,
+    backgroundColor: cssVar.colorBorderSecondary,
+  },
   hint: {
     paddingInline: '8px',
     fontSize: '12px',
@@ -34,44 +39,50 @@ export interface SandboxDriveFolderPick {
 }
 
 interface SandboxDriveMenuProps {
+  /**
+   * Whether this plan includes a drive. Without one the folders are replaced by
+   * a single drive row leading to a plan; `undefined` hides the drive entirely
+   * (a deployment without one).
+   */
+  entitled?: boolean;
   /** Opens the full directory browser, for folders this short list does not reach. */
   onBrowse: () => void;
-  /** Leaves the menu for Sandbox Storage, where the drives are browsed and managed. */
-  onOpenStorage: () => void;
   onPick: (pick: SandboxDriveFolderPick) => void;
+  onPickTemporary: () => void;
+  onUpgrade: () => void;
   /** The label of a pick the list cannot show: a nested folder, or another drive. */
   selectedLabel?: string;
   /** The folder the conversation is on, when it is on one. */
   selectedPath?: string;
-  /** Whether the folders are offered: only once the drive is switched on. */
-  showFolders?: boolean;
-  /** The drive's on/off switch, shown above the folders. */
-  toggle?: ReactNode;
+  /** Whether the conversation runs in a temporary sandbox. */
+  temporary: boolean;
 }
 
 /**
- * The drive menu: the switch that keeps files on the drive, then — once it is
- * on — the top of the conversation's own drive and the way into the full
- * browser. The list lives here so it is only fetched once it is shown.
+ * Where the cloud sandbox keeps its files, one level under its storage option:
+ * a temporary sandbox, or a folder of the conversation's own drive — its top
+ * folders, and the way into the full browser. The list lives here so it is
+ * only fetched once it is opened.
  */
 const SandboxDriveMenu = memo<SandboxDriveMenuProps>(
   ({
+    entitled,
     onBrowse,
-    onOpenStorage,
     onPick,
+    onPickTemporary,
+    onUpgrade,
     selectedLabel,
     selectedPath,
-    showFolders = true,
-    toggle,
+    temporary,
   }) => {
-    const { t } = useTranslation(['chat', 'device']);
+    const { t } = useTranslation(['chat', 'device', 'common']);
     const workspaceId = useActiveWorkspaceId();
     // The public drive's root is not a place to work, so a workspace starts on
     // the member's own drive, as a new conversation does.
     const drive: SandboxDrive | undefined = workspaceId ? 'personal' : undefined;
 
     const { data, error, mutate } = useSWR(
-      showFolders ? ['sandbox-drive-menu-folders', workspaceId ?? '', drive ?? ''] : null,
+      entitled ? ['sandbox-drive-menu-folders', workspaceId ?? '', drive ?? ''] : null,
       () => sandboxStorageService.listFiles({ drive }),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
@@ -83,20 +94,32 @@ const SandboxDriveMenu = memo<SandboxDriveMenuProps>(
       selectedPath === SANDBOX_DRIVE_ROOT || folders.some((item) => item.path === selectedPath);
 
     return (
-      <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
-        <SubmenuHeader
-          title={t('sandboxDrive.title')}
-          action={{
-            icon: ServerIcon,
-            label: t('sandboxDrive.openStorage'),
-            onClick: onOpenStorage,
-          }}
+      <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 220 }}>
+        <OptionRow
+          compact
+          active={temporary}
+          icon={<Icon icon={TimerIcon} size={16} />}
+          label={t('sandboxOptions.temporary')}
+          onClick={onPickTemporary}
         />
 
-        {toggle}
+        {entitled === false && (
+          <OptionRow
+            compact
+            icon={<Icon icon={HardDriveIcon} size={16} />}
+            label={t('sandboxDrive.title')}
+            badge={
+              <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
+                {t('pro', { ns: 'common' })}
+              </Tag>
+            }
+            onClick={onUpgrade}
+          />
+        )}
 
-        {showFolders && (
+        {entitled && (
           <>
+            <div {...stylex.props(styles.divider)} />
             <div {...stylex.props(styles.list)}>
               {selectedLabel && !listed && (
                 <OptionRow
