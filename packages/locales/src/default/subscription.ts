@@ -575,7 +575,7 @@ export default {
   'plans.cloud.sync': 'Global cloud sync',
   'plans.cloud.title': 'Cloud service',
   'plans.compare.agentMemory': 'Agent memory',
-  'plans.compare.agentRunCredit.runs': '{{runs}} agent start fees',
+  'plans.compare.agentRunCredit.runs': '{{runs}} runs (no model usage)',
   'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
@@ -630,9 +630,9 @@ export default {
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
   'plans.limits.agentRunCredit.ownKey': 'Use your own API key',
-  'plans.limits.agentRunCredit.runs': '{{runs}} agent start fees/mo',
+  'plans.limits.agentRunCredit.runs': '{{runs}} platform run fees/mo',
   'plans.limits.agentRunCredit.tooltip':
-    'Pays only the start fee of agent tasks. Model calls while a task runs are billed separately: LobeHub adds nothing for models on your own API key, and LobeHub-hosted models draw on your free allowance and top-ups.',
+    'Covers platform run fees for agent tasks only, not model usage. LobeHub adds nothing for models on your own API key; LobeHub-hosted models draw on your free allowance and top-ups.',
   'plans.limits.agentRunFee': '{{value}} per agent task',
   'plans.limits.agentRunFee.tooltip':
     'Charged from your balance when an agent task you start finishes, on top of its model usage. Tasks that fail, or that you stop within 30 seconds, are free.',
@@ -1044,8 +1044,8 @@ export default {
   'credits.budgetPage.allocate.title': 'Shared allowances',
   'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
   'credits.budgetPage.limit.title': 'Spending limits',
-  'plans.usageHero.agentRunCredit.desc': 'Monthly start fees, models extra',
-  'plans.usageHero.agentRunCredit.title': '{{runs}} tasks',
+  'plans.usageHero.agentRunCredit.desc': 'Run fees, no model usage',
+  'plans.usageHero.agentRunCredit.title': '{{runs}}/mo',
   'plans.usageHero.comparedTo5h': '5-hour limit of {{plan}}',
   'balance.hobbyQuotaDesc':
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
