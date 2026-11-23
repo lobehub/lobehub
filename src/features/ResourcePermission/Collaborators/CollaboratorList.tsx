@@ -12,13 +12,16 @@ import {
   Text,
 } from '@lobehub/ui';
 import { XIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
+import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import AsyncError from '@/components/AsyncError';
 import UserAvatar from '@/components/UserAvatar';
 import type { PermissionResourceType, ResourceCollaborator } from '@/services/resourcePermission';
 import { densityVars } from '@/styles/densityVars';
+import { getWorkspaceMemberName } from '@/utils/workspaceMemberName';
 
 import { useAccessLevelOptions } from '../useAccessLevelOptions';
 import { useResourceCollaborators } from '../useResourceCollaborators';
@@ -34,11 +37,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const displayName = (collaborator: ResourceCollaborator) =>
-  collaborator.user?.fullName ||
-  collaborator.user?.username ||
-  collaborator.user?.email ||
-  collaborator.userId;
+/** Collaborator rows carry no nickname; it comes from the workspace's member list. */
+const displayName = (collaborator: ResourceCollaborator, nickname?: string | null) =>
+  getWorkspaceMemberName({ ...collaborator, config: { nickname } });
 
 interface CollaboratorListProps {
   resourceId: string;
@@ -56,6 +57,13 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
     useResourceCollaborators(resourceType, resourceId);
 
   const levelOptions = useAccessLevelOptions({ isPrivate: false, resourceType });
+  // The roster supplies nicknames; this list may be the only member consumer on the page.
+  useFetchWorkspaceMembers();
+  const workspaceMembers = useWorkspaceMembers();
+  const nicknames = useMemo(
+    () => new Map(workspaceMembers.map((member) => [member.userId, member.config?.nickname])),
+    [workspaceMembers],
+  );
 
   if (error) return <AsyncError error={error} variant={'inline'} onRetry={() => mutate()} />;
 
@@ -77,7 +85,7 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
   return (
     <Flexbox>
       {collaborators.map((collaborator) => {
-        const name = displayName(collaborator);
+        const name = displayName(collaborator, nicknames.get(collaborator.userId));
         const email = collaborator.user?.email;
         const levelLabel = levelOptions.find(
           (option) => option.value === collaborator.accessLevel,
