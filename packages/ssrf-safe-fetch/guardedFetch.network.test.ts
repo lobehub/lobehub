@@ -24,6 +24,11 @@ let server: http.Server;
 let origin: string;
 let hits: string[] = [];
 
+/** A second origin (same host, different port) for cross-origin redirect cases. */
+let crossServer: http.Server;
+let crossOrigin: string;
+let crossRequests: { authorization?: string; cookie?: string; url?: string }[] = [];
+
 beforeAll(async () => {
   server = http.createServer((req, res) => {
     hits.push(req.url!);
@@ -45,6 +50,32 @@ beforeAll(async () => {
       return res.end();
     }
 
+    if (req.url === '/redirect-cross-origin') {
+      res.writeHead(307, { location: `${crossOrigin}/echo` });
+      return res.end();
+    }
+
+    if (req.url === '/redirect-post-307') {
+      res.writeHead(307, { location: '/echo' });
+      return res.end();
+    }
+
+    if (req.url === '/echo') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            authorization: req.headers.authorization ?? null,
+            body,
+            method: req.method,
+          }),
+        );
+      });
+      return;
+    }
+
     if (req.url === '/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.write('data: first\n\n');
@@ -56,14 +87,30 @@ beforeAll(async () => {
     res.end(JSON.stringify({ ok: true }));
   });
 
+  crossServer = http.createServer((req, res) => {
+    crossRequests.push({
+      authorization: req.headers.authorization,
+      cookie: req.headers.cookie,
+      url: req.url,
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  });
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => crossServer.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  crossOrigin = `http://127.0.0.1:${(crossServer.address() as AddressInfo).port}`;
 });
 
-afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+afterAll(async () => {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await new Promise<void>((resolve) => crossServer.close(() => resolve()));
+});
 
 afterEach(() => {
   hits = [];
+  crossRequests = [];
   vi.restoreAllMocks();
 });
 
@@ -249,5 +296,30 @@ describe('createSsrfSafeFetch with an environment proxy (NODE_USE_ENV_PROXY=1)',
 
     expect(await res.json()).toEqual({ ok: true });
     expect(hits).toEqual(['/redirect-to-ok', '/ok']);
+  });
+
+  it('strips credentials when a redirect crosses origins', async () => {
+    const res = await createProxyModeFetch()(`${origin}/redirect-cross-origin`, {
+      headers: { authorization: 'Bearer secret', cookie: 'session=private' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(crossRequests).toEqual([{ authorization: undefined, cookie: undefined, url: '/echo' }]);
+  });
+
+  it("keeps a Request input's method, headers and body across a same-origin redirect", async () => {
+    const request = new Request(`${origin}/redirect-post-307`, {
+      body: 'payload',
+      headers: { authorization: 'Bearer keep-me' },
+      method: 'POST',
+    });
+
+    const res = await createProxyModeFetch()(request);
+
+    expect(await res.json()).toEqual({
+      authorization: 'Bearer keep-me',
+      body: 'payload',
+      method: 'POST',
+    });
   });
 });

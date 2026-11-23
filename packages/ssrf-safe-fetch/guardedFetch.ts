@@ -114,6 +114,7 @@ const assertResolvedTargetAllowed = async (url: URL, policy: SSRFOptions) => {
 };
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const SENSITIVE_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'cookie2'];
 const MAX_REDIRECTS = 5;
 
 /**
@@ -126,18 +127,37 @@ const fetchThroughEnvProxy = async (
   policy: SSRFOptions,
   baseFetch: typeof fetch,
 ) => {
-  const followRedirects = (init?.redirect ?? 'follow') === 'follow';
+  /**
+   * Flatten a `Request` input into `init`: the loop below re-issues every hop
+   * from a string URL, which would otherwise drop the request's method,
+   * headers and body after the first redirect. Explicit `init` fields win.
+   */
+  let requestInit: RequestInit;
+  if (input instanceof Request) {
+    const headers = new Headers(input.headers);
+    if (init?.headers) new Headers(init.headers).forEach((v, k) => headers.set(k, v));
+    requestInit = {
+      ...init,
+      // `input.body` is locked to the Request; read it once so every hop can resend it
+      body: init?.body ?? (input.body ? await input.arrayBuffer() : undefined),
+      headers,
+      method: init?.method ?? input.method,
+      redirect: init?.redirect ?? input.redirect,
+    };
+  } else {
+    requestInit = { ...init };
+  }
+
+  const followRedirects = (requestInit.redirect ?? 'follow') === 'follow';
+  if (followRedirects) requestInit.redirect = 'manual';
+
   let url = resolveRequestUrl(input);
-  let method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
-  let request: { init?: RequestInit; input: RequestInfo | URL } = {
-    init: followRedirects ? { ...init, redirect: 'manual' } : init,
-    input,
-  };
+  let method = (requestInit.method ?? 'GET').toUpperCase();
 
   for (let hop = 0; ; hop++) {
     await assertResolvedTargetAllowed(url, policy);
 
-    const response = await baseFetch(request.input, request.init);
+    const response = await baseFetch(url.href, requestInit);
     const location = response.headers.get('location');
     if (!followRedirects || !REDIRECT_STATUSES.has(response.status) || !location) return response;
 
@@ -146,17 +166,24 @@ const fetchThroughEnvProxy = async (
       throw new TypeError('fetch failed', { cause: new Error('Too many redirects') });
     }
 
+    const next = new URL(location, url);
+    if (next.origin !== url.origin && requestInit.headers) {
+      // Native fetch strips credentials when a redirect crosses origins
+      const headers = new Headers(requestInit.headers);
+      for (const name of SENSITIVE_HEADERS) headers.delete(name);
+      requestInit = { ...requestInit, headers };
+    }
+
     // Mirror fetch's redirect semantics: 303, and 301/302 after a POST, become a body-less GET
     const switchToGet =
       (response.status === 303 && method !== 'HEAD') ||
       ((response.status === 301 || response.status === 302) && method === 'POST');
-    if (switchToGet) method = 'GET';
+    if (switchToGet) {
+      method = 'GET';
+      requestInit = { ...requestInit, body: undefined, method };
+    }
 
-    url = new URL(location, url);
-    request = {
-      init: switchToGet ? { ...request.init, body: undefined, method } : request.init,
-      input: url.href,
-    };
+    url = next;
   }
 };
 
