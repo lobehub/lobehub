@@ -32,6 +32,10 @@ describe('parseCronPattern', () => {
     expect(parseCronPattern('*/15 * * * *').triggerMinute).toBe(0);
     expect(parseCronPattern('* 9 * * *').triggerMinute).toBe(0);
   });
+
+  it('normalizes Sunday when a range includes the alias 7', () => {
+    expect(parseCronPattern('30 9 * * 6-7').weekdays).toEqual([0, 6]);
+  });
 });
 
 describe('getMinuteChoices', () => {
@@ -60,6 +64,24 @@ describe('formatScheduleDescription', () => {
     );
     expect(formatScheduleDescription('5 9 * * 1', t)).toContain('"time":"09:05"');
   });
+
+  it.each(['MON-FRI', '1-5', '1,2,3,4,5'])('shows all weekdays at 09:30 for %s', (weekdayField) => {
+    const days = ['mon', 'tue', 'wed', 'thu', 'fri']
+      .map((weekday) => `taskSchedule.weekdays.${weekday}`)
+      .join('/');
+
+    expect(formatScheduleDescription(`30 9 * * ${weekdayField}`, t)).toBe(
+      `taskSchedule.summary.weekly:{"days":"${days}","time":"09:30"}`,
+    );
+  });
+
+  it.each(['MON-INVALID', 'FRI#2', '5L'])(
+    'shows the original expression when %s cannot be rendered as a weekly schedule',
+    (weekdayField) => {
+      const pattern = `30 9 * * ${weekdayField}`;
+      expect(formatScheduleDescription(pattern, t)).toBe(pattern);
+    },
+  );
 
   it('names an exact minute for hourly schedules', () => {
     expect(formatScheduleDescription('5 * * * *', t)).toBe(

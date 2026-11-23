@@ -1,3 +1,4 @@
+import { parseCronWeekdays } from '@lobechat/utils/cronEval';
 import { type Dayjs } from 'dayjs';
 
 export type ScheduleType = 'daily' | 'hourly' | 'weekly';
@@ -102,7 +103,7 @@ export const parseCronPattern = (
   triggerMinute: number;
   weekdays?: number[];
 } => {
-  const parts = cronPattern.split(' ');
+  const parts = cronPattern.trim().split(/\s+/);
   if (parts.length !== 5) {
     return { scheduleType: 'daily', triggerHour: 0, triggerMinute: 0 };
   }
@@ -123,8 +124,12 @@ export const parseCronPattern = (
   const triggerHour = Number.parseInt(hour);
 
   if (weekday !== '*') {
-    const weekdays = weekday.split(',').map((d) => Number.parseInt(d));
-    return { scheduleType: 'weekly', triggerHour, triggerMinute, weekdays };
+    return {
+      scheduleType: 'weekly',
+      triggerHour,
+      triggerMinute,
+      weekdays: parseCronWeekdays(cronPattern),
+    };
   }
 
   return { scheduleType: 'daily', triggerHour, triggerMinute };
