@@ -4,7 +4,8 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
-import { channelMessageConnector, isChannelRuntime, isRemoteChannelRuntime } from './channel';
+import { isChannelRuntime, isRemoteChannelRuntime } from './channel';
+import { channelMessageConnector } from './channelMessageCard';
 
 describe('isChannelRuntime', () => {
   it('accepts LobeHub native execution', () => {
