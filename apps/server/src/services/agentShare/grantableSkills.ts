@@ -66,13 +66,15 @@ const resolveLegacyBuiltinSkills = async ({
   workspaceId,
 }: Pick<GrantableSkillsInput, 'agentConfig' | 'db' | 'userId' | 'workspaceId'>) => {
   const userSettings = await new UserModel(db, userId).getUserSettings().catch(() => null);
-  // Unknown settings fail closed: no legacy builtin is offered as installed.
-  const uninstalledBuiltinIds = userSettings
-    ? resolveUninstalledBuiltinTools(
-        userSettings.tool as UninstalledBuiltinToolsScope | undefined,
-        workspaceId,
-      )
-    : legacyBuiltinSkillIds;
+  // A failed read cannot confirm any legacy builtin is installed. A missing row
+  // (`undefined`) is an owner who never saved settings and keeps the defaults.
+  const uninstalledBuiltinIds =
+    userSettings === null
+      ? legacyBuiltinSkillIds
+      : resolveUninstalledBuiltinTools(
+          userSettings?.tool as UninstalledBuiltinToolsScope | undefined,
+          workspaceId,
+        );
 
   return {
     disabledIds: getLegacyDisabledBuiltinSkillIds(
