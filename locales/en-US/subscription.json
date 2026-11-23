@@ -717,6 +717,7 @@
   "plans.quota.freeLimit": "Monthly limit, resets every month",
   "plans.quota.none": "No built-in usage",
   "plans.quota.title": "Usage",
+  "plans.recommended": "Recommended",
   "plans.restoreSubscription": "Restore subscription",
   "plans.restoreSubscriptionError": "Could not restore your subscription",
   "plans.restoreSubscriptionSuccess": "Subscription has been restored",

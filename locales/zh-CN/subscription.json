@@ -717,6 +717,7 @@
   "plans.quota.freeLimit": "每月限额，按月重置",
   "plans.quota.none": "无内置额度",
   "plans.quota.title": "额度",
+  "plans.recommended": "推荐",
   "plans.restoreSubscription": "恢复订阅",
   "plans.restoreSubscriptionError": "订阅恢复失败",
   "plans.restoreSubscriptionSuccess": "订阅已恢复",
