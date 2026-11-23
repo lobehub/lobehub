@@ -167,7 +167,9 @@ describe('changing an Agent member’s channel environment', () => {
   it('creates a member in the device home folder when the Agent has no directory there', async () => {
     querySystemInfo.mockResolvedValue({ homePath: '/Users/me' });
     statPath.mockResolvedValue({ canonicalPath: '/Users/me', isDirectory: true });
-    create.mockResolvedValue({ channel: { id: 'channel-1' } });
+    create.mockResolvedValue({
+      channel: { id: 'chn_1', metadata: null, projectId: null, title: 'c' },
+    });
 
     await service().create({ agents: [{ agentId: 'agent-1', deviceId: 'mac' }], title: 'c' });
 
