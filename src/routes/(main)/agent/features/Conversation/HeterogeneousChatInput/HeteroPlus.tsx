@@ -3,7 +3,15 @@
 import { cssVar, Icon, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import { CalendarClockIcon, CheckIcon, FileUp, PlusIcon, TargetIcon, TypeIcon } from 'lucide-react';
+import {
+  CalendarClockIcon,
+  CheckIcon,
+  FileUp,
+  PlusIcon,
+  ReplyIcon,
+  TargetIcon,
+  TypeIcon,
+} from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +21,9 @@ import SubmenuChevron from '@/features/ChatInput/ActionBar/components/SubmenuChe
 import { insertGoalTag } from '@/features/ChatInput/InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
+import { contextSelectors } from '@/features/Conversation/store';
+import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { OFFSETS_IN_HOURS, resolveScheduleTime } from './scheduleTime';
 import { useHeteroUpload } from './useHeteroUpload';
@@ -45,13 +56,16 @@ const styles = stylex.create({
  * is shown next to it by `ScheduledSendChip`.
  */
 interface HeteroPlusProps {
+  /** The CLI runs on this desktop and can supply its own next-prompt suggestion. */
+  nativeSuggestionsAvailable?: boolean;
   /** The agent's CLI adapter type — decides whether picked images are accepted. */
   providerType?: string;
 }
 
-const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
+const HeteroPlus = memo<HeteroPlusProps>(({ nativeSuggestionsAvailable, providerType }) => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
+  const { t: tSetting } = useTranslation('setting');
   const [open, setOpen] = useState(false);
 
   const [editor, showTypoBar, setShowTypoBar] = useChatInputStore((s) => [
@@ -62,6 +76,15 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
 
   const scheduledSendAt = useConversationStore((s) => s.scheduledSendAt);
   const setScheduledSendAt = useConversationStore((s) => s.setScheduledSendAt);
+
+  const agentId = useConversationStore(contextSelectors.agentId);
+  const showFollowUpToggle = !!nativeSuggestionsAvailable && !!agentId;
+  const followUpEnabled = useAgentStore(
+    (s) =>
+      !!agentId &&
+      chatConfigByIdSelectors.getChatConfigById(agentId)(s).enableFollowUpChips === true,
+  );
+  const updateChatConfig = useAgentStore((s) => s.updateAgentChatConfigById);
 
   const closeMenu = useCallback(() => setOpen(false), []);
   const { beforeUpload, onFiles } = useHeteroUpload(providerType, closeMenu);
@@ -126,6 +149,19 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
         onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
         type: 'switch',
       },
+      ...(showFollowUpToggle
+        ? [
+            {
+              checked: followUpEnabled,
+              icon: ReplyIcon,
+              key: 'follow-up-suggestions',
+              label: tSetting('settingChat.enableFollowUpChips.title'),
+              onCheckedChange: (checked: boolean) =>
+                void updateChatConfig(agentId!, { enableFollowUpChips: checked }),
+              type: 'switch' as const,
+            },
+          ]
+        : []),
       // Goal creation shares the standard input's goal chip.
       { type: 'divider' },
       {
@@ -142,6 +178,11 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
   }, [
     t,
     tEditor,
+    tSetting,
+    agentId,
+    followUpEnabled,
+    showFollowUpToggle,
+    updateChatConfig,
     showTypoBar,
     setShowTypoBar,
     armSchedule,

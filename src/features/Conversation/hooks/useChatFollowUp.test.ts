@@ -26,6 +26,26 @@ vi.mock('@/store/user', () => ({
   useUserStore: vi.fn(),
 }));
 
+const desktop = vi.hoisted(() => ({ isDesktop: false }));
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  get isDesktop() {
+    return desktop.isDesktop;
+  },
+}));
+
+const agency = vi.hoisted(() => ({
+  config: undefined as Record<string, unknown> | undefined,
+  isPreferenceLoading: false,
+}));
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: agency.config,
+    isPreferenceLoading: agency.isPreferenceLoading,
+    workspaceScoped: false,
+  }),
+}));
+
 describe('useChatFollowUp', () => {
   let fetchFor: ReturnType<typeof vi.fn>;
   let clear: ReturnType<typeof vi.fn>;
@@ -49,6 +69,73 @@ describe('useChatFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     (useUserStore as unknown as Mock).mockReset();
+  });
+
+  describe('Claude Code native suggestions', () => {
+    const renderNative = () =>
+      renderHook(() =>
+        useChatFollowUp({
+          agentChatConfig: VALID_AGENT,
+          agentId: 'agent-1',
+          conversationKey: CONVERSATION_KEY,
+          topicId: TOPIC_ID,
+        }),
+      ).result.current;
+
+    afterEach(() => {
+      desktop.isDesktop = false;
+      agency.config = undefined;
+      agency.isPreferenceLoading = false;
+    });
+
+    it('needs no global model and still clears on send', async () => {
+      desktop.isDesktop = true;
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+      (useUserStore as unknown as Mock).mockImplementation((selector: any) =>
+        selector({ settings: { systemAgent: { followUpAction: { enabled: false } } } }),
+      );
+
+      const hooks = renderNative();
+
+      expect(hooks.onAssistantTurnSettled).toBeUndefined();
+      await hooks.onBeforeSendMessage?.({} as any);
+      expect(clear).toHaveBeenCalledWith(CONVERSATION_KEY);
+    });
+
+    it('leaves the extraction decision to the executor for a local run', () => {
+      desktop.isDesktop = true;
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+
+      expect(renderNative().onAssistantTurnSettled).toBeUndefined();
+    });
+
+    it('keeps server extraction for Claude Code on the web', () => {
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
+
+    it.each(['device', 'sandbox'])('keeps server extraction for a desktop %s run', (target) => {
+      desktop.isDesktop = true;
+      agency.config = {
+        boundDeviceId: 'device-a',
+        executionTarget: target,
+        heterogeneousProvider: { type: 'claude-code' },
+      };
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
+
+    it('keeps server extraction while the device preference is loading', () => {
+      desktop.isDesktop = true;
+      agency.config = { heterogeneousProvider: { type: 'claude-code' } };
+      agency.isPreferenceLoading = true;
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
+
+    it('keeps server extraction for other CLI agents on desktop', () => {
+      desktop.isDesktop = true;
+      agency.config = { heterogeneousProvider: { type: 'codex' } };
+      expect(renderNative().onAssistantTurnSettled).toBeDefined();
+    });
   });
 
   describe('disabled effective state — returns empty hooks', () => {

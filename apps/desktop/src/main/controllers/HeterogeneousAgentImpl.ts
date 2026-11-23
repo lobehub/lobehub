@@ -32,8 +32,7 @@ import {
   resolveHeterogeneousAgentCommand,
   resolveHeterogeneousProviderBinding,
 } from '@lobechat/heterogeneous-agents';
-import type { AskUserBridgeOptions } from '@lobechat/heterogeneous-agents/askUser';
-import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { AskUserBridge, type AskUserBridgeOptions } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
   McpToolResult,
@@ -76,6 +75,7 @@ import {
   DSH_COMMAND,
   ensureClaudeCodeResumeTranscript,
   findClaudeCodeTranscriptPath,
+  gatePromptSuggestionArgs,
   getCodexAppServerUnsupportedArgs,
   getHeterogeneousAgentSpawnEnv,
   prepareClaudeCodeLobeHubCli,
@@ -1893,7 +1893,7 @@ export default class HeterogeneousAgentCtr {
       params.permissionMode &&
       this.setupAcpInterventionForOp(params.operationId, session.sessionId, 'claude-code');
     const sdkSession = new ClaudeAgentSdkSession({
-      args: [...session.args, ...input.args],
+      args: [...gatePromptSuggestionArgs(session.args, session.cliVersion), ...input.args],
       askUserBridge: prompts ? prompts.bridge : undefined,
       commandPath,
       configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,

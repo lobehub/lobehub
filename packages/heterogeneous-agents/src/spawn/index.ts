@@ -1,3 +1,4 @@
+export { gatePromptSuggestionArgs } from '../claudeCodePromptSuggestions';
 /**
  * Producer-side helpers for converting external agent CLI output into the
  * unified `AgentStreamEvent` wire shape. Imported by:

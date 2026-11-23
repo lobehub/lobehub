@@ -13,6 +13,7 @@ import { type ActionKeys } from '@/features/ChatInput';
 import HeteroControlBar from '@/features/ChatInput/ControlBar/HeteroControlBar';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
+import { supportsNativePromptSuggestions } from '@/features/Conversation/hooks/nativePromptSuggestions';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -122,6 +123,7 @@ const HeterogeneousChatInput = memo(() => {
     clientExecutionAvailable: isDesktop,
     workspaceScoped,
   });
+  const nativeSuggestionsAvailable = supportsNativePromptSuggestions(agencyConfig, workspaceScoped);
   const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
     useProviderBindingValidation(providerType, providerApiConfig);
   const deviceSelectionRequired =
@@ -154,12 +156,17 @@ const HeterogeneousChatInput = memo(() => {
     () => [
       {
         alwaysDisplay: true,
-        children: <HeteroPlus providerType={providerType} />,
+        children: (
+          <HeteroPlus
+            nativeSuggestionsAvailable={nativeSuggestionsAvailable}
+            providerType={providerType}
+          />
+        ),
         key: 'heteroPlus',
       },
       { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
     ],
-    [providerType],
+    [nativeSuggestionsAvailable, providerType],
   );
 
   // The model selector rides in the send-area prefix rather than the
