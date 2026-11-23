@@ -226,6 +226,8 @@ export const onboardingUnderstandingRouter = router({
   watchOnboardingGenerationProgress: onboardingGenerationProgressProcedure
     .input(onboardingGenerationProgressInputSchema)
     .subscription(async function* ({ ctx, input, signal }) {
+      // The platform clock starts with the request, so the budget must include the first read.
+      const guard = createOnboardingProgressStallGuard(Date.now());
       let lastEventId = input.lastEventId;
       const readPersistedProgress = async () => {
         const understanding = await ctx.understandingService.get(input.topicId);
@@ -247,7 +249,6 @@ export const onboardingUnderstandingRouter = router({
       }
       if (shouldEndOnboardingProgressStream(initial.progress)) return;
 
-      const guard = createOnboardingProgressStallGuard(Date.now());
       const subscription = await subscribeToOnboardingGenerationProgress(input.topicId);
       let current = initial;
       // A write landing between the initial read and the subscribe publishes to nobody, so a

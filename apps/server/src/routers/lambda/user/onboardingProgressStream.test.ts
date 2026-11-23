@@ -280,6 +280,28 @@ describe('watchOnboardingGenerationProgress stall guard', () => {
     expect(events.at(-1)).toMatchObject({ phase: 'stalled', stalledReason: 'stream-budget' });
   });
 
+  it('counts a slow initial read against the stream budget', async () => {
+    const slowRead = 60_000;
+    let revision = 1;
+    mockUnderstandingService.get.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, slowRead));
+      return collectingSession(revision);
+    });
+    mockUnderstandingService.get.mockImplementation(async () => {
+      revision += 1;
+      return collectingSession(revision);
+    });
+
+    const { consumed, events, hasEnded } = await watch();
+    await vi.advanceTimersByTimeAsync(ONBOARDING_PROGRESS_STREAM_BUDGET_MS - 1_000);
+    expect(hasEnded()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await consumed;
+
+    expect(events.at(-1)).toMatchObject({ phase: 'stalled', stalledReason: 'stream-budget' });
+  });
+
   it('still ends an empty session immediately without subscribing', async () => {
     mockUnderstandingService.get.mockResolvedValue({
       id: 'session-1',
