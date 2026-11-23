@@ -19,16 +19,15 @@ import {
   Pin,
   PinOff,
   Settings2Icon,
+  ShieldIcon,
   TagIcon,
   Trash,
-  UsersIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
-import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
 import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
@@ -44,7 +43,6 @@ import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
 import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
-import { useAgentVisibilityMenu } from './useAgentVisibilityMenu';
 
 interface UseAgentDropdownMenuParams {
   avatar?: string;
@@ -128,7 +126,6 @@ export const useAgentDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
   const isShownInSidebar = isSidebarItemVisible({ id, slug, type: 'agent', userId });
-  const visibilityMenu = useAgentVisibilityMenu({ id, slug, userId, visibility });
 
   // Member Permissions only gate Agent configuration. Workspace-level list
   // organization (pin/group) and duplication remain available to members.
@@ -165,16 +162,7 @@ export const useAgentDropdownMenu = ({
     },
     { userId, visibility },
   );
-  // Ownership handover to a workspace member (recipient must accept) — a
-  // separate entry from the cross-scope "Move to…" above.
-  const agentTransferToMemberItem = useAgentTransferToMemberMenuItem(
-    id,
-    { avatar, backgroundColor, title },
-    { userId, visibility },
-  );
-
   const transferMenuItems = isInbox ? null : agentTransferMenuItems;
-  const transferToMemberItem = isInbox ? null : agentTransferToMemberItem;
   const canManagePermission = !isInbox && canManageResource;
 
   const copyAgentIdItem = useCopyAgentIdMenuItem(id);
@@ -450,30 +438,25 @@ export const useAgentDropdownMenu = ({
         ...(canConfigure && transferMenuItems?.length ? transferMenuItems : []),
         ...(canConfigure
           ? [
-              // Permissions live on their own page now — the sidebar keeps a
-              // shortcut so creators and workspace owners don't have to open
-              // the Agent first.
+              // Member permissions, visibility and the handover to a member
+              // are low-frequency management: they live in the Agent's
+              // settings, and the row keeps one shortcut into that section
+              // for creators and workspace owners.
               ...(activeWorkspaceId && canManagePermission
                 ? [
                     { type: 'divider' as const },
                     {
-                      icon: <Icon icon={UsersIcon} />,
+                      icon: <Icon icon={ShieldIcon} />,
                       key: 'permission',
-                      label: t('permission.page.entry', { ns: 'setting' }),
+                      label: t('permission.page.agentEntry', { ns: 'setting' }),
                       onClick: ({ domEvent }: any) => {
                         domEvent?.stopPropagation();
                         navigate(`/agent/${id}/permission`);
                       },
-                      sfSymbol: 'person.2',
+                      sfSymbol: 'lock.shield',
                     },
                   ]
                 : []),
-              // Visibility is a property: the row carries the current scope
-              // and opens Private / Workspace, replacing the one-way
-              // "Publish to Workspace" and "Make private" actions.
-              ...(visibilityMenu.submenu ? [visibilityMenu.submenu] : []),
-              // Under Visibility: hand ownership to a member.
-              ...(transferToMemberItem ? [transferToMemberItem] : []),
               ...(canDelete
                 ? [
                     { type: 'divider' as const },
@@ -515,7 +498,6 @@ export const useAgentDropdownMenu = ({
       navigate,
       pinned,
       id,
-      avatar,
       title,
       name,
       pinAgent,
@@ -536,8 +518,6 @@ export const useAgentDropdownMenu = ({
       isDefault,
       openCreateGroupModal,
       transferMenuItems,
-      transferToMemberItem,
-      visibilityMenu,
       isShownInSidebar,
       setSidebarItemVisible,
       t,

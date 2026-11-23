@@ -8,12 +8,14 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   canEditResource: true,
   canManage: true,
+  canManageResource: false,
   home: {
     duplicateAgentGroup: vi.fn(),
     pinAgentGroup: vi.fn(),
     removeAgentGroup: vi.fn(),
   },
   isSidebarItemVisible: vi.fn(() => true),
+  navigate: vi.fn(),
   openAgentInNewWindow: vi.fn(),
   setSidebarItemVisible: vi.fn(),
   toastError: vi.fn(),
@@ -33,14 +35,26 @@ vi.mock('@/business/client/hooks/useAgentGroupTransferMenuItem', () => ({
   useAgentGroupTransferMenuItem: () => null,
 }));
 
+// A viewer who may hand the group over: the row menu must still not offer it.
 vi.mock('@/business/client/hooks/useAgentGroupTransferToMemberMenuItem', () => ({
-  useAgentGroupTransferToMemberMenuItem: () => null,
+  useAgentGroupTransferToMemberMenuItem: () => ({
+    key: 'transfer-agent-group-to-member',
+    label: 'Transfer to member...',
+  }),
 }));
 
 vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
-  useResourceAccess: () => ({ canEditResource: mocks.canEditResource, isAccessResolved: true }),
+  useResourceAccess: () => ({
+    canEditResource: mocks.canEditResource,
+    canManageResource: mocks.canManageResource,
+    isAccessResolved: true,
+  }),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -99,6 +113,7 @@ describe('useGroupDropdownMenu', () => {
     mocks.canEdit = true;
     mocks.canEditResource = true;
     mocks.canManage = true;
+    mocks.canManageResource = false;
     mocks.isSidebarItemVisible.mockReturnValue(true);
   });
 
@@ -124,6 +139,29 @@ describe('useGroupDropdownMenu', () => {
     const { result } = renderGroupMenu();
 
     expect(getMenuKeys(result.current()).slice(0, 3)).toEqual(['pin', 'hideFromSidebar', 'rename']);
+  });
+
+  it('leaves the member handover to the Permissions settings shortcut', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    mocks.canManageResource = true;
+    const { result } = renderGroupMenu();
+
+    const keys = getMenuKeys(result.current());
+    expect(keys).not.toContain('transfer-agent-group-to-member');
+    expect(keys).toContain('permission');
+
+    const entry = (result.current() ?? []).find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'permission',
+    ) as { onClick: (info: unknown) => void };
+    entry.onClick({ domEvent: { stopPropagation: vi.fn() } });
+    expect(mocks.navigate).toHaveBeenCalledWith('/group/cg_1/permission');
+  });
+
+  it('keeps the Permissions shortcut from members who do not manage the group', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    const { result } = renderGroupMenu();
+
+    expect(getMenuKeys(result.current())).not.toContain('permission');
   });
 
   it('offers hide to a member who cannot configure the group', () => {
