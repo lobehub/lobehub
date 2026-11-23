@@ -12,7 +12,7 @@ vi.mock('@/utils/connectorOAuth', () => ({ waitForConnectorOAuth: vi.fn() }));
 const server: OfficialMcpServerType = {
   auth: 'oauth',
   author: 'Sentry',
-  category: 'developer',
+  category: 'coding',
   description: 'Look up issues',
   icon: 'https://example.com/sentry.ico',
   identifier: 'sentry',
