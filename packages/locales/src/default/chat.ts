@@ -709,6 +709,17 @@ export default {
   'heteroAgent.permissionMode.switchUnsupported':
     'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
   'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',
+  'heteroAgent.planMode.label': 'Plan',
+  'heteroAgent.planMode.tooltipOff':
+    'Plan first: Codex explores and proposes a plan instead of making changes. Codex still has full access. A new topic in this directory starts with your last choice.',
+  'heteroAgent.planMode.tooltipOn':
+    'Plan is on: Codex proposes a plan instead of making changes. Turn it off, or choose Execute plan, to let it carry the plan out.',
+  'heteroAgent.planMode.nextTurn': 'Applies from the next turn',
+  'heteroAgent.planMode.saveFailed': 'Couldn’t save the Plan setting. Try again.',
+  'heteroAgent.planMode.unavailable.appServerLab':
+    'Plan needs the Codex App Server Runtime. Turn it on in Settings → Labs.',
+  'heteroAgent.planMode.unavailable.unsupported':
+    'Plan isn’t available where this agent runs: it needs Codex app-server on this computer, or a device whose Codex and lh support it. Update lh on the device to use it.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
