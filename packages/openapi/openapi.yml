@@ -1131,6 +1131,7 @@ components:
           enum:
             - internal
             - external
+            - replay
         experimentId:
           type:
             - string

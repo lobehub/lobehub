@@ -1,183 +1,25 @@
 import { readFile } from 'node:fs/promises';
 
+import { parseModelTargets } from '@lobechat/agent-tracing/replay';
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { resolveLocalDeviceId } from '../utils/device';
-import { log } from '../utils/logger';
+import { registerEvalReplayCommands } from './evalReplay';
+import type { JsonOption, RunSetStatus } from './evalShared';
+import {
+  executeCommand,
+  getCreatedId,
+  parseBoolean,
+  parseJsonObject,
+  parseResultJson,
+  parseRunStatus,
+  parseScore,
+  withResourceUrl,
+} from './evalShared';
 import { resolveAppUrlBuilder } from './task/url';
-
-const JSON_VERSION = 'v1' as const;
-
-interface JsonError {
-  code?: string;
-  message: string;
-}
-
-interface JsonEnvelope<T> {
-  data: T | null;
-  error: JsonError | null;
-  ok: boolean;
-  version: typeof JSON_VERSION;
-}
-
-interface JsonOption {
-  json?: boolean;
-}
-
-const printJson = (data: unknown) => {
-  console.log(JSON.stringify(data, null, 2));
-};
-
-const outputJsonSuccess = (data: unknown) => {
-  const payload: JsonEnvelope<unknown> = {
-    data,
-    error: null,
-    ok: true,
-    version: JSON_VERSION,
-  };
-  printJson(payload);
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const getCreatedId = (value: unknown) => {
-  if (!isRecord(value)) return undefined;
-  if (typeof value.id === 'string') return value.id;
-  return isRecord(value.data) && typeof value.data.id === 'string' ? value.data.id : undefined;
-};
-
-const withResourceUrl = (
-  buildUrl: (pathname: string) => string,
-  data: unknown,
-  pathname: string,
-) => ({
-  ...(isRecord(data) ? data : { data }),
-  url: buildUrl(pathname),
-});
-
-const toJsonError = (error: unknown): JsonError => {
-  if (error instanceof Error) {
-    const maybeData = (error as Error & { data?: { code?: string } }).data;
-    const code = maybeData?.code;
-
-    return {
-      code: typeof code === 'string' ? code : undefined,
-      message: error.message,
-    };
-  }
-
-  if (isRecord(error)) {
-    const code = typeof error.code === 'string' ? error.code : undefined;
-    const message = typeof error.message === 'string' ? error.message : 'Unknown error';
-    return { code, message };
-  }
-
-  return { message: String(error) };
-};
-
-const handleCommandError = (error: unknown, json: boolean) => {
-  const normalized = toJsonError(error);
-
-  if (json) {
-    const payload: JsonEnvelope<null> = {
-      data: null,
-      error: normalized,
-      ok: false,
-      version: JSON_VERSION,
-    };
-    printJson(payload);
-  } else {
-    log.error(normalized.message);
-  }
-
-  process.exit(1);
-};
-
-const parseScore = (value: string) => {
-  const score = Number(value);
-  if (!Number.isFinite(score)) {
-    throw new InvalidArgumentError(`Invalid score: ${value}`);
-  }
-  return score;
-};
-
-const parseBoolean = (value: string) => {
-  const normalized = value.trim().toLowerCase();
-  if (['1', 'true', 'yes'].includes(normalized)) return true;
-  if (['0', 'false', 'no'].includes(normalized)) return false;
-  throw new InvalidArgumentError(`Invalid boolean value: ${value}`);
-};
-
-const parseResultJson = (value: string) => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    throw new InvalidArgumentError('Invalid JSON value for --result-json');
-  }
-
-  if (!isRecord(parsed) || Array.isArray(parsed)) {
-    throw new InvalidArgumentError('--result-json must be a JSON object');
-  }
-
-  return parsed;
-};
-
-const parseJsonObject = (option: string) => (value: string) => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    throw new InvalidArgumentError(`Invalid JSON value for ${option}`);
-  }
-  if (!isRecord(parsed) || Array.isArray(parsed)) {
-    throw new InvalidArgumentError(`${option} must be a JSON object`);
-  }
-  return parsed;
-};
-
-const RUN_SET_STATUSES = ['running', 'completed', 'external', 'failed', 'aborted'] as const;
-type RunSetStatus = (typeof RUN_SET_STATUSES)[number];
-
-const parseRunStatus = (value: string): RunSetStatus => {
-  if (!(RUN_SET_STATUSES as readonly string[]).includes(value)) {
-    throw new InvalidArgumentError(
-      `Only ${RUN_SET_STATUSES.map((s) => `'${s}'`).join(', ')} are supported`,
-    );
-  }
-
-  return value as RunSetStatus;
-};
-
-const executeCommand = async (
-  options: JsonOption,
-  action: () => Promise<unknown>,
-  successMessage?: string,
-) => {
-  try {
-    const data = await action();
-    if (options.json) {
-      outputJsonSuccess(data);
-      return;
-    }
-
-    if (successMessage) {
-      console.log(`${pc.green('OK')} ${successMessage}`);
-      if (isRecord(data) && typeof data.url === 'string') {
-        console.log(`${pc.bold('url')}: ${data.url}`);
-      }
-      return;
-    }
-
-    printJson(data);
-  } catch (error) {
-    handleCommandError(error, Boolean(options.json));
-  }
-};
 
 export function registerEvalCommand(program: Command) {
   const evalCmd = program.command('eval').description('Manage evaluation workflows');
@@ -456,7 +298,7 @@ export function registerEvalCommand(program: Command) {
   datasetCmd
     .command('create')
     .description('Create a dataset')
-    .requiredOption('--benchmark-id <id>', 'Benchmark ID')
+    .option('--benchmark-id <id>', 'Benchmark ID (omit for a standalone captured-case dataset)')
     .requiredOption('--identifier <identifier>', 'Unique identifier')
     .requiredOption('-n, --name <name>', 'Dataset name')
     .option('-d, --description <desc>', 'Description')
@@ -471,7 +313,7 @@ export function registerEvalCommand(program: Command) {
     .action(
       async (
         options: JsonOption & {
-          benchmarkId: string;
+          benchmarkId?: string;
           description?: string;
           evalConfig?: Record<string, unknown>;
           evalMode?: string;
@@ -486,10 +328,10 @@ export function registerEvalCommand(program: Command) {
             const client = await getTrpcClient();
             const buildUrl = await resolveAppUrlBuilder(client);
             const input: Record<string, any> = {
-              benchmarkId: options.benchmarkId,
               identifier: options.identifier,
               name: options.name,
             };
+            if (options.benchmarkId) input.benchmarkId = options.benchmarkId;
             if (options.description) input.description = options.description;
             if (options.evalMode) input.evalMode = options.evalMode;
             if (options.evalConfig) input.evalConfig = options.evalConfig;
@@ -500,7 +342,9 @@ export function registerEvalCommand(program: Command) {
               ? withResourceUrl(
                   buildUrl,
                   result,
-                  `/eval/bench/${encodeURIComponent(options.benchmarkId)}/datasets/${encodeURIComponent(id)}`,
+                  options.benchmarkId
+                    ? `/eval/bench/${encodeURIComponent(options.benchmarkId)}/datasets/${encodeURIComponent(id)}`
+                    : `/eval/datasets/${encodeURIComponent(id)}`,
                 )
               : result;
           },
@@ -655,11 +499,15 @@ export function registerEvalCommand(program: Command) {
       parseJsonObject('--environment'),
     )
     .option('--sort-order <n>', 'New sort order')
+    .option('--criteria <text>', 'New llm-rubric judge criteria (self-contained)')
+    .option('--criteria-file <path>', 'Read the new judge criteria from a file')
     .option('--json', 'Output JSON envelope')
     .action(
       async (
         options: JsonOption & {
           category?: string;
+          criteria?: string;
+          criteriaFile?: string;
           expected?: string;
           environment?: Record<string, unknown>;
           id: string;
@@ -683,6 +531,13 @@ export function registerEvalCommand(program: Command) {
             }
             if (Object.keys(content).length > 0) input.content = content;
             if (options.sortOrder) input.sortOrder = Number.parseInt(options.sortOrder, 10);
+            const criteria = options.criteriaFile
+              ? await readFile(options.criteriaFile, 'utf8')
+              : options.criteria;
+            if (criteria?.trim()) {
+              input.evalMode = 'llm-rubric';
+              input.evalConfig = { criteria };
+            }
             return client.agentEval.updateTestCase.mutate(input as any);
           },
           `Updated test case ${pc.bold(options.id)}`,
@@ -716,6 +571,8 @@ export function registerEvalCommand(program: Command) {
         return client.agentEvalExternal.testCasesCount.query({ datasetId: options.datasetId });
       }),
     );
+
+  registerEvalReplayCommands(evalCmd, testcaseCmd);
 
   // ============================================
   // Run Operations
@@ -787,6 +644,10 @@ export function registerEvalCommand(program: Command) {
     .option('--id <id>', 'Caller-supplied run ID (idempotent create; 409 if params differ)')
     .option('--include-cases <ids>', 'Comma-separated dataset-native case IDs to include')
     .option('--exclude-cases <ids>', 'Comma-separated dataset-native case IDs to exclude')
+    .option(
+      '-m, --model <list>',
+      'Comma-separated provider/model the agent runs on (overrides its own model); several create one run per model',
+    )
     .option('--json', 'Output JSON envelope')
     .action(
       async (
@@ -794,6 +655,7 @@ export function registerEvalCommand(program: Command) {
           agentId?: string;
           datasetId: string;
           excludeCases?: string;
+          model?: string;
           experimentId?: string;
           external?: boolean;
           id?: string;
@@ -840,7 +702,38 @@ export function registerEvalCommand(program: Command) {
                 caseIds: parseCaseIds(options.excludeCases),
                 mode: 'exclude',
               };
+            const subjects = options.model ? parseModelTargets(options.model) : [];
+            if (subjects.length === 1) {
+              config.model = subjects[0].model;
+              config.provider = subjects[0].provider;
+            }
             if (Object.keys(config).length > 0) input.config = config;
+
+            if (subjects.length > 1) {
+              if (options.external || options.id) {
+                throw new InvalidArgumentError(
+                  'Several --model values create one run each; --external and --id take a single run',
+                );
+              }
+              if (!options.agentId) {
+                throw new InvalidArgumentError(
+                  '--agent-id is required with several --model values',
+                );
+              }
+              const dataset = await client.agentEval.getDataset.query({ id: options.datasetId });
+              const runs = await client.agentEval.createSubjectRuns.mutate({
+                ...(input as any),
+                subjects: subjects.map(({ model, provider }) => ({ model, provider })),
+              });
+              return runs.map((run: { id: string }) =>
+                withResourceUrl(
+                  buildUrl,
+                  run,
+                  `/eval/bench/${encodeURIComponent(dataset.benchmarkId)}/runs/${encodeURIComponent(run.id)}`,
+                ),
+              );
+            }
+
             const dataset = options.external
               ? await client.agentEvalExternal.datasetGet.query({ datasetId: options.datasetId })
               : await client.agentEval.getDataset.query({ id: options.datasetId });

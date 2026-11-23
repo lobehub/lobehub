@@ -19,7 +19,7 @@ import {
 import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
-import { evalRunInputConfigSchema } from '../evalRunConfig.schema';
+import { evalRunInputConfigSchema, evalRunSubjectSchema } from '../evalRunConfig.schema';
 import { assertRunFollowsBenchmark } from './benchmarkStandard';
 import { RUN_ENRICHMENT_CONCURRENCY } from './constants';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
@@ -66,6 +66,38 @@ export const runRouter = router({
   // ============================================
   // Run Operations
   // ============================================
+  /**
+   * Evaluate one agent on several models: one run per model, each keeping the
+   * agent's setup and swapping only its model (`config.model`), so a model
+   * comparison never needs a cloned agent per model. Runs are created idle;
+   * start them with `startRun`.
+   */
+  createSubjectRuns: agentEvalProcedureWrite
+    .input(
+      z.object({
+        config: evalRunInputConfigSchema.optional(),
+        datasetId: z.string(),
+        experimentId: z.string().optional(),
+        name: z.string().optional(),
+        subjects: z.array(evalRunSubjectSchema).min(1).max(8),
+        targetAgentId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { config, name, subjects, ...rest } = input;
+      const unique = [...new Map(subjects.map((s) => [`${s.provider}/${s.model}`, s])).values()];
+
+      return pMap(
+        unique,
+        (subject) =>
+          ctx.runService.createRun({
+            ...rest,
+            config: { ...config, model: subject.model, provider: subject.provider },
+            name: name ? `${name} · ${subject.model}` : subject.model,
+          }),
+        { concurrency: 2 },
+      );
+    }),
   createRun: agentEvalProcedureWrite
     .input(
       z.object({
@@ -231,6 +263,13 @@ export const runRouter = router({
       const run = await ctx.runModel.findById(runId);
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
+      }
+
+      if (run.config?.executionMode === 'replay') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Replay comparisons start via startReplayComparison',
+        });
       }
 
       // Check run status

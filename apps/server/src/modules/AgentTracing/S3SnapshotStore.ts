@@ -24,6 +24,11 @@ const isPreconditionFailed = (error: unknown): boolean => {
   return status === 412 || (error as { name?: string })?.name === 'PreconditionFailed';
 };
 
+// First 4 bytes of any zstd frame (0xFD2FB528, little-endian).
+const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
+const isZstdFrame = (bytes: Uint8Array): boolean =>
+  bytes.length >= 4 && ZSTD_MAGIC.every((byte, index) => bytes[index] === byte);
+
 const TRACE_PREFIX = 'agent-traces';
 const SNAPSHOT_SUFFIX = '.json.zst';
 const LEGACY_SUFFIX = '.json';
@@ -96,6 +101,24 @@ export class S3SnapshotStore implements ISnapshotStore {
     log('Saving snapshot to S3: %s', key);
     const compressed = await this.encodeSnapshot(snapshot);
     await this.s3.uploadBuffer(key, compressed, ZSTD_CONTENT_TYPE);
+  }
+
+  /**
+   * Read a finalized snapshot by its S3 key (`agent_operations.trace_s3_key`).
+   * Returns null when the object is missing. The body is decoded by content
+   * rather than suffix, since pre-zstd snapshots are plain JSON.
+   */
+  async loadByKey(key: string): Promise<ExecutionSnapshot | null> {
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.s3.getFileByteArray(key);
+    } catch (error) {
+      log('Snapshot %s not readable: %O', key, error);
+      return null;
+    }
+
+    if (isZstdFrame(bytes)) return this.decodeSnapshot<ExecutionSnapshot>(bytes);
+    return JSON.parse(Buffer.from(bytes).toString('utf8')) as ExecutionSnapshot;
   }
 
   // === Query methods — not supported, use OTEL backend ===

@@ -9,6 +9,7 @@ export * from './channelReplyError';
 export * from './channelReplyOpener';
 export * from './channelRouting';
 export * from './compressContext';
+export * from './evalCriteriaDraft';
 export * from './expertise';
 export * from './followUpAction';
 export * from './generateBrief';
