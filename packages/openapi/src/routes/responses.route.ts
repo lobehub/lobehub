@@ -32,7 +32,8 @@ ResponsesRoutes.post(
     // OpenResponses clients parse `error.message`/`error.type`, so HTTP errors
     // keep the protocol's shape (plus `requestId`) instead of `ApiError`.
     errorSchema: OpenResponsesHttpErrorSchema,
-    errors: [400, 403, 404],
+    // 403 (and 401/429/500) is shared by every authenticated routeDoc.
+    errors: [400, 404],
     streamContent: { 'text/event-stream': { schema: ResponseStreamEventSchema } },
     requestExample: example(CreateResponseRequestSchema, CREATE_RESPONSE_EXAMPLE),
     responseExample: RESPONSE_EXAMPLE,
