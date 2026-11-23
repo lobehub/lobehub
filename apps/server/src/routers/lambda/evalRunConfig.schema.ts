@@ -145,3 +145,9 @@ export const evalRunInputConfigSchema = z
     message: 'judgeModel and judgeProvider must be set together',
     path: ['judgeProvider'],
   });
+
+/** One model an eval run evaluates the target agent on. */
+export const evalRunSubjectSchema = z.object({
+  model: z.string().trim().min(1),
+  provider: z.string().trim().min(1),
+});

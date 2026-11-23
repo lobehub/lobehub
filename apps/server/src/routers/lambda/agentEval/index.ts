@@ -6,6 +6,7 @@ import { datasetConnectionRouter } from './datasetConnections';
 import { datasetRouter } from './datasets';
 import { environmentRouter } from './environments';
 import { experimentRouter } from './experiments';
+import { replayRouter } from './replay';
 import { runRouter } from './runs';
 import { testCaseRouter } from './testCases';
 
@@ -18,4 +19,5 @@ export const agentEvalRouter = mergeRouters(
   environmentRouter,
   testCaseRouter,
   runRouter,
+  replayRouter,
 );

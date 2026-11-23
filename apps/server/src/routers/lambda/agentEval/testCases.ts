@@ -267,6 +267,12 @@ export const testCaseRouter = router({
         ctx.testCaseModel.findByDatasetId(input.datasetId, input.limit, input.offset),
         ctx.testCaseModel.countByDatasetId(input.datasetId),
       ]);
-      return { data: await attachEnvironments(ctx.environmentModel, data), total };
+      // A frozen call carries the whole prompt and tool set — tens of KB per
+      // case — so lists only say whether one exists; `getTestCase` returns it.
+      const listed = data.map(({ frozenCall, ...testCase }) => ({
+        ...testCase,
+        hasFrozenCall: !!frozenCall,
+      }));
+      return { data: await attachEnvironments(ctx.environmentModel, listed), total };
     }),
 });

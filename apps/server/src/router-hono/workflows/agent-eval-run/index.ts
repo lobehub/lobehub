@@ -16,6 +16,7 @@ import {
   paginateTestCasesHandler,
   paginateTestCasesWorkflowOptions,
 } from './workflows/paginateTestCases';
+import { replayCellHandler, replayCellWorkflowOptions } from './workflows/replayCell';
 import {
   resumeAgentTrajectoryHandler,
   resumeAgentTrajectoryWorkflowOptions,
@@ -113,6 +114,16 @@ app.post(
       url: '/api/workflows/agent-eval-run/finalize-run',
     }),
     { ...finalizeRunWorkflowOptions, qstashClient },
+  ),
+);
+
+app.post(
+  '/replay-cell',
+  serve(
+    withOtelMetricsForUpstashWorkflows(replayCellHandler, {
+      url: '/api/workflows/agent-eval-run/replay-cell',
+    }),
+    { ...replayCellWorkflowOptions, qstashClient },
   ),
 );
 

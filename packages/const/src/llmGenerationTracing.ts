@@ -17,6 +17,7 @@ export const TRACING_SCENARIOS = {
   ChannelReplyOpener: 'channel_reply_opener',
   ChannelRouting: 'channel_routing',
   DocumentToSkillMeta: 'document_to_skill_meta',
+  EvalCriteriaDraft: 'eval_criteria_draft',
   ExpertiseConsolidation: 'expertise_consolidation',
   ExpertiseDomainDraft: 'expertise_domain_draft',
   ExpertiseRejectionIngestion: 'expertise_rejection_ingestion',

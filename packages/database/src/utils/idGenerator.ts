@@ -25,6 +25,7 @@ const prefixes = {
   evalBenchmarks: 'evb',
   evalDatasets: 'ds',
   evalExperiments: 'exp',
+  evalReplayResults: 'rpl',
   evalRuns: 'run',
   evalTestCases: 'case',
   expertiseDomains: 'epd',

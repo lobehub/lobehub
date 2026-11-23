@@ -17,6 +17,7 @@ import { AgentEvalEnvironmentConnectionRepo } from '@/database/repositories/agen
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
+import { AgentEvalReplayService } from '@/server/services/agentEvalReplay';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { FileService } from '@/server/services/file';
 import { FileUploadService } from '@/server/services/fileUpload';
@@ -63,6 +64,7 @@ export const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
         wsId,
       ),
       experimentModel: new AgentEvalExperimentModel(ctx.serverDB, ctx.userId, wsId),
+      replayService: new AgentEvalReplayService(ctx.serverDB, ctx.userId, wsId),
       runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),
       runService: new AgentEvalRunService(ctx.serverDB, ctx.userId, wsId),
       runTopicModel: new AgentEvalRunTopicModel(ctx.serverDB, ctx.userId, wsId),

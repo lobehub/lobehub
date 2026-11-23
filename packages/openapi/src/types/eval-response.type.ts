@@ -215,7 +215,7 @@ export const EvalRunSchema = z
       .strict(),
     createdAt: dateTimeSchema,
     datasetId: z.string(),
-    executionMode: z.enum(['internal', 'external']),
+    executionMode: z.enum(['internal', 'external', 'replay']),
     experimentId: z.string().nullable(),
     id: z.string(),
     metrics: EvalRunMetricsSchema.nullable(),
