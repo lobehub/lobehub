@@ -20,7 +20,7 @@ import {
   type UsageStats,
   type ValidationResult,
 } from '../types';
-import { formatUsageStats } from '../utils';
+import { appendUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
 import { createLobeTelegramAdapter } from './guestAdapter';
 import { deliverGuestCreate, deliverGuestEdit } from './guestOutbound';
@@ -490,7 +490,7 @@ class TelegramWebhookClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): number {

@@ -1,5 +1,6 @@
 import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
 import { formatDuration as formatDurationMs, merge } from '@lobechat/utils';
+import { formatUsageCost, isUsageCreditsEnabled } from '@lobechat/utils/usageCredits';
 
 import type {
   BotProviderConfig,
@@ -273,6 +274,17 @@ export function formatUsageStats(stats: UsageStats): string {
     (llmCalls && llmCalls > 1) || (toolCalls && toolCalls > 0)
       ? ` | llm×${llmCalls ?? 0} | tools×${toolCalls ?? 0}`
       : '';
+  if (stats.showMemberTokenUsage !== true) {
+    const credits =
+      isUsageCreditsEnabled() && totalCost > 0
+        ? formatUsageCost(totalCost, String) +
+          (stats.replyLocale === 'zh-CN' ? ' 积分' : ' Credits')
+        : undefined;
+    const summary = [credits, elapsedMs && elapsedMs > 0 ? formatDuration(elapsedMs) : undefined]
+      .filter(Boolean)
+      .join(' · ');
+    return [summary, calls.slice(3)].filter(Boolean).join(' | ');
+  }
   return `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
 }
 
@@ -289,4 +301,9 @@ export function platformFromThreadId(platformThreadId: string): string;
 export function platformFromThreadId(platformThreadId: string | undefined): string | undefined;
 export function platformFromThreadId(platformThreadId?: string): string | undefined {
   return platformThreadId?.split(':')[0];
+}
+
+export function appendUsageStats(body: string, stats: UsageStats, prefix = ''): string {
+  const footer = formatUsageStats(stats);
+  return footer ? `${body}\n\n${prefix}${footer}` : body;
 }

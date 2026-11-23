@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AgentStatCardsSkeleton } from '@/components/Skeleton/AgentStatistics';
 import StatisticCard from '@/components/StatisticCard';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { type AgentUsageStats } from '@/types/usage/usageRecord';
 import { formatNumber, formatUsageValue } from '@/utils/format';
 import { usageAmountSuffix } from '@/utils/usageCostLabel';
@@ -24,6 +25,7 @@ const desc = (text: string) => (
 );
 
 const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('spend');
   const suffix = ` · ${rangeLabel}`;
 
@@ -32,7 +34,7 @@ const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
   if (isLoading) return <AgentStatCardsSkeleton />;
 
   return (
-    <Grid gap={8} maxItemWidth={240} rows={3}>
+    <Grid gap={8} maxItemWidth={240} rows={showMemberTokenUsage ? 3 : 2}>
       <StatisticCard
         title={t('usageStats.cards.cost') + suffix}
         statistic={{
@@ -45,12 +47,14 @@ const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
       <StatisticCard
         title={t('usageStats.cards.cacheSavings') + suffix}
         statistic={{
-          description: desc(
-            t('usageStats.cards.cacheDesc', {
-              rate: String(Math.round(summary.cacheHitRate * 100)),
-              read: formatUsageValue(summary.cacheReadTokens),
-            }),
-          ),
+          description:
+            showMemberTokenUsage &&
+            desc(
+              t('usageStats.cards.cacheDesc', {
+                rate: String(Math.round(summary.cacheHitRate * 100)),
+                read: formatUsageValue(summary.cacheReadTokens),
+              }),
+            ),
           precision: 2,
           prefix: usageAmountPrefix(),
           suffix: usageAmountSuffix(),
@@ -58,18 +62,20 @@ const StatCards = memo<StatCardsProps>(({ summary, isLoading, rangeLabel }) => {
           valueStyle: { color: cssVar.colorSuccess },
         }}
       />
-      <StatisticCard
-        title={t('usageStats.cards.token') + suffix}
-        statistic={{
-          description: desc(
-            t('usageStats.cards.tokenDesc', {
-              input: formatUsageValue(summary.inputTokens),
-              output: formatUsageValue(summary.outputTokens),
-            }),
-          ),
-          value: formatUsageValue(summary.totalTokens),
-        }}
-      />
+      {showMemberTokenUsage && (
+        <StatisticCard
+          title={t('usageStats.cards.token') + suffix}
+          statistic={{
+            description: desc(
+              t('usageStats.cards.tokenDesc', {
+                input: formatUsageValue(summary.inputTokens),
+                output: formatUsageValue(summary.outputTokens),
+              }),
+            ),
+            value: formatUsageValue(summary.totalTokens),
+          }}
+        />
+      )}
     </Grid>
   );
 });

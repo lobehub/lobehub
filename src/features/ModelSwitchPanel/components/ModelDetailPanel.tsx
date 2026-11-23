@@ -16,6 +16,7 @@ import type { FC } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { getModelDescriptionI18nKey } from '@/utils/modelDescriptionI18n';
 
@@ -124,6 +125,7 @@ interface ModelDetailPanelProps {
 
 const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
   ({ model: modelId, provider, enabledList: enabledListProp, pricingMode }) => {
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { t } = useTranslation(['components', 'models']);
     const {
       approximatePriceLabel,
@@ -137,7 +139,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       handleExpandedChange,
       hasAbilities,
       hasCachedInputPricing,
-      hasPricing,
+      hasPricing: hasModelPricing,
       isAbilitiesExpanded,
       isCreditPricing,
       isPricingExpanded,
@@ -196,7 +198,10 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
           </Text>
         )}
         {/* Sections */}
-        {(hasRating || hasPricing || contextWindowLabel || hasAbilities) && (
+        {(hasRating ||
+          (showMemberTokenUsage && hasModelPricing) ||
+          contextWindowLabel ||
+          hasAbilities) && (
           <AccordionRoot
             indicatorPlacement="inline"
             style={{ gap: 8 }}
@@ -357,7 +362,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
             )}
 
             {/* Pricing */}
-            {hasPricing && (formatPrice || approximatePriceLabel) && (
+            {showMemberTokenUsage && hasModelPricing && (formatPrice || approximatePriceLabel) && (
               <AccordionItem value="pricing">
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>

@@ -68,6 +68,8 @@ export type IFeatureFlagsState = {
   showOpenAIApiKey: boolean | undefined;
   showOpenAIProxyUrl: boolean | undefined;
   showProvider: boolean | undefined;
+  /** Whether members may see token usage and per-token pricing. */
+  showMemberTokenUsage: boolean;
   /** Whether to display token usage in the chat input (`token_counter`). */
   showTokenCounter: boolean | undefined;
   showWelcomeSuggest: boolean | undefined;

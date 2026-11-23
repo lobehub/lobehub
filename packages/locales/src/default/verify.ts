@@ -533,8 +533,11 @@ export default {
     'Start runs the plan on the next wave. Revise has the main Agent rewrite the plan, then it comes back to you.',
   'acceptance.gate.checks':
     'Gate checks {{passed}}/{{total}} passed. They show the experiments finished, not that the plan carries over.',
+  'acceptance.gate.remainingUnits':
+    '{{count}} more after that, each wave reviewed by the main Agent.',
   'acceptance.gate.remaining':
     '{{count}} more after that, each wave reviewed by the main Agent. About {{estimate}} tokens in total, estimated from the experiments.',
+  'acceptance.gate.unitRuns': '{{runs}} run(s)',
   'acceptance.gate.unitMeta': '{{runs}} run(s) · {{tokens}} tokens',
   'acceptance.gate.unitReworkedCostly':
     'Passed after {{rework}} rework round(s), using {{ratio}}× the average.',

@@ -3,20 +3,23 @@ import { cleanObject } from '@lobechat/utils';
 
 import { LOADING_FLAT } from '@/const/message';
 
+import { stripMemberTokenUsage, stripSubAgentTokenUsage } from './stripMemberTokenUsage';
 import { type BaseExportOptions } from './type';
 
 interface FullExportParams extends BaseExportOptions {
   messages: UIChatMessage[];
+  showMemberTokenUsage?: boolean;
   systemRole: string;
   topic?: ChatTopic;
 }
 
 /**
- * Generates a lossless export of topic data including all message metadata
+ * Exports topic data using the tenant’s member usage visibility setting.
  */
 export const generateFullExport = ({
   topic,
   messages,
+  showMemberTokenUsage = false,
   systemRole,
   withSystemRole,
 }: FullExportParams): ExportedTopic => {
@@ -39,12 +42,12 @@ export const generateFullExport = ({
         plugin: m.plugin,
         pluginError: m.pluginError,
         pluginIntervention: m.pluginIntervention,
-        pluginState: m.pluginState,
+        pluginState: showMemberTokenUsage ? m.pluginState : stripSubAgentTokenUsage(m),
         tool_call_id: m.tool_call_id,
         tools: m.tools,
 
         // Extended fields
-        metadata: m.metadata,
+        metadata: showMemberTokenUsage ? m.metadata : stripMemberTokenUsage(m.metadata),
         reasoning: m.reasoning,
         search: m.search,
         traceId: m.traceId,

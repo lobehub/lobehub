@@ -14,6 +14,9 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
+import { formatUsageCostLabel } from '@/utils/usageCostLabel';
+
 import SegmentBar from '../../../../../../../../features/SegmentBar';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -131,6 +134,7 @@ const isDeterministicMode = (rubricId: string): boolean => {
 };
 
 const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, score }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('eval');
   const rubricScores = evalResult?.rubricScores;
   const hasRubricScores = rubricScores && rubricScores.length > 0;
@@ -280,11 +284,15 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
         {evalResult?.cost !== undefined && evalResult.cost !== null && (
           <div className={styles.infoItem}>
             <span className={styles.infoLabel}>{t('caseDetail.cost')}</span>
-            <span className={styles.infoValue}>${formatCost(evalResult.cost)}</span>
+            <span className={styles.infoValue}>
+              {showMemberTokenUsage
+                ? `${formatCost(evalResult.cost)}`
+                : formatUsageCostLabel(evalResult.cost, () => '')}
+            </span>
           </div>
         )}
 
-        {evalResult?.tokens !== undefined && evalResult.tokens !== null && (
+        {showMemberTokenUsage && evalResult?.tokens !== undefined && evalResult.tokens !== null && (
           <div className={styles.infoItem}>
             <span className={styles.infoLabel}>{t('caseDetail.tokens')}</span>
             <span className={styles.infoValue}>{formatShortenNumber(evalResult.tokens)}</span>

@@ -6,6 +6,8 @@ import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
+
 import ExportLayout, { ToolbarDivider } from '../components/ExportLayout';
 import { SelectChip, ToggleChip } from '../components/OptionChips';
 import { useShareData } from '../ShareDataProvider';
@@ -22,6 +24,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 };
 
 const ShareJSON = memo(() => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
 
@@ -39,6 +42,7 @@ const ShareJSON = memo(() => {
           systemRole: systemRole ?? '',
         })
       : generateFullExport({
+          showMemberTokenUsage,
           ...fieldValue,
           includeTool: true,
           messages: exportMessages,

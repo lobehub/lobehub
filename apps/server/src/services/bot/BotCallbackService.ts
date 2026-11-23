@@ -19,6 +19,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
+import { getBotMemberTokenVisibility } from './memberUsageVisibility';
 import type {
   BotMessageAttachment,
   BotReplyLocale,
@@ -451,6 +452,8 @@ export class BotCallbackService {
     );
 
     const stats: UsageStats = {
+      replyLocale,
+      showMemberTokenUsage: await getBotMemberTokenVisibility(),
       elapsedMs: body.elapsedMs,
       totalCost: body.totalCost ?? 0,
       totalTokens: body.totalTokens ?? 0,
@@ -563,6 +566,8 @@ export class BotCallbackService {
     }
 
     const stats: UsageStats = {
+      replyLocale,
+      showMemberTokenUsage: await getBotMemberTokenVisibility(),
       elapsedMs: body.duration,
       llmCalls: body.llmCalls ?? 0,
       toolCalls: body.toolCalls ?? 0,

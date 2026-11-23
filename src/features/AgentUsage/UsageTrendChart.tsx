@@ -5,6 +5,7 @@ import { Block, Divider, Flexbox, Segmented, Skeleton, Text } from '@lobehub/ui'
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { type AgentUsageBucket } from '@/types/usage/usageRecord';
 import { formatNumber, formatTokenNumber } from '@/utils/format';
 import { formatUsageCost } from '@/utils/usageCredits';
@@ -26,8 +27,10 @@ interface UsageTrendChartProps {
 
 const UsageTrendChart = memo<UsageTrendChartProps>(({ buckets, isLoading }) => {
   const { t } = useTranslation('spend');
-  const [type, setType] = useState<ShowType>(ShowType.Spend);
+  const showMemberTokenUsage = useShowMemberTokenUsage();
+  const [selectedType, setType] = useState<ShowType>(ShowType.Spend);
 
+  const type = showMemberTokenUsage ? selectedType : ShowType.Spend;
   const inputKey = t('usageStats.chart.input');
   const cachedInputKey = t('usageStats.chart.cachedInput');
   const outputKey = t('usageStats.chart.output');
@@ -59,14 +62,16 @@ const UsageTrendChart = memo<UsageTrendChartProps>(({ buckets, isLoading }) => {
         <Text fontSize={16} weight={500}>
           {t('usageStats.chart.title')}
         </Text>
-        <Segmented
-          value={type}
-          options={[
-            { label: t('usageStats.chart.spend'), value: ShowType.Spend },
-            { label: t('usageStats.chart.tokens'), value: ShowType.Token },
-          ]}
-          onChange={(value) => setType(value as ShowType)}
-        />
+        {showMemberTokenUsage && (
+          <Segmented
+            value={type}
+            options={[
+              { label: t('usageStats.chart.spend'), value: ShowType.Spend },
+              { label: t('usageStats.chart.tokens'), value: ShowType.Token },
+            ]}
+            onChange={(value) => setType(value as ShowType)}
+          />
+        )}
       </Flexbox>
       {isLoading ? (
         <Skeleton height={320} />

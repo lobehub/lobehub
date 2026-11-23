@@ -18,7 +18,9 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import SegmentBar from '@/routes/(main)/eval/features/SegmentBar';
+import { formatUsageCostLabel } from '@/utils/usageCostLabel';
 
 import { getResumeTarget } from '../resumeTarget';
 
@@ -263,6 +265,7 @@ const FINISHED_RUN_STATUSES = new Set(['completed', 'failed', 'aborted']);
 const CaseResultsTable = memo<CaseResultsTableProps>(
   ({ results, benchmarkId, runId, k = 1, onRetryCase, onResumeCase, runStatus }) => {
     const { t } = useTranslation('eval');
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const [searchText, setSearchText] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [pageSize, setPageSize] = useState(20);
@@ -469,11 +472,17 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             const cost = record.evalResult?.cost;
             const tokens = record.evalResult?.tokens;
             const hasCost = cost !== undefined && cost !== null;
-            const hasTokens = tokens !== undefined && tokens !== null;
-            if (!hasCost && !hasTokens) return '-';
+            const hasTokens = showMemberTokenUsage && tokens !== undefined && tokens !== null;
+            if (!hasCost && !hasTokens) return showMemberTokenUsage ? '-' : null;
             return (
               <Flexbox gap={2}>
-                {hasCost && <span className={styles.monoCell}>${formatCost(cost)}</span>}
+                {hasCost && (
+                  <span className={styles.monoCell}>
+                    {showMemberTokenUsage
+                      ? `${formatCost(cost)}`
+                      : formatUsageCostLabel(cost, () => '')}
+                  </span>
+                )}
                 {hasTokens && (
                   <span className={styles.durationSub}>{formatShortenNumber(tokens)} tokens</span>
                 )}
@@ -495,11 +504,17 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             const cost = record.evalResult?.totalCost;
             const tokens = record.evalResult?.totalTokens;
             const hasCost = cost !== undefined && cost !== null;
-            const hasTokens = tokens !== undefined && tokens !== null;
-            if (!hasCost && !hasTokens) return '-';
+            const hasTokens = showMemberTokenUsage && tokens !== undefined && tokens !== null;
+            if (!hasCost && !hasTokens) return showMemberTokenUsage ? '-' : null;
             return (
               <Flexbox gap={2}>
-                {hasCost && <span className={styles.monoCell}>${formatCost(cost)}</span>}
+                {hasCost && (
+                  <span className={styles.monoCell}>
+                    {showMemberTokenUsage
+                      ? `${formatCost(cost)}`
+                      : formatUsageCostLabel(cost, () => '')}
+                  </span>
+                )}
                 {hasTokens && (
                   <span className={styles.durationSub}>{formatShortenNumber(tokens)} tokens</span>
                 )}
@@ -570,6 +585,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
 
       return cols;
     }, [
+      showMemberTokenUsage,
       benchmarkId,
       runId,
       t,

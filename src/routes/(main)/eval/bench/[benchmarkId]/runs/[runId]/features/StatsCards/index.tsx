@@ -7,6 +7,9 @@ import { CheckCircle2, Clock, DollarSign, Hash } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
+import { formatUsageCostLabel } from '@/utils/usageCostLabel';
+
 import { formatDuration } from '../../../../../../utils';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -87,6 +90,7 @@ interface StatsCardsProps {
 }
 
 const StatsCards = memo<StatsCardsProps>(({ metrics }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('eval');
 
   const passedCount = metrics?.passedCases ?? 0;
@@ -117,17 +121,26 @@ const StatsCards = memo<StatsCardsProps>(({ metrics }) => {
       subtitle:
         metrics?.perCaseCost !== undefined ? (
           <>
-            ~${formatCost(metrics.perCaseCost)}{' '}
+            ~
+            {showMemberTokenUsage
+              ? `${formatCost(metrics.perCaseCost)}`
+              : formatUsageCostLabel(metrics.perCaseCost, () => '')}{' '}
             <span className={styles.subtitleUnit}>{t('run.metrics.perCase')}</span>
           </>
         ) : undefined,
-      value: metrics?.totalCost !== undefined ? `$${formatCost(metrics.totalCost)}` : '-',
+      value:
+        metrics?.totalCost !== undefined
+          ? showMemberTokenUsage
+            ? `${formatCost(metrics.totalCost)}`
+            : formatUsageCostLabel(metrics.totalCost, () => '')
+          : '-',
     },
     {
       bgColor: cssVar.colorInfoBg,
       color: cssVar.colorInfo,
       icon: Hash,
       label: t('run.metrics.tokens'),
+      visible: showMemberTokenUsage,
       subtitle:
         metrics?.perCaseTokens !== undefined ? (
           <>
@@ -169,18 +182,20 @@ const StatsCards = memo<StatsCardsProps>(({ metrics }) => {
 
       {/* Secondary metrics */}
       <div className={styles.grid}>
-        {cards.map((card) => (
-          <Flexbox horizontal align={'center'} className={styles.card} gap={12} key={card.label}>
-            <div className={styles.iconBox} style={{ background: card.bgColor }}>
-              <Icon icon={card.icon} size={16} style={{ color: card.color }} />
-            </div>
-            <Flexbox gap={2}>
-              <span className={styles.label}>{card.label}</span>
-              <span className={styles.value}>{card.value}</span>
-              {card.subtitle && <span className={styles.subtitle}>{card.subtitle}</span>}
+        {cards
+          .filter((card) => card.visible !== false)
+          .map((card) => (
+            <Flexbox horizontal align={'center'} className={styles.card} gap={12} key={card.label}>
+              <div className={styles.iconBox} style={{ background: card.bgColor }}>
+                <Icon icon={card.icon} size={16} style={{ color: card.color }} />
+              </div>
+              <Flexbox gap={2}>
+                <span className={styles.label}>{card.label}</span>
+                <span className={styles.value}>{card.value}</span>
+                {card.subtitle && <span className={styles.subtitle}>{card.subtitle}</span>}
+              </Flexbox>
             </Flexbox>
-          </Flexbox>
-        ))}
+          ))}
       </div>
     </Flexbox>
   );

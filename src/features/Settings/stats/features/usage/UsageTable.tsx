@@ -8,6 +8,7 @@ import SpendType, { type SpendTypeValue } from '@/components/SpendType';
 import TablePagination from '@/components/TablePagination';
 import TotalToken from '@/components/TotalToken';
 import { parseAsInteger, useQueryStates } from '@/hooks/useQueryParam';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { usageService } from '@/services/usage';
@@ -63,6 +64,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
     },
     { clearOnDefault: true },
   );
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const [sort, setSort] = useState<SortState | null>(null);
 
   useEffect(() => {
@@ -171,11 +173,15 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   return (
     <>
       <InlineTable
-        columns={columns}
         dataSource={pageData}
         loading={isLoading}
         rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
         size="small"
+        columns={
+          showMemberTokenUsage
+            ? columns
+            : columns.filter(({ key }) => key !== 'totalTokens' && key !== 'tps')
+        }
         onChange={(_pagination, _filters, sorterResult) => {
           // Columns sort one at a time; the array form only exists for `multiple` sorters.
           const sorter = Array.isArray(sorterResult) ? sorterResult[0] : sorterResult;

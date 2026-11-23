@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
 import { AgentModelBreakdownTableSkeleton } from '@/components/Skeleton/AgentStatistics';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { type AgentUsageModelRow } from '@/types/usage/usageRecord';
 import { formatNumber, formatUsageValue } from '@/utils/format';
 import { formatUsageCost } from '@/utils/usageCredits';
@@ -17,6 +18,7 @@ interface ModelBreakdownProps {
 }
 
 const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('spend');
 
   const columns: TableColumn<AgentUsageModelRow>[] = [
@@ -69,12 +71,14 @@ const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
         <AgentModelBreakdownTableSkeleton />
       ) : (
         <Table<AgentUsageModelRow>
-          columns={columns}
           dataSource={rows}
           loading={isLoading}
           pagination={false}
           rowKey={'id'}
           size={'middle'}
+          columns={
+            showMemberTokenUsage ? columns : columns.filter(({ key }) => key !== 'totalTokens')
+          }
         />
       )}
     </Block>

@@ -33,7 +33,7 @@ import {
   type ValidationError,
   type ValidationResult,
 } from '../types';
-import { formatUsageStats } from '../utils';
+import { appendUsageStats } from '../utils';
 import { isSoloBotChat } from './chatComposition';
 import { FeishuWSConnection } from './gateway';
 import { readReactionIds, writeReactionIds } from './reactionTracker';
@@ -469,7 +469,7 @@ class FeishuWebhookClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {
@@ -690,7 +690,7 @@ class FeishuWSClientImpl implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {

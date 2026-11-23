@@ -7,6 +7,7 @@ import { BadgeCentIcon, CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from '
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
@@ -240,6 +241,7 @@ interface MetricItem {
 }
 
 const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation(['chat', 'opStatusTray']);
   const context = useConversationStore(contextSelectors.context);
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -350,7 +352,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           value: String(operationState.steps),
         }
       : undefined,
-    totalTokens > 0
+    showMemberTokenUsage && totalTokens > 0
       ? {
           icon: CoinsIcon,
           key: 'tokens',
@@ -369,7 +371,9 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
         }
       : undefined,
   ].filter((item): item is MetricItem => !!item);
-  const tokenMetric = metrics.find((metric) => metric.key === 'tokens');
+  const compactMetric = metrics.find(
+    (metric) => metric.key === (showMemberTokenUsage ? 'tokens' : 'cost'),
+  );
 
   const renderMetric = ({ icon, title, value }: MetricItem) => (
     <Tooltip title={title}>
@@ -432,11 +436,11 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
               </Fragment>
             ))}
           </span>
-          {tokenMetric && (
+          {compactMetric && (
             <Popover content={metricPopoverContent} placement="topRight" trigger="hover">
               <span className={cx(styles.metric, styles.compactMetric)}>
-                <Icon className={styles.metricIcon} icon={tokenMetric.icon} size={13} />
-                <span className={styles.metricValue}>{tokenMetric.value}</span>
+                <Icon className={styles.metricIcon} icon={compactMetric.icon} size={13} />
+                <span className={styles.metricValue}>{compactMetric.value}</span>
               </span>
             </Popover>
           )}

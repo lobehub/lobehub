@@ -359,3 +359,16 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableRAGEval).toBe(true);
   });
 });
+
+describe('member token visibility', () => {
+  it('requires an explicit opt-in', () => {
+    expect(DEFAULT_FEATURE_FLAGS.member_token_visible).toBe(false);
+    expect(mapFeatureFlagsEnvToState({}).showMemberTokenUsage).toBe(false);
+    expect(mapFeatureFlagsEnvToState({ member_token_visible: false }).showMemberTokenUsage).toBe(
+      false,
+    );
+    expect(mapFeatureFlagsEnvToState({ member_token_visible: true }).showMemberTokenUsage).toBe(
+      true,
+    );
+  });
+});

@@ -133,6 +133,7 @@
   "heteroImport.footer.importEmpty": "Import",
   "heteroImport.footer.rescan": "Rescan",
   "heteroImport.footer.selected": "Selected {{sessions}} sessions · ~{{messages}} messages · {{tokens}} tokens",
+  "heteroImport.footer.selectedMessages": "Selected {{sessions}} sessions · ~{{messages}} messages",
   "heteroImport.hideImported": "Hide imported",
   "heteroImport.ignoredGroup": "Ignored {{count}} directories",
   "heteroImport.meta.messages": "{{count}} messages",

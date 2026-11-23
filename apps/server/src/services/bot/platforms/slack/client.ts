@@ -22,7 +22,7 @@ import {
   type UsageStats,
   type ValidationResult,
 } from '../types';
-import { formatUsageStats } from '../utils';
+import { appendUsageStats } from '../utils';
 import { SLACK_API_BASE, SlackApi } from './api';
 import { SlackSocketModeConnection } from './gateway';
 import { markdownToSlackMrkdwn } from './markdownToMrkdwn';
@@ -254,7 +254,7 @@ class SlackWebhookClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {
@@ -473,7 +473,7 @@ class SlackSocketModeClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {

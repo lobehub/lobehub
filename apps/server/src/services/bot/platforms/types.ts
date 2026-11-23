@@ -2,6 +2,8 @@ import type { Chat, Message } from 'chat';
 
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 
+import type { BotReplyLocale } from './const';
+
 // ============================================================================
 // Bot Platform Core Types
 // ============================================================================
@@ -213,6 +215,8 @@ export interface PlatformMessenger {
 export interface UsageStats {
   elapsedMs?: number;
   llmCalls?: number;
+  replyLocale?: BotReplyLocale;
+  showMemberTokenUsage?: boolean;
   toolCalls?: number;
   totalCost: number;
   totalTokens: number;

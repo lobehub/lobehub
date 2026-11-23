@@ -32,7 +32,7 @@ import {
   type UsageStats,
   type ValidationResult,
 } from '../types';
-import { formatUsageStats } from '../utils';
+import { appendUsageStats } from '../utils';
 import { createWechatApiClient, wechatApiFetch } from './apiClient';
 import { consumeSendCredits, recordInboundToken, type WechatWindowRedis } from './contextWindow';
 import { sendWechatAttachments } from './sendAttachments';
@@ -539,7 +539,7 @@ class WechatGatewayClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {

@@ -15,6 +15,9 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
+import { formatUsageCostLabel } from '@/utils/usageCostLabel';
+
 const styles = createStaticStyles(({ css }) => ({
   backLink: css`
     cursor: pointer;
@@ -94,6 +97,7 @@ interface CaseHeaderProps {
 
 const CaseHeader = memo<CaseHeaderProps>(
   ({ caseNumber, runName, evalResult, onBack, onPrev, onNext }) => {
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { t } = useTranslation('eval');
 
     const metrics = [
@@ -110,12 +114,20 @@ const CaseHeader = memo<CaseHeaderProps>(
       {
         icon: DollarSign,
         label: t('caseDetail.cost'),
-        value: evalResult?.cost != null ? `$${formatCost(evalResult.cost)}` : null,
+        value:
+          evalResult?.cost != null
+            ? showMemberTokenUsage
+              ? `${formatCost(evalResult.cost)}`
+              : formatUsageCostLabel(evalResult.cost, () => '')
+            : null,
       },
       {
         icon: Hash,
         label: t('caseDetail.tokens'),
-        value: evalResult?.tokens != null ? formatShortenNumber(evalResult.tokens) : null,
+        value:
+          showMemberTokenUsage && evalResult?.tokens != null
+            ? formatShortenNumber(evalResult.tokens)
+            : null,
       },
     ].filter((m) => m.value !== null);
 

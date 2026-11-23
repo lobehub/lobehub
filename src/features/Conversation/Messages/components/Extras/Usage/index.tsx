@@ -11,6 +11,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -46,6 +47,7 @@ interface UsageProps {
 
 const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
   const { t } = useTranslation('chat');
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   const serverDefaultConfiguredModel = useAgentStore((s) => {
@@ -99,7 +101,15 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
           TTFT rides in the hover instead of taking a second inline slot — it's a
           diagnostic, not an at-a-glance metric. */}
       <Center horizontal gap={6} style={{ fontSize: 12 }}>
-        <Center horizontal gap={4}>
+        <Center
+          horizontal
+          gap={4}
+          title={
+            !showMemberTokenUsage && performance?.ttft
+              ? `${t('messages.tokenDetails.speed.ttft.title')}: ${formatNumber(performance.ttft / 1000, 2)}s`
+              : undefined
+          }
+        >
           {heteroName || (
             <>
               <ModelIcon model={displayModel} type={'mono'} />
@@ -107,7 +117,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             </>
           )}
         </Center>
-        {!!performance?.tps && (
+        {showMemberTokenUsage && !!performance?.tps && (
           <>
             <span>·</span>
             <Tooltip
@@ -133,7 +143,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       </Center>
 
       <Center horizontal gap={8}>
-        {!!usage?.totalTokens && (
+        {showMemberTokenUsage && !!usage?.totalTokens && (
           <TokenDetail
             model={displayModel}
             performance={performance}
@@ -154,12 +164,15 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             </Center>
           </Tooltip>
         )}
-        {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
-          <Center horizontal gap={2}>
-            <Icon icon={isUsageCreditsEnabled() ? BadgeCent : CircleDollarSignIcon} />
-            {formatUsageCost(usage.cost, formatCost)}
-          </Center>
-        )}
+        {usage?.cost != null &&
+          (showMemberTokenUsage
+            ? !isShowCredit && !!usage.cost && usage.cost >= MIN_DISPLAY_COST
+            : usage.cost > 0 && isUsageCreditsEnabled()) && (
+            <Center horizontal gap={2}>
+              <Icon icon={isUsageCreditsEnabled() ? BadgeCent : CircleDollarSignIcon} />
+              {formatUsageCost(usage.cost, formatCost)}
+            </Center>
+          )}
       </Center>
     </Flexbox>
   );

@@ -23,6 +23,7 @@ import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { electronHeteroSessionService } from '@/services/electron/heteroSession';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
@@ -48,6 +49,7 @@ interface ContentProps {
 }
 
 const Content = memo<ContentProps>(({ agentId }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation(['topic', 'common']);
   const { close } = useModalContext();
   const refreshTopic = useChatStore((s) => s.refreshTopic);
@@ -339,11 +341,16 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Flexbox horizontal align="center" className={styles.footer} justify="space-between">
           <Text fontSize={13} type="secondary">
             {selected.size > 0
-              ? t('heteroImport.footer.selected', {
-                  messages: estMessages.toLocaleString(),
-                  sessions: selected.size,
-                  tokens: fmtTokens(estTokens),
-                })
+              ? t(
+                  showMemberTokenUsage
+                    ? 'heteroImport.footer.selected'
+                    : 'heteroImport.footer.selectedMessages',
+                  {
+                    messages: estMessages.toLocaleString(),
+                    sessions: selected.size,
+                    tokens: fmtTokens(estTokens),
+                  },
+                )
               : t('heteroImport.footer.hint')}
           </Text>
           <Flexbox horizontal gap={8}>

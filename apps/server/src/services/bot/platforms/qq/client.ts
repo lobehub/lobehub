@@ -23,7 +23,7 @@ import {
   type UsageStats,
   type ValidationResult,
 } from '../types';
-import { formatUsageStats } from '../utils';
+import { appendUsageStats } from '../utils';
 import { sendQQAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:qq:bot');
@@ -320,7 +320,7 @@ class QQGatewayClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {
@@ -426,7 +426,7 @@ class QQWebhookClient implements PlatformClient {
 
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
-    return `${body}\n\n${formatUsageStats(stats)}`;
+    return appendUsageStats(body, stats);
   }
 
   parseMessageId(compositeId: string): string {

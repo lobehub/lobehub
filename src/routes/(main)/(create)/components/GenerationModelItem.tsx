@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import {
@@ -82,13 +83,14 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
     ...model
   }) => {
     const isDarkMode = useIsDark();
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { t } = useTranslation('components');
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
 
     const priceLabel = useMemo(() => {
-      if (!showPrice) return undefined;
+      if (!showMemberTokenUsage || !showPrice) return undefined;
 
       const isVideo = priceKind === 'video';
       const exactUsd = isVideo ? pricePerVideo : pricePerImage;
@@ -129,6 +131,7 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
       }
       return undefined;
     }, [
+      showMemberTokenUsage,
       showPrice,
       approximatePricePerImage,
       approximatePricePerVideo,

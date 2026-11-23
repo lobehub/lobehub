@@ -169,6 +169,7 @@ export default {
   'heteroImport.footer.import': 'Import {{count}} sessions',
   'heteroImport.footer.importEmpty': 'Import',
   'heteroImport.footer.rescan': 'Rescan',
+  'heteroImport.footer.selectedMessages': 'Selected {{sessions}} sessions · ~{{messages}} messages',
   'heteroImport.footer.selected':
     'Selected {{sessions}} sessions · ~{{messages}} messages · {{tokens}} tokens',
   'heteroImport.hideImported': 'Hide imported',

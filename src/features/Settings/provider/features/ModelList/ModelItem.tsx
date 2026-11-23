@@ -21,6 +21,7 @@ import { ModelInfoTags } from '@/components/ModelSelect';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { formatPriceByCurrency } from '@/utils/format';
 import {
@@ -88,6 +89,7 @@ const ModelItem = memo<ModelItemProps>(
     abilities,
     type,
   }) => {
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { t } = useTranslation(['modelProvider', 'components', 'models', 'common']);
     const { modelEditable, showDeployName } = use(ProviderSettingsContext);
     const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
@@ -104,7 +106,7 @@ const ModelItem = memo<ModelItemProps>(
     const [checked, setChecked] = useState(enabled);
 
     const formatPricing = (): string[] => {
-      if (!pricing) return [];
+      if (!showMemberTokenUsage || !pricing) return [];
 
       switch (type) {
         case 'chat': {

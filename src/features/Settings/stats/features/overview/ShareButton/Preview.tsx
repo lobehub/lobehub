@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ProductLogo } from '@/components/Branding';
 import { isCustomBranding } from '@/const/version';
 import UserAvatar from '@/features/User/UserAvatar';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 
 import AiHeatmaps from '../../visualization/AiHeatmaps';
 import TotalMessages from '../TotalMessages';
@@ -97,6 +98,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const Preview = memo(() => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('auth');
 
   return (
@@ -139,7 +141,7 @@ const Preview = memo(() => {
                 marginTop: -12,
               }}
             />
-            <Grid gap={8} maxItemWidth={100} rows={2} width={'100%'}>
+            <Grid gap={8} maxItemWidth={100} rows={showMemberTokenUsage ? 2 : 1} width={'100%'}>
               <TotalMessages inShare />
               <TotalTokens inShare />
             </Grid>

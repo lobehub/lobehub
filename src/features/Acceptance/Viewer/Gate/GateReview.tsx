@@ -26,6 +26,7 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GoalDecisionAsker } from '@/features/AgentGoals/GoalDecision';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
@@ -212,6 +213,7 @@ const ResultRow = memo<{
   unit: GoalReleaseGateUnit;
 }>(({ active, average, onSelect, unit }) => {
   const { t } = useTranslation('verify');
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const exception = isException(unit);
   const ratio = average > 0 ? unit.tokens / average : 0;
   return (
@@ -230,7 +232,7 @@ const ResultRow = memo<{
                 passed: unit.acceptance.checks.passed,
                 total: unit.acceptance.checks.total,
               }),
-            t('acceptance.gate.unitMeta', {
+            t(showMemberTokenUsage ? 'acceptance.gate.unitMeta' : 'acceptance.gate.unitRuns', {
               runs: unit.runs,
               tokens: formatTokens(unit.tokens),
             }),
@@ -243,7 +245,7 @@ const ResultRow = memo<{
         <Text style={{ paddingInlineStart: 28 }} type={'warning'}>
           {unit.status !== 'resolved'
             ? t('acceptance.gate.unitUnsettled')
-            : ratio >= 1.5
+            : showMemberTokenUsage && ratio >= 1.5
               ? t('acceptance.gate.unitReworkedCostly', {
                   ratio: ratio.toFixed(1),
                   rework: unit.runs - 1,
@@ -277,6 +279,7 @@ const NextRow = memo<{ active: boolean; onSelect: () => void; title: string }>(
 const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
   ({ onClose, selection }) => {
     const { t } = useTranslation('verify');
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const title = selection.kind === 'result' ? selection.unit.title : selection.title;
     const brief = selection.kind === 'result' ? selection.unit.brief : selection.brief;
     return (
@@ -290,7 +293,7 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
         {selection.kind === 'result' ? (
           <Flexbox gap={8}>
             <span className={styles.meta}>
-              {t('acceptance.gate.unitMeta', {
+              {t(showMemberTokenUsage ? 'acceptance.gate.unitMeta' : 'acceptance.gate.unitRuns', {
                 runs: selection.unit.runs,
                 tokens: formatTokens(selection.unit.tokens),
               })}
@@ -489,6 +492,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
   const { t } = useTranslation('verify');
   const [selected, setSelected] = useState<Selection>();
   const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(dossier.plan.skillId);
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const average =
     dossier.units.reduce((sum, unit) => sum + unit.tokens, 0) / Math.max(1, dossier.units.length);
   const probes = dossier.kind === 'probes';
@@ -605,10 +609,13 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
           ))}
         </div>
         <span className={styles.meta}>
-          {t('acceptance.gate.remaining', {
-            count: dossier.remainingAfter,
-            estimate: formatTokens(estimate),
-          })}
+          {t(
+            showMemberTokenUsage ? 'acceptance.gate.remaining' : 'acceptance.gate.remainingUnits',
+            {
+              count: dossier.remainingAfter,
+              estimate: formatTokens(estimate),
+            },
+          )}
         </span>
       </Section>
 

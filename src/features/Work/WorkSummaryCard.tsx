@@ -7,6 +7,7 @@ import { BadgeCentIcon, CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useChatStore } from '@/store/chat';
 import { formatUsageCost, isUsageCreditsEnabled } from '@/utils/usageCredits';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
@@ -133,6 +134,7 @@ interface WorkSummaryCardProps {
 
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { t } = useTranslation('chat');
     const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
@@ -140,7 +142,9 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
     const openTaskDetail = useChatStore((s) => s.openTaskDetail);
     const promptResourceDeleted = useResourceDeletedPrompt();
     const cost = formatWorkVersionCost(item.totalCost);
-    const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
+    const totalTokens = showMemberTokenUsage
+      ? getWorkVersionTotalTokens(item.event.cumulativeUsage)
+      : undefined;
     // Beside an icon the amount drops its unit: the `$`, or the credit label.
     const usage = cost
       ? isUsageCreditsEnabled()

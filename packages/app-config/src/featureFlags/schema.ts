@@ -29,6 +29,7 @@ export const FeatureFlagsSchema = z.object({
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
   voice_dictation: FeatureFlagValue.optional(),
+  member_token_visible: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
 
   welcome_suggest: FeatureFlagValue.optional(),
@@ -145,6 +146,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   check_updates: true,
   welcome_suggest: true,
+  member_token_visible: false,
   token_counter: true,
 
   knowledge_base: true,
@@ -207,6 +209,7 @@ export const mapFeatureFlagsEnvToState = (
     showApiKeyManage: evaluateFeatureFlag(config.api_key_manage, userId),
 
     showAiImage: evaluateFeatureFlag(config.ai_image, userId),
+    showMemberTokenUsage: evaluateFeatureFlag(config.member_token_visible, userId) === true,
     showTokenCounter: evaluateFeatureFlag(config.token_counter, userId),
     showChangelog: evaluateFeatureFlag(config.changelog, userId),
 

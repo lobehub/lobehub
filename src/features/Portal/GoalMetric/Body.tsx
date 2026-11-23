@@ -27,6 +27,7 @@ import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { usePermission } from '@/hooks/usePermission';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
@@ -380,6 +381,7 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
   const { t } = useTranslation('chat');
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
 
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const rows = useMemo(() => costBreakdownRows(graph, spend), [graph, spend]);
   const columns = useMemo(() => costBreakdownColumns(rows), [rows]);
 
@@ -410,14 +412,16 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
               <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
                 {row.view?.node.title ?? row.taskId}
               </Text>
-              <Text
-                className={styles.mono}
-                fontSize={12}
-                style={{ flex: 'none', textAlign: 'right', width: columns.tokens }}
-                type={'secondary'}
-              >
-                {row.tokensLabel}
-              </Text>
+              {showMemberTokenUsage && (
+                <Text
+                  className={styles.mono}
+                  fontSize={12}
+                  style={{ flex: 'none', textAlign: 'right', width: columns.tokens }}
+                  type={'secondary'}
+                >
+                  {row.tokensLabel}
+                </Text>
+              )}
               <Text
                 className={styles.mono}
                 style={{ flex: 'none', textAlign: 'right', width: columns.cost }}

@@ -5,6 +5,7 @@ import { CoinsIcon, FlameIcon, MessageSquareIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
@@ -18,9 +19,11 @@ const AiHeatmaps = memo<
   Omit<HeatmapsProps, 'data' | 'ref'> & { inShare?: boolean; mobile?: boolean }
 >(({ inShare, mobile, ...rest }) => {
   const { t } = useTranslation('auth');
-  const [type, setType] = useState<HeatmapType>(
+  const showMemberTokenUsage = useShowMemberTokenUsage();
+  const [selectedType, setType] = useState<HeatmapType>(
     inShare ? HeatmapType.Messages : HeatmapType.Tokens,
   );
+  const type = showMemberTokenUsage ? selectedType : HeatmapType.Messages;
   const isTokens = type === HeatmapType.Tokens;
 
   const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(type), async () =>
@@ -127,7 +130,7 @@ const AiHeatmaps = memo<
 
   return (
     <StatsFormGroup
-      afterTitle={typeSwitch}
+      afterTitle={showMemberTokenUsage && typeSwitch}
       extra={dayTags}
       fontSize={16}
       title={t('stats.lastYearActivity')}

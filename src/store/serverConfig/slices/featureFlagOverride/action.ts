@@ -10,10 +10,13 @@ import {
 
 const DEV_DOCK_ACCESS_FLAG = 'enableDevDock';
 
-export type FeatureFlagKey = Exclude<keyof IFeatureFlagsState, typeof DEV_DOCK_ACCESS_FLAG>;
+export type FeatureFlagKey = Exclude<
+  keyof IFeatureFlagsState,
+  typeof DEV_DOCK_ACCESS_FLAG | 'showMemberTokenUsage'
+>;
 
 export const isFeatureFlagOverridable = (key: keyof IFeatureFlagsState): key is FeatureFlagKey =>
-  key !== DEV_DOCK_ACCESS_FLAG;
+  key !== DEV_DOCK_ACCESS_FLAG && key !== 'showMemberTokenUsage';
 
 type Setter = StoreSetter<ServerConfigStore>;
 

@@ -1,5 +1,6 @@
+import type * as BusinessConst from '@lobechat/business-const';
 import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PlatformDefinition } from './types';
 import {
@@ -11,6 +12,11 @@ import {
   resolveConnectionMode,
   withResolvedConcurrencySettings,
 } from './utils';
+
+vi.mock('@lobechat/business-const', async (load) => ({
+  ...(await load<typeof BusinessConst>()),
+  USAGE_CREDITS: undefined,
+}));
 
 function makePlatform(overrides: Partial<PlatformDefinition> = {}): PlatformDefinition {
   return {
@@ -70,32 +76,55 @@ describe('formatDuration', () => {
 
 describe('formatUsageStats', () => {
   it('should format basic stats', () => {
-    expect(formatUsageStats({ totalCost: 0.0312, totalTokens: 1234 })).toBe(
-      '1.2k tokens · $0.0312',
-    );
+    expect(
+      formatUsageStats({ showMemberTokenUsage: true, totalCost: 0.0312, totalTokens: 1234 }),
+    ).toBe('1.2k tokens · $0.0312');
   });
 
   it('should include duration when provided', () => {
-    expect(formatUsageStats({ elapsedMs: 3000, totalCost: 0.01, totalTokens: 500 })).toBe(
-      '500 tokens · $0.0100 · 3s',
-    );
+    expect(
+      formatUsageStats({
+        showMemberTokenUsage: true,
+        elapsedMs: 3000,
+        totalCost: 0.01,
+        totalTokens: 500,
+      }),
+    ).toBe('500 tokens · $0.0100 · 3s');
   });
 
   it('should include call counts when llmCalls > 1', () => {
     expect(
-      formatUsageStats({ llmCalls: 3, toolCalls: 2, totalCost: 0.05, totalTokens: 2000 }),
+      formatUsageStats({
+        showMemberTokenUsage: true,
+        llmCalls: 3,
+        toolCalls: 2,
+        totalCost: 0.05,
+        totalTokens: 2000,
+      }),
     ).toBe('2.0k tokens · $0.0500 | llm×3 | tools×2');
   });
 
   it('should include call counts when toolCalls > 0', () => {
-    expect(formatUsageStats({ llmCalls: 1, toolCalls: 5, totalCost: 0.01, totalTokens: 800 })).toBe(
-      '800 tokens · $0.0100 | llm×1 | tools×5',
-    );
+    expect(
+      formatUsageStats({
+        showMemberTokenUsage: true,
+        llmCalls: 1,
+        toolCalls: 5,
+        totalCost: 0.01,
+        totalTokens: 800,
+      }),
+    ).toBe('800 tokens · $0.0100 | llm×1 | tools×5');
   });
 
   it('should hide call counts when llmCalls=1 and toolCalls=0', () => {
     expect(
-      formatUsageStats({ llmCalls: 1, toolCalls: 0, totalCost: 0.001, totalTokens: 100 }),
+      formatUsageStats({
+        showMemberTokenUsage: true,
+        llmCalls: 1,
+        toolCalls: 0,
+        totalCost: 0.001,
+        totalTokens: 100,
+      }),
     ).toBe('100 tokens · $0.0010');
   });
 });
@@ -240,4 +269,16 @@ describe('withResolvedConcurrencySettings', () => {
     expect(withResolvedConcurrencySettings('wechat', bare)).toBe(bare);
     expect(withResolvedConcurrencySettings('wechat', undefined)).toBeUndefined();
   });
+});
+
+it('hides token counts and dollars by default when credit conversion is unavailable', () => {
+  expect(
+    formatUsageStats({
+      elapsedMs: 3000,
+      llmCalls: 5,
+      toolCalls: 4,
+      totalCost: 0.0312,
+      totalTokens: 1234,
+    }),
+  ).toBe('3s | llm×5 | tools×4');
 });

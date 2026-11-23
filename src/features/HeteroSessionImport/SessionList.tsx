@@ -17,6 +17,8 @@ import { Check, RotateCcw, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
+
 import { baseName, fmtTokens, type ImportRowState, selectable, type SessionStatus } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -127,6 +129,7 @@ interface SessionRowProps {
 export const SessionRow = memo<SessionRowProps>(
   ({ item, checked, importing, importState, onRetry, onToggle, showDir, showRetry }) => {
     const { t } = useTranslation('topic');
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { digest, status } = item;
     const canPick = selectable(status) && !importing;
     const dim = !selectable(status);
@@ -165,7 +168,7 @@ export const SessionRow = memo<SessionRowProps>(
             <Text fontSize={12} type="secondary">
               {t('heteroImport.meta.messages', { count: digest.messageCount })}
             </Text>
-            {digest.tokens ? (
+            {showMemberTokenUsage && digest.tokens ? (
               <Text fontSize={12} type="secondary">
                 {t('heteroImport.meta.tokens', { tokens: fmtTokens(digest.tokens) })}
               </Text>

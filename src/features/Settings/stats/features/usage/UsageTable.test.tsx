@@ -15,6 +15,10 @@ import spend from '@/locales/default/spend';
 import zhSpend from '../../../../../../locales/zh-CN/spend.json';
 import UsageTable from './UsageTable';
 
+const visibility = vi.hoisted(() => ({ enabled: false }));
+vi.mock('@/hooks/useShowMemberTokenUsage', () => ({
+  useShowMemberTokenUsage: () => visibility.enabled,
+}));
 vi.unmock('react-i18next');
 
 // Stubbed rather than left real because the branding-aware icon reaches the
@@ -58,6 +62,7 @@ vi.mock('@/components/InlineTable', () => ({
     dataSource?: { id: string; type: string }[];
   }) => (
     <div>
+      <div data-testid="columns">{columns.map((col) => col.dataIndex).join(',')}</div>
       <div data-testid="rows">{dataSource?.map((row) => row.id).join(',')}</div>
       {dataSource?.map((row) => (
         <div data-testid={`type-${row.id}`} key={row.id}>
@@ -147,4 +152,13 @@ describe('UsageTable', () => {
       'row-1,row-2,row-3,row-4,row-5,row-6,row-7,row-8,row-9,row-10',
     );
   });
+});
+
+it.each([false, true])('shows token and speed columns only when opted in (%s)', (enabled) => {
+  visibility.enabled = enabled;
+  renderTable();
+  const columns = screen.getByTestId('columns').textContent!.split(',');
+  expect(columns.includes('totalTokens')).toBe(enabled);
+  expect(columns.includes('tps')).toBe(enabled);
+  expect(columns).toContain('spend');
 });

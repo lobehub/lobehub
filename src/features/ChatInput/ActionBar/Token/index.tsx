@@ -1,6 +1,7 @@
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -15,9 +16,10 @@ const Token = memo<PropsWithChildren>(({ children }) => {
 });
 
 const ContextWindow = () => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const showTokenCounter = useServerConfigStore((s) => featureFlagsSelectors(s).showTokenCounter);
 
-  if (!showTokenCounter) return null;
+  if (!showMemberTokenUsage || !showTokenCounter) return null;
 
   return (
     <Token>

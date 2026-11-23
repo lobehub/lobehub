@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import type { ChatTopic } from '@/types/topic';
 import { formatUsageCostLabel } from '@/utils/usageCostLabel';
 
@@ -87,6 +88,7 @@ interface TopicCardProps {
 }
 
 const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('topic');
   const navigate = useWorkspaceAwareNavigate();
 
@@ -189,7 +191,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
               {messageCount}
             </Flexbox>
           )}
-          {tokenUsage > 0 && (
+          {showMemberTokenUsage && tokenUsage > 0 && (
             <Flexbox horizontal align={'center'} gap={3} title={`${tokenUsage} tokens`}>
               <Icon icon={Zap} size={11} />
               {formatTokenNumber(tokenUsage)}

@@ -6,6 +6,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
@@ -22,6 +23,7 @@ import TotalCard from './ShareButton/TotalCard';
  * so the card shows the same month-over-month delta as its siblings.
  */
 const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('auth');
 
   const { data, isLoading, error, mutate } = useClientDataSWR(
@@ -41,6 +43,8 @@ const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
     }
     return { count, prevCount };
   }, [data]);
+
+  if (!showMemberTokenUsage) return null;
 
   if (inShare)
     return (

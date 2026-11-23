@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { usageService } from '@/services/usage';
@@ -53,6 +54,7 @@ const StatsSetting = memo<StatsSettingProps>(
     const { t, i18n } = useTranslation('auth');
     dayjs.locale(i18n.language);
 
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const [groupBy, setGroupBy] = useState<GroupBy>(GroupBy.Model);
     const [dateRange, setDateRange] = useState<dayjs.Dayjs>(dayjs(new Date()));
     const [dateStrings, setDateStrings] = useState<string>();
@@ -89,7 +91,7 @@ const StatsSetting = memo<StatsSettingProps>(
             )
           }
         >
-          <Grid gap={8} maxItemWidth={150} rows={4}>
+          <Grid gap={8} maxItemWidth={150} rows={showMemberTokenUsage ? 4 : 3}>
             <TotalAssistants mobile={mobile} />
             <TotalTopics mobile={mobile} />
             <TotalMessages mobile={mobile} />

@@ -5,6 +5,8 @@ import { createStaticStyles, cssVar, Flexbox, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
+
 import ScatterPlot from './ScatterPlot';
 import StatusDonut from './StatusDonut';
 
@@ -51,6 +53,7 @@ interface BenchmarkChartsProps {
 }
 
 const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runId }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('eval');
   const theme = useTheme();
 
@@ -129,28 +132,30 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
       </Flexbox>
 
       {/* Chart 2: Scatter Plot */}
-      <Flexbox className={styles.chartCard} flex={2}>
-        <Flexbox horizontal justify={'space-between'} style={{ marginBlockEnd: 12 }}>
-          <span className={styles.chartTitle} style={{ marginBlockEnd: 0 }}>
-            {t('run.chart.latencyTokenDistribution')}
-          </span>
-          <Flexbox horizontal gap={12} style={{ fontSize: cssVar.fontSizeSM }}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorSuccess }} />
-              <span className={styles.legendText}>{t('run.chart.pass')}</span>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorFill }} />
-              <span className={styles.legendText}>{t('run.chart.fail')}</span>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorWarning }} />
-              <span className={styles.legendText}>{t('run.chart.error')}</span>
+      {showMemberTokenUsage && (
+        <Flexbox className={styles.chartCard} flex={2}>
+          <Flexbox horizontal justify={'space-between'} style={{ marginBlockEnd: 12 }}>
+            <span className={styles.chartTitle} style={{ marginBlockEnd: 0 }}>
+              {t('run.chart.latencyTokenDistribution')}
+            </span>
+            <Flexbox horizontal gap={12} style={{ fontSize: cssVar.fontSizeSM }}>
+              <Flexbox horizontal align={'center'} gap={4}>
+                <div className={styles.legendDot} style={{ background: theme.colorSuccess }} />
+                <span className={styles.legendText}>{t('run.chart.pass')}</span>
+              </Flexbox>
+              <Flexbox horizontal align={'center'} gap={4}>
+                <div className={styles.legendDot} style={{ background: theme.colorFill }} />
+                <span className={styles.legendText}>{t('run.chart.fail')}</span>
+              </Flexbox>
+              <Flexbox horizontal align={'center'} gap={4}>
+                <div className={styles.legendDot} style={{ background: theme.colorWarning }} />
+                <span className={styles.legendText}>{t('run.chart.error')}</span>
+              </Flexbox>
             </Flexbox>
           </Flexbox>
+          <ScatterPlot benchmarkId={benchmarkId} results={results} runId={runId} />
         </Flexbox>
-        <ScatterPlot benchmarkId={benchmarkId} results={results} runId={runId} />
-      </Flexbox>
+      )}
 
       {/* Chart 3: Histogram */}
       <Flexbox className={styles.chartCard} flex={1}>

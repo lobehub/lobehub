@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessModelPricing } from '@/business/client/hooks/useBusinessModelPricing';
 import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModelRating';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { usageCreditBaseline } from '@/utils/usageCredits';
 
 import { getPrice } from '../../hooks/useModelDetailPanel';
@@ -75,6 +76,7 @@ export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
     [resolveRating, model.id, provider],
   );
 
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const columns = useMetaColumns();
   const multiplier = getInputPriceMultiplier(pricing);
   const bars = RATING_KEYS.map((key) => {
@@ -83,7 +85,7 @@ export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
   });
 
   let priceTooltip: React.ReactNode;
-  if (pricing && multiplier !== undefined) {
+  if (showMemberTokenUsage && pricing && multiplier !== undefined) {
     const isCreditPricing = provider === BRANDING_PROVIDER;
     // Set when the distribution charges in its own credits; the × is then
     // counted against its 1× rate rather than upstream's million-credit one.

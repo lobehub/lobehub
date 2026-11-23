@@ -4,6 +4,7 @@ import { createStaticStyles, cssVar, Flexbox, Popover, Text } from '@lobehub/ui'
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { formatUsageCostLabel } from '@/utils/usageCostLabel';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -44,6 +45,7 @@ interface GoalRoundPopoverProps {
  */
 const GoalRoundPopover = memo<GoalRoundPopoverProps>(
   ({ children, duration, index, status, usage, verdict }) => {
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const { t } = useTranslation('chat');
 
     const verdictLabel = (() => {
@@ -73,7 +75,7 @@ const GoalRoundPopover = memo<GoalRoundPopoverProps>(
             },
           ]
         : []),
-      ...(usage?.tokens
+      ...(showMemberTokenUsage && usage?.tokens
         ? [
             {
               label: t('taskDetail.goalTimeline.hover.tokens'),

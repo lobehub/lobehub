@@ -133,6 +133,7 @@
   "heteroImport.footer.importEmpty": "导入",
   "heteroImport.footer.rescan": "重新扫描",
   "heteroImport.footer.selected": "已选 {{sessions}} 个会话 · 预计 {{messages}} 条消息 · {{tokens}} tokens",
+  "heteroImport.footer.selectedMessages": "已选 {{sessions}} 个会话 · 预计 {{messages}} 条消息",
   "heteroImport.hideImported": "隐藏已导入",
   "heteroImport.ignoredGroup": "已忽略 {{count}} 个目录",
   "heteroImport.meta.messages": "{{count}} 条消息",

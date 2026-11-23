@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -158,6 +159,7 @@ const workTypeKey = (item: WorkSummaryItem) => {
  * has no "resource deleted" state.
  */
 const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t, i18n } = useTranslation(['chat', 'common', 'file']);
   const agent = useAgentDisplayMeta(item.originAgentId);
   const descriptor = getWorkTypeDescriptor(item);
@@ -183,7 +185,9 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
     date: eventAt,
     ns: 'file',
   });
-  const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
+  const totalTokens = showMemberTokenUsage
+    ? getWorkVersionTotalTokens(item.event.cumulativeUsage)
+    : undefined;
   const cost = formatWorkVersionCost(item.totalCost);
 
   return (

@@ -1,11 +1,12 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { GroupBotIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cx } from '@lobehub/ui';
+import { GroupBotIcon } from '@lobehub/ui/icons';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
@@ -53,6 +54,7 @@ export const CallSubAgentInspector = memo<
   BuiltinInspectorProps<CallSubAgentParams, CallSubAgentState>
 >(({ args, partialArgs, pluginState, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
+  const showMemberTokenUsage = useShowMemberTokenUsage();
 
   const description = (args?.description || partialArgs?.description)?.trim();
   const isShiny = isArgumentsStreaming || isLoading;
@@ -63,7 +65,10 @@ export const CallSubAgentInspector = memo<
   // stale live sample once the run is done.
   const hasFinalStats =
     pluginState?.totalTokens !== undefined || pluginState?.totalToolCalls !== undefined;
-  const stats = hasFinalStats ? pluginState : pluginState?.progress;
+  const stats =
+    hasFinalStats || (!showMemberTokenUsage && pluginState?.totalCost != null)
+      ? pluginState
+      : pluginState?.progress;
 
   return (
     <div className={cx(inspectorTextStyles.root, styles.root)}>
@@ -75,7 +80,8 @@ export const CallSubAgentInspector = memo<
       {stats && (
         <SubAgentStats
           model={stats.model}
-          totalTokens={stats.totalTokens}
+          totalCost={showMemberTokenUsage ? undefined : stats.totalCost}
+          totalTokens={showMemberTokenUsage ? stats.totalTokens : undefined}
           totalToolCalls={stats.totalToolCalls}
         />
       )}

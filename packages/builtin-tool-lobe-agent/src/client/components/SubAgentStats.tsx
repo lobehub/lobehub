@@ -4,6 +4,8 @@ import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { formatUsageCostLabel } from '@/utils/usageCostLabel';
+
 import type { SubAgentRunStats } from '../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -29,23 +31,26 @@ const formatTokens = (n: number): string => {
  * Fed live during the run (streamed totals) and by the persisted state after it,
  * so the same row serves both. Renders nothing until the first stat arrives.
  */
-export const SubAgentStats = memo<SubAgentRunStats>(({ model, totalToolCalls, totalTokens }) => {
-  const { t } = useTranslation('plugin');
+export const SubAgentStats = memo<SubAgentRunStats>(
+  ({ model, totalCost, totalToolCalls, totalTokens }) => {
+    const { t } = useTranslation('plugin');
 
-  const items = [
-    model || null,
-    typeof totalToolCalls === 'number' && totalToolCalls > 0
-      ? t('builtins.lobe-agent.subAgent.stats.tools', { count: totalToolCalls })
-      : null,
-    typeof totalTokens === 'number' && totalTokens > 0
-      ? t('builtins.lobe-agent.subAgent.stats.tokens', { count: formatTokens(totalTokens) })
-      : null,
-  ].filter(Boolean);
+    const items = [
+      model || null,
+      typeof totalToolCalls === 'number' && totalToolCalls > 0
+        ? t('builtins.lobe-agent.subAgent.stats.tools', { count: totalToolCalls })
+        : null,
+      totalCost != null ? formatUsageCostLabel(totalCost, () => '') : null,
+      typeof totalTokens === 'number' && totalTokens > 0
+        ? t('builtins.lobe-agent.subAgent.stats.tokens', { count: formatTokens(totalTokens) })
+        : null,
+    ].filter(Boolean);
 
-  if (items.length === 0) return null;
+    if (items.length === 0) return null;
 
-  return <span className={styles.root}>{items.join(' · ')}</span>;
-});
+    return <span className={styles.root}>{items.join(' · ')}</span>;
+  },
+);
 
 SubAgentStats.displayName = 'SubAgentStats';
 

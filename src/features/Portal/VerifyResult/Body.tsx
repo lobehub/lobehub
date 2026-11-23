@@ -13,6 +13,7 @@ import {
   useVerifyResults,
   useVerifyState,
 } from '@/features/Acceptance/hooks';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, threadSelectors } from '@/store/chat/selectors';
@@ -101,6 +102,7 @@ const Field = memo<{ children: ReactNode; label: string }>(({ label, children })
 });
 
 const Body = () => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('verify');
   const operationId = useChatStore(chatPortalSelectors.verifyResultOperationId);
   const checkItemId = useChatStore(chatPortalSelectors.verifyResultCheckItemId);
@@ -137,7 +139,8 @@ const Body = () => {
         ? `${getProviderDisplayName(tracing.provider)} / ${tracing.model}`
         : tracing.model,
     },
-    tokens != null && { key: t('detail.tokens'), value: tokens.toLocaleString() },
+    showMemberTokenUsage &&
+      tokens != null && { key: t('detail.tokens'), value: tokens.toLocaleString() },
   ].filter(Boolean) as { key: string; value: string }[];
 
   const sections: { key: string; value?: string | null }[] = [

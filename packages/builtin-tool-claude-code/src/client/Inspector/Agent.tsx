@@ -3,12 +3,12 @@
 import { AnimatedNumber } from '@lobechat/shared-tool-ui/components';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cx, Tooltip } from '@lobehub/ui';
 import { GroupBotIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
 import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
@@ -146,6 +146,8 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
     const labelText = resolved?.label ?? fallbackLabel;
 
     const metrics = useSubagentMetrics(toolCallId);
+    const showMemberTokenUsage = useShowMemberTokenUsage();
+    const visibleTokens = showMemberTokenUsage ? (metrics?.totalTokens ?? 0) : 0;
 
     const tooltipLines: string[] = [];
     if (metrics?.model) {
@@ -156,16 +158,16 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
         tChat('thread.subagentMetrics.toolCalls', { count: metrics.toolCalls }) as string,
       );
     }
-    if (metrics && metrics.totalTokens > 0) {
+    if (visibleTokens > 0) {
       tooltipLines.push(
         tChat('thread.subagentMetrics.tokens', {
-          count: metrics.totalTokens.toLocaleString('en-US'),
+          count: visibleTokens.toLocaleString('en-US'),
         }) as string,
       );
     }
 
     const metricsNode =
-      metrics?.hasAny && (metrics.toolCalls > 0 || metrics.totalTokens > 0) ? (
+      metrics?.hasAny && (metrics.toolCalls > 0 || visibleTokens > 0) ? (
         <Tooltip title={tooltipLines.length > 0 ? tooltipLines.join(' · ') : undefined}>
           <span className={styles.metrics}>
             {metrics.toolCalls > 0 && (
@@ -173,16 +175,12 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
                 {tChat('thread.subagentMetrics.toolsShort', { count: metrics.toolCalls })}
               </span>
             )}
-            {metrics.toolCalls > 0 && metrics.totalTokens > 0 && (
+            {metrics.toolCalls > 0 && visibleTokens > 0 && (
               <span className={styles.metricsDot}>·</span>
             )}
-            {metrics.totalTokens > 0 && (
+            {visibleTokens > 0 && (
               <span>
-                <AnimatedNumber
-                  duration={2000}
-                  formatter={formatTokens}
-                  value={metrics.totalTokens}
-                />
+                <AnimatedNumber duration={2000} formatter={formatTokens} value={visibleTokens} />
               </span>
             )}
           </span>

@@ -10,6 +10,7 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from '../createBotCompletionHook';
+import { getBotMemberTokenVisibility } from '../memberUsageVisibility';
 import type { BotReactionMode, BotReplyLocale, PlatformClient } from '../platforms';
 import {
   DEFAULT_BOT_REACTION_MODE,
@@ -165,6 +166,8 @@ export async function executeWithHooksLocalMode(
                 );
 
                 const stats = {
+                  replyLocale,
+                  showMemberTokenUsage: await getBotMemberTokenVisibility(),
                   elapsedMs: event.elapsedMs ?? getElapsedMs(),
                   totalCost: event.totalCost ?? 0,
                   totalTokens: event.totalTokens ?? 0,
@@ -272,6 +275,8 @@ export async function executeWithHooksLocalMode(
                     if (hasText) {
                       const replyBody = renderFinalReply(lastAssistantContent!);
                       const replyStats = {
+                        replyLocale,
+                        showMemberTokenUsage: await getBotMemberTokenVisibility(),
                         elapsedMs: event.duration ?? getElapsedMs(),
                         llmCalls: event.llmCalls ?? 0,
                         toolCalls: event.toolCalls ?? 0,

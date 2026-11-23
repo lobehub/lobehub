@@ -3,6 +3,7 @@ import { Block, cssVar, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
@@ -28,6 +29,7 @@ const formatDuration = (seconds?: number) => {
  * cards above, so it is intentionally not repeated here.
  */
 const HeatmapStats = memo(() => {
+  const showMemberTokenUsage = useShowMemberTokenUsage();
   const { t } = useTranslation('auth');
 
   const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(HeatmapType.Tokens), () =>
@@ -70,7 +72,9 @@ const HeatmapStats = memo(() => {
   const days = (n: number) => [n, t('stats.days')].join(' ');
 
   const items = [
-    { label: t('stats.heatmapStats.peakTokens'), value: formatShortenNumber(stats.peak) },
+    ...(showMemberTokenUsage
+      ? [{ label: t('stats.heatmapStats.peakTokens'), value: formatShortenNumber(stats.peak) }]
+      : []),
     {
       label: t('stats.heatmapStats.longestTask'),
       loading: maxTaskDuration === undefined,

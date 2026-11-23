@@ -162,25 +162,41 @@ describe('Context window token', () => {
     totalToken: 6000,
   };
 
+  it('hides the entire counter in developer mode by default', () => {
+    tokenMocks.useTokenBreakdown.mockReturnValue(breakdown);
+    render(createElement(ContextWindow));
+    expect(screen.queryByTestId('token-tag')).not.toBeInTheDocument();
+    expect(tokenMocks.useTokenBreakdown).not.toHaveBeenCalled();
+  });
+
   it('hides the token tag when disabled and restores it when enabled', async () => {
     tokenMocks.useTokenBreakdown.mockReturnValue(breakdown);
-    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({ token_counter: true });
+    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({
+      member_token_visible: true,
+      token_counter: true,
+    });
     const { rerender } = render(createElement(ContextWindow));
 
     expect(await screen.findByTestId('token-tag')).toHaveTextContent('6000');
 
-    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({ token_counter: false });
+    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({
+      member_token_visible: true,
+      token_counter: false,
+    });
     rerender(createElement(ContextWindow));
     expect(screen.queryByTestId('token-tag')).not.toBeInTheDocument();
 
-    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({ token_counter: true });
+    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({
+      member_token_visible: true,
+      token_counter: true,
+    });
     rerender(createElement(ContextWindow));
     expect(await screen.findByTestId('token-tag')).toHaveTextContent('6000');
   });
 
   it('shows the token tag only for users in the token counter allowlist', async () => {
     tokenMocks.useTokenBreakdown.mockReturnValue(breakdown);
-    const config = { token_counter: ['user-123'] };
+    const config = { member_token_visible: true, token_counter: ['user-123'] };
     tokenMocks.featureFlags = mapFeatureFlagsEnvToState(config, 'user-123');
     const { rerender } = render(createElement(ContextWindow));
 
@@ -192,7 +208,10 @@ describe('Context window token', () => {
   });
 
   it('keeps the token tag hidden for models without a context window', () => {
-    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({ token_counter: true });
+    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({
+      member_token_visible: true,
+      token_counter: true,
+    });
     setEnabledModels({ model: 'agent-model', provider: 'agent-provider' });
     tokenMocks.useTokenBreakdown.mockReturnValue(breakdown);
 
@@ -202,7 +221,10 @@ describe('Context window token', () => {
   });
 
   it('shows the token tag when the topic pinned model has a context window but the agent default does not', async () => {
-    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({ token_counter: true });
+    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({
+      member_token_visible: true,
+      token_counter: true,
+    });
     tokenMocks.topicModel = { model: 'topic-model', provider: 'topic-provider' };
     setEnabledModels(
       { model: 'agent-model', provider: 'agent-provider' },
@@ -216,7 +238,10 @@ describe('Context window token', () => {
   });
 
   it('hides the token tag when the agent default has a context window but the topic pinned model does not', () => {
-    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({ token_counter: true });
+    tokenMocks.featureFlags = mapFeatureFlagsEnvToState({
+      member_token_visible: true,
+      token_counter: true,
+    });
     tokenMocks.topicModel = { model: 'topic-model', provider: 'topic-provider' };
     setEnabledModels(
       { contextWindowTokens: 8000, model: 'agent-model', provider: 'agent-provider' },

@@ -4,6 +4,7 @@ import { getProviderDisplayName } from 'model-bank/modelProviders';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import { type UsageLog, type UsageRecordItem } from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 import { usageAmount } from '@/utils/usageCredits';
@@ -83,7 +84,8 @@ enum ShowType {
 const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUser }) => {
   const { t } = useTranslation('auth');
 
-  const [type, setType] = useState<ShowType>(ShowType.Spend);
+  const showMemberTokenUsage = useShowMemberTokenUsage();
+  const [selectedType, setType] = useState<ShowType>(ShowType.Spend);
 
   const { categories: spendCate, data: spendData } = groupByType(
     data || [],
@@ -98,6 +100,7 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUs
     resolveUser,
   );
 
+  const type = showMemberTokenUsage ? selectedType : ShowType.Spend;
   const charts =
     data &&
     (type === ShowType.Spend ? (
@@ -121,15 +124,17 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy, resolveUs
   return (
     <StatsFormGroup
       extra={
-        <Tabs
-          activeKey={type}
-          style={{ width: 'auto' }}
-          items={[
-            { key: ShowType.Spend, label: t('usage.trends.spend') },
-            { key: ShowType.Token, label: t('usage.trends.tokens') },
-          ]}
-          onChange={(key) => setType(key as ShowType)}
-        />
+        showMemberTokenUsage && (
+          <Tabs
+            activeKey={type}
+            style={{ width: 'auto' }}
+            items={[
+              { key: ShowType.Spend, label: t('usage.trends.spend') },
+              { key: ShowType.Token, label: t('usage.trends.tokens') },
+            ]}
+            onChange={(key) => setType(key as ShowType)}
+          />
+        )
       }
     >
       {isLoading ? <Skeleton height={280} /> : charts}

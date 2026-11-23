@@ -192,7 +192,29 @@ const createEnabledList = (
   },
 ];
 
+const visibility = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@/hooks/useShowMemberTokenUsage', () => ({
+  useShowMemberTokenUsage: () => visibility.enabled,
+}));
+
 describe('ModelDetailPanel pricing', () => {
+  it('omits pricing when member visibility is disabled', () => {
+    visibility.enabled = false;
+    try {
+      const { container } = render(
+        <ModelDetailPanel
+          enabledList={createEnabledList('lobehub', textPricing)}
+          model="test-model"
+          provider="lobehub"
+        />,
+      );
+      expect(container).not.toHaveTextContent('Pricing');
+      expect(container).not.toHaveTextContent('/M');
+    } finally {
+      visibility.enabled = true;
+    }
+  });
+
   it('renders the LobeHub-scoped localized description for the LobeHub provider', () => {
     const { container } = render(
       <ModelDetailPanel

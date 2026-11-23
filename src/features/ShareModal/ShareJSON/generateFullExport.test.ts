@@ -148,3 +148,64 @@ describe('generateFullExport', () => {
     expect(result.messages.some((m) => m.content === LOADING_FLAT)).toBeFalsy();
   });
 });
+
+it.each([false, true])(
+  'preserves usage metadata only for opted-in full exports (%s)',
+  (visible) => {
+    const metadata = {
+      performance: { tps: 777, ttft: 42 },
+      usage: { cost: 0.31, totalTokens: 543 },
+    };
+    const message = {
+      content: '543 remains in user text',
+      createdAt: 0,
+      id: 'm',
+      metadata,
+      role: 'assistant',
+      updatedAt: 0,
+    } as UIChatMessage;
+    const result = generateFullExport({
+      includeTool: true,
+      messages: [message],
+      showMemberTokenUsage: visible,
+      systemRole: '',
+      withSystemRole: false,
+    });
+    expect(result.messages[0].metadata).toEqual(
+      visible ? metadata : { performance: { ttft: 42 }, usage: { cost: 0.31 } },
+    );
+    expect(result.messages[0].content).toBe(message.content);
+  },
+);
+
+it.each([false, true])(
+  'gates both live and final built-in sub-agent tool stats (%s)',
+  (visible) => {
+    const stats = {
+      totalCost: 0.31,
+      totalInputTokens: 121,
+      totalOutputTokens: 422,
+      totalTokens: 543,
+    };
+    const state = { ...stats, progress: stats, threadId: 'thread' };
+    const message = {
+      content: 'result',
+      createdAt: 0,
+      id: 'tool',
+      plugin: { apiName: 'callSubAgent', identifier: 'lobe-agent' },
+      pluginState: state,
+      role: 'tool',
+      updatedAt: 0,
+    } as UIChatMessage;
+    const result = generateFullExport({
+      includeTool: true,
+      messages: [message],
+      showMemberTokenUsage: visible,
+      systemRole: '',
+      withSystemRole: false,
+    });
+    expect(result.messages[0].pluginState).toEqual(
+      visible ? state : { progress: { totalCost: 0.31 }, threadId: 'thread', totalCost: 0.31 },
+    );
+  },
+);
