@@ -27,6 +27,7 @@ import {
   linkPushedPullRequests,
   linkTopicPullRequest,
   listTopicPullRequestsWithStatus,
+  listTopicsPullRequestsWithStatus,
   parsePullRequestUrl,
   registerShellWorksForLocalRun,
   resolveAgentWorkFile,
@@ -58,6 +59,9 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
     },
   });
 });
+
+/** Topic ids per `listTopicsPullRequests` read; the client splits longer lists. */
+const TOPIC_PULL_REQUEST_BATCH = 100;
 
 const lookupPullRequestInput = z.object({ url: z.string().trim().min(1).max(2048) });
 
@@ -485,6 +489,23 @@ export const workRouter = router({
         workModel: ctx.workModel,
         workspaceId: ctx.workspaceId,
       }),
+    ),
+
+  // The same for many topics at once (a topic list's bulk actions), keyed by
+  // topic id; topics without a visible pull request are left out.
+  listTopicsPullRequests: workProcedure
+    .input(z.object({ topicIds: z.array(z.string().min(1)).min(1).max(TOPIC_PULL_REQUEST_BATCH) }))
+    .query(async ({ ctx, input }) =>
+      Object.fromEntries(
+        await listTopicsPullRequestsWithStatus({
+          db: ctx.serverDB,
+          topicIds: input.topicIds,
+          topicModel: ctx.topicModel,
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId,
+        }),
+      ),
     ),
 
   lookupPullRequest: workProcedure.input(lookupPullRequestInput).query(async ({ ctx, input }) => {

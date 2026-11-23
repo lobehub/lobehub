@@ -67,7 +67,11 @@ import {
   type RegisterGoalReportWorkParams,
 } from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
-import { listTopicPullRequests, listTopicsByPullRequest } from './pullRequests';
+import {
+  listTopicPullRequests,
+  listTopicsByPullRequest,
+  listTopicsPullRequests,
+} from './pullRequests';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
 import type { ExternalToolWorkOperation } from './toolResultParsing';
@@ -358,4 +362,7 @@ export class WorkModel {
   listTopicPullRequests = (topicId: string) => listTopicPullRequests(this.ctx, topicId);
 
   listTopicsByPullRequest = (identifier: string) => listTopicsByPullRequest(this.ctx, identifier);
+
+  /** See {@link listTopicsPullRequests}. */
+  listTopicsPullRequests = (topicIds: string[]) => listTopicsPullRequests(this.ctx, topicIds);
 }

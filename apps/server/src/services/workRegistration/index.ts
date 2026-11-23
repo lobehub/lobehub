@@ -50,4 +50,5 @@ export {
   linkPushedPullRequests,
   type LinkPushedPullRequestsResult,
   listTopicPullRequestsWithStatus,
+  listTopicsPullRequestsWithStatus,
 } from './topicPullRequests';
