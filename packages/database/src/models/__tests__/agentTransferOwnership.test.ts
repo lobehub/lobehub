@@ -977,7 +977,6 @@ describe('AgentModel.transferAgentOwnership', () => {
     await serverDB.transaction((trx) =>
       AgentTransferJobModel.createJob(trx, {
         agentIds: [agent.id],
-        sessionIds: [],
         source: { userId: ownerId, workspaceId: wsId },
         target: { userId: teammateId, workspaceId: wsId },
         topics: [],

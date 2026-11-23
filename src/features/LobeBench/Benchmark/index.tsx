@@ -31,6 +31,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import BenchmarkTitleBar from '@/routes/(main)/eval/bench/[benchmarkId]/features/BenchmarkHeader/TitleBar';
 import { useEvalStore } from '@/store/eval';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   container: {
@@ -48,14 +49,14 @@ const styles = stylex.create({
   datasetGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   datasetCard: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
-    paddingBlock: 12,
-    paddingInline: 16,
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

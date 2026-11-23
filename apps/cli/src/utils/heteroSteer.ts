@@ -1,4 +1,6 @@
 // Built-in control commands register themselves when the steer loop loads.
+import './heteroCollaborationMode';
+import './heteroPermissionMode';
 import './heteroStopTask';
 
 import type {
@@ -7,6 +9,7 @@ import type {
   ClaudeCodeControlRequest,
   ClaudeCodeControlRequestHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type { CodexCollaborationMode } from '@lobechat/types';
 
 import {
   dispatchHeteroControl,
@@ -31,6 +34,7 @@ export interface HeteroSteerClient {
       mutate: (
         input: {
           acceptsControl?: boolean;
+          acceptsImageAttachments?: boolean;
           acceptsImages?: boolean;
           blockMs?: number;
           holdSteer?: boolean;
@@ -54,11 +58,12 @@ export interface HeteroSteerClient {
   };
 }
 
-/** A follow-up to type into the session; `imageList` holds images pasted into its body. */
+/** A follow-up to type into the session, including uploaded and inline images. */
 export interface HeteroSteerMessage {
   content: string;
   imageList?: { id: string; url: string }[];
   messageId: string;
+  requiresImages?: true;
 }
 
 /** The prompt a follow-up is typed in as: its text, then its images as image blocks. */
@@ -87,6 +92,9 @@ interface SteerableHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
+  supportsSteerImageAttachments?: true;
+  supportsSteerImages?: boolean;
 }
 
 const RETRY_MS = 2000;
@@ -142,6 +150,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
 
   const { operationId } = context;
   const sendControlRequest = handle.sendControlRequest;
+  const setCollaborationMode = handle.setCollaborationMode;
   const delivered = new Set<string>();
   const abort = new AbortController();
   const handling = new Set<Promise<void>>();
@@ -182,7 +191,9 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       log.debug('Control %s: %s', control.id, control.command);
       const outcome = await dispatchHeteroControl(control, {
         operationId,
-        sendControlRequest: sendControlRequest!,
+        // A native Codex run has no stream-json input: its handlers say so.
+        sendControlRequest: sendControlRequest ?? (() => undefined),
+        setCollaborationMode,
         signal: abort.signal,
       });
       await report(client, control, outcome);
@@ -195,15 +206,18 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   const poll = async () => {
     const client = await context.getTrpcClient();
     // Control messages need a way into the session and back to the server.
-    const acceptsControl = !!sendControlRequest && !!client.aiAgent.reportHeteroControlResult;
+    const acceptsControl =
+      (!!sendControlRequest || !!setCollaborationMode) &&
+      !!client.aiAgent.reportHeteroControlResult;
     while (!abort.signal.aborted) {
       let message: HeteroSteerMessage | null;
       try {
         const res = await client.aiAgent.waitHeteroSteer.mutate(
           {
             ...(acceptsControl && { acceptsControl: true }),
+            ...(handle.supportsSteerImageAttachments && { acceptsImageAttachments: true }),
             // The session takes image blocks, so pasted images come along.
-            acceptsImages: true,
+            ...(handle.supportsSteerImages !== false && { acceptsImages: true }),
             // The first poll answers at once, so the run is marked steerable early.
             ...(!answered && { blockMs: 1 }),
             ...(waitingForUser() && { holdSteer: true }),
@@ -239,7 +253,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       const steer = message;
       const options = { uuid: steer.messageId };
       const accepted = await send(buildSteerPrompt(steer), options).catch(async (error) => {
-        if (!steer.imageList?.length) return false;
+        if (steer.requiresImages || !steer.imageList?.length) return false;
         // An image that cannot be fetched must not cost the message: its
         // markdown still names the image.
         log.debug('Steer images failed, sending the text: %s', String(error));

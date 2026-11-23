@@ -166,16 +166,36 @@ describe('sendVoiceMessage', () => {
 
   // A new topic's first turn runs the composer's git step first, like a typed send.
   it('sends into the worktree the git step prepared', async () => {
-    const newTopicWorkingDirectory = { git: { activeWorktree: '/wt/x' }, path: '/repo' };
+    const firstSendWorktree = {
+      deviceId: 'dev-1',
+      path: '/repo',
+      repoType: 'git' as const,
+      sourcePath: '/repo',
+    };
     const sendMessage = vi.fn(async (params: SendMessageParams) => {
       params.onMessageAccepted?.();
     });
 
     await sendVoiceMessage(sendMessage, voiceFile, {
-      prepare: async () => ({ newTopicWorkingDirectory, ok: true }),
+      prepare: async () => ({ firstSendWorktree, ok: true }),
     });
 
-    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ newTopicWorkingDirectory }));
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ firstSendWorktree }));
+  });
+
+  it('passes a prepared Desktop checkout to the first voice send', async () => {
+    const checkout = { path: '/repo', sessionPath: '/checkout' };
+    const sendMessage = vi.fn(async (params: SendMessageParams) => {
+      params.onMessageAccepted?.();
+    });
+
+    await sendVoiceMessage(sendMessage, voiceFile, {
+      prepare: async () => ({ newTopicWorkingDirectory: checkout, ok: true }),
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ newTopicWorkingDirectory: checkout }),
+    );
   });
 
   it('sends nothing, and keeps the recording retryable, when the git step stops', async () => {

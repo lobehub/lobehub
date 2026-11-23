@@ -1,5 +1,7 @@
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import { getLegacyDisabledBuiltinToolIds } from '@lobechat/builtin-tools';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { getLegacyDisabledBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import type { AgentSenderMetadata, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -27,6 +29,7 @@ import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import { applyShareGateToAgentConfig } from '../shareGate';
+import { resolveShareAutoAgentGrants } from '../shareGate/autoGrants';
 import { assertAgentRelayHop } from '../sourceAttribution';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
@@ -133,6 +136,7 @@ export const execAgentTurn = async (
     trigger,
     cronJobId,
     webhookThread,
+    openedByTopicId,
     taskId,
     evalContext,
     evalRuntime,
@@ -155,7 +159,7 @@ export const execAgentTurn = async (
     approvalSourceOperationId: providedApprovalSourceOperationId,
     selectedSkillIds,
     selectedToolIds,
-    shareGate,
+    shareGate: requestedShareGate,
     mentionedAgents,
     suppressUserMessage,
     ephemeralUserMessage,
@@ -170,7 +174,7 @@ export const execAgentTurn = async (
   // A share caller that sends no config falls back to `manual`, never to
   // this method's `headless` default: `headless` auto-runs `'required'`
   // calls, which would grant a consent nobody gave.
-  const userInterventionConfig: UserInterventionConfig = shareGate
+  const userInterventionConfig: UserInterventionConfig = requestedShareGate
     ? (params.userInterventionConfig ?? { approvalMode: 'manual' })
     : requestedUserInterventionConfig;
 
@@ -261,6 +265,7 @@ export const execAgentTurn = async (
     agentSlug,
     assistantAgentId,
     autoSkillIds,
+    builtinOverrides,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
@@ -285,7 +290,7 @@ export const execAgentTurn = async (
         instructions,
         modelOverride,
         providerOverride,
-        shareVisitorUserId: shareGate?.visitorUserId,
+        shareVisitorUserId: requestedShareGate?.visitorUserId,
         throwIfExecutionAborted,
         toolModeOverride,
       },
@@ -295,7 +300,25 @@ export const execAgentTurn = async (
   // Share-visitor runs must never see the creator's files/knowledge bases.
   // Applied to the resolved config before anything downstream (knowledge
   // flags, tools engine, context snapshot) reads it.
-  if (shareGate) applyShareGateToAgentConfig(agentConfig);
+  if (requestedShareGate) applyShareGateToAgentConfig(agentConfig);
+
+  // Resolve `autoGrantAgentTools` against this run's Agent config before any
+  // stage reads the share's grants.
+  const shareGate = requestedShareGate
+    ? await resolveShareAutoAgentGrants(requestedShareGate, {
+        agent: {
+          autoSkillIds,
+          chatConfig: agentConfig.chatConfig,
+          disabledPluginIds,
+          plugins: agentConfig.plugins,
+        },
+        db: deps.db,
+        listLobehubSkillProviderIds: async () =>
+          (await deps.getMarketService()).listLobehubSkillProviderIds(),
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      })
+    : undefined;
 
   // Before the turn writes any row: a refused send leaves nothing behind.
   await claimRunSlot(runSlot, {
@@ -418,6 +441,14 @@ export const execAgentTurn = async (
   // other forever; past the bound a person has to step in.
   assertAgentRelayHop(agentSender);
 
+  // When the user @-mentions agents (multi-mention, non-group), enable the
+  // agent-management tool for this run so the supervisor can `callAgent` to
+  // delegate. Mirrors the client runtime, which injects a callAgent manifest.
+  // Single-mention takes a client-only deterministic-router path and never
+  // reaches here. The delegation *context* (which agents were mentioned) is
+  // injected separately via `initialContext.mentionedAgents` below.
+  const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
+
   // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
   // model), device-access policy, hetero detection, attachment ingestion, and
   // the persisted user/assistant rows (see `pipeline/turnSetup`).
@@ -441,24 +472,34 @@ export const execAgentTurn = async (
         botContext,
         botSender,
         clientIds,
-        continuationAssistantId,
+        continuationAssistantId: continuationAssistantId ?? params.reservedAssistantMessageId,
         conversationAgentId,
         createdThreadId,
         externalOrigin,
         cronJobId,
         webhookThread,
+        openedByTopicId,
         files,
+        hasMentionedAgents,
         modelOverride,
         operationTaskId,
         parentMessageId,
+        persistedUserMessageId:
+          suppressUserMessage &&
+          !effectiveResume &&
+          params.persistedUserMessageId === parentMessageId
+            ? params.persistedUserMessageId
+            : undefined,
         prompt,
         providerOverride,
         requestedDeviceId,
         requireDevice,
+        reservedOperationId: params.reservedOperationId,
         resolvedAgentId,
         resume,
         runFromHistory,
         selectedSkillIds,
+        selectedToolIds,
         shareGate,
         steer,
         throwIfExecutionAborted,
@@ -528,7 +569,10 @@ export const execAgentTurn = async (
     userMessageId: turn.userMessageId,
     // Exactly what the user row was persisted with, so every stage reads the
     // message the way a later turn reads it back from history.
-    userMessageMetadata: turn.userMessageId ? turn.requestTriggerMetadata : undefined,
+    userMessageMetadata:
+      turn.userMessageId || params.reservedAssistantMessageId
+        ? turn.requestTriggerMetadata
+        : undefined,
   };
 
   // Every caller that is not the plain composer (bots, group members,
@@ -559,6 +603,7 @@ export const execAgentTurn = async (
             bindTopicWorkingDirectory({ topicModel: deps.topicModel }, p),
           db: deps.db,
           getMarketService: (options) => deps.getMarketService(runFacts, options),
+          includeShareVisitor: !!runContext.shareGate,
           messageModel: deps.messageModel,
           resolveDeviceWorkspaceId: deps.resolveDeviceWorkspaceId,
           topicModel: deps.topicModel,
@@ -593,7 +638,10 @@ export const execAgentTurn = async (
           requestTrigger: requestTriggerMetadata.trigger,
           requestedDeviceId: turn.requestedDeviceId,
           runAttachments,
-          selfMessageIds,
+          selfMessageIds:
+            params.reservedAssistantMessageId && parentMessageId
+              ? new Set([...selfMessageIds, parentMessageId])
+              : selfMessageIds,
           topicStartOwnerOperationId: params.topicStartOwnerOperationId,
         },
       ),
@@ -607,10 +655,18 @@ export const execAgentTurn = async (
   }
 
   // 4. Fetch user settings (memory config + timezone)
-  const { enableExpertise, globalMemoryEnabled, userTimezone } = await traceSendStage(
-    'run_settings',
-    () => resolveRunSettings({ agentConfig, runFacts, shareGate }),
-  );
+  const { enableExpertise, globalMemoryEnabled, uninstalledBuiltinIds, userTimezone } =
+    await traceSendStage('run_settings', () =>
+      resolveRunSettings({ agentConfig, runFacts, shareGate, workspaceId: deps.workspaceId }),
+    );
+  if (!shareGate && !exclusivePluginIds) {
+    disabledPluginIds.push(
+      ...getLegacyDisabledBuiltinSkillIds(uninstalledBuiltinIds, builtinOverrides),
+    );
+    disabledPluginIds.push(
+      ...getLegacyDisabledBuiltinToolIds(uninstalledBuiltinIds, builtinOverrides),
+    );
+  }
   log(
     'execAgent: globalMemoryEnabled=%s, timezone=%s',
     globalMemoryEnabled,
@@ -636,14 +692,6 @@ export const execAgentTurn = async (
       selfMessageIds,
     },
   );
-
-  // When the user @-mentions agents (multi-mention, non-group), enable the
-  // agent-management tool for this run so the supervisor can `callAgent` to
-  // delegate. Mirrors the client runtime, which injects a callAgent manifest.
-  // Single-mention takes a client-only deterministic-router path and never
-  // reaches here. The delegation *context* (which agents were mentioned) is
-  // injected separately via `initialContext.mentionedAgents` below.
-  const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
 
   // 15. Generate operation ID: op_{timestamp}_{agentId}_{topicId}_{random}
   const operationId =
@@ -799,6 +847,7 @@ export const execAgentTurn = async (
       },
       runContext,
       {
+        acceptsArtboardWorks: params.acceptsArtboardWorks,
         acceptsFileWorks: params.acceptsFileWorks,
         acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
         approvalClaim,

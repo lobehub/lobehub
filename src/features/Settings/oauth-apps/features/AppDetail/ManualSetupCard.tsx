@@ -7,6 +7,8 @@ import { ChevronDownIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { type IntegrationEndpointKey } from '../../integrationEndpoints';
 import { useIntegrationEndpoints } from './IntegrationCard';
 import SectionCard from './SectionCard';
@@ -18,7 +20,7 @@ const styles = stylex.create({
   label: { fontSize: '12px', color: cssVar.colorTextSecondary },
   value: {
     paddingBlock: '2px',
-    paddingInlineStart: '12px',
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
     paddingInlineEnd: '2px',
     borderRadius: cssVar.borderRadius,
     fontFamily: cssVar.fontFamilyCode,

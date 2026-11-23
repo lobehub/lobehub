@@ -10,6 +10,9 @@ import type {
 import type { SerializedAgentHook } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
+import type { HeteroPermissionMode, HeteroPermissionModeFallback } from '../heteroPermissionMode';
+import { HETERO_PERMISSION_MODES } from '../heteroPermissionMode';
+import type { CodexPlanDecision } from '../heteroPlanMode';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
 import type { OwnedWorktree } from '../ownedWorktree';
@@ -68,6 +71,19 @@ export interface ChatTopicWebhookContext {
 
 export interface ChatTopicBotContext {
   applicationId: string;
+  /**
+   * Whether the sender, not being the owner, sits in a channel whose members
+   * may all use the owner's devices (`settings.devicePolicy = 'channel'` +
+   * `settings.deviceChannelAllowFrom`). Absent means no channel grant.
+   */
+  isDeviceChannelGranted?: boolean;
+  /**
+   * Whether the conversation is outside the channels the owner limited device
+   * use to (`settings.deviceChannelPolicy = 'allowlist'` +
+   * `settings.deviceChannelAllowFrom`). Denies device access to everyone,
+   * the owner included. Absent means no channel restriction.
+   */
+  isDeviceChannelRestricted?: boolean;
   /**
    * Whether the sender, not being the owner, is on the owner's device list
    * (`settings.devicePolicy = 'allowlist'` + `settings.deviceAllowFrom`).
@@ -139,6 +155,25 @@ export interface OnboardingSessionSnapshot {
   version: number;
 }
 
+/**
+ * Provenance of a topic opened from another one (its parent topic): the topic
+ * and agent it was opened from.
+ *
+ * A link only — the topic keeps its own agent, working directory and
+ * lifecycle. While `detachedAt` is unset it lists under its parent
+ * (`topic.getTopics({ openedByTopicId })`, `lh topic list --parent-topic-id`);
+ * a detached one keeps the link as its origin.
+ */
+export interface TopicOpenedBy {
+  /** The opener topic's agent, so a reader never has to load the opener. */
+  agentId?: string;
+  /** ISO time the link was written. */
+  at: string;
+  /** ISO time the topic was unlinked from its parent; it no longer lists under it. */
+  detachedAt?: string;
+  topicId: string;
+}
+
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
@@ -159,6 +194,8 @@ export interface ChatTopicMetadata {
 
   botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
+  /** The Execute plan / Keep discussing buttons under the latest Codex plan. */
+  codexPlanDecision?: CodexPlanDecision | null;
   cronJobId?: string;
   /**
    * The conversation's device was chosen explicitly for it (the composer's
@@ -219,6 +256,28 @@ export interface ChatTopicMetadata {
    * agent's effort" by `applyTopicModelToHeterogeneousProvider`.
    */
   heteroEffort?: HeterogeneousReasoningEffort;
+  /**
+   * Claude Code permission mode of this topic:
+   * what its next run starts in, and the mode Claude Code last reported, so a
+   * switch Claude Code made itself (leaving plan mode) sticks.
+   */
+  heteroPermissionMode?: HeteroPermissionMode;
+  /** Why the last run was not in the picked mode; cleared by a run that was. */
+  heteroPermissionModeFallback?: HeteroPermissionModeFallback | null;
+  /**
+   * Operation dispatched to `lh hetero exec` with a mode that asks, whose run
+   * has not reported Claude Code's mode yet. Still set when it ends cleanly:
+   * that `lh` predates permission modes (`outdatedCli`). Server-written only.
+   */
+  heteroPermissionModeReportPending?: string | null;
+  /**
+   * Codex Plan switch of this topic. Absent
+   * until the user first turns it on: such a topic sends no collaboration
+   * mode at all. Once set, every native turn sends `plan` (true) or
+   * `default` (false) explicitly. Codex keeps the mode on the thread, so only
+   * the user turns it off (the switch, or Execute plan).
+   */
+  heteroPlanMode?: boolean;
   /** Latest Task run's dispatched settings; no args, credentials or system context. */
   heteroRuntimeConfig?: {
     /** Per-field configuration and provenance captured before dispatch. */
@@ -304,6 +363,13 @@ export interface ChatTopicMetadata {
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
   /**
+   * The topic this one was opened from (its parent topic). Server-owned
+   * (absent from the client-writable metadata schema), written once when the
+   * topic is created with `execAgent({ openedByTopicId })` — e.g.
+   * `lh topic send --new` run inside a conversation. See {@link TopicOpenedBy}.
+   */
+  openedBy?: TopicOpenedBy;
+  /**
    * Worktrees the app created for this topic, and where their automatic
    * cleanup stands. Server-owned: claimed whenever metadata is written with
    * `workingDirectoryConfig.git.autoCreated`, and deliberately absent from
@@ -313,7 +379,7 @@ export interface ChatTopicMetadata {
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
-   * Better Coding Experience: PR links kept on the topic (found on its own
+   * PR links kept on the topic (found on its own
    * branch, or linked by hand) and the PRs removed from its lists. Server-owned —
    * written only by the `work.*TopicPullRequest` endpoints, never by a client
    * metadata patch.
@@ -593,6 +659,23 @@ const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
   userMessageId: z.string(),
 });
 
+export const firstSendWorktreeSchema = z.object({
+  baseBranch: z.string().min(1).max(1024).optional(),
+  deviceId: z.string().min(1).max(256),
+  path: z.string().min(1).max(4096),
+  repoType: z.enum(['git', 'github']),
+  sourcePath: z.string().min(1).max(4096),
+});
+
+const worktreeStartRunSchema = topicScheduledRunBaseSchema.extend({
+  error: z.string().optional(),
+  kind: z.literal('worktree_start'),
+  operationId: z.string(),
+  retryable: z.boolean().optional(),
+  userMessageId: z.string(),
+  waitingForDevice: z.boolean().optional(),
+});
+
 /**
  * A deferred agent run on a topic: *when* to run (`runAt`), a lease so only one
  * replica dispatches it (`claim`), and *what* to run (the `kind` variant).
@@ -607,11 +690,14 @@ const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
 export const topicScheduledRunSchema = z.discriminatedUnion('kind', [
   resumeAfterRateLimitRunSchema,
   delayedStartRunSchema,
+  worktreeStartRunSchema,
 ]);
 
 export type TopicScheduledRunClaim = z.infer<typeof topicScheduledRunClaimSchema>;
 export type ResumeAfterRateLimitRun = z.infer<typeof resumeAfterRateLimitRunSchema>;
 export type DelayedStartRun = z.infer<typeof delayedStartRunSchema>;
+export type FirstSendWorktree = z.infer<typeof firstSendWorktreeSchema>;
+export type WorktreeStartRun = z.infer<typeof worktreeStartRunSchema>;
 export type TopicScheduledRun = z.infer<typeof topicScheduledRunSchema>;
 
 /**
@@ -680,6 +766,13 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  heteroPermissionMode: z.enum(HETERO_PERMISSION_MODES).optional(),
+  heteroPermissionModeFallback: z.enum(['outdatedCli', 'root']).nullable().optional(),
+  heteroPlanMode: z.boolean().optional(),
+  codexPlanDecision: z
+    .object({ dismissed: z.boolean(), itemId: z.string().min(1) })
+    .nullable()
+    .optional(),
   heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
@@ -792,7 +885,7 @@ export type ChatTopicStatus = z.infer<typeof chatTopicStatusSchema>;
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
-  /** Server-side mock until real cost aggregation lands. */
+  /** USD cost of the topic, rolled up from its messages and runs; set by detail queries. */
   cost?: number | null;
   description?: string | null;
   favorite?: boolean;
@@ -840,7 +933,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;
   title: string;
-  /** Server-side mock until real token aggregation lands. */
+  /** Tokens the topic used, rolled up with `cost`; set by detail queries. */
   tokenUsage?: number | null;
   trigger?: string | null;
   userId?: string;

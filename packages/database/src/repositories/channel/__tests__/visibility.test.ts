@@ -87,6 +87,22 @@ describe('Channel visibility', () => {
     await expect(outsider.join(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('records who added a member, and drops it when they rejoin on their own', async () => {
+    const { channel, outsider, owner } = await create();
+    const added = await owner.addUser(channel.id, fixture.memberId);
+    const ownerMember = (await owner.detail(channel.id)).members.find(
+      (entry) => entry.role === 'owner',
+    );
+    const invitedBy = async () =>
+      (await owner.detail(channel.id)).members.find((entry) => entry.id === added.id)?.invitedBy;
+    expect(await invitedBy()).toBe(ownerMember?.id);
+
+    await owner.updateVisibility(channel.id, 'public');
+    await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, added.id));
+    await outsider.join(channel.id);
+    expect(await invitedBy()).toBeNull();
+  });
+
   it('hides archived and trashed public channels, and rejects people outside the workspace', async () => {
     const { channel, outsider, owner } = await create();
     await owner.updateVisibility(channel.id, 'public');

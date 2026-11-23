@@ -237,7 +237,6 @@
   "rules.distill.truncated": "자료가 길어서 시작 부분만 읽었습니다.",
   "rules.distill.untitled": "제목 없음",
   "rules.distill.upload": "파일 업로드",
-  "rules.distill.uploadFailed": "파일을 업로드하지 못했습니다.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint 또는 일반 텍스트",
   "rules.enforcement.block": "차단",
   "rules.enforcement.blockDesc": "전달을 보류합니다. 아직 적용되지 않음: 현재는 알림만 제공",

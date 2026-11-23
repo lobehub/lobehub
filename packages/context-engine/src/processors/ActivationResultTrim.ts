@@ -27,6 +27,14 @@ const log = debug('context-engine:processor:ActivationResultTrimProcessor');
 const ACTIVATOR_IDENTIFIER = 'lobe-activator';
 const SKILLS_IDENTIFIER = 'lobe-skills';
 
+/**
+ * Closing line of an `activateTools` result, as written by the activator and by this
+ * processor's trimmed form. ToolActivationAnchorProcessor replaces it when the
+ * instructions stay with the result instead.
+ */
+export const ACTIVATION_DOCS_IN_SYSTEM_PROMPT_NOTE =
+  'Usage instructions for the activated items are in the system prompt.';
+
 interface ActivatedToolState {
   apiCount?: number;
   identifier?: string;
@@ -36,6 +44,11 @@ interface ActivatedToolState {
 interface ActivatedSkillState {
   identifier?: string;
   name?: string;
+}
+
+interface UnavailableToolState {
+  identifier?: string;
+  reason?: string;
 }
 
 export interface ActivationResultTrimConfig {
@@ -181,6 +194,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
           activatedSkills?: ActivatedSkillState[];
           activatedTools?: ActivatedToolState[];
           alreadyActive?: string[];
+          notAvailable?: UnavailableToolState[];
           notFound?: string[];
         }
       | undefined;
@@ -243,21 +257,61 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
     if (state?.alreadyActive?.length) {
       parts.push(`Already active: ${state.alreadyActive.join(', ')}.`);
     }
-    if (state?.notFound?.length) {
-      parts.push(`Not found: ${state.notFound.join(', ')}.`);
+    // `notFound` lists every identifier that was not activated; the ones the
+    // host explained keep their reason, so a tool withheld from this run does
+    // not read as a typo to retry.
+    const notAvailable = this.readUnavailableTools(state, message.content as string);
+    for (const item of notAvailable) {
+      parts.push(`Not available: ${item.identifier}. ${item.reason}`);
+    }
+    const explained = new Set(notAvailable.map((item) => item.identifier));
+    const notFound = (state?.notFound ?? []).filter((id) => !explained.has(id));
+    if (notFound.length > 0) {
+      parts.push(`Not found: ${notFound.join(', ')}.`);
     }
 
-    parts.push('Usage instructions for the activated items are in the system prompt.');
+    parts.push(ACTIVATION_DOCS_IN_SYSTEM_PROMPT_NOTE);
 
     return parts.join('\n');
+  }
+
+  /**
+   * The not-activated tools the host explained, with the reason it gave.
+   * Results persisted before `notAvailable` existed carry the reason only in
+   * their text, as a `Not available: <id>. <reason>` line per tool — read it
+   * back from there so those rows keep it too.
+   */
+  private readUnavailableTools(
+    state: { notAvailable?: UnavailableToolState[]; notFound?: string[] } | undefined,
+    original: string,
+  ): Array<{ identifier: string; reason: string }> {
+    if (Array.isArray(state?.notAvailable)) {
+      return state.notAvailable.flatMap((item) =>
+        item?.identifier && item.reason
+          ? [{ identifier: item.identifier, reason: item.reason }]
+          : [],
+      );
+    }
+
+    return (state?.notFound ?? []).flatMap((identifier) => {
+      const label = `\nNot available: ${identifier}. `;
+      const labelIndex = original.indexOf(label);
+      if (labelIndex === -1) return [];
+
+      const from = labelIndex + label.length;
+      const lineEnd = original.indexOf('\n', from);
+      const reason = original.slice(from, lineEnd === -1 ? undefined : lineEnd).trim();
+      return reason ? [{ identifier, reason }] : [];
+    });
   }
 
   /**
    * Locate each fallback-activated skill's injected content inside the
    * activateTools result blob (skill contents are appended in activation
    * order) and return the non-injected suffix that follows each copy, cut at
-   * the next skill's content or the trailing `Already active:` / `Not found:`
-   * sections. Returns undefined when any copy cannot be located.
+   * the next skill's content or the trailing `Already active:` /
+   * `Not available:` / `Not found:` sections. Returns undefined when any copy
+   * cannot be located.
    */
   private extractFallbackSkillRemainders(
     original: string,
@@ -284,7 +338,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
       let to = index + 1 < positions.length ? positions[index + 1].start : original.length;
       // Matches the literal section labels ActivatorExecutionRuntime appends
       // after the skill contents.
-      for (const label of ['\nAlready active:', '\nNot found:']) {
+      for (const label of ['\nAlready active:', '\nNot available:', '\nNot found:']) {
         const labelIndex = original.indexOf(label, position.end);
         if (labelIndex !== -1 && labelIndex < to) to = labelIndex;
       }

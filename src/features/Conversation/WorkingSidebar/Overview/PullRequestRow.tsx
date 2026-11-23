@@ -1,8 +1,9 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import { TriangleAlertIcon, XIcon } from 'lucide-react';
-import { memo } from 'react';
+import * as stylex from '@stylexjs/stylex';
+import { TriangleAlertIcon } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -14,11 +15,12 @@ import {
 import { shouldShowCiLabel } from './overviewData';
 import { OverviewRow, rowStyles } from './OverviewRow';
 import { sectionStyles } from './sectionStyles';
+import { statusTint } from './statusTint';
 
 interface PullRequestRowProps {
+  /** The row's "⋯" menu, after the CI pill. */
+  actions?: ReactNode;
   onClick: () => void;
-  /** Better Coding Experience: remove the PR from the topic's lists. */
-  onDismiss?: () => void;
   pullRequest: DeviceGitLinkedPullRequest;
   /** Defaults to `#number title`. */
   tooltip?: string;
@@ -28,7 +30,7 @@ interface PullRequestRowProps {
 
 /** One pull request under the repository card's Changes row: state, number, title, CI. */
 const PullRequestRow = memo<PullRequestRowProps>(
-  ({ onClick, onDismiss, pullRequest, tooltip, unvouched }) => {
+  ({ actions, onClick, pullRequest, tooltip, unvouched }) => {
     const { t } = useTranslation('chat');
     const ciStatus = pullRequest.ciStatus;
     const ci = getCiVisual(ciStatus);
@@ -38,6 +40,7 @@ const PullRequestRow = memo<PullRequestRowProps>(
       <Tooltip title={tooltip ?? `#${pullRequest.number} ${pullRequest.title}`}>
         <div>
           <OverviewRow
+            actions={actions}
             icon={prVisual.icon}
             iconColor={prVisual.color}
             trailing={
@@ -48,13 +51,15 @@ const PullRequestRow = memo<PullRequestRowProps>(
                       aria-label={t('workingPanel.overview.pr.unvouched')}
                       color={cssVar.colorWarning}
                       icon={TriangleAlertIcon}
-                      size={13}
+                      size={14}
                     />
                   </Tooltip>
                 )}
                 <span
-                  className={sectionStyles.pill}
-                  style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
+                  {...stylex.props(
+                    sectionStyles.pill,
+                    sectionStyles.pillTone(ci.color, statusTint(ci.color)),
+                  )}
                 >
                   <Icon icon={ci.icon} size={12} />
                   {shouldShowCiLabel(ciStatus)
@@ -63,23 +68,11 @@ const PullRequestRow = memo<PullRequestRowProps>(
                       )
                     : null}
                 </span>
-                {onDismiss && (
-                  <ActionIcon
-                    aria-label={t('workingPanel.overview.pr.dismiss')}
-                    icon={XIcon}
-                    size={'small'}
-                    title={t('workingPanel.overview.pr.dismiss')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDismiss();
-                    }}
-                  />
-                )}
               </>
             }
             value={
               <>
-                <span className={rowStyles.num}>#{pullRequest.number}</span>
+                <span {...stylex.props(rowStyles.num)}>#{pullRequest.number}</span>
                 {pullRequest.title}
               </>
             }

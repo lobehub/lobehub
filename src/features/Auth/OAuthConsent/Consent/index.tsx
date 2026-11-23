@@ -1,5 +1,6 @@
 'use client';
 
+import { DESKTOP_OIDC_CLIENT_IDS, LOBOT_MOBILE_CLIENT_ID } from '@lobechat/const';
 import { Block, Button, Flexbox, Text } from '@lobehub/ui';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +31,12 @@ function getScopeDescription(scope: string, t: any, reviewKind?: 'acceptance' | 
   return t(`consent.scope.${scope.replace(':', '-')}`, scope);
 }
 
-const BUILTIN_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile', 'lobehub-market', 'toby']);
+const BUILTIN_CLIENTS = new Set([
+  ...DESKTOP_OIDC_CLIENT_IDS,
+  'lobehub-mobile',
+  'lobehub-market',
+  LOBOT_MOBILE_CLIENT_ID,
+]);
 
 const ConsentClient = memo<ClientProps>(
   ({ acceptanceReview, uid, clientId, scopes, clientMetadata }) => {

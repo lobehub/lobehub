@@ -8,6 +8,7 @@ import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { getAudioDuration } from '@/utils/client/audioDuration';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
+import { getImageThumbhash } from '@/utils/client/imageThumbhash';
 
 import { useFileStore as useStore } from '../../store';
 
@@ -27,6 +28,10 @@ vi.mock('@/utils/client/audioDuration', () => ({
 
 vi.mock('@/utils/client/imageDimensions', () => ({
   getImageDimensions: vi.fn(),
+}));
+
+vi.mock('@/utils/client/imageThumbhash', () => ({
+  getImageThumbhash: vi.fn(),
 }));
 
 // Mock for sha256
@@ -67,6 +72,7 @@ beforeEach(() => {
   vi.mocked(handleFileUploadError).mockReturnValue(false);
   vi.mocked(fileTypeFromBlob).mockResolvedValue(undefined);
   vi.mocked(getAudioDuration).mockResolvedValue(undefined);
+  vi.mocked(getImageThumbhash).mockResolvedValue(undefined);
   vi.spyOn(uploadService, 'releaseUpload').mockResolvedValue();
 });
 
@@ -100,6 +106,7 @@ describe('FileUploadAction', () => {
 
       // Mock dependencies
       vi.mocked(getImageDimensions).mockResolvedValue(mockDimensions);
+      vi.mocked(getImageThumbhash).mockResolvedValue('HBkSHYSIeHiPiHh8eJd4eTN0EEQG');
       vi.spyOn(uploadService, 'uploadBase64ToS3').mockResolvedValue(mockUploadResult);
       vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
@@ -108,11 +115,16 @@ describe('FileUploadAction', () => {
       });
 
       expect(getImageDimensions).toHaveBeenCalledWith(base64Data);
+      expect(getImageThumbhash).toHaveBeenCalledWith(base64Data);
       expect(uploadService.uploadBase64ToS3).toHaveBeenCalledWith(base64Data);
       expect(fileService.createFile).toHaveBeenCalledWith({
         fileType: mockUploadResult.fileType,
         hash: mockUploadResult.hash,
-        metadata: { ...mockUploadResult.metadata, ...mockDimensions },
+        metadata: {
+          ...mockUploadResult.metadata,
+          ...mockDimensions,
+          thumbhash: 'HBkSHYSIeHiPiHh8eJd4eTN0EEQG',
+        },
         name: mockMetadata.filename,
         size: mockUploadResult.size,
         url: mockMetadata.path,
@@ -231,6 +243,7 @@ describe('FileUploadAction', () => {
         const onStatusUpdate = vi.fn();
 
         vi.mocked(getImageDimensions).mockResolvedValue(mockDimensions);
+        vi.mocked(getImageThumbhash).mockResolvedValue('HBkSHYSIeHiPiHh8eJd4eTN0EEQG');
         vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
         const uploadToS3Spy = vi.spyOn(uploadService, 'uploadFileToS3');
@@ -253,7 +266,11 @@ describe('FileUploadAction', () => {
           {
             fileType: mockFile.type,
             hash: 'mock-hash-value',
-            metadata: { ...mockExistingMetadata, ...mockDimensions },
+            metadata: {
+              ...mockExistingMetadata,
+              ...mockDimensions,
+              thumbhash: 'HBkSHYSIeHiPiHh8eJd4eTN0EEQG',
+            },
             name: mockFile.name,
             size: mockFile.size,
             url: mockExistingMetadata.path, // Uses metadata.path when available
@@ -374,6 +391,7 @@ describe('FileUploadAction', () => {
           type: 'updateFile',
           value: {
             dimensions: mockDimensions,
+            fileType: 'image/jpeg',
             fileUrl: mockFileResponse.url,
             id: mockFileResponse.id,
             status: 'success',
@@ -945,6 +963,7 @@ describe('FileUploadAction', () => {
           type: 'updateFile',
           value: {
             dimensions: mockDimensions,
+            fileType: 'image/jpeg',
             fileUrl: mockFileResponse.url,
             id: mockFileResponse.id,
             status: 'success',

@@ -23,6 +23,11 @@ describe('LobeHubSkill', () => {
     expect(LobeHubSkill.content).toContain('references/connector');
   });
 
+  it('provides task commands as a platform reference', () => {
+    expect(LobeHubSkill.content).toContain('references/task');
+    expect(LobeHubSkill.resources?.['references/task']?.content).toContain('lh task complete <id>');
+  });
+
   it('documents workspace scope in the guide', () => {
     expect(LobeHubSkill.content).toContain('`lh workspace`');
     expect(LobeHubSkill.content).toContain('references/workspace');

@@ -35,7 +35,6 @@ import { mutate } from '@/libs/swr';
 import { cronKeys, topicKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { aiChatService } from '@/services/aiChat';
-import { type GitLinkedPRSummary } from '@/services/git';
 import { messageService } from '@/services/message';
 import type { TopicBatchDeleteScope } from '@/services/topic';
 import { topicService } from '@/services/topic';
@@ -48,14 +47,6 @@ import {
   isAudioOnlyFirstUserMessage,
   normalizeTopicTitleMessages,
 } from '@/store/chat/utils/topicTitle';
-import {
-  canReadTopicGitTransport,
-  getTopicLinkedPullRequestBase,
-  isSuccessfulLinkedPullRequestLookup,
-  mergeWorkingDirGithubState,
-  resolveTopicGitTransport,
-  toWorkingDirGithubState,
-} from '@/store/chat/utils/topicWorkingDirGit';
 import { useGlobalStore } from '@/store/global';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
@@ -83,10 +74,6 @@ import {
 import { type ChatTopicDispatch } from './reducer';
 import { topicSelectors } from './selectors';
 import { createTopicDetailSlice, RUN_WATCH_INTERVAL } from './topicDetail';
-import {
-  type TopicLinkedPullRequestRefreshParams,
-  useTopicLinkedPullRequestSync,
-} from './topicLinkedPullRequest';
 
 const n = setNamespace('t');
 
@@ -273,29 +260,6 @@ export class ChatTopicActionImpl {
     ]);
     subscribeCacheScope((scope) => this.#topicList.ensureScope(scope));
   }
-
-  #resolveTopicLinkedPullRequestRefreshParams = (
-    topicId: string,
-    metadata?: ChatTopicMetadata,
-  ): TopicLinkedPullRequestRefreshParams | undefined => {
-    const sourceMetadata = metadata ?? topicSelectors.getTopicById(topicId)(this.#get())?.metadata;
-    const base = getTopicLinkedPullRequestBase(sourceMetadata);
-    if (!base) return undefined;
-
-    const { activeAgentId } = this.#get();
-    if (!activeAgentId) return undefined;
-
-    const transport = resolveTopicGitTransport(activeAgentId);
-    if (!canReadTopicGitTransport(transport)) return undefined;
-
-    return {
-      branch: base.branch,
-      deviceId: transport.deviceId,
-      path: base.path,
-      pullRequestNumber: base.pullRequestNumber,
-      topicId,
-    };
-  };
 
   closeAllTopicsDrawer = (): void => {
     this.#set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
@@ -1202,20 +1166,9 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Re-read a `scheduled` topic from the server and fold any dispatch back into
-   * the store. The cron dispatcher (`scheduledTopicDispatch`) mutates only the
-   * DB when `runAt` passes — status → 'running', `scheduledRun` cleared,
-   * `runningOperation` seeded, the parked error card cleared off the failed
-   * message — and no push channel tells a client that is already sitting on the
-   * topic. This is the pull side: `useScheduledRunWatch` calls it on topic entry
-   * and on a short poll around `runAt`.
-   *
-   * When the server has moved past `scheduled`, the fresh row is patched into
-   * the topic map (so `useGatewayReconnect` sees `runningOperation` and attaches
-   * to the live stream) and the message list is refetched (so the stale
-   * rate-limit card drops and the continuation's assistant row appears).
-   *
-   * Returns whether a dispatch was observed and folded in.
+   * Fold scheduled work's server-side transition into the topic map. The watcher
+   * calls this on entry and while the schedule is due. A dispatch also refreshes
+   * the transcript so gateway reconnect can anchor to the new assistant row.
    */
   syncScheduledTopicRun = async (topicId: string): Promise<boolean> => {
     const stored = topicSelectors.getTopicById(topicId)(this.#get());
@@ -1237,8 +1190,18 @@ export class ChatTopicActionImpl {
     const fresh = this.#pendingTopicStatusWrites.apply(fetched, 'server');
     if (fresh.status !== fetched.status) return false;
 
-    // Server still parked — nothing to fold in.
-    if (fresh.status === 'scheduled' && fresh.metadata?.scheduledRun) return false;
+    // A first send can wait for its device before it starts creating the checkout.
+    const stillScheduled = fresh.status === 'scheduled' && !!fresh.metadata?.scheduledRun;
+    if (stillScheduled) {
+      const pending = fresh.metadata?.scheduledRun;
+      const previous = stored.metadata?.scheduledRun;
+      if (
+        pending?.kind !== 'worktree_start' ||
+        previous?.kind !== 'worktree_start' ||
+        !!pending.waitingForDevice === !!previous.waitingForDevice
+      )
+        return false;
+    }
 
     // Re-check after the await: a topic/agent switch mid-flight means the
     // active bucket no longer holds this row — don't patch a foreign bucket.
@@ -1256,17 +1219,10 @@ export class ChatTopicActionImpl {
     // The dispatcher also rewrote messages before handing off (cleared/deleted
     // the failed step, created the continuation's placeholder), so the list
     // must be refetched before the gateway reconnect anchors on it.
-    await this.#get().refreshMessages();
+    if (!stillScheduled) await this.#get().refreshMessages();
 
     return true;
   };
-
-  /** Keep a topic's recorded PR state current (see `useTopicLinkedPullRequestSync`). */
-  useFetchTopicLinkedPullRequest = (topicId?: string, metadata?: ChatTopicMetadata) =>
-    useTopicLinkedPullRequestSync(
-      topicId ? this.#resolveTopicLinkedPullRequestRefreshParams(topicId, metadata) : undefined,
-      (params, pr) => this.#get().internal_updateTopicLinkedPullRequest(params, pr),
-    );
 
   autoRenameTopicTitle = async (id: string, topicAgentId?: string): Promise<void> => {
     const { activeAgentId, summaryTopicTitle } = this.#get();
@@ -1757,70 +1713,6 @@ export class ChatTopicActionImpl {
       topicService.updateTopic(id, data),
     );
     await this.#get().refreshTopic(containerKey);
-  };
-
-  internal_updateTopicLinkedPullRequest = async (
-    params: TopicLinkedPullRequestRefreshParams,
-    prData?: GitLinkedPRSummary,
-  ): Promise<void> => {
-    if (!isSuccessfulLinkedPullRequestLookup(prData)) return;
-
-    const topic = topicSelectors.getTopicById(params.topicId)(this.#get());
-    if (!topic) return;
-
-    const base = getTopicLinkedPullRequestBase(topic.metadata);
-    if (
-      !base ||
-      base.branch !== params.branch ||
-      base.path !== params.path ||
-      base.pullRequestNumber !== params.pullRequestNumber
-    ) {
-      return;
-    }
-
-    const github = toWorkingDirGithubState(prData);
-    if (!github) return;
-
-    if (
-      base.pullRequestNumber !== undefined &&
-      github.pullRequest?.number !== base.pullRequestNumber
-    ) {
-      return;
-    }
-
-    const nextConfig = mergeWorkingDirGithubState({
-      branch: base.branch,
-      currentConfig: base.currentConfig,
-      github,
-      path: base.path,
-      upstream: prData?.upstream,
-    });
-
-    if (isEqual(base.currentConfig, nextConfig)) return;
-
-    this.#get().internal_dispatchTopic(
-      {
-        id: params.topicId,
-        type: 'updateTopic',
-        value: {
-          metadata: {
-            ...topic.metadata,
-            workingDirectoryConfig: nextConfig,
-          },
-        },
-      },
-      n('refreshTopicLinkedPullRequest'),
-    );
-
-    try {
-      await topicService.updateTopicMetadata(params.topicId, {
-        workingDirectoryConfig: nextConfig,
-      });
-      await this.#get().refreshTopic();
-    } catch (error) {
-      await this.#get().refreshTopic();
-      throw error;
-    }
   };
 
   internal_createTopic = async (params: CreateTopicParams): Promise<string> => {

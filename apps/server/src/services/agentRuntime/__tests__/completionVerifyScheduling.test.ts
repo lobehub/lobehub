@@ -29,7 +29,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
 
   it('hands the verify gate to its own delivery instead of this request', async () => {
     const lifecycle = new CompletionLifecycle({} as any, 'user-1');
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
@@ -54,7 +54,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     'does not wait for unfinished plan generation on %s',
     async (reason) => {
       const lifecycle = new CompletionLifecycle({} as any, 'user-1');
-      vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+      vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
       const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
       vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
       let release!: () => void;
@@ -81,7 +81,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
 
   it.each(['error', 'interrupted'])('settles an aborted repair on %s', async (reason) => {
     const lifecycle = new CompletionLifecycle({} as any, 'user-1');
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const settle = vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
@@ -100,7 +100,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
     const release = vi.spyOn(verifyServices, 'releaseUndeliveredRound').mockResolvedValue(true);
     const lifecycle = new CompletionLifecycle({} as any, 'user-1');
-    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue({});
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 

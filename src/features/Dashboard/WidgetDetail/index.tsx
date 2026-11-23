@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { DashboardWidgetItem } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { densityVars } from '@/styles/densityVars';
 
 import { ErrorLine } from '../ErrorLine';
 import { useWidgetTrend } from '../hooks/useWidgetTrend';
@@ -24,7 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
   cell: css`
     min-width: 0;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     background: ${cssVar.colorBgContainer};
   `,
   cellLabel: css`
@@ -48,7 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   status: css`
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   summary: css`

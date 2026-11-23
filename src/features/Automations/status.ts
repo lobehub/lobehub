@@ -32,7 +32,9 @@ export interface AutomationStatus {
 
 /** One readable reason per `last_error` value (契约 3.1); `unknown` covers anything unmapped. */
 export const automationErrorKey = (error: InboundWebhookError | string) =>
-  `automations.error.${ERROR_KEYS.has(error as InboundWebhookError) ? error : 'unknown'}`;
+  error === 'access_revoked'
+    ? 'automations.error.reconnectToResubscribe'
+    : `automations.error.${ERROR_KEYS.has(error as InboundWebhookError) ? error : 'unknown'}`;
 
 const ERROR_KEYS = new Set<InboundWebhookError>([
   'access_revoked',

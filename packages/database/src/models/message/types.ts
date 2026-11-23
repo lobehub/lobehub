@@ -55,6 +55,8 @@ export interface QueryMessagesOptions {
    * timestamp strings compared with a `::timestamptz` cast.
    */
   groupNodeWindow?: MessageGroupNodeWindow;
+  /** Same opt-in as `includeFileWorks`, for `artboard` work summaries. */
+  includeArtboardWorks?: boolean;
   /**
    * Opt-in for `file` work summaries in the payload (see
    * `QueryMessageParams.includeFileWorks`).
@@ -71,6 +73,8 @@ export interface QueryMessagesOptions {
     path: string | null,
     file: { fileType: string; id?: string | null },
   ) => Promise<string>;
+  /** See `QueryMessageParams.skipCompressedMembers`. */
+  skipCompressedMembers?: boolean;
   /**
    * Skip the Work-summary assembly (see `QueryMessageParams.skipWorks`).
    */
@@ -148,6 +152,7 @@ export interface QueryTopicByCursorParams {
   /** Group chat topic: rows carry the group id, same filter as `query`. */
   groupId?: string | null;
   /** See {@link QueryMessageParams.includeFileWorks}. */
+  includeArtboardWorks?: boolean;
   includeFileWorks?: boolean;
   /** How many rounds to load per page (the current round is always whole). */
   roundLimit?: number;
@@ -239,28 +244,6 @@ export interface ShareVisitorWriteOptions {
  */
 export interface MessageModelOptions {
   includeShareVisitor?: boolean;
-}
-
-/**
- * Per-share switches that relax {@link toVisitorMessage}'s default redaction.
- * Both default to `false` (strip everything), so a caller that forgets to pass
- * options gets the fail-closed projection.
- */
-export interface VisitorRedactionOptions {
-  /**
-   * `AgentShareConfig.showErrorDetails`. When false, a run failure is
-   * projected down to a generic classified `type` (see
-   * {@link sanitizeVisitorError}) instead of the raw
-   * message/provider/budget/upstream-body payload `formatErrorForState`
-   * builds.
-   */
-  showErrorDetails?: boolean;
-  /**
-   * `AgentShareConfig.showModelInfo`. When false, the creator's model /
-   * provider choice and the token/cost snapshot are stripped everywhere they
-   * appear, at any nesting depth.
-   */
-  showModelInfo?: boolean;
 }
 
 export interface SoftDeletedMessage {

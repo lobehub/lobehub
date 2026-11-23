@@ -11,8 +11,12 @@ import {
 } from './acpAgentSession';
 import type { AcpRpcMessage } from './acpStdioClient';
 import { AcpServerRequestError } from './acpStdioClient';
-import type { CliCommandStatus } from './resolveCliCommand';
-import { detectValidatedCommand } from './resolveCliCommand';
+import type { CliCommandStatus, ResolvedHeteroCommand } from './resolveCliCommand';
+import {
+  detectInUserBinDirs,
+  detectInWslWhenMissing,
+  detectValidatedCommandCandidates,
+} from './resolveCliCommand';
 
 /**
  * DeepSeek Harness over the Agent Client Protocol.
@@ -51,22 +55,51 @@ const isSupportedDshVersion = (version: string | undefined): boolean => {
  * Find a `dsh` that can run LobeHub turns. An older CLI still answers
  * `--version` but has no `acp` profile, so it is reported unavailable here
  * rather than failing every turn after the agent was created.
+ *
+ * `dsh` is installed with `npm i -g`, which puts it in whichever global folder
+ * the user's Node setup has: `%APPDATA%\npm`, an nvm-windows or fnm Node's own
+ * folder, a pnpm / bun / Volta global, often off the PATH this app started
+ * with. Those folders are swept before WSL is asked.
  */
 export const detectDshCommand = async (
   command: string = DSH_COMMAND,
   env?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
-  const status = await detectValidatedCommand(
-    command,
-    { validatePattern: DSH_VERSION_PATTERN },
-    env,
-  );
+  const isDefaultCommand = command.trim() === DSH_COMMAND;
+  const validation = { validatePattern: DSH_VERSION_PATTERN };
+  const nativeStatus = await detectValidatedCommandCandidates([command], validation, env);
+  const status = isDefaultCommand
+    ? await detectInWslWhenMissing(
+        await detectInUserBinDirs(nativeStatus, [DSH_COMMAND], validation, env),
+        [DSH_COMMAND],
+        validation,
+      )
+    : nativeStatus;
   if (!status.available || isSupportedDshVersion(status.version)) return status;
   return {
     ...status,
     available: false,
     error: `DeepSeek Harness CLI ${status.version} is too old; LobeHub needs ${DSH_MIN_VERSION} or newer. Update it with: npm i -g @deepseek-ai/dsh`,
   };
+};
+
+/**
+ * The `dsh` binary a session should spawn, with the PATH that validated it.
+ * A custom command is used verbatim; the default one is re-detected so a CLI
+ * installed after the host started (a fresh registry PATH on Windows, a new
+ * login-shell PATH elsewhere) still launches instead of failing with ENOENT.
+ */
+export const resolveDshSpawnCommand = async (
+  command?: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<ResolvedHeteroCommand> => {
+  const requested = command?.trim();
+  if (requested && requested !== DSH_COMMAND) return { command: requested };
+
+  const detected = await detectDshCommand(DSH_COMMAND, env).catch(() => undefined);
+  return detected?.available && detected.path
+    ? { command: detected.path, pathEnv: detected.resolvedPathEnv, version: detected.version }
+    : { command: DSH_COMMAND };
 };
 
 /** Select the CLI's shipped ACP profile, served on stdio until disconnect. */

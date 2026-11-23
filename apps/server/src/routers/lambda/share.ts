@@ -1,9 +1,11 @@
+import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
+  DEFAULT_AGENT_CHAT_CONFIG,
 } from '@lobechat/const';
 import {
+  getOptedInPluginIds,
   type SharedAgentData,
   type SharedAgentDeliveryStats,
   type SharedAgentUploadAbility,
@@ -22,11 +24,14 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
+import { listShareActivatableExtensionIds } from '@/server/services/agentShare/activatableExtensions';
 import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
+import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
+import { applyShareAutoAgentGrants } from '@/server/services/aiAgent/shareGate/autoGrants';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
 import { sharedTopicText } from './_helpers/sharedTopicText';
@@ -141,7 +146,13 @@ export const shareRouter = router({
     }),
   /**
    * Resolve the visitor-facing metadata for an agent share, by its custom
-   * slug or its raw share id, after enforcing signed-in access.
+   * slug or its raw share id.
+   *
+   * Public so a signed-out visitor can read the share's landing page before
+   * deciding to sign in; starting a conversation still requires a session
+   * (`channel.openShared` is authed). Everything returned is computed as the
+   * share OWNER, never as the caller, so an anonymous caller sees exactly what
+   * a signed-in stranger sees.
    *
    * `findBySlugOrId` intentionally does NOT enforce visibility — it resolves
    * whatever share matches, of ANY visibility; the (private → owner only,
@@ -151,7 +162,7 @@ export const shareRouter = router({
    * Deployment support applies to every viewer, including owner previews.
    * The rollout flag only gates publishing, never access to an existing share.
    */
-  getSharedAgent: authedProcedure
+  getSharedAgent: publicProcedure
     .use(serverDatabase)
     .input(z.object({ slugOrId: z.string().trim().min(1) }))
     .query(async ({ input, ctx }): Promise<SharedAgentData> => {
@@ -163,13 +174,20 @@ export const shareRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
       }
 
-      AgentShareModel.assertShareAccess(share, ctx.userId);
+      // A public procedure skips `oidcAuth`, which confines a sandbox
+      // `hetero-operation` token to its own routes. Read such a caller as
+      // signed out so the token cannot unlock the owner's private shares.
+      const viewerId = ctx.oidcAuth?.purpose === 'hetero-operation' ? null : ctx.userId;
 
-      const isOwner = share.ownerId === ctx.userId;
+      AgentShareModel.assertShareAccess(share, viewerId);
 
-      if (!isOwner) {
-        // Owner previews are not counted: userViewCount tracks visitor page
-        // views (PV, not deduplicated visitors). The counter is analytics
+      const isOwner = !!viewerId && share.ownerId === viewerId;
+
+      if (!isOwner && viewerId) {
+        // Owner previews are not counted: userViewCount tracks signed-in
+        // visitor page views (PV, not deduplicated visitors). Anonymous loads
+        // are not counted either, so an unauthenticated client cannot inflate
+        // the counter. The counter is analytics
         // only, so it is best-effort: a failed increment must never turn an
         // otherwise valid share page into an error for the visitor.
         try {
@@ -221,6 +239,43 @@ export const shareRouter = router({
         })(),
       ]);
 
+      // With `autoGrantAgentTools` on, visitors also get the tools the Agent
+      // turns on; count those the way a visitor run resolves them.
+      const { toolGrants } = share.shareConfig.autoGrantAgentTools
+        ? applyShareAutoAgentGrants(share.shareConfig, {
+            // LobeHub connections live in the creator's Market account, which a
+            // visitor request cannot read; only the advertised count leaves them out.
+            activatableExtensionIds: await listShareActivatableExtensionIds({
+              agentId: share.agentId,
+              db: ctx.serverDB,
+              userId: share.ownerId,
+              workspaceId: share.workspaceId ?? undefined,
+            }).then(
+              (ids) => [...ids, ...getOptedInPluginIds(share.agentPlugins ?? [])],
+              (error) => {
+                log('failed to list connected extensions for %s: %O', share.shareId, error);
+                return undefined;
+              },
+            ),
+            chatConfig: { ...DEFAULT_AGENT_CHAT_CONFIG, ...share.agentChatConfig },
+            plugins: share.agentPlugins ?? [],
+            skillIds: (
+              await listShareGrantableSkills({
+                agentConfig: { chatConfig: share.agentChatConfig, plugins: share.agentPlugins },
+                agentId: share.agentId,
+                db: ctx.serverDB,
+                userId: share.ownerId,
+                workspaceId: share.workspaceId ?? undefined,
+              }).catch((error) => {
+                // Only the advertised count degrades: pinned skills may be
+                // counted as tools. The run resolves its own grants.
+                log('failed to list grantable skills for %s: %O', share.shareId, error);
+                return [];
+              })
+            ).map((skill) => skill.identifier),
+          })
+        : share.shareConfig;
+
       return {
         agentId: share.agentId,
         agentMeta: {
@@ -247,14 +302,22 @@ export const shareRouter = router({
         terms: {
           allowCreatorViewSessions: share.shareConfig.allowCreatorViewSessions ?? false,
           maxFileStorage: share.shareConfig.maxFileStorage ?? AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-          maxTopicsPerVisitor:
-            share.shareConfig.maxTopicsPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-          maxTurnsPerTopic:
-            share.shareConfig.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+          maxMessagesPerVisitor:
+            share.shareConfig.maxMessagesPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
         },
         // Identifiers only. The granted API list is owner-facing configuration
-        // and must not reach a visitor.
-        toolGrants: (share.shareConfig.toolGrants ?? []).map((grant) => grant.identifier),
+        // and must not reach a visitor. A Claude Code / Codex Agent runs none of
+        // LobeHub's tools, so grants stored before it switched harness are not
+        // advertised (the settings page hides them too).
+        toolGrants: share.agentAgencyConfig?.heterogeneousProvider
+          ? []
+          : (toolGrants ?? [])
+              .map((grant) => grant.identifier)
+              // A visitor run drops memory without the read permission.
+              .filter(
+                (identifier) =>
+                  identifier !== MemoryIdentifier || !!share.shareConfig.allowReadMemory,
+              ),
         uploadAbility,
         // TODO(cloud budget gate): the spend gate itself is already enforced —
         // `shareChat.execAgent` checks `checkAgentShareSpendAllowance` before

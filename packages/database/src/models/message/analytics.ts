@@ -110,9 +110,8 @@ export class MessageAnalyticsQueries extends MessageScope {
    * Agent-share visitor messages carry the creator's `userId`, so personal
    * analytics must exclude them (visitor usage is reported separately by the
    * share usage center) — see `notShareVisitorMessage` in `../utils/shareVisitor`.
-   *
-   * MUST NOT be applied to {@link countByTopic} — see that method's JSDoc for
-   * why exact per-topic turn counting needs the visitor topic's own messages.
+   * The per-visitor message cap counts through `TopicModel.countMessagesBySender`
+   * instead, because it needs exactly those visitor messages.
    */
   private analyticsConditions = (params?: MessageAnalyticsFilters) => [
     this.ownership(),

@@ -4,9 +4,9 @@ import type { SandboxSelection } from './useSandboxPlacement';
 export const REMEMBERED_SANDBOX_DIRECTORY_PREFIX = 'lobechat-sandbox-last-directory';
 
 /**
- * Prefix of the temporary sandbox's memory, kept apart from the folder: the
- * persistent sandbox remembers which folder of the drive, the temporary one
- * which repository it was initialized from — or that it used none.
+ * Prefix of the environment's memory, kept apart from the folder: which
+ * environment the agent's last conversation was set up from — or that it used
+ * none — whether it kept its files on the drive or not.
  */
 export const REMEMBERED_SANDBOX_REPOSITORY_PREFIX = 'lobechat-sandbox-last-repository';
 
@@ -68,7 +68,26 @@ export const getRememberedSandboxDirectory = (
 };
 
 /**
- * What the agent's last temporary sandbox was initialized from: `{ environmentId }`
+ * The environment picked together with the remembered folder, if any. Kept in
+ * the folder's own entry rather than read from the environment memory: the two
+ * memories are written apart, and a folder paired with an environment it was
+ * never set up from would skip the setup — it only runs in an empty folder.
+ */
+export const getRememberedSandboxDirectoryEnvironment = (
+  scope: RememberScope,
+  agentId: string,
+): string | undefined => {
+  const key = rememberedSandboxDirectoryKey(scope, agentId);
+  if (!key) return undefined;
+
+  const value = readEntry(key);
+  if (!isValid(value)) return undefined;
+  const { environmentId } = value as { environmentId?: unknown };
+  return typeof environmentId === 'string' && environmentId ? environmentId : undefined;
+};
+
+/**
+ * What the agent's last conversation was set up from: `{ environmentId }`
  * for a repository, `{}` for none picked on purpose, `undefined` when nothing
  * is remembered yet.
  */
@@ -88,13 +107,15 @@ export const getRememberedSandboxRepository = (
 };
 
 /**
- * Remember a pick so the next conversation starts where this one was put:
+ * Remember a pick so the next conversation starts where this one was put. The
+ * folder and the environment are two answers, each remembered on its own:
  *
- * - a folder on the drive — the persistent sandbox — is remembered as its
- *   folder;
- * - the temporary sandbox is remembered as the repository it starts from, or
- *   as none; the folder memory stays, for the next time the persistent
- *   sandbox is used;
+ * - a folder on the drive is remembered as the folder, with the environment
+ *   picked together with it; switching the drive off leaves the folder memory
+ *   alone, for the next time it is switched on;
+ * - the environment — or none, picked on purpose — is remembered whether or
+ *   not the drive is on. `folderOnly` skips it, for an environment that only
+ *   means something where it was picked: a project's;
  * - a legacy environment directory says nothing about either and changes
  *   nothing.
  *
@@ -105,6 +126,7 @@ export const rememberSandboxSelection = (
   scope: RememberScope,
   agentId: string,
   selection: SandboxSelection,
+  { folderOnly = false }: { folderOnly?: boolean } = {},
 ): void => {
   const key = rememberedSandboxDirectoryKey(scope, agentId);
   if (!key) return;
@@ -116,14 +138,14 @@ export const rememberSandboxSelection = (
     if (selection.workingDirectory) {
       localStorage.setItem(
         key,
-        JSON.stringify(
-          selection.drive
-            ? { drive: selection.drive, workingDirectory: selection.workingDirectory }
-            : { workingDirectory: selection.workingDirectory },
-        ),
+        JSON.stringify({
+          ...(selection.drive && { drive: selection.drive }),
+          ...(!folderOnly && selection.environmentId && { environmentId: selection.environmentId }),
+          workingDirectory: selection.workingDirectory,
+        }),
       );
-      return;
     }
+    if (folderOnly) return;
 
     localStorage.setItem(
       repositoryKey,

@@ -58,6 +58,9 @@ vi.mock('@/store/user/selectors', () => ({
   settingsSelectors: {
     getHotkeyById: () => () => 'ctrl+backquote',
   },
+  userGeneralSettingsSelectors: {
+    interfaceDensity: () => 'loose',
+  },
 }));
 
 describe('TerminalPanelToggle', () => {

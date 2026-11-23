@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Conectores Stdio só podem sincronizar no aplicativo desktop. Abra o LobeHub Desktop para sincronizar este conector.",
   "connector.kind.agent": "Conector de agente",
   "connector.kind.builtin": "Ferramenta integrada",
-  "connector.kind.community": "Ferramenta da comunidade",
+  "connector.kind.community": "Ferramenta do Mercado",
   "connector.kind.custom": "Conector personalizado",
   "connector.kind.oauth": "Conector OAuth",
   "connector.manageOnlyCreator": "Somente o criador ou um proprietário do espaço de trabalho pode gerenciar este conector",
@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Adicionar Item",
   "updateArgs.form.key": "Chave do Campo",
   "updateArgs.form.value": "Valor do Campo",
-  "updateArgs.formValidationFailed": "Validação do formulário falhou, verifique o formato dos parâmetros",
   "updateArgs.keyRequired": "A chave do campo não pode estar vazia",
   "updateArgs.stringifyError": "Não foi possível serializar os parâmetros, verifique o formato"
 }

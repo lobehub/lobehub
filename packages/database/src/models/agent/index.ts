@@ -15,6 +15,7 @@ import * as find from './find';
 import * as groupMembership from './groupMembership';
 import * as knowledge from './knowledge';
 import * as list from './list';
+import * as plugins from './plugins';
 import * as transfer from './transfer';
 import * as transferOwnership from './transferOwnership';
 import * as trash from './trash';
@@ -27,6 +28,7 @@ export {
   AGENT_SHARED_TRANSFER_BLOCKED,
   AgentOwnedByGroupError,
 } from './errors';
+export type { AgentPluginModeItem } from './plugins';
 export type { AgentGroupMembershipRef, DeviceBindingCandidate } from './types';
 
 export class AgentModel {
@@ -54,6 +56,11 @@ export class AgentModel {
   countAgents = this.withContext(list.countAgents);
   getAgentAvatarsByIds = this.withContext(list.getAgentAvatarsByIds);
   listMessengerBindableAgents = this.withContext(list.listMessengerBindableAgents);
+
+  // **************** Plugins *************** //
+
+  listPluginModes = this.withContext(plugins.listPluginModes);
+  setPluginMode = this.withContext(plugins.setPluginMode);
 
   // **************** Read *************** //
 
@@ -110,6 +117,7 @@ export class AgentModel {
       agentId,
     );
   assertDeletable = this.withContext(remove.assertDeletable);
+  detachFromSurvivingTopics = this.withContext(remove.detachFromSurvivingTopics);
   findSessionIdsByAgentIds = this.withContext(remove.findSessionIdsByAgentIds);
   findAgentIdsBySessionIds = this.withContext(remove.findAgentIdsBySessionIds);
   batchDelete = this.withContext(remove.batchDelete);
@@ -129,6 +137,7 @@ export class AgentModel {
   // **************** Transfer *************** //
 
   transferHasForeignRows = this.withContext(transfer.transferHasForeignRows);
+  getDeleteImpact = this.withContext(transfer.getDeleteImpact);
   /**
    * Cross-scope transfer of agents and everything they own. The unit of work
    * spans many aggregates, so it lives in {@link AgentTransferRepository};

@@ -6,6 +6,7 @@ import {
   extractActivatedSkillsFromMessages,
   extractActivatedToolIdsFromMessages,
   extractTodosFromMessages,
+  extractToolActivationsFromMessages,
   findInMessages,
   normalizeTodosState,
 } from './messageSelectors';
@@ -487,6 +488,7 @@ describe('extractActivatedToolIdsFromMessages', () => {
     const messages = [
       createToolMessage({
         plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+        tool_call_id: 'first',
         pluginState: {
           activatedTools: [{ identifier: 'lobe-task' }, { identifier: 'lobe-calendar' }],
         },
@@ -497,6 +499,10 @@ describe('extractActivatedToolIdsFromMessages', () => {
       } as any),
     ];
 
+    expect(extractToolActivationsFromMessages(messages)).toEqual([
+      { id: 'lobe-task', afterToolCallId: 'first' },
+      { id: 'lobe-calendar', afterToolCallId: 'first' },
+    ]);
     expect(extractActivatedToolIdsFromMessages(messages)).toEqual(['lobe-task', 'lobe-calendar']);
   });
 
@@ -525,7 +531,9 @@ describe('extractActivatedToolIdsFromMessages', () => {
       } as any),
     ];
 
-    expect(extractActivatedToolIdsFromMessages(messages)).toEqual(['lobe-task']);
+    expect(extractToolActivationsFromMessages(messages)).toEqual([
+      { id: 'lobe-task', afterToolCallId: 'call-1' },
+    ]);
   });
 
   it('should ignore failed or unrelated tool results', () => {

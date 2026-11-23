@@ -82,7 +82,7 @@ export const resourcesTreePrompt = (
 
   return `## Available Resources
 
-Use \`readReference\` with skillName="${skillName}" and the file path to read these files.
+Use \`readReference\` with id="${skillName}" and the file path to read these files.
 
 \`\`\`
 ${treeText}

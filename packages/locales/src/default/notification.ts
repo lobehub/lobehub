@@ -178,6 +178,10 @@ export default {
     'Workspace "{{workspaceName}}" is running low on balance — about {{balance}} remaining in the shared pool. Top up or turn on auto top-up to keep your team working.',
   'workspace_credit_balance_low_action': 'Top up',
   'workspace_credit_balance_low_title': 'Workspace balance running low',
+  'workspace_member_budget_exceeded':
+    '{{memberLabel}} has used up their member budget in "{{workspaceName}}" and asked you to raise it.',
+  'workspace_member_budget_exceeded_action': 'Adjust budget',
+  'workspace_member_budget_exceeded_title': 'Member budget used up',
   'workspace_member_invited':
     '{{inviterLabel}} invited you to join workspace "{{workspaceName}}" as a {{role}}.',
   'workspace_member_invited_title': 'Invitation to join {{workspaceName}}',

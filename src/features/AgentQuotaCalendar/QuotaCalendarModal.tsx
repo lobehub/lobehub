@@ -22,6 +22,8 @@ import { BanIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon, RotateCcwIcon } f
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import {
   buildBurnSeries,
   buildDailyBurn,
@@ -66,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
   layout: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: start;
 
     /* Nothing to pair the calendar with, so let it take the whole width. */
@@ -317,7 +319,7 @@ const styles = createStaticStyles(({ css }) => ({
   windowListRow: css`
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(110px, 1fr) minmax(0, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-height: 30px;

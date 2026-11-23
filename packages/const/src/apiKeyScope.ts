@@ -20,6 +20,8 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
  * the one that burns money (chat/completions, image, video, music, asr).
+ * On the public REST API, text / JSON / image / video generation, speech and
+ * transcription spend credits under `generation:write` instead.
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
@@ -49,6 +51,17 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Text, JSON (structured output), image and video generation, text-to-speech
+   * and transcription on the public REST API (`/api/v1/text`, `/api/v1/objects`,
+   * `/api/v1/images`, `/api/v1/videos`, `/api/v1/generations`, `/api/v1/audio`).
+   * `generation:write` starts paid generations and deletes generated assets;
+   * `generation:read` reads their status and results. Text / JSON generation and
+   * speech also accept keys issued with `model:invoke`. The tRPC generation
+   * namespaces keep requiring `model:invoke`.
+   */
+  'generation:read',
+  'generation:write',
   'mcp:read',
   'mcp:write',
   'usage:read',
@@ -188,6 +201,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // is separated onto `agent:credential:write` via
   // `TRPC_PROCEDURE_EXTRA_SCOPES` below.
   agentAccount: rw('agent:read', 'agent:write'),
+  // read-only status of the caller's agents: presence, queued replies, quota reset time
+  agentAvailability: rw('agent:read', null),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
   // a bot's wake records: channel message previews and the owner's marks, read through the same
@@ -222,6 +237,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // `auth.getScope` only reports which scope the presented credential runs
   // under, so any key — however narrow — can tell where its calls land
   auth: 'open',
+  artboard: 'blocked',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',
@@ -401,6 +417,8 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.finishLocalHeteroRunFee': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
+  'aiAgent.submitWorktreeTurn': AGENT_RUN_SCOPES,
+  'aiAgent.retryWorktreeTurn': AGENT_RUN_SCOPES,
   // a queued follow-up is a deferred composer send: the run that drains it
   // starts a model turn and writes the user message
   'agentSteerQueue.append': AGENT_RUN_SCOPES,
@@ -408,6 +426,7 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // returns the queued prompts and attachments, i.e. conversation content
   'agentSteerQueue.list': ['chat:read'],
   // thread/message state writes without starting a run
+  'aiAgent.cancelWorktreeTurn': ['chat:write'],
   'aiAgent.createClientGroupAgentTaskThread': ['chat:write'],
   'aiAgent.createClientTaskThread': ['chat:write'],
   'aiAgent.interruptTask': ['chat:write'],

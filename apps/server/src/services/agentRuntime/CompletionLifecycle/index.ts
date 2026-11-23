@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
@@ -10,6 +11,7 @@ import { MessageModel } from '@/database/models/message';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { recordShareRunResult } from '@/server/services/aiAgent/shareGate/runMetrics';
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
@@ -31,7 +33,7 @@ import {
 } from './intervention';
 import { buildLifecycleEvent, extractErrorMessage } from './lifecycleEvent';
 import { extractOutboundAttachments, extractTextFromMessageContent } from './messageContent';
-import { persistCompletion, settleRunThread } from './persistence';
+import { type CompletionTransition, persistCompletion, settleRunThread } from './persistence';
 import { recallUserOnCompletion } from './recall';
 import { emitSignalEvents, isAgentShareRun } from './signals';
 import type {
@@ -75,6 +77,60 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'max_steps' ||
   reason === 'cost_limit' ||
   reason === 'tool_call_repeat_limit';
+
+/**
+ * Count a shared Agent run's terminal result, once: only the write that moved the row out of an
+ * in-flight status counts, so a replayed completion (a retried hook delivery, a repeated device
+ * finish) does not count the run again. The row's `trigger` identifies a share run on synthetic
+ * terminals (a device dispatch failure, an abandonment) whose state carries no share visitor.
+ *
+ * Only the visitor's own top-level run counts: a sub-agent or group member it spawns is part of
+ * that run, and counting it too would inflate both the total and the failure rate. A capped run
+ * (`max_steps` and the like) that stopped without a reply is a failure the visitor saw, typed
+ * by its cap.
+ */
+const recordShareRunCompletion = (
+  state: any,
+  reason: string,
+  event: {
+    attachments?: unknown[];
+    errorAttribution?: string;
+    errorType?: string;
+    lastAssistantContent?: string;
+  },
+  runOrigin: ReturnType<typeof buildLifecycleEvent>['origin'],
+  transition: CompletionTransition | undefined,
+) => {
+  if (!transition) return;
+  if (!isAgentShareRun(state) && transition.trigger !== RequestTrigger.AgentShare) return;
+  if (
+    transition.parentOperationId ||
+    runOrigin.lineage?.parentOperationId ||
+    runOrigin.lineage?.isSubAgent === true ||
+    runOrigin.lineage?.orchestrationRole === 'member'
+  )
+    return;
+  if (reason === 'done' || reason === 'interrupted') {
+    recordShareRunResult({ outcome: reason === 'done' ? 'success' : 'interrupted', stage: 'run' });
+    return;
+  }
+  if (isSuccessLikeCompletionReason(reason)) {
+    const replied = !!event.lastAssistantContent?.trim() || !!event.attachments?.length;
+    recordShareRunResult(
+      replied
+        ? { outcome: 'success', stage: 'run' }
+        : { errorType: reason, outcome: 'error', stage: 'run' },
+    );
+    return;
+  }
+  if (reason === 'error')
+    recordShareRunResult({
+      attribution: event.errorAttribution,
+      errorType: event.errorType,
+      outcome: 'error',
+      stage: 'run',
+    });
+};
 
 /**
  * Owns everything that happens once an operation reaches a terminal state:
@@ -221,8 +277,16 @@ export class CompletionLifecycle {
     state: any,
     reason: string,
     settledAsAbandoned?: boolean,
-  ): Promise<boolean> {
-    return persistCompletion(this.deps(), operationId, state, reason, settledAsAbandoned);
+    terminalClaimed?: boolean,
+  ) {
+    return persistCompletion(
+      this.deps(),
+      operationId,
+      state,
+      reason,
+      settledAsAbandoned,
+      terminalClaimed,
+    );
   }
 
   /**
@@ -304,7 +368,11 @@ export class CompletionLifecycle {
         { content: input.deliverable ?? '', role: 'assistant' },
       ],
       host: { hooks: input.serializedHooks },
-      metadata: { assistantMessageId: input.assistantMessageId },
+      metadata: {
+        assistantMessageId: input.assistantMessageId,
+        ...(input.worksRegistered && { _fileWorksRegistered: true }),
+      },
+      ...(input.shareVisitor && { principal: { actor: { shareVisitor: input.shareVisitor } } }),
       origin: {
         agentId: input.agentId,
         lineage: { orchestrationRole: input.orchestrationRole },
@@ -326,6 +394,13 @@ export class CompletionLifecycle {
    */
   async registerFileWorks(operationId: string, state: any): Promise<void> {
     return registerFileWorks(this.deps(), operationId, state);
+  }
+
+  // Feed the result back as `worksRegistered` so completeOperation's backstop skips a second scan.
+  async registerOperationWorks(input: OperationCompletionInput): Promise<boolean> {
+    const state = this.buildStateFromInput(input);
+    await this.registerFileWorks(input.operationId, state);
+    return (state.metadata as { _fileWorksRegistered?: boolean })._fileWorksRegistered === true;
   }
 
   /**
@@ -388,6 +463,7 @@ export class CompletionLifecycle {
         state,
         reason,
         options?.settledAsAbandoned,
+        options?.terminalClaimed,
       );
       if (completionAccepted === false) {
         log('[%s] Skipping hooks for an operation with a conflicting terminal owner', operationId);
@@ -456,6 +532,9 @@ export class CompletionLifecycle {
           event.attachments = attachments.length > 0 ? attachments : undefined;
         }
       }
+
+      // After content recovery: a capped run counts as a success only when it left a reply.
+      recordShareRunCompletion(state, reason, event, runOrigin, completionAccepted.transition);
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, state?.host?.hooks);
 

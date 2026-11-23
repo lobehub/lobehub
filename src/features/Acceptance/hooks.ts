@@ -32,8 +32,22 @@ const VERIFY_REPORT_SWR_CONFIG = {
  */
 const TERMINAL_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed']);
 
+/**
+ * Most subjects never get an acceptance, so a missing one is checked every 10s rather than
+ * every 2s, which kept every open task page reading it around the clock.
+ */
+export const ACCEPTANCE_ABSENT_REFRESH_MS = 10_000;
+
+/**
+ * Readers on one task page (state row, acceptance section, result portal) poll the same subject
+ * on their own timers, and may mount seconds apart; `useClientDataSWR` dedupes nothing by
+ * default. Just under the 5s live interval, so every reader shares one read per interval, and a
+ * read left by the slower absent poll delays the first live one by less than one interval.
+ */
+export const ACCEPTANCE_POLL_DEDUPE_MS = 4500;
+
 export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
-  if (!acceptance) return 2000;
+  if (!acceptance) return ACCEPTANCE_ABSENT_REFRESH_MS;
   const status = (acceptance as { status?: string }).status;
   return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
 };
@@ -120,7 +134,7 @@ export interface AcceptanceBySubjectSync {
  * The optional acceptance aggregate attached to a task/topic/document subject,
  * read from the verify store's replica of `acceptanceBySubjectMap`. A subject
  * can mount before its first Verify Run creates the aggregate, so the sync
- * polls fastest until one exists and then keeps it live until it settles.
+ * checks for one and then keeps it live until it settles.
  */
 export const useAcceptanceBySubject = (
   subjectType: CreatableAcceptanceSubjectType,
@@ -131,10 +145,11 @@ export const useAcceptanceBySubject = (
   const data = useVerifyStore((s) => (key ? s.acceptanceBySubjectMap[key] : undefined));
 
   const sync = useFetchAcceptanceBySubject(subjectType, subjectId, {
+    dedupingInterval: ACCEPTANCE_POLL_DEDUPE_MS,
     refreshInterval: getAcceptanceBySubjectRefreshInterval(data),
   });
 
-  // A subject without an acceptance polls every 2s. Once a request for this key
+  // A subject without an acceptance polls every 10s. Once a request for this key
   // has settled, "no acceptance" is a known answer: later polls must not flip the
   // caller back to its loading placeholder (that swapped the task's Acceptance
   // trigger for a spinner on every tick and made the section jump).

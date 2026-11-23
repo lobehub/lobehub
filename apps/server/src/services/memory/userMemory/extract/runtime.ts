@@ -10,6 +10,7 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import type { MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { createUserEndpointGuardedRuntime } from '@/server/modules/ModelRuntime/userEndpointGuard';
 import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { LayersEnum } from '@/types/userMemory';
@@ -110,11 +111,18 @@ export const resolveRuntimeAgentConfig = (
 
     // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
     // to system config to avoid mixing credentials.
-    return ModelRuntime.initializeWithProvider(provider, {
-      apiKey: userApiKey,
-      baseURL: userBaseURL,
-      userId: options?.userId,
-    });
+    return new ModelRuntime(
+      createUserEndpointGuardedRuntime({
+        create: () =>
+          ModelRuntime.createProviderRuntime(provider, {
+            apiKey: userApiKey,
+            baseURL: userBaseURL,
+            userId: options?.userId,
+          }),
+        endpoints: [userBaseURL],
+        provider,
+      }),
+    );
   }
 
   debugRuntimeInit(agent, {

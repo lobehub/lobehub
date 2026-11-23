@@ -48,7 +48,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
@@ -58,12 +58,7 @@ import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
-import {
-  getCiVisual,
-  getPullRequestState,
-  getTopicMetaCard,
-  PR_STATE_VISUAL,
-} from './metaCardData';
+import { getTopicMetaCard } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
@@ -80,32 +75,6 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
-  ciBadge: css`
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-
-    line-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  ciPending: css`
-    animation: ci-spin 1s linear infinite;
-
-    @keyframes ci-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
   markerIcon: css`
     position: relative;
     display: inline-flex;
@@ -274,7 +243,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
-    const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
@@ -422,11 +390,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
     // keeping the row itself clean.
-    const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-    const metaCard = useMemo(
-      () => getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding }),
-      [betterCoding, metadata],
-    );
+    const metaCard = useMemo(() => getTopicMetaCard(metadata), [metadata]);
 
     // For default topic (no id)
     if (!id) {
@@ -526,7 +490,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // The conversation a goal was planned in says more about the row than
       // the PR it produced, so it outranks the PR marker (which stays in the
       // meta hover card).
-      if (hasGoal && goalsEnabled) {
+      if (hasGoal) {
         return (
           <Tooltip title={t('metaCard.goal')}>
             <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
@@ -535,37 +499,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
                 size={'small'}
                 style={{ color: cssVar.colorTextDescription }}
               />
-            </span>
-          </Tooltip>
-        );
-      }
-      // GitHub PR state marker (open=green, merged=purple, closed=red),
-      // like Codex. It is secondary metadata, so only an idle topic uses it
-      // as the leading icon.
-      if (metaCard?.pullRequest) {
-        const prState = getPullRequestState(metaCard.pullRequest);
-        const prVisual = PR_STATE_VISUAL[prState];
-        const ciStatus = metaCard.pullRequest.ciStatus;
-        const ciVisual = getCiVisual(ciStatus);
-        const showCiBadge =
-          prState !== 'merged' && ciStatus !== undefined && ciStatus !== 'unknown';
-        const tooltip = showCiBadge
-          ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
-          : t(prVisual.labelKey);
-        return (
-          <Tooltip title={tooltip}>
-            <span className={styles.markerIcon}>
-              <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
-              {showCiBadge && (
-                <span className={styles.ciBadge}>
-                  <Icon
-                    className={ciStatus === 'pending' ? styles.ciPending : undefined}
-                    icon={ciVisual.icon}
-                    size={9}
-                    style={{ color: ciVisual.color }}
-                  />
-                </span>
-              )}
             </span>
           </Tooltip>
         );
@@ -583,7 +516,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
 
     // Workspace mode (creator resolvable): the creator's round avatar is the
     // primary visual and always leads the row; the row's own icon — execution
-    // status first, then identity icons (Discord / WeChat / PR marker) —
+    // status first, then identity icons (Discord / WeChat) —
     // shrinks into a bottom-right corner badge. Personal mode keeps the
     // original layout untouched.
     const ownIconNode = statusIconNode ?? identityIconNode;
@@ -670,7 +603,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
         {metaCard ? (
           <Popover
             arrow={false}
-            content={<MetaHoverCard metadata={metadata} title={title} topicId={id} />}
+            content={<MetaHoverCard metadata={metadata} title={title} />}
             mouseEnterDelay={0.8}
             placement={'right'}
             styles={META_HOVER_CARD_STYLES}

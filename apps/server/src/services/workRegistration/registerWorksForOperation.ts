@@ -23,7 +23,7 @@ import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
-import { resolveShellPullRequestLinking } from './pullRequestLinking';
+import { createShellPullRequestLinking } from './pullRequestLinking';
 import { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 import { registerShellWorks } from './shellWorkRegistration';
 
@@ -360,6 +360,45 @@ export const registerWorksForOperation = async (
     return { attempted: 0, failed: 0 };
   }
 
+  const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
+
+  // The whole operation's spend/usage is attached to each version registered
+  // this round (an operation-level, not per-file, figure — the scanner can't
+  // attribute cost to individual files). Prefer the terminal state's live blobs
+  // over the op row: on the pre-snapshot path the row's cost/usage columns are
+  // written only later by `recordCompletion`, so the row reads null/stale here.
+  // The op row's `totalCost` also rolls up terminal child ops; replicate that
+  // from the already-loaded tree (children complete before their root, so their
+  // rows carry final totals) to keep the state-sourced figure equivalent.
+  const childCost = tree
+    .filter((op) => op.id !== operationId)
+    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
+  const ownCost = params.finalCost?.total;
+  const cumulativeCost =
+    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
+  const usageBlob = params.finalUsage ?? completingOp.usage;
+  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
+    ? {
+        capturedAt: new Date().toISOString(),
+        cost: params.finalCost ?? completingOp.cost ?? undefined,
+        usage: usageBlob,
+      }
+    : null;
+
+  // Works the agent wrote itself (`lobe-work` / `lh work`) were saved mid-run
+  // without a cost; give them the same run total the Works below carry. This
+  // runs before the record scan: a run whose only output is such a Work may
+  // leave no plugin records the scan below needs.
+  try {
+    await workModel.fillAgentWorkCost({
+      cumulativeCost,
+      cumulativeUsage,
+      rootOperationId: operationId,
+    });
+  } catch (error) {
+    log('[%s] Failed to fill agent Work cost (non-fatal): %O', operationId, error);
+  }
+
   // A share visitor's tool rows live under a topic with a non-null `senderId`,
   // which `MessageModel.ownership()` excludes by default — without the opt-in
   // the scan (and the anchor stamp below) silently sees nothing for that run.
@@ -398,31 +437,6 @@ export const registerWorksForOperation = async (
     return undefined;
   };
 
-  const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
-
-  // The whole operation's spend/usage is attached to each version registered
-  // this round (an operation-level, not per-file, figure — the scanner can't
-  // attribute cost to individual files). Prefer the terminal state's live blobs
-  // over the op row: on the pre-snapshot path the row's cost/usage columns are
-  // written only later by `recordCompletion`, so the row reads null/stale here.
-  // The op row's `totalCost` also rolls up terminal child ops; replicate that
-  // from the already-loaded tree (children complete before their root, so their
-  // rows carry final totals) to keep the state-sourced figure equivalent.
-  const childCost = tree
-    .filter((op) => op.id !== operationId)
-    .reduce((sum, op) => sum + (op.totalCost ?? 0), 0);
-  const ownCost = params.finalCost?.total;
-  const cumulativeCost =
-    typeof ownCost === 'number' ? ownCost + childCost : (completingOp.totalCost ?? null);
-  const usageBlob = params.finalUsage ?? completingOp.usage;
-  const cumulativeUsage: WorkVersionCumulativeUsage | null = usageBlob
-    ? {
-        capturedAt: new Date().toISOString(),
-        cost: params.finalCost ?? completingOp.cost ?? undefined,
-        usage: usageBlob,
-      }
-    : null;
-
   // Recover external Works (github issue/PR today) from hetero / device shell
   // records (codex, claude-code, lobe-local-system) — these surfaces never pass
   // the skill-tool registration hook. Self-guarded: per-record failures are
@@ -433,7 +447,7 @@ export const registerWorksForOperation = async (
   // links pull requests into them.
   const pullRequestLinking = params.agentShareVisitor
     ? undefined
-    : await resolveShellPullRequestLinking({
+    : createShellPullRequestLinking({
         db: serverDB,
         topicId,
         userId,

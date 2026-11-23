@@ -39,6 +39,8 @@ export type WorkspaceAuditAction =
   | 'budget.team_created'
   | 'budget.team_updated'
   | 'budget.team_deleted'
+  | 'budget.model_policy_updated'
+  | 'budget.model_policy_removed'
   | 'team.created'
   | 'team.updated'
   | 'team.deleted'

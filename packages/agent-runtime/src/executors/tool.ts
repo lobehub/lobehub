@@ -439,6 +439,7 @@ const persistActivatedTools = ({
       })
       .map((tool) => ({
         activatedAtStep: stepCount,
+        afterToolCallId: result.toolCallId,
         id: tool.identifier,
         manifest: effectiveManifestMap[tool.identifier],
         source: 'discovery' as const,

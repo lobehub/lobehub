@@ -5,12 +5,14 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   card: css`
     align-self: flex-start;
 
     width: calc(50% - 4px);
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -24,7 +26,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
   `,
   title: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
   `,
 }));

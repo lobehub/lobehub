@@ -9,24 +9,7 @@ const MAX_DISMISSED = 100;
 /** Concurrent writers each retry against the row they lost to. */
 const MAX_WRITE_ATTEMPTS = 3;
 
-/** A github.com PR page, also one of its tabs (`/files`) or with a query / anchor. */
-const PULL_URL_RE = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:[/?#]\S*)?$/i;
-
-/** `owner/repo#number` and the canonical URL of a github.com pull request URL. */
-export const parsePullRequestUrl = (
-  url: string,
-): { identifier: string; number: number; repoFullName: string; url: string } | null => {
-  const match = PULL_URL_RE.exec(url.trim());
-  if (!match) return null;
-  const repoFullName = `${match[1]}/${match[2]}`;
-  const number = Number(match[3]);
-  return {
-    identifier: `${repoFullName}#${number}`,
-    number,
-    repoFullName,
-    url: `https://github.com/${repoFullName}/pull/${number}`,
-  };
-};
+export { parsePullRequestUrl } from '@lobechat/utils/githubPullRequest';
 
 const sameIdentifier = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 

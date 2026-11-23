@@ -208,7 +208,11 @@ describe('useSignIn', () => {
         await result.current.handleCheckUser({ email: 'unknownuser' });
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      // Pinned under the email field with a next step, not a corner toast
+      expect(mockForm.setErrors).toHaveBeenCalledWith({
+        email: expect.stringContaining('usernameNotFound'),
+      });
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(result.current.step).toBe('email');
     });
 
@@ -219,7 +223,10 @@ describe('useSignIn', () => {
         await result.current.handleCheckUser({ email: 'invalid email!@#' });
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(mockForm.setErrors).toHaveBeenCalledWith({
+        email: expect.stringContaining('emailInvalid'),
+      });
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });
@@ -475,7 +482,9 @@ describe('useSignIn', () => {
         await result.current.handleSocialSignIn('google');
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      // Explained under the provider buttons instead of a toast
+      expect(result.current.socialErrorProvider).toBe('google');
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
 
     it('should not retry social sign in when captcha is returned unexpectedly', async () => {
@@ -490,7 +499,7 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInSocial).toHaveBeenCalledTimes(1);
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.socialErrorProvider).toBe('google');
     });
 
     it('should save last auth provider to localStorage', async () => {
@@ -616,7 +625,9 @@ describe('useSignIn', () => {
         await result.current.handleForgotPassword();
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      // Shown under the Forgot password link, not as a toast
+      expect(result.current.sendError).toContain('resetEmailFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(result.current.step).toBe('password');
       expect(result.current.sentInfo).toBeNull();
     });
@@ -639,7 +650,8 @@ describe('useSignIn', () => {
         await result.current.handleForgotPassword();
       });
 
-      expect(mockMessageError).toHaveBeenCalled();
+      expect(result.current.sendError).toContain('resetEmailFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(result.current.step).toBe('password');
     });
   });
@@ -670,6 +682,56 @@ describe('useSignIn', () => {
       expect(result.current.sentInfo).toEqual(
         expect.objectContaining({ email: 'user@example.com', type: 'magicLink' }),
       );
+    });
+  });
+
+  describe('magic link failures', () => {
+    it('should pin a failed first send to the email field', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockEnableMagicLink = true;
+      mockSignInMagicLink.mockResolvedValue({ error: { message: 'smtp down', status: 500 } });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: false }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      expect(mockForm.setErrors).toHaveBeenCalledWith({
+        email: expect.stringContaining('magicLinkFailed'),
+      });
+      expect(result.current.step).toBe('email');
+      expect(mockMessageError).not.toHaveBeenCalled();
+    });
+
+    it('should show a failed resend under the Resend button on the inbox screen', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockEnableMagicLink = true;
+      mockSignInMagicLink.mockResolvedValueOnce({ error: null });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: false }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+      expect(result.current.step).toBe('emailSent');
+
+      mockSignInMagicLink.mockResolvedValueOnce({ error: { message: 'smtp down', status: 500 } });
+      await act(async () => {
+        await result.current.handleResendEmail();
+      });
+
+      expect(result.current.sendError).toContain('magicLinkFailed');
+      expect(mockMessageError).not.toHaveBeenCalled();
+      expect(mockMessageSuccess).not.toHaveBeenCalled();
     });
   });
 

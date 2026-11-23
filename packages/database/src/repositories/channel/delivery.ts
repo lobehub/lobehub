@@ -17,6 +17,7 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
+import { unhideForActivity } from './sections';
 
 /** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
 export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
@@ -161,6 +162,16 @@ export const deliver = async (
   return recipients.map((agent) => agent.id);
 };
 
+/** Reserves the channel's next message sequence. The caller holds the channel lock. */
+export const takeSequence = async (tx: Transaction, channelId: string): Promise<number> => {
+  const [{ sequence }] = await tx
+    .update(channels)
+    .set({ sequence: sql`${channels.sequence} + 1` })
+    .where(eq(channels.id, channelId))
+    .returning({ sequence: channels.sequence });
+  return sequence;
+};
+
 /** Appends a message at the next channel sequence. The caller holds the channel lock. */
 export const appendMessage = async (
   tx: Transaction,
@@ -177,15 +188,12 @@ export const appendMessage = async (
       'BAD_REQUEST',
       'A message requires exactly one sender of the correct type',
     );
-  const [{ sequence }] = await tx
-    .update(channels)
-    .set({ sequence: sql`${channels.sequence} + 1` })
-    .where(eq(channels.id, values.channelId))
-    .returning({ sequence: channels.sequence });
+  const sequence = await takeSequence(tx, values.channelId);
   const [message] = await tx
     .insert(channelMessages)
     .values({ ...values, sequence })
     .returning();
+  await unhideForActivity(tx, values.channelId);
 
   return message;
 };

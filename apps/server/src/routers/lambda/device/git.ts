@@ -8,6 +8,7 @@ import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewar
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { parsePullRequestUrl } from '@/server/services/workRegistration/topicPullRequestLinks';
 import { WorktreeCleanupService } from '@/server/services/worktreeCleanup';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
@@ -456,20 +457,29 @@ export const gitRouter = router({
         deviceId: z.string(),
         number: z.number().int().positive(),
         path: z.string(),
+        repository: z.object({ path: z.string().min(1), url: z.string().max(2048) }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertWorkspaceRootApproved(
-        ctx.deviceModel,
-        input.deviceId,
-        input.path,
-        ctx.workspaceId,
-      );
+      const { action, deviceId, number, repository } = input;
+      // Deleting the local branch must still run in the selected checkout.
+      const target = action.type === 'merge' && action.deleteBranch ? undefined : repository;
+      const pullRequest = target && parsePullRequestUrl(target.url);
+      if (target && (!pullRequest || pullRequest.number !== number)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Expected the matching GitHub PR URL',
+        });
+      }
+
+      const path = target?.path ?? input.path;
+      await assertWorkspaceRootApproved(ctx.deviceModel, deviceId, path, ctx.workspaceId);
       return deviceGateway.runGitPullRequestAction({
-        action: input.action,
-        deviceId: input.deviceId,
-        number: input.number,
-        path: input.path,
+        action,
+        deviceId,
+        number,
+        path,
+        ...(pullRequest && { url: pullRequest.url }),
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });

@@ -7,10 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSidebarPullRequests } from '../useSidebarPullRequests';
 
 const mocks = vi.hoisted(() => ({
-  betterCoding: true,
-  legacy: vi.fn(),
   linked: {
-    enabled: true,
     primary: undefined as any,
     probes: [] as any[],
     views: [] as any[],
@@ -20,12 +17,6 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (s: unknown) => unknown) => selector({}),
-}));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableBetterCodingExperience: () => mocks.betterCoding },
-}));
 vi.mock('@/features/TopicPullRequests/useTopicPullRequests', () => ({
   useTopicPullRequests: () => mocks.linked,
 }));
@@ -34,12 +25,6 @@ vi.mock('@/services/work', () => ({
     linkTopicPullRequest: mocks.link,
     refreshTopicPullRequests: mocks.refresh,
     setTopicPullRequestDismissed: mocks.dismiss,
-  },
-}));
-vi.mock('../useLinkedPullRequest', () => ({
-  useLinkedPullRequest: (params: unknown) => {
-    mocks.legacy(params);
-    return { confirmed: true, pullRequest: { number: 1 }, refresh: vi.fn() };
   },
 }));
 
@@ -60,8 +45,6 @@ const view = (number: number, extra: Record<string, unknown> = {}) => ({
 
 const PARAMS = {
   available: true,
-  gitPath: '/repo',
-  isGithub: true,
   topicId: 't1',
   workingDirectory: '/repo',
 };
@@ -69,31 +52,12 @@ const PARAMS = {
 describe('useSidebarPullRequests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.betterCoding = true;
-    mocks.linked = { enabled: true, primary: undefined, probes: [], views: [] };
-  });
-
-  it('keeps the branch PR path untouched without the lab', () => {
-    mocks.betterCoding = false;
-    mocks.linked = { ...mocks.linked, enabled: false };
-    const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
-
-    expect(mocks.legacy).toHaveBeenCalledWith(PARAMS);
-    expect(result.current.pullRequest).toEqual({ number: 1 });
-    expect(result.current.pullRequests).toBeUndefined();
-  });
-
-  it('never asks for the branch PR under the lab', () => {
-    renderHook(() => useSidebarPullRequests(PARAMS));
-
-    expect(mocks.legacy).toHaveBeenCalledWith(
-      expect.objectContaining({ gitPath: undefined, isGithub: false, snapshot: undefined }),
-    );
+    mocks.linked = { primary: undefined, probes: [], views: [] };
   });
 
   it('lists every linked PR and opens the picked one in the tab', () => {
     const views = [view(3), view(2), view(9, { localDetail: false })];
-    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.linked = { primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
 
     expect(result.current.pullRequests).toHaveLength(3);
@@ -111,7 +75,7 @@ describe('useSidebarPullRequests', () => {
 
   it('locks mutations until the PR is confirmed', () => {
     const views = [view(3, { confirmed: false })];
-    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.linked = { primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
 
     expect(result.current.confirmed).toBe(false);
@@ -121,7 +85,7 @@ describe('useSidebarPullRequests', () => {
 
   it('keeps a confirmed PR locked when the app cannot vouch for it', () => {
     const views = [view(3, { vouched: false })];
-    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.linked = { primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
 
     expect(result.current.confirmed).toBe(false);
@@ -129,7 +93,7 @@ describe('useSidebarPullRequests', () => {
 
   it('removes and links PRs on the topic, then refreshes its list', async () => {
     const views = [view(3)];
-    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.linked = { primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
 
     await act(async () => {
@@ -156,7 +120,7 @@ describe('useSidebarPullRequests', () => {
 
   it('rejects a link or removal the server did not save', async () => {
     const views = [view(3)];
-    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.linked = { primary: views[0], probes: [], views };
     mocks.link.mockResolvedValueOnce({ identifier: 'a/b#4', linked: false });
     mocks.dismiss.mockResolvedValueOnce({ updated: false });
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
@@ -170,7 +134,7 @@ describe('useSidebarPullRequests', () => {
 
   it('offers no link or removal before the conversation has a topic', () => {
     const views = [view(3)];
-    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.linked = { primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests({ ...PARAMS, topicId: null }));
 
     expect(result.current.linkPullRequest).toBeUndefined();

@@ -176,6 +176,54 @@ describe('withHeteroSteer', () => {
     expect(giveBack).not.toHaveBeenCalled();
   });
 
+  it('returns an uploaded image follow-up intact when its image cannot be loaded', async () => {
+    const { client, giveBack, wait } = createClient([
+      {
+        content: 'see the screenshot',
+        imageList: [{ id: 'f', url: 'https://x/expired' }],
+        messageId: 'msg-1',
+        requiresImages: true,
+      },
+    ]);
+    const sendUserMessage = vi.fn(async (prompt: unknown) => {
+      if (typeof prompt !== 'string') throw new Error('image fetch failed: 403');
+      return true;
+    });
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage, supportsSteerImageAttachments: true },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
+    await flush();
+    stream.end();
+    await out;
+
+    expect(wait.mock.calls[0][0]).toMatchObject({ acceptsImageAttachments: true });
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
+  });
+
+  it('omits acceptsImages when the handle declares supportsSteerImages: false', async () => {
+    const { client, wait } = createClient([]);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage: async () => true, supportsSteerImages: false },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(wait).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(wait.mock.calls[0][0]).not.toHaveProperty('acceptsImages');
+  });
+
   it('gives a refused message back and stops polling', async () => {
     const { client, giveBack, wait } = createClient([{ content: 'hi', messageId: 'msg-1' }]);
     const stream = createStream();

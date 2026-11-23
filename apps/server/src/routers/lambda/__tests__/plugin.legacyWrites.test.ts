@@ -37,7 +37,7 @@ describe('pluginRouter legacy create routes', () => {
 
   const caller = () =>
     pluginRouter.createCaller({
-      clientMetadata: { type: 'desktop', version: '2.1.4' },
+      clientMetadata: { app: 'lobehub', type: 'desktop', version: '2.1.4' },
       userId: 'user-1',
     } as any);
 
@@ -73,6 +73,7 @@ describe('pluginRouter legacy create routes', () => {
       type: 'plugin',
     });
     expect(counter.add).toHaveBeenCalledWith(1, {
+      client_app: 'lobehub',
       client_type: 'desktop',
       client_version: toClientVersionLabel('2.1.4'),
       plugin_type: 'plugin',
@@ -111,10 +112,51 @@ describe('pluginRouter legacy create routes', () => {
       type: 'customPlugin',
     });
     expect(counter.add).toHaveBeenCalledWith(1, {
+      client_app: 'lobehub',
       client_type: 'desktop',
       client_version: toClientVersionLabel('2.1.4'),
       plugin_type: 'customPlugin',
       procedure: 'createPlugin',
+    });
+  });
+  describe('server-owned Composio account', () => {
+    // Regression: a member copied a teammate's private Composio account (read
+    // off the workspace projection) into a plugin row of another identifier.
+    // The row passed for a legacy connection, and executeAction ran it.
+    const forged = {
+      composio: { connectedAccountId: 'acc-victim', linkedByUserId: 'victim', status: 'ACTIVE' },
+      mcp: { type: 'http', url: 'https://mcp.example.com' },
+    };
+
+    it.each(['createPlugin', 'createOrInstallPlugin'] as const)(
+      '%s drops a client-written composio block',
+      async (procedure) => {
+        await caller()[procedure]({
+          customParams: forged,
+          identifier: 'slack',
+          manifest: { api: [], identifier: 'slack' },
+          type: 'plugin',
+        });
+
+        expect(pluginModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ customParams: { mcp: forged.mcp } }),
+        );
+      },
+    );
+
+    it('updatePlugin keeps the stored block instead of the client one', async () => {
+      const stored = { connectedAccountId: 'acc-own', linkedByUserId: 'user-1' };
+      pluginModel.findById.mockResolvedValue({
+        customParams: { composio: stored },
+        userId: 'user-1',
+      });
+
+      await caller().updatePlugin({ customParams: forged, id: 'gmail' });
+
+      expect(pluginModel.update).toHaveBeenCalledWith(
+        'gmail',
+        expect.objectContaining({ customParams: { composio: stored, mcp: forged.mcp } }),
+      );
     });
   });
 });

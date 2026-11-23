@@ -13,6 +13,7 @@ import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
+import { densityVars } from '@/styles/densityVars';
 
 import { lessonSectionLabel } from '../helpers';
 import { useExpertiseDomain, useExpertiseLesson } from '../hooks';
@@ -29,10 +30,10 @@ const styles = createStaticStyles(({ css }) => ({
   sectionItem: css`
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
 
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};

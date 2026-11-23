@@ -1,0 +1,88 @@
+---
+title: 将 LobeHub 作为 MCP Server 连接
+description: >-
+  通过 /api/v1/mcp 上的 MCP Server，在 Claude Code、Cursor 或 Codex 中使用
+  LobeHub：工具、资源、鉴权与 scope。
+tags:
+  - LobeHub
+  - MCP
+  - MCP Server
+  - Claude Code
+  - Cursor
+---
+
+# 将 LobeHub 作为 MCP Server 连接
+
+<Callout type="info">
+  **即将推出**（[#23318](https://github.com/lobehub/lobehub/pull/23318)）。MCP Server 尚未上线
+  LobeHub Cloud，其 `run:*` scope 还依赖 Agent 运行 API（[#23253](https://github.com/lobehub/lobehub/pull/23253)）。
+  下文的工具名称和限制来自该 PR，正式发布前可能调整。
+</Callout>
+
+LobeHub 可以作为 [MCP](https://modelcontextprotocol.io) Server，让编码助手或任意 MCP 客户端列出你的 Agent、运行 Agent，并读取话题、消息、文件和资源库。
+
+同一 PR 还在 `docs/usage/integrations/mcp-server` 添加了面向用户的使用指南；本页是开发者参考。
+
+这与你**向** LobeHub Agent 添加 MCP Server 的方向相反（后者通过 `/api/v1/mcp-servers` 管理，现已可用）。
+
+## 端点与鉴权
+
+- URL：`https://app.lobehub.com/api/v1/mcp`（或 `<your origin>/api/v1/mcp`）
+- 传输方式：Streamable HTTP，无状态。客户端用 `POST` 发送 JSON-RPC；`GET` 和 `DELETE` 返回 `405`。
+- 鉴权：与 REST API 相同，`Authorization: Bearer <API key or OIDC token>`。使用 OIDC token 时，发送 `X-Workspace-Id` 以在工作区中操作；工作区 API Key 使用其所属的工作区。
+
+服务器只列出凭证 scope 可访问的工具。建议单独创建一个 API Key，只授予你希望助手拥有的下列 scope。
+
+## 工具
+
+| 工具                                            | 作用                                         | Scope                      |
+| --------------------------------------------- | ------------------------------------------ | -------------------------- |
+| `list_agents`、`get_agent`                     | 列出 Agent，读取单个 Agent                        | `agent:read`               |
+| `run_agent`                                   | 运行 Agent 并等待回复（`waitSeconds`，默认 50，最多 120） | `run:write`、`model:invoke` |
+| `get_run`                                     | 读取运行的状态和结果                                 | `run:read`                 |
+| `search_topics`、`get_topic`、`search_messages` | 查找和读取对话                                    | `chat:read`                |
+| `list_files`、`read_file`                      | 列出和读取文件                                    | `file:read`                |
+| `upload_file`                                 | 上传文件                                       | `file:write`               |
+| `list_knowledge_bases`                        | 列出资源库                                      | `knowledge:read`           |
+
+资源：`lobehub://agents`、`lobehub://agents/{agentId}`、`lobehub://topics/{topicId}`。提示词：`summarize_topic`。
+
+如果 `run_agent` 未在 `waitSeconds` 内完成，会返回运行 id；稍后调用 `get_run` 获取结果。
+
+## 客户端配置
+
+### Claude Code
+
+```bash
+claude mcp add --transport http lobehub https://app.lobehub.com/api/v1/mcp \
+  --header "Authorization: Bearer sk-lh-your-key"
+```
+
+### Cursor
+
+添加到 `~/.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "lobehub": {
+      "url": "https://app.lobehub.com/api/v1/mcp",
+      "headers": { "Authorization": "Bearer sk-lh-your-key" }
+    }
+  }
+}
+```
+
+### Codex
+
+添加到 `~/.codex/config.toml`，并导出 `LOBEHUB_API_KEY`：
+
+```toml
+[mcp_servers.lobehub]
+url = "https://app.lobehub.com/api/v1/mcp"
+bearer_token_env_var = "LOBEHUB_API_KEY"
+```
+
+## 检查连接
+
+添加服务器后，让助手「list my LobeHub agents」。它应当调用 `list_agents` 并显示你的 Agent。如果返回 `401`，请检查 API Key；如果缺少某个工具，说明该 API Key 没有对应工具的 scope。

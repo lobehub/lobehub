@@ -3,7 +3,7 @@ import { getWorkingDirSourcePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { EnvironmentModel, normalizeProjectRepository } from '../../models/environment';
+import { normalizeProjectRepository } from '../../models/environment';
 import { EnvironmentInstanceModel } from '../../models/environmentInstance';
 import { ProjectModel } from '../../models/project';
 import {
@@ -11,16 +11,11 @@ import {
   ProjectWorkingDirectoryModel,
 } from '../../models/projectWorkingDirectory';
 import { hasLiveTaskCallbackReservation } from '../../models/topic';
-import {
-  agents,
-  devices,
-  projectEnvironments,
-  projectWorkingDirectories,
-  topics,
-} from '../../schemas';
+import { agents, devices, environments, projectWorkingDirectories, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { mergeRepositories, ProjectEnvironmentRepository } from '../projectEnvironment';
 
 /**
  * A refused directory write. It carries its tRPC code, so a permission or
@@ -87,6 +82,7 @@ export interface RelocateProjectDirectoryInput {
 export interface BindProjectDirectoryInput {
   agentId?: string;
   deviceId: string;
+  /** Ignored: a folder always works in the project's own environment. Kept for older clients. */
   environmentId?: string;
   name: string;
   path: string;
@@ -125,12 +121,10 @@ export class ProjectDirectoryRepository {
   }
 
   async bind(input: BindProjectDirectoryInput) {
-    await this.assertManageableProject(input.projectId);
+    const project = await this.assertManageableProject(input.projectId);
     return this.db.transaction(async (tx) => {
       const db = tx as LobeChatDatabase;
-      const environmentModel = new EnvironmentModel(db, this.userId, this.workspaceId);
       const instanceModel = new EnvironmentInstanceModel(db, this.userId, this.workspaceId);
-      const projectModel = new ProjectModel(db, this.userId, this.workspaceId);
       const directoryModel = new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId);
       // Serialize bindings of the same device, including bindings from different projects.
       const [device] = await db
@@ -147,45 +141,29 @@ export class ProjectDirectoryRepository {
         ? normalizeProjectRepository(input.repositoryUrl)
         : undefined;
       const existing = await instanceModel.findByDeviceAndDirectory(device.id, path);
-      let instance = existing;
-      let environment;
-      // An environment is the definition; an instance is one materialization of
-      // it. So the same project bound on a second device reuses the definition
-      // the first binding made and adds its own instance, rather than minting a
-      // second environment under the same name — which is both what the
-      // (user, scope, name) unique indexes require and what the two concepts
-      // already meant.
-      const knownId = existing?.environmentId ?? input.environmentId;
-      const named = knownId ? undefined : await environmentModel.findByName(input.name);
-      const environmentId = knownId ?? named?.id;
-      if (environmentId) {
-        environment = await environmentModel.findEnabledById(environmentId);
-        // The name lookup deliberately sees disabled rows, because the unique
-        // indexes do: a disabled environment of this name still owns the name,
-        // so minting a replacement would only hit the constraint.
-        if (!environment && named)
-          throw new ProjectDirectoryError('BAD_REQUEST', 'Environment is disabled');
-        if (!environment || (input.environmentId && input.environmentId !== environment.id))
-          throw new ProjectDirectoryError(
-            'CONFLICT',
-            'This directory belongs to another environment',
-          );
-        if (
-          repositoryUrl &&
-          !environment.configuration.sources?.some(
-            (source) => source.kind === 'git' && source.url === repositoryUrl,
-          )
-        )
-          throw new ProjectDirectoryError(
-            'CONFLICT',
-            'Repository differs from the existing environment',
-          );
-      } else {
-        environment = await environmentModel.save({
-          name: input.name,
-          repositoryUrl: input.repositoryUrl,
-        });
+      // A folder works in the project's own environment — the only one it has.
+      // A folder some other environment already built is that one's.
+      let environment = await ProjectEnvironmentRepository.ensure(db, project);
+      if (existing && existing.environmentId !== environment.id)
+        throw new ProjectDirectoryError(
+          'CONFLICT',
+          'This directory belongs to another environment',
+        );
+      // A folder that is a checkout of a repository the environment does not
+      // list yet adds it, the same as adding it on the project's settings.
+      if (repositoryUrl) {
+        const configuration = mergeRepositories(environment.configuration, [
+          { sources: [{ kind: 'git', url: repositoryUrl }] },
+        ]);
+        if (configuration !== environment.configuration) {
+          [environment] = await db
+            .update(environments)
+            .set({ configuration, updatedAt: new Date() })
+            .where(eq(environments.id, environment.id))
+            .returning();
+        }
       }
+      let instance = existing;
       if (!instance) {
         instance = await instanceModel.createForDeviceBinding({
           configurationSnapshot: environment.configuration,
@@ -197,18 +175,6 @@ export class ProjectDirectoryRepository {
       }
       if (!instance.enabled)
         throw new ProjectDirectoryError('BAD_REQUEST', 'Environment instance is disabled');
-      await projectModel.attachEnvironment(input.projectId, environment.id);
-      const [link] = await db
-        .select()
-        .from(projectEnvironments)
-        .where(
-          and(
-            eq(projectEnvironments.projectId, input.projectId),
-            eq(projectEnvironments.environmentId, environment.id),
-          ),
-        );
-      if (!link.enabled)
-        throw new ProjectDirectoryError('BAD_REQUEST', 'Environment is disabled in this project');
       const prior = await directoryModel.findByLocation(input.projectId, device.id, path);
       const directory =
         prior ??

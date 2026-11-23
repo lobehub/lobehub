@@ -21,7 +21,7 @@ const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, workspaceId),
       homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId),
-      homeService: new HomeService(ctx.userId),
+      homeService: new HomeService(ctx.userId, workspaceId),
     },
   });
 });
@@ -43,12 +43,19 @@ const homeSearchProcedure = homeProcedure.use(async (opts) => {
   });
 });
 
+/**
+ * Lobe AI (the inbox) is listed only for callers that ask for it. Released
+ * clients still draw it as their own fixed row and would show it twice — with
+ * the ordinary agent menu — if the list started returning it unasked.
+ */
+const includeInboxInput = z.object({ includeInbox: z.boolean().optional() }).optional();
+
 export const homeRouter = router({
   getDailyBrief: homeProcedure.query(({ ctx }): Promise<HomeBriefData> =>
     ctx.homeService.getDailyBrief(),
   ),
 
-  getSidebarAgentList: homeProcedure.query(async ({ ctx }) => {
+  getSidebarAgentList: homeProcedure.input(includeInboxInput).query(async ({ ctx, input }) => {
     // The sidebar payload carries applied label names and colors, so it has to
     // respect the same grant as the label registry itself — otherwise denying
     // `agent_label:read` only closes the front door. Personal scope has no
@@ -76,13 +83,17 @@ export const homeRouter = router({
         })
       : true;
 
-    return ctx.homeRepository.getSidebarAgentList(includeLabels, includeGroups);
+    return ctx.homeRepository.getSidebarAgentList(
+      includeLabels,
+      includeGroups,
+      input?.includeInbox ?? false,
+    );
   }),
 
   searchAgents: homeSearchProcedure
-    .input(z.object({ keyword: z.string() }))
+    .input(z.object({ includeInbox: z.boolean().optional(), keyword: z.string() }))
     .query(async ({ input, ctx }) => {
-      return ctx.homeRepository.searchAgents(input.keyword);
+      return ctx.homeRepository.searchAgents(input.keyword, input.includeInbox ?? false);
     }),
 
   /**

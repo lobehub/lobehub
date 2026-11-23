@@ -6,6 +6,7 @@ import { memo } from 'react';
 import ToggleLeftPanelButton, { isMacDesktop } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { DENSITY_TOKENS, useDensityTokens } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { getNavHeaderLeading } from './leading';
@@ -41,11 +42,14 @@ const NavHeader = memo<NavHeaderProps>(
     ...rest
   }) => {
     const expand = useGlobalStore(systemStatusSelectors.showLeftPanel);
+    const density = useDensityTokens();
+    const mobile = isMobileSurface();
+    const headerHeight = mobile ? DENSITY_TOKENS.loose.headerHeight : density.headerHeight;
 
     const leading = getNavHeaderLeading({
       expand: !!expand,
       isMacDesktop,
-      mobile: isMobileSurface(),
+      mobile,
       noContent: !left && !right && !children,
       showTogglePanelButton,
     });
@@ -59,9 +63,10 @@ const NavHeader = memo<NavHeaderProps>(
         align={'center'}
         flex={'none'}
         gap={4}
-        height={44}
+        height={headerHeight}
         justify={'space-between'}
-        padding={8}
+        paddingBlock={(headerHeight - 28) / 2}
+        paddingInline={8}
         style={style}
         {...rest}
       >

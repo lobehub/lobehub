@@ -9,14 +9,15 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, useConversationStore } from '../../store';
 
 const styles = stylex.create({
   card: {
     overflow: 'hidden',
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

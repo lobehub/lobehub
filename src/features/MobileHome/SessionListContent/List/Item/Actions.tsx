@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
 import {
   ActionIcon,
@@ -11,10 +12,12 @@ import { Check, Copy, ListTree, MoreVertical, Pin, PinOff, Plus, Trash } from 'l
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
+import { type RemoveAgentOptions } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -79,7 +82,7 @@ const Actions = ({
         await refreshAgentList();
       } else await updateAgentGroup(item.id, target);
     });
-  const items: DropdownItem[] = [
+  const organizeItems: DropdownItem[] = [
     {
       key: 'pin',
       title: editReason,
@@ -135,42 +138,58 @@ const Actions = ({
         },
       ],
     },
+  ];
+  const deleteItems: DropdownItem[] = [
     { type: 'divider' },
     {
       key: 'delete',
       title: editReason,
       danger: true,
-      disabled: !editable || !manageable || !access.canManageResource,
+      // Server `canManage` covers the author, the Owner and — for another
+      // member's shared agent — an Admin, whose delete the confirmation warns
+      // about and the server accepts only with that acknowledgment.
+      disabled: !editable || !access.canManageResource || (item.type === 'group' && !manageable),
       icon: <Icon icon={Trash} />,
       label: t('delete', { ns: 'common' }),
-      onClick: () =>
+      onClick: () => {
+        const onDelete = (options?: RemoveAgentOptions) =>
+          run(async () => {
+            try {
+              if (item.type === 'group') await removeAgentGroup(item.id);
+              else await removeAgent(item.id, options);
+              toast.success(
+                t(
+                  item.type === 'group'
+                    ? 'confirmRemoveGroupSuccess'
+                    : 'confirmRemoveSessionSuccess',
+                ),
+              );
+            } catch (error) {
+              toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
+            }
+          });
+
+        if (item.type !== 'group') {
+          confirmRemoveAgent({ agentId: item.id, onConfirm: onDelete });
+          return;
+        }
+
         confirmModal({
           title: t('delete', { ns: 'common' }),
-          content: t(
-            item.type === 'group'
-              ? 'confirmRemoveChatGroupItemAlert'
-              : 'confirmRemoveSessionItemAlert',
-          ),
+          content: t('confirmRemoveChatGroupItemAlert'),
           okText: t('delete', { ns: 'common' }),
           okButtonProps: { danger: true },
-          onOk: () =>
-            run(async () => {
-              try {
-                await (item.type === 'group' ? removeAgentGroup : removeAgent)(item.id);
-                toast.success(
-                  t(
-                    item.type === 'group'
-                      ? 'confirmRemoveGroupSuccess'
-                      : 'confirmRemoveSessionSuccess',
-                  ),
-                );
-              } catch (error) {
-                toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
-              }
-            }),
-        }),
+          onOk: () => onDelete(),
+        });
+      },
     },
   ];
+  // Lobe AI (the inbox) is the built-in default Agent: it cannot be deleted,
+  // and a copy would come out nameless (its stored title is blank).
+  const items =
+    item.slug === INBOX_SESSION_ID
+      ? organizeItems.filter((menuItem) => menuItem?.key !== 'duplicate')
+      : [...organizeItems, ...deleteItems];
   return (
     <div
       role="presentation"

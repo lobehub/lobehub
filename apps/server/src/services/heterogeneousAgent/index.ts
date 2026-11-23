@@ -25,6 +25,7 @@ import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory'
 import { shouldRecordGatewayError } from '@/server/modules/AgentRuntime/gatewayErrorRecord';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import type { OperationCompletionShareVisitor } from '@/server/services/agentRuntime/CompletionLifecycle/types';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
@@ -36,6 +37,7 @@ import {
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
 import { HeteroTraceRecorder } from './HeteroTraceRecorder';
+import { settlePermissionModeReport } from './permissionModeReport';
 
 const log = debug('lobe-server:hetero-agent-service');
 
@@ -178,6 +180,13 @@ export interface HeterogeneousAgentServiceOptions {
   agentOperationModel?: AgentOperationModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
+  /**
+   * The share visitor this run belongs to (from the operation row the dispatch
+   * stamped). A visitor's topic and messages are hidden from default-scoped
+   * models, so without it every write of the run matches nothing; it also
+   * marks the completion as a share run.
+   */
+  shareVisitor?: OperationCompletionShareVisitor;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
   snapshotStore?: ISnapshotStore | null;
   /**
@@ -222,6 +231,7 @@ export class HeterogeneousAgentService {
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
   private readonly traceRecorder: HeteroTraceRecorder;
+  private readonly shareVisitor?: OperationCompletionShareVisitor;
   private readonly userId: string;
   private readonly workspaceId?: string;
 
@@ -237,9 +247,12 @@ export class HeterogeneousAgentService {
     this.queuedFollowUpStarter = options.startQueuedFollowUp;
     this.agentOperationModel =
       options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.shareVisitor = options.shareVisitor;
+    const visitorScope = { includeShareVisitor: !!options.shareVisitor };
+    this.messageModel = new MessageModel(db, userId, workspaceId, undefined, visitorScope);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
-    this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.topicModel =
+      options.topicModel ?? new TopicModel(db, userId, workspaceId, undefined, visitorScope);
     this.traceRecorder = new HeteroTraceRecorder(
       options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
     );
@@ -460,6 +473,14 @@ export class HeterogeneousAgentService {
       result,
       topicId,
     });
+    // `cancelled` is followed by the terminal callback, which settles this.
+    if (result !== 'cancelled') {
+      await settlePermissionModeReport(this.topicModel, {
+        operationId,
+        succeeded: result === 'success',
+        topicId,
+      }).catch((err) => log('heteroFinish: permission mode report (non-fatal): %O', err));
+    }
 
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId = seedAssistantMessageId;
@@ -577,11 +598,13 @@ export class HeterogeneousAgentService {
     // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
     // if the CLI stream missed it. A stale callback that belongs to neither the
     // root operation nor one of its children returns above.
-    await this.streamEventManager.publishStreamEvent(operationId, {
-      data: endData,
-      stepIndex: 0,
-      type: 'agent_runtime_end',
-    });
+    const publishRuntimeEnd = () =>
+      this.streamEventManager.publishStreamEvent(operationId, {
+        data: endData,
+        stepIndex: 0,
+        type: 'agent_runtime_end',
+      });
+    if (result !== 'success') await publishRuntimeEnd();
 
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
@@ -723,37 +746,46 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
-      {
-        agentId,
-        assistantMessageId,
-        cost: { total: totals?.totalCost ?? null },
-        deliverable: lastAssistantContent ?? '',
-        error: error ?? undefined,
-        goal: goalContent,
-        // Backfilled executed model/provider — the verify gate bails when absent.
-        model: totals?.model,
-        operationId,
-        orchestrationRole,
-        provider: totals?.provider,
-        serializedHooks,
-        stepCount: totals?.stepCount ?? null,
-        topicId,
-        usage: {
-          llm: {
-            apiCalls: totals?.llmCalls ?? null,
-            tokens: {
-              input: totals?.totalInputTokens ?? null,
-              output: totals?.totalOutputTokens ?? null,
-              total: totals?.totalTokens ?? null,
-            },
+    const lifecycle = new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
+      includeShareVisitor: !!this.shareVisitor,
+    });
+    const completionInput = {
+      agentId,
+      assistantMessageId,
+      cost: { total: totals?.totalCost ?? null },
+      deliverable: lastAssistantContent ?? '',
+      error: error ?? undefined,
+      goal: goalContent,
+      // Backfilled executed model/provider — the verify gate bails when absent.
+      model: totals?.model,
+      operationId,
+      orchestrationRole,
+      provider: totals?.provider,
+      serializedHooks,
+      shareVisitor: this.shareVisitor,
+      stepCount: totals?.stepCount ?? null,
+      topicId,
+      usage: {
+        llm: {
+          apiCalls: totals?.llmCalls ?? null,
+          tokens: {
+            input: totals?.totalInputTokens ?? null,
+            output: totals?.totalOutputTokens ?? null,
+            total: totals?.totalTokens ?? null,
           },
-          tools: { totalCalls: totals?.toolCalls ?? null },
         },
-        userId: this.userId,
+        tools: { totalCalls: totals?.toolCalls ?? null },
       },
-      completionReason,
-    );
+      userId: this.userId,
+    };
+    // The client refetches messages on `agent_runtime_end`; Works registered after it
+    // (the lifecycle backstop) leave the Work card missing until a manual reload.
+    let worksRegistered = false;
+    if (result === 'success') {
+      worksRegistered = await lifecycle.registerOperationWorks(completionInput);
+      await publishRuntimeEnd();
+    }
+    await lifecycle.completeOperation({ ...completionInput, worksRegistered }, completionReason);
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
 
     // Follow-ups the user queued behind this run start as the next turn here,

@@ -12,13 +12,14 @@ import {
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { withRepositorySetup } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
-import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
+import { resolveScmCloneCredentials } from '@/server/services/scm/cloneCredential';
 
 import { sandboxStorageBinding } from './binding';
 import { driveFolderExists, ensureDriveFolder } from './driveFolder';
@@ -123,9 +124,11 @@ export interface SandboxSessionConfig {
  * session of every environment that gained one.
  */
 const toSessionSpecification = (
-  configuration: EnvironmentConfiguration | null | undefined,
+  stored: EnvironmentConfiguration | null | undefined,
 ): SandboxSessionSpecification | undefined => {
-  if (!configuration) return undefined;
+  if (!stored) return undefined;
+  // Each repository's own setup rides in the one command the plane runs.
+  const configuration = withRepositorySetup(stored);
 
   const specification: SandboxSessionSpecification = {
     ...(configuration.bootstrapCommand && { bootstrapCommand: configuration.bootstrapCommand }),
@@ -395,14 +398,16 @@ const resolvePlacement = async ({
  * private one), or one that asks for nothing.
  */
 const resolveInitialization = async ({
+  placement,
   serverDB,
   topicId,
   userId,
   workspaceId,
 }: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
-  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
-  SandboxInitialization | undefined
-> => {
+  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'> & {
+    /** Where the run works, as {@link resolvePlacement} decided. */
+    placement: Pick<SandboxSessionConfig, 'drive' | 'mode'>;
+  }): Promise<SandboxInitialization | undefined> => {
   try {
     const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
       topicId,
@@ -440,20 +445,41 @@ const resolveInitialization = async ({
       }
     }
 
+    // Every member can browse the workspace's public drive, so a private
+    // environment's checkout and setup output must not land in a folder there:
+    // it is applied on a personal drive or in a temporary sandbox only.
+    if (
+      workspaceId &&
+      placement.mode === 'drive' &&
+      placement.drive === 'public' &&
+      environment.visibility !== 'public'
+    ) {
+      log(
+        'Not applying private environment %s in a public-drive folder on topic %s',
+        environmentId,
+        topicId,
+      );
+      return undefined;
+    }
+
     const initialization = toSandboxInitialization(environment);
     if (!initialization || initialization.sources.length === 0) return initialization;
 
     // The same credential a build used to get, so a private repository the
     // picker offered still clones. Never throws: without one, a public
     // repository clones and a private one fails in the report, by name.
-    const cloneCredential = await resolveScmCloneCredential({
+    const cloneCredentials = await resolveScmCloneCredentials({
       configuration: environment.configuration ?? undefined,
       db: serverDB,
       userId,
       workspaceId,
     });
 
-    return cloneCredential ? { ...initialization, cloneCredential } : initialization;
+    if (cloneCredentials.length === 0) return initialization;
+    // One repository keeps the single host-wide credential it always had.
+    return cloneCredentials.length === 1
+      ? { ...initialization, cloneCredential: cloneCredentials[0] }
+      : { ...initialization, cloneCredentials };
   } catch (error) {
     log('Failed to read the environment for topic %s: %O', topicId, error);
     return undefined;
@@ -477,7 +503,12 @@ export const resolveSandboxSessionConfig = async (
   const { serverDB, topicId } = input;
   if (!serverDB || !topicId || config.mode === 'persistent') return config;
 
-  const initialization = await resolveInitialization({ ...input, serverDB, topicId });
+  const initialization = await resolveInitialization({
+    ...input,
+    placement: config,
+    serverDB,
+    topicId,
+  });
 
   return initialization ? { ...config, initialization } : config;
 };

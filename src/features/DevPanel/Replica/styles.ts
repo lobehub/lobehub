@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const replicaStyles = createStaticStyles(({ css }) => ({
   actions: css`
     display: flex;
@@ -33,7 +35,7 @@ export const replicaStyles = createStaticStyles(({ css }) => ({
     gap: 8px;
 
     min-height: 0;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   editorFooter: css`
     display: flex;

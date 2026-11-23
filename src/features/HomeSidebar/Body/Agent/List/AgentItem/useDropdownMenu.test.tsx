@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   canManageSettings: false,
   myPinnedIds: [] as string[],
   confirmModal: vi.fn(),
+  confirmRemoveAgent: vi.fn(),
   copyToClipboard: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
@@ -104,6 +105,9 @@ vi.mock('@/hooks/useResourceManageable', () => ({
 }));
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
+vi.mock('@/features/AgentDeleteConfirm', () => ({
+  confirmRemoveAgent: mocks.confirmRemoveAgent,
+}));
 
 vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   useOptionalAgentModal: () => null,
@@ -386,10 +390,44 @@ describe('useAgentDropdownMenu', () => {
     if (!deleteItem) throw new Error('Expected delete menu item');
 
     deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
-    const { onOk } = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
-    await onOk();
+    const { agentId, onConfirm } = mocks.confirmRemoveAgent.mock.calls[0][0] as {
+      agentId: string;
+      onConfirm: (options: { acknowledgeForeignContent: boolean }) => Promise<void>;
+    };
+    expect(agentId).toBe('agent-1');
+    await onConfirm({ acknowledgeForeignContent: true });
 
+    expect(mocks.home.removeAgent).toHaveBeenCalledWith('agent-1', {
+      acknowledgeForeignContent: true,
+    });
     expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
+  });
+
+  const findDeleteItem = (items: unknown[]) =>
+    items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
+    );
+
+  it("offers delete to a workspace Admin on another member's shared agent", () => {
+    // Admin: not the creator and not the Owner (client `canManage` false), but
+    // the server's `canManage` (AGENT_UPDATE:all) is true.
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = true;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeDefined();
+  });
+
+  it("hides delete from a member on another member's agent", () => {
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = false;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeUndefined();
   });
 
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
@@ -420,10 +458,38 @@ describe('useAgentDropdownMenu', () => {
       'copy-agent',
       'divider',
       'permission',
-      'makePrivate',
+      'visibility',
       'divider',
       'delete',
     ]);
+  });
+
+  it('keeps Lobe AI (the inbox) organizable but never deletable, copyable or transferable', () => {
+    mocks.canEditResource = true;
+    mocks.canManage = true;
+    mocks.canManageResource = true;
+    mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'inbox-agent',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        slug: 'inbox',
+        title: 'Lobe AI',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    const keys = getMenuKeys(result.current());
+    expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar', 'rename', 'moveGroup']));
+    expect(keys).not.toContain('delete');
+    expect(keys).not.toContain('duplicate');
+    expect(keys).not.toContain('copy-agent');
+    expect(keys).not.toContain('permission');
+    expect(keys).not.toContain('visibility');
   });
 
   it('hides the Permission shortcut from a non-author member who can configure the agent', () => {

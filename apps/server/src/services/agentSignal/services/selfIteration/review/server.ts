@@ -52,6 +52,10 @@ import {
   refreshSelfReviewProposal,
   supersedeSelfReviewProposal,
 } from './proposal';
+import {
+  normalizeSelfReviewProposalInput,
+  SELF_REVIEW_PROPOSAL_ACTION_TYPES,
+} from './proposalInput';
 import { createSelfReviewProposalPreflightService } from './proposalPreflight';
 import { createSelfReviewProposalSnapshotService } from './proposalSnapshot';
 import {
@@ -187,55 +191,6 @@ const getProposalActionSnapshotInput = (action: Record<string, unknown>) => {
       pickTrimmedString(target.skillDocumentId),
     title: pickTrimmedString(operationInput.title) ?? pickTrimmedString(target.skillName),
   };
-};
-
-/** Action types a `createSelfReviewProposal` action may carry. */
-export const SELF_REVIEW_PROPOSAL_ACTION_TYPES = [
-  'create_skill',
-  'refine_skill',
-  'consolidate_skill',
-  'refine_prompt',
-  'write_memory',
-  'proposal_only',
-] as const;
-
-const SELF_REVIEW_PROPOSAL_ACTION_TYPE_ALIASES: Record<string, string> = {
-  record_idea: 'proposal_only',
-};
-
-/**
- * Normalizes model-authored proposal actions before projection.
- *
- * Models routinely send the action kind as `type` (and the legacy prompt named
- * ideas `record_idea`); the projection only reads `actionType`, so those
- * proposals silently projected to nothing and every nightly review ended
- * without a brief. Unknown action types fail loudly so the model can retry.
- */
-export const normalizeSelfReviewProposalInput = (
-  input: CreateSelfReviewProposalInput,
-): CreateSelfReviewProposalInput => {
-  if (!Array.isArray(input.actions)) return input;
-
-  const actions = input.actions.map((rawAction, index) => {
-    const action = toRecordOrEmpty(rawAction);
-    const rawType = pickTrimmedString(action.actionType) ?? pickTrimmedString(action.type);
-    const actionType = rawType
-      ? (SELF_REVIEW_PROPOSAL_ACTION_TYPE_ALIASES[rawType] ?? rawType)
-      : undefined;
-
-    if (
-      !actionType ||
-      !(SELF_REVIEW_PROPOSAL_ACTION_TYPES as readonly string[]).includes(actionType)
-    ) {
-      throw new Error(
-        `actions[${index}] has ${rawType ? `unsupported actionType "${rawType}"` : 'no actionType'}; expected one of: ${SELF_REVIEW_PROPOSAL_ACTION_TYPES.join(', ')}.`,
-      );
-    }
-
-    return { ...action, actionType };
-  });
-
-  return { ...input, actions } as CreateSelfReviewProposalInput;
 };
 
 const withCompleteProposalSnapshots = async ({

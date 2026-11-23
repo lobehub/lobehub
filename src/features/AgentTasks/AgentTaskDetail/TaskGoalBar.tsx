@@ -26,7 +26,7 @@ const TaskGoalBar = memo(() => {
         style={{ maxWidth: '100%', minWidth: 0 }}
         type={'text'}
         // The agent-less route: the goal's supervising agent may be private to its
-        // creator or gated by Agent Lab, while the goal itself stays readable.
+        // creator, while the goal itself stays readable.
         onClick={() => navigate(`/goal/${goal.id}`)}
       >
         <Text ellipsis style={{ minWidth: 0 }} weight={500}>

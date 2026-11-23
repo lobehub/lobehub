@@ -1,10 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
-  Blocks,
   Brain,
   Building2,
   ChartColumnBigIcon,
@@ -20,13 +18,10 @@ import {
   Info,
   KeyboardIcon,
   KeyIcon,
-  KeyRound,
   Map,
-  MessageCircleIcon,
   MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   ScrollText,
   Sparkles,
   TagIcon,
@@ -106,7 +101,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   return useMemo(
     () =>
       [
-        // Account-level settings (profile / appearance / hotkeys / messenger)
+        // Account-level settings (profile / appearance / hotkeys)
         // follow the user, not the workspace. They are mirrored here so members
         // can reach them without leaving the workspace; the pages are the
         // personal ones.
@@ -131,21 +126,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Hotkey,
               label: t('tab.hotkey'),
             },
-            // Follow-up chips / input completion act on the member's own chat
-            // surface, so every role configures them here — the workspace
-            // Service Model page stays admin-only.
+            // Conversation preferences (reply language, chat assist, send key…)
+            // act on the member's own chat surface, so every role configures
+            // them here — the workspace Service Model page stays admin-only.
             {
               icon: MessagesSquareIcon,
-              key: WorkspaceSettingsTabs.ChatPreference,
-              label: t('tab.chatPreference'),
-            },
-            // The System Bot binding is a per-user identity (owned by userId,
-            // not the workspace); reaching a workspace's agents happens via the
-            // scope selector on the page itself.
-            {
-              icon: MessageCircleIcon,
-              key: WorkspaceSettingsTabs.Messenger,
-              label: t('tab.messenger'),
+              key: WorkspaceSettingsTabs.Conversation,
+              label: t('tab.conversation'),
             },
           ],
           key: WorkspaceSettingsGroupKey.Account,
@@ -234,11 +221,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
             },
-            {
-              icon: SkillsIcon,
-              key: WorkspaceSettingsTabs.Skill,
-              label: t('workspaceSetting.tab.skill'),
-            },
             // Label registry is readable by everyone; the page itself keeps
             // management actions behind the admin gate (disabled, not hidden).
             {
@@ -250,42 +232,22 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // Outside services the workspace's agents can reach. These bindings
-        // belong to the workspace; Messenger stays in Account because it is a
-        // per-user binding.
-        {
+        enableWebhook && {
           items: [
-            // An installation connected here belongs to the workspace, so
-            // every member sees the same one.
-            {
-              icon: PlugIcon,
-              key: WorkspaceSettingsTabs.Integrations,
-              label: t('tab.integrations'),
-            },
-            {
-              icon: Blocks,
-              key: WorkspaceSettingsTabs.Connector,
-              label: t('workspaceSetting.tab.connector'),
-            },
             // Every member sees the workspace's event subscriptions, so it is
             // clear what fires the shared agents; managing one is per row.
-            enableWebhook && {
+            {
               icon: ZapIcon,
               key: WorkspaceSettingsTabs.Automations,
               label: t('tab.automations'),
             },
             // The workspace's agents' webhooks; made on each agent's page, managed here too.
-            enableWebhook && {
+            {
               icon: WebhookIcon,
               key: WorkspaceSettingsTabs.Webhooks,
               label: t('tab.webhooks'),
             },
-            {
-              icon: KeyRound,
-              key: WorkspaceSettingsTabs.Creds,
-              label: t('tab.creds'),
-            },
-          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          ] as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
           title: t('group.connection'),
         },
@@ -306,12 +268,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.SubscriptionAccounts,
               label: t('tab.subscriptionAccounts'),
             },
-            // Always there: a code environment is a definition, written down before
-            // anything runs it, and useful with or without a drive to run it on.
+            // Environments & Vault, always there: what a run starts from and
+            // the secrets it reads, in one place. An environment is a definition,
+            // written down before anything runs it, so it needs no drive.
             {
               icon: ContainerIcon,
               key: WorkspaceSettingsTabs.Environments,
-              label: t('tab.environments'),
+              label: t('tab.environmentsAndCreds'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,

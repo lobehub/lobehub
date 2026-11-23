@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 /**
  * Shared surfaces for the mail page.
  *
@@ -15,7 +17,7 @@ const definitions = stylex.create({
     maxHeight: '40%',
   },
   card: {
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: '14px',
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,

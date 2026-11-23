@@ -11,6 +11,7 @@ import {
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { needsConnectorReauthorization } from '@lobechat/types';
 import {
   connectorConnectVia,
   connectorDeviceBinding,
@@ -28,6 +29,7 @@ import {
   ConnectorToolPermission,
 } from '@/database/schemas';
 import type { AuthConfig, McpTool } from '@/libs/mcp';
+import { createMCPError } from '@/libs/mcp/types';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { resolveConnectorToolPermission } from '@/server/routers/lambda/_helpers/connectorToolPermission';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -69,6 +71,9 @@ export const buildConnectorMcpParams = (
     };
   }
   if (!connector.mcpServerUrl) throw new Error('Connector has no MCP server URL configured');
+  if (needsConnectorReauthorization(connector.credentials)) {
+    throw createMCPError('AUTHORIZATION_ERROR', 'Reconnect this connector to continue.');
+  }
   const { auth, headers } = buildHttpAuthFromCredentials(connector.credentials);
   // Custom headers live in `metadata.customHeaders` (plaintext, independent of
   // the single-kind `credentials` column) so they can coexist with any auth

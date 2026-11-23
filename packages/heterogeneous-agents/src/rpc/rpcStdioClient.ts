@@ -117,12 +117,16 @@ export class RpcStdioClient {
   async start(): Promise<void> {
     if (this.child || this.closed) return;
 
-    const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
+    const spawnPlan = await resolveCliSpawnPlan(
+      this.options.commandPath,
+      this.options.args,
+      this.options.env,
+    );
     if (this.closed) return;
     const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32' && (this.options.detached ?? true),
-      env: this.options.env,
+      env: spawnPlan.env ?? this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.child = child;

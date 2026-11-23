@@ -1,4 +1,5 @@
 import { type AgentState, selectOperationToolSet } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   buildStepSkillDelta,
   buildStepToolDelta,
@@ -53,11 +54,15 @@ export const resolveServerCallLlmTooling = (
   // Resolve device policy first, then activate only tools already allowed by
   // the operation snapshot. Routing a device must not widen that tool pool.
   const activeDeviceId = resolveRunActiveDeviceId(state);
-  const executionTarget = (state.plan?.execution as ExecutionPlan | undefined)?.target;
+  const executionPlan = state.plan?.execution as ExecutionPlan | undefined;
+  const executionTarget = executionPlan?.target;
   const operationToolSet: OperationToolSet = selectOperationToolSet(state);
 
   const stepDelta = buildStepToolDelta({
-    activeDeviceId,
+    // A pre-bound device makes local-system discoverable. Only a device selected
+    // mid-run (or a legacy operation without a plan) activates its functions.
+    activeDeviceId:
+      !executionPlan || executionPlan.kind === 'device-unrouted' ? activeDeviceId : undefined,
     enabledToolIds: operationToolSet.enabledToolIds,
     forceFinish: state.forceFinish,
     // Device activation cannot widen the operation's allowed tool pool.
@@ -74,7 +79,14 @@ export const resolveServerCallLlmTooling = (
   );
 
   const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
-  const toolDiscoveryConfig = buildToolDiscoveryConfig(operationToolSet, resolved.enabledToolIds);
+  // Keep <available_tools> anchored to the operation's starting enabledToolIds
+  // as long as the activator remains active this step (e.g. not stripped by
+  // forceFinish). Dropping newly activated tools mid-operation mutates the
+  // before-first-user context message and invalidates the prompt-cache prefix;
+  // the next operation starts with them already in `operationToolSet.enabledToolIds`.
+  const toolDiscoveryConfig = resolved.enabledToolIds.includes(LobeActivatorIdentifier)
+    ? buildToolDiscoveryConfig(operationToolSet, operationToolSet.enabledToolIds)
+    : undefined;
 
   if (stepDelta.activatedTools.length > 0) {
     log(

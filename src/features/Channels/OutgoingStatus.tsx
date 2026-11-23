@@ -5,9 +5,10 @@ import { useTranslation } from 'react-i18next';
 
 import { channelActions, type ChannelOutgoingMessage } from '@/store/channel';
 
+import { receiptErrorKey } from './MessageReceipts';
 import { statusStyles, toneStyles } from './styles';
 
-/** Below a message this tab sent that failed: retry and delete. */
+/** Below a message this tab sent that failed: why, when the server said, then retry and delete. */
 export function OutgoingStatus({
   message,
   onRetry,
@@ -19,11 +20,12 @@ export function OutgoingStatus({
   const { t } = useTranslation('channel');
   // A message still sending shows faded in place (`ChannelMessage` `pending`), with no line here.
   if (message.status !== 'failed') return null;
+  const reasonKey = receiptErrorKey(message.errorType);
   return (
     <span role="alert" {...stylex.props(statusStyles.receipts, statusStyles.state)}>
       <span {...stylex.props(statusStyles.state, toneStyles.error)}>
         <Icon icon={CircleAlert} size={12} />
-        {t('outgoing.failed')}
+        {reasonKey ? t(reasonKey) : t('outgoing.failed')}
       </span>
       <Button size="small" type="text" onClick={() => onRetry(message)}>
         {t('outgoing.retry')}

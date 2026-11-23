@@ -31,6 +31,9 @@ export const getChannelSaveErrorKey = (error: unknown) => {
     case 'Agent not found': {
       return 'environment.agentUnavailable';
     }
+    case 'A private Agent cannot join a workspace Channel; make it visible to the workspace first': {
+      return 'environment.privateAgent';
+    }
     default: {
       if (status === 401) return 'environment.signInRequired';
       if (status === 403) return 'environment.permissionRequired';

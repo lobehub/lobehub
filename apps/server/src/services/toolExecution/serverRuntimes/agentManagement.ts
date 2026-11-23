@@ -12,12 +12,13 @@ import {
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
 import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
 import {
-  getPluginMode,
   type HeterogeneousProviderConfig,
   parsePluginEntry,
-  upsertPluginMode,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -339,16 +340,21 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           if (resolution.status !== 'loadable')
             return unresolvablePluginResult(identifier, resolution);
 
-          // upsertPluginMode preserves an already-pinned entry (string or
-          // object) as-is and flips a disabled entry back to pinned in place,
-          // instead of blindly pushing a duplicate bare-string identifier.
-          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+          const existing = agent.plugins?.find(
+            (entry) => parsePluginEntry(entry).identifier === identifier,
+          );
+          const needsBuiltinOverride =
+            isOnDemandBuiltinTool(identifier) &&
+            (!existing || typeof existing === 'string' || !existing.builtinOverride);
+          if (!existing || parsePluginEntry(existing).mode === 'disabled' || needsBuiltinOverride) {
             await agentModel.updateConfig(agentId, {
-              plugins: upsertPluginMode(
-                agent.plugins ?? undefined,
-                identifier,
-                'pinned',
-              ) as unknown as string[],
+              plugins: (isOnDemandBuiltinTool(identifier)
+                ? setBuiltinPluginMode(agent.plugins ?? undefined, identifier, 'auto')
+                : upsertConnectorEnabled(
+                    agent.plugins ?? undefined,
+                    identifier,
+                    true,
+                  )) as unknown as string[],
             });
           }
 

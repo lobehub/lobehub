@@ -81,7 +81,7 @@ const installThroughPopup = async (identifier: string) => {
 
 const enabledPinned = (identifier: string) =>
   expect(mocks.agentState.optimisticUpdateAgentConfig).toHaveBeenCalledWith('agent-1', {
-    plugins: [{ identifier, mode: 'pinned' }],
+    plugins: [{ identifier, mode: 'auto' }],
   });
 
 beforeEach(() => {

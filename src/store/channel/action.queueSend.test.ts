@@ -85,6 +85,21 @@ describe('Channel queued send', () => {
     expect(requestKeys).toEqual([failed.requestKey, failed.requestKey]);
   });
 
+  it('keeps the refusal the server named until the message is retried', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(channelService.send).mockRejectedValueOnce(new Error('ShareMessageLimitExceeded'));
+    await channelActions.queueSend(input);
+    const [failed] = outgoing();
+    expect(failed).toMatchObject({ errorType: 'ShareMessageLimitExceeded', status: 'failed' });
+
+    const gate = Promise.withResolvers<SendResult>();
+    vi.mocked(channelService.send).mockReturnValueOnce(gate.promise);
+    const retried = channelActions.retrySend(failed);
+    expect(outgoing()[0]).toMatchObject({ errorType: undefined, status: 'sending' });
+    gate.resolve(result(stored('message', 2)));
+    await retried;
+  });
+
   it('does not send a failed message after it is deleted', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(channelService.send).mockRejectedValueOnce(new Error('offline'));

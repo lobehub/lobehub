@@ -25,6 +25,8 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import PermissionModeSelector from './PermissionMode';
+import PlanModeSwitch from './PlanMode';
 import {
   AntigravityQuotaMenu,
   ClaudeCodeQuotaMenu,
@@ -169,6 +171,16 @@ const HeteroControlBar = memo(() => {
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
 
   const heteroProvider = agencyConfig?.heterogeneousProvider;
+  // Claude Code picks how it asks before acting, per topic.
+  const permissionModeChip =
+    heteroProvider?.type === 'claude-code' && agentId ? (
+      <PermissionModeSelector agentId={agentId} topicId={topicId} />
+    ) : null;
+  // Codex gets a Plan switch beside its unchanged full access.
+  const planModeSwitch =
+    heteroProvider?.type === 'codex' && agentId ? (
+      <PlanModeSwitch agentId={agentId} topicId={topicId} />
+    ) : null;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     isHetero: !!heteroProvider,
@@ -219,7 +231,11 @@ const HeteroControlBar = memo(() => {
         justify={'space-between'}
       >
         <DeviceSwitcher agentId={agentId} />
-        {shouldShowApiCredits && <ChatInputCredits />}
+        <Flexbox horizontal align={'center'} gap={4}>
+          {permissionModeChip}
+          {planModeSwitch}
+          {shouldShowApiCredits && <ChatInputCredits />}
+        </Flexbox>
       </Flexbox>
     );
   }
@@ -246,7 +262,9 @@ const HeteroControlBar = memo(() => {
         >
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
-        {(shouldShowApiCredits ||
+        {(permissionModeChip ||
+          planModeSwitch ||
+          shouldShowApiCredits ||
           (shouldShowClaudeQuota && quotaDeviceId) ||
           (shouldShowCodexQuota && quotaDeviceId) ||
           (shouldShowKimiCodeQuota && quotaDeviceId) ||
@@ -257,6 +275,8 @@ const HeteroControlBar = memo(() => {
             className={stylex.props(styles.rightGroup).className}
             gap={4}
           >
+            {permissionModeChip}
+            {planModeSwitch}
             {shouldShowApiCredits && <ChatInputCredits />}
             {shouldShowAntigravityQuota && quotaDeviceId && (
               <AntigravityQuotaMenu
@@ -374,7 +394,10 @@ const HeteroControlBar = memo(() => {
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {sdkRuntimeBadge}
-        <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+        {planModeSwitch}
+        {permissionModeChip ?? (
+          <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+        )}
       </Flexbox>
     </Flexbox>
   );

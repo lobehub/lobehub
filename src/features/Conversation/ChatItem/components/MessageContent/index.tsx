@@ -1,4 +1,6 @@
-import { createStaticStyles, cx, Flexbox, type ModalInstance } from '@lobehub/ui';
+import { Flexbox, type ModalInstance } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,30 +9,34 @@ import { usePrintMode } from '@/features/Conversation/components/PrintModeContex
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import { openEditorModal } from '@/features/EditorModal';
 import { usePermission } from '@/hooks/usePermission';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
+import { sx } from '@/styles/sx';
 
 import { type ChatItemProps } from '../../type';
 import { useEditConfirmation } from './useEditConfirmation';
 
 export const MSG_CONTENT_CLASSNAME = 'msg_content_flag';
 
-export const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    bubble: css`
-      padding-block: 8px;
-      padding-inline: 12px;
-      border-radius: ${cssVar.borderRadiusLG};
-      background-color: ${cssVar.colorFillTertiary};
-    `,
-    disabled: css`
-      user-select: ${'none'};
-      color: ${cssVar.colorTextSecondary};
-    `,
-    message: css`
-      position: relative;
-      overflow: hidden;
-      max-width: 100%;
-    `,
-  };
+const styles = stylex.create({
+  bubble: {
+    paddingBlock: '8px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillTertiary,
+  },
+  bubbleCompact: {
+    paddingBlock: '6px',
+  },
+  disabled: {
+    userSelect: 'none',
+    color: cssVar.colorTextSecondary,
+  },
+  message: {
+    position: 'relative',
+    overflow: 'hidden',
+    maxWidth: '100%',
+  },
 });
 
 export interface MessageContentProps {
@@ -59,6 +65,7 @@ const MessageContent = memo<MessageContentProps>(
   }) => {
     const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
     const printMode = usePrintMode();
+    const { compact } = useDensity();
 
     const editorData = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
@@ -108,13 +115,13 @@ const MessageContent = memo<MessageContentProps>(
 
     return (
       <Flexbox
-        gap={16}
-        className={cx(
-          MSG_CONTENT_CLASSNAME,
+        gap={compact ? 12 : 16}
+        {...sx(
           styles.message,
           variant === 'bubble' && styles.bubble,
+          variant === 'bubble' && compact && styles.bubbleCompact,
           disabled && styles.disabled,
-          className,
+          [MSG_CONTENT_CLASSNAME, className].filter(Boolean).join(' '),
         )}
         onDoubleClick={onDoubleClick}
       >

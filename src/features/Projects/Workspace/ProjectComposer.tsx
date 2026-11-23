@@ -64,6 +64,13 @@ const TRAY_OVERLAP = CONTAINER_RADIUS;
  */
 const COMPACT_TRAY_WIDTH = 500;
 
+/**
+ * Visible breathing room above and below the tray's controls. The tray also
+ * carries `TRAY_OVERLAP` at its block-end, but the composer card covers that
+ * band, so this is the padding that actually shows on both sides of the row.
+ */
+const TRAY_PADDING_BLOCK = 5;
+
 const styles = stylex.create({
   // The composer sits in front of the tray. The tray is inset by more than the
   // composer's corner radius on each side, so it only ever meets the
@@ -89,8 +96,8 @@ const styles = stylex.create({
   },
   tray: {
     gap: '8px',
-    paddingBlockStart: '8px',
-    paddingBlockEnd: `${TRAY_OVERLAP + 8}px`,
+    paddingBlockStart: `${TRAY_PADDING_BLOCK}px`,
+    paddingBlockEnd: `${TRAY_OVERLAP + TRAY_PADDING_BLOCK}px`,
     paddingInline: '10px',
     borderStartStartRadius: '20px',
     borderStartEndRadius: '20px',
@@ -157,7 +164,10 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     mode !== 'chat'
       ? {}
       : location.target === 'sandbox'
-        ? { environmentId: repositoryState.repository?.id }
+        ? {
+            environmentId: repositoryState.repository?.id,
+            withoutEnvironment: repositoryState.withoutEnvironment,
+          }
         : { directoryId: directoryState.directory?.id };
   const { send, sending } = useProjectComposer(project, mode, agentId, place);
 
@@ -239,7 +249,6 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
               disabled={sending}
               location={location}
               projectId={project.id}
-              publish={sharedAgent}
               showRepositories={mode === 'chat'}
               state={repositoryState}
             />

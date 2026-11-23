@@ -91,7 +91,6 @@
   "events.youInvited": "Вы пригласили {{names}} в канал",
   "events.youInvitedMembers": "Вы пригласили <members/> в канал",
   "failure.locate": "Показать сообщение",
-  "failure.messageLabel": "Ответ не удался: {{names}}",
   "failure.title": "Неудачные ответы · {{count}}",
   "followers": "Ответы от: {{names}}",
   "invite.directHint": "Приглашение здесь создаст новый канал с {{name}} и выбранными вами участниками. Эта беседа с {{name}} останется без изменений.",

@@ -45,7 +45,7 @@ describe('FileShareModel', () => {
       const result = await shareModel.create(fileId);
 
       expect(result).toMatchObject({ fileId, userId, visibility: 'private' });
-      expect(result!.id).toHaveLength(16);
+      expect(result!.id).toMatch(/^[\w-]{22}$/);
     });
 
     it('creates a link share', async () => {

@@ -237,7 +237,6 @@
   "rules.distill.truncated": "素材過長；僅閱讀了開頭部分。",
   "rules.distill.untitled": "未命名",
   "rules.distill.upload": "上傳文件",
-  "rules.distill.uploadFailed": "無法上傳文件。",
   "rules.distill.uploadHint": "Markdown、PDF、Word、PowerPoint 或純文本",
   "rules.enforcement.block": "封鎖",
   "rules.enforcement.blockDesc": "將暫停交付，直到您允許通過。尚未生效：目前僅作為提醒",

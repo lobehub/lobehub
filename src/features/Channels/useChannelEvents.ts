@@ -10,6 +10,32 @@ import {
 } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useServerConfigStore } from '@/store/serverConfig';
 
+/**
+ * One gateway event reaches every mounted subscriber (sidebar, main conversation, thread
+ * panel) in the same tick, and each used to refresh the list on its own: one notify cost three
+ * list reads plus the details. Requests made in the same tick are merged into one refresh per
+ * view; a reconnect refreshes the same way.
+ */
+let queuedList = false;
+const queuedDetails = new Map<string, ChannelViewParams>();
+export const queueChannelRefresh = (detail?: ChannelViewParams) => {
+  if (detail) {
+    const { before, channelId, threadId } = detail;
+    queuedDetails.set(JSON.stringify([channelId, threadId ?? null, before ?? null]), detail);
+  }
+  if (queuedList) return;
+  queuedList = true;
+  queueMicrotask(() => {
+    const details = [...queuedDetails.values()];
+    queuedList = false;
+    queuedDetails.clear();
+    void Promise.allSettled([
+      channelActions.refreshList(),
+      ...details.map((params) => channelActions.refreshDetail(params)),
+    ]);
+  });
+};
+
 /** Public invalidations share the authenticated user socket, never an Agent's private stream. */
 export const useChannelEvents = (params?: ChannelViewParams) => {
   const gatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
@@ -22,12 +48,8 @@ export const useChannelEvents = (params?: ChannelViewParams) => {
     const identity = { gatewayUrl };
     if (isGatewayMuxUnavailable(identity)) return;
     const mux = getGatewayMux(identity);
-    const refresh = () => {
-      void Promise.allSettled([
-        channelActions.refreshList(),
-        ...(channelId ? [channelActions.refreshDetail({ channelId, threadId, before })] : []),
-      ]);
-    };
+    const refresh = () =>
+      queueChannelRefresh(channelId ? { before, channelId, threadId } : undefined);
     const remove = [
       mux.on('channel_changed', (event) => {
         if (!channelId || event.channelId === channelId) refresh();

@@ -10,6 +10,8 @@ on:
       - canary
     paths:
       - packages/sdk/**
+      # The SDK is generated from the spec: a spec change ships an SDK change.
+      - packages/openapi/openapi.yml
   workflow_dispatch: {}
 
 concurrency:
@@ -52,11 +54,16 @@ jobs:
       - name: Build package
         run: pnpm --filter @lobehub/sdk build
 
+      # Semver: package.json `version` + its CHANGELOG.md section go to `latest`;
+      # a push whose version is already on npm ships `x.y.(z+1)-canary.<ts>`
+      # under the `canary` dist-tag. See packages/sdk/scripts/release-version.ts.
       - name: Prepare publish package
         id: version
         run: |
-          BASE_VERSION=$(node -p "require('./packages/sdk/package.json').version.split('.').slice(0, 2).join('.')")
-          SDK_VERSION="${BASE_VERSION}.$(date -u +%Y%m%d%H%M%S)"
+          PUBLISHED=$(npm view @lobehub/sdk versions --json 2>/dev/null || echo '[]')
+          RELEASE=$(bun packages/sdk/scripts/release-version.ts --published "$PUBLISHED")
+          SDK_VERSION=$(node -p "JSON.parse(process.argv[1]).version" "$RELEASE")
+          SDK_TAG=$(node -p "JSON.parse(process.argv[1]).tag" "$RELEASE")
           export SDK_VERSION
 
           node <<'NODE'
@@ -70,7 +77,7 @@ jobs:
           packageJson.type = 'module';
           packageJson.main = './dist/index.mjs';
           packageJson.types = './dist/index.d.mts';
-          packageJson.files = ['dist'];
+          packageJson.files = ['dist', 'CHANGELOG.md'];
           packageJson.repository = {
             type: 'git',
             url: 'https://github.com/lobehub/lobehub',
@@ -101,10 +108,11 @@ jobs:
           NODE
 
           echo "version=${SDK_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Prepared @lobehub/sdk@${SDK_VERSION}"
+          echo "tag=${SDK_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Prepared @lobehub/sdk@${SDK_VERSION} (dist-tag ${SDK_TAG})"
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "${{ steps.version.outputs.tag }}"
         working-directory: packages/sdk
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

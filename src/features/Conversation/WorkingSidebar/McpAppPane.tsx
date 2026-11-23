@@ -35,6 +35,7 @@ export const McpAppPane = ({ id, scope }: { id: string; scope: string }) => {
           if (!host) throw new Error('No writable conversation');
           await host.sendMessage(params);
         },
+        topicId: message.topicId ?? undefined,
       }}
       onThisDevice={!!mcpApp.deviceId}
     />

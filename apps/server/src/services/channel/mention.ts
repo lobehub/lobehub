@@ -1,7 +1,8 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, not } from 'drizzle-orm';
 
 import { notifyChannelMention } from '@/business/server/channel-mention/notifyActivity';
+import { notificationsMutedSql } from '@/database/repositories/channel/notificationMute';
 import { channelMembers, workspaceMembers } from '@/database/schemas';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
@@ -18,10 +19,11 @@ interface MentionedMessage {
  */
 export const notifyChannelMentions = (
   db: LobeChatDatabase,
-  context: { userId: string; workspaceId?: string },
+  /** `includeActor` notifies `userId` too: an Agent wrote the message on their behalf. */
+  context: { includeActor?: boolean; userId: string; workspaceId?: string },
   message: MentionedMessage,
 ) => {
-  const { userId, workspaceId } = context;
+  const { includeActor, userId, workspaceId } = context;
   if (!workspaceId || !message.mentions.length) return;
 
   after(async () => {
@@ -44,11 +46,13 @@ export const notifyChannelMentions = (
             inArray(channelMembers.id, message.mentions),
             eq(channelMembers.actorType, 'user'),
             eq(channelMembers.status, 'active'),
+            // Muting the Channel's notifications stops even an @mention's push.
+            not(notificationsMutedSql()),
           ),
         );
       const recipientUserIds = [
         ...new Set(members.flatMap((member) => (member.userId ? [member.userId] : []))),
-      ].filter((id) => id !== userId);
+      ].filter((id) => includeActor || id !== userId);
       if (!recipientUserIds.length) return;
 
       await notifyChannelMention({

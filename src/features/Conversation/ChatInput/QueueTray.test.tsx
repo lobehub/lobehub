@@ -53,7 +53,7 @@ describe('QueueTray', () => {
     render(<QueueTray />);
 
     expect(screen.getAllByText('inputQueue.deliveringHint').length).toBeGreaterThan(0);
-    expect(screen.queryByText('inputQueue.queuedHint')).toBeNull();
+    expect(screen.queryByText('inputQueue.steerHint')).toBeNull();
     for (const label of actionLabels) expect(screen.queryByLabelText(label)).toBeNull();
   });
 
@@ -63,7 +63,7 @@ describe('QueueTray', () => {
 
     setQueue([serverQueued()]);
 
-    expect(screen.getAllByText('inputQueue.queuedHint').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('inputQueue.steerHint').length).toBeGreaterThan(0);
     expect(screen.queryByText('inputQueue.deliveringHint')).toBeNull();
     for (const label of actionLabels) expect(screen.getByLabelText(label)).toBeTruthy();
   });
@@ -73,8 +73,8 @@ describe('QueueTray', () => {
     render(<QueueTray />);
 
     // One waiting row: it sends on its own, not merged with the delivering one.
-    expect(screen.getAllByText('inputQueue.queuedHint').length).toBeGreaterThan(0);
-    expect(screen.queryByText('inputQueue.queuedMergeHint')).toBeNull();
+    expect(screen.getAllByText('inputQueue.steerHint').length).toBeGreaterThan(0);
+    expect(screen.queryByText('inputQueue.steerMergeHint')).toBeNull();
     for (const label of actionLabels) expect(screen.getAllByLabelText(label)).toHaveLength(1);
   });
 });

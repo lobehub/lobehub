@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatPercent } from '@/features/DeviceManager/DeviceHealth/format';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { accountDisplayName, providerAvatar } from './AccountRow';
 import {
@@ -60,9 +61,9 @@ const styles = stylex.create({
   card: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-    paddingBlock: '16px',
-    paddingInline: '16px',
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     backgroundColor: cssVar.colorBgContainer,
     borderWidth: '1px',
     borderStyle: 'solid',

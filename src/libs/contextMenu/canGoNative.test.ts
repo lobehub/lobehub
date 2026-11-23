@@ -40,6 +40,18 @@ describe('canGoNative', () => {
     });
   });
 
+  it('accepts a plain-text extra without a desc (it becomes the sublabel)', () => {
+    const items = [
+      {
+        children: [{ key: 'a', label: 'Private' }],
+        extra: 'Private',
+        key: 'visibility',
+        label: 'Visibility',
+      },
+    ] as unknown as NativeContextMenuItem[];
+    expect(canGoNative(items)).toBe(true);
+  });
+
   describe('rejects', () => {
     it('a switch item', () => {
       expect(canGoNative([{ checked: true, key: '1', label: 'Auto save', type: 'switch' }])).toBe(
@@ -47,9 +59,16 @@ describe('canGoNative', () => {
       );
     });
 
-    it('an item with non-empty extra', () => {
+    it('an item with a non-text extra', () => {
       const items = [
-        { extra: '1', key: '1', label: 'Delete' },
+        { extra: { type: 'span' }, key: '1', label: 'Delete' },
+      ] as unknown as NativeContextMenuItem[];
+      expect(canGoNative(items)).toBe(false);
+    });
+
+    it('an item with both a text extra and a desc (only one fits the sublabel)', () => {
+      const items = [
+        { desc: 'Only you', extra: 'Private', key: '1', label: 'Visibility' },
       ] as unknown as NativeContextMenuItem[];
       expect(canGoNative(items)).toBe(false);
     });

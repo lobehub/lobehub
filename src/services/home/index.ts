@@ -15,7 +15,7 @@ export class HomeService {
    * Get sidebar agent list with pinned, grouped, and ungrouped items
    */
   getSidebarAgentList = (): Promise<SidebarAgentListResponse> => {
-    return lambdaClient.home.getSidebarAgentList.query();
+    return lambdaClient.home.getSidebarAgentList.query({ includeInbox: true });
   };
 
   /**
@@ -30,7 +30,7 @@ export class HomeService {
    * Search agents by keyword
    */
   searchAgents = (keyword: string): Promise<SidebarAgentItem[]> => {
-    return lambdaClient.home.searchAgents.query({ keyword });
+    return lambdaClient.home.searchAgents.query({ includeInbox: true, keyword });
   };
 
   /**

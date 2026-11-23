@@ -7,12 +7,12 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 import { isMacOS } from '@/utils/platform';
 
 import { useCloseMobileNavDrawer } from './MobileDrawerContext';
@@ -44,6 +44,7 @@ interface ToggleLeftPanelButtonProps {
 
 const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
   ({ title, showActive, icon, size, id = TOGGLE_BUTTON_ID, forceVisible }) => {
+    const headerActionSize = useHeaderActionSize(true);
     const [expand, togglePanel] = useGlobalStore((s) => [
       systemStatusSelectors.showLeftPanel(s),
       s.toggleLeftPanel,
@@ -61,7 +62,7 @@ const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
       return (
         <ActionIcon
           icon={PanelLeftClose}
-          size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={size || headerActionSize}
           title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
           onClick={closeMobileDrawer}
         />
@@ -72,7 +73,7 @@ const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
         active={showActive ? expand : undefined}
         icon={icon || (expand ? PanelLeftClose : PanelLeftOpen)}
         id={id ?? undefined}
-        size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={size || headerActionSize}
         title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
         tooltipProps={{
           hotkey,

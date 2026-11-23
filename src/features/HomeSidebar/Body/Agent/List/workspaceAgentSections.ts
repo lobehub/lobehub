@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { SidebarAgentItem, SidebarGroup } from '@lobechat/types';
 
 export interface WorkspaceSidebarMembership {
@@ -40,6 +41,12 @@ export interface WorkspaceAgentSections {
 
 const updatedAtMs = (item: SidebarAgentItem) => new Date(item.updatedAt).getTime() || 0;
 
+const isInbox = (item: Pick<SidebarAgentItem, 'slug'>) => item.slug === INBOX_SESSION_ID;
+
+/** Newest first, with Lobe AI (the inbox), the default Agent, leading. */
+const byInboxThenRecency = (a: SidebarAgentItem, b: SidebarAgentItem) =>
+  Number(isInbox(b)) - Number(isInbox(a)) || updatedAtMs(b) - updatedAtMs(a);
+
 /**
  * Whether a row outside the pinned sections belongs in the member's sidebar.
  *
@@ -50,15 +57,22 @@ const updatedAtMs = (item: SidebarAgentItem) => new Date(item.updatedAt).getTime
  * row menu or the Agents page (`sidebarAgentVisibilityOverrides`) always wins;
  * the release seeded such choices once for the shared rows each member was
  * using. The legacy hidden-id list is applied separately by the caller.
+ *
+ * Lobe AI (the inbox) is the workspace's one shared default Agent, created by
+ * whichever member opened it first, so it is listed for everyone by default.
  */
 export const isListedInWorkspaceSidebar = (
-  item: Pick<SidebarAgentItem, 'id' | 'userId' | 'visibility'>,
+  item: Pick<SidebarAgentItem, 'id' | 'slug' | 'userId' | 'visibility'>,
   { currentUserId, visibilityOverrides }: WorkspaceSidebarMembership,
 ): boolean => {
   const override = visibilityOverrides[item.id];
   if (override !== undefined) return override;
 
-  return item.visibility === 'private' || (!!currentUserId && item.userId === currentUserId);
+  return (
+    isInbox(item) ||
+    item.visibility === 'private' ||
+    (!!currentUserId && item.userId === currentUserId)
+  );
 };
 
 /**
@@ -73,8 +87,8 @@ export const isListedInWorkspaceSidebar = (
  * 3. Folders — only the member's private folders. Public folders are shared
  *    catalogue structure browsed on the Agents page.
  * 4. The rest — rows outside the private folders (including rows inside a
- *    public folder) that {@link isListedInWorkspaceSidebar} keeps, newest
- *    first.
+ *    public folder) that {@link isListedInWorkspaceSidebar} keeps, Lobe AI
+ *    first, then newest first.
  *
  * Every row appears at most once.
  */
@@ -127,7 +141,7 @@ export const resolveWorkspaceAgentSections = ({
   const membership = { currentUserId, visibilityOverrides };
   const rest = [...ungrouped, ...privateUngrouped, ...publicFolderItems]
     .filter((item) => notPinned(item) && isListedInWorkspaceSidebar(item, membership))
-    .sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
+    .sort(byInboxThenRecency);
 
   return { folders, myPinned, rest, teamPinned };
 };

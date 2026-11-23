@@ -24,6 +24,8 @@ export interface ContactAgentProfile {
   avatar: string | null;
   backgroundColor: string | null;
   description: string | null;
+  /** Personal name; the label is `agentDisplayName` of it and `title`. */
+  name: string | null;
   owner: ContactUserProfile;
   /** Share id; the visitor page and every run authorize against it. */
   shareId: string;
@@ -62,17 +64,22 @@ export interface ContactRequestItem {
   direction: 'incoming' | 'outgoing';
   id: string;
   message: string | null;
+  /** How the requester found the addressee; null for a search or a profile. */
+  source?: ContactRequestSourceItem | null;
   /** The other person. */
   user: ContactUserProfile;
   /** Set when a member invited the addressee to be an external contact of this workspace. */
   workspace?: ContactRequestWorkspace | null;
 }
 
-export interface ContactRequestWorkspace {
+/** A workspace as the address book names it: an invitation's origin, or one I am external to. */
+export interface ContactWorkspace {
   avatar: string | null;
   id: string;
   name: string;
 }
+
+export type ContactRequestWorkspace = ContactWorkspace;
 
 /**
  * Relation of a search result or profile to the current user, in the active scope. `member`:
@@ -87,3 +94,75 @@ export type ContactSearchResult =
 
 /** Owner-side extras of an address book entry; open for later management features. */
 export type ContactMetadata = Record<string, unknown>;
+
+/**
+ * A contact shared into a Channel as a card (`metadata.card` of the message). Only the reference
+ * is authoritative; the name and avatar are the server's snapshot at send time, so a card reads
+ * the same in previews and to Agents after the person or Agent changes. Clients look the person
+ * or the share up again before acting on it.
+ */
+export type ContactCard =
+  | {
+      avatar: string | null;
+      name: string | null;
+      type: 'user';
+      userId: string;
+      username: string | null;
+    }
+  | {
+      agentId: string;
+      avatar: string | null;
+      backgroundColor: string | null;
+      name: string | null;
+      /** Owner's display name, so the card can say whose Agent it is. */
+      ownerName: string | null;
+      /** The link share the recipient adds it through. */
+      shareId: string;
+      type: 'agent';
+    };
+
+export type ContactCardType = ContactCard['type'];
+
+/** What a sender picks to share: the server resolves and snapshots the rest. */
+export type ContactCardInput =
+  { type: 'user'; userId: string } | { agentId: string; type: 'agent' };
+
+/** Reads `metadata.card`, or undefined when a message carries none or a malformed one. */
+export const contactCardOf = (
+  metadata: Record<string, unknown> | null | undefined,
+): ContactCard | undefined => {
+  const card = metadata?.card as Partial<Record<string, unknown>> | undefined;
+  if (card?.type === 'user' && typeof card.userId === 'string') return card as ContactCard;
+  if (
+    card?.type === 'agent' &&
+    typeof card.agentId === 'string' &&
+    typeof card.shareId === 'string'
+  )
+    return card as ContactCard;
+  return undefined;
+};
+
+/**
+ * The stored text of a card message, for every reader that does not render the card: list
+ * previews, notifications, Agents and bots. Clients that render cards localize their own label.
+ */
+export const contactCardText = (card: ContactCard) =>
+  `[${card.type === 'agent' ? 'Agent card' : 'Contact card'}] ${card.name || (card.type === 'user' ? card.username : '') || ''}`.trim();
+
+/**
+ * Stored on a contact request sent from a person's card in a Channel: the card message and who
+ * shared it. Server-verified at send time, so it never names a referrer who did not share.
+ */
+export interface ContactRequestSource {
+  channelId: string;
+  messageId: string;
+  referrerId: string | null;
+  type: 'card';
+}
+
+/** A request's source as the client shows it: "From X's card". */
+export interface ContactRequestSourceItem {
+  /** Who shared the card; null once their account is gone. */
+  referrer: ContactUserProfile | null;
+  type: 'card';
+}

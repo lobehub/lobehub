@@ -19,6 +19,11 @@ const { findById, findInstanceById, getAgentVisibility, resolveSandboxStorageCla
 
 vi.mock('@/server/services/scm/cloneCredential', () => ({
   resolveScmCloneCredential: mocks.resolveScmCloneCredential,
+  // One repository: the single host-wide credential, as a list.
+  resolveScmCloneCredentials: async (params: unknown) => {
+    const credential = await mocks.resolveScmCloneCredential(params);
+    return credential ? [credential] : [];
+  },
 }));
 
 vi.mock('../entitlement', () => ({
@@ -710,6 +715,56 @@ describe('resolveSandboxSessionConfig', () => {
       getAgentVisibility.mockResolvedValue('public');
 
       await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        initialization: { environmentId: 'env-1' },
+      });
+    });
+
+    // T-14791: a folder and an environment can now be picked together, so a
+    // private environment could otherwise be checked out where every member
+    // of the workspace can browse it.
+    it("keeps a private environment out of a folder on the workspace's public drive", async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.driveFolderExists.mockResolvedValue(true);
+      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'private' });
+      findById.mockResolvedValue({
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'team' },
+      });
+
+      const config = await resolve({ workspaceId: 'ws-1' });
+
+      expect(config).toMatchObject({ cwd: 'team', drive: 'public', mode: 'drive' });
+      expect(config).not.toHaveProperty('initialization');
+    });
+
+    it("applies a private environment in a folder on the member's personal drive", async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.driveFolderExists.mockResolvedValue(true);
+      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'private' });
+      findById.mockResolvedValue({
+        metadata: {
+          sandboxDrive: 'personal',
+          sandboxEnvironmentId: 'env-1',
+          sandboxWorkingDirectory: 'mine',
+        },
+      });
+
+      await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        drive: 'personal',
+        initialization: { environmentId: 'env-1' },
+        mode: 'drive',
+      });
+    });
+
+    it('applies a published environment in a folder on the public drive', async () => {
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.driveFolderExists.mockResolvedValue(true);
+      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'public' });
+      findById.mockResolvedValue({
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'team' },
+      });
+
+      await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        drive: 'public',
         initialization: { environmentId: 'env-1' },
       });
     });

@@ -89,4 +89,42 @@ describe('buildHeteroExecStdinPayload', () => {
       },
     ]);
   });
+
+  it('carries the permission mode in the envelope older lh releases unwrap', () => {
+    const payload = JSON.parse(
+      buildHeteroExecStdinPayload({ permissionMode: 'plan', prompt: 'hello' }),
+    );
+    expect(payload).toEqual({
+      content: [{ text: 'hello', type: 'text' }],
+      permissionMode: 'plan',
+    });
+  });
+
+  it('keeps the resume fallback beside the permission mode', () => {
+    const payload = JSON.parse(
+      buildHeteroExecStdinPayload({
+        permissionMode: 'default',
+        prompt: 'hello',
+        resumeFallbackSystemContext: 'history',
+      }),
+    );
+    expect(payload.permissionMode).toBe('default');
+    expect(payload.resumeFallback).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: 'hello', type: 'text' })]),
+    );
+  });
+
+  it('carries the Codex Plan switch in the envelope older lh releases unwrap', () => {
+    const payload = JSON.parse(
+      buildHeteroExecStdinPayload({ collaborationMode: 'default', prompt: 'hello' }),
+    );
+    expect(payload).toEqual({
+      collaborationMode: 'default',
+      content: [{ text: 'hello', type: 'text' }],
+    });
+  });
+
+  it('keeps the historical plain shape without a Plan switch', () => {
+    expect(buildHeteroExecStdinPayload({ prompt: 'hello' })).toBe(JSON.stringify('hello'));
+  });
 });

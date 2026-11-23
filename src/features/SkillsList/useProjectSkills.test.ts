@@ -46,8 +46,6 @@ const wrapper = ({ children }: PropsWithChildren) =>
   );
 
 const skill = (name: string): ProjectSkillItem => ({
-  fileCount: 1,
-  files: ['SKILL.md'],
   name,
   path: `/repo/.agents/skills/${name}/SKILL.md`,
   previewRoot: '/repo',
@@ -82,7 +80,6 @@ describe('useProjectSkills after a reload', () => {
     const initialScan = scan('alpha', 'beta');
     initialScan.skills[0].disableModelInvocation = true;
     initialScan.skills[1].scope = 'device';
-    initialScan.skills[1].disableModelInvocation = false;
     listProjectSkills().mockResolvedValue(initialScan);
     const first = renderHook(() => useProjectSkills('/repo'), { wrapper });
     await waitFor(() =>
@@ -105,12 +102,9 @@ describe('useProjectSkills after a reload', () => {
       expect(reloaded.result.current.items.map((i) => i.name)).toEqual(['alpha', 'beta']),
     );
     expect(reloaded.result.current.isLoading).toBe(false);
-    expect(reloaded.result.current.projectItems).toMatchObject([
-      { disableModelInvocation: true, name: 'alpha' },
-    ]);
-    expect(reloaded.result.current.deviceItems).toMatchObject([
-      { disableModelInvocation: false, name: 'beta' },
-    ]);
+    expect(reloaded.result.current.projectItems).toMatchObject([{ name: 'alpha' }]);
+    expect(reloaded.result.current.projectItems[0]).not.toHaveProperty('disableModelInvocation');
+    expect(reloaded.result.current.deviceItems).toMatchObject([{ name: 'beta' }]);
 
     await act(async () => release(scan('alpha', 'beta', 'gamma')));
     await waitFor(() =>

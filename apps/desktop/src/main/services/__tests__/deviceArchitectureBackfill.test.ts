@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { backfillDeviceArchitecture } from '../deviceArchitectureBackfill';
+import {
+  backfillDeviceArchitecture,
+  resetDeviceArchitectureBackfill,
+  UNLISTED_DEVICE_RETRY_MS,
+} from '../deviceArchitectureBackfill';
 
 const options = {
   architecture: 'arm64',
@@ -16,7 +20,11 @@ const localDevice = {
   scope: 'personal',
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+  resetDeviceArchitectureBackfill();
+});
 
 describe('backfillDeviceArchitecture', () => {
   it('repairs a missing local architecture without overwriting metadata or settings', async () => {
@@ -70,5 +78,66 @@ describe('backfillDeviceArchitecture', () => {
     await expect(backfillDeviceArchitecture(options)).rejects.toThrow('HTTP 503');
     await expect(backfillDeviceArchitecture(options)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  // Regression: every device-info read (each window focus, each local run)
+  // downloaded the whole device list again, long after the backfill was done.
+  it('stops reading the device list once the architecture is known', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        Response.json({ result: { data: { json: [{ ...localDevice, architecture: 'arm64' }] } } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    for (let read = 0; read < 5; read++) await backfillDeviceArchitecture(options);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops reading the device list after a successful backfill', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ result: { data: { json: [localDevice] } } }))
+      .mockResolvedValueOnce(Response.json({ result: { data: { json: {} } } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await backfillDeviceArchitecture(options);
+    await backfillDeviceArchitecture(options);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares one read between concurrent calls', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        Response.json({ result: { data: { json: [{ ...localDevice, architecture: 'arm64' }] } } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await Promise.all([backfillDeviceArchitecture(options), backfillDeviceArchitecture(options)]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up a device the registry does not list yet again only after a while', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => Response.json({ result: { data: { json: [] } } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await backfillDeviceArchitecture(options);
+    await backfillDeviceArchitecture(options);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(UNLISTED_DEVICE_RETRY_MS);
+    await backfillDeviceArchitecture(options);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('checks again for another signed-in account on the same device', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        Response.json({ result: { data: { json: [{ ...localDevice, architecture: 'arm64' }] } } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await backfillDeviceArchitecture({ ...options, userId: 'user-a' });
+    await backfillDeviceArchitecture({ ...options, userId: 'user-b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,5 +1,5 @@
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
-import type { VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger, type VerifyCheckItem } from '@lobechat/types';
 
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
@@ -152,6 +152,8 @@ export const startEvidenceSubmission = async (params: {
     // instruction on every execution target.
     prompt: evidencePrompt,
     suppressUserMessage: true,
+    // This turn only submits acceptance evidence, so its spend belongs to verify.
+    trigger: RequestTrigger.Verify,
     userInterventionConfig: { approvalMode: 'headless' },
   });
 

@@ -1,18 +1,18 @@
-import { generateWorktreeBranchName, WORKTREE_BRANCH_PREFIX } from '@lobechat/const';
-import type { ConversationContext, WorkingDirConfig } from '@lobechat/types';
+import { generateWorktreeBranchName, isDesktop, WORKTREE_BRANCH_PREFIX } from '@lobechat/const';
+import type { ConversationContext, FirstSendWorktree, WorkingDirConfig } from '@lobechat/types';
 import { deriveWorktreePath } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 
 import { deviceService } from '@/services/device';
 import { gitService, isDeviceGitOutdated } from '@/services/git';
 import { issueWorktreeReceipt } from '@/services/ownedWorktree';
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { parseSingleAgentMentionDirectRoute } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { gitStatusKey } from '@/store/device/gitStatus/projection';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
 import { desktopStateSelectors } from '@/store/electron/selectors';
-import { getUserStoreState } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { findWorktreeForBranch, getPathName } from '../worktreeHelpers';
 import {
@@ -52,22 +52,23 @@ export type DraftGitSendResult =
        * on it: the composer may have changed hands in the meantime.
        */
       acted?: boolean;
+      firstSendWorktree?: FirstSendWorktree;
       newTopicWorkingDirectory?: WorkingDirConfig;
       ok: true;
+      onMessagePersisted?: () => void;
     };
 
 const PASS: DraftGitSendResult = { ok: true };
 const STOP: DraftGitSendResult = { ok: false };
 
 /**
- * The directory the send acts on, when it should act at all: the lab is on and
- * the send starts a new topic in an agent's composer that shows a git directory.
+ * The directory the send acts on, when it should act at all: the send starts a
+ * new topic in an agent's composer that shows a git directory.
  */
 export const resolveDraftGitTarget = (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
   editorData?: Record<string, any>,
 ): DraftGitTarget | undefined => {
-  if (!labPreferSelectors.enableBetterCodingExperience(getUserStoreState())) return;
   if (context.topicId || context.groupId || context.threadId || !context.agentId) return;
   // A message that starts with a single `@Agent` runs that agent, on its own
   // device and directory: the composer's directory is not where it runs.
@@ -117,51 +118,64 @@ const countRunningTopics = async ({ keyDeviceId, path }: DraftGitTarget): Promis
   }
 };
 
-const createWorktree = async (
+const snapshotWorktree = (
   target: DraftGitTarget,
-  base: string | undefined,
-  headBranch: string | undefined,
+  baseBranch: string | undefined,
+  { prompts, t }: { prompts: DraftGitSendPrompts; t: TFunction<'device'> },
+): DraftGitSendResult => {
+  const deviceId = target.deviceId ?? target.keyDeviceId;
+  if (!deviceId) {
+    prompts.notifyError({
+      description: t('workingDirectory.worktreeDeviceRequired'),
+      title: t('workingDirectory.worktreeCreateFailed'),
+    });
+    return STOP;
+  }
+  const key = draftBranchKey(target);
+  return {
+    firstSendWorktree: {
+      baseBranch,
+      deviceId,
+      path: target.path,
+      repoType: target.isGithub ? 'github' : 'git',
+      sourcePath: target.sourcePath,
+    },
+    ok: true,
+    onMessagePersisted: () => {
+      if (getDraftBranch(key) === baseBranch) setDraftBranch(key, undefined);
+    },
+  };
+};
+
+/** API-bound agents must run in this Desktop, even without a gateway registration. */
+const createLocalWorktree = async (
+  target: DraftGitTarget,
+  picked: string | undefined,
   { prompts, t }: { prompts: DraftGitSendPrompts; t: TFunction<'device'> },
 ): Promise<DraftGitSendResult> => {
+  const { path, sourcePath } = target;
+  const title = t('workingDirectory.worktreeCreateFailed');
   const fail = (description: string) => {
-    prompts.notifyError({ description, title: t('workingDirectory.worktreeCreateFailed') });
+    prompts.notifyError({ description, title });
     return STOP;
   };
-  // Forking from HEAD needs nothing new from the device; only a different
-  // start point does, so only then is it passed (and the device checked).
-  const startPoint = base && base !== headBranch ? base : undefined;
-  if (startPoint && !(await deviceHonoursBranch(target, startPoint)))
-    return fail(t('workingDirectory.deviceOutdated'));
-
-  const branch = generateWorktreeBranchName({ exclude: await listBranchNames(target) });
-  // The creation receipt, signed by the server for this user: the device
-  // writes it into the worktree, and only a cleanup presenting it — which the
-  // server does only for this user's topics — may later remove the folder.
-  const receipt = await issueWorktreeReceipt();
-  const ownerToken = receipt?.token;
-  const homeDir = target.deviceId
-    ? undefined
-    : desktopStateSelectors.userHomePath(getElectronStoreState()) || undefined;
   const dismiss = prompts.showProgress(t('workingDirectory.preparingWorktree'));
   try {
+    const [refs, receipt] = await Promise.all([listBranchNames(target), issueWorktreeReceipt()]);
+    const branch = generateWorktreeBranchName({ exclude: refs });
+    const homeDir = desktopStateSelectors.userHomePath(getElectronStoreState()) || undefined;
+    const ownerToken = receipt?.token;
     const result = await gitService.addGitWorktree({
       branch,
-      deviceId: target.deviceId,
       ownerToken,
-      path: target.path,
-      sourcePath: target.sourcePath,
-      startPoint,
-      stripBranchPrefix: true,
-      // Local only: a remote device's folder is derived by the server.
-      worktreePath: target.deviceId
-        ? ''
-        : deriveWorktreePath(target.sourcePath, branch, {
-            homeDir,
-            stripBranchPrefix: WORKTREE_BRANCH_PREFIX,
-          }),
+      path,
+      startPoint: picked,
+      worktreePath: deriveWorktreePath(sourcePath, branch, {
+        homeDir,
+        stripBranchPrefix: WORKTREE_BRANCH_PREFIX,
+      }),
     });
-    if (!result.success || !result.worktreePath)
-      return fail(describeGitFailure(result, t, t('workingDirectory.worktreeCreateFailed')));
+    if (!result.success || !result.worktreePath) return fail(describeGitFailure(result, t, title));
 
     return {
       acted: true,
@@ -170,20 +184,21 @@ const createWorktree = async (
           activeWorktree: result.worktreePath,
           autoCreated: true,
           autoCreatedAt: new Date().toISOString(),
-          // Only what the device confirms it recorded.
-          ...(ownerToken &&
-            result.ownerToken === ownerToken && { ownerNonce: receipt?.nonce, ownerToken }),
           branch,
           isWorktree: true,
-          // The send created this branch: the run end may look its PR up.
           ownBranch: branch,
+          ...(ownerToken &&
+            result.ownerToken === ownerToken && { ownerNonce: receipt?.nonce, ownerToken }),
         },
-        path: target.sourcePath,
+        path: sourcePath,
         repoType: target.isGithub ? 'github' : 'git',
         sessionPath: result.worktreePath,
       },
       ok: true,
     };
+  } catch (error) {
+    console.error('[prepareDraftGitSend] could not create Desktop worktree', error);
+    return fail(isDeviceGitOutdated(error) ? t('workingDirectory.deviceOutdated') : title);
   } finally {
     dismiss();
   }
@@ -246,20 +261,6 @@ const switchInPlace = async (
 };
 
 /**
- * The git half of a new topic's first send under Better Coding Experience,
- * run before the user message is saved. The picked branch is acted on now:
- *
- * - "New worktree" on: a new `lobehub/…` branch is cut from it into its own
- *   worktree, which becomes the new topic's directory; this directory is left
- *   alone, so there is nothing to warn about.
- * - Off: this directory switches to it — through a new branch when another
- *   worktree holds it — after warning about uncommitted changes and other
- *   topics running here.
- *
- * Any failure or cancellation returns `ok: false`: the caller does not send
- * and keeps the draft.
- */
-/**
  * What the send will act on, read from the composer at the moment the user
  * sends. A send that runs later (a voice turn, after upload and transcription)
  * takes this snapshot along: by then the composer may show another
@@ -312,7 +313,19 @@ export const prepareDraftGitSend = async (
   if (!snap) return PASS;
   const { picked, target, worktreeMode } = snap;
   const key = draftBranchKey(target);
-  if (!picked && !worktreeMode) return PASS;
+  if (worktreeMode) {
+    const provider =
+      isDesktop && !target.deviceId
+        ? agentSelectors.getAgentConfigById(target.agentId)(getAgentStoreState())?.agencyConfig
+            ?.heterogeneousProvider
+        : undefined;
+    if (provider?.authMode !== 'api') return snapshotWorktree(target, picked, { prompts, t });
+
+    const result = await createLocalWorktree(target, picked, { prompts, t });
+    if (result.ok && getDraftBranch(key) === picked) setDraftBranch(key, undefined);
+    return result;
+  }
+  if (!picked) return PASS;
 
   // Act on what the directory is on now, not on the bar's last read.
   const head = await gitService
@@ -320,11 +333,7 @@ export const prepareDraftGitSend = async (
     .catch(() => undefined);
   const headBranch = head?.detached ? undefined : head?.branch;
 
-  const result = worktreeMode
-    ? await createWorktree(target, picked ?? head?.branch, headBranch, { prompts, t })
-    : picked && picked !== headBranch
-      ? await switchInPlace(target, picked, { prompts, t })
-      : PASS;
+  const result = picked !== headBranch ? await switchInPlace(target, picked, { prompts, t }) : PASS;
 
   // Done with: the pick now describes the directory (or its new worktree).
   if (result.ok) setDraftBranch(key, undefined);

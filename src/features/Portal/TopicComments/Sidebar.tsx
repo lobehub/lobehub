@@ -3,10 +3,10 @@ import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+import { useHeaderActionSize } from '@/styles/density';
 
 import Body from './Body';
 import ThreadBody from './ThreadBody';
@@ -26,6 +26,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const TopicCommentsSidebar = memo(() => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation(['chat', 'common']);
   const view = useChatStore(chatPortalSelectors.currentView);
   const [goBack, openTopicComments] = useChatStore((s) => [s.goBack, s.openTopicComments]);
@@ -47,7 +48,7 @@ const TopicCommentsSidebar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.subheader} gap={4}>
         <ActionIcon
           icon={ArrowLeft}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={headerActionSize}
           title={t('back', { ns: 'common' })}
           onClick={isThread ? goBack : () => openTopicComments(view.topicId)}
         />

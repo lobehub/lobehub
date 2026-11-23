@@ -237,7 +237,6 @@
   "rules.distill.truncated": "المادة طويلة؛ تم قراءة بدايتها فقط.",
   "rules.distill.untitled": "بدون عنوان",
   "rules.distill.upload": "تحميل ملف",
-  "rules.distill.uploadFailed": "تعذر تحميل الملف.",
   "rules.distill.uploadHint": "Markdown، PDF، Word، PowerPoint أو نص عادي",
   "rules.enforcement.block": "حظر",
   "rules.enforcement.blockDesc": "سيوقف التسليم حتى تسمح بمروره. ليس قيد التنفيذ بعد: حاليًا ينبه فقط",

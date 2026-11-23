@@ -10,6 +10,7 @@ import ClarificationQuestions, {
   type ClarificationAnswer,
   type ClarificationQuestion,
 } from '@/features/ClarificationQuestions';
+import { densityVars } from '@/styles/densityVars';
 
 import type { ClarificationAnswers } from './taskIntent';
 
@@ -24,8 +25,8 @@ const styles = createStaticStyles(({ css }) => ({
        (The absolute cap is the leftover from the confirm step's instruction
         editor, which no longer exists — the questions never needed it.) */
     max-height: min(420px, 42dvh);
-    padding-block: 12px 16px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap} 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   footer: css`
     padding-block: 8px;
@@ -34,13 +35,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   goalCallout: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,
   head: css`
-    padding-block: 12px 0;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap} 0;
+    padding-inline: ${densityVars.cardPadding};
   `,
   // Reuses OptionCard's row rhythm so the recap reads as the same list the
   // user just answered, not as a different kind of object.
@@ -48,7 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 8px;
 
     transition: background 0.12s ease;
@@ -70,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
     border: none;
 
     font-family: inherit;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 600;
     line-height: 1.4;
     color: inherit;

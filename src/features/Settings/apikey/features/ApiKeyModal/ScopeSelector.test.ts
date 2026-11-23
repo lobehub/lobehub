@@ -33,4 +33,11 @@ describe('toggleScopeSelection', () => {
       'agent:read',
     ]);
   });
+
+  it('selects generation read together with generation write', () => {
+    expect(sorted(toggleScopeSelection([], 'generation:write', true))).toEqual([
+      'generation:read',
+      'generation:write',
+    ]);
+  });
 });

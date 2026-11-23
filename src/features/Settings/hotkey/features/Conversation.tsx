@@ -1,11 +1,11 @@
 'use client';
 
-import { HotkeyGroupEnum, KeyEnum } from '@lobechat/const/hotkeys';
-import { combineKeys, Flexbox, Hotkey, HotkeyInput, Select } from '@lobehub/ui';
+import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
+import { HotkeyInput } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { ConversationHotkeysSkeleton } from '@/components/Skeleton/Settings/tabs/Hotkey';
@@ -18,36 +18,10 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
 import { type UserHotkeyConfig } from '@/types/user/settings';
 
-import { type SendKey, useSendKeyPreference } from './useSendKeyPreference';
-
-const SendKeyLabel = memo<{ sendKey: SendKey }>(({ sendKey }) => (
-  <Flexbox horizontal align={'center'} as={'span'} gap={4}>
-    <Trans
-      i18nKey={sendKey === 'enter' ? 'input.sendWithEnter' : 'input.sendWithCmdEnter'}
-      ns={'chat'}
-      components={{
-        key: (
-          <Hotkey
-            as={'span'}
-            keys={sendKey === 'enter' ? KeyEnum.Enter : combineKeys([KeyEnum.Mod, KeyEnum.Enter])}
-            variant={'borderless'}
-          />
-        ),
-      }}
-    />
-  </Flexbox>
-));
-
-const SEND_KEY_OPTIONS = (['enter', 'modEnter'] as const).map((sendKey) => ({
-  label: <SendKeyLabel sendKey={sendKey} />,
-  value: sendKey,
-}));
-
 const HotkeySetting = memo(() => {
-  const { t } = useTranslation(['setting', 'hotkey', 'chat']);
+  const { t } = useTranslation(['setting', 'hotkey']);
   const { hotkey } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
-  const { sendKey, setSendKey } = useSendKeyPreference();
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const form = useForm({
     initialValues: hotkey,
@@ -89,33 +63,10 @@ const HotkeySetting = memo(() => {
     };
   };
 
-  // Stored in user preference rather than the hotkey map, so it is a controlled
-  // field outside the hotkey form values.
-  const sendKeyItem = {
-    children: (
-      <Select
-        aria-label={t('hotkey.sendMessage.title')}
-        options={SEND_KEY_OPTIONS}
-        style={{ minWidth: 160 }}
-        value={sendKey}
-        onChange={(value: SendKey) => save(() => setSendKey(value))}
-      />
-    ),
-    desc: t('hotkey.sendMessage.desc'),
-    label: (
-      <SettingsSearchAnchor id={'hotkey-send-message'}>
-        {t('hotkey.sendMessage.title')}
-      </SettingsSearchAnchor>
-    ),
-  };
-
   const conversation: FormGroupItem<UserHotkeyConfig> = {
-    children: [
-      sendKeyItem,
-      ...HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Conversation).map(
-        (item) => mapHotkeyItem(item),
-      ),
-    ],
+    children: HOTKEYS_REGISTRATION.filter(
+      (item) => item.group === HotkeyGroupEnum.Conversation,
+    ).map((item) => mapHotkeyItem(item)),
     extra:
       saveStatus === 'idle' ? undefined : (
         <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />

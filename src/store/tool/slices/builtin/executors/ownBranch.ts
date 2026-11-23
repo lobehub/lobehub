@@ -27,7 +27,7 @@ export const parseCreatedBranch = (content?: string): string | undefined => {
 
 /**
  * Record `branch` as the conversation's own when the command created it and
- * the topic is now on it (`git.ownBranch`, Better Coding Experience). The run
+ * the topic is now on it (`git.ownBranch`). The run
  * end only asks GitHub for the PR of that branch.
  */
 export const applyOwnBranchToConfig = (

@@ -1,27 +1,37 @@
-import { Accordion, createStaticStyles, ScrollArea } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { Accordion, createStaticStyles, cx, ScrollArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useState } from 'react';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
+import { useDensity } from '@/styles/density';
 import { type ChatCitationItem } from '@/types/index';
 
+import { STEP_TRIGGER_STYLES } from '../stepTriggerStyles';
 import Title from './Title';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  contentScroll: css`
-    max-height: min(40vh, 320px);
-    padding-block-end: 8px;
-    padding-inline: 8px;
-    color: ${cssVar.colorTextDescription};
+const styles = stylex.create({
+  contentScroll: {
+    maxHeight: 'min(40vh, 320px)',
+    paddingBlockEnd: '8px',
+    paddingInline: '8px',
+    color: cssVar.colorTextDescription,
+  },
+  scrollRoot: {
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  contentScroll: css`
     article * {
       color: ${cssVar.colorTextDescription};
     }
-  `,
-  scrollRoot: css`
-    border-radius: 0;
-    background: transparent;
   `,
 }));
 
@@ -37,6 +47,7 @@ interface ThinkingProps {
 const Thinking = memo<ThinkingProps>((props) => {
   const { content, duration, thinking, citations, thinkingAnimated } = props;
   const [showDetail, setShowDetail] = useState(false);
+  const { density } = useDensity();
 
   const { ref, handleScroll } = useAutoScroll<HTMLDivElement>({
     deps: [content, showDetail],
@@ -52,7 +63,7 @@ const Thinking = memo<ThinkingProps>((props) => {
     <Accordion
       gap={8}
       indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      styles={STEP_TRIGGER_STYLES[density]}
       value={showDetail ? ['thinking'] : []}
       items={[
         {
@@ -60,9 +71,9 @@ const Thinking = memo<ThinkingProps>((props) => {
             <ScrollArea
               disableContentFit
               scrollFade
-              className={styles.scrollRoot}
+              className={stylex.props(styles.scrollRoot).className}
               viewportProps={{
-                className: styles.contentScroll,
+                className: cx(stylex.props(styles.contentScroll).className, fallback.contentScroll),
                 ref: ref as RefObject<HTMLDivElement>,
                 onScroll: handleScroll,
               }}

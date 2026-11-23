@@ -1,15 +1,9 @@
 import { isDesktop, isHeterogeneousAgentModelId } from '@lobechat/const';
-import type {
-  ChatTopicMetadata,
-  DeviceGitUpstreamRef,
-  WorkingDirConfig,
-  WorkingDirGithubState,
-} from '@lobechat/types';
-import { dropStaleAutoCreated, getWorkingDirEffectivePath } from '@lobechat/types';
+import type { DeviceGitUpstreamRef, WorkingDirConfig } from '@lobechat/types';
+import { dropStaleAutoCreated } from '@lobechat/types';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { applyTopicDeviceBinding } from '@/helpers/executionTarget';
-import type { GitLinkedPRSummary } from '@/services/git';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getElectronStoreState } from '@/store/electron';
@@ -18,13 +12,6 @@ export interface TopicGitTransport {
   deviceId?: string;
   isLocalDevice: boolean;
   targetDeviceId?: string;
-}
-
-export interface TopicLinkedPullRequestBase {
-  branch: string;
-  currentConfig?: WorkingDirConfig;
-  path: string;
-  pullRequestNumber?: number;
 }
 
 export const canReadTopicGitTransport = (transport: Pick<TopicGitTransport, 'deviceId'>) =>
@@ -65,60 +52,19 @@ export const resolveTopicGitTransport = (
   };
 };
 
-export const getTopicLinkedPullRequestBase = (
-  metadata?: ChatTopicMetadata,
-): TopicLinkedPullRequestBase | undefined => {
-  const currentConfig = metadata?.workingDirectoryConfig;
-  const git = currentConfig?.git;
-  const branch = git?.branch;
-  const path = getWorkingDirEffectivePath(currentConfig) ?? metadata?.workingDirectory;
-  const repoType =
-    currentConfig?.repoType ??
-    (git?.github ? 'github' : undefined) ??
-    (isDesktop ? undefined : 'github');
-
-  if (!path || !branch || git?.detached || repoType !== 'github') return undefined;
-
-  return {
-    branch,
-    currentConfig,
-    path,
-    pullRequestNumber: git?.github?.pullRequest?.number,
-  };
-};
-
-export const isSuccessfulLinkedPullRequestLookup = (
-  prData?: GitLinkedPRSummary,
-): prData is GitLinkedPRSummary =>
-  !!prData && !prData.ghMissing && (prData.pullRequestStatus ?? 'ok') === 'ok';
-
-export const toWorkingDirGithubState = (
-  prData?: GitLinkedPRSummary,
-): WorkingDirGithubState | undefined => {
-  if (!prData) return undefined;
-
-  return {
-    ...(prData.extraCount === undefined ? {} : { extraPullRequestCount: prData.extraCount }),
-    pullRequest: prData.pullRequest ?? null,
-    pullRequestStatus: prData.pullRequestStatus ?? (prData.ghMissing ? 'gh-missing' : 'ok'),
-  };
-};
-
-export const mergeWorkingDirGithubState = ({
+/**
+ * Record the working directory's live branch (and its remote ref) on the
+ * topic's config. A PR snapshot recorded by an older client is kept while the
+ * branch stays, and dropped once it moves.
+ */
+export const mergeWorkingDirGitBranch = ({
   branch,
   currentConfig,
-  github,
   path,
   upstream,
 }: {
   branch: string;
   currentConfig?: WorkingDirConfig;
-  /**
-   * The linked-PR snapshot to record. Omitted under Better Coding Experience,
-   * which no longer guesses a PR from the branch: the one already recorded is
-   * kept while the branch stays, and dropped once it moves.
-   */
-  github?: WorkingDirGithubState;
   path: string;
   upstream?: DeviceGitUpstreamRef;
 }): WorkingDirConfig => {
@@ -129,8 +75,7 @@ export const mergeWorkingDirGithubState = ({
     branch,
     isWorktree,
   };
-  if (github) git.github = github;
-  else if (currentConfig?.git?.branch !== branch) delete git.github;
+  if (currentConfig?.git?.branch !== branch) delete git.github;
 
   delete git.detached;
   if (isWorktree) git.activeWorktree = path;

@@ -8,12 +8,15 @@ import { useChatInputStore } from '../store';
 /**
  * A small spinner at the head of the send area while the agent runs, so it sits
  * beside the model selector that qualifies the run. Stop itself stays static.
+ * Hosts that already show the run elsewhere turn it off with `hideRunningIndicator`.
  */
 const RunningIndicator = memo(() => {
   const { t } = useTranslation('chat');
-  const generating = useChatInputStore((s) => !!s.sendButtonProps?.generating);
+  const visible = useChatInputStore(
+    (s) => !!s.sendButtonProps?.generating && !s.sendButtonProps.hideRunningIndicator,
+  );
 
-  if (!generating) return null;
+  if (!visible) return null;
 
   return (
     <Tooltip title={t('input.running')}>

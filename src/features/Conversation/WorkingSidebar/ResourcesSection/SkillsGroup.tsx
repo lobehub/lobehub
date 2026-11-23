@@ -13,6 +13,8 @@ import {
   useProjectSkills,
 } from '@/features/SkillsList';
 
+import { useSelectSkill } from './useSelectSkill';
+
 // Filesystem skills are resolved by the underlying runtime registry, so
 // we serialize them as a literal `/skill-name` (projectSkill chip).
 const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
@@ -31,29 +33,23 @@ interface SkillsGroupProps {
 
 const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
+  const onSelectSkill = useSelectSkill('projectSkill');
   const [searchQuery, setSearchQuery] = useState('');
   // Local desktop reads over IPC; a bound device reads over RPC. Either path
   // makes the skills list reachable even when this client isn't the desktop.
   const enabled = (isDesktop || !!deviceId) && !!workingDirectory;
-  const {
-    deviceItems,
-    error,
-    getRowActions,
-    isLoading,
-    mutate,
-    onOpenFile,
-    onOpenSkill,
-    projectItems,
-  } = useProjectSkills(enabled ? workingDirectory : undefined, deviceId);
+  const { deviceItems, error, isLoading, mutate, projectItems } = useProjectSkills(
+    enabled ? workingDirectory : undefined,
+    deviceId,
+  );
 
   if (!enabled) return null;
 
   const renderList = (items: typeof projectItems) => (
     <SkillsList
-      getRowActions={getRowActions}
+      compact
       items={items}
-      onOpenFile={onOpenFile}
-      onOpenSkill={onOpenSkill}
+      onSelectSkill={onSelectSkill}
       onSkillDragStart={handleSkillDragStart}
     />
   );
@@ -71,10 +67,11 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
       <>
         <SkillsSearchBar onSearch={setSearchQuery} />
         {!hasMatchedProject && !hasMatchedDevice && (
-          <SkillSection isEmpty emptyText={t('workingPanel.skills.noSearchResults')} />
+          <SkillSection compact isEmpty emptyText={t('workingPanel.skills.noSearchResults')} />
         )}
         {hasMatchedProject && (
           <SkillSection
+            compact
             sectionHeader={{
               collapsible: false,
               count: matchedProjectItems.length,
@@ -86,6 +83,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
         )}
         {hasMatchedDevice && (
           <SkillSection
+            compact
             sectionHeader={{
               collapsible: false,
               count: matchedDeviceItems.length,
@@ -101,6 +99,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
 
   return (
     <SkillSection
+      compact
       isEmpty
       emptyText={t('workingPanel.skills.empty')}
       error={error}

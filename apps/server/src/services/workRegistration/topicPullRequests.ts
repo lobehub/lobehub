@@ -1,4 +1,5 @@
 import type {
+  ScmChangeRequestMetadata,
   ScmChangeRequestSnapshot,
   ScmCiStatus,
   ScmReviewDecision,
@@ -14,11 +15,9 @@ import { ScmChangeRequestModel } from '@/database/models/scm';
 import type { TopicModel } from '@/database/models/topic';
 import { parseGitPushResult, type WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
+import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 
-import {
-  createShellPullRequestLinking,
-  isBetterCodingExperienceEnabled,
-} from './pullRequestLinking';
+import { createShellPullRequestLinking } from './pullRequestLinking';
 import { readShellCommandRecord } from './shellWorkRegistration';
 import { parsePullRequestUrl } from './topicPullRequestLinks';
 
@@ -33,11 +32,28 @@ type ScmChangeRequestState = Pick<
   'isDraft' | 'mergedAt' | 'number' | 'repoFullName' | 'state' | 'title'
 > & {
   ciStatus?: ScmCiStatus | null;
+  id: string;
+  metadata?: ScmChangeRequestMetadata | null;
   reviewDecision?: ScmReviewDecision | null;
+  topicId?: string | null;
   updatedAt: Date;
+  wakeCount: number;
 };
 
-const toScmState = (row: ScmChangeRequestState): TopicPullRequestScmState => ({
+type OwnerTopic = TopicPullRequestScmState['autoFix']['ownerTopic'];
+
+const toScmState = (
+  row: ScmChangeRequestState,
+  ownerTopic: OwnerTopic,
+): TopicPullRequestScmState => ({
+  autoFix: {
+    changeRequestId: row.id,
+    enabled: row.metadata?.autoFix !== false,
+    maxWakes: SCM_MAX_WAKES,
+    ownerTopic,
+    ownerTopicId: row.topicId ?? null,
+    wakeCount: row.wakeCount,
+  },
   ciStatus: row.ciStatus ?? null,
   isDraft: row.isDraft ?? false,
   mergedAt: row.mergedAt ?? null,
@@ -64,56 +80,118 @@ const toLinkItem = (link: TopicPullRequestLinkMeta): TopicPullRequestWork | null
   };
 };
 
-/**
- * Pull requests linked to a topic — its `github_pull_request` Work rows plus
- * the links kept on the topic (branch match, by hand), minus the ones removed
- * from it — latest link first, each with the GitHub App's state when an
- * installation the scope can see tracks the repository. `scm: null` means "not
- * confirmed here": the client then asks the execution device, and only
- * confirmed, vouched data may enable merge / close.
- */
-export const listTopicPullRequestsWithStatus = async (params: {
+type TopicPullRequestsParams = {
   db: LobeChatDatabase;
-  topicId: string;
   topicModel: TopicModel;
   userId: string;
   workModel: WorkModel;
   workspaceId?: string | null;
-}): Promise<TopicPullRequestItem[]> => {
-  const [works, topic] = await Promise.all([
-    params.workModel.listTopicPullRequests(params.topicId),
-    params.topicModel.findById(params.topicId),
-  ]);
-  const meta = topic?.metadata?.pullRequests;
-  const dismissed = new Set((meta?.dismissed ?? []).map((id) => id.toLowerCase()));
-  const fromWorks = new Set(works.map((item) => item.identifier.toLowerCase()));
+};
 
-  const items = [
-    // Work rows were parsed by the server from the run's own tool messages.
-    ...works.map((item) => ({ item, vouched: true })),
-    ...(meta?.links ?? []).flatMap((link) => {
-      const item = toLinkItem(link);
-      return item && !fromWorks.has(item.identifier.toLowerCase())
-        ? [{ item, vouched: link.vouched }]
-        : [];
-    }),
-  ]
-    .filter(({ item }) => !dismissed.has(item.identifier.toLowerCase()))
-    .sort((a, b) => b.item.linkedAt.getTime() - a.item.linkedAt.getTime());
-  if (items.length === 0) return [];
+/**
+ * Pull requests linked to each topic — its `github_pull_request` Work rows plus
+ * the links kept on the topic (branch match, by hand), minus the ones removed
+ * from it — latest link first, each with the GitHub App's state when an
+ * installation the scope can see tracks the repository. `scm: null` means "not
+ * confirmed here": the client then asks the execution device, and only
+ * confirmed, vouched data may enable merge / close. A tracked PR also carries
+ * its Auto-fix state and the conversation that Auto-fix wakes — named when it
+ * is another conversation the viewer can open.
+ *
+ * Only topics the viewer can see are read; the others, and topics without a
+ * pull request, are absent from the map. One read for every topic, so a bulk
+ * action over a topic list costs the same few queries as one topic.
+ */
+export const listTopicsPullRequestsWithStatus = async (
+  params: TopicPullRequestsParams & { topicIds: string[] },
+): Promise<Map<string, TopicPullRequestItem[]>> => {
+  const result = new Map<string, TopicPullRequestItem[]>();
+  const topicIds = [...new Set(params.topicIds)];
+  if (topicIds.length === 0) return result;
 
+  const visibleTopics = await params.topicModel.findByIds(topicIds);
+  const visibleIds = visibleTopics.map((topic) => topic.id);
+  if (visibleIds.length === 0) return result;
+  const worksByTopic = await params.workModel.listTopicsPullRequests(visibleIds);
+
+  const itemsByTopic = new Map<string, { item: TopicPullRequestWork; vouched: boolean }[]>();
+  for (const topic of visibleTopics) {
+    const works = worksByTopic.get(topic.id) ?? [];
+    const meta = topic.metadata?.pullRequests;
+    const dismissed = new Set((meta?.dismissed ?? []).map((id) => id.toLowerCase()));
+    const fromWorks = new Set(works.map((item) => item.identifier.toLowerCase()));
+
+    const items = [
+      // Work rows were parsed by the server from the run's own tool messages.
+      ...works.map((item) => ({ item, vouched: true })),
+      ...(meta?.links ?? []).flatMap((link) => {
+        const item = toLinkItem(link);
+        return item && !fromWorks.has(item.identifier.toLowerCase())
+          ? [{ item, vouched: link.vouched }]
+          : [];
+      }),
+    ]
+      .filter(({ item }) => !dismissed.has(item.identifier.toLowerCase()))
+      .sort((a, b) => b.item.linkedAt.getTime() - a.item.linkedAt.getTime());
+    if (items.length > 0) itemsByTopic.set(topic.id, items);
+  }
+  if (itemsByTopic.size === 0) return result;
+
+  const identities = new Map<string, { number: number; repoFullName: string }>();
+  for (const items of itemsByTopic.values()) {
+    for (const { item } of items) {
+      identities.set(identityKey(item.repoFullName, item.number), {
+        number: item.number,
+        repoFullName: item.repoFullName,
+      });
+    }
+  }
   const rows = await ScmChangeRequestModel.listByIdentities(
     params.db,
     { userId: params.userId, workspaceId: params.workspaceId ?? null },
-    items.map(({ item }) => ({ number: item.number, repoFullName: item.repoFullName })),
+    [...identities.values()],
   );
   const byIdentity = new Map(rows.map((row) => [identityKey(row.repoFullName, row.number), row]));
 
-  return items.map(({ item, vouched }) => {
-    const row = byIdentity.get(identityKey(item.repoFullName, item.number));
-    return { ...item, scm: row ? toScmState(row) : null, vouched };
-  });
+  // Scoped to the viewer: a conversation they cannot open stays unnamed.
+  const ownerTopicIds = [...new Set(rows.flatMap((row) => (row.topicId ? [row.topicId] : [])))];
+  const known = new Map(visibleTopics.map((topic) => [topic.id, topic]));
+  const unknownOwnerIds = ownerTopicIds.filter((id) => !known.has(id));
+  const ownerTopics = new Map(
+    [
+      ...ownerTopicIds.flatMap((id) => {
+        const topic = known.get(id);
+        return topic ? [topic] : [];
+      }),
+      ...(unknownOwnerIds.length > 0 ? await params.topicModel.findByIds(unknownOwnerIds) : []),
+    ].map((topic) => [
+      topic.id,
+      { agentId: topic.agentId ?? null, id: topic.id, title: topic.title ?? null },
+    ]),
+  );
+
+  for (const [topicId, items] of itemsByTopic) {
+    result.set(
+      topicId,
+      items.map(({ item, vouched }) => {
+        const row = byIdentity.get(identityKey(item.repoFullName, item.number));
+        // The conversation the viewer is in needs no name.
+        const ownerTopic =
+          row?.topicId && row.topicId !== topicId ? (ownerTopics.get(row.topicId) ?? null) : null;
+        return { ...item, scm: row ? toScmState(row, ownerTopic) : null, vouched };
+      }),
+    );
+  }
+  return result;
 };
+
+/** {@link listTopicsPullRequestsWithStatus} for one topic. */
+export const listTopicPullRequestsWithStatus = async (
+  params: TopicPullRequestsParams & { topicId: string },
+): Promise<TopicPullRequestItem[]> =>
+  (await listTopicsPullRequestsWithStatus({ ...params, topicIds: [params.topicId] })).get(
+    params.topicId,
+  ) ?? [];
 
 /** One pull request the execution device found for a pushed branch (`gh pr list --head`). */
 export interface DeviceReportedPullRequest {
@@ -136,8 +214,7 @@ export type LinkPushedPullRequestsResult =
 const PULL_URL_RE = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)\/?$/i;
 
 /**
- * Link the pull requests a `git push` updated, right after the push (Better
- * Coding Experience). The server re-reads the push from the persisted tool
+ * Link the pull requests a `git push` updated, right after the push. The server re-reads the push from the persisted tool
  * message — the client only names which call it was — and takes the
  * repository and branches from git's own report. Which pull request heads the
  * branch comes from, in order:
@@ -158,10 +235,6 @@ export const linkPushedPullRequests = async (params: {
   workModel: WorkModel;
   workspaceId?: string | null;
 }): Promise<LinkPushedPullRequestsResult> => {
-  if (!(await isBetterCodingExperienceEnabled(params.db, params.userId))) {
-    return { status: 'skipped' };
-  }
-
   const messageId = await params.messageModel.findToolMessageIdByToolCallId(params.toolCallId);
   if (!messageId) return { status: 'pending' };
   const [record] = await params.messageModel.listMessagePluginsByIds({

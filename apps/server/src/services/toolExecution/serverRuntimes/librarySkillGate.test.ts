@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createLibrarySkillGate, resolveAgentSkillGates } from './librarySkillGate';
 
-const mocks = vi.hoisted(() => ({ getAgentConfigById: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getAgentConfigById: vi.fn(), getUserSettings: vi.fn() }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
     return { getAgentConfigById: mocks.getAgentConfigById };
+  }),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return { getUserSettings: mocks.getUserSettings };
   }),
 }));
 
@@ -43,6 +49,7 @@ describe('resolveAgentSkillGates', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getUserSettings.mockResolvedValue({});
     mocks.getAgentConfigById.mockResolvedValue({
       plugins: [
         { identifier: 'off', mode: 'disabled' },
@@ -75,6 +82,20 @@ describe('resolveAgentSkillGates', () => {
     });
 
     expect(isLibrarySkillEnabled).toBeUndefined();
+  });
+
+  it('honors the workspace uninstall until the running agent explicitly opts in again', async () => {
+    const id = 'lobe-artifacts';
+    mocks.getUserSettings.mockResolvedValue({
+      tool: { uninstalledBuiltinToolsByWorkspace: { ws: [id] } },
+    });
+    mocks.getAgentConfigById.mockResolvedValue({ plugins: [id], workspaceId: 'ws' });
+    expect((await resolveAgentSkillGates(context)).disabledSkillIds.has(id)).toBe(true);
+    mocks.getAgentConfigById.mockResolvedValue({
+      plugins: [{ builtinOverride: true, identifier: id, mode: 'auto' }],
+      workspaceId: 'ws',
+    });
+    expect((await resolveAgentSkillGates(context)).disabledSkillIds.has(id)).toBe(false);
   });
 
   it('applies no gate when the run has no agent', async () => {

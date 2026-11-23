@@ -17,7 +17,9 @@ export const resolveNavPanelKey = (
       return grandchildSegment === 'docs' ? 'agent-docs' : 'agent';
     }
 
-    case 'community': {
+    // `community` is the pre-rename URL; it only redirects to `marketplace`.
+    case 'community':
+    case 'marketplace': {
       return 'discover';
     }
 
