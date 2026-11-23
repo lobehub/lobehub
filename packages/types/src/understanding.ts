@@ -235,7 +235,12 @@ export type OnboardingGenerationProgressPhase =
   | 'recommending-tasks'
   | 'completed'
   | 'partial'
-  | 'failed';
+  | 'failed'
+  // The stream stopped waiting. The session is not terminal: keep reading persisted state.
+  | 'stalled';
+
+/** Why a progress stream ended before the session reached a terminal state. */
+export type OnboardingGenerationProgressStalledReason = 'no-progress' | 'stream-budget';
 
 /** Progress state for one durable onboarding generation step. */
 export type OnboardingGenerationProgressStepStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -251,6 +256,8 @@ export interface OnboardingGenerationProgressEvent {
   phase: OnboardingGenerationProgressPhase;
   /** Current session that owns the persisted Understanding state. */
   sessionId: string;
+  /** Set only on the `stalled` phase. */
+  stalledReason?: OnboardingGenerationProgressStalledReason;
   /** Per-step states; phases may overlap while independent durable work is running. */
   steps: {
     collectSources: OnboardingGenerationProgressStepStatus;
