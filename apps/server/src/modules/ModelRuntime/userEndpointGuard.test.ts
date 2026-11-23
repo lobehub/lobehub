@@ -2,7 +2,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { SSRFBlockedError } from '@lobechat/ssrf-safe-fetch';
+import { SSRFBlockedError, validateSsrfAddress } from '@lobechat/ssrf-safe-fetch';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -102,13 +102,17 @@ describe('resolveUserEndpointSsrfPolicy', () => {
     ]);
   });
 
-  it('denies link-local and NAT64 even when self-hosted deployments allow private addresses', () => {
-    expect(resolveUserEndpointSsrfPolicy().denyIPAddressList).toEqual([
-      '169.254.0.0/16',
-      'fe80::/10',
-      '64:ff9b::/96',
-      '64:ff9b:1::/48',
-    ]);
+  it.each(['169.254.169.254', 'fe80::1', '64:ff9b::a9fe:a9fe', '::ffff:a9fe:a9fe'])(
+    'denies %s under the self-host policy even though private addresses are allowed',
+    (address) => {
+      expect(validateSsrfAddress(address, resolveUserEndpointSsrfPolicy())).toBeInstanceOf(
+        SSRFBlockedError,
+      );
+    },
+  );
+
+  it('still allows a plain private address under the self-host policy', () => {
+    expect(validateSsrfAddress('10.0.0.1', resolveUserEndpointSsrfPolicy())).toBeUndefined();
   });
 });
 

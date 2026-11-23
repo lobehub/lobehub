@@ -246,12 +246,14 @@ describe('createSsrfSafeFetch', () => {
     expect(res).toBeInstanceOf(Response);
 
     const reader = res.body!.getReader();
-    const startedAt = Date.now();
     const first = await reader.read();
 
-    // The first SSE event arrives before the server finishes (it waits 300ms)
-    expect(Date.now() - startedAt).toBeLessThan(250);
-    expect(new TextDecoder().decode(first.value)).toContain('data: first');
+    // The server sends the first SSE event immediately and the second only
+    // after a delay, so a body buffered to completion would deliver both
+    // events in the first chunk.
+    const firstEvent = new TextDecoder().decode(first.value);
+    expect(firstEvent).toContain('data: first');
+    expect(firstEvent).not.toContain('data: second');
 
     let rest = '';
     for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
