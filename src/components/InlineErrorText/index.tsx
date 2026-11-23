@@ -49,6 +49,17 @@ const styles = stylex.create({
   },
 });
 
+/** Expanded raw cause; scrolls itself into view so a footer cannot cover it. */
+const ErrorDetail = ({ children }: { children: ReactNode }) => {
+  const ref = useRevealOnMount<HTMLPreElement>();
+
+  return (
+    <pre ref={ref} {...stylex.props(styles.detail)}>
+      {children}
+    </pre>
+  );
+};
+
 interface InlineErrorTextProps {
   children: ReactNode;
   /**
@@ -88,7 +99,7 @@ const InlineErrorText = memo<InlineErrorTextProps>(({ children, detail, style })
           </Button>
         )}
       </div>
-      {open && detail && <pre {...stylex.props(styles.detail)}>{detail}</pre>}
+      {open && detail && <ErrorDetail>{detail}</ErrorDetail>}
     </div>
   );
 });

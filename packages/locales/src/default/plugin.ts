@@ -1125,6 +1125,8 @@ export default {
   'dev.saveError': 'Install failed, please try again',
   'dev.saveFailedRetry': "Couldn't save the connector. Check your network and try again.",
   'dev.saveSuccess': 'Settings saved',
+  'dev.ssrfBlockedRetry':
+    "This server address isn't allowed. Use a public address, or open details to see how to allow it.",
   'dev.tabs.manifest': 'Manifest',
   'dev.tabs.meta': 'Meta info',
   'dev.title.connectorSettings': 'Connector settings',

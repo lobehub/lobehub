@@ -1058,6 +1058,7 @@
   "dev.saveError": "安装失败，请重试",
   "dev.saveFailedRetry": "无法保存连接器，请检查网络后重试。",
   "dev.saveSuccess": "技能设置保存成功",
+  "dev.ssrfBlockedRetry": "该服务器地址不被允许，请改用公网地址，或展开详情查看放行方法。",
   "dev.tabs.manifest": "功能描述清单 (Manifest)",
   "dev.tabs.meta": "技能元信息",
   "dev.title.connectorSettings": "连接器设置",
