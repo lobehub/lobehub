@@ -291,7 +291,7 @@ export default {
   'fork.forksCount_other': '{{count}} forks',
 
   'fork.orgSetupRequired.memberContent':
-    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Marketplace → Workspace.",
+    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Plugins → Workspace.",
   'fork.orgSetupRequired.ownerContent':
     'This workspace has not yet set up a Community profile. Set one up to fork agents from the marketplace into your workspace.',
   'fork.orgSetupRequired.ownerOk': 'Go to setup',

@@ -373,6 +373,7 @@ export default {
   'tab.contexts': 'Contexts',
   'tab.home': 'Home',
   'tab.identities': 'Identities',
+  'tab.overview': 'Overview',
   'tab.preferences': 'Preferences',
   'tab.rules': 'Self-evolving',
   'tab.search': 'Search',

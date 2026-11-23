@@ -46,7 +46,7 @@ import {
   legacySettingsMarketplaceRedirects,
   marketplaceRoute,
 } from '@/spa/router/marketplaceRoutes';
-import { memoryChildren } from '@/spa/router/memoryRoutes';
+import { legacyMemoryRedirects, settingsMemoryChildren } from '@/spa/router/memoryRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
@@ -198,14 +198,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   resourceRoute,
 
-  // Memory routes
+  // Memory moved under Settings; these forward its old URLs.
   {
-    children: memoryChildren,
-    element: dynamicLayout(
-      () => import('@/routes/(main)/memory/_layout'),
-      'Desktop > Memory > Layout',
-      { preloadId: 'memory' },
-    ),
+    children: legacyMemoryRedirects,
     errorElement: <ErrorBoundary />,
     handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
     path: 'memory',
@@ -383,11 +378,26 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         path: 'provider',
       },
       {
-        element: dynamicElement(
-          () => import('@/routes/(main)/settings'),
-          'Desktop > Settings > Memory',
-        ),
-        handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/settings'),
+              'Desktop > Settings > Memory',
+            ),
+            handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
+            index: true,
+          },
+          // The memory pages draw their own header, so they skip the settings frame.
+          {
+            children: settingsMemoryChildren,
+            element: dynamicLayout(
+              () => import('@/routes/(main)/settings/memory/_layout'),
+              'Desktop > Settings > Memory > Layout',
+              { preloadId: 'memory' },
+            ),
+            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+          },
+        ],
         path: 'memory',
       },
       // The personal vault is a tab of the Environments & Vault page; old
