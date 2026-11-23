@@ -501,6 +501,18 @@ describe('MessageModel.getInterventionSnapshot', () => {
     await seedAssistantMessage('snap-new-row');
     expect((await snapshot(['snap-card'])).revision).not.toBe(edited);
   });
+
+  it('reports a bare revision for no cards and a topic that holds no message', async () => {
+    const { revision, statuses } = await messageModel.getInterventionSnapshot({
+      ids: [],
+      topicId: 'plugin-topic-without-messages',
+    });
+
+    expect(statuses).toEqual({});
+    // `max(updatedAt)` is NULL for a topic with no message; the probe must not
+    // leak `null` into the revision string.
+    expect(revision).toBe('0||');
+  });
 });
 
 describe('MessageModel.findToolMessageIdByToolCallId', () => {

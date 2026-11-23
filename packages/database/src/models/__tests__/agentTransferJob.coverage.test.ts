@@ -54,6 +54,43 @@ describe('AgentTransferJobModel coverage edges', () => {
       expect(executor.execute).not.toHaveBeenCalled();
     });
 
+    it('rewriteResidualMessageScope ORs several linkage arms into one residual', async () => {
+      await serverDB.insert(users).values({ id: 'atjcov-or-target' });
+      await serverDB.insert(sessions).values({ id: 'atjcov-or-s', slug: 'atjcov-or-s', userId });
+      await serverDB.insert(agents).values({ id: 'atjcov-or-agent', userId });
+      await serverDB.insert(messages).values([
+        { id: 'atjcov-or-by-session', role: 'user', sessionId: 'atjcov-or-s', userId },
+        { id: 'atjcov-or-by-agent', role: 'user', agentId: 'atjcov-or-agent', userId },
+        { id: 'atjcov-or-untouched', role: 'user', userId },
+      ]);
+
+      await rewriteResidualMessageScope(
+        serverDB,
+        { agentIds: ['atjcov-or-agent'], sessionIds: ['atjcov-or-s'] },
+        { userId: 'atjcov-or-target', workspaceId: null },
+      );
+
+      const rows = await serverDB
+        .select({ id: messages.id, userId: messages.userId })
+        .from(messages)
+        .where(
+          inArray(messages.id, [
+            'atjcov-or-by-session',
+            'atjcov-or-by-agent',
+            'atjcov-or-untouched',
+          ]),
+        );
+      const byId = Object.fromEntries(rows.map((row) => [row.id, row.userId]));
+
+      expect(byId).toEqual({
+        'atjcov-or-by-agent': 'atjcov-or-target',
+        'atjcov-or-by-session': 'atjcov-or-target',
+        'atjcov-or-untouched': userId,
+      });
+
+      await serverDB.delete(users).where(eq(users.id, 'atjcov-or-target'));
+    });
+
     it('rewriteResidualMessageScope still moves the session residual of an already queued job', async () => {
       await serverDB.insert(users).values({ id: 'atjcov-target' });
       await serverDB.insert(sessions).values({ id: 'atjcov-s', slug: 'atjcov-s', userId });
