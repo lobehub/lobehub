@@ -175,6 +175,7 @@ describe('plan decision', () => {
     const sendMessage = vi.fn(async ({ message }: { message: string }) => {
       order.push(`send:${message}`);
     });
+    // A draft the user typed meanwhile is not what this sends: keep it.
 
     await executeCodexPlan({
       message: 'Execute the plan above.',
@@ -188,6 +189,10 @@ describe('plan decision', () => {
       'update:{"codexPlanDecision":{"dismissed":true,"itemId":"p1"},"heteroPlanMode":false}',
       'send:Execute the plan above.',
     ]);
+    expect(sendMessage).toHaveBeenCalledWith({
+      message: 'Execute the plan above.',
+      preserveComposer: true,
+    });
   });
 
   it('keeps discussing by only putting the buttons away', async () => {

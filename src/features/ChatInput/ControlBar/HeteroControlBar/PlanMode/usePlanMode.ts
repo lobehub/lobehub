@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { getCodexAppServerUnsupportedArgs } from '@lobechat/heterogeneous-agents/codexAppServerArgs';
 import { CODEX_COLLABORATION_MODE_RUNTIME, getWorktreeModeKey } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { useCallback, useEffect, useState } from 'react';
@@ -42,24 +43,29 @@ const selectPlanModeDirs =
 
 /**
  * Whether the Plan switch can reach Codex where this agent runs: the native
- * app-server, which needs its lab, and — on a connected device — an `lh` that
- * takes the switch (`codex-collaboration-mode-v1`). The cloud sandbox and API
- * auth run `codex exec`, which has no collaboration mode.
+ * app-server, which needs its lab and arguments it can honor, and — on a
+ * connected device — an `lh` that takes the switch (`codex-collaboration-mode-v1`).
+ * The cloud sandbox, API auth and such arguments run `codex exec`, which has no
+ * collaboration mode. Only the switch grays out: a topic keeps its choice.
  */
 export const resolvePlanModeAvailability = ({
   appServerLab,
   authMode,
   deviceRuntimes,
   executionTarget,
+  providerArgs,
 }: {
   appServerLab: boolean;
   authMode?: string;
+  /** The Codex provider's arguments: some (e.g. `--profile`) keep a run on `codex exec`. */
+  providerArgs?: readonly string[];
   /** The device's agent-run runtimes; undefined while unknown. */
   deviceRuntimes?: readonly string[];
   executionTarget: string;
 }): PlanModeUnavailableReason | undefined => {
   if (!appServerLab) return 'appServerLab';
   if (authMode === 'api') return 'unsupported';
+  if (getCodexAppServerUnsupportedArgs([...(providerArgs ?? [])]).length > 0) return 'unsupported';
   if (executionTarget === 'local') return;
   if (executionTarget === 'device' && deviceRuntimes?.includes(CODEX_COLLABORATION_MODE_RUNTIME))
     return;
@@ -109,6 +115,7 @@ export const usePlanMode = (agentId: string, topicId: string | null | undefined)
   const unavailable = resolvePlanModeAvailability({
     appServerLab,
     authMode: agencyConfig?.heterogeneousProvider?.authMode,
+    providerArgs: agencyConfig?.heterogeneousProvider?.args,
     deviceRuntimes: runtimes,
     executionTarget,
   });

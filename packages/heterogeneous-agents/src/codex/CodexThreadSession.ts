@@ -140,6 +140,12 @@ export class CodexThreadSession {
   private effort?: ReasoningEffort | null;
   /** The mode this run's turns send; a mid-run switch changes it for the next turn. */
   private collaborationMode?: CodexCollaborationMode;
+  /**
+   * Modes sent since the last `turn/start`, oldest first, that Codex has not
+   * acknowledged yet. A `thread/settings/updated` naming one of them answers
+   * that request (and supersedes the older ones), not the latest pick.
+   */
+  private pendingModeRequests: CodexCollaborationMode[] = [];
   private running = false;
   private readonly sessionUnsubscribers: Array<() => void> = [];
   private threadId?: string;
@@ -252,6 +258,8 @@ export class CodexThreadSession {
     this.activeTurn = activeTurn;
 
     const collaborationMode = this.collaborationModeParams(this.collaborationMode);
+    // Each turn states its mode afresh: earlier unanswered requests are moot.
+    this.pendingModeRequests = collaborationMode ? [collaborationMode.mode] : [];
     const turnParams: ExperimentalTurnStartParams = {
       input,
       threadId,
@@ -502,6 +510,7 @@ export class CodexThreadSession {
     if (!this.running || !this.attached || !this.threadId || this.closedByHost) return;
     const collaborationMode = this.collaborationModeParams(mode);
     if (!collaborationMode) return;
+    this.pendingModeRequests.push(mode);
     await this.options.client.request('thread/settings/update', {
       collaborationMode,
       threadId: this.threadId,
@@ -531,18 +540,22 @@ export class CodexThreadSession {
 
   /**
    * Codex reports the thread's mode after `turn/start` set it, or after a
-   * mid-run switch (it only reports a change). The report carries what this
-   * run asked for, so the topic follows Codex only where the two disagree.
+   * mid-run switch (it only reports a change). The report carries the request
+   * it answers, so the topic follows Codex only where the two disagree. A
+   * notification naming a pending request acknowledges that one: with Plan
+   * flipped on and back off before Codex answered, its `plan` answers the
+   * first flip and must not read as Codex refusing the second.
    */
   private handleThreadSettingsUpdated(
     activeTurn: ActiveTurn,
     params: ThreadSettingsUpdatedNotification,
   ): Promise<void> {
     const mode = params?.threadSettings?.collaborationMode?.mode;
-    const requested = this.collaborationMode;
-    if (params?.threadId !== this.threadId || !requested || !isCodexCollaborationMode(mode)) {
-      return Promise.resolve();
-    }
+    if (params?.threadId !== this.threadId || !this.collaborationMode) return Promise.resolve();
+    if (!isCodexCollaborationMode(mode)) return Promise.resolve();
+    const acknowledged = this.pendingModeRequests.indexOf(mode);
+    const requested = acknowledged >= 0 ? mode : this.collaborationMode;
+    if (acknowledged >= 0) this.pendingModeRequests.splice(0, acknowledged + 1);
     const data: CollaborationModeReportData = {
       collaborationMode: mode,
       phase: COLLABORATION_MODE_PHASE,

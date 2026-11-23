@@ -20,6 +20,15 @@ describe('resolvePlanModeAvailability', () => {
     );
   });
 
+  it('is unavailable for provider arguments only codex exec honors', () => {
+    expect(resolvePlanModeAvailability({ ...base, providerArgs: ['--profile', 'work'] })).toBe(
+      'unsupported',
+    );
+    expect(
+      resolvePlanModeAvailability({ ...base, providerArgs: ['-m', 'gpt-6.1-sol'] }),
+    ).toBeUndefined();
+  });
+
   it('needs a device whose lh takes the switch', () => {
     const device = { ...base, executionTarget: 'device' };
     expect(

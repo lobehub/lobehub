@@ -21,7 +21,9 @@ const turn = (id: string, status: 'completed' | 'inProgress' | 'interrupted') =>
  * `turn/start` with a collaboration mode first reports it with
  * `thread/settings/updated`, and a plan turn streams a `plan` item.
  */
-const createHarness = (options: { hangTurns?: boolean; refuseMode?: boolean } = {}) => {
+const createHarness = (
+  options: { hangTurns?: boolean; refuseMode?: boolean; slowAck?: boolean } = {},
+) => {
   let notify: (method: string, params: unknown) => Promise<void> = async () => {};
   let threadMode: 'default' | 'plan' = 'default';
   let turnSequence = 0;
@@ -56,7 +58,10 @@ const createHarness = (options: { hangTurns?: boolean; refuseMode?: boolean } = 
       if (method === 'thread/settings/update') {
         if (threadMode !== params.collaborationMode.mode) {
           threadMode = params.collaborationMode.mode;
-          void settingsUpdated(threadMode);
+          const ack = threadMode;
+          // `slowAck`: Codex answers after the caller already moved on.
+          if (options.slowAck) setTimeout(() => void settingsUpdated(ack), 5);
+          else void settingsUpdated(ack);
         }
         return {};
       }
@@ -235,5 +240,26 @@ describe('CodexThreadSession — Codex Plan switch', () => {
     expect(harness.reports().map((e) => e.data)).toEqual([
       { collaborationMode: 'default', phase: COLLABORATION_MODE_PHASE, requested: 'plan' },
     ]);
+  });
+
+  it('reads an acknowledgement of an earlier flip as that flip, not a refusal of the latest', async () => {
+    const harness = createHarness({ hangTurns: true, slowAck: true });
+    const run = runOnce(harness.session, { collaborationMode: 'default' });
+    await vi.waitFor(() => expect(harness.turnStarts()).toHaveLength(1));
+
+    // On then off before Codex answers the first switch.
+    await harness.session.setCollaborationMode('plan');
+    await harness.session.setCollaborationMode('default');
+    await vi.waitFor(() => expect(harness.reports()).toHaveLength(2));
+
+    const reports = harness.reports().map((e) => e.data);
+    expect(reports).toEqual([
+      { collaborationMode: 'plan', phase: COLLABORATION_MODE_PHASE, requested: 'plan' },
+      { collaborationMode: 'default', phase: COLLABORATION_MODE_PHASE, requested: 'default' },
+    ]);
+    // Neither report disagrees with its request, so the topic keeps the user's last pick.
+    expect(reports.every((r) => r.collaborationMode === r.requested)).toBe(true);
+    await harness.session.interrupt();
+    await run;
   });
 });

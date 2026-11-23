@@ -174,7 +174,8 @@ interface PlanDecisionDeps {
 /**
  * "Execute plan": turn Plan off and put the buttons away, then ask Codex to
  * carry the plan out. The write lands first: the run the message dispatches
- * reads the topic (on the server for `lh` runs) and must send `default`.
+ * reads the topic (on the server for `lh` runs) and must send `default`. The
+ * message is a turn of its own, so a draft in the composer stays there.
  */
 export const executeCodexPlan = async ({
   message,
@@ -184,13 +185,13 @@ export const executeCodexPlan = async ({
   updateTopicMetadata,
 }: PlanDecisionDeps & {
   message: string;
-  sendMessage: (params: { message: string }) => Promise<unknown>;
+  sendMessage: (params: { message: string; preserveComposer: true }) => Promise<unknown>;
 }): Promise<void> => {
   await updateTopicMetadata(topicId, {
     codexPlanDecision: { dismissed: true, itemId: toolCallId },
     heteroPlanMode: false,
   });
-  await sendMessage({ message });
+  await sendMessage({ message, preserveComposer: true });
 };
 
 /** "Keep discussing": put the buttons away; Plan stays on. */
