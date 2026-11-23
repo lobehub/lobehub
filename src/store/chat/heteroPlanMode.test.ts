@@ -10,12 +10,11 @@ import {
   shouldShowCodexPlanDecision,
 } from './heteroPlanMode';
 
-const lab = vi.hoisted(() => ({ appServer: true, betterCoding: true }));
+const lab = vi.hoisted(() => ({ appServer: true }));
 
 vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: {
-    enableBetterCodingExperience: () => lab.betterCoding,
     enableCodexAppServer: () => lab.appServer,
   },
 }));
@@ -34,7 +33,6 @@ const storeWith = (metadata: Record<string, unknown> | undefined) => {
 describe('resolveRunCollaborationMode (local runs)', () => {
   beforeEach(() => {
     lab.appServer = true;
-    lab.betterCoding = true;
   });
 
   it('sends nothing for a topic that never turned Plan on, or another agent', () => {
@@ -47,23 +45,18 @@ describe('resolveRunCollaborationMode (local runs)', () => {
     expect(resolveRunCollaborationMode('codex', { heteroPlanMode: false })).toBe('default');
   });
 
-  it('sends nothing when either lab is off', () => {
-    for (const off of ['appServer', 'betterCoding'] as const) {
-      lab.appServer = true;
-      lab.betterCoding = true;
-      lab[off] = false;
-      expect(resolveRunCollaborationMode('codex', { heteroPlanMode: true })).toBeUndefined();
-    }
+  it('sends nothing with the app-server lab off', () => {
+    lab.appServer = false;
+    expect(resolveRunCollaborationMode('codex', { heteroPlanMode: true })).toBeUndefined();
   });
 });
 
 describe('pendingHeteroPlanModeMetadata (new topics)', () => {
   beforeEach(() => {
     lab.appServer = true;
-    lab.betterCoding = true;
   });
 
-  it('hands over the switch the composer showed, off included, with the labs on', () => {
+  it('hands over the switch the composer showed, off included, with the app-server lab on', () => {
     setPendingHeteroPlanMode('agt', false);
     expect(pendingHeteroPlanModeMetadata('agt', 'codex')).toEqual({ heteroPlanMode: false });
     setPendingHeteroPlanMode('agt', true);
@@ -132,7 +125,6 @@ describe('shouldShowCodexPlanDecision', () => {
 
   beforeEach(() => {
     lab.appServer = true;
-    lab.betterCoding = true;
   });
 
   it('shows under the latest plan once the topic is idle with Plan on', () => {
@@ -160,7 +152,7 @@ describe('shouldShowCodexPlanDecision', () => {
     expect(show({ messages: [...messages, plan('p2')] })).toBe(false);
   });
 
-  it('hides with either lab off', () => {
+  it('hides with the app-server lab off', () => {
     lab.appServer = false;
     expect(show()).toBe(false);
   });

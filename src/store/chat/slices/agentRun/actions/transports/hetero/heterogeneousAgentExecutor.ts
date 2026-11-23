@@ -2383,7 +2383,7 @@ export const executeHeterogeneousAgent = async (
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
       assistantMessageId,
-      // The Codex Plan switch (Better Coding Experience lab).
+      // The Codex Plan switch.
       collaborationMode: resolveRunCollaborationMode(adapterType, runTopicMetadata),
       imageList,
       userId: userProfileSelectors.userId(getUserStoreState()),

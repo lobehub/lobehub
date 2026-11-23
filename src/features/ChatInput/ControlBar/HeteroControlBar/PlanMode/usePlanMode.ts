@@ -81,7 +81,7 @@ export interface PlanModeState {
 }
 
 /**
- * The composer's Codex Plan switch (Better Coding Experience lab).
+ * The composer's Codex Plan switch.
  *
  * - An existing topic shows its own `heteroPlanMode`; flipping it writes the
  *   topic and, mid-run, tells the live thread, which takes it from the next turn.

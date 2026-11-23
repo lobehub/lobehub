@@ -57,9 +57,9 @@ class HeterogeneousAgentService {
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
-    /** Claude Code permission mode (Better Coding Experience lab); absent allows everything. */
+    /** Claude Code permission mode; absent allows everything. */
     permissionMode?: HeteroPermissionMode;
-    /** Codex Plan switch (Better Coding Experience lab); absent sends no collaboration mode. */
+    /** Codex Plan switch; absent sends no collaboration mode. */
     collaborationMode?: CodexCollaborationMode;
     prompt: string;
     /**
@@ -103,7 +103,7 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
   }
 
-  /** Switch a local Claude Code run's permission mode (Better Coding Experience mode chip). */
+  /** Switch a local Claude Code run's permission mode (the composer's mode chip). */
   async setPermissionMode(sessionId: string, mode: HeteroPermissionMode) {
     return this.ipc.heterogeneousAgent.setPermissionMode({ mode, sessionId });
   }
