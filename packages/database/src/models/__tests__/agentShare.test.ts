@@ -800,6 +800,19 @@ describe('AgentShareModel', () => {
       expect(share.shareId).toBe(created!.id);
     });
 
+    it('lets a signed-out viewer read a link share and nothing else', async () => {
+      const link = await agentShareModel.create(agentId, 'link');
+      const linkShare = await AgentShareModel.findByShareId(serverDB, link!.id);
+
+      expect(() => AgentShareModel.assertShareAccess(linkShare!, undefined)).not.toThrow();
+      // An empty viewer must never match the owner, even a row with no owner id.
+      for (const visibility of ['private', 'card'] as const) {
+        expect(() =>
+          AgentShareModel.assertShareAccess({ ownerId: '', visibility }, undefined),
+        ).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
+      }
+    });
+
     it('throws NOT_FOUND for an unknown UUID', async () => {
       await expect(
         AgentShareModel.findByShareIdWithAccessCheck(
