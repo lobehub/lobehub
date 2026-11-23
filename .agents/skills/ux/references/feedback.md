@@ -491,7 +491,7 @@ message) and never passes an i18n file. Three smells mark a message that escaped
 - **Internal ids in the headline** — a raw `tpc_…` / `msg_…` / uuid, a `#N` sequence, an
   operation id. The id is for a **log or an inspect link**, never the sentence the user reads;
   it belongs on a **structured field** (`topicId`, `taskId`) that powers a "View run" affordance,
-  not baked into the title. A human reading "topic #1 (tpc\_5UBuAjUU4z6B)" learns nothing and
+  not baked into the title. A human reading "topic #1 (tpc_5UBuAjUU4z6B)" learns nothing and
   distrusts the whole card.
 - **Log / stack framing** — `Execution failed: …`, `Error: …`, `[TaskLifecycle]`, a
   prefixed severity. Framing that reads like a console line signals "this wasn't meant for
@@ -511,7 +511,7 @@ of the smells above, and localize the _cause_ too where it maps to a known error
 > `topicId` field that lights up "View run" (`InboxBriefCard.tsx`,
 > `taskLifecycle/index.ts` error brief). ❌ Its prior form baked the lot into the stored
 > string — title `` `${taskIdentifier} topic #${seq} (${topicId}) error` `` → **"T-1 topic #1
-> (tpc\_5UBuAjUU4z6B) error"**, summary `` `Execution failed: ${raw}` `` — internal id in the
+> (tpc_5UBuAjUU4z6B) error"**, summary `` `Execution failed: ${raw}` `` — internal id in the
 > headline, log framing, task ref duplicated from the meta row, and English-only for every
 > locale.
 

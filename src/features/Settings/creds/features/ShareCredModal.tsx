@@ -1,7 +1,16 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, createModal, Flexbox, Icon, Select, Tag, Text, toast } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  Flexbox,
+  Icon,
+  Select,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
