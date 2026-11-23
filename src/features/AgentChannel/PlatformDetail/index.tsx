@@ -246,7 +246,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
         ),
       [platformDef.schema],
     );
-    const valuesChangedRef = useRef<() => void>(undefined);
+    /** Recomputes pending state; `userEdit` is true only for a real edit (FormKit's user source). */
+    const valuesChangedRef = useRef<(userEdit?: boolean) => void>(undefined);
     /** Form values seen by the last change, to tell which module an edit touched */
     const lastValuesRef = useRef<ChannelValues>(undefined);
     const autoSavingRef = useRef(false);
@@ -261,7 +262,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const saveQueueRef = useRef<Promise<void>>(undefined);
     const form = useForm<ChannelFormValues>({
       initialValues: getFormValues(platformDef.schema, currentConfig, heterogeneous),
-      onValuesChange: () => valuesChangedRef.current?.(),
+      onValuesChange: () => valuesChangedRef.current?.(true),
     });
 
     // Which tab is open, kept in `?tab=` so a reload or a shared link lands on it. No value
@@ -549,29 +550,35 @@ const PlatformDetail = memo<PlatformDetailProps>(
       writeDisabled,
     ]);
 
-    const handleValuesChange = useCallback(() => {
-      const values = form.getValues();
-      setIsDirty(hasPendingChanges(values, storedRef.current, replyKeys));
-      setDirtyModules(dirtyModuleIds(saveModules, values, storedRef.current));
-      // An edit after a failed save makes that failure stale; the next save reports afresh.
-      const previous = lastValuesRef.current;
-      lastValuesRef.current = values;
-      setSaveResult((current) => (current?.type === 'error' ? undefined : current));
-      setModuleErrors((prev) => clearEditedModuleErrors(prev, saveModules, values, previous));
+    const handleValuesChange = useCallback(
+      (userEdit?: boolean) => {
+        const values = form.getValues();
+        setIsDirty(hasPendingChanges(values, storedRef.current, replyKeys));
+        setDirtyModules(dirtyModuleIds(saveModules, values, storedRef.current));
+        // An edit after a failed save makes that failure stale; the next save reports afresh.
+        // Post-save recomputes (no user edit) must keep the failure they just reported.
+        const previous = lastValuesRef.current;
+        lastValuesRef.current = values;
+        if (userEdit) {
+          setSaveResult((current) => (current?.type === 'error' ? undefined : current));
+          setModuleErrors((prev) => clearEditedModuleErrors(prev, saveModules, values, previous));
+        }
 
-      if (!currentConfig || writeDisabled || replyKeys.length === 0) return;
-      if (!replyDiffers(values.settings, storedRef.current.settings, replyKeys)) return;
+        if (!currentConfig || writeDisabled || replyKeys.length === 0) return;
+        if (!replyDiffers(values.settings, storedRef.current.settings, replyKeys)) return;
 
-      saveCoordinator.scheduleAuto(saveReplySettings, 400);
-    }, [
-      currentConfig,
-      form,
-      replyKeys,
-      saveCoordinator,
-      saveModules,
-      saveReplySettings,
-      writeDisabled,
-    ]);
+        saveCoordinator.scheduleAuto(saveReplySettings, 400);
+      },
+      [
+        currentConfig,
+        form,
+        replyKeys,
+        saveCoordinator,
+        saveModules,
+        saveReplySettings,
+        writeDisabled,
+      ],
+    );
     useEffect(() => {
       valuesChangedRef.current = handleValuesChange;
     }, [handleValuesChange]);
@@ -841,7 +848,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
       setTestResult(undefined);
     }, [currentConfig, form, heterogeneous, platformDef.schema]);
 
-    const handleFormValuesChange = handleValuesChange;
+    const handleFormValuesChange = useCallback(
+      () => handleValuesChange(true),
+      [handleValuesChange],
+    );
 
     // Put one block back as stored; every other block keeps its edits.
     const discardModule = useCallback(
