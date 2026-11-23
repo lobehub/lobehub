@@ -10,6 +10,7 @@ import type { StoreSetter } from '@/store/types';
 import type { UploadFileItem } from '@/types/files';
 import { getAudioDuration } from '@/utils/client/audioDuration';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
+import { getImageThumbhash } from '@/utils/client/imageThumbhash';
 
 import type { FileStore } from '../../store';
 import { audioMimeFromExtension } from '../chat/uploadGuard';
@@ -120,8 +121,11 @@ export class FileUploadActionImpl {
   ): Promise<UploadWithProgressResult | undefined> => {
     let uploadedPathname: string | undefined;
     try {
-      // Extract image dimensions from base64 data
-      const dimensions = await getImageDimensions(base64);
+      // Extract image dimensions and the blurred placeholder from base64 data
+      const [dimensions, thumbhash] = await Promise.all([
+        getImageDimensions(base64),
+        getImageThumbhash(base64),
+      ]);
 
       const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
       uploadedPathname = metadata.path;
@@ -129,7 +133,7 @@ export class FileUploadActionImpl {
       const res = await fileService.createFile({
         fileType,
         hash,
-        metadata: { ...metadata, ...dimensions },
+        metadata: { ...metadata, ...dimensions, ...(thumbhash && { thumbhash }) },
         name: metadata.filename,
         size,
         url: metadata.path,
@@ -168,8 +172,11 @@ export class FileUploadActionImpl {
           ? getAudioDuration(normalizedFile).catch(() => undefined)
           : undefined;
 
-      // 1. extract image dimensions if applicable
-      const dimensions = await getImageDimensions(normalizedFile);
+      // 1. extract image dimensions and the blurred placeholder if applicable
+      const [dimensions, thumbhash] = await Promise.all([
+        getImageDimensions(normalizedFile),
+        getImageThumbhash(normalizedFile),
+      ]);
 
       // 2. check file hash
       const hash = await hashFile(normalizedFile, abortController?.signal, (progress) => {
@@ -248,6 +255,7 @@ export class FileUploadActionImpl {
             ...fileMetadata,
             ...metadata,
             ...dimensions,
+            ...(thumbhash && { thumbhash }),
             ...(durationMs === undefined ? {} : { durationMs }),
           },
           name: normalizedFile.name,
