@@ -24,6 +24,7 @@ import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
 import { resolveShareVisitorDeviceAccess } from '@/server/services/aiAgent/shareGate/deviceAccess';
+import { recordShareRunResult } from '@/server/services/aiAgent/shareGate/runMetrics';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
@@ -33,6 +34,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
+import { announceDeviceGrants } from './deviceGrantCard';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
@@ -83,6 +85,27 @@ const dispatchFailure = (error: unknown): { message: string; type: string } | un
   if (error instanceof ChannelDispatchError) return { message: error.message, type: error.type };
   if (error instanceof Error && Object.hasOwn(SHARE_REFUSAL_MESSAGES, error.message))
     return { message: SHARE_REFUSAL_MESSAGES[error.message], type: error.message };
+};
+
+/**
+ * Count a shared Agent's reply retired before its run started. Such a reply never reaches the
+ * runtime's completion, which counts every run that did start. A reply its requester cancelled
+ * meanwhile is `interrupted`, not a failure; nothing counts when another worker settled it.
+ */
+const countShareAdmission = (
+  retired: 'error' | 'interrupted' | false,
+  failure?: { message: string; type: string },
+) => {
+  if (!retired) return;
+  if (retired === 'interrupted') {
+    recordShareRunResult({ outcome: 'interrupted', stage: 'admission' });
+    return;
+  }
+  recordShareRunResult({
+    errorType: failure?.type,
+    outcome: failure ? 'refused' : 'error',
+    stage: 'admission',
+  });
 };
 
 /** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
@@ -266,12 +289,15 @@ export class ChannelCoordinator {
     } finally {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
+    // A claim that found the device made private since it was picked files a request; ask now.
+    if (pending.length) await announceDeviceGrants(this.db, channelId);
   };
 
   /**
    * A job held back only because another run uses its member's directory moves its branch into
-   * a worktree of that directory instead of waiting. Returns whether the branch got one; a
-   * directory that cannot host one (not a git repo, device too old) keeps the job waiting.
+   * a worktree of that directory instead of waiting. A directory that cannot host one (not a
+   * git repo, device too old) is shared instead: the job runs in it alongside the other run.
+   * Returns whether the claim is worth retrying.
    */
   private async moveToWorktree(
     channelId: string,
@@ -285,7 +311,7 @@ export class ChannelCoordinator {
     const created = await createChannelWorktree(candidate, workspaceId);
     if (created.path === undefined) {
       await this.executions.worktreeUnavailable(channelId, candidate, created.error);
-      return false;
+      return true;
     }
     return this.executions.assignWorktree(channelId, candidate, created.path);
   }
@@ -442,7 +468,8 @@ export class ChannelCoordinator {
         workspaceId ?? undefined,
       ).findById(job.operationId);
       if (operation?.status === 'idle') {
-        await this.executions.retireReservation(job.channelId, job.id, failure);
+        const retired = await this.executions.retireReservation(job.channelId, job.id, failure);
+        if (share) countShareAdmission(retired, failure);
       } else
         await this.executions.fail(
           job.channelId,
@@ -476,8 +503,9 @@ export class ChannelCoordinator {
     ) {
       // A reservation that was never started can be retired. Its old dispatcher cannot
       // initialise this now-terminal operation, even if it resumes after a process stall.
-      if (await this.executions.retireReservation(channelId, jobId))
-        await this.reportFailure(channelId, jobId);
+      const retired = await this.executions.retireReservation(channelId, jobId);
+      if (job.executionConfig?.share) countShareAdmission(retired);
+      if (retired) await this.reportFailure(channelId, jobId);
       return;
     }
     if (job.publicationRevoked && operation.status !== 'done') {
@@ -642,7 +670,12 @@ export class ChannelCoordinator {
         .innerJoin(channelJobs, eq(channelJobs.operationId, agentOperations.id))
         .where(eq(agentOperations.id, job.operationId));
       if (!row?.operation.userId) continue;
-      if (await this.executions.retireReservation(job.channelId, job.id)) continue;
+      const retired = await this.executions.retireReservation(job.channelId, job.id);
+      if (retired) {
+        // A reply stopped before its run started never reaches the runtime's count.
+        if (row.config?.share) countShareAdmission(retired);
+        continue;
+      }
       // Cancellation must not release the writer while a dispatcher can still submit
       // its network request. An operation result alone does not prove device exit.
       const [current] = await this.db.select().from(channelJobs).where(eq(channelJobs.id, job.id));

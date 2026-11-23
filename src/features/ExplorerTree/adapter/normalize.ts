@@ -44,7 +44,22 @@ const dedupeName = (taken: Set<string>, rawName: string, isFolder: boolean): str
   return fallback;
 };
 
+// Normalising a large tree walks and re-keys every node. A host that toggles
+// between two node arrays (a filtered view and the full one) hands the same
+// array back, so remember the result per array instead of redoing the walk.
+// Callers treat `nodes` as immutable; a changed tree is a new array.
+const normalizedTreeCache = new WeakMap<object, NormalizedTree<unknown>>();
+
 export const normalizeTree = <TData>(nodes: ExplorerTreeNode<TData>[]): NormalizedTree<TData> => {
+  const cached = normalizedTreeCache.get(nodes) as NormalizedTree<TData> | undefined;
+  if (cached) return cached;
+
+  const normalized = buildNormalizedTree(nodes);
+  normalizedTreeCache.set(nodes, normalized as NormalizedTree<unknown>);
+  return normalized;
+};
+
+const buildNormalizedTree = <TData>(nodes: ExplorerTreeNode<TData>[]): NormalizedTree<TData> => {
   const pathById = new Map<string, string>();
   const idByPath = new Map<string, string>();
   const nodeById = new Map<string, ExplorerTreeNode<TData>>();

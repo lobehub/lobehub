@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Dodaj Element",
   "updateArgs.form.key": "Klucz Pola",
   "updateArgs.form.value": "Wartość Pola",
-  "updateArgs.formValidationFailed": "Walidacja formularza nie powiodła się, sprawdź format parametrów",
   "updateArgs.keyRequired": "Klucz pola nie może być pusty",
   "updateArgs.stringifyError": "Nie można przekształcić parametrów do formatu tekstowego, sprawdź ich poprawność"
 }

@@ -311,7 +311,6 @@
   "updateArgs.form.add": "項目を追加",
   "updateArgs.form.key": "フィールドキー",
   "updateArgs.form.value": "フィールド値",
-  "updateArgs.formValidationFailed": "フォームの検証に失敗しました。パラメータの形式を確認してください。",
   "updateArgs.keyRequired": "フィールドキーは空にできません。",
   "updateArgs.stringifyError": "パラメータをシリアライズできません。パラメータの形式を確認してください。"
 }

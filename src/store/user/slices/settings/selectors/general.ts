@@ -40,6 +40,12 @@ const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
 const enableVoiceMessage = (s: UserStore) => generalConfig(s).enableVoiceMessage ?? false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
+// `isDevMode` (the retired Advanced Tools switch) used to gate the usage row,
+// so it seeds the default for people who never chose this setting.
+const showMessageUsage = (s: UserStore) =>
+  generalConfig(s).showMessageUsage ??
+  (generalConfig(s) as { isDevMode?: boolean }).isDevMode ??
+  false;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
 const interfaceDensity = (s: UserStore): InterfaceDensity =>
   generalConfig(s).interfaceDensity ?? 'loose';
@@ -78,6 +84,7 @@ export const userGeneralSettingsSelectors = {
   currentTimezone,
   responseLanguage,
   showImageReadPreview,
+  showMessageUsage,
   telemetry,
   timezone,
   transitionMode,

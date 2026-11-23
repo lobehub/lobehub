@@ -11,9 +11,11 @@ import {
   agentEngineRouteMeta,
   agentEnvironmentRouteMeta,
   agentGoalsRouteMeta,
+  agentGraphRouteMeta,
   agentInstructionRouteMeta,
   agentKnowledgeRouteMeta,
   agentMailRouteMeta,
+  agentOpeningRouteMeta,
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
@@ -278,6 +280,22 @@ export const agentPageChildren: RouteObject[] = [
     ),
     handle: { meta: routeMeta({ Skeleton: NoRouteSkeleton }) },
     path: 'self-learning/*',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/opening'),
+      'Desktop > Chat > Opening Settings',
+    ),
+    handle: { meta: agentOpeningRouteMeta },
+    path: 'opening',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/graph'),
+      'Desktop > Chat > Graph Runtime',
+    ),
+    handle: { meta: agentGraphRouteMeta },
+    path: 'graph',
   },
   {
     element: dynamicElement(

@@ -357,16 +357,55 @@ describe('shareRouter', () => {
       expect(result.featuredWorks).toEqual([]);
     });
 
-    it('requires authentication without resolving or counting the share', async () => {
+    it('serves a signed-out visitor the landing data without counting the view', async () => {
+      const caller = shareRouter.createCaller(await createContextInner());
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        ownerWorkspaceSlug: null,
+        shareId: 'agent-share-1',
+      });
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ shareId: 'agent-share-1' }),
+        undefined,
+      );
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+      expect(listFeaturedWorks).toHaveBeenCalled();
+    });
+
+    it('hides a private share from a signed-out visitor', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        visibility: 'private',
+      } as any);
+      vi.mocked(AgentShareModel.assertShareAccess).mockImplementationOnce(() => {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
+      });
       const caller = shareRouter.createCaller(await createContextInner());
 
       await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
-        code: 'UNAUTHORIZED',
+        code: 'NOT_FOUND',
       });
-      expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
-      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
       expect(listFeaturedWorks).not.toHaveBeenCalled();
-      expect(getDeliveryStats).not.toHaveBeenCalled();
+    });
+
+    it('reads a sandbox operation token as signed out, even for the owner', async () => {
+      const caller = shareRouter.createCaller(
+        await createContextInner({
+          oidcAuth: { purpose: 'hetero-operation', sub: 'owner-user' } as any,
+          userId: 'owner-user',
+        }),
+      );
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        ownerWorkspaceSlug: null,
+      });
+      expect(AgentShareModel.assertShareAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ shareId: 'agent-share-1' }),
+        null,
+      );
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
     });
 
     it('resolves by slug, returns only visitor-safe metadata, and counts the view', async () => {

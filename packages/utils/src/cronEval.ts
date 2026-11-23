@@ -64,6 +64,18 @@ const parseCron = (cronPattern: string, timezone: string | null, currentDate: Da
   return CronExpressionParser.parse(pattern, { currentDate, tz });
 };
 
+/** Expand cron weekdays for a weekly picker. Sunday is 0 in the picker. */
+export const parseCronWeekdays = (cronPattern: string): number[] => {
+  try {
+    const { dayOfWeek } = parseCron(cronPattern, null, new Date()).fields;
+    if (dayOfWeek.nthDay || dayOfWeek.hasLastChar) return [];
+
+    return [...new Set(dayOfWeek.values.map((day) => Number(day) % 7))].sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+};
+
 /**
  * Find the occurrence a cron pattern is due for on this dispatcher tick, or
  * `null` when nothing is due. The returned instant identifies the occurrence,

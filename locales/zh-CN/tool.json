@@ -155,6 +155,7 @@
   "connector.add.clientSecret": "OAuth Client Secret（可选）",
   "connector.add.confirm": "添加",
   "connector.add.editTitle": "编辑连接器",
+  "connector.add.failedRetry": "无法保存连接器，请检查服务器地址和网络后重试。",
   "connector.add.name": "名称",
   "connector.add.namePlaceholder": "我的连接器",
   "connector.add.popupBlocked": "请允许此网站打开弹出窗口后重试。",
@@ -168,6 +169,8 @@
   "connector.authError": "授权异常",
   "connector.connected": "已连接",
   "connector.createTools": "创建类工具",
+  "connector.dangerZone.desc": "断开或移除 {{name}} 后，所有用到它的助理都会失去这些工具。",
+  "connector.dangerZone.title": "危险操作",
   "connector.delete": "删除",
   "connector.deleteAccountConfirmContent": "此操作会移除该连接器及其在你账号下的授权。之后任何使用它的助理都需要重新授权。",
   "connector.deleteAgentConfirmContent": "该连接器归属于助理「{{agent}}」。删除它会同时把这个工具从该助理中移除。",
@@ -377,7 +380,7 @@
   "updateArgs.form.add": "添加一项",
   "updateArgs.form.key": "字段键",
   "updateArgs.form.value": "字段值",
-  "updateArgs.formValidationFailed": "表单验证失败，请检查参数格式",
   "updateArgs.keyRequired": "字段键不能为空",
+  "updateArgs.saveFailed": "参数保存失败，请检查网络后重试",
   "updateArgs.stringifyError": "无法序列化参数，请检查参数格式"
 }

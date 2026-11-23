@@ -33,7 +33,7 @@ const ownPluginAgents = (ctx: AgentModelContext): SQL | undefined =>
     ctx.ownership(),
     eq(agents.userId, ctx.userId),
     or(isNull(agents.virtual), eq(agents.virtual, false), eq(agents.slug, INBOX_SESSION_ID)),
-    sql`jsonb_typeof(${agents.agencyConfig}->'heterogeneousProvider') IS DISTINCT FROM 'object'`,
+    sql`COALESCE(jsonb_typeof(${agents.agencyConfig}->'heterogeneousProvider'), '') <> 'object'`,
   );
 
 /**

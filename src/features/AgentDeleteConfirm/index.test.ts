@@ -1,15 +1,19 @@
 /**
  * @vitest-environment happy-dom
  */
+import { act, render, screen } from '@testing-library/react';
+import { type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 
 import {
+  AGENT_DELETE_IMPACT_TIMEOUT_MS,
   confirmRemoveAgent,
   getOtherCreatorWarning,
   getRemoveAgentAlert,
   getRemoveAgentConfirmState,
+  lookupAgentDeleteImpact,
 } from './index';
 
 const createModalMock = vi.hoisted(() => vi.fn());
@@ -185,5 +189,99 @@ describe('confirmRemoveAgent', () => {
 
     expect(createModalMock).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();
+  });
+
+  describe('dialog content', () => {
+    // React only replays a suspended tree inside an awaited act scope.
+    const renderDialog = async () => {
+      await act(async () => {
+        render((createModalMock.mock.calls[0][0] as { content: ReactElement }).content);
+      });
+    };
+    const deleteButton = () => screen.getByRole('button', { name: 'delete' });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('replaces the placeholder with the impact copy once the lookup resolves', async () => {
+      let resolveImpact!: (impact: Impact) => void;
+      vi.spyOn(agentService, 'getAgentDeleteImpact').mockReturnValue(
+        new Promise<Impact>((resolve) => {
+          resolveImpact = resolve;
+        }),
+      );
+
+      confirmRemoveAgent({ agentId: 'agent-1', onConfirm: vi.fn() });
+      await renderDialog();
+
+      expect(deleteButton()).toBeDisabled();
+
+      await act(async () => {
+        resolveImpact({ ...own, foreignTopicCount: 2, hasForeignContent: true });
+      });
+
+      expect(
+        screen.getByText('confirmRemoveSessionItemAlertWithOthersCount:2'),
+      ).toBeInTheDocument();
+      expect(deleteButton()).toBeEnabled();
+    });
+
+    it('falls back to the impact-unknown copy and allows Delete when the lookup hangs', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(agentService, 'getAgentDeleteImpact').mockReturnValue(new Promise<Impact>(() => {}));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const onConfirm = vi.fn();
+
+      confirmRemoveAgent({ agentId: 'agent-1', onConfirm });
+      await renderDialog();
+      expect(deleteButton()).toBeDisabled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(AGENT_DELETE_IMPACT_TIMEOUT_MS);
+      });
+
+      expect(screen.getByText('confirmRemoveSessionItemAlertImpactUnknown')).toBeInTheDocument();
+      expect(deleteButton()).toBeEnabled();
+
+      await act(async () => {
+        deleteButton().click();
+      });
+      // An unknown impact acknowledges nothing, so the server guard still decides.
+      expect(onConfirm).toHaveBeenCalledWith({
+        acknowledgeForeignContent: false,
+        acknowledgeOtherCreator: false,
+      });
+    });
+  });
+});
+
+describe('lookupAgentDeleteImpact', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('settles as null when the lookup outlives the timeout', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(agentService, 'getAgentDeleteImpact').mockReturnValue(new Promise<Impact>(() => {}));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = lookupAgentDeleteImpact('agent-1', 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(result).resolves.toBeNull();
+  });
+
+  it('returns the impact when the lookup lands before the timeout', async () => {
+    vi.useFakeTimers();
+    const impact = { ...own, foreignTopicCount: 0, hasForeignContent: false };
+    vi.spyOn(agentService, 'getAgentDeleteImpact').mockResolvedValue(impact);
+
+    const result = lookupAgentDeleteImpact('agent-1', 1000);
+
+    await expect(result).resolves.toEqual(impact);
+    // The timer is cleared, so nothing fires once the lookup has settled.
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

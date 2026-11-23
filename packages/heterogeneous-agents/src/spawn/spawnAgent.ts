@@ -1,8 +1,9 @@
 import type { ChildProcess } from 'node:child_process';
 import { platform } from 'node:os';
+import { finished } from 'node:stream/promises';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { HeteroPermissionMode } from '@lobechat/types';
+import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
 import { isHeteroPermissionMode } from '@lobechat/types';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
@@ -54,6 +55,11 @@ export interface SpawnAgentOptions {
   agentType: string;
   /** Bridge for bidirectional question requests emitted by ACP agents. */
   askUserBridge?: AskUserBridge;
+  /**
+   * (native Codex app-server only; `spawnAgent` ignores it) The Codex Plan
+   * switch: the collaboration mode every turn sends.
+   */
+  collaborationMode?: CodexCollaborationMode;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
    * Use this when the binary lives at a non-default
@@ -145,11 +151,9 @@ export interface SpawnAgentHandle {
    */
   events: AsyncIterable<AgentStreamEvent>;
   /**
-   * Resolves once the child process exits. Note: this resolves on the
-   * underlying `'exit'` event, which Node may fire before stdio is fully
-   * closed — `events` already gates on `stdout` end internally, so consumers
-   * should iterate `events` to completion BEFORE awaiting `exit` if they
-   * care about ordering.
+   * Resolves after process exit, which can precede stdio closure. OpenCode
+   * exit 1 also waits for stdout to determine the outcome. Drain `events`
+   * before awaiting `exit` when event ordering matters.
    */
   exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   /**
@@ -196,6 +200,11 @@ export interface SpawnAgentHandle {
    * server can persist it for `--resume` on the next turn.
    */
   readonly sessionId: string | undefined;
+  /**
+   * (native Codex) The Codex Plan switch flipped mid-run: the thread takes the
+   * collaboration mode from its next turn (`thread/settings/update`).
+   */
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
   /**
    * The child's stderr stream — caller can pipe to its own stderr or
    * collect for error reporting. The pipeline does not consume stderr.
@@ -613,7 +622,7 @@ const spawnCliAgent = async (
   const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
-    env: childEnv,
+    env: cliSpawnPlan.env ?? childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -836,7 +845,22 @@ const spawnCliAgent = async (
 
   return {
     events,
-    exit,
+    exit:
+      options.agentType === 'opencode'
+        ? exit.then(async (status) => {
+            if (status.code !== 1 || status.signal || killedByUs) return status;
+            try {
+              await finished(stdout, { cleanup: true, writable: false });
+              await pipelineQueue;
+              if (!streamError && !killedByUs) {
+                return { ...status, code: pipeline.resolveExitCode(status.code) };
+              }
+            } catch {
+              // A broken stdout stream cannot establish a completed reply.
+            }
+            return status;
+          })
+        : exit,
     ...(claudeLive && {
       interruptTurn: () => claudeLive.interrupt(),
       sendControlRequest: (request: ClaudeCodeControlRequest) =>

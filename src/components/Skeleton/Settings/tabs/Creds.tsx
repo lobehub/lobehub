@@ -2,7 +2,7 @@
 
 import { cssVar, Flexbox } from '@lobehub/ui';
 
-import { useDensity, useDensityTokens } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 
 import SkeletonBar from '../../Bar';
 import type { SettingsTabSkeleton } from './types';
@@ -16,13 +16,12 @@ const ROW_WIDTHS = [
 
 /**
  * Credential rows as `CredItem` lays them out: 12px block padding, a 48px icon
- * tile, a name + type-tag line over a key line, and the "..." menu button. Rows
- * sit edge to edge (gap 0), like the settled list.
+ * tile and a name + type-tag line over a key line. Rows sit edge to edge
+ * (gap 0), like the settled list.
  */
 export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
   // Compact `CredItem`: 6px padding, 36px tile, 22px title line + 2 + 18px key line = 54px.
   const { compact, tokens } = useDensity();
-  const { controlHeight } = useDensityTokens();
 
   return (
     <Flexbox aria-busy data-testid={'settings-creds-skeleton'} gap={0} width={'100%'}>
@@ -53,7 +52,6 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
                 </Flexbox>
               </Flexbox>
             </Flexbox>
-            <SkeletonBar height={controlHeight} width={controlHeight} />
           </Flexbox>
         );
       })}
@@ -61,8 +59,8 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
   );
 };
 
-/** The small primary "Create" button the page portals into the header. */
-const PageActions = () => <SkeletonBar height={32} width={96} />;
+/** The small primary "Add" button the page portals into the header. */
+const PageActions = () => <SkeletonBar height={32} width={72} />;
 
 const CredsSkeleton: SettingsTabSkeleton = { Body: () => <CredsListSkeleton />, PageActions };
 

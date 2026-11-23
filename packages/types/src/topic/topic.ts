@@ -12,6 +12,7 @@ import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { HeteroPermissionMode, HeteroPermissionModeFallback } from '../heteroPermissionMode';
 import { HETERO_PERMISSION_MODES } from '../heteroPermissionMode';
+import type { CodexPlanDecision } from '../heteroPlanMode';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
 import type { OwnedWorktree } from '../ownedWorktree';
@@ -193,6 +194,8 @@ export interface ChatTopicMetadata {
 
   botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
+  /** The Execute plan / Keep discussing buttons under the latest Codex plan. */
+  codexPlanDecision?: CodexPlanDecision | null;
   cronJobId?: string;
   /**
    * The conversation's device was chosen explicitly for it (the composer's
@@ -267,6 +270,14 @@ export interface ChatTopicMetadata {
    * that `lh` predates permission modes (`outdatedCli`). Server-written only.
    */
   heteroPermissionModeReportPending?: string | null;
+  /**
+   * Codex Plan switch of this topic (Better Coding Experience lab). Absent
+   * until the user first turns it on: such a topic sends no collaboration
+   * mode at all. Once set, every native turn sends `plan` (true) or
+   * `default` (false) explicitly. Codex keeps the mode on the thread, so only
+   * the user turns it off (the switch, or Execute plan).
+   */
+  heteroPlanMode?: boolean;
   /** Latest Task run's dispatched settings; no args, credentials or system context. */
   heteroRuntimeConfig?: {
     /** Per-field configuration and provenance captured before dispatch. */
@@ -757,6 +768,11 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroPermissionMode: z.enum(HETERO_PERMISSION_MODES).optional(),
   heteroPermissionModeFallback: z.enum(['outdatedCli', 'root']).nullable().optional(),
+  heteroPlanMode: z.boolean().optional(),
+  codexPlanDecision: z
+    .object({ dismissed: z.boolean(), itemId: z.string().min(1) })
+    .nullable()
+    .optional(),
   heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z

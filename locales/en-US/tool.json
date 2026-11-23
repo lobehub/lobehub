@@ -155,6 +155,7 @@
   "connector.add.clientSecret": "OAuth Client Secret (optional)",
   "connector.add.confirm": "Add",
   "connector.add.editTitle": "Edit Connector",
+  "connector.add.failedRetry": "Couldn't save the connector. Check the server URL and your network, then try again.",
   "connector.add.name": "Name",
   "connector.add.namePlaceholder": "My connector",
   "connector.add.popupBlocked": "Please allow popups for this site and try again.",
@@ -168,6 +169,8 @@
   "connector.authError": "Authorization error",
   "connector.connected": "Connected",
   "connector.createTools": "Create tools",
+  "connector.dangerZone.desc": "Disconnecting or removing {{name}} takes its tools away from every Agent that uses them.",
+  "connector.dangerZone.title": "Danger zone",
   "connector.delete": "Delete",
   "connector.deleteAccountConfirmContent": "This removes the connector and its authorization from your account. Any agent that uses it will need to be re-authorized afterwards.",
   "connector.deleteAgentConfirmContent": "This connector belongs to the agent “{{agent}}”. Deleting it will also remove this tool from that agent.",
@@ -377,7 +380,7 @@
   "updateArgs.form.add": "Add an Item",
   "updateArgs.form.key": "Field Key",
   "updateArgs.form.value": "Field Value",
-  "updateArgs.formValidationFailed": "Form validation failed, please check the parameter format",
   "updateArgs.keyRequired": "Field key cannot be empty",
+  "updateArgs.saveFailed": "Couldn't save the parameters. Check your network and try again.",
   "updateArgs.stringifyError": "Unable to serialize parameters, please check the parameter format"
 }

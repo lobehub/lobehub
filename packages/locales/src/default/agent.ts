@@ -906,6 +906,12 @@ export default {
   'channel.feishu.fetchOwnerIdFailed': 'Failed to read the app owner',
   'channel.feishu.fetchOwnerIdMissingCredentials':
     'Enter the Application ID and App Secret first — the lookup runs as your app.',
+  'channel.imessage.bridgeTestFailedRetry':
+    "Couldn't reach BlueBubbles. Check the server URL and password, then test again.",
+  'channel.imessage.bridgeToggleFailedRetry':
+    "Couldn't change the bridge status. Check the BlueBubbles server URL and password, then try again.",
+  'channel.line.fetchBotInfoFailedRetry':
+    "Couldn't fetch the bot info. Check the Channel Access Token and try again.",
   'channel.userIdHint.imessage':
     'Use your iMessage handle as seen in BlueBubbles, usually an email address or E.164 phone number.',
   'channel.userIdHint.line':
@@ -922,6 +928,7 @@ export default {
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
+  'channel.updateFailedRetry': "Couldn't save this change. Check your network and try again.",
 
   'share.entry': 'Share this Agent',
   'share.settings.autoGrant.desc':
@@ -1156,6 +1163,7 @@ export default {
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
   'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
+  'share.visitor.profile.free': 'Free',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
   'share.visitor.profile.lobotFallback.description':
@@ -1179,6 +1187,7 @@ export default {
     'It runs in the owner Workspace, and every reply is paid from the Workspace budget.',
   'share.visitor.profile.terms.desc':
     'Today these rules only show up as errors once you hit them. Here they are up front.',
+  'share.visitor.profile.terms.free': 'Free to use — doesn’t use your credits.',
   'share.visitor.profile.terms.messages_one': 'You can send up to {{count}} message.',
   'share.visitor.profile.terms.messages_other': 'You can send up to {{count}} messages.',
   'share.visitor.profile.terms.title': 'Before you start',
@@ -1293,6 +1302,7 @@ export default {
   'share.visitor.profile.metrics.durationCaption': 'per operation',
   'share.visitor.profile.metrics.cost': 'Average cost',
   'share.visitor.profile.metrics.costCaption': 'per work · paid by the creator',
+  'share.visitor.profile.metrics.costPerWorkCaption': 'per work',
   'share.visitor.profile.works.title': 'Featured works',
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',

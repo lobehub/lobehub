@@ -38,6 +38,7 @@ import { heteroOperationCapabilities } from '../heteroOperationCapabilities';
 import { buildHeteroProjectContext } from '../projectContext';
 import { traceHeteroStage } from '../sendTracing';
 import { buildViewedTaskContextPrompt, joinSystemContext } from '../viewedTaskContext';
+import { resolveDispatchCollaborationMode } from './codexCollaboration';
 import { resolveDispatchPermissionMode } from './permissionMode';
 import type { HeteroDispatchDeps, HeteroDispatchInput } from './types';
 import { settleInOrder } from './utils';
@@ -105,6 +106,14 @@ export const prepareHeteroRun = async (
   // Channels. `isOwner` is decided once, fail-closed, in `buildBotContext`.
   const isOwnerBotOperation =
     ctx.trigger === RequestTrigger.Bot && ctx.botContext?.isOwner === true;
+  // A scheduled run replays the user's own message off history, so it has
+  // no fresh user row; server-started `chat` deliveries have none either.
+  const isUserTurn =
+    (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
+    ctx.trigger === RequestTrigger.Scheduled;
+  // Mirrors the `channel:message` grant in `heteroOperationCapabilities`.
+  const canMessageForUser =
+    !shareGate && (isOwnerBotOperation || (isUserTurn && !isChannelOperation && !operationTaskId));
 
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
@@ -120,11 +129,7 @@ export const prepareHeteroRun = async (
           ownerBotTurn: isOwnerBotOperation,
           shareVisitor: !!shareGate,
           taskId: operationTaskId,
-          // A scheduled run replays the user's own message off history, so it has
-          // no fresh user row; server-started `chat` deliveries have none either.
-          userTurn:
-            (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
-            ctx.trigger === RequestTrigger.Scheduled,
+          userTurn: isUserTurn,
         }),
         operationId,
         userId: deps.userId,
@@ -206,6 +211,11 @@ export const prepareHeteroRun = async (
       (error) => log('execAgent: permission mode report marker failed: %O', error),
     );
     return mode;
+  });
+
+  const collaborationModePromise = resolveDispatchCollaborationMode(deps.db, deps.userId, {
+    heteroType,
+    topicMetadata: topic?.metadata,
   });
 
   // The primary resumed attempt already has native history and must not get
@@ -333,7 +343,7 @@ export const prepareHeteroRun = async (
     selectionContext,
     isChannelOperation
       ? CHANNEL_INSTRUCTIONS
-      : isOwnerBotOperation
+      : canMessageForUser
         ? BOT_CHANNEL_MESSAGING_INSTRUCTIONS
         : undefined,
   );
@@ -395,6 +405,9 @@ export const prepareHeteroRun = async (
       heteroType === 'claude-code' && heterogeneousProvider?.type === heteroType
         ? resolveDispatchedClaudeCodeEntrypoint(heterogeneousProvider.env)
         : undefined,
+    // The Codex Plan switch before the runtime is known; the device dispatch
+    // narrows it (`forDeviceRuntime`), and the cloud sandbox (`codex exec`) ignores it.
+    collaborationMode: await collaborationModePromise,
     githubToken,
     imageList: heteroImageList,
     jwt: operationJwt,

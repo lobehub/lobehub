@@ -4,6 +4,22 @@ import type { ExplorerTreeNode } from '../types';
 import { isDescendantOf, normalizeTree, remapIdsToPaths, remapPathsToIds } from './normalize';
 
 describe('normalizeTree', () => {
+  it('reuses the result for the same nodes array and rebuilds for a new one', () => {
+    const nodes: ExplorerTreeNode[] = [
+      { id: 'folder', isFolder: true, name: 'src', parentId: null },
+      { id: 'file', name: 'index.ts', parentId: 'folder' },
+    ];
+
+    const first = normalizeTree(nodes);
+
+    expect(normalizeTree(nodes)).toBe(first);
+
+    const next = normalizeTree([...nodes, { id: 'other', name: 'README.md', parentId: null }]);
+
+    expect(next).not.toBe(first);
+    expect(next.paths).toEqual(['src/', 'src/index.ts', 'README.md']);
+  });
+
   it('keeps duplicate sibling names addressable by stable ids', () => {
     const nodes: ExplorerTreeNode[] = [
       { id: 'folder-a', isFolder: true, name: 'Docs', parentId: null },

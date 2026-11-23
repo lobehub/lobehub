@@ -41,6 +41,7 @@ import type { ChannelContacts } from './contacts';
 import { noChannelContacts } from './contacts';
 import { deleteMessage } from './delete';
 import { findThread } from './delivery';
+import { withDisplayTitles } from './displayTitle';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { syncMemberGrant } from './grants';
@@ -95,6 +96,7 @@ export type {
 } from './claim';
 export type { ChannelContacts } from './contacts';
 export { noChannelContacts } from './contacts';
+export * from './displayTitle';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
@@ -156,6 +158,7 @@ export class ChannelRepository {
     /** The direct conversation's Agent environment; the caller resolved and checked it. */
     agentConfig?: ChannelMemberConfig;
     agents?: ChannelAddAgentInput[];
+    metadata?: ChannelItem['metadata'];
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
@@ -189,6 +192,7 @@ export class ChannelRepository {
       }
       const insert = tx.insert(channels).values({
         agentId,
+        metadata: params.metadata,
         projectId: params.projectId,
         userId: this.userId,
         title: params.title,
@@ -558,7 +562,8 @@ export class ChannelRepository {
   /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list. Active open
-   * project Channels the caller has not joined follow with `joined: false`.
+   * project Channels the caller has not joined follow with `joined: false`. A conversation
+   * between two Agents is left out: it opens from the report where the asking began.
    */
   list = async (): Promise<
     Array<
@@ -579,6 +584,7 @@ export class ChannelRepository {
         sharedAgentHandle: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
+        displayTitle: string;
       }
     >
   > => {
@@ -602,7 +608,9 @@ export class ChannelRepository {
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .leftJoin(agents, eq(agents.id, channels.agentId))
       .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
-      .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
+      .where(
+        and(this.membershipWhere(), notTrashed(channels.isDeleted), isNull(channels.agentPairKey)),
+      )
       .orderBy(desc(channels.createdAt));
     const open = await listUnjoinedOpenChannels(this.db, this.userId, this.workspaceId);
     const previewIds = [...rows.map(({ channel }) => channel.id), ...open.map(({ id }) => id)];
@@ -723,7 +731,7 @@ export class ChannelRepository {
         };
       },
     );
-    return [
+    const items = [
       ...joined,
       // Not joined: nothing is unread or pending for the caller yet.
       ...open.map((channel) => ({
@@ -747,6 +755,7 @@ export class ChannelRepository {
         unreadCount: 0,
       })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return withDisplayTitles(this.db, items);
   };
 
   /**

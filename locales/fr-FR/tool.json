@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Ajouter un élément",
   "updateArgs.form.key": "Clé du champ",
   "updateArgs.form.value": "Valeur du champ",
-  "updateArgs.formValidationFailed": "Échec de la validation du formulaire, veuillez vérifier le format des paramètres",
   "updateArgs.keyRequired": "La clé du champ ne peut pas être vide",
   "updateArgs.stringifyError": "Impossible de sérialiser les paramètres, veuillez vérifier le format des paramètres"
 }

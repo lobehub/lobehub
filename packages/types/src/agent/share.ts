@@ -94,7 +94,7 @@ export interface SharedAgentStats extends SharedAgentDeliveryStats {
   visitors: number;
 }
 
-/** Agent metadata exposed to signed-in visitors of an agent share. */
+/** Agent metadata exposed to visitors of an agent share, including signed-out ones. */
 export interface SharedAgentUploadAbility {
   audio: boolean;
   image: boolean;

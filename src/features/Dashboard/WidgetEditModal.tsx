@@ -15,6 +15,8 @@ import { t as translate } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { useDashboardStore } from '@/store/dashboard';
 
 /** Longest widget title and metric definition the API accepts. */
@@ -33,6 +35,8 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
   const [title, setTitle] = useState(widget.title);
   const [description, setDescription] = useState(widget.description ?? '');
   const [saving, setSaving] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's edits. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
   const trimmedTitle = title.trim();
 
   const handleSave = async () => {
@@ -46,14 +50,15 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
       close();
       return;
     }
+    setError(null);
     setSaving(true);
     try {
       await updateWidget(widget.id, patch);
       toast.success(t('widgetEdit.saved'));
       close();
-    } catch (error) {
-      console.error('[dashboard] widget edit failed', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+    } catch (err) {
+      console.error('[dashboard] widget edit failed', err);
+      setError(toInlineError(t('widget.saveFailedRetry'), err));
     } finally {
       setSaving(false);
     }
@@ -71,8 +76,11 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             data-widget-edit-title
             maxLength={TITLE_MAX_LENGTH}
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
             onPressEnter={() => void handleSave()}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setError(null);
+            }}
           />
         </Flexbox>
         <Flexbox gap={6}>
@@ -88,6 +96,7 @@ const WidgetEditForm = ({ widget }: WidgetEditFormProps) => {
             onChange={(event) => setDescription(event.target.value)}
           />
         </Flexbox>
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

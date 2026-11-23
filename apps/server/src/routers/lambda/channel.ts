@@ -249,6 +249,11 @@ export const channelRouter = router({
         before: z.number().int().positive().optional(),
         channelId,
         /**
+         * The client opens a reply's canvas beside the Channel. Released clients without a canvas
+         * view omit it and keep canvases off the cards.
+         */
+        includeCanvasWorks: z.boolean().optional(),
+        /**
          * The client renders the opt-in Work types (files, collections) on reply cards. Released
          * desktop clients without them omit it and keep receiving only the types they know.
          */

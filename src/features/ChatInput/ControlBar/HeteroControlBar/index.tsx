@@ -28,6 +28,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import PermissionModeSelector from './PermissionMode';
+import PlanModeSwitch from './PlanMode';
 import {
   AntigravityQuotaMenu,
   ClaudeCodeQuotaMenu,
@@ -178,6 +179,11 @@ const HeteroControlBar = memo(() => {
     betterCoding && heteroProvider?.type === 'claude-code' && agentId ? (
       <PermissionModeSelector agentId={agentId} topicId={topicId} />
     ) : null;
+  // Codex under the lab gets a Plan switch beside its unchanged full access.
+  const planModeSwitch =
+    betterCoding && heteroProvider?.type === 'codex' && agentId ? (
+      <PlanModeSwitch agentId={agentId} topicId={topicId} />
+    ) : null;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     isHetero: !!heteroProvider,
@@ -230,6 +236,7 @@ const HeteroControlBar = memo(() => {
         <DeviceSwitcher agentId={agentId} />
         <Flexbox horizontal align={'center'} gap={4}>
           {permissionModeChip}
+          {planModeSwitch}
           {shouldShowApiCredits && <ChatInputCredits />}
         </Flexbox>
       </Flexbox>
@@ -259,6 +266,7 @@ const HeteroControlBar = memo(() => {
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
         {(permissionModeChip ||
+          planModeSwitch ||
           shouldShowApiCredits ||
           (shouldShowClaudeQuota && quotaDeviceId) ||
           (shouldShowCodexQuota && quotaDeviceId) ||
@@ -271,6 +279,7 @@ const HeteroControlBar = memo(() => {
             gap={4}
           >
             {permissionModeChip}
+            {planModeSwitch}
             {shouldShowApiCredits && <ChatInputCredits />}
             {shouldShowAntigravityQuota && quotaDeviceId && (
               <AntigravityQuotaMenu
@@ -388,6 +397,7 @@ const HeteroControlBar = memo(() => {
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {sdkRuntimeBadge}
+        {planModeSwitch}
         {permissionModeChip ?? (
           <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
         )}

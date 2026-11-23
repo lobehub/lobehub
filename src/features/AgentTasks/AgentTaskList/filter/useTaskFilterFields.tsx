@@ -43,6 +43,7 @@ import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { getWorkspaceMemberName } from '@/utils/workspaceMemberName';
 
 import { PRIORITY_META } from '../../features/TaskPriorityTag';
 import TaskStatusIcon from '../../features/TaskStatusIcon';
@@ -191,8 +192,7 @@ export const useTaskFilterFields = ({
 
     const memberOptions: TaskFilterOption[] = hasMembers
       ? members.map((member) => {
-          const name =
-            member.user?.fullName || member.user?.username || member.user?.email || member.userId;
+          const name = getWorkspaceMemberName(member);
           return {
             icon: <UserAvatar avatar={member.user?.avatar} name={name} size={OPTION_ICON_SIZE} />,
             label: name,

@@ -90,7 +90,6 @@
   "proxy.port": "المنفذ",
   "proxy.resetButton": "إعادة تعيين",
   "proxy.saveButton": "حفظ",
-  "proxy.saveFailed": "فشل الحفظ: {{error}}",
   "proxy.saveSuccess": "تم حفظ إعدادات البروكسي بنجاح",
   "proxy.server": "عنوان الخادم",
   "proxy.testButton": "اختبار الاتصال",

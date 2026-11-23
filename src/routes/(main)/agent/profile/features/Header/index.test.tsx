@@ -300,6 +300,7 @@ describe('Agent profile Header', () => {
     mocks.shareSupport = { publishable: false, supported: false, visible: false };
     mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
     mocks.serverConfigState.serverConfig.enableBusinessFeatures = true;
+    vi.stubGlobal('__MOBILE__', false);
   });
 
   describe('Market review entry', () => {
@@ -395,7 +396,8 @@ describe('Agent profile Header', () => {
   it.each([
     ['the role cannot edit content', { canEditResource: true, permission: false }],
     ['General Access is view-only', { canEditResource: false, permission: true }],
-  ])('disables the config entries when %s', (_label, { canEditResource, permission }) => {
+  ])('disables the mobile config entries when %s', (_label, { canEditResource, permission }) => {
+    vi.stubGlobal('__MOBILE__', true);
     mocks.permission.allowed = permission;
     mocks.resourceAccess.canEditResource = canEditResource;
     // No global mock reset in this file, so the shared spy carries calls in
@@ -444,7 +446,15 @@ describe('Agent profile Header', () => {
     await waitFor(() => expect(mocks.copyToClipboard).toHaveBeenCalledWith('agent-1'));
   });
 
+  it('leaves the config entries to the sidebar on desktop', () => {
+    render(<Header />);
+
+    expect(screen.queryByRole('button', { name: 'advancedSettings' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'permission.page.entry' })).toBeNull();
+  });
+
   it('shows workspace resource permission controls for the LobeAI inbox agent', () => {
+    vi.stubGlobal('__MOBILE__', true);
     mocks.agentState.isInbox = true;
 
     render(<Header />);
@@ -453,7 +463,8 @@ describe('Agent profile Header', () => {
     expect(screen.getByTestId('access-level-resource-id')).toHaveTextContent('agent-1');
   });
 
-  it('opens the Permission page from the menu entry', () => {
+  it('opens the Permission page from the mobile menu entry', () => {
+    vi.stubGlobal('__MOBILE__', true);
     render(<Header />);
 
     fireEvent.click(screen.getByRole('button', { name: 'permission.page.entry' }));
@@ -462,6 +473,7 @@ describe('Agent profile Header', () => {
   });
 
   it('keeps the Permission entry on a private workspace agent — its model / environment policies still apply once shared', () => {
+    vi.stubGlobal('__MOBILE__', true);
     mocks.agentState.visibility = 'private';
 
     render(<Header />);

@@ -28,6 +28,7 @@ import {
   marketplaceIndexRoute,
   marketplaceManageRoutes,
 } from '@/spa/router/marketplaceRoutes';
+import { mobileSettingsMemoryRedirects } from '@/spa/router/memoryRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
@@ -178,7 +179,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
           ...marketplaceAppAndMcpRoutes,
           {
             element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/skill'),
+              // Mobile keeps the one-column catalog; the desktop route has the two-column Skills page.
+              () => import('@/features/Marketplace/Catalog/SkillCatalog'),
               'Mobile > Discover > List > Skill',
             ),
             handle: {
@@ -391,6 +393,7 @@ export const mobileRoutes: RouteObject[] = [
           },
           { element: <LegacySandboxStorageRedirect />, path: 'drive' },
           ...legacySettingsMarketplaceRedirects,
+          ...mobileSettingsMemoryRedirects,
           // Every known tab gets a static segment: `/settings/memory` and
           // `/:workspaceSlug/memory` (or `/agent`, `/image`, …) tie on route
           // score, and the workspace tree would read `settings` as a slug.

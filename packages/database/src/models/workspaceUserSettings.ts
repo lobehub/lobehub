@@ -3,7 +3,11 @@ import type {
   HeteroPermissionModeDir,
   WorkspaceUserPreference,
 } from '@lobechat/types';
-import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
+import {
+  applyHeteroPermissionModeDir,
+  applyHeteroPlanModeDir,
+  applyWorktreeModeDir,
+} from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
@@ -164,6 +168,16 @@ export class WorkspaceUserSettingsModel {
     this.mutatePreference((current) => {
       const worktreeModeDirs = applyWorktreeModeDir(current.worktreeModeDirs, key, enabled);
       return { next: { ...current, worktreeModeDirs }, result: worktreeModeDirs };
+    });
+
+  /**
+   * Remember whether this member left the Codex Plan switch on for one
+   * directory and return the stored list (capped here, like the worktree switch).
+   */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    this.mutatePreference((current) => {
+      const heteroPlanModeDirs = applyHeteroPlanModeDir(current.heteroPlanModeDirs, key, enabled);
+      return { next: { ...current, heteroPlanModeDirs }, result: heteroPlanModeDirs };
     });
 
   /**

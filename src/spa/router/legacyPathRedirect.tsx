@@ -54,6 +54,18 @@ export const LegacyPathRedirect = memo<{ to: string }>(({ to }) => {
 LegacyPathRedirect.displayName = 'LegacyPathRedirect';
 
 /**
+ * The standalone `/memory` pages moved under personal Settings. Memory has no
+ * workspace scope, so a `/:workspaceSlug/memory` link drops the prefix.
+ */
+export const LegacyMemoryRedirect = memo<{ to: string }>(({ to }) => {
+  const { hash, search } = useLocation();
+
+  return <Navigate replace to={buildLegacyRedirectPath(to, { hash, search })} />;
+});
+
+LegacyMemoryRedirect.displayName = 'LegacyMemoryRedirect';
+
+/**
  * The retired Integrations settings. GitHub and Linear moved onto their
  * Marketplace connectors; their install callbacks still return to these paths.
  */

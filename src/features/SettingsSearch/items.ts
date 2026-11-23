@@ -516,6 +516,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Conversation,
   },
   {
+    anchor: 'conversation-message-usage',
+    descKey: 'settingChatAppearance.showMessageUsage.desc',
+    keywords: ['token', 'usage', 'model', 'cost', 'developer', 'advanced tools'],
+    labelKey: 'settingChatAppearance.showMessageUsage.title',
+    tab: SettingsTabs.Conversation,
+  },
+  {
     anchor: 'conversation-transition',
     keywords: ['transition', 'animation', 'fade', 'streaming'],
     labelKey: 'settingChatAppearance.transitionMode.title',
@@ -555,13 +562,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   // Advanced
   {
-    anchor: 'advanced-dev-mode',
-    descKey: 'settingCommon.devMode.desc',
-    keywords: ['developer', 'debug', 'dev mode'],
-    labelKey: 'settingCommon.devMode.title',
-    tab: SettingsTabs.Advanced,
-  },
-  {
     anchor: 'advanced-gateway-mode',
     descKey: 'tab.advanced.gatewayMode.desc',
     keywords: ['gateway', 'agent runtime'],
@@ -569,12 +569,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.enableGatewayMode,
   },
+  // About
   {
-    anchor: 'advanced-update-channel',
+    anchor: 'about-update-channel',
     descKey: 'tab.advanced.updateChannel.desc',
     keywords: ['update', 'version', 'canary', 'stable'],
     labelKey: 'tab.advanced.updateChannel.title',
-    tab: SettingsTabs.Advanced,
+    tab: SettingsTabs.About,
     visible: (ctx) => ctx.isDesktop,
   },
   // Labs — derived from the LAB_FEATURES catalog the page renders, so a new

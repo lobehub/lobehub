@@ -147,6 +147,45 @@ describe('rule-based reply error cards', () => {
     expect(card.actions).not.toContain('switch_device');
   });
 
+  it("explains a shared Agent's monthly usage limit without offering a doomed retry", () => {
+    const card = ruleBasedReplyError(
+      facts(
+        {
+          error: {
+            message: 'This shared Agent reached its monthly usage limit',
+            type: 'ShareSpendLimitExceeded',
+          },
+        },
+        { share: { showErrorDetails: false } },
+        { acceptedAt: null },
+      ),
+      'zh-CN',
+      NOW,
+    );
+    expect(card.kind).toBe('share_spend_limit');
+    expect(card.actions).toEqual([]);
+    expect(card.summary).toBe(
+      'Coder 已用完这个分享的用量额度，这次没有回复。需要创建者提高额度才能继续。',
+    );
+    expect(card.errorType).toBe('ShareSpendLimitExceeded');
+  });
+
+  it("explains a shared Agent's message limit without offering a doomed resume", () => {
+    const card = ruleBasedReplyError(
+      facts(
+        { error: { message: 'limit', type: 'ShareMessageLimitExceeded' } },
+        { share: { showErrorDetails: false } },
+      ),
+      'en-US',
+      NOW,
+    );
+    expect(card.kind).toBe('share_message_limit');
+    expect(card.actions).toEqual([]);
+    expect(card.summary).toBe(
+      'Messages to Coder reached the limit its creator set, so it did not reply. Its creator needs to raise the limit.',
+    );
+  });
+
   it("never persists a shared Agent's owner detail, even with the share's details enabled", () => {
     const card = ruleBasedReplyError(
       facts(

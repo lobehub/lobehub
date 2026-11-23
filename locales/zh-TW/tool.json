@@ -311,7 +311,6 @@
   "updateArgs.form.add": "新增一項",
   "updateArgs.form.key": "欄位鍵",
   "updateArgs.form.value": "欄位值",
-  "updateArgs.formValidationFailed": "表單驗證失敗，請檢查參數格式",
   "updateArgs.keyRequired": "欄位鍵不可為空",
   "updateArgs.stringifyError": "無法序列化參數，請檢查參數格式"
 }

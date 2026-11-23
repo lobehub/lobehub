@@ -78,6 +78,13 @@ export const workspaceUserSettingsRouter = router({
       ctx.workspaceUserSettingsModel.setWorktreeModeDir(input.key, input.enabled),
     ),
 
+  /** Whether this member last left the Codex Plan switch on for one directory. */
+  setHeteroPlanModeDir: workspaceUserSettingsProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.workspaceUserSettingsModel.setHeteroPlanModeDir(input.key, input.enabled),
+    ),
+
   /** The Claude Code permission mode this member last picked for one directory. */
   setHeteroPermissionModeDir: workspaceUserSettingsProcedure
     .input(z.object({ key: z.string().min(1).max(4096), mode: z.enum(HETERO_PERMISSION_MODES) }))

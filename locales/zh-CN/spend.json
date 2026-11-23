@@ -94,6 +94,7 @@
   "table.pagination.perPage": "{{size}} 条/页",
   "table.pagination.prev": "上一页",
   "table.pagination.range": "第 {{from}}-{{to}} 条，共 {{total}} 条",
+  "table.planIncluded": "订阅额度",
   "table.title": "明细",
   "table.totalToken.input": "输入",
   "table.totalToken.output": "输出",

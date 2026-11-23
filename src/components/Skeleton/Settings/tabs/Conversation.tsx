@@ -115,7 +115,7 @@ export const SendingSectionSkeleton = () => {
   );
 };
 
-/** Message display: the vertical font-size slider with its preview, then link icons. */
+/** Message display: the vertical font-size slider with its preview, link icons, then the usage row. */
 export const DisplaySectionSkeleton = () => {
   const text = useSkeletonText('setting');
 
@@ -156,6 +156,12 @@ export const DisplaySectionSkeleton = () => {
                 </Flexbox>
               ),
               label: text('settingChatAppearance.linkIcon.title', 120, 14),
+              minWidth: undefined,
+            },
+            {
+              control: SWITCH_CONTROL,
+              desc: text('settingChatAppearance.showMessageUsage.desc', 320, 12),
+              label: text('settingChatAppearance.showMessageUsage.title', 120, 14),
               minWidth: undefined,
             },
           ],

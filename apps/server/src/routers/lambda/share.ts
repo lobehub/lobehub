@@ -24,7 +24,7 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
@@ -146,7 +146,13 @@ export const shareRouter = router({
     }),
   /**
    * Resolve the visitor-facing metadata for an agent share, by its custom
-   * slug or its raw share id, after enforcing signed-in access.
+   * slug or its raw share id.
+   *
+   * Public so a signed-out visitor can read the share's landing page before
+   * deciding to sign in; starting a conversation still requires a session
+   * (`channel.openShared` is authed). Everything returned is computed as the
+   * share OWNER, never as the caller, so an anonymous caller sees exactly what
+   * a signed-in stranger sees.
    *
    * `findBySlugOrId` intentionally does NOT enforce visibility — it resolves
    * whatever share matches, of ANY visibility; the (private → owner only,
@@ -156,7 +162,7 @@ export const shareRouter = router({
    * Deployment support applies to every viewer, including owner previews.
    * The rollout flag only gates publishing, never access to an existing share.
    */
-  getSharedAgent: authedProcedure
+  getSharedAgent: publicProcedure
     .use(serverDatabase)
     .input(z.object({ slugOrId: z.string().trim().min(1) }))
     .query(async ({ input, ctx }): Promise<SharedAgentData> => {
@@ -168,13 +174,20 @@ export const shareRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
       }
 
-      AgentShareModel.assertShareAccess(share, ctx.userId);
+      // A public procedure skips `oidcAuth`, which confines a sandbox
+      // `hetero-operation` token to its own routes. Read such a caller as
+      // signed out so the token cannot unlock the owner's private shares.
+      const viewerId = ctx.oidcAuth?.purpose === 'hetero-operation' ? null : ctx.userId;
 
-      const isOwner = share.ownerId === ctx.userId;
+      AgentShareModel.assertShareAccess(share, viewerId);
 
-      if (!isOwner) {
-        // Owner previews are not counted: userViewCount tracks visitor page
-        // views (PV, not deduplicated visitors). The counter is analytics
+      const isOwner = !!viewerId && share.ownerId === viewerId;
+
+      if (!isOwner && viewerId) {
+        // Owner previews are not counted: userViewCount tracks signed-in
+        // visitor page views (PV, not deduplicated visitors). Anonymous loads
+        // are not counted either, so an unauthenticated client cannot inflate
+        // the counter. The counter is analytics
         // only, so it is best-effort: a failed increment must never turn an
         // otherwise valid share page into an error for the visitor.
         try {

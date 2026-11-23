@@ -149,12 +149,27 @@ export class GitHub {
     return `https://raw.githubusercontent.com/${info.owner}/${info.repo}/${info.branch}/${info.filePath}`;
   }
 
-  async resolveCommit(info: GitHubRepoInfo) {
-    const repoUrl = `https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}`;
-    const response = await fetch(`${repoUrl}/commits/${encodeURIComponent(info.branch)}`, {
-      headers: { 'Accept': 'application/vnd.github.sha', 'User-Agent': this.userAgent },
-      signal: AbortSignal.timeout(15_000),
-    });
+  private apiRepoUrl(info: GitHubRepoInfo) {
+    return `https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}`;
+  }
+
+  /**
+   * Resolve a ref to its commit. With `token`, the request is authenticated
+   * (api.github.com only) and a rejected token throws `GitHubAuthError`.
+   */
+  async resolveCommit(info: GitHubRepoInfo, token?: string) {
+    const response = await fetch(
+      `${this.apiRepoUrl(info)}/commits/${encodeURIComponent(info.branch)}`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.sha',
+          'User-Agent': this.userAgent,
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (token && response.status === 401) throw new GitHubAuthError('GitHub token was rejected');
     // A missing repository answers 404, a missing ref answers 422.
     if (response.status === 404 || response.status === 422)
       throw new GitHubNotFoundError('GitHub repository or ref not found', response.status);
@@ -180,6 +195,36 @@ export class GitHub {
     const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (response.status === 404 || response.status === 403)
       throw new GitHubNotFoundError('GitHub repository or commit is inaccessible');
+    return this.readArchive(response);
+  }
+
+  /**
+   * Download a commit's archive with a token. Only the api.github.com request
+   * carries the token; the archive it redirects to is pre-signed and fetched
+   * without credentials.
+   */
+  async downloadTokenZip(info: GitHubRepoInfo, commit: string, token: string) {
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubParseError('Invalid commit SHA');
+    const response = await fetch(`${this.apiRepoUrl(info)}/zipball/${commit}`, {
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': this.userAgent,
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (response.status === 401) throw new GitHubAuthError('GitHub token was rejected');
+    if (response.status === 404 || response.status === 403)
+      throw new GitHubNotFoundError('GitHub repository or commit is inaccessible', response.status);
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      const location = response.headers.get('location');
+      if (!location) throw new GitHubDownloadError('Missing GitHub archive location');
+      return this.downloadSnapshotZip(
+        new URL(location, response.url || this.apiRepoUrl(info)).href,
+      );
+    }
     return this.readArchive(response);
   }
 
@@ -363,6 +408,14 @@ export class GitHubDownloadError extends GitHubError {
   constructor(message: string) {
     super(message);
     this.name = 'GitHubDownloadError';
+  }
+}
+
+/** The token sent with a request was rejected (401). */
+export class GitHubAuthError extends GitHubError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubAuthError';
   }
 }
 

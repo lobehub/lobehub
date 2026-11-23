@@ -1,5 +1,5 @@
 import { type UserCredSummary } from '@lobechat/types';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type CredsApi } from './useCredsApi';
@@ -14,6 +14,9 @@ vi.mock('@/hooks/usePermission', () => ({
 }));
 
 vi.mock('@/libs/trpc/client', () => ({ lambdaClient: { market: { creds: {} } } }));
+
+const { createViewCredModal } = vi.hoisted(() => ({ createViewCredModal: vi.fn() }));
+vi.mock('./ViewCredModal', () => ({ createViewCredModal }));
 
 const cred = (overrides: Partial<UserCredSummary>): UserCredSummary =>
   ({
@@ -85,5 +88,26 @@ describe('WorkspaceCredsList', () => {
     // Only "Team token": the private one stays readable by its creator, and a
     // personal credential shared in stays readable by its owner.
     expect(screen.getAllByText('creds.writeOnly.tag')).toHaveLength(1);
+  });
+
+  it('opens the detail from the row, carrying its remove, edit and visibility actions', () => {
+    render(
+      <WorkspaceCredsList
+        credsApi={credsApiWith([
+          cred({ id: 2, key: 'MY_TOKEN', name: 'My token', visibility: 'private' }),
+        ])}
+      />,
+    );
+
+    // No "..." menu on the row any more: the row itself is the button.
+    expect(screen.queryByTitle('more')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /My token/ }));
+
+    expect(createViewCredModal).toHaveBeenCalledTimes(1);
+    const props = createViewCredModal.mock.calls[0][0];
+    expect(props.cred.id).toBe(2);
+    expect(props.onDelete).toBeTypeOf('function');
+    expect(props.onEdit).toBeTypeOf('function');
+    expect(props.actions.map((action: { key: string }) => action.key)).toContain('publish');
   });
 });

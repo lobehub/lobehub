@@ -22,7 +22,7 @@ import { findMergeableRequests, mergeJobs } from './merge';
 import type { ChannelTopicScope } from './topic';
 import { continuationTopic, resolveTopic, resumableTopic } from './topic';
 import { audit } from './transaction';
-import { assignedWorktree } from './worktree';
+import { assignedWorktree, sharesDirectory } from './worktree';
 
 export interface ChannelClaimOptions {
   /** How long the claimer may go without a heartbeat before reconcile takes over. */
@@ -476,7 +476,9 @@ export const claimJob = async (
 
   const blocked =
     (await deviceBlock(tx, channel, member, job)) ??
-    (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
+    (sharesDirectory(member)
+      ? undefined
+      : await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
     return null;

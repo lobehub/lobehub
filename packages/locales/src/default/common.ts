@@ -85,7 +85,7 @@ export default {
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
-  'cmdk.context.community': 'Marketplace',
+  'cmdk.context.community': 'Plugins',
   'cmdk.context.general': 'General',
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
@@ -107,7 +107,7 @@ export default {
   'cmdk.keywords.billing': 'billing payment invoice transaction',
 
   'cmdk.keywords.marketplace':
-    'marketplace market community discover agent skill connector model provider mcp',
+    'plugin plugins marketplace market community discover agent skill connector model provider mcp',
 
   // CMDK search keywords (space-separated for i18n)
   'cmdk.keywords.contactUs': 'feedback issue bug problem',
@@ -211,7 +211,7 @@ export default {
 
   'cmdk.search.loading': 'Searching...',
 
-  'cmdk.search.market': 'Marketplace',
+  'cmdk.search.market': 'Plugins',
 
   'cmdk.search.mcp': 'MCP Server',
 
@@ -457,7 +457,6 @@ export default {
   'navPanel.showMoreTeamPinned': 'Show {{count}} more',
   'navPanel.teamPinned': 'Pinned for team',
   'navPanel.teamPinnedHint': 'Pinned by admins for everyone in this workspace',
-  'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',
@@ -635,7 +634,7 @@ export default {
   'tab.goals': 'Goals',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
-  'tab.marketplace': 'Marketplace',
+  'tab.marketplace': 'Plugins',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.music': 'Music',

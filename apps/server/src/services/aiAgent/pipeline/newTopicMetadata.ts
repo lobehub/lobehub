@@ -108,6 +108,11 @@ export const buildNewTopicMetadata = ({
     ...(initialTopicMeta?.heteroPermissionMode && {
       heteroPermissionMode: initialTopicMeta.heteroPermissionMode,
     }),
+    // Codex Plan switch the composer showed: `false` is a choice too (never
+    // `&&`-dropped), while absent keeps a topic that sends no mode at all.
+    ...(typeof initialTopicMeta?.heteroPlanMode === 'boolean' && {
+      heteroPlanMode: initialTopicMeta.heteroPlanMode,
+    }),
     ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
     ...pickSandboxPlacement(initialTopicMeta),
     ...(initialTopicMeta?.workingDirectory && {

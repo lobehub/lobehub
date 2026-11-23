@@ -1,6 +1,9 @@
 import {
   type AgentDeviceOverride,
+  type ChannelDeviceGrantCard,
+  channelMessageConnector,
   channelMessageDeletedAt,
+  channelMessageDeviceGrant,
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageReplyError,
@@ -22,7 +25,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  like,
   lt,
   or,
   type SQL,
@@ -51,6 +53,8 @@ import { channelAttachments, fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
+import { channelUserNameSql } from './nickname';
+import { isOpeningAck } from './openingAck';
 import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
@@ -59,7 +63,7 @@ export const publicMessageColumns = {
   senderAgentName: agents.name,
   senderAgentTitle: agentTitleSql(),
   senderUserAvatar: users.avatar,
-  senderUserName: users.fullName,
+  senderUserName: channelUserNameSql(channelMessages.channelId, channelMessages.userId),
   senderUsername: users.username,
 };
 
@@ -138,6 +142,8 @@ export const publicMessage = (
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
     card: contactCardOf(message.metadata) ?? null,
+    // An Agent asking the reader to connect a connector it needs.
+    connector: (isAgent && channelMessageConnector(message.metadata)) || null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
@@ -204,6 +210,44 @@ const withRelayAvatar = <
   };
 };
 
+/**
+ * The current status of the device requests an Agent's cards on this page carry, for the device
+ * owner reading them. A grant that is gone (its environment moved, or the member left) reads as
+ * `expired`; a card the viewer does not own reads as nothing.
+ */
+const deviceGrantCards = async (
+  tx: Transaction,
+  rows: MessageRow[],
+  viewerUserId: string | undefined,
+) => {
+  const requests = rows.flatMap((row) => {
+    const request = isAgentAuthored(row) && channelMessageDeviceGrant(row.metadata);
+    return request ? [[row.id, request] as const] : [];
+  });
+  const cards = new Map<string, ChannelDeviceGrantCard>();
+  if (!viewerUserId || !requests.length) return cards;
+  const found = await tx
+    .select({
+      deviceOwnerId: channelMemberGrants.deviceOwnerId,
+      id: channelMemberGrants.id,
+      status: channelMemberGrants.status,
+    })
+    .from(channelMemberGrants)
+    .where(
+      inArray(
+        channelMemberGrants.id,
+        requests.map(([, request]) => request.grantId),
+      ),
+    );
+  const grants = new Map(found.map((grant) => [grant.id, grant]));
+  for (const [messageId, request] of requests) {
+    const grant = grants.get(request.grantId);
+    if (grant && grant.deviceOwnerId !== viewerUserId) continue;
+    cards.set(messageId, { ...request, status: grant?.status ?? 'expired' });
+  }
+  return cards;
+};
+
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
 /**
  * The Agent topic behind each published reply, for replies the viewer ran: the topic belongs to
@@ -237,22 +281,6 @@ const sourceTopicsByMessage = async (
 };
 
 const THREAD_PREVIEW_LENGTH = 240;
-
-/**
- * Request keys of the acknowledgements an Agent posts before its run (`openingRequestKey` in
- * `./opening`, which imports this module, so the prefix is repeated here).
- */
-const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
-
-/**
- * An Agent's acknowledgement before its run: it says the work started, not what came of it. One
- * a failure turned into the reply's card is news again.
- */
-const isOpeningAck = and(
-  eq(channelMessages.routingStatus, 'reply'),
-  like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
-  sql`COALESCE(${channelMessages.metadata} ->> 'replyError', '') = ''`,
-);
 
 type ThreadSummary = {
   lastNewsAt: Date | null;
@@ -568,6 +596,8 @@ export const readChannelView = async (
   channelId: string,
   options: {
     before?: number;
+    /** The client opens canvases from reply cards; see `replyWorksByMessage`. */
+    includeCanvasWorks?: boolean;
     /** The client renders the opt-in Work types on reply cards; see `replyWorksByMessage`. */
     includeFileWorks?: boolean;
     limit?: number;
@@ -593,7 +623,7 @@ export const readChannelView = async (
         role: channelMembers.role,
         status: channelMembers.status,
         userId: channelMembers.userId,
-        userName: users.fullName,
+        userName: channelUserNameSql(channelMembers.channelId, channelMembers.userId),
         username: users.username,
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
@@ -737,13 +767,15 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works, relayAvatars] = await Promise.all([
+  const [sourceTopics, works, relayAvatars, grantCards] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
     replyWorksByMessage(tx, channelId, replyIds, {
+      includeCanvasWorks: options.includeCanvasWorks,
       includeFileWorks: options.includeFileWorks,
       userId: viewerUserId,
     }),
     relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
+    deviceGrantCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
   ]);
   const ids = [...new Set([...files.values()].flat())];
   const attachments = await channelAttachments(tx, ids);
@@ -818,6 +850,7 @@ export const readChannelView = async (
             }),
             relayAvatars,
           ),
+          deviceGrant: grantCards.get(rootMessage.id) ?? null,
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
           works: works.get(rootMessage.id) ?? [],
@@ -831,6 +864,7 @@ export const readChannelView = async (
         }),
         relayAvatars,
       ),
+      deviceGrant: grantCards.get(message.id) ?? null,
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],

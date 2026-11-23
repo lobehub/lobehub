@@ -167,6 +167,9 @@ export default {
   'connector.account.title': 'Accounts',
   'connector.account.usingAccount': 'Account: {{name}}',
   'connector.actionFailed': 'Operation failed, please try again',
+  'connector.dangerZone.desc':
+    'Disconnecting or removing {{name}} takes its tools away from every Agent that uses them.',
+  'connector.dangerZone.title': 'Danger zone',
   'connector.error.network':
     'The network connection was interrupted. Check your connection and try again.',
   'connector.error.stdioDesktopOnly':
@@ -181,6 +184,8 @@ export default {
   'connector.add.clientSecret': 'OAuth Client Secret (optional)',
   'connector.add.confirm': 'Add',
   'connector.add.editTitle': 'Edit Connector',
+  'connector.add.failedRetry':
+    "Couldn't save the connector. Check the server URL and your network, then try again.",
   'connector.add.name': 'Name',
   'connector.add.namePlaceholder': 'My connector',
   'connector.add.popupBlocked': 'Please allow popups for this site and try again.',
@@ -423,7 +428,7 @@ export default {
   'updateArgs.form.add': 'Add an Item',
   'updateArgs.form.key': 'Field Key',
   'updateArgs.form.value': 'Field Value',
-  'updateArgs.formValidationFailed': 'Form validation failed, please check the parameter format',
   'updateArgs.keyRequired': 'Field key cannot be empty',
+  'updateArgs.saveFailed': "Couldn't save the parameters. Check your network and try again.",
   'updateArgs.stringifyError': 'Unable to serialize parameters, please check the parameter format',
 };

@@ -67,7 +67,6 @@ export interface UserGeneralConfig {
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
   interfaceDensity?: InterfaceDensity;
-  isDevMode: boolean;
   isLiteMode: boolean;
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
@@ -81,6 +80,13 @@ export interface UserGeneralConfig {
    * @default true
    */
   showImageReadPreview?: boolean;
+  /**
+   * Whether each answer shows the model that produced it and its token usage.
+   * Unset falls back to the retired `isDevMode` switch, so people who had
+   * Advanced Tools on keep seeing it.
+   * @default false
+   */
+  showMessageUsage?: boolean;
   telemetry: boolean;
   timezone?: string;
   transitionMode?: ResponseAnimationStyle;

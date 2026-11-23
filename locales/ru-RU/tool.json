@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Добавить элемент",
   "updateArgs.form.key": "Ключ поля",
   "updateArgs.form.value": "Значение поля",
-  "updateArgs.formValidationFailed": "Ошибка проверки формы, проверьте формат параметров",
   "updateArgs.keyRequired": "Ключ поля не может быть пустым",
   "updateArgs.stringifyError": "Не удалось сериализовать параметры, проверьте их формат"
 }

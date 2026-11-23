@@ -1,4 +1,5 @@
 // Built-in control commands register themselves when the steer loop loads.
+import './heteroCollaborationMode';
 import './heteroPermissionMode';
 import './heteroStopTask';
 
@@ -8,6 +9,7 @@ import type {
   ClaudeCodeControlRequest,
   ClaudeCodeControlRequestHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type { CodexCollaborationMode } from '@lobechat/types';
 
 import {
   dispatchHeteroControl,
@@ -90,6 +92,7 @@ interface SteerableHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
   supportsSteerImageAttachments?: true;
   supportsSteerImages?: boolean;
 }
@@ -147,6 +150,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
 
   const { operationId } = context;
   const sendControlRequest = handle.sendControlRequest;
+  const setCollaborationMode = handle.setCollaborationMode;
   const delivered = new Set<string>();
   const abort = new AbortController();
   const handling = new Set<Promise<void>>();
@@ -187,7 +191,9 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       log.debug('Control %s: %s', control.id, control.command);
       const outcome = await dispatchHeteroControl(control, {
         operationId,
-        sendControlRequest: sendControlRequest!,
+        // A native Codex run has no stream-json input: its handlers say so.
+        sendControlRequest: sendControlRequest ?? (() => undefined),
+        setCollaborationMode,
         signal: abort.signal,
       });
       await report(client, control, outcome);
@@ -200,7 +206,9 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   const poll = async () => {
     const client = await context.getTrpcClient();
     // Control messages need a way into the session and back to the server.
-    const acceptsControl = !!sendControlRequest && !!client.aiAgent.reportHeteroControlResult;
+    const acceptsControl =
+      (!!sendControlRequest || !!setCollaborationMode) &&
+      !!client.aiAgent.reportHeteroControlResult;
     while (!abort.signal.aborted) {
       let message: HeteroSteerMessage | null;
       try {

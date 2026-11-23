@@ -1,21 +1,34 @@
 'use client';
 
-import { Button, Input, TextArea, toast } from '@lobehub/ui';
+import { Button, Input, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { useMutation } from '@tanstack/react-query';
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 
 import { credErrorKey } from '../credError';
 import CredFormFooter from '../CredFormFooter';
 import KVPairsField from '../KVPairsField';
 import { createExtras, type CredsApi } from '../useCredsApi';
 
+/** Fields a caller can fill in ahead, e.g. a GitHub token's key and variable name. */
+export interface KVCredPreset {
+  description?: string;
+  key: string;
+  /** Variable names; their values stay for the person to paste. */
+  keys: string[];
+  name: string;
+}
+
 interface KVCredFormProps {
   credsApi: CredsApi;
   disabled?: boolean;
   onCancel: () => void;
   onSuccess: () => void;
+  preset?: KVCredPreset;
   type: 'kv-env' | 'kv-header';
 }
 
@@ -26,12 +39,32 @@ interface FormValues {
   name: string;
 }
 
-const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onCancel, onSuccess }) => {
+const KVCredForm: FC<KVCredFormProps> = ({
+  credsApi,
+  type,
+  disabled,
+  onCancel,
+  onSuccess,
+  preset,
+}) => {
   const { t } = useTranslation('setting');
   const form = useForm<FormValues>({
-    initialValues: { kvPairs: [{ key: '', value: '' }] } as FormValues,
+    initialValues: (preset
+      ? {
+          description: preset.description,
+          key: preset.key,
+          kvPairs: preset.keys.map((key) => ({ key, value: '' })),
+          name: preset.name,
+        }
+      : { kvPairs: [{ key: '', value: '' }] }) as FormValues,
     onSubmit: (values) => handleSubmit(values),
   });
+
+  /**
+   * Create failures (including Market's 409 slot conflicts) render above the submit row: the
+   * modal stays open and the user's next move is on this form, not behind a corner toast.
+   */
+  const [submitError, setSubmitError] = useState<InlineErrorState | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -58,7 +91,8 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onCancel, o
       });
     },
     onError: (error) => {
-      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
+      console.error('[KVCredForm] Create failed:', error);
+      setSubmitError(toInlineError(t(credErrorKey(error, 'creds.errors.createFailed')), error));
     },
     onSuccess: () => {
       onSuccess();
@@ -68,6 +102,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onCancel, o
   const handleSubmit = (values: FormValues) => {
     if (disabled) return;
 
+    setSubmitError(null);
     createMutation.mutate(values);
   };
 
@@ -102,8 +137,14 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onCancel, o
         />
       </Form.Field>
 
+      {submitError && (
+        <InlineErrorText detail={submitError.detail}>{submitError.summary}</InlineErrorText>
+      )}
+
       <CredFormFooter>
-        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+        <Button type="fill" onClick={onCancel}>
+          {t('creds.form.cancel')}
+        </Button>
         <Button
           disabled={disabled}
           htmlType="submit"

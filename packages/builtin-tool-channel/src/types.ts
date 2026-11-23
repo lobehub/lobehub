@@ -7,6 +7,7 @@ export const ChannelApiName = {
   messagePerson: 'messagePerson',
   readMessage: 'readMessage',
   readMessages: 'readMessages',
+  requestConnector: 'requestConnector',
   sendMessage: 'sendMessage',
   steerThread: 'steerThread',
   stopThread: 'stopThread',

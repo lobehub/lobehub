@@ -9,14 +9,11 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
 import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
-import ComposioSkillItem from '@/features/Settings/skill/features/ComposioSkillItem';
 import {
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
 } from '@/features/Settings/skill/features/connectorSections';
-import LobehubSkillItem from '@/features/Settings/skill/features/LobehubSkillItem';
-import { RowAddAction, RowMoreMenu } from '@/features/Settings/skill/features/RowActions';
-import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
+import { RowAddAction } from '@/features/Settings/skill/features/RowActions';
 import { useToolStore } from '@/store/tool';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
@@ -24,10 +21,32 @@ import CatalogSection from '../Catalog/CatalogSection';
 import DiscoverCatalogHeader from '../Catalog/DiscoverCatalogHeader';
 import { catalogStyles } from '../Catalog/styles';
 import { useCatalogDetailNavigate } from '../Catalog/useCatalogDetailNavigate';
-import { AppIcon } from './AppIcon';
-import { appCategories, getAppHome, getInlineConnectTool, hasAppConnection } from './catalog';
+import { MARKETPLACE_APPS_PATH } from '../paths';
+import AppRow from './AppRow';
+import AppRowMenu from './AppRowMenu';
+import {
+  appCategories,
+  appUrl,
+  CATEGORY_PREVIEW_COUNT,
+  getAppHome,
+  getInlineConnectTool,
+  hasAppConnection,
+  isAppCategory,
+} from './catalog';
+import OfficialMcpItem from './OfficialMcpItem';
+import { useAppSummary } from './useAppSummary';
 import { useMarketplaceApps } from './useMarketplaceApps';
 
+/** `?connect=1` on an app's page starts connecting it as the page opens. */
+export const CONNECT_ON_OPEN_PARAM = 'connect';
+
+/**
+ * The Apps catalog: apps grouped by category in two columns. Each group previews
+ * its first rows; its arrow opens the category's own page (`?category=`), and a
+ * search lists every match. A row opens the app's page; its `+` opens that page
+ * and starts connecting there, so the page is already showing when the sign-in
+ * lands. A connected row's `…` holds Details and Disconnect.
+ */
 export default function AppCatalog() {
   const { t } = useTranslation('discover');
   const { t: ts } = useTranslation('setting');
@@ -35,39 +54,18 @@ export default function AppCatalog() {
   const [params, setParams] = useSearchParams();
   const connected = params.get('view') === 'connected';
   const keyword = params.get('q') ?? '';
+  const categoryParam = params.get('category');
+  const category = isAppCategory(categoryParam) ? categoryParam : undefined;
   const navigate = useCatalogDetailNavigate();
-  const {
-    apps,
-    composioServers,
-    lobehubServers,
-    lobehubEnabled,
-    loading,
-    refreshing,
-    error,
-    retry,
-  } = useMarketplaceApps();
+  const summaryOf = useAppSummary();
+  const { apps, lobehubEnabled, loading, refreshing, error, retry } = useMarketplaceApps();
   const workspace = useActiveWorkspaceId();
   const useFetchConnectors = useToolStore((s) => s.useFetchConnectors);
   const connectorsSync = useFetchConnectors(!!workspace);
-  const connectorsReady = useToolStore((s) => s.isConnectorsInit);
-  const composioReady = useToolStore((s) => s.isComposioServersInit);
-  const lobehubReady = useToolStore((s) => s.lobehubSkillServers !== undefined);
   const rows = apps
     .filter((app) => !connected || hasAppConnection(app))
-    .map((app) => {
-      const { channel, tool } = app;
-      const summary = channel
-        ? t(`apps.summary.channel.${channel.id}`, {
-            defaultValue: tm(`messenger.list.${channel.id}.description`),
-          })
-        : t(`apps.summary.tool.${app.id}`, {
-            defaultValue:
-              (tool?.type === 'lobehub'
-                ? tool.provider.description
-                : tool?.serverType.description) ?? '',
-          });
-      return { ...app, summary };
-    })
+    .filter((app) => !category || app.category === category)
+    .map((app) => ({ ...app, summary: summaryOf(app) }))
     .filter(
       (app) =>
         matchesConnectorKeyword(keyword, [
@@ -79,11 +77,75 @@ export default function AppCatalog() {
         ]) ||
         (app.tool && matchesIntegrationKeyword(app.tool, keyword, ts)),
     );
+  const renderRows = (items: typeof rows) =>
+    items.map((app) => {
+      const isConnected = hasAppConnection(app);
+      const home = getAppHome(app);
+      const open = () => navigate(home);
+      const inlineTool = getInlineConnectTool(app, lobehubEnabled);
+      const label = t('catalog.rowAction', {
+        action: isConnected
+          ? t('apps.manage')
+          : app.channelPending
+            ? t('apps.continue')
+            : t('apps.connect'),
+        name: app.name,
+      });
+      if (app.officialMcp)
+        return (
+          <OfficialMcpItem app={app} key={app.id} server={app.officialMcp} summary={app.summary} />
+        );
+      return (
+        <AppRow
+          app={app}
+          key={app.id}
+          summary={app.summary}
+          action={
+            <>
+              {app.channel?.access?.requiredPlan === 'paid' && (
+                <Tag size={'small'}>{tm('messenger.paidBadge')}</Tag>
+              )}
+              {isConnected ? (
+                <AppRowMenu app={app} label={label} onOpenDetail={open} />
+              ) : (
+                <RowAddAction
+                  label={label}
+                  onClick={() =>
+                    navigate(
+                      inlineTool
+                        ? appUrl(home, {
+                            [CONNECT_ON_OPEN_PARAM]: '1',
+                          })
+                        : home,
+                    )
+                  }
+                />
+              )}
+            </>
+          }
+          onOpen={open}
+        />
+      );
+    });
+
+  // A category page and a search show every row; the catalog previews each category.
+  const full = Boolean(category) || Boolean(keyword.trim());
 
   return (
     <div {...stylex.props(catalogStyles.frame)}>
       <DiscoverCatalogHeader
         kind={'app'}
+        group={
+          category
+            ? {
+                backTo: appUrl(MARKETPLACE_APPS_PATH, {
+                  q: keyword || undefined,
+                  view: connected ? 'connected' : undefined,
+                }),
+                title: t(`apps.category.${category}`),
+              }
+            : undefined
+        }
         titleExtra={
           isMobileSurface() && (
             <Button
@@ -121,79 +183,33 @@ export default function AppCatalog() {
           </Text>
         }
       >
-        {appCategories.map((category) => {
-          const group = rows.filter((app) => app.category === category);
-          if (!group.length) return null;
+        {appCategories.map((group) => {
+          const items = rows.filter((app) => app.category === group);
+          if (!items.length) return null;
+          // The category's own page is titled by the header: just its rows.
+          if (category)
+            return (
+              <div key={group} {...stylex.props(catalogStyles.grid)}>
+                {renderRows(items)}
+              </div>
+            );
+          const visible = full ? items : items.slice(0, CATEGORY_PREVIEW_COUNT);
           return (
             <CatalogSection
-              count={group.length}
-              key={category}
-              label={t(`apps.category.${category}`)}
+              count={items.length}
+              key={group}
+              label={t(`apps.category.${group}`)}
               loading={false}
+              to={
+                full || items.length <= CATEGORY_PREVIEW_COUNT
+                  ? undefined
+                  : appUrl(MARKETPLACE_APPS_PATH, {
+                      category: group,
+                      view: connected ? 'connected' : undefined,
+                    })
+              }
             >
-              {group.map((app) => {
-                const isConnected = hasAppConnection(app);
-                const label = t('catalog.rowAction', {
-                  action: isConnected
-                    ? t('apps.manage')
-                    : app.channelPending
-                      ? t('apps.continue')
-                      : t('apps.connect'),
-                  name: app.name,
-                });
-                const open = () => navigate(getAppHome(app));
-                const row = {
-                  icon: () => <AppIcon app={app} size={20} />,
-                  onClick: open,
-                  summary: app.summary,
-                  title: app.name,
-                };
-                const tool = getInlineConnectTool(app, lobehubEnabled);
-                if (tool) {
-                  const ready = tool.type === 'composio' ? composioReady : lobehubReady;
-                  if (!ready || (workspace && !connectorsReady))
-                    return (
-                      <SkillListRow
-                        {...row}
-                        extra={<RowAddAction disabled label={label} onClick={open} />}
-                        key={app.id}
-                      />
-                    );
-                  return tool.type === 'composio' ? (
-                    <ComposioSkillItem
-                      catalogRow={row}
-                      key={app.id}
-                      server={composioServers.find((s) => s.identifier === app.id)}
-                      serverType={tool.serverType}
-                    />
-                  ) : (
-                    <LobehubSkillItem
-                      catalogRow={row}
-                      key={app.id}
-                      provider={tool.provider}
-                      server={lobehubServers.find((s) => s.identifier === app.id)}
-                    />
-                  );
-                }
-                return (
-                  <SkillListRow
-                    {...row}
-                    key={app.id}
-                    extra={
-                      <>
-                        {app.channel?.access?.requiredPlan === 'paid' && (
-                          <Tag size={'small'}>{tm('messenger.paidBadge')}</Tag>
-                        )}
-                        {isConnected ? (
-                          <RowMoreMenu label={label} onOpenDetail={open} />
-                        ) : (
-                          <RowAddAction label={label} onClick={open} />
-                        )}
-                      </>
-                    }
-                  />
-                );
-              })}
+              {renderRows(visible)}
             </CatalogSection>
           );
         })}

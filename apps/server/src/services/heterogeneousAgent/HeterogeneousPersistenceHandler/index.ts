@@ -9,6 +9,10 @@ import {
   isPermissionModeReport,
   permissionModeReportPatch,
 } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import {
+  collaborationModeReportPatch,
+  isCollaborationModeReport,
+} from '@lobechat/heterogeneous-agents/codexPlanMode';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { createNanoId } from '@lobechat/utils';
@@ -362,6 +366,15 @@ export class HeterogeneousPersistenceHandler {
         ...permissionModeReportPatch(event.data),
         heteroPermissionModeReportPending: null,
       });
+      return;
+    }
+    // Codex Plan switch: a thread back in `default` clears the pending reset;
+    // the switch follows Codex only where Codex disagrees with the request.
+    if (event.type === 'step_complete' && isCollaborationModeReport(event.data)) {
+      const patch = collaborationModeReportPatch(event.data);
+      if (Object.keys(patch).length > 0) {
+        await this.deps.topicModel.updateMetadata(state.topicId, patch);
+      }
       return;
     }
     await this.reduceAndApply(state, event);

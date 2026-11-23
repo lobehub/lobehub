@@ -432,6 +432,11 @@ export default {
   'limitation.insufficientBudget.exactDesc':
     'This request needs more balance. Top up or upgrade your plan.',
   'limitation.insufficientBudget.required': 'Required amount',
+  'limitation.insufficientBudget.rescue.basic.configApi': 'Set up API key',
+  'limitation.insufficientBudget.rescue.basic.desc':
+    "Basic doesn't include LobeHub-hosted model usage, and your free allowance is used up",
+  'limitation.insufficientBudget.rescue.basic.ownKeyHint':
+    'Models on your own API key keep working.',
   'limitation.insufficientBudget.rescue.desc': 'This request needs {{shortfall}} more to continue',
   'limitation.insufficientBudget.rescue.referral.badge': 'Free',
   'limitation.insufficientBudget.rescue.referral.benefit':
@@ -570,6 +575,7 @@ export default {
   'plans.cloud.sync': 'Global cloud sync',
   'plans.cloud.title': 'Cloud service',
   'plans.compare.agentMemory': 'Agent memory',
+  'plans.compare.agentRunCredit.runs': '{{runs}} runs (no model usage)',
   'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
@@ -623,9 +629,10 @@ export default {
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
-  'plans.limits.agentRunCredit.runs': 'About {{runs}} agent tasks a month',
+  'plans.limits.agentRunCredit.ownKey': 'Use your own API key',
+  'plans.limits.agentRunCredit.runs': '{{runs}} platform run fees/mo',
   'plans.limits.agentRunCredit.tooltip':
-    'Pays only the per-task fee of agent tasks. Models on your own API key cost nothing more; LobeHub-hosted models draw on your free allowance and top-ups.',
+    'Covers platform run fees for agent tasks only, not model usage. LobeHub adds nothing for models on your own API key; LobeHub-hosted models draw on your free allowance and top-ups.',
   'plans.limits.agentRunFee': '{{value}} per agent task',
   'plans.limits.agentRunFee.tooltip':
     'Charged from your balance when an agent task you start finishes, on top of its model usage. Tasks that fail, or that you stop within 30 seconds, are free.',
@@ -663,6 +670,7 @@ export default {
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
   'plans.plan.pro.desc': 'For professionals who rely on AI every day',
+  'plans.recommended': 'Recommended',
   'plans.restoreSubscription': 'Restore subscription',
   'plans.restoreSubscriptionError': 'Could not restore your subscription',
   'plans.restoreSubscriptionSuccess': 'Subscription has been restored',
@@ -737,7 +745,8 @@ export default {
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
   'plans.plan.free.title': 'Free',
-  'plans.plan.basic.desc': 'For running agents with your own model API keys',
+  'plans.plan.basic.desc':
+    'Run agents with your own model API keys. LobeHub-hosted model usage not included',
   'plans.plan.basic.title': 'Basic',
   'plans.plan.hobby.desc': 'For users with their own API who pay as they go',
   'plans.plan.hobby.title': 'Hobby',
@@ -1036,17 +1045,22 @@ export default {
   'credits.budgetPage.allocate.title': 'Shared allowances',
   'credits.budgetPage.limit.desc': 'Cap what each member and externally shared agents can use.',
   'credits.budgetPage.limit.title': 'Spending limits',
+  'plans.usageHero.agentRunCredit.desc': 'Run fees, no model usage',
+  'plans.usageHero.agentRunCredit.title': '{{runs}}/mo',
   'plans.usageHero.comparedTo5h': '5-hour limit of {{plan}}',
   'balance.hobbyQuotaDesc':
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
   'balance.subscriptionQuota': 'Subscription usage',
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
+  'cancelPlan.failed': "Couldn't cancel the subscription. Check your connection and try again.",
   'compare.monthlyQuota': 'Monthly usage',
   'plans.quota.freeLimit': 'Monthly limit, resets every month',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
   'creditUsageReminder.used': "{{percent}} of this billing cycle's subscription usage is used",
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
+  'credits.agentShareBudget.saveFailed':
+    "Couldn't save the Agent Share budget. Check your connection and try again.",
   'creditsChip.rolling.usageTitle': 'Plan usage',
   'creditsChip.rolling.usageTooltip': 'Plan usage toward the nearest limit',
   'creditsChip.usageTitle': 'Usage',
@@ -1073,6 +1087,8 @@ export default {
   'credits.autoTopUp.enable.noChargeNow':
     'Your balance is {{balance}}, above {{threshold}}, so nothing is charged now. Auto top-up runs once it drops to {{threshold}}.',
   'credits.autoTopUp.enable.noPaymentMethod': 'Add a card first',
+  'credits.autoTopUp.enable.openSetupFailed':
+    "Couldn't open payment method setup. Check your connection and try again.",
   'credits.autoTopUp.enable.overflowNote':
     'This also turns on "{{overflow}}". Without it, requests stop at your plan limits and auto top-up never runs.',
   'credits.autoTopUp.enable.paymentMethod': 'Payment method',
@@ -1084,12 +1100,23 @@ export default {
   'credits.autoTopUp.enable.waitingForPaymentMethod':
     'Add the card in the new tab, then come back here to turn it on.',
   'credits.autoTopUp.recommended': 'Recommended',
+  'credits.autoTopUp.saveFailed':
+    "Couldn't save auto top-up settings. Check your connection and try again.",
   'credits.autoTopUp.setupAndEnable': 'Add card and turn on',
   'credits.autoTopUp.summary': 'Refill to {{target}} when the balance is at or below {{threshold}}',
   'credits.autoTopUp.summaryMonthly': 'Charged this month: {{amount}} / {{limit}}',
   'credits.autoTopUp.summaryNoCard':
     'Add a card to refill the balance automatically, so requests keep going after your limits run out',
   'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
+  'credits.autoTopUp.turnOffFailed': "Couldn't turn off auto top-up. Try again.",
+  'credits.costEstimateHint.saveFailedRetry':
+    "Couldn't save the alert threshold. Check your connection and try again.",
+  'credits.dedicatedBudget.saveFailed':
+    "Couldn't save the dedicated budget. Check your connection and try again.",
+  'credits.memberBudget.saveFailed':
+    "Couldn't save the member budget. Check your connection and try again.",
+  'credits.teamBudget.saveFailed':
+    "Couldn't save the team budget. Check your connection and try again.",
   'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
   'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
   'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',

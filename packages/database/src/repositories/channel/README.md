@@ -37,6 +37,11 @@ which then follows the Thread. Deleting a bound Agent cascades its direct conver
 While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
 name, with the Agent on the device and directory a new Channel would give it
 (`createAgentDirectChannel`).
+A project's default Channel (`createDefaultChannel`, titled `General`) carries
+`metadata.projectDefault`. Every Channel the router hands a client gets `displayTitle`
+(`withDisplayTitles`): the project's name for that marked Channel while the project is live and
+named, else `title`. It is read each time, so a project rename shows at once, and renaming the
+Channel edits only `title`, keeping the mark.
 Inviting from a direct conversation leaves it as it is and starts a group instead
 (`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
 plus the invited Agents and people. `userCandidates` lists those people from a direct
@@ -72,7 +77,10 @@ Agent owner's private devices are offered to them) waits as `pending`. Saving th
 keeps the decision; any other environment replaces it. A claim that finds no row (the device was
 made private after it was picked) files a pending request for the waiting requester. The device
 owner lists requests with `listDeviceGrants` and approves, rejects or revokes with
-`decideDeviceGrant`, which refuses a grant whose environment has since moved.
+`decideDeviceGrant`, which refuses a grant whose environment has since moved. The server also asks
+them as the Agent (`announceDeviceGrants` in the channel services): a card in their direct
+conversation with it, `metadata.deviceGrant` under request key `device-grant:<grantId>`. The view
+adds the grant's live status for the device owner, `expired` once the grant is gone.
 
 Every claim rechecks the actual requester's Agent access and reads the Agent's current settings.
 Configuration uses the same merge function as AgentService: system defaults, server defaults,

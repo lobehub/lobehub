@@ -1,10 +1,9 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
-import { Select, Spin, Switch } from '@lobehub/ui';
+import { Spin, Switch } from '@lobehub/ui';
 import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -12,7 +11,6 @@ import AdvancedSkeleton from '@/components/Skeleton/Settings/tabs/Advanced';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
-import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -20,8 +18,6 @@ import { type UserGeneralConfig } from '@/types/user/settings';
 
 import { useDiagnosticsItems } from './useDiagnosticsItems';
 import { useRemoteDebuggingItem } from './useRemoteDebuggingItem';
-
-type UpdateChannelValue = 'canary' | 'stable';
 
 const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }) => {
   const { t } = useTranslation('setting');
@@ -52,21 +48,6 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const diagnosticsItems = useDiagnosticsItems<UserGeneralConfig>();
   const remoteDebuggingItem = useRemoteDebuggingItem<UserGeneralConfig>();
-
-  const [channel, setChannel] = useState<UpdateChannelValue>('stable');
-
-  useEffect(() => {
-    if (!isDesktop) return;
-    autoUpdateService
-      .getUpdateChannel()
-      .then(setChannel)
-      .catch(() => {});
-  }, []);
-
-  const handleChannelChange = useCallback((value: UpdateChannelValue) => {
-    setChannel(value);
-    autoUpdateService.setUpdateChannel(value);
-  }, []);
 
   const handleGatewayModeChange = useCallback(
     (checked: boolean) => {
@@ -99,17 +80,6 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
 
   const advancedGroup: FormGroupItem<UserGeneralConfig> = {
     children: [
-      {
-        children: <Switch />,
-        desc: t('settingCommon.devMode.desc'),
-        label: (
-          <SettingsSearchAnchor id={'advanced-dev-mode'}>
-            {t('settingCommon.devMode.title')}
-          </SettingsSearchAnchor>
-        ),
-        minWidth: undefined,
-        name: 'isDevMode',
-      },
       ...(enableGatewayMode
         ? [
             {
@@ -136,29 +106,8 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
     title: t('tab.advanced.toolsAndDiagnostics.title'),
   };
 
-  const channelOptions = [
-    { label: t('tab.advanced.updateChannel.stable'), value: 'stable' as const },
-    { label: t('tab.advanced.updateChannel.canary'), value: 'canary' as const },
-  ];
-
-  const updateChannelGroup: FormGroupItem<UserGeneralConfig> = {
-    children: [
-      {
-        children: (
-          <Select options={channelOptions} value={channel} onChange={handleChannelChange} />
-        ),
-        desc: t('tab.advanced.updateChannel.desc'),
-        label: (
-          <SettingsSearchAnchor id={'advanced-update-channel'}>
-            {t('tab.advanced.updateChannel.title')}
-          </SettingsSearchAnchor>
-        ),
-      },
-    ],
-    title: t('tab.advanced.appUpdates.title'),
-  };
-
-  const items = isDesktop ? [advancedGroup, updateChannelGroup] : [advancedGroup];
+  // The update channel lives in About, beside the version and update action.
+  const items = (advancedGroup.children as unknown[]).length > 0 ? [advancedGroup] : [];
 
   return (
     <>

@@ -709,6 +709,17 @@ export default {
   'heteroAgent.permissionMode.switchUnsupported':
     'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
   'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',
+  'heteroAgent.planMode.label': 'Plan',
+  'heteroAgent.planMode.tooltipOff':
+    'Plan first: Codex explores and proposes a plan instead of making changes. Codex still has full access. A new topic in this directory starts with your last choice.',
+  'heteroAgent.planMode.tooltipOn':
+    'Plan is on: Codex proposes a plan instead of making changes. Turn it off, or choose Execute plan, to let it carry the plan out.',
+  'heteroAgent.planMode.nextTurn': 'Applies from the next turn',
+  'heteroAgent.planMode.saveFailed': 'Couldn’t save the Plan setting. Try again.',
+  'heteroAgent.planMode.unavailable.appServerLab':
+    'Plan needs the Codex App Server Runtime. Turn it on in Settings → Labs.',
+  'heteroAgent.planMode.unavailable.unsupported':
+    'Plan isn’t available where this agent runs: it needs Codex app-server on this computer, or a device whose Codex and lh support it. Update lh on the device to use it.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
@@ -1047,14 +1058,21 @@ export default {
   'inbox.title': 'Lobe AI',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
-  'input.agentRunFeeUnfunded.desc':
-    'Each agent run carries a fee, even on your own API key. Top up or upgrade your plan, then send again.',
+  'input.agentRunFeeUnfunded.desc': 'Top up or upgrade your plan, then send again.',
   'input.agentRunFeeUnfunded.descOverflow':
-    'Each agent run carries a fee, even on your own API key. Your balance covers it: use your balance, then send again.',
-  'input.agentRunFeeUnfunded.descSubscribe':
-    'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
-  'input.agentRunFeeUnfunded.descTopUp':
-    'Each agent run carries a fee, even on your own API key. Top up, then send again.',
+    'Your balance covers this run. Use your balance, then send again.',
+  'input.agentRunFeeUnfunded.descSubscribe': 'Subscribe to a plan, then send again.',
+  'input.agentRunFeeUnfunded.descTopUp': 'Top up, then send again.',
+  'input.agentRunFeeUnfunded.free.desc':
+    'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs.',
+  'input.agentRunFeeUnfunded.free.descNoReset':
+    'Upgrade to {{plan}} for model usage and more agent runs.',
+  'input.agentRunFeeUnfunded.free.descOwnKey':
+    'Resets on {{date}}. Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
+  'input.agentRunFeeUnfunded.free.descOwnKeyNoReset':
+    'Upgrade to {{plan}} for model usage and more agent runs, or choose {{basic}} ({{price}}/month) if you only use your own API key.',
+  'input.agentRunFeeUnfunded.free.title': 'You’ve used this month’s free credits',
+  'input.agentRunFeeUnfunded.free.upgrade': 'Upgrade plan',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
@@ -1673,6 +1691,9 @@ export default {
   'connectAgent.create.stepDevice':
     'Step 1 of 3 · Pick the machine your agents run on — it will be scanned automatically.',
   'connectAgent.create.stepAgents': 'Step 2 of 3 · {{device}}',
+  'connectAgent.create.stepAgentsInline': 'Step 1 of 2 · {{device}}',
+  'connectAgent.create.stepConfirmInline': 'Step 2 of 2 · Name it for your agent list',
+  'connectAgent.create.switchDevice': 'Run on',
   'connectAgent.create.stepConfirm': 'Step 3 of 3 · Name it for your agent list',
   'connectAgent.create.thisDevice': 'This device',
   'connectAgent.create.connectedDevices': 'Connected devices',
@@ -2157,9 +2178,11 @@ export default {
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
   'tab.backToChat': 'Back to chat',
+  'tab.group.advanced': 'Advanced',
+  'tab.group.growth': 'Growth',
   'tab.group.identity': 'Identity',
   'tab.group.shape': 'Shape',
-  'tab.group.setup': 'Configure',
+  'tab.group.setup': 'Capabilities',
   'tab.context': 'Context',
   'tab.engine': 'Engine',
   'tab.environment': 'Environment',
@@ -2514,7 +2537,6 @@ export default {
     'Stops once total spend reaches this amount; leave blank for no cap.',
   'createGoal.costBudgetLabel': 'Cost budget',
   'createGoal.costBudgetPlaceholder': 'No cap',
-  'createGoal.createFailed': 'Failed to create goal',
   'createGoal.back': 'Back',
   'createGoal.agentsHint':
     'The main agent plans and supervises the goal; tasks go to the executor, or to the main agent when none is chosen.',
@@ -2522,6 +2544,8 @@ export default {
   'createGoal.budgetTitle': 'Budget',
   'createGoal.contextLabel': 'Context for the Agent',
   'createGoal.contextHint': 'Add constraints, source material, or anything the Agent should know',
+  'createGoal.createFailedRetry':
+    "Couldn't create the goal. Your plan is kept, check your connection and try again.",
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'Acceptance criteria',
@@ -2564,7 +2588,8 @@ export default {
   'createTask.assignee': 'Agent',
   'createTask.member': 'Assignee',
   'createTask.collapse': 'Hide input',
-  'createTask.createFailed': 'Failed to create task',
+  'createTask.createFailedRetry':
+    "Couldn't create the task. Your draft is kept, check your connection and try again.",
   'createTask.discardConfirm.cancel': 'Keep editing',
   'createTask.discardConfirm.content':
     'The title, instruction and attachments you added will be lost.',
@@ -2823,11 +2848,9 @@ export default {
   'goalProcess.northStar.declare.opLabel': 'Condition',
   'goalProcess.northStar.declare.targetLabel': 'Target value',
   'goalProcess.northStar.declare.submit': 'Declare',
-  'goalProcess.northStar.declare.failed': 'Failed to declare the metric',
   'goalProcess.northStar.record.title': 'Record observation',
   'goalProcess.northStar.record.valueLabel': 'Current value of {{key}}',
   'goalProcess.northStar.record.submit': 'Record',
-  'goalProcess.northStar.record.failed': 'Failed to record the observation',
   'goalProcess.northStar.detail.history': 'Observations ({{count}})',
   'goalProcess.northStar.detail.removed': 'This metric is no longer declared on the goal',
   'goalProcess.northStar.detail.source.agent': 'Recorded by agent',
@@ -3377,6 +3400,10 @@ export default {
   'goalPage.title': 'Overview',
   'goalPage.view.card': 'Cards',
   'goalPage.view.list': 'List',
+  'goalProcess.northStar.declare.failedRetry':
+    "Couldn't declare the metric. Check the key and target, then try again.",
+  'goalProcess.northStar.record.failedRetry':
+    "Couldn't record the observation. Check the value and try again.",
   'goalTurn.authorUser': 'User',
   'goalTurn.continuation': 'Why planning reopened',
   'goalTurn.earlierFeedback': 'Earlier feedback ({{count}})',
@@ -3395,6 +3422,10 @@ export default {
   'goalTurn.trigger.first': 'First turn',
   'goalTurn.trigger.settled': 'Work settled',
   'goalTurn.trigger.takeover': 'Takeover',
+  'heteroAgent.claudeQuota.manage.loginFailedRetry':
+    "Sign-in didn't finish. Click Add account to try again.",
+  'heteroAgent.claudeQuota.manage.switchFailedRetry':
+    "Couldn't switch the account. Check your network and try again.",
   'taskList.activeTasks': 'Active Tasks',
   'taskList.all': 'All tasks',
   'taskList.completedTasks.all': 'All',
@@ -3545,7 +3576,36 @@ export default {
   'taskList.mine.emptyAssigned': 'No tasks assigned to you yet',
   'taskList.mine.emptyCreated': "You haven't created any tasks yet",
   'taskList.mine.title': 'My tasks',
+  'taskList.scheduled.columns.assignee': 'Assignee',
+  'taskList.scheduled.columns.cadence': 'Frequency',
+  'taskList.scheduled.columns.nextRun': 'Next run',
+  'taskList.scheduled.columns.recentRuns': 'Recent runs',
+  'taskList.scheduled.columns.task': 'Task',
   'taskList.scheduled.empty': 'No scheduled tasks yet',
+  'taskList.scheduled.group.attention': 'Needs attention',
+  'taskList.scheduled.group.running': 'Running',
+  'taskList.scheduled.group.scheduled': 'Scheduled',
+  'taskList.scheduled.runs.none': 'No runs yet',
+  'taskList.scheduled.runs.outcome.canceled': 'Canceled',
+  'taskList.scheduled.runs.outcome.failed': 'Failed',
+  'taskList.scheduled.runs.outcome.interrupted': 'Interrupted',
+  'taskList.scheduled.runs.outcome.running': 'Running',
+  'taskList.scheduled.runs.outcome.succeeded': 'Succeeded',
+  'taskList.scheduled.runs.tooltip': 'Run #{{seq}} · {{outcome}} · {{time}}',
+  'taskList.scheduled.state.awaitingHuman': 'Waiting for your reply',
+  'taskList.scheduled.state.awaitingHuman.hint':
+    'Runs are skipped until you answer the question on this task',
+  'taskList.scheduled.state.awaitingReview': 'Pending review',
+  'taskList.scheduled.state.awaitingReview.hint': 'Open the task to review its latest result',
+  'taskList.scheduled.state.nextRunUnknown': 'Schedule can’t be read',
+  'taskList.scheduled.state.overrun': 'Running for {{duration}}, not finished',
+  'taskList.scheduled.state.overrun.hint': 'Later runs are skipped until this run ends',
+  'taskList.scheduled.state.running': 'Running · {{duration}}',
+  'taskList.scheduled.state.runningNoDuration': 'Running',
+  'taskList.scheduled.state.stopped_one': 'Stopped after {{count}} failed run',
+  'taskList.scheduled.state.stopped_other': 'Stopped after {{count}} failed runs',
+  'taskList.scheduled.state.stopped.hint':
+    'It won’t run again until a run succeeds. Open the task to see the error, then run it now',
   'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.subtaskProgress.loadFailed':
     "Couldn't load sub-tasks. Click the progress badge to retry.",
@@ -4724,6 +4784,8 @@ export default {
   'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
   'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
   'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
+  'resource.artifacts.history.restoreFailedRetry':
+    "Couldn't restore this revision. Check your network and try again.",
   'taskLabel.add': 'Add labels',
   'taskLabel.anyInGroup': 'Any {{name}}',
   'taskLabel.createFailed': 'Failed to create label',
@@ -4761,4 +4823,11 @@ export default {
   'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
   'sandboxEnvironment.noRepository': 'No repository',
+  'sessionGroup.createFailedRetry':
+    "Couldn't create the category. Check your network and try again.",
+  'shareModal.downloadFailedRetry': "Couldn't download the PDF. Check your network and try again.",
+  'shareModal.generation.updateFailedRetry':
+    "Couldn't update the share link. Check your network and try again.",
+  'taskDetail.statusCascade.applyFailedRetry':
+    "Couldn't update the task status. Check your network and try again.",
 };

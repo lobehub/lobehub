@@ -170,6 +170,7 @@
   "olderMessages": "Older messages",
   "openAgent": "Open Agent",
   "openAgentNamed": "Open {{name}}",
+  "openDirect.unavailable": "This Agent's conversation can't be opened right now.",
   "openThread": "Open thread",
   "openThreadPage": "Open as page",
   "otherAgents": "Other Agents",

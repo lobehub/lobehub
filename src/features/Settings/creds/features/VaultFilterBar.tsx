@@ -25,8 +25,8 @@ interface VaultFilterBarProps {
 
 /**
  * The vault's filter row, under the tabs and the create button: one tab per
- * credential type with its count on the left, the search box (and any extra
- * filters) on the right.
+ * credential type with its count on the left, the search box filling the rest
+ * of the row (and any extra filters) on the right.
  */
 const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, creds, onChange, value }) => {
   const { t } = useTranslation('setting');
@@ -36,6 +36,7 @@ const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, creds, onChange, va
     <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
       <Segmented
         value={value.type ?? 'all'}
+        variant={'outlined'}
         options={(['all', ...CRED_TYPES] as CredTypeFilterValue[]).map((option) => ({
           label: (
             <span>
@@ -47,8 +48,8 @@ const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, creds, onChange, va
         }))}
         onChange={(next) => onChange({ ...value, type: next as CredTypeFilterValue })}
       />
-      {/* Takes the rest of the row and shrinks the search box before wrapping,
-          so the tabs, search and visibility filter share one line at settings
+      {/* Takes the rest of the row, the search box stretching across it, so
+          the tabs, search and visibility filter share one line at settings
           widths; a very narrow pane still wraps each control onto its own line. */}
       <Flexbox
         horizontal
@@ -61,7 +62,7 @@ const VaultFilterBar: FC<VaultFilterBarProps> = ({ children, creds, onChange, va
         <SearchBar
           allowClear
           placeholder={t('creds.searchPlaceholder')}
-          style={{ flex: '1 1 140px', maxWidth: 240, minWidth: 140 }}
+          style={{ flex: '1 1 140px', minWidth: 140 }}
           value={value.keyword ?? ''}
           variant={'filled'}
           onChange={(e) => onChange({ ...value, keyword: e.target.value })}

@@ -1060,6 +1060,15 @@ components:
           type:
             - string
             - "null"
+        editorData:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+          description: Lexical editor state (`SerializedEditorState`) of the body; `null`
+            for folders, HTML pages and pages saved without one.
       required:
         - createdAt
         - fileType
@@ -1069,6 +1078,7 @@ components:
         - title
         - updatedAt
         - content
+        - editorData
       additionalProperties: false
     EvalRun:
       type: object
@@ -16413,8 +16423,8 @@ paths:
     post:
       operationId: documents.create
       description: >-
-        Creates a page from Markdown, or a folder with `fileType:
-        "custom/folder"`.
+        Creates a page from Markdown or Lexical `editorData`, or a folder with
+        `fileType: "custom/folder"`.
 
 
         **API key scopes:** `knowledge:write`.
@@ -16560,6 +16570,31 @@ paths:
                   description: Markdown body. Omit for a folder.
                   type: string
                   maxLength: 10000000
+                editorData:
+                  type: object
+                  properties:
+                    root:
+                      type: object
+                      properties:
+                        children:
+                          minItems: 1
+                          type: array
+                          items: {}
+                        type:
+                          type: string
+                          const: root
+                      required:
+                        - children
+                        - type
+                      additionalProperties: {}
+                  required:
+                    - root
+                  additionalProperties: {}
+                  description: Lexical editor state (`SerializedEditorState`) with a non-empty
+                    `root`, at most 50000000 characters serialized. Replaces the
+                    whole body. When `content` is omitted, the server exports
+                    the Markdown body from it. Not accepted for folders or HTML
+                    pages (`custom/html`).
                 fileType:
                   description: "`custom/folder` creates a folder; defaults to a page
                     (`custom/document`)."
@@ -16581,6 +16616,10 @@ paths:
   /api/v1/documents/{id}:
     get:
       operationId: documents.get
+      description: |-
+        Returns the Markdown `content` and the Lexical `editorData` of the body.
+
+        **API key scopes:** `knowledge:read`.
       summary: Get a document
       tags:
         - documents
@@ -16718,12 +16757,14 @@ paths:
             minLength: 1
           required: true
         - $ref: "#/components/parameters/WorkspaceId"
-      description: "**API key scopes:** `knowledge:read`."
     patch:
       operationId: documents.update
       description: >-
-        Replaces the title and/or the whole Markdown body. A page open in the
-        editor receives the write through its live room.
+        Replaces the title and/or the whole body, sent as Markdown `content` or
+        Lexical `editorData`. A page open in the editor receives the write
+        through its live room. Send `ifUpdatedAt` to get 409 instead of
+        overwriting an edit made since the client last read the page; a page
+        someone else is editing also answers 409.
 
 
         **API key scopes:** `knowledge:write`.
@@ -16822,6 +16863,21 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "429":
           content:
             application/json:
@@ -16872,9 +16928,44 @@ paths:
               type: object
               properties:
                 content:
-                  description: Markdown body; replaces the whole body.
+                  description: Markdown body; replaces the whole body. Sent with `editorData`, it
+                    is stored as that state’s Markdown.
                   type: string
                   maxLength: 10000000
+                editorData:
+                  type: object
+                  properties:
+                    root:
+                      type: object
+                      properties:
+                        children:
+                          minItems: 1
+                          type: array
+                          items: {}
+                        type:
+                          type: string
+                          const: root
+                      required:
+                        - children
+                        - type
+                      additionalProperties: {}
+                  required:
+                    - root
+                  additionalProperties: {}
+                  description: Lexical editor state (`SerializedEditorState`) with a non-empty
+                    `root`, at most 50000000 characters serialized. Replaces the
+                    whole body. When `content` is omitted, the server exports
+                    the Markdown body from it. Not accepted for folders or HTML
+                    pages (`custom/html`).
+                ifUpdatedAt:
+                  description: The `updatedAt` the client last read. When the stored `updatedAt`
+                    differs, nothing is written and the API answers 409
+                    `conflict`; the error’s `details` entry for
+                    `json.ifUpdatedAt` carries the stored `updatedAt` as its
+                    message.
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
                 title:
                   type: string
                   minLength: 1

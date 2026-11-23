@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Item toevoegen",
   "updateArgs.form.key": "Veldsleutel",
   "updateArgs.form.value": "Veldwaarde",
-  "updateArgs.formValidationFailed": "Formulier validatie mislukt, controleer het parameterformaat",
   "updateArgs.keyRequired": "Veldsleutel mag niet leeg zijn",
   "updateArgs.stringifyError": "Kan parameters niet serialiseren, controleer het parameterformaat"
 }

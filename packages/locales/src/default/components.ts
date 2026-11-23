@@ -48,6 +48,8 @@ export default {
   'FileManager.actions.copyUrlError': 'Failed to copy the file link',
   'FileManager.actions.copyUrlSuccess': 'File url copied successfully.',
   'FileManager.actions.createChunkingTask': 'Preparing...',
+  'FileManager.actions.createFolderFailedRetry':
+    "Couldn't create the folder. Check your network and try again.",
   'FileManager.actions.deleteSuccess': 'File deleted successfully.',
   'FileManager.actions.deleteAll': 'Delete All Items',
   'FileManager.actions.deleteAllOwn': 'Delete All Items I Created',
