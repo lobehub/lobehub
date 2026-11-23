@@ -1,6 +1,6 @@
 'use client';
 
-import { Center, Segmented, Text } from '@lobehub/ui';
+import { Center, Tabs, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -299,6 +299,13 @@ const CommunityListPage = memo<{ query: AssistantQueryParams }>(({ query }) => {
   );
   const data = useDiscoverStore(assistantSelectors.assistantList(queryKey));
   const agents = useMemo(() => (data?.items ?? []).map(fromCommunity), [data]);
+  // A response missing a paging field reads as a single page.
+  const paging = {
+    currentPage: data?.currentPage ?? 1,
+    pageSize: data?.pageSize ?? agents.length,
+    totalCount: data?.totalCount ?? agents.length,
+    totalPages: data?.totalPages ?? 0,
+  };
 
   if (error && !data)
     return <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />;
@@ -313,12 +320,12 @@ const CommunityListPage = memo<{ query: AssistantQueryParams }>(({ query }) => {
   return (
     <>
       <AgentGrid agents={agents} source={query.source} />
-      {data && data.totalPages > 1 && (
+      {paging.totalPages > 1 && (
         <Pagination
-          currentPage={data.currentPage}
-          pageSize={data.pageSize}
+          currentPage={paging.currentPage}
+          pageSize={paging.pageSize}
           path={MARKETPLACE_AGENT_PATH}
-          total={data.totalCount}
+          total={paging.totalCount}
         />
       )}
     </>
@@ -386,14 +393,15 @@ export const AgentCatalog = () => {
     <DiscoverCatalogHeader
       kind={'agent'}
       titleExtra={
-        <Segmented
-          value={tab}
-          variant={'outlined'}
-          options={TABS.map((value) => ({
+        <Tabs
+          activeKey={tab}
+          size={'small'}
+          variant={'square'}
+          items={TABS.map((value) => ({
+            key: value,
             label: t(`marketplaceAgents.tabs.${value}`),
-            value,
           }))}
-          onChange={(value) => setTab(value as AgentsTab)}
+          onChange={(key) => setTab(key as AgentsTab)}
         />
       }
     />
