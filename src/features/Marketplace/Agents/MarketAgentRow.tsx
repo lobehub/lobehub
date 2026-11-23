@@ -1,7 +1,7 @@
 import { Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AssistantMarketSource } from '@/types/discover';
@@ -50,6 +50,7 @@ const MarketAgentRow = memo<{ agent: MarketAgentSummary; source?: AssistantMarke
     const { t } = useTranslation('discover');
     const openAgent = useOpenAgent(source);
     const open = () => openAgent(agent.id, agent.isGroup);
+    const [hovered, setHovered] = useState(false);
 
     return (
       <div
@@ -57,8 +58,16 @@ const MarketAgentRow = memo<{ agent: MarketAgentSummary; source?: AssistantMarke
         data-agent-type={agent.isGroup ? 'agent-group' : 'agent'}
         data-testid={'assistant-item'}
         onClick={open}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <MarketAgentAvatar avatar={agent.avatar} size={40} title={agent.title} />
+        <MarketAgentAvatar
+          avatar={agent.avatar}
+          followPointer={hovered}
+          identifier={agent.id}
+          size={40}
+          title={agent.title}
+        />
         <span {...stylex.props(styles.text)}>
           <Text ellipsis weight={500}>
             {agent.title}

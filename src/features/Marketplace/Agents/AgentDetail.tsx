@@ -217,7 +217,13 @@ const AgentDetail = memo<{ detail: Partial<DiscoverAssistantDetail>; mobile?: bo
       <div {...stylex.props(catalogStyles.frame)} data-testid={'assistant-detail-content'}>
         <Flexbox gap={24}>
           <Flexbox horizontal align={'flex-start'} gap={16} wrap={'wrap'}>
-            <MarketAgentAvatar avatar={detail.avatar} size={56} title={title} />
+            <MarketAgentAvatar
+              followPointer
+              avatar={detail.avatar}
+              identifier={identifier}
+              size={56}
+              title={title}
+            />
             <Flexbox flex={1} gap={4} style={{ minWidth: 200 }}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <h1 {...stylex.props(styles.title)}>{title}</h1>
