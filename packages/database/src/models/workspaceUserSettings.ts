@@ -9,9 +9,10 @@ import {
   applyWorktreeModeDir,
 } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
-import { workspaceUserSettings } from '../schemas/workspace';
+import { MAX_PINNED_ORDER_ITEMS } from '../repositories/home/pinnedOrder';
+import { workspaceMembers, workspaceUserSettings } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 
 /**
@@ -196,6 +197,69 @@ export class WorkspaceUserSettingsModel {
       );
       return { next: { ...current, heteroPermissionModeDirs }, result: heteroPermissionModeDirs };
     });
+
+  /**
+   * When this member joined the workspace, or `undefined` when they are not
+   * a member (any more).
+   */
+  getJoinedAt = async (): Promise<Date | undefined> => {
+    const [row] = await this.db
+      .select({ joinedAt: workspaceMembers.joinedAt })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, this.workspaceId),
+          eq(workspaceMembers.userId, this.userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      );
+    return row?.joinedAt;
+  };
+
+  /**
+   * Set this member's sidebar up from the workspace once:
+   * - `pinIds` go after the member's own pins (`sidebarPinnedItemIds`), so a
+   *   member keeps what they saw: their pins first, then the team's;
+   * - `listIds` are added to the sidebar unpinned
+   *   (`sidebarAgentVisibilityOverrides`), never overriding a choice the
+   *   member already made.
+   *
+   * The preference is then marked `sidebarInitialized`, after which the
+   * sidebar is the member's alone. Nothing happens while both lists are
+   * empty, so a member who loads the sidebar before the workspace has
+   * anything to offer still gets it later — unless `final` says nothing can
+   * ever be added, which marks the member as set up anyway. Returns the
+   * stored preference.
+   */
+  initializeSidebar = async ({
+    final = false,
+    listIds = [],
+    pinIds = [],
+  }: {
+    final?: boolean;
+    listIds?: readonly string[];
+    pinIds?: readonly string[];
+  }): Promise<WorkspaceUserPreference> => {
+    if (!final && listIds.length === 0 && pinIds.length === 0) return this.getPreference();
+
+    return this.mutatePreference((current) => {
+      if (current.sidebarInitialized) return { next: current, result: current };
+
+      const next: WorkspaceUserPreference = { ...current, sidebarInitialized: true };
+      if (pinIds.length > 0) {
+        next.sidebarPinnedItemIds = [
+          ...new Set([...(current.sidebarPinnedItemIds ?? []), ...pinIds]),
+        ].slice(0, MAX_PINNED_ORDER_ITEMS);
+      }
+      if (listIds.length > 0) {
+        next.sidebarAgentVisibilityOverrides = {
+          ...Object.fromEntries(listIds.map((id) => [id, true])),
+          ...current.sidebarAgentVisibilityOverrides,
+        };
+      }
+      return { next, result: next };
+    });
+  };
 
   /** Read → change → write this member's preference under the row lock. */
   private mutatePreference = async <T>(

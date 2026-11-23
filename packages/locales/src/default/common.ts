@@ -30,6 +30,13 @@ export default {
   'agentViewAll.orderBy.updatedAt': 'Updated at',
   'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
+  'agentViewAll.recommendedSection.title': 'Recommended agents',
+  'agentViewAll.recommendedSection.hint':
+    'Recommended by your workspace admins. Add the ones you use to your sidebar.',
+  'agentViewAll.recommendedSection.adminHint':
+    'Every member sees these here, and new members start with them in their sidebar. Drag to reorder.',
+  'agentViewAll.recommendedSection.empty':
+    'No recommended agents yet. Use “Add to recommended agents” in an agent’s menu.',
   'agentViewAll.sidebarSection.collapse': 'Fold',
   'agentViewAll.sidebarSection.expand': 'Unfold',
   'agentViewAll.sidebarSection.title': 'In Sidebar',
@@ -450,13 +457,8 @@ export default {
   'navPanel.agent': 'Agents',
   'navPanel.createPrivateFolder': 'New private category',
   'navPanel.managePrivateFolders': 'Manage private categories',
-  'navPanel.myPinned': 'Pinned',
   'navPanel.newChat': 'New chat',
   'navPanel.privateTooltip': 'Private · only you can see this',
-  'navPanel.showLessTeamPinned': 'Show less',
-  'navPanel.showMoreTeamPinned': 'Show {{count}} more',
-  'navPanel.teamPinned': 'Pinned for team',
-  'navPanel.teamPinnedHint': 'Pinned by admins for everyone in this workspace',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',

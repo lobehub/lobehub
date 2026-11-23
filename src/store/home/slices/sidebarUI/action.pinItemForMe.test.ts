@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.spyOn(agentService, 'updateAgentPinned').mockResolvedValue(undefined as any);
   vi.spyOn(chatGroupService, 'updateGroup').mockResolvedValue(undefined as any);
   vi.spyOn(useHomeStore.getState(), 'refreshAgentList').mockResolvedValue(undefined);
+  useHomeStore.setState({ pinnedAgents: [] } as any);
   useUserStore.setState({
     updateWorkspaceUserPreference: updatePreference,
     workspaceUserPreference: { sidebarPinnedItemIds: ['older'] },
@@ -36,18 +37,46 @@ describe('pinItemForMe', () => {
     await pinForMe({ id: 'pub', pinned: false, type: 'agent', visibility: 'public' }, true);
 
     expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['pub', 'older'] });
-    // The shared column is the team pin — a member's pin must not touch it.
+    // The shared column is the default pin for new members — a member's pin must not touch it.
     expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
   });
 
-  it('unpins a public agent from the member preference only', async () => {
+  it('unpins a public agent from the member preference only, keeping it listed', async () => {
     useUserStore.setState({ workspaceUserPreference: { sidebarPinnedItemIds: ['pub', 'older'] } });
 
     await pinForMe({ id: 'pub', pinned: true, type: 'agent', visibility: 'public' }, false);
 
-    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['older'] });
-    // Even when the row is team-pinned, a personal unpin leaves the team pin.
+    // A default pin seeded into the member's list moves down instead of
+    // leaving the sidebar, and the default itself is left alone.
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarAgentVisibilityOverrides: { pub: true },
+      sidebarPinnedItemIds: ['older'],
+    });
     expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
+  });
+
+  it('saves the team pins with the first pin made before the server set the sidebar up', async () => {
+    useHomeStore.setState({ pinnedAgents: [{ id: 'team-1' }, { id: 'older' }] } as any);
+
+    await pinForMe({ id: 'pub', pinned: false, type: 'agent', visibility: 'public' }, true);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['pub', 'older', 'team-1'],
+      sidebarInitialized: true,
+    });
+  });
+
+  it('keeps an explicit sidebar choice when unpinning', async () => {
+    useUserStore.setState({
+      workspaceUserPreference: {
+        sidebarAgentVisibilityOverrides: { pub: false },
+        sidebarPinnedItemIds: ['pub'],
+      },
+    });
+
+    await pinForMe({ id: 'pub', pinned: false, type: 'agent', visibility: 'public' }, false);
+
+    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: [] });
   });
 
   it('keeps a private agent column in sync with its preference entry', async () => {

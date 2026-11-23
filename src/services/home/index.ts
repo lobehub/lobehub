@@ -42,6 +42,13 @@ export class HomeService {
   };
 
   /**
+   * Replace the workspace's recommended Agents / chat groups (owner/admin only).
+   */
+  updateRecommendedAgents = async (ids: string[]): Promise<void> => {
+    await lambdaClient.home.updateRecommendedAgents.mutate({ ids });
+  };
+
+  /**
    * Update an agent's session group
    */
   updateAgentSessionGroupId = (agentId: string, sessionGroupId: string | null): Promise<void> => {

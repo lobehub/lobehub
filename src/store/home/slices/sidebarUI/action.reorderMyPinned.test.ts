@@ -5,6 +5,11 @@ import { cacheScope } from '@/libs/replica';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: vi.fn(() => 'ws-1'),
+  useActiveWorkspaceId: vi.fn(() => 'ws-1'),
+}));
+
 let scope = 'user-a:ws-1';
 
 const updatePreference = vi.fn();
@@ -48,6 +53,32 @@ describe('reorderMyPinned', () => {
     await reorder(['legacy', 'a']);
 
     expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['legacy', 'a'] });
+  });
+
+  it('keeps a pinned order longer than 200 rows, since it is seeded with every default pin', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => `team-${i}`);
+    setPinned([]);
+
+    await reorder(many);
+
+    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: many });
+  });
+
+  it('saves the team pins and marks the sidebar set up when the member reorders before the server did', async () => {
+    useHomeStore.setState({ pinnedAgents: [{ id: 'team-1' }] } as any);
+    useUserStore.setState({
+      updateWorkspaceUserPreference: updatePreference,
+      workspaceUserPreference: { sidebarPinnedItemIds: ['a'] },
+    } as any);
+
+    // The sidebar already showed the default pin after the member's own.
+    await reorder(['team-1', 'a']);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['team-1', 'a'],
+      sidebarInitialized: true,
+    });
+    useHomeStore.setState({ pinnedAgents: [] } as any);
   });
 
   it('skips the write when nothing moved', async () => {

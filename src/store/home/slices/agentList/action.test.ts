@@ -155,6 +155,30 @@ describe('sidebar agent list replica', () => {
   });
 });
 
+describe('updateRecommendedAgents', () => {
+  it('shows the new list right away, drops unknown rows, and rolls back on failure', async () => {
+    vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
+      response({ recommendedIds: ['a'], ungrouped: [agent('a'), agent('b')] }),
+    );
+    sync();
+    await waitFor(() => expect(useHomeStore.getState().recommendedAgentIds).toEqual(['a']));
+
+    let reject!: (error: Error) => void;
+    const save = vi
+      .spyOn(homeService, 'updateRecommendedAgents')
+      .mockImplementation(() => new Promise<void>((_, fail) => (reject = fail)));
+
+    // `gone` was deleted (or made private) since it was recommended.
+    const update = useHomeStore.getState().updateRecommendedAgents(['b', 'gone', 'a']);
+    expect(useHomeStore.getState().recommendedAgentIds).toEqual(['b', 'a']);
+    await waitFor(() => expect(save).toHaveBeenCalledWith(['b', 'a']));
+
+    reject(new Error('boom'));
+    await expect(update).rejects.toThrow('boom');
+    expect(useHomeStore.getState().recommendedAgentIds).toEqual(['a']);
+  });
+});
+
 describe('reorderPinnedAgents across a scope change', () => {
   it.each([
     ['another workspace', (from: string) => from.replace(/:[^:]*$/, ':ws-2')],

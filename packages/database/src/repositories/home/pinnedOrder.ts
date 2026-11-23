@@ -6,6 +6,9 @@
  */
 export const MAX_PINNED_ORDER_ITEMS = 2000;
 
+/** Upper bound for a workspace's recommended Agents list. */
+export const MAX_RECOMMENDED_ITEMS = 200;
+
 /** Reads a stored order defensively: anything but a string array is no order. */
 export const parsePinnedOrder = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
