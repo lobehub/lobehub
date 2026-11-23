@@ -41,7 +41,7 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
     isLogin: !!isLogin,
   });
   const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
-  const { customList, pinnedList, defaultList } = useAgentList();
+  const { customList, pinnedList, defaultList, inboxItem } = useAgentList();
   // Personal pins are the user's own, so they can always be reordered. A
   // workspace caller (compact switchers) gets the team pins here, whose order
   // only owners/admins may change from the sidebar's own section.
@@ -89,9 +89,12 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
 
   // Always render the default SessionList so the "+ Create Agent" entry is visible
   // even when the user has only the built-in Lobe AI inbox.
+  // Lobe AI's own row leads the list, ahead of the pins, like the standalone
+  // entry it replaces.
   return (
     <>
       {showStandaloneInbox && <InboxItem />}
+      {inboxItem && <SessionList dataSource={[inboxItem]} />}
       {showPinned &&
         (isWorkspace ? (
           <SessionList dataSource={pinnedList!} />

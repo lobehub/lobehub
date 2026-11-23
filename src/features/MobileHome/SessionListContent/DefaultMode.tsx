@@ -35,7 +35,7 @@ const DefaultMode = memo(() => {
   const hasInboxAgent = useHomeStore(homeAgentListSelectors.hasInboxAgent);
   const useFetchAgentList = useHomeStore((s) => s.useFetchAgentList);
   useFetchAgentList(isLogin);
-  const { defaultList, pinnedList, customList, privateGroupList, privateUngroupedList } =
+  const { defaultList, inboxItem, pinnedList, customList, privateGroupList, privateUngroupedList } =
     useAgentList(false);
   const keep = useKeepSidebarListed();
   const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
@@ -98,6 +98,8 @@ const DefaultMode = memo(() => {
       {/* Signed in, Lobe AI arrives as an ordinary list item from the server;
           the standalone entry stands in until that list holds it. */}
       {!hasInboxAgent && <Inbox />}
+      {/* Lobe AI's own row leads the list wherever it is pinned or filed. */}
+      {inboxItem && <SessionList dataSource={[inboxItem]} />}
       <CollapseGroup
         activeKey={sessionGroupKeys}
         items={items}
