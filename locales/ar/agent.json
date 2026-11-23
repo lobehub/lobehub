@@ -685,7 +685,6 @@
   "share.settings.notice.workspaceDesc": "الزوار لا يقرأون هذا الوكيل فقط — بل يقومون بتشغيله. يتم إنشاء كل رد في مساحة العمل ويتم احتسابه على ميزانيتها المشتركة، دون استهلاك حصة المنشئ أو أي عضو آخر. يعمل الوكيل فقط مع الوصول الذي تمنحه للزوار أدناه.",
   "share.settings.notice.workspaceTitle": "الزوار يشغلون هذا الوكيل على ميزانية مساحة العمل",
   "share.settings.permissions.allowCreatorViewSessions": "السماح لي بقراءة محادثات الزوار",
-  "share.settings.permissions.allowCreatorViewSessionsHint": "معطل افتراضيًا: تظل محادثات الزوار خاصة بالزائر.",
   "share.settings.permissions.allowReadMemory": "السماح بقراءة ذاكرتي",
   "share.settings.permissions.allowReadMemoryHint": "قد يعتمد الوكيل على ذاكرتك طويلة المدى أثناء الرد على الزائر.",
   "share.settings.permissions.desc": "ما يمكن لتشغيل الزائر قراءته، وما يمكن للزائر رؤيته بالمقابل.",
