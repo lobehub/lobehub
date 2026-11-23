@@ -3,6 +3,8 @@ interface DeviceArchitectureBackfillOptions {
   deviceId: string;
   headers: Record<string, string>;
   serverUrl: string;
+  /** Signed-in user, so another account on this machine is checked again. */
+  userId?: string;
 }
 
 /** How long a device the registry does not list yet waits before it is looked up again. */
@@ -67,7 +69,7 @@ const run = async (
 export const backfillDeviceArchitecture = (
   options: DeviceArchitectureBackfillOptions,
 ): Promise<void> => {
-  const key = `${options.serverUrl}\n${options.deviceId}`;
+  const key = [options.serverUrl, options.userId ?? '', options.deviceId].join('\n');
   if (settled.has(key)) return Promise.resolve();
   const unlisted = unlistedAt.get(key);
   if (unlisted !== undefined && Date.now() - unlisted < UNLISTED_DEVICE_RETRY_MS)

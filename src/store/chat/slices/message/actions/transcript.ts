@@ -320,7 +320,10 @@ export class MessageTranscriptActionImpl {
             context.topicId,
             ids,
           );
-          const changed = lastRevision !== undefined && lastRevision !== revision;
+          // The first probe of a chain has no baseline: a card edited between
+          // the page read and this probe would otherwise never be re-read, so
+          // it re-reads once.
+          const changed = lastRevision !== revision;
           lastRevision = revision;
           return changed || ids.some((id) => statuses[id] !== 'pending');
         } catch (error) {

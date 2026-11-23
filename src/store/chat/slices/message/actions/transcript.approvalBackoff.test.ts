@@ -208,6 +208,10 @@ describe('pending approval status poll', () => {
   // topic, only to learn the card was still pending.
   it('asks only for the card status while it stays pending', async () => {
     const view = await mount();
+    // The first probe of the chain re-reads once to set its baseline.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL * 2);
+    });
     const reads = vi.mocked(messageService.getMessages).mock.calls.length;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
@@ -228,6 +232,19 @@ describe('pending approval status poll', () => {
     vi.mocked(messageService.getInterventionSnapshot).mockResolvedValue(snapshot('approved'));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL);
+    });
+    expect(vi.mocked(messageService.getMessages).mock.calls.length).toBeGreaterThan(reads);
+    view.unmount();
+  });
+
+  // Regression: the first probe only recorded its revision, so an argument
+  // edit landing between the page read and that probe was never shown.
+  it('re-reads the page on the first probe of a chain', async () => {
+    const view = await mount();
+    const reads = vi.mocked(messageService.getMessages).mock.calls.length;
+    vi.mocked(messageService.getInterventionSnapshot).mockResolvedValue(snapshot('pending', 'r2'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL + 100);
     });
     expect(vi.mocked(messageService.getMessages).mock.calls.length).toBeGreaterThan(reads);
     view.unmount();

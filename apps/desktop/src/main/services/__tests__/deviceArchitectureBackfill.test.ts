@@ -128,4 +128,16 @@ describe('backfillDeviceArchitecture', () => {
     await backfillDeviceArchitecture(options);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('checks again for another signed-in account on the same device', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        Response.json({ result: { data: { json: [{ ...localDevice, architecture: 'arm64' }] } } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await backfillDeviceArchitecture({ ...options, userId: 'user-a' });
+    await backfillDeviceArchitecture({ ...options, userId: 'user-b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
