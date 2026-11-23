@@ -53,6 +53,13 @@ const SUMMARY_LENGTH = 300;
 /** Latest steps of a running reply shown in a Thread summary. */
 const ACTIVITY_STEPS = 3;
 
+/** Runs the requester started themselves, which may message for them without a Channel job. */
+const DIRECT_RUN_TRIGGERS = new Set<RequestTrigger>([
+  RequestTrigger.Bot,
+  RequestTrigger.Chat,
+  RequestTrigger.Scheduled,
+]);
+
 const clip = (text: string | null | undefined, length = SUMMARY_LENGTH) => {
   const value = (text ?? '').trim();
   return value.length > length ? `${value.slice(0, length)}…` : value;
@@ -273,16 +280,17 @@ export class ChannelHistoryRepository {
   /**
    * Who a run relays as, and from where. A Channel run relays from its Channel and request
    * (`currentRun`, all its checks). A run with no Channel job may only be the requester's own
-   * live bot run, and only when the caller says so (`allowBotRun`): the bot's owner asked their
-   * Agent from an IM platform to post into one of their Channels. Only a caller holding that run's
-   * `channel:message` token, minted only for an owner's bot message, may set it; the trigger is
-   * checked again here so no other run without a Channel can relay.
+   * live direct run, and only when the caller says so (`allowDirectRun`): the requester asked
+   * their Agent, in a chat (sent or scheduled) or as the bot's owner on an IM platform, to message
+   * someone or post into one of their Channels. Only a caller holding that run's `channel:message`
+   * token, minted only for those runs, may set it; the trigger is checked again here so no
+   * server-started run without a Channel can relay.
    */
   relaySource = async (
     operationId: string,
-    { allowBotRun = false }: { allowBotRun?: boolean } = {},
+    { allowDirectRun = false }: { allowDirectRun?: boolean } = {},
   ): Promise<{
-    /** The Channel run, with what {@link currentRun} reads; absent for a bot run. */
+    /** The Channel run, with what {@link currentRun} reads; absent for a direct run. */
     channelRun?: Awaited<ReturnType<ChannelHistoryRepository['currentRun']>>;
     origin?: { channelId: string; threadId: string | null };
     requestVia?: ChannelMessageVia;
@@ -293,7 +301,7 @@ export class ChannelHistoryRepository {
       .from(channelJobs)
       .where(eq(channelJobs.operationId, operationId))
       .limit(1);
-    if (job || !allowBotRun) {
+    if (job || !allowDirectRun) {
       const run = await this.currentRun(operationId);
       return {
         channelRun: run,
@@ -321,7 +329,7 @@ export class ChannelHistoryRepository {
       !operation?.agentId ||
       operation.userId !== this.userId ||
       operation.workspaceId !== this.workspaceId ||
-      operation.trigger !== RequestTrigger.Bot
+      !DIRECT_RUN_TRIGGERS.has(operation.trigger as RequestTrigger)
     )
       throw new ChannelError('NOT_FOUND', 'Channel operation not found');
     if (operation.status !== 'running')

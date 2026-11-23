@@ -236,10 +236,10 @@ describe('ChannelMessagingService', () => {
     await service().listChannels();
     expect(relaySource).toHaveBeenLastCalledWith('op-current', {});
     const fromBot = new ChannelMessagingService({} as never, 'user-1', 'op-current', undefined, {
-      allowBotRun: true,
+      allowDirectRun: true,
     });
     await fromBot.listChannels();
-    expect(relaySource).toHaveBeenLastCalledWith('op-current', { allowBotRun: true });
+    expect(relaySource).toHaveBeenLastCalledWith('op-current', { allowDirectRun: true });
   });
 
   it("relays an owner's bot request with no current Channel and no receipt origin", async () => {
