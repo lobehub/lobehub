@@ -168,6 +168,8 @@
   "connector.authError": "授权异常",
   "connector.connected": "已连接",
   "connector.createTools": "创建类工具",
+  "connector.dangerZone.desc": "断开或移除 {{name}} 后，所有用到它的助理都会失去这些工具。",
+  "connector.dangerZone.title": "危险操作",
   "connector.delete": "删除",
   "connector.deleteAccountConfirmContent": "此操作会移除该连接器及其在你账号下的授权。之后任何使用它的助理都需要重新授权。",
   "connector.deleteAgentConfirmContent": "该连接器归属于助理「{{agent}}」。删除它会同时把这个工具从该助理中移除。",

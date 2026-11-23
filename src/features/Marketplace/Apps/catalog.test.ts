@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { MessengerPlatformItem } from '@/store/messenger/projection';
 
-import { buildMarketplaceApps, getInlineConnectTool, hasAppConnection } from './catalog';
+import {
+  buildMarketplaceApps,
+  getAppFacts,
+  getInlineConnectTool,
+  hasAppConnection,
+  isAppCategory,
+} from './catalog';
 
 const slack: MessengerPlatformItem = {
   appId: 'slack-app',
@@ -119,5 +125,34 @@ describe('marketplace apps', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.filter((id) => taken.has(id))).toEqual([]);
     for (const server of OFFICIAL_MCP_SERVERS) expect(new URL(server.url).protocol).toBe('https:');
+  });
+});
+
+describe('getAppFacts', () => {
+  it('names the vendor as developer and the integrator apart', () => {
+    expect(
+      getAppFacts({ id: 'notion', name: 'Notion', tool: { type: 'composio' } as any }),
+    ).toEqual({ integrator: 'Composio', vendor: 'Notion', vendorUrl: 'https://www.notion.com' });
+  });
+
+  it('falls back to the integrator for an app without a known vendor', () => {
+    expect(getAppFacts({ id: 'acme', name: 'Acme', tool: { type: 'lobehub' } as any })).toEqual({
+      vendor: 'LobeHub',
+    });
+  });
+
+  it('names a channel-only app by its vendor', () => {
+    expect(getAppFacts({ id: 'telegram', name: 'Telegram' })).toEqual({
+      vendor: 'Telegram',
+      vendorUrl: 'https://telegram.org',
+    });
+  });
+});
+
+describe('isAppCategory', () => {
+  it('accepts catalog categories only', () => {
+    expect(isAppCategory('developer')).toBe(true);
+    expect(isAppCategory('social')).toBe(false);
+    expect(isAppCategory(null)).toBe(false);
   });
 });

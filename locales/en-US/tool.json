@@ -168,6 +168,8 @@
   "connector.authError": "Authorization error",
   "connector.connected": "Connected",
   "connector.createTools": "Create tools",
+  "connector.dangerZone.desc": "Disconnecting or removing {{name}} takes its tools away from every Agent that uses them.",
+  "connector.dangerZone.title": "Danger zone",
   "connector.delete": "Delete",
   "connector.deleteAccountConfirmContent": "This removes the connector and its authorization from your account. Any agent that uses it will need to be re-authorized afterwards.",
   "connector.deleteAgentConfirmContent": "This connector belongs to the agent “{{agent}}”. Deleting it will also remove this tool from that agent.",
