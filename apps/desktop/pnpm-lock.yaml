@@ -809,6 +809,9 @@ importers:
       superjson:
         specifier: ^2.2.6
         version: 2.2.6
+      thumbhash:
+        specifier: ^0.1.1
+        version: 0.1.1
       tldts:
         specifier: ^7.4.18
         version: 7.4.18
@@ -7726,6 +7729,9 @@ packages:
 
   thenify@3.3.1:
     resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
+
+  thumbhash@0.1.1:
+    resolution: {integrity: sha512-kH5pKeIIBPQXAOni2AiY/Cu/NKdkFREdpH+TLdM0g6WA7RriCv0kPLgP731ady67MhTAqrVG/4mnEeibVuCJcg==}
 
   tiny-async-pool@1.3.0:
     resolution: {integrity: sha512-01EAw5EDrcVrdgyCLgoSPvqznC0sVxDSVeiOz09FUpjh71G79VCqneOr+xvt7T1r76CF6ZZfPjHorN2+d+3mqA==}
@@ -15708,6 +15714,8 @@ snapshots:
   thenify@3.3.1:
     dependencies:
       any-promise: 1.3.0
+
+  thumbhash@0.1.1: {}
 
   tiny-async-pool@1.3.0:
     dependencies:
