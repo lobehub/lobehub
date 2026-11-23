@@ -111,7 +111,7 @@ export interface TopicPullRequestsParams {
 }
 
 /**
- * The pull requests a topic's Work rows link (Better Coding Experience): the
+ * The pull requests a topic's Work rows link: the
  * control bar's PR chip and the working sidebar's repository card. A reload
  * paints the last list — with the last known states — before the network
  * answers. Revalidated by `workService.refreshTopicPullRequests` (run end,
