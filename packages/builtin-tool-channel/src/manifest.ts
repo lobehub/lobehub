@@ -90,6 +90,36 @@ export const ChannelManifest: BuiltinToolManifest = {
       },
     },
     {
+      name: ChannelApiName.requestConnector,
+      description:
+        'Ask the person to connect a connector (an app or MCP server) you need, as a card in this conversation with a one-click Connect button; they authorize in place and need no URL or key from you. Use it whenever the person asks you to connect something or a task needs a connector that is not connected yet, instead of pasting an authorization link. Pass a catalog identifier (e.g. github, linear, notion, sentry, stripe); for an MCP server outside the catalog also pass its https url. The card is posted right away; finish your answer by saying it is there, and use the connector from your next turn once connected.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['identifier'],
+        properties: {
+          auth: {
+            type: 'string',
+            enum: ['oauth', 'none'],
+            description: 'Only with url: how the server authorizes. Default oauth.',
+          },
+          identifier: {
+            type: 'string',
+            description: 'Catalog identifier, or a short id (letters, digits, _ and -) for a url.',
+          },
+          name: { type: 'string', description: 'Only with url: display name of the server.' },
+          reason: {
+            type: 'string',
+            description: 'One short sentence on what you will do with it, shown on the card.',
+          },
+          url: {
+            type: 'string',
+            description: 'The https MCP endpoint of a server outside the catalog.',
+          },
+        },
+      },
+    },
+    {
       name: ChannelApiName.sendMessage,
       description:
         "Ask or tell another Agent something. Address one Agent by agentIds: it is asked in the conversation between you two, never in the person's conversation or a group; its answer wakes you there, and what you then write is posted back where you asked. To address several Agents together, also give channelId, a group they are all in: the message appears as your requester's, marked as relayed by you, they answer in that group, and the reply is brought back to you here as a new request. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",

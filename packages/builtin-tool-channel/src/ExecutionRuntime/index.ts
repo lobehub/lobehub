@@ -1,6 +1,7 @@
 import { projectChannelHistory } from '@lobechat/prompts/channel';
 import type {
   BuiltinServerRuntimeOutput,
+  ChannelConnectorRequestResult,
   ChannelCreatedThread,
   ChannelCreateThreadParams,
   ChannelDirectoryPage,
@@ -13,6 +14,7 @@ import type {
   ChannelPeoplePage,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
+  ChannelRequestConnectorParams,
   ChannelSendMessageParams,
   ChannelSentMessage,
   ChannelSentPersonMessage,
@@ -29,6 +31,10 @@ import type {
 export interface ChannelHistoryService {
   readMessage: (params: ChannelReadMessageParams) => Promise<ChannelHistoryMessageDetail>;
   readMessages: (params: ChannelReadMessagesParams) => Promise<ChannelHistoryPage>;
+  /** Posts a card in the run's conversation; the runtime binds the run and tool call. */
+  requestConnector?: (
+    params: ChannelRequestConnectorParams,
+  ) => Promise<ChannelConnectorRequestResult>;
 }
 
 /**
@@ -108,6 +114,27 @@ export class ChannelExecutionRuntime {
     }
   }
 
+  requestConnector = async (
+    params: ChannelRequestConnectorParams,
+  ): Promise<BuiltinServerRuntimeOutput> => {
+    try {
+      if (!this.service.requestConnector)
+        throw new Error('Connector requests are not available in this run');
+      const state = await this.service.requestConnector(params);
+      return {
+        content: `Posted a card asking the person to connect ${state.name}. They connect it from the card; it is usable from your next turn once connected.`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not ask for that connector';
+      return {
+        content: message,
+        error: { type: 'ChannelConnectorError', message },
+        success: false,
+      };
+    }
+  };
   readMessages = (params: ChannelReadMessagesParams) =>
     this.result(() => this.service.readMessages(params));
   readMessage = (params: ChannelReadMessageParams) =>

@@ -118,6 +118,24 @@ export const channelHistoryProcedures = {
     .mutation(({ ctx, input: { requestKey, ...params } }) =>
       ctx.channelMessaging.messagePerson(params, `cli:${requestKey}`),
     ),
+  /** Posts a card in the run's own conversation asking its requester to connect a connector. */
+  requestConnector: historyProcedure
+    .input(
+      z
+        .object({
+          auth: z.enum(['none', 'oauth']).optional(),
+          identifier: z.string().min(1).max(64),
+          name: z.string().max(64).optional(),
+          reason: z.string().max(280).optional(),
+          /** Repeat it to retry without posting twice. */
+          requestKey: z.string().min(1).max(100),
+          url: z.string().url().max(2048).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { requestKey, ...params } }) =>
+      ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
+    ),
   sendMessage: messagingProcedure
     .input(
       z

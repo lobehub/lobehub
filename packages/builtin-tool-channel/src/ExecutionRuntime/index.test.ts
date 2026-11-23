@@ -147,3 +147,28 @@ describe('Channel messaging', () => {
     });
   });
 });
+
+describe('Channel connector requests', () => {
+  it('posts the card and tells the Agent the connector comes next turn', async () => {
+    const requestConnector = vi
+      .fn()
+      .mockResolvedValue({ messageId: 'msg', name: 'GitHub', source: 'lobehub' });
+    const runtime = new ChannelExecutionRuntime({
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+      requestConnector,
+    });
+    const result = await runtime.requestConnector({ identifier: 'github' });
+    expect(requestConnector).toHaveBeenCalledWith({ identifier: 'github' });
+    expect(result).toMatchObject({ state: { messageId: 'msg' }, success: true });
+    expect(result.content).toContain('next turn');
+  });
+
+  it('fails as a tool error when the run cannot post one', async () => {
+    const runtime = new ChannelExecutionRuntime({ readMessage: vi.fn(), readMessages: vi.fn() });
+    expect(await runtime.requestConnector({ identifier: 'github' })).toMatchObject({
+      error: { type: 'ChannelConnectorError' },
+      success: false,
+    });
+  });
+});
