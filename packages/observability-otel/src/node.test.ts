@@ -117,12 +117,22 @@ class TestMetricReader extends MetricReader {
 
 describe('OTEL_METRICS_DROP', () => {
   it('accepts exact names and trailing-wildcard prefixes only', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     expect(
       parseMetricsDropPatterns(
         ' fts_search_backend_*, http.client.*,,exact_metric , *, *mid*, a*b ',
       ),
     ).toEqual(['fts_search_backend_*', 'http.client.*', 'exact_metric']);
     expect(parseMetricsDropPatterns(undefined)).toEqual([]);
+
+    /** Visible even when the caller set the OTEL diag level to ERROR, as Cloud does. */
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      expect.stringContaining('"*"'),
+      expect.stringContaining('"*mid*"'),
+      expect.stringContaining('"a*b"'),
+    ]);
+    warn.mockRestore();
   });
 
   it('stops exporting matched instruments and keeps the rest', async () => {

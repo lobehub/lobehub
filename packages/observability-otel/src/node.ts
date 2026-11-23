@@ -144,7 +144,13 @@ export function parseMetricsDropPatterns(value?: string): string[] {
     const isExact = wildcardIndex === -1;
     const isPrefix = wildcardIndex === pattern.length - 1 && wildcardIndex > 0;
     if (!isExact && !isPrefix) {
-      diag.warn(`[observability-otel] ignoring unsupported OTEL_METRICS_DROP entry "${pattern}"`);
+      /**
+       * `console.warn`, not `diag.warn`: callers commonly raise the diag level to ERROR, which would
+       * hide the warning and leave the operator unaware that the metric is still exported.
+       */
+      console.warn(
+        `[observability-otel] ignoring unsupported OTEL_METRICS_DROP entry "${pattern}"`,
+      );
       continue;
     }
     patterns.push(pattern);
