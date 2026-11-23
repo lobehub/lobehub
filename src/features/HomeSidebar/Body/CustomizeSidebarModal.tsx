@@ -72,8 +72,7 @@ export interface SidebarItemConfig {
 }
 
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
-  { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
-  { id: 'goals', labelKey: 'tab.goals', routeId: 'goals' },
+  { id: 'tasks', labelKey: 'tab.goalsAndTasks', labelNs: 'chat', routeId: 'tasks' },
   { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
   { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
@@ -83,7 +82,6 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
   { id: 'community', labelKey: 'tab.marketplace', routeId: 'community' },
   { id: 'resource', labelKey: 'tab.resource', routeId: 'resource' },
-  { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
 
 interface SidebarItemAvailability {
@@ -97,9 +95,7 @@ export const getAvailableSidebarItems = (
 ): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => {
     if (item.id === 'channels' && !channelsEnabled) return false;
-    if (!isWorkspaceMode && item.id === 'goals') return false;
-    if (item.id === 'dashboard' && !dashboardEnabled) return false;
-    if (isWorkspaceMode && (item.id === 'memory' || item.id === 'dashboard')) return false;
+    if (item.id === 'dashboard' && (!dashboardEnabled || isWorkspaceMode)) return false;
     return true;
   });
 
@@ -182,10 +178,9 @@ const styles = stylex.create({
 
 const SortableItem = memo<{
   hiddenSections: string[];
-  personal: boolean;
   id: string;
   onToggle: (key: string) => void;
-}>(({ id, hiddenSections, onToggle, personal }) => {
+}>(({ id, hiddenSections, onToggle }) => {
   const { t } = useTranslation(['common', 'channel', 'chat']);
   const item = ITEM_MAP.get(id);
   const labelKey = item?.labelKey;
@@ -232,11 +227,7 @@ const SortableItem = memo<{
           <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         </Flexbox>
         {route?.icon && <Icon icon={route.icon} size={18} />}
-        <Text>
-          {personal && id === 'tasks'
-            ? t('tab.goalsAndTasks', { ns: 'chat' })
-            : t(labelKey as any, { ns: item.labelNs ?? 'common' })}
-        </Text>
+        <Text>{t(labelKey as any, { ns: item.labelNs ?? 'common' })}</Text>
       </Flexbox>
       {item.alwaysVisible ? (
         <Tooltip title={t('navPanel.pinned' as any)}>
@@ -344,7 +335,7 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 // Drag overlay item (static, no sortable hooks)
 // ---------------------------------------------------------------------------
 
-const OverlayItem = memo<{ id: string; personal: boolean }>(({ id, personal }) => {
+const OverlayItem = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation(['common', 'channel', 'chat']);
   const agentLabelKey = 'navPanel.agent';
 
@@ -391,11 +382,7 @@ const OverlayItem = memo<{ id: string; personal: boolean }>(({ id, personal }) =
     <Flexbox horizontal align={'center'} className={stylex.props(styles.overlay).className} gap={8}>
       <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       {route?.icon && <Icon icon={route.icon} size={18} />}
-      <Text>
-        {personal && id === 'tasks'
-          ? t('tab.goalsAndTasks', { ns: 'chat' })
-          : t(labelKey as any, { ns: labelNs })}
-      </Text>
+      <Text>{t(labelKey as any, { ns: labelNs })}</Text>
     </Flexbox>
   );
 });
@@ -476,10 +463,10 @@ const CustomizeSidebarContent = memo(() => {
   const toggleSection = useCallback(
     (key: string) => {
       const isHidden = hiddenSections.includes(key);
-      const newHidden = setSidebarSectionHidden(hiddenSections, key, !isHidden, isWorkspaceMode);
+      const newHidden = setSidebarSectionHidden(hiddenSections, key, !isHidden);
       setHiddenSections(newHidden);
     },
-    [hiddenSections, isWorkspaceMode],
+    [hiddenSections],
   );
 
   const handleResetDefault = useCallback(() => {
@@ -575,13 +562,7 @@ const CustomizeSidebarContent = memo(() => {
     isSpacer(id) ? (
       <SpacerSortableItem key={id} />
     ) : (
-      <SortableItem
-        hiddenSections={hiddenSections}
-        id={id}
-        key={id}
-        personal={!isWorkspaceMode}
-        onToggle={toggleSection}
-      />
+      <SortableItem hiddenSections={hiddenSections} id={id} key={id} onToggle={toggleSection} />
     );
 
   return (
@@ -612,7 +593,7 @@ const CustomizeSidebarContent = memo(() => {
 
         {createPortal(
           <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({}) }}>
-            {activeId ? <OverlayItem id={activeId} personal={!isWorkspaceMode} /> : null}
+            {activeId ? <OverlayItem id={activeId} /> : null}
           </DragOverlay>,
           document.body,
         )}

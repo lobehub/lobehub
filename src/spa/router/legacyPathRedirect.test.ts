@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
+import type { RouteObject } from 'react-router';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +13,7 @@ import {
   legacySettingsMarketplaceRedirects,
   marketplaceIndexRoute,
 } from './marketplaceRoutes';
+import { legacyMemoryRedirects } from './memoryRoutes';
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -158,5 +160,33 @@ describe('legacy URL redirects', () => {
   ])('%s → %s', (from, to) => {
     renderAt(from);
     expect(screen.getByTestId('url').textContent).toBe(to);
+  });
+});
+
+describe('legacyMemoryRedirects', () => {
+  const targetOf = (route: RouteObject) => (route.element as { props: { to: string } }).props.to;
+
+  it('forwards every old memory page to its Settings section', () => {
+    const targets = legacyMemoryRedirects.map((route) => [
+      route.index ? '' : route.path,
+      targetOf(route),
+    ]);
+
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        ['', '/settings/memory/overview'],
+        ['identities', '/settings/memory/identities'],
+        ['preferences', '/settings/memory/preferences'],
+        ['contexts', '/settings/memory/contexts'],
+        ['activities', '/settings/memory/activities'],
+        ['rules', '/settings/memory/rules'],
+      ]),
+    );
+  });
+
+  it('keeps the detail query of a deep link', () => {
+    expect(
+      buildLegacyRedirectPath('/settings/memory/preferences', { search: '?preferenceId=p1' }),
+    ).toBe('/settings/memory/preferences?preferenceId=p1');
   });
 });

@@ -155,6 +155,7 @@ describe('useSidebarSectionMenuItems', () => {
       'favorites',
       'agent',
       '__spacer__',
+      'image',
     ];
 
     const moveUp = find(itemsFor('channels'), 'moveUp');

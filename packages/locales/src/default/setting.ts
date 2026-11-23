@@ -4269,11 +4269,11 @@ When I am ___, I need ___
   'workspace.onboarding.step4.subtitleWithAgents':
     '{{count}} agent(s) ready to help. Jump in and start collaborating with your team.',
   'workspace.onboarding.step4.marketProfileNudge':
-    "We've set up a Community profile for <strong>{{name}}</strong> so workspace agents can be installed. <cta>Customize it in the Marketplace</cta>.",
+    "We've set up a Community profile for <strong>{{name}}</strong> so workspace agents can be installed. <cta>Customize it in Plugins</cta>.",
   'workspace.onboarding.step4.marketProfileAdjust':
-    "We've automatically created a Community profile for your workspace. <cta>Adjust it in the Marketplace</cta>.",
+    "We've automatically created a Community profile for your workspace. <cta>Adjust it in Plugins</cta>.",
   'workspace.onboarding.step4.marketProfileCreate':
-    "We couldn't set up your Community profile automatically. <cta>Create one in the Marketplace</cta> so workspace agents can be shared.",
+    "We couldn't set up your Community profile automatically. <cta>Create one in Plugins</cta> so workspace agents can be shared.",
   'workspace.onboarding.step4.cta': 'Enter workspace',
   'workspaceSetting.breadcrumb.settings': 'Settings',
   'workspaceSetting.devices.connectTitlePrivate': 'Add private device',

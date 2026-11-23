@@ -98,15 +98,10 @@ const Body = memo(() => {
   const hideSection = useCallback(
     (key: string) => {
       updateSystemStatus({
-        hiddenSidebarSections: setSidebarSectionHidden(
-          hiddenSections,
-          key,
-          true,
-          !!activeWorkspaceId,
-        ),
+        hiddenSidebarSections: setSidebarSectionHidden(hiddenSections, key, true),
       });
     },
-    [activeWorkspaceId, hiddenSections, updateSystemStatus],
+    [hiddenSections, updateSystemStatus],
   );
 
   const getContextMenuItems = useCallback(
