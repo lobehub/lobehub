@@ -1,7 +1,7 @@
 import type {
   ChannelAgentExchange,
-  ChannelConnectorRequest,
   ChannelAskInput,
+  ChannelConnectorRequest,
   ChannelContextMessage,
   ChannelExecutionConfig,
   ChannelHistoryMessage,

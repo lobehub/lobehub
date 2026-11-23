@@ -25,12 +25,12 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import type { ChannelAskAnswerInput } from '@/database/repositories/channel/ask';
+import { answerAsk } from '@/database/repositories/channel/ask';
 import {
   projectDefaultChannelMetadata,
   withDisplayTitle,
 } from '@/database/repositories/channel/displayTitle';
-import type { ChannelAskAnswerInput } from '@/database/repositories/channel/ask';
-import { answerAsk } from '@/database/repositories/channel/ask';
 import type { ChannelDeviceGrantDecision } from '@/database/repositories/channel/grants';
 import { decideDeviceGrant, listDeviceGrants } from '@/database/repositories/channel/grants';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
