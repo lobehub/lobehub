@@ -1630,6 +1630,33 @@ table verifications {
   }
 }
 
+table channel_agent_grants {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  member_id uuid [not null]
+  owner_id text [not null]
+  grantee_member_id uuid
+  thread_id text
+  requested_by_member_id uuid
+  status text [not null, default: 'pending']
+  decided_at "timestamp with time zone"
+  revoked_at "timestamp with time zone"
+  revoke_reason text
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (member_id, grantee_member_id, thread_id) [name: 'channel_agent_grants_live_scope_unique', unique]
+    (owner_id, status) [name: 'channel_agent_grants_owner_status_idx']
+    grantee_member_id [name: 'channel_agent_grants_grantee_idx']
+    
+    
+    
+    
+  }
+}
+
 table channel_audit {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   channel_id text [not null]
