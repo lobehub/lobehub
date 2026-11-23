@@ -250,6 +250,27 @@ describe('createSsrfSafeFetch', () => {
     });
     expect(res.status).toBe(200);
   });
+
+  it('falls back to application-layer checks on Bun, whose fetch ignores dispatchers', async () => {
+    const baseFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+    (process.versions as Record<string, string | undefined>).bun = '1.4.4';
+    try {
+      // private targets are still refused — at resolution time rather than connect time
+      await expectBlocked(createSsrfSafeFetch({}, { fetch: baseFetch })(`${origin}/ok`));
+      expect(baseFetch).not.toHaveBeenCalled();
+      expect(hits).toHaveLength(0);
+
+      // allowed targets go through the base fetch with no dispatcher attached
+      const res = await createSsrfSafeFetch(
+        { allowIPAddressList: ['127.0.0.1'] },
+        { fetch: baseFetch },
+      )(`${origin}/ok`);
+      expect(res.status).toBe(200);
+      expect((baseFetch.mock.calls[0][1] as RequestInit).dispatcher).toBeUndefined();
+    } finally {
+      delete (process.versions as Record<string, string | undefined>).bun;
+    }
+  });
 });
 
 describe('createSsrfSafeFetch with an environment proxy (NODE_USE_ENV_PROXY=1)', () => {
@@ -296,6 +317,17 @@ describe('createSsrfSafeFetch with an environment proxy (NODE_USE_ENV_PROXY=1)',
 
     expect(await res.json()).toEqual({ ok: true });
     expect(hits).toEqual(['/redirect-to-ok', '/ok']);
+  });
+
+  it("preserves a Request input's abort signal across hops", async () => {
+    const request = new Request(`${origin}/redirect-post-307`, {
+      body: 'payload',
+      method: 'POST',
+      signal: AbortSignal.abort(),
+    });
+
+    await expect(createProxyModeFetch()(request)).rejects.toThrowError(/abort/i);
+    expect(hits).toHaveLength(0);
   });
 
   it('strips credentials when a redirect crosses origins', async () => {

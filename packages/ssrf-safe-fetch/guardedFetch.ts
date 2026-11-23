@@ -104,6 +104,14 @@ const globalDispatcherIsProxy = () => {
   return dispatcher instanceof ProxyAgent || dispatcher instanceof EnvHttpProxyAgent;
 };
 
+/**
+ * Bun's fetch — and the `undici` shim it maps the package specifier to —
+ * ignores `init.dispatcher`, so connect-time filtering is impossible there.
+ * `dev:bun` is a supported server runtime, so fall back to resolving and
+ * vetting every target at the application layer, as with proxy transports.
+ */
+const isBunRuntime = () => !!process.versions.bun;
+
 const resolveRequestUrl = (input: RequestInfo | URL) =>
   new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 
@@ -156,6 +164,7 @@ const fetchThroughEnvProxy = async (
       headers,
       method: init?.method ?? input.method,
       redirect: init?.redirect ?? input.redirect,
+      signal: init?.signal ?? input.signal,
     };
   } else {
     requestInit = { ...init };
@@ -226,7 +235,7 @@ export const createSsrfSafeFetch = (
   const dispatcher = createSsrfSafeDispatcher(policy);
 
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (isEnvProxyActive() || globalDispatcherIsProxy()) {
+    if (isEnvProxyActive() || globalDispatcherIsProxy() || isBunRuntime()) {
       return fetchThroughEnvProxy(input, init, policy, getBaseFetch());
     }
 
