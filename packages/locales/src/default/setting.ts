@@ -5605,4 +5605,6 @@ When I am ___, I need ___
     "Couldn't delete the label. Check your network and try again.",
   'workspaceSetting.labels.form.saveFailedRetry':
     "Couldn't save the label. Check your network and try again.",
+  'workspace.auditLog.actions.budget.model_policy_removed': 'Model tier rule removed',
+  'workspace.auditLog.actions.budget.model_policy_updated': 'Model tier rule updated',
 };

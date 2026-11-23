@@ -113,4 +113,6 @@ export default {
     'The provider returned a malformed response that could not be parsed. Please retry; if it persists, try a different model or provider.',
   UserConfigError:
     'Provider configuration is invalid (incorrect base URL, missing environment variable, virtual-key restriction, etc.). Please review the provider settings.',
+  WorkspaceModelRestricted:
+    'This model is above the highest tier your workspace admin allows you. Pick a lower-tier model, or ask a workspace admin to raise your tier.',
 };
