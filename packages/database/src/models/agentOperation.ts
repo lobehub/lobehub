@@ -267,11 +267,12 @@ export class AgentOperationModel {
    * Update the row when the operation reaches a terminal state. Scoped by
    * `userId` so a leaked operationId can't be used to flip another user's
    * row. No-op when the start row was never written.
+   *
+   * Returns the written row's provenance and the status it held before this write, so a caller
+   * can act once per transition: a replay of the same terminal status is accepted again and
+   * reads back that status. `undefined` when nothing was written.
    */
-  async recordCompletion(
-    operationId: string,
-    params: RecordOperationCompletionParams,
-  ): Promise<boolean> {
+  async recordCompletion(operationId: string, params: RecordOperationCompletionParams) {
     const updates: Partial<NewAgentOperation> = {
       completionReason: params.completionReason,
       status: params.status,
@@ -316,9 +317,15 @@ export class AgentOperationModel {
           this.ownership(),
         ),
       )
-      .returning({ id: agentOperations.id });
+      .returning({
+        id: agentOperations.id,
+        parentOperationId: agentOperations.parentOperationId,
+        // A sub-select in RETURNING reads the statement's snapshot, which predates this UPDATE.
+        previousStatus: sql<string>`(SELECT prev.status FROM agent_operations prev WHERE prev.id = ${operationId})`,
+        trigger: agentOperations.trigger,
+      });
 
-    return Boolean(row);
+    return row;
   }
 
   /**

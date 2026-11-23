@@ -102,11 +102,57 @@ describe('AgentOperationModel recovery lookups', () => {
           provider: 'openai',
           status: 'done',
         }),
-      ).toBe(true);
+      ).toBeDefined();
       expect(await model().findById('op-provenance')).toMatchObject({
         model: 'gpt-5',
         provider: 'openai',
       });
+    });
+  });
+
+  describe('recordCompletion', () => {
+    it('reads back the status before the write, so a same-status replay is not a transition', async () => {
+      await model().recordStart({
+        operationId: 'op-transition',
+        parentOperationId: 'op-parent',
+        trigger: 'agent_share',
+      });
+
+      const first = await model().recordCompletion('op-transition', {
+        completionReason: 'error',
+        status: 'error',
+      });
+      expect(first).toEqual({
+        id: 'op-transition',
+        parentOperationId: 'op-parent',
+        previousStatus: 'running',
+        trigger: 'agent_share',
+      });
+
+      const replay = await model().recordCompletion('op-transition', {
+        completionReason: 'error',
+        status: 'error',
+      });
+      expect(replay?.previousStatus).toBe('error');
+      expect((await model().findById('op-transition'))?.status).toBe('error');
+    });
+
+    it('writes nothing over a different terminal status or another owner’s row', async () => {
+      await model().recordStart({ operationId: 'op-settled' });
+      await model().recordCompletion('op-settled', { completionReason: 'done', status: 'done' });
+
+      expect(
+        await model().recordCompletion('op-settled', {
+          completionReason: 'error',
+          status: 'error',
+        }),
+      ).toBeUndefined();
+      expect(
+        await model(otherUserId).recordCompletion('op-settled', {
+          completionReason: 'done',
+          status: 'done',
+        }),
+      ).toBeUndefined();
     });
   });
 
@@ -299,7 +345,7 @@ describe('AgentOperationModel recovery lookups', () => {
           completionReason: 'error',
           status: 'error',
         }),
-      ).toBe(true);
+      ).toBeDefined();
     });
 
     it('leaves a run alone once an ingest refreshed it after dispatch', async () => {
