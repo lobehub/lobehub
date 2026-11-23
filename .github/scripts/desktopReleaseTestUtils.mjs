@@ -103,7 +103,10 @@ export async function startGithubFixture() {
     }
     if (route.startsWith('/pulls/')) {
       const pr = state.pullRequest;
-      return json(response, pr ? 200 : 404, pr || { message: 'not found' });
+      if (!pr) return json(response, 404, { message: 'not found' });
+      const payload = { ...pr };
+      if (request.headers['x-github-api-version'] !== '2022-11-28') delete payload.merge_commit_sha;
+      return json(response, 200, payload);
     }
     return json(response, 404, { message: `Unknown fixture route ${route}` });
   });
