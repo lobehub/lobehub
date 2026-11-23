@@ -1596,6 +1596,13 @@
       "when": 1795445232107,
       "tag": "0227_channel_agent_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "7",
+      "when": 1795457259109,
+      "tag": "0228_channel_message_kind",
+      "breakpoints": true
     }
   ],
   "version": "6"
