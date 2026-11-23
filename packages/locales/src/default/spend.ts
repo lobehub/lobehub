@@ -95,7 +95,7 @@ export default {
   'table.pagination.perPage': '{{size}} / page',
   'table.pagination.prev': 'Previous page',
   'table.pagination.range': '{{from}}-{{to}} of {{total}} items',
-  'table.planIncluded': 'Included in plan',
+  'table.planIncluded': 'Subscription credits',
   'table.title': 'Breakdown',
   'table.totalToken.input': 'Input',
   'table.totalToken.output': 'Output',
