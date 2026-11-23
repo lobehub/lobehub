@@ -116,7 +116,11 @@ describe('single tool executors', () => {
 
     const stepTools = result.newState.activatedStepTools ?? [];
     expect(stepTools).toHaveLength(1);
-    expect(stepTools[0]).toMatchObject({ id: 'lobe-web-browsing', source: 'discovery' });
+    expect(stepTools[0]).toMatchObject({
+      afterToolCallId: 'tool-call-1',
+      id: 'lobe-web-browsing',
+      source: 'discovery',
+    });
   });
 
   it('parks single client-source tools without invoking the transport runner', async () => {

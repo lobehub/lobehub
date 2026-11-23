@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "Não foi possível acessar um dispositivo de execução para este agente. Conecte um dispositivo ou configure o gateway de dispositivos no servidor e tente novamente.",
   "response.DeviceResponseTimeout": "O dispositivo não respondeu a tempo. Ele pode estar offline ou em modo de espera, ou ainda pode estar iniciando esta execução. Verifique se o dispositivo está conectado e se esta execução já está em andamento, depois tente novamente.",
   "response.ExceededContextWindowCloud": "A conversa é muito longa para ser processada. Por favor, edite sua última mensagem para reduzir a entrada ou exclua algumas mensagens e tente novamente.",
-  "response.FreePlanLimit": "Você está usando o plano gratuito e não pode acessar este recurso. Faça upgrade para um plano pago.",
   "response.GoogleAIBlockReason.BLOCKLIST": "O conteúdo inclui termos bloqueados. Por favor, reformule e tente novamente.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "A imagem gerada foi bloqueada por razões de segurança. Por favor, tente modificar sua solicitação.",
   "response.GoogleAIBlockReason.LANGUAGE": "O idioma solicitado não é suportado. Por favor, tente novamente em um idioma suportado.",

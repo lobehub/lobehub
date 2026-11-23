@@ -44,6 +44,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDensityTokens } from '@/styles/density';
 import { sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 
 import { useTopicsViewStore } from './store';
 import type {
@@ -67,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: ${sidebarRow.controlHeight};
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: calc(${sidebarRow.controlHeight} / 2);
 
@@ -124,7 +125,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 0;
-    padding-inline: 12px 6px;
+    padding-inline: ${densityVars.contentGap} 6px;
 
     font-size: 13px;
     color: ${cssVar.colorText};
@@ -148,7 +149,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: ${sidebarRow.controlHeight};
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: calc(${sidebarRow.controlHeight} / 2);
 
     font-size: 13px;

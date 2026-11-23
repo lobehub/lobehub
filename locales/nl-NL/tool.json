@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Stdio-connectors kunnen alleen synchroniseren in de desktop-app. Open LobeHub Desktop om deze connector te synchroniseren.",
   "connector.kind.agent": "Agentconnector",
   "connector.kind.builtin": "Ingebouwd hulpmiddel",
-  "connector.kind.community": "Community-hulpmiddel",
+  "connector.kind.community": "Marktplaats-tool",
   "connector.kind.custom": "Aangepaste connector",
   "connector.kind.oauth": "OAuth-connector",
   "connector.manageOnlyCreator": "Alleen de maker of een werkruimte-eigenaar kan deze connector beheren",
@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Item toevoegen",
   "updateArgs.form.key": "Veldsleutel",
   "updateArgs.form.value": "Veldwaarde",
-  "updateArgs.formValidationFailed": "Formulier validatie mislukt, controleer het parameterformaat",
   "updateArgs.keyRequired": "Veldsleutel mag niet leeg zijn",
   "updateArgs.stringifyError": "Kan parameters niet serialiseren, controleer het parameterformaat"
 }

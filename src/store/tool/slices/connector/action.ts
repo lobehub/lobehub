@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import type { LobeToolCustomPlugin } from '@lobechat/types';
 import {
   connectorDeviceBinding,
   connectorMcpEndpoint,
@@ -26,6 +27,7 @@ import type { StoreSetter } from '@/store/types';
 import { ConnectorOAuthError, waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import type { ToolStore } from '../../store';
+import { executeLegacyMigrationSave } from './legacyPluginMigration';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
@@ -431,6 +433,17 @@ export class ConnectorActionImpl {
     }
   };
 
+  migrateLegacyPlugin = (legacy: LobeToolCustomPlugin, value: LobeToolCustomPlugin) =>
+    executeLegacyMigrationSave(legacy, value, {
+      createConnector: (payload) => lambdaClient.connector.create.mutate(payload),
+      deleteConnector: this.#deleteConnectorRecord,
+      refreshLists: async () => {
+        await Promise.all([this.#refreshConnectorLists(), this.#get().refreshPlugins()]);
+      },
+      syncConnectorTools: (id, payload) => this.#writeConnectorTools(id, {}, payload),
+      uninstallCustomPlugin: (identifier) => this.#get().removeInstalledPluginRecord(identifier),
+    });
+
   /** Connect an additional account and refresh all connector lists after authorization. */
   connectConnectorAccount = (
     connectorId: string,
@@ -559,9 +572,13 @@ export class ConnectorActionImpl {
    * removal is confirmed rather than optimistic.
    */
   deleteConnector = async (id: string): Promise<void> => {
+    await this.#deleteConnectorRecord(id);
+    await this.#refreshConnectorLists();
+  };
+
+  #deleteConnectorRecord = async (id: string): Promise<void> => {
     await lambdaClient.connector.delete.mutate({ id });
     this.#connectorRows.remove(id);
-    await this.#refreshConnectorLists();
   };
 
   updateConnector = async (
@@ -606,10 +623,11 @@ export class ConnectorActionImpl {
       'syncConnectorTools/start',
     );
     try {
-      const synced =
-        (await this.#syncCloudConnectorTools(id, options)) ||
-        (await this.#syncLocalConnectorTools(id, options));
-      if (!synced) await lambdaClient.connector.syncTools.mutate({ id, ...options });
+      await this.#writeConnectorTools(
+        id,
+        options,
+        connectorSelectors.connectorById(id)(this.#get()),
+      );
       await this.#refreshConnectorLists();
     } finally {
       this.#set(
@@ -620,26 +638,30 @@ export class ConnectorActionImpl {
     }
   };
 
-  /**
-   * A market-hosted (`cloud`) server has no endpoint to list tools from: the
-   * market serves them in the server's manifest. Returns false for any other
-   * connector.
-   */
+  #writeConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean },
+    connector: Pick<ConnectorWithTools, 'identifier' | 'mcpConnectionType'> | undefined,
+  ): Promise<void> => {
+    if (connector?.mcpConnectionType === 'cloud') {
+      await this.#syncCloudConnectorTools(id, options, connector.identifier);
+    } else if (!(await this.#syncLocalConnectorTools(id, options))) {
+      await lambdaClient.connector.syncTools.mutate({ id, ...options });
+    }
+  };
+
+  /** A market-hosted connector lists its tools in the market manifest. */
   #syncCloudConnectorTools = async (
     id: string,
     options: { pruneMissingAutoTools?: boolean },
-  ): Promise<boolean> => {
-    const connector = connectorSelectors.connectorById(id)(this.#get());
-    if (connector?.mcpConnectionType !== 'cloud') return false;
-
-    const { identifier } = connector;
+    identifier: string,
+  ): Promise<void> => {
     const data = await discoverService.getMCPPluginManifest(identifier);
     await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
       ...options,
       tools: cloudManifestTools(buildCloudMcpManifest({ data, plugin: { identifier } })),
     });
-    return true;
   };
 
   /**

@@ -22,9 +22,8 @@ import {
 import {
   type BuiltinToolResult,
   type DiscoverAssistantDetail,
-  getPluginMode,
   parsePluginEntry,
-  upsertPluginMode,
+  upsertConnectorEnabled,
 } from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
@@ -176,17 +175,15 @@ export class AgentManagerRuntime {
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
         const { pluginId, enabled } = params.togglePlugin;
-        const isCurrentlyEnabled = getPluginMode(previousConfig?.plugins, pluginId) === 'pinned';
+        const existing = previousConfig?.plugins?.find(
+          (entry) => parsePluginEntry(entry).identifier === pluginId,
+        );
+        const isCurrentlyEnabled = existing
+          ? parsePluginEntry(existing).mode !== 'disabled'
+          : false;
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
-        // upsertPluginMode preserves an already-matching entry as-is and
-        // flips a disabled entry back to pinned in place, instead of
-        // blindly pushing a duplicate bare-string identifier.
-        const newPlugins = upsertPluginMode(
-          previousConfig?.plugins,
-          pluginId,
-          shouldEnable ? 'pinned' : 'auto',
-        );
+        const newPlugins = upsertConnectorEnabled(previousConfig?.plugins, pluginId, shouldEnable);
 
         finalConfig = { ...finalConfig, plugins: newPlugins };
 

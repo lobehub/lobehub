@@ -776,6 +776,7 @@ export class AiAgentService {
   verifyShareRunStillAuthorized = async (params: {
     agentId: string;
     shareId: string;
+    visitorUserId?: string;
   }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**

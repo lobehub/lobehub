@@ -17,14 +17,6 @@ vi.mock('@lobehub/ui/chat', () => ({
     createElement('div', { 'data-testid': 'token-tag' }, value),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: object) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: { config: () => ({ isDevMode: true }) },
-}));
-
 vi.mock('./components/ActionPopover', () => ({
   default: ({ children, content }: { children?: ReactNode; content?: ReactNode }) =>
     createElement('div', {}, children, content),
@@ -94,5 +86,19 @@ describe('Context window token', () => {
     expect(tokenMocks.useTokenBreakdown).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('token-tag')).toHaveTextContent('6000');
     expect(screen.getByTestId('token-progress-used')).toHaveTextContent('used:6000,rest:2000');
+    // The per-source breakdown is shown to every user, not only Advanced Tools.
+    expect(screen.getByTestId('token-progress-system')).toBeInTheDocument();
+  });
+
+  it('stays out of the composer until half the context window is used', () => {
+    tokenMocks.useTokenBreakdown.mockReturnValue({
+      chatsToken: 1000,
+      maxTokens: 8000,
+      totalToken: 4000,
+    });
+
+    render(createElement(Token));
+
+    expect(screen.queryByTestId('token-tag')).not.toBeInTheDocument();
   });
 });

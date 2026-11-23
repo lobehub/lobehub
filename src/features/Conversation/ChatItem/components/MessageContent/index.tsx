@@ -9,6 +9,8 @@ import { usePrintMode } from '@/features/Conversation/components/PrintModeContex
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import { openEditorModal } from '@/features/EditorModal';
 import { usePermission } from '@/hooks/usePermission';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { type ChatItemProps } from '../../type';
@@ -19,9 +21,12 @@ export const MSG_CONTENT_CLASSNAME = 'msg_content_flag';
 const styles = stylex.create({
   bubble: {
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillTertiary,
+  },
+  bubbleCompact: {
+    paddingBlock: '6px',
   },
   disabled: {
     userSelect: 'none',
@@ -60,6 +65,7 @@ const MessageContent = memo<MessageContentProps>(
   }) => {
     const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
     const printMode = usePrintMode();
+    const { compact } = useDensity();
 
     const editorData = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
@@ -109,10 +115,11 @@ const MessageContent = memo<MessageContentProps>(
 
     return (
       <Flexbox
-        gap={16}
+        gap={compact ? 12 : 16}
         {...sx(
           styles.message,
           variant === 'bubble' && styles.bubble,
+          variant === 'bubble' && compact && styles.bubbleCompact,
           disabled && styles.disabled,
           [MSG_CONTENT_CLASSNAME, className].filter(Boolean).join(' '),
         )}

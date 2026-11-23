@@ -17,8 +17,9 @@ import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon, SearchXIcon } from '
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import GoalSkeleton, { GoalListRowsSkeleton } from '@/components/Skeleton/Goal';
-import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { AgentGoalsAndTasksTabs } from '@/features/AgentTasks/AgentGoalsAndTasksTabs';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -27,6 +28,7 @@ import type { GoalListFilter } from '@/store/goal';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { globalGoalListScopeId, goalListKey, goalListScopeId } from '@/store/goal/projection';
 import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { createGoalModal } from './CreateGoalModal';
 import GoalAgentFilter from './GoalAgentFilter';
@@ -57,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
   list: css`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     @media (width <= 900px) {
       grid-template-columns: minmax(0, 1fr);
@@ -70,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metric: css`
     min-width: 88px;
-    padding-inline-start: 16px;
+    padding-inline-start: ${densityVars.cardPadding};
     border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
 
     &:first-child {
@@ -120,6 +122,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { pageTitleFontSize } = useDensityTokens();
   const navigate = useWorkspaceAwareNavigate();
   const cacheScope = useCacheScope();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const isGlobal = !agentId && !projectId;
   const agentFilter = useGoalStore((s) => s.goalListAgentFilter);
   const setAgentFilter = useGoalStore((s) => s.setGoalListAgentFilter);
@@ -222,6 +225,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     !isArchivedProbePending &&
     archivedView !== undefined &&
     archivedView.goals.length === 0;
+  const isListPending = isLoading || isArchivedProbePending;
   const summary = useMemo(() => {
     const total = listView?.total ?? goals.length;
     // An aggregate that has not answered is unknown, not zero. Falling back to
@@ -293,16 +297,23 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         left={
-          agentId ? (
-            <AgentBreadcrumb agentId={agentId} title={t('goalList.title')} />
+          agentId || isGlobal ? (
+            <AgentGoalsAndTasksTabs
+              agentId={agentId}
+              showMine={isGlobal && !!activeWorkspaceId}
+              view={'goals'}
+            />
           ) : (
             <Text weight={600}>{t('goalList.title')}</Text>
           )
         }
         right={
-          <Button icon={PlusIcon} size={'small'} type={'fill'} onClick={() => openCreateGoal()}>
-            {t('goalPage.create')}
-          </Button>
+          !isListPending &&
+          !hasNoGoals && (
+            <Button icon={PlusIcon} size={'small'} type={'fill'} onClick={() => openCreateGoal()}>
+              {t('goalPage.create')}
+            </Button>
+          )
         }
       />
       <WideScreenContainer
@@ -313,7 +324,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {isLoading || isArchivedProbePending ? (
+        {isListPending ? (
           <GoalSkeleton chrome={'body'} />
         ) : error && listView === undefined ? (
           // Only a read that left nothing to show becomes the page: a failed

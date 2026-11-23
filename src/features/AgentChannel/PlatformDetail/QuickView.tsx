@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+import { densityTokens } from '@/styles/density.stylex';
 
 import type { ChannelFormValues } from './index';
 import {
@@ -32,7 +33,7 @@ const styles = stylex.create({
     fontSize: 13,
     lineHeight: 1.6,
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     wordBreak: 'break-word',
   },
   mention: {
@@ -55,7 +56,7 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     display: 'flex',
     flexShrink: 0,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     height: 36,
     justifyContent: 'center',
@@ -63,7 +64,7 @@ const styles = stylex.create({
   },
   discordBody: {
     color: cssVar.colorText,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: 1.5,
     wordBreak: 'break-word',
   },
@@ -75,7 +76,7 @@ const styles = stylex.create({
   },
   discordName: {
     color: cssVar.colorText,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
   },
   mono: {
@@ -100,7 +101,7 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: 12,
     paddingBlock: 6,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

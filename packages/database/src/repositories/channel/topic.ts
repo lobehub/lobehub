@@ -90,6 +90,42 @@ export const continuationTopic = async (
     return topic;
 };
 
+/**
+ * The topic a resumed job (`retryJob` in `resume` mode) continues: the one its failed run worked
+ * in, kept on the queued job. Only while it is still the same Agent's, in the same scope, not
+ * trashed and not held by another run, and only when the run would execute where that one did
+ * (runtime, device, directory): a CLI session lives on that machine and in that directory.
+ * Undefined starts as a retry would.
+ */
+export const resumableTopic = async (
+  tx: Transaction,
+  job: ChannelJobItem,
+  member: ChannelMemberItem,
+  scope: ChannelTopicScope,
+  executionConfig: ChannelExecutionConfig,
+) => {
+  if (!job.topicId) return;
+  const previous = job.executionConfig;
+  if (
+    previous &&
+    (previous.runtime !== executionConfig.runtime ||
+      (previous.deviceId ?? null) !== (executionConfig.deviceId ?? null) ||
+      (previous.workingDirectory ?? null) !== (executionConfig.workingDirectory ?? null))
+  )
+    return;
+  const [topic] = await tx.select().from(topics).where(eq(topics.id, job.topicId));
+  if (
+    topic &&
+    topic.agentId === member.agentId &&
+    topic.userId === scope.userId &&
+    topic.workspaceId === scope.workspaceId &&
+    (topic.senderId ?? undefined) === scope.senderId &&
+    !topic.isDeleted &&
+    !(await topicStillHeld(tx, topic.id))
+  )
+    return topic;
+};
+
 /** Whether some run is still writing into this topic, in any branch of its Agent. */
 const topicStillHeld = async (tx: Transaction, topicId: string) => {
   const [held] = await tx

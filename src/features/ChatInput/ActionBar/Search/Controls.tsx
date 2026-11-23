@@ -11,6 +11,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { densityTokens } from '@/styles/density.stylex';
 import { type SearchMode } from '@/types/search';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -40,7 +41,11 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  title: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
 });
 
 interface NetworkOption {
@@ -84,16 +89,8 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
   );
 });
 
-/**
- * Search settings that are only meaningful once web search is on: which engine
- * answers (app tool vs the model's built-in search) and which model runs the
- * function-calling search. Extracted so the search capability row in the
- * chat-input Tools popover can host it beside the Auto/Disable policy.
- */
-export const SearchAdvancedControls = memo(() => {
+export const useSearchAdvancedVisibility = () => {
   const agentId = useAgentId();
-  const { allowed: canCreate } = usePermission('create_content');
-
   const { model, provider } = useEffectiveModel(agentId);
   const [useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
@@ -123,11 +120,28 @@ export const SearchAdvancedControls = memo(() => {
     !supportFC &&
     (!modelBuiltinSearchImpl || (!isModelBuiltinSearchInternal && !useModelBuiltinSearch));
 
-  if (!showModelBuiltinSearch && !showFCSearchModel) return null;
+  return {
+    hasControls: showModelBuiltinSearch || showFCSearchModel,
+    showFCSearchModel,
+    showModelBuiltinSearch,
+  };
+};
+
+/**
+ * Search settings that are only meaningful once web search is on: which engine
+ * answers (app tool vs the model's built-in search) and which model runs the
+ * function-calling search. Extracted so both the Tools popover and the agent
+ * Tools settings page can host it cleanly.
+ */
+export const SearchAdvancedControls = memo<{ showDivider?: boolean }>(({ showDivider = true }) => {
+  const { allowed: canCreate } = usePermission('create_content');
+  const { hasControls, showFCSearchModel, showModelBuiltinSearch } = useSearchAdvancedVisibility();
+
+  if (!hasControls) return null;
 
   return (
     <>
-      <Divider style={{ margin: 0 }} />
+      {showDivider && <Divider style={{ margin: 0 }} />}
       {showModelBuiltinSearch && <ModelBuiltinSearch disabled={!canCreate} />}
       {showFCSearchModel && <FCSearchModel disabled={!canCreate} />}
     </>

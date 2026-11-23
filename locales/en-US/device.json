@@ -67,6 +67,7 @@
   "workingDirectory.drive.initializeWith": "Initialize with",
   "workingDirectory.drive.moreActions": "More actions",
   "workingDirectory.drive.pickFailed": "Could not switch to this folder. Try again.",
+  "workingDirectory.drive.pickFailedRetry": "Couldn't switch to this folder. Check your network and try again.",
   "workingDirectory.drive.pickFolderFirst": "Choose a folder first",
   "workingDirectory.drive.privateBlocked": "Private environment — a shared agent can’t use it",
   "workingDirectory.drive.readOnly": "Environment directories are read-only here.",

@@ -82,11 +82,10 @@ export default {
   'cmdk.askAgentHeading': 'Ask Agent',
   'cmdk.askAgentPlaceholder': 'Ask {{agent}} something...',
   'cmdk.askLobeAI': 'Ask Lobe AI',
-  'cmdk.community': 'Community',
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
-  'cmdk.context.community': 'Community',
+  'cmdk.context.community': 'Plugins',
   'cmdk.context.general': 'General',
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
@@ -107,7 +106,8 @@ export default {
 
   'cmdk.keywords.billing': 'billing payment invoice transaction',
 
-  'cmdk.keywords.community': 'discover market assistant model provider mcp',
+  'cmdk.keywords.marketplace':
+    'plugin plugins marketplace market community discover agent skill connector model provider mcp',
 
   // CMDK search keywords (space-separated for i18n)
   'cmdk.keywords.contactUs': 'feedback issue bug problem',
@@ -191,7 +191,7 @@ export default {
 
   'cmdk.search.chatGroups': 'Groups',
 
-  'cmdk.search.communityAgent': 'Community Agent',
+  'cmdk.search.communityAgent': 'Marketplace Agent',
 
   'cmdk.search.file': 'File',
 
@@ -211,7 +211,7 @@ export default {
 
   'cmdk.search.loading': 'Searching...',
 
-  'cmdk.search.market': 'Community',
+  'cmdk.search.market': 'Plugins',
 
   'cmdk.search.mcp': 'MCP Server',
 
@@ -449,7 +449,6 @@ export default {
   'more': 'More',
   'navPanel.agent': 'Agents',
   'navPanel.createPrivateFolder': 'New private category',
-  'navPanel.createWorkspaceAgent': 'New workspace agent',
   'navPanel.managePrivateFolders': 'Manage private categories',
   'navPanel.myPinned': 'Pinned',
   'navPanel.newChat': 'New chat',
@@ -458,7 +457,6 @@ export default {
   'navPanel.showMoreTeamPinned': 'Show {{count}} more',
   'navPanel.teamPinned': 'Pinned for team',
   'navPanel.teamPinnedHint': 'Pinned by admins for everyone in this workspace',
-  'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
   'navPanel.shortcuts': 'Shortcuts',
@@ -627,7 +625,6 @@ export default {
   'tab.chat': 'Chat',
   'tab.projects': 'Projects',
   'recents': 'Recents',
-  'tab.community': 'Community',
   'tab.dashboard': 'Dashboards',
   'tab.create': 'Create',
   'tab.discover': 'Discover',
@@ -637,7 +634,7 @@ export default {
   'tab.goals': 'Goals',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
-  'tab.marketplace': 'Marketplace',
+  'tab.marketplace': 'Plugins',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.music': 'Music',
@@ -703,5 +700,10 @@ export default {
   'userPanel.workspaceSetting': 'Workspace Settings',
   'userPanel.workspaceUsage': 'Workspace Usage',
   'version': 'Version',
+  'visibilityFilter.all': 'All',
+  'visibilityFilter.empty': 'Nothing matches this filter',
+  'visibilityFilter.label': 'Filter by visibility',
+  'visibilityFilter.private': 'Private',
+  'visibilityFilter.workspace': 'Workspace',
   'zoom': 'Zoom',
 };

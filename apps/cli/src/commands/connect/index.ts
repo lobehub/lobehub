@@ -154,6 +154,7 @@ export function registerConnectCommand(program: Command) {
       }
 
       const isServiceChild = options.serviceChild || process.env.LOBEHUB_CONNECT_SERVICE === '1';
+      if (isServiceChild) process.env.LOBEHUB_CONNECT_SERVICE = '1';
       const isDaemonChild =
         options.daemonChild || isServiceChild || process.env.LOBEHUB_DAEMON === '1';
 

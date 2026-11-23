@@ -2,10 +2,21 @@ import type { ChildProcess } from 'node:child_process';
 import { platform } from 'node:os';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
+import { isHeteroPermissionMode } from '@lobechat/types';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
+import { AntigravityAdapter } from '../adapters/antigravity';
 import { ClaudeCodeAdapter } from '../adapters/claudeCode';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
+import {
+  askThroughBridge,
+  attachClaudeCodePermissionResponder,
+  buildClaudeCodePermissionArgs,
+  isRunningAsRoot,
+  PermissionModeReporter,
+  resolveClaudeCodePermissionMode,
+} from '../claudeCodePermission';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import {
   spawnCopilotAcpAgent,
@@ -17,6 +28,7 @@ import {
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { buildAntigravityArgs } from './antigravity';
+import { AntigravityLiveInput, resolveAntigravityLiveRuntimeEnd } from './antigravityLiveInput';
 import {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
@@ -42,6 +54,11 @@ export interface SpawnAgentOptions {
   agentType: string;
   /** Bridge for bidirectional question requests emitted by ACP agents. */
   askUserBridge?: AskUserBridge;
+  /**
+   * (native Codex app-server only; `spawnAgent` ignores it) The Codex Plan
+   * switch: the collaboration mode every turn sends.
+   */
+  collaborationMode?: CodexCollaborationMode;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
    * Use this when the binary lives at a non-default
@@ -98,6 +115,14 @@ export interface SpawnAgentOptions {
    * events still carry the conventional shape.
    */
   operationId: string;
+  /**
+   * (Claude Code `liveInput` with an `askUserBridge`) The permission mode the
+   * Better Coding Experience lab picked. Claude Code then asks the host before
+   * acting as the mode requires, the bridge raises a card per request, and the
+   * mode Claude Code reports is emitted as `step_complete { phase:
+   * 'permission_mode' }`. Absent: every action is allowed, as before the lab.
+   */
+  permissionMode?: HeteroPermissionMode;
   /**
    * User prompt. A plain string is sugar for a single text block; the array
    * form supports mixed text + image content blocks (URL / path / base64).
@@ -177,12 +202,19 @@ export interface SpawnAgentHandle {
    */
   readonly sessionId: string | undefined;
   /**
+   * (native Codex) The Codex Plan switch flipped mid-run: the thread takes the
+   * collaboration mode from its next turn (`thread/settings/update`).
+   */
+  setCollaborationMode?: (mode: CodexCollaborationMode) => Promise<void>;
+  /**
    * The child's stderr stream — caller can pipe to its own stderr or
    * collect for error reporting. The pipeline does not consume stderr.
    */
   stderr: NodeJS.ReadableStream;
   /** The live session accepts uploaded images with their follow-up message. */
   supportsSteerImageAttachments?: true;
+  /** Whether the live session accepts image blocks on follow-up steer messages (defaults to true). */
+  supportsSteerImages?: boolean;
 }
 
 /**
@@ -228,21 +260,6 @@ export const CODEBUDDY_BASE_ARGS = [
   '--disallowedTools',
   CODEBUDDY_DISALLOWED_TOOLS.join(','),
 ] as const;
-
-// bypassPermissions is blocked when running as root (e.g. cloud sandbox).
-// Fall back to acceptEdits + pre-approved tools so the agent can still run
-// headlessly without interactive permission prompts.
-const isRunningAsRoot = () => process.getuid?.() === 0;
-
-const CLAUDE_CODE_PERMISSION_ARGS = (): string[] =>
-  isRunningAsRoot()
-    ? [
-        '--permission-mode',
-        'acceptEdits',
-        '--allowed-tools',
-        'Bash,Read,Write,Edit,MultiEdit,WebSearch,mcp__*',
-      ]
-    : ['--permission-mode', 'bypassPermissions'];
 
 export const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check'] as const;
 export const CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG = '--dangerously-bypass-approvals-and-sandbox';
@@ -298,6 +315,10 @@ interface BuildSpawnArgsParams {
   inputArgs: string[];
   /** (Claude Code only) Replay consumed user messages for live input. */
   liveInput?: boolean;
+  /** (Claude Code only) Lab permission mode the host answers prompts for. */
+  permissionMode?: HeteroPermissionMode;
+  /** (Claude Code only) Someone answers prompts; without, a mode fails closed. */
+  permissionPrompts?: boolean;
   /** Native session id for resume; undefined for fresh runs. */
   resumeSessionId: string | undefined;
 }
@@ -307,12 +328,14 @@ const buildClaudeCodeArgs = ({
   includePartialMessages,
   inputArgs,
   liveInput,
+  permissionMode,
+  permissionPrompts,
   resumeSessionId,
 }: BuildSpawnArgsParams) => [
   ...CLAUDE_CODE_BASE_ARGS,
   ...(includePartialMessages ? ['--include-partial-messages'] : []),
   ...(liveInput ? ['--replay-user-messages'] : []),
-  ...CLAUDE_CODE_PERMISSION_ARGS(),
+  ...buildClaudeCodePermissionArgs({ hostPrompts: permissionPrompts, mode: permissionMode }),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
   ...extraArgs,
@@ -553,7 +576,12 @@ const spawnCliAgent = async (
   childEnv: NodeJS.ProcessEnv,
   codexJwtFile: CodexJwtFile | undefined,
 ): Promise<SpawnAgentHandle> => {
-  const liveInput = options.agentType === 'claude-code' && options.liveInput === true;
+  const claudeLiveInput = options.agentType === 'claude-code' && options.liveInput === true;
+  const antigravityLiveInput = options.agentType === 'antigravity' && options.liveInput === true;
+  // Prompts need someone to answer them: the live stdin and a card bridge.
+  // Without, a picked mode still applies and fails closed (never bypass).
+  const permissionMode = options.agentType === 'claude-code' ? options.permissionMode : undefined;
+  const permissionPrompts = claudeLiveInput && !!options.askUserBridge;
   const args = buildSpawnArgs({
     agentType: options.agentType,
     configArgs:
@@ -563,7 +591,9 @@ const spawnCliAgent = async (
     extraArgs: options.extraArgs ?? [],
     includePartialMessages: options.includePartialMessages ?? false,
     inputArgs: inputPlan.args,
-    liveInput,
+    liveInput: claudeLiveInput,
+    permissionMode,
+    permissionPrompts,
     resumeSessionId: options.resumeSessionId,
   });
   const initialModel =
@@ -587,26 +617,36 @@ const spawnCliAgent = async (
         })
       : undefined;
 
-  const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
+  const cliSpawnPlan = await resolveCliSpawnPlan(command, args, childEnv);
   const detached = platform() !== 'win32' && (options.detached ?? true);
   const startedAt = Date.now();
   const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
-    env: childEnv,
+    env: cliSpawnPlan.env ?? childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
+  const claudeLive =
+    claudeLiveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
+  const antigravityLive =
+    antigravityLiveInput && proc.stdin ? new AntigravityLiveInput(proc.stdin) : undefined;
+  const live = claudeLive ?? antigravityLive;
+
   const pipeline = new AgentStreamPipeline({
     // A live session can run more turns after its first `result`, so the
-    // runtime ends once, at process exit, and the turn a background task's
-    // completion opens is grouped under the tool that started it.
-    adapter: liveInput
+    // runtime ends once, at process exit.
+    adapter: claudeLive
       ? new ClaudeCodeAdapter({
           runtimeEndStrategy: 'on-transport-close',
           signalBackgroundTaskCompletion: true,
         })
-      : undefined,
+      : antigravityLive
+        ? new AntigravityAdapter({
+            runtimeEndStrategy: 'on-transport-close',
+            takeNextSteerUuid: () => antigravityLive.takeSteerUuid(),
+          })
+        : undefined,
     agentType: options.agentType,
     cwd,
     env: childEnv,
@@ -659,7 +699,32 @@ const spawnCliAgent = async (
     void exit.then(removeJwtFile, removeJwtFile);
   }
 
-  const live = liveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
+  if (claudeLive && permissionMode && permissionPrompts && options.askUserBridge) {
+    const bridge = options.askUserBridge;
+    const isRoot = isRunningAsRoot();
+    attachClaudeCodePermissionResponder(claudeLive, {
+      ask: askThroughBridge(bridge),
+      cancel: (toolCallId) => bridge.cancel(toolCallId, 'session_ended'),
+      isRoot,
+    });
+    const reporter = new PermissionModeReporter(
+      options.operationId,
+      resolveClaudeCodePermissionMode(permissionMode, isRoot).fallback,
+    );
+    // A mid-run switch: report against the pick (root takes acceptEdits for bypass).
+    claudeLive.onControlRequestSent((request, meta) => {
+      const requestedMode = meta?.requestedMode;
+      if (request.subtype === 'set_permission_mode' && isHeteroPermissionMode(requestedMode)) {
+        reporter.requested(requestedMode, isRoot);
+      }
+    });
+    claudeLive.subscribe((message) => {
+      const event = reporter.observe(message);
+      if (!event) return;
+      queue.push(event);
+      wake();
+    });
+  }
   if (live) {
     live.send(inputPlan.stdin);
   } else if (proc.stdin) {
@@ -703,12 +768,21 @@ const spawnCliAgent = async (
         if (code === 0 && !killedByUs) events.push(...pipeline.validateCompletion());
         sawErrorEvent ||= events.some((event) => event.type === 'error');
         for (const event of events) queue.push(event);
-        const liveEnd = resolveClaudeCodeLiveRuntimeEnd(live?.lastTurn, {
-          code,
-          killedByHost: killedByUs,
-          sawError: sawErrorEvent,
-          signal,
-        });
+        const liveEnd = claudeLive
+          ? resolveClaudeCodeLiveRuntimeEnd(claudeLive.lastTurn, {
+              code,
+              killedByHost: killedByUs,
+              sawError: sawErrorEvent,
+              signal,
+            })
+          : antigravityLive
+            ? resolveAntigravityLiveRuntimeEnd(antigravityLive.lastTurn, {
+                code,
+                killedByHost: killedByUs,
+                sawError: sawErrorEvent,
+                signal,
+              })
+            : undefined;
         if (liveEnd) for (const event of pipeline.completeRuntime(liveEnd)) queue.push(event);
         // Kimi Code reports usage only via its on-disk session wire log, so
         // it can only be collected now that the process has exited. The hook
@@ -773,16 +847,24 @@ const spawnCliAgent = async (
   return {
     events,
     exit,
-    ...(live && {
-      interruptTurn: () => live.interrupt(),
-      sendControlRequest: (request: ClaudeCodeControlRequest) => live.sendControlRequest(request),
+    ...(claudeLive && {
+      interruptTurn: () => claudeLive.interrupt(),
+      sendControlRequest: (request: ClaudeCodeControlRequest) =>
+        claudeLive.sendControlRequest(request),
       sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
-        if (!live.isOpen) return false;
+        if (!claudeLive.isOpen) return false;
         const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);
-        return live.send(plan.stdin, sendOptions?.uuid);
+        return claudeLive.send(plan.stdin, sendOptions?.uuid);
       },
       // Uploaded images go in as image blocks of the same stream-json message.
       supportsSteerImageAttachments: true as const,
+    }),
+    ...(antigravityLive && {
+      sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
+        if (!antigravityLive.isOpen) return false;
+        const plan = await buildAgentInput('antigravity', prompt, options.inputOptions);
+        return antigravityLive.send(plan.stdin, sendOptions?.uuid);
+      },
     }),
     kill: (signal: NodeJS.Signals = 'SIGINT') => {
       killedByUs = true;

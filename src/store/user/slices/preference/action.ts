@@ -31,11 +31,7 @@ export class PreferenceActionImpl {
 
   updateLab = async (lab: Partial<UserLab>, action?: any): Promise<void> => {
     const { updatePreference } = this.#get();
-    // Older clients still read the pre-rename `enableTopicAcceptance` key, so keep
-    // it in step with `enableGoals` until they age out.
-    const patch =
-      lab.enableGoals === undefined ? lab : { ...lab, enableTopicAcceptance: lab.enableGoals };
-    const nextLab = merge(this.#get().preference.lab, patch);
+    const nextLab = merge(this.#get().preference.lab, lab);
     await updatePreference({ lab: nextLab }, action || n('updateLab'));
   };
 

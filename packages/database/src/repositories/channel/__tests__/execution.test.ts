@@ -213,8 +213,9 @@ describe('ChannelExecutionRepository', () => {
   });
 
   it('answers a branch in message order and holds one writer per member in it', async () => {
-    const { agent, asMember, channel, job } = await mentionAgent();
-    const next = await asMember.send(channel.id, {
+    const { agent, asOwner, channel, job } = await mentionAgent();
+    // Someone else asks next: the same person's next request would be merged into the first run.
+    const next = await asOwner.send(channel.id, {
       content: 'Second',
       mentions: [agent.id],
       requestKey: 'req-2',
@@ -249,9 +250,9 @@ describe('ChannelExecutionRepository', () => {
       threads.push(await team.asMember.createThread(team.channel.id, { rootMessageId: root.id }));
     }
     let sent = 0;
-    const ask = async (threadId: string | null) => {
+    const ask = async (threadId: string | null, as = team.asMember) => {
       sent += 1;
-      const message = await team.asMember.send(team.channel.id, {
+      const message = await as.send(team.channel.id, {
         content: `Request ${sent}`,
         mentions: [agent.id],
         requestKey: `ask-${sent}`,
@@ -265,10 +266,11 @@ describe('ChannelExecutionRepository', () => {
   };
 
   it('runs one member in several branches at once, each in message order', async () => {
-    const { ask, channel, threads } = await threadsFor(nativeConfig, ['A', 'B']);
+    const { ask, asOwner, channel, threads } = await threadsFor(nativeConfig, ['A', 'B']);
     const [threadA, threadB] = threads;
     const a1 = await ask(threadA.id);
-    const a2 = await ask(threadA.id);
+    // From someone else, so it waits for its own run instead of being merged into a1's.
+    const a2 = await ask(threadA.id, asOwner);
     const b1 = await ask(threadB.id);
     const main = await ask(null);
 

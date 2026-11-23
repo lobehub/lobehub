@@ -347,13 +347,14 @@ describe('native Session to Agent compatibility', () => {
   it('fails closed for foreign, trashed, group and multi-agent contexts', async () => {
     const { agent, session } = await legacy();
     const caller = callers();
+    // An out-of-scope id reads as "not found or no access": no config, no error.
     await expect(
       callers(undefined, otherUserId).agent.getAgentConfigById({ agentId: session.id }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    ).resolves.toBeNull();
     const workspaceId = await workspace();
     await expect(
       callers(workspaceId).agent.getAgentConfigById({ agentId: agent.id }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    ).resolves.toBeNull();
     const [otherAgent] = await db.insert(agents).values({ userId }).returning();
     expect(
       await resolveContext({ agentId: otherAgent.id, sessionId: session.id }, db, userId),
@@ -378,9 +379,7 @@ describe('native Session to Agent compatibility', () => {
     await db.update(sessions).set({ type: 'agent' }).where(eq(sessions.id, session.id));
     await db.update(agents).set({ isDeleted: true }).where(eq(agents.id, agent.id));
     for (const id of [session.id, agent.id]) {
-      await expect(caller.agent.getAgentConfigById({ agentId: id })).rejects.toMatchObject({
-        code: 'NOT_FOUND',
-      });
+      await expect(caller.agent.getAgentConfigById({ agentId: id })).resolves.toBeNull();
       await expect(caller.session.updateSession({ id, value: {} })).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
@@ -401,14 +400,12 @@ describe('native Session to Agent compatibility', () => {
     });
     await expect(
       callers(undefined, otherUserId).agent.getAgentConfigById({ agentId: agent.id }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    ).resolves.toBeNull();
     await expect(resolveAgentReference('agent_missing', db, userId)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
     await db.update(agents).set({ isDeleted: true }).where(eq(agents.id, agent.id));
-    await expect(callers().agent.getAgentConfigById({ agentId: agent.id })).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
+    await expect(callers().agent.getAgentConfigById({ agentId: agent.id })).resolves.toBeNull();
   });
 
   it.each(['agent', 'session'] as const)(

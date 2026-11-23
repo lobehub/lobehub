@@ -14,6 +14,13 @@ export const legacyBuiltinSkillIds: readonly string[] = [
   LobeHubIdentifier,
 ];
 
+/** Only the bundled skills that used to have a library uninstall action need this fallback. */
+export const getLegacyDisabledBuiltinSkillIds = (
+  uninstalled: readonly string[],
+  overrides: readonly string[],
+): string[] =>
+  uninstalled.filter((id) => legacyBuiltinSkillIds.includes(id) && !overrides.includes(id));
+
 const noImplicitSkills: readonly string[] = [];
 
 export type SkillDiscoveryChatConfig = Pick<

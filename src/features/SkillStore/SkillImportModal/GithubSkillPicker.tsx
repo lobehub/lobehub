@@ -6,6 +6,8 @@ import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import {
   canImportCandidate,
   getGithubSkillChoices,
@@ -24,7 +26,7 @@ const styles = stylex.create({
   toolbar: {
     backgroundColor: cssVar.colorFillQuaternary,
     paddingBlock: 6,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   list: {
     maxHeight: 'min(40dvh, 360px)',
@@ -35,7 +37,7 @@ const styles = stylex.create({
     borderBlockStartWidth: { 'default': 1, ':first-child': 0 },
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   label: { flexGrow: 1, flexBasis: 0, minWidth: 0, paddingBlock: 9, minHeight: 46 },
   text: { flexGrow: 1, minWidth: 0, whiteSpace: 'normal' },

@@ -16,7 +16,7 @@ import {
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
-  getActivePluginIds,
+  getOptedInPluginIds,
   isLiveAgentAccount,
   ordinaryDocumentAccessScope,
 } from '@lobechat/types';
@@ -191,7 +191,7 @@ export const createServerContextFactProviders = ({
       if (!config) return null;
       return {
         ...config,
-        plugins: getActivePluginIds(Array.isArray(config.plugins) ? config.plugins : undefined),
+        plugins: getOptedInPluginIds(Array.isArray(config.plugins) ? config.plugins : undefined),
       };
     },
 
@@ -270,7 +270,7 @@ export const createServerContextFactProviders = ({
 
     getUserInfo: async (targetUserId) => {
       const info = await UserModel.getInfoForAIGeneration(db, targetUserId ?? userId);
-      return { language: info.responseLanguage, username: info.userName };
+      return { language: info.preferredReplyLanguage, username: info.userName };
     },
 
     getWorkspaceContext: async (targetWorkspaceId) => {

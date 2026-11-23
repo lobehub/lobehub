@@ -8,12 +8,13 @@ import { useTranslation } from 'react-i18next';
 import { ModelTag } from '@/components/LobeIcons';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentStore } from '@/store/agent/store';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 import HistoryDivider from './HistoryDivider';
 
 const styles = stylex.create({
-  container: { paddingInline: '12px', borderRadius: '12px' },
+  container: { paddingInline: densityTokens['--lobe-density-content-gap'], borderRadius: '12px' },
   content: { color: cssVar.colorTextDescription },
   line: {
     width: '3px',

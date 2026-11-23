@@ -48,6 +48,8 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
+import { getWorkspaceMemberNickname } from '@/utils/workspaceMemberName';
 
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -81,7 +83,7 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 100%;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     transition: background 0.15s;
@@ -309,7 +311,12 @@ const AgentViewAllPage = memo(() => {
       if (!profile) continue;
       map.set(member.userId, {
         avatar: profile.avatar,
-        name: profile.fullName || profile.username || profile.email || undefined,
+        name:
+          getWorkspaceMemberNickname(member) ||
+          profile.fullName ||
+          profile.username ||
+          profile.email ||
+          undefined,
       });
     }
     return map;
@@ -541,11 +548,14 @@ const AgentViewAllPage = memo(() => {
     createMarketAgentMenuItem,
   } = useCreateMenuItems();
 
-  // Creating from the Private tab lands the item in the private bucket, so
-  // the new row appears in the list the user is currently looking at.
+  // Each tab starts creation in its own bucket, so the new row appears in the
+  // list the user is currently looking at. The create dialogs still show the
+  // choice and let the user change it.
   const createOptions = useMemo(
     () =>
-      activeWorkspaceId && segment === 'private' ? { visibility: 'private' as const } : undefined,
+      activeWorkspaceId
+        ? { visibility: segment === 'private' ? ('private' as const) : ('public' as const) }
+        : undefined,
     [activeWorkspaceId, segment],
   );
 

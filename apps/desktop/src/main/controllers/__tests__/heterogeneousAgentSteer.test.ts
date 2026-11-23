@@ -1,6 +1,9 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
-import { ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
+import { AntigravityLiveInput, ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it, vi } from 'vitest';
 
 import { endLiveCliRun, writeCliPrompt } from '../heterogeneousAgentLiveInput';
@@ -73,6 +76,45 @@ describe('steerAgentSession', () => {
       [expect.objectContaining({ text: 'also run the tests', type: 'text' })],
       'steer-1',
     );
+  });
+
+  it('steers a live Antigravity CLI with text and image attachments', async () => {
+    const stdin = new PassThrough();
+    const written = readLines(stdin);
+    const liveInput = new AntigravityLiveInput(stdin);
+    const agy = session({ agentType: 'antigravity', command: 'agy', liveInput });
+
+    await expect(steerAgentSession(agy, params, '/tmp')).resolves.toEqual({
+      status: 'accepted',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(written[0]).toEqual({
+      event: 'user',
+      message: { content: expect.stringContaining('also run the tests') },
+    });
+    expect(liveInput.takeSteerUuid()).toBe('steer-1');
+
+    const cacheDir = await mkdtemp(path.join(tmpdir(), 'agy-desktop-steer-test-'));
+    const image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
+    try {
+      await expect(
+        steerAgentSession(
+          agy,
+          {
+            ...params,
+            imageList: [{ id: 'img-1', url: `data:image/png;base64,${image}` }],
+            messageId: 'steer-image',
+          },
+          cacheDir,
+        ),
+      ).resolves.toEqual({ status: 'accepted' });
+      const filePath = JSON.parse(written[1].message.content.match(/^- (".+")$/m)![1]);
+      expect(await readFile(filePath)).toEqual(Buffer.from(image, 'base64'));
+      expect(liveInput.takeSteerUuid()).toBe('steer-image');
+    } finally {
+      await rm(cacheDir, { force: true, recursive: true });
+    }
   });
 
   it('steers a Pi run', async () => {

@@ -3,6 +3,8 @@ import { useCallback, useMemo } from 'react';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import type { TriggerFilter } from '@/features/AgentTopicManager/types';
+import { TOPICS_TRIGGER_PARAM } from '@/features/AgentTopicManager/urlState';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -120,7 +122,13 @@ export const useNavigateToAgentTopics = () => {
   const router = useQueryRoute();
 
   return useCallback(
-    (agentId: string) => router.push(urlJoin('/agent', agentId, 'topics')),
+    /** `trigger` opens the page with only that source picked instead of the default. */
+    (agentId: string, trigger?: TriggerFilter) => {
+      const url = urlJoin('/agent', agentId, 'topics');
+      return trigger
+        ? router.push(url, { query: { [TOPICS_TRIGGER_PARAM]: trigger } })
+        : router.push(url);
+    },
     [router],
   );
 };

@@ -87,6 +87,13 @@ export interface ClaudeCodeControlRequest {
   subtype: string;
 }
 
+/**
+ * Key of host-only metadata on a control request (e.g. the mode the user
+ * picked, where the request carries the mode Claude Code can run). Stripped
+ * before the request reaches Claude Code; handed to `onControlRequestSent`.
+ */
+export const CONTROL_REQUEST_HOST_META = '__host';
+
 /** Claude Code's answer to a control request. */
 export type ClaudeCodeControlResponse =
   { response?: Record<string, unknown>; subtype: 'success' } | { error: string; subtype: 'error' };
@@ -139,6 +146,10 @@ export class ClaudeCodeLiveInput {
   private readonly idleCloseMs: number;
   private lastOutcome: ClaudeCodeTurnOutcome | undefined;
   private lineBuffer = '';
+  private readonly listeners = new Set<(message: unknown) => void>();
+  private readonly sentListeners = new Set<
+    (request: ClaudeCodeControlRequest, meta: Record<string, unknown> | undefined) => void
+  >();
   private readonly pendingControl = new Map<string, (answer: ClaudeCodeControlResponse) => void>();
   private turnOpen = true;
   private readonly unconsumed = new Set<string>();
@@ -194,14 +205,48 @@ export class ClaudeCodeLiveInput {
   ): ClaudeCodeControlRequestHandle | undefined {
     if (this.closed) return;
 
+    const { [CONTROL_REQUEST_HOST_META]: meta, ...wire } = request;
     const requestId = randomUUID();
     const response = new Promise<ClaudeCodeControlResponse>((resolve) => {
       this.pendingControl.set(requestId, resolve);
     });
     this.stdin.write(
-      `${JSON.stringify({ request, request_id: requestId, type: 'control_request' })}\n`,
+      `${JSON.stringify({ request: wire, request_id: requestId, type: 'control_request' })}\n`,
     );
+    for (const listener of this.sentListeners) {
+      listener(wire as ClaudeCodeControlRequest, meta as Record<string, unknown> | undefined);
+    }
     return { requestId, response };
+  }
+
+  /** Watch every control request the host writes, with its host-only metadata. */
+  onControlRequestSent(
+    listener: (
+      request: ClaudeCodeControlRequest,
+      meta: Record<string, unknown> | undefined,
+    ) => void,
+  ): () => void {
+    this.sentListeners.add(listener);
+    return () => this.sentListeners.delete(listener);
+  }
+
+  /**
+   * Answer a control request Claude Code sent the host (`can_use_tool` under
+   * `--permission-prompt-tool stdio`). Returns false once input has closed.
+   */
+  respondToControlRequest(requestId: string, response: Record<string, unknown>): boolean {
+    if (this.closed) return false;
+
+    this.stdin.write(
+      `${JSON.stringify({ response: { request_id: requestId, response, subtype: 'success' }, type: 'control_response' })}\n`,
+    );
+    return true;
+  }
+
+  /** Watch every record Claude Code writes, as `observe` parses it. */
+  subscribe(listener: (message: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   /** Feed raw stdout so the session state tracks what Claude Code reports. */
@@ -222,6 +267,7 @@ export class ClaudeCodeLiveInput {
         }
         // Turns still run after input closes, so keep tracking them.
         this.observeMessage(message);
+        for (const listener of this.listeners) listener(message);
       } catch {
         // Non-JSON noise on stdout carries no session state.
       }

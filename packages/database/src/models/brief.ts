@@ -284,6 +284,35 @@ export class BriefModel {
     return rows.length > 0;
   }
 
+  /**
+   * Which of `taskIds` have an unresolved urgent brief — the batch form of
+   * {@link hasUnresolvedUrgentByTask}, for lists that mark the tasks whose
+   * automation is held back until the user answers.
+   */
+  async findTaskIdsWithUnresolvedUrgent(
+    taskIds: string[],
+    options?: { excludeTypes?: string[] },
+  ): Promise<Set<string>> {
+    if (taskIds.length === 0) return new Set();
+
+    const excludeTypes = options?.excludeTypes ?? [];
+    const conditions = [
+      this.ownership(),
+      inArray(briefs.taskId, taskIds),
+      eq(briefs.priority, 'urgent'),
+      isNull(briefs.resolvedAt),
+    ];
+    if (excludeTypes.length > 0) {
+      conditions.push(notInArray(briefs.type, excludeTypes));
+    }
+
+    const rows = await this.db
+      .selectDistinct({ taskId: briefs.taskId })
+      .from(briefs)
+      .where(and(...conditions));
+    return new Set(rows.map((row) => row.taskId).filter((id): id is string => !!id));
+  }
+
   async findByCronJobId(cronJobId: string): Promise<BriefItem[]> {
     return this.db
       .select()

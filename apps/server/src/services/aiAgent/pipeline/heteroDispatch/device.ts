@@ -28,6 +28,7 @@ import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingD
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import { traceHeteroStage } from '../sendTracing';
+import { forDeviceRuntime } from './codexCollaboration';
 import { recordHeteroDeviceRoute } from './deviceRoute';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
@@ -191,6 +192,10 @@ export const dispatchToCliDevice = async (
     );
   }
   const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
+  const collaborationMode = forDeviceRuntime(heteroParams.collaborationMode, {
+    native: !!nativeCodex,
+    supportsCollaborationMode: !!nativeCodex?.supportsCollaborationMode,
+  });
 
   // A turn the server starts on its own (a delegated task reporting back)
   // never passed the composer's restore step: bring back the worktree a
@@ -311,6 +316,7 @@ export const dispatchToCliDevice = async (
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
           ...(claudeAccountRouting && { claudeAccountRouting }),
           clientKinds: nativeCodex?.clientKinds,
+          collaborationMode,
           cwd: deviceCwd,
           deviceId: dispatchDeviceId,
           resumeFallbackSystemContext: deviceResumeFallbackSystemContext,

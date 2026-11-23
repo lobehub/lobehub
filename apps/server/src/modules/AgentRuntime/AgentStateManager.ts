@@ -204,14 +204,6 @@ export interface AgentOperationMetadata {
   totalSteps: number;
   userId?: string;
   /**
-   * Visitor-facing redaction policy for a shared-agent visitor run, mirrored
-   * from the share's `AgentShareConfig`. Persisted alongside
-   * {@link streamOwnerUserId} so a queue worker that never ran this op's init
-   * can still apply the OWNER-configured policy instead of falling back to the
-   * fail-closed full strip.
-   */
-  visitorRedaction?: { showErrorDetails?: boolean };
-  /**
    * Workspace the operation runs in (null/undefined = personal). Persisted so
    * queue workers (e.g. QStash `runStep`) can reconstruct a workspace-scoped
    * runtime; without it the runtime is personal-scoped and message/topic
@@ -534,9 +526,6 @@ export class AgentStateManager {
       return {
         acceptsMemberRuntimeEnd: metadata.acceptsMemberRuntimeEnd === 'true' || undefined,
         agentConfig: metadata.agentConfig ? JSON.parse(metadata.agentConfig) : undefined,
-        visitorRedaction: metadata.visitorRedaction
-          ? JSON.parse(metadata.visitorRedaction)
-          : undefined,
         createdAt: metadata.createdAt,
         lastActiveAt: metadata.lastActiveAt,
         modelRuntimeConfig: metadata.modelRuntimeConfig
@@ -564,7 +553,6 @@ export class AgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       streamOwnerUserId?: string;
@@ -578,7 +566,6 @@ export class AgentStateManager {
       const metadata: AgentOperationMetadata = {
         acceptsMemberRuntimeEnd: data.acceptsMemberRuntimeEnd,
         agentConfig: data.agentConfig,
-        visitorRedaction: data.visitorRedaction,
         createdAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
         mirrorToOperationId: data.mirrorToOperationId,
@@ -609,8 +596,6 @@ export class AgentStateManager {
       if (metadata.modelRuntimeConfig)
         redisData.modelRuntimeConfig = JSON.stringify(metadata.modelRuntimeConfig);
       if (metadata.agentConfig) redisData.agentConfig = JSON.stringify(metadata.agentConfig);
-      if (metadata.visitorRedaction)
-        redisData.visitorRedaction = JSON.stringify(metadata.visitorRedaction);
 
       await this.redis.hmset(metaKey, redisData);
       await this.redis.expire(metaKey, this.DEFAULT_TTL);

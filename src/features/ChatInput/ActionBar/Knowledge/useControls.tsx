@@ -11,7 +11,7 @@ import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
@@ -25,7 +25,7 @@ const styles = stylex.create({
   viewMore: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     // width 320 + margin-inline -12 anchors the submenu to 320px (matching the skill
     // submenu) and lets the row span full width; padding-inline 12 lines its icon/text
@@ -36,7 +36,7 @@ const styles = stylex.create({
     // from the list, but the bottom leaves a dead gap against the popup edge — cancel it.
     marginBlockEnd: '-8px',
     marginInline: '-12px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderStyle: 'none',
     borderRadius: sidebarRow.radius,
     fontSize: sidebarRow.textFontSize,

@@ -19,6 +19,8 @@ import { t as translate } from 'i18next';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import type { DashboardListItem, DashboardSettingsPatch } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
@@ -85,6 +87,8 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
   const [visibility, setVisibility] = useState<DashboardVisibility>(dashboard.visibility);
   const [pickedSchedule, setPickedSchedule] = useState<BoardScheduleChoice>();
   const [saving, setSaving] = useState(false);
+  /** Save failure, shown above the footer buttons: the modal stays open with the user's edits. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
 
   // Home boards outside a workspace are personal: there is no one to share with.
   const showVisibility = !!dashboard.workspaceId;
@@ -117,6 +121,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
 
   const handleSave = async () => {
     if (!trimmedTitle || saving) return;
+    setError(null);
     setSaving(true);
     try {
       const patch: DashboardSettingsPatch = {};
@@ -144,9 +149,9 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
       else if (keptPrivate) toast.info(t('settings.visibilityKeptPrivate'));
       else toast.success(t('settings.saved'));
       close();
-    } catch (error) {
-      console.error('[dashboard] settings save failed', error);
-      toast.error(t('operationFailed', { ns: 'common' }));
+    } catch (err) {
+      console.error('[dashboard] settings save failed', err);
+      setError(toInlineError(t('form.saveFailedRetry'), err));
     } finally {
       setSaving(false);
     }
@@ -167,7 +172,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         options={scheduleOptions}
         value={schedule}
         variant={'filled'}
-        onChange={(value) => setPickedSchedule(value as BoardScheduleChoice)}
+        onChange={(value) => {
+          setPickedSchedule(value as BoardScheduleChoice);
+          setError(null);
+        }}
       />
     );
   };
@@ -182,7 +190,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
             maxLength={200}
             placeholder={t('form.titlePlaceholder')}
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setError(null);
+            }}
           />
         </Field>
         <Field label={t('form.descriptionLabel')}>
@@ -191,7 +202,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
             maxLength={2000}
             placeholder={t('form.descriptionPlaceholder')}
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              setError(null);
+            }}
           />
         </Field>
         {showVisibility && (
@@ -203,7 +217,10 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
                 { label: t('settings.visibilityPrivate'), value: 'private' },
                 { label: t('settings.visibilityPublic'), value: 'public' },
               ]}
-              onChange={(value) => setVisibility(value as DashboardVisibility)}
+              onChange={(value) => {
+                setVisibility(value as DashboardVisibility);
+                setError(null);
+              }}
             />
           </Field>
         )}
@@ -222,6 +239,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
         >
           {renderSchedule()}
         </Field>
+        {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

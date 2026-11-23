@@ -8,6 +8,8 @@ import { TargetIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { type MarkdownElementProps } from '../type';
 import {
   type GoalTurnAttributes,
@@ -104,7 +106,7 @@ const styles = stylex.create({
     cursor: 'pointer',
     margin: '0',
     paddingBlock: '0',
-    paddingInlineStart: '12px',
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
     paddingInlineEnd: '0',
     borderStyle: 'none',
     font: 'inherit',

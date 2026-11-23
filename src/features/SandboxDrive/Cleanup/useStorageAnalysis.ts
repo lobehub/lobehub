@@ -1,9 +1,10 @@
 import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
-import { useRefreshDrive } from '../useDriveData';
+import { useRefreshDrive, useRemeasureDrive } from '../useDriveData';
 import {
   type StorageAnalysis,
   type StorageAnalysisItem,
@@ -45,6 +46,7 @@ export const useStorageAnalysis = (drive: SandboxDrive) => {
   const [scanning, setScanning] = useState(false);
   const generation = useRef(0);
   const refreshDrive = useRefreshDrive();
+  const remeasureDrive = useRemeasureDrive();
 
   const scan = useCallback(
     async (restart = false) => {
@@ -97,6 +99,8 @@ export const useStorageAnalysis = (drive: SandboxDrive) => {
     async (items: StorageAnalysisItem[], options: { regenerableOnly?: boolean } = {}) => {
       // Sent in batches the server accepts; what a batch could not finish in
       // time goes back to the front of the queue.
+      // The workspace the delete is made in; see `useRemeasureDrive`.
+      const workspaceId = getActiveWorkspaceId();
       let pending = [...new Set(items.map((item) => item.path))];
       let freedBytes = 0;
       const failed: string[] = [];
@@ -132,11 +136,15 @@ export const useStorageAnalysis = (drive: SandboxDrive) => {
           };
         });
         await refreshDrive();
+        // The usage read returns the figure measured before the delete until
+        // the drive is measured again; not awaited, since a large drive takes
+        // several calls and the delete's outcome is already known.
+        if (gone.size > 0) void remeasureDrive(drive, workspaceId);
       }
 
       return { failed, freedBytes, pending } satisfies DeleteOutcome;
     },
-    [drive, refreshDrive],
+    [drive, refreshDrive, remeasureDrive],
   );
 
   return { analysis, error, remove, rescan: () => scan(true), scanning };

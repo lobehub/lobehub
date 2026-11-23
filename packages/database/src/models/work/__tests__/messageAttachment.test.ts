@@ -64,6 +64,34 @@ describe('MessageModel · work summary attachment', () => {
     expect(result.find((m) => m.id === 'msg-tool')?.works).toBeUndefined();
   });
 
+  it('gives an anchor whose Works were deleted an empty list, not an omitted one', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const messageModel = new MessageModel(serverDB, userId);
+    await serverDB.insert(messages).values({
+      content: '',
+      id: 'msg-anchor',
+      metadata: { work: { rootOperationId: 'op-collection' } },
+      role: 'assistant',
+      topicId,
+      userId,
+    });
+    const run = { operationId: 'op-collection', topicId, userId };
+    const work = await workModel.createAgentWork(run, {
+      title: 'Preview',
+      type: 'link',
+      url: 'https://preview.example.com',
+    });
+    expect(
+      (await messageModel.query({ topicId })).find((m) => m.id === 'msg-anchor')?.works,
+    ).toHaveLength(1);
+
+    await workModel.deleteAgentWork(run, work.id);
+
+    // Clients keep earlier works only when a payload omits them (skipWorks reads).
+    const anchor = (await messageModel.query({ topicId })).find((m) => m.id === 'msg-anchor');
+    expect(anchor?.works).toEqual([]);
+  });
+
   it('omits works for messages that carry no work rootOperationId', async () => {
     const messageModel = new MessageModel(serverDB, userId);
 

@@ -3,7 +3,7 @@
 import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { Ban, Gauge, Monitor, Moon, Mouse, Rows3, Rows4, Sun, Waves } from 'lucide-react';
+import { Ban, Gauge, Monitor, Moon, Rows3, Rows4, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -179,56 +179,6 @@ const Common = memo(() => {
         minWidth: undefined,
         name: 'interfaceDensity',
         valueProp: 'activeKey',
-      },
-      {
-        children: (
-          <Tabs
-            items={[
-              {
-                icon: <Icon icon={Ban} size={16} />,
-                key: 'disabled',
-                label: t('settingAppearance.contextMenuMode.disabled'),
-              },
-              {
-                icon: <Icon icon={Mouse} size={16} />,
-                key: 'default',
-                label: t('settingAppearance.contextMenuMode.default'),
-              },
-            ]}
-          />
-        ),
-        label: (
-          <SettingsSearchAnchor id={'appearance-context-menu'}>
-            {t('settingAppearance.contextMenuMode.title')}
-          </SettingsSearchAnchor>
-        ),
-        minWidth: undefined,
-        name: 'contextMenuMode',
-        valueProp: 'activeKey',
-      },
-
-      {
-        children: (
-          <Flexbox horizontal justify={'flex-end'}>
-            <Select
-              allowClear
-              options={localeOptions}
-              placeholder={t('settingCommon.responseLanguage.placeholder')}
-              value={general?.responseLanguage || undefined}
-              style={{
-                width: '50%',
-              }}
-              onChange={(value) => {
-                save(() => setSettings({ general: { responseLanguage: value ?? '' } }));
-              }}
-            />
-          </Flexbox>
-        ),
-        label: (
-          <SettingsSearchAnchor id={'appearance-response-language'}>
-            {t('settingCommon.responseLanguage.title')}
-          </SettingsSearchAnchor>
-        ),
       },
     ],
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,

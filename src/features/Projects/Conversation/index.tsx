@@ -4,6 +4,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import { useRegisterArtboardTool } from '@/features/Artboard';
 import ConversationWorkspace from '@/features/Conversation/Workspace';
 import NavHeader from '@/features/NavHeader';
 import ChatConversation from '@/routes/(main)/agent/features/Conversation';
@@ -17,6 +18,7 @@ import { useProjectConversation } from './useProjectConversation';
 const ProjectConversation = memo(() => {
   const { fallback, getConversationPath, getTopicPath, restageDraft, stage, title, topic } =
     useProjectConversation();
+  useRegisterArtboardTool();
 
   if (fallback) return fallback;
 

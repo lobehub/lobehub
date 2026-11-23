@@ -39,7 +39,7 @@ import { projectFileService } from '@/services/projectFile';
 import { useGlobalStore } from '@/store/global';
 import { isPersistedPartialIndex } from '@/store/projectFile';
 import { useDensityTokens } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
 import { FILE_TREE_UNSAFE_CSS } from './fileTreeStyle';
@@ -109,7 +109,7 @@ const styles = stylex.create({
   truncated: {
     flexShrink: 0,
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,

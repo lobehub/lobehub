@@ -78,6 +78,21 @@ html.desktop[data-theme='light'] body {
   background-color: color-mix(in srgb, var(--lobe-color-bg-layout) 70%, transparent);
 }
 
+/* @-mention blue-violet (src/styles/mention.stylex.ts). The geekblue/purple scale vars keep one
+   value across themes, so dark mode lifts the text toward colorText and deepens the tint. */
+html {
+  --lobe-mention-base: color-mix(in srgb, var(--lobe-geekblue) 50%, var(--lobe-purple));
+  --lobe-mention-color: var(--lobe-mention-base);
+  --lobe-mention-bg: color-mix(in srgb, var(--lobe-mention-base) 14%, transparent);
+  --lobe-mention-bg-hover: color-mix(in srgb, var(--lobe-mention-base) 22%, transparent);
+}
+
+html[data-theme='dark'] {
+  --lobe-mention-color: color-mix(in srgb, var(--lobe-mention-base) 55%, var(--lobe-color-text));
+  --lobe-mention-bg: color-mix(in srgb, var(--lobe-mention-base) 26%, transparent);
+  --lobe-mention-bg-hover: color-mix(in srgb, var(--lobe-mention-base) 36%, transparent);
+}
+
 /* MAC_WINDOW_FULLSCREEN_SELECTOR / MAC_PANEL_BG_VAR from
    @/features/Electron/system/macWindowFullscreen */
 html.desktop[data-window-fullscreen] {

@@ -33,7 +33,6 @@ import { useAnalytics } from '@/libs/analytics/client';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
 type FooterMenuItems = NonNullable<DropdownItem[]>;
 
@@ -86,7 +85,6 @@ const Footer = memo(() => {
   const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
   const bugReportItem = useHelpMenuBugReportItem();
 
@@ -116,8 +114,10 @@ const Footer = memo(() => {
     helpMenuItems: DropdownItem[];
     trackedMenuKeys: string[];
   }>(() => {
+    // The compact footer gives Settings its own icon beside Help; only the
+    // expanded footer, which has no such icon, lists it in the menu.
     const settingsGroup: FooterMenuItems =
-      footer.showSettingsEntry && !isDevMode
+      footer.showSettingsEntry && footer.layout === 'expanded'
         ? [
             {
               icon: <Icon icon={Settings2} />,
@@ -241,7 +241,6 @@ const Footer = memo(() => {
     bugReportItem,
     handleOpenChangelogModal,
     handleOpenFeedbackModal,
-    isDevMode,
     t,
     settingLabelKey,
     billboardMenuItems,
@@ -304,7 +303,7 @@ const Footer = memo(() => {
               size={FOOTER_ICON_SIZE}
             />
           </DropdownMenu>
-          {isDevMode && (
+          {footer.showSettingsEntry && (
             <WorkspaceLink to="/settings">
               <ActionIcon
                 aria-label={t(settingLabelKey)}

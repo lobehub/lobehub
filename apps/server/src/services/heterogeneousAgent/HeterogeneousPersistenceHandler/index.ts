@@ -5,6 +5,14 @@ import type {
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
 import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
+import {
+  isPermissionModeReport,
+  permissionModeReportPatch,
+} from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import {
+  collaborationModeReportPatch,
+  isCollaborationModeReport,
+} from '@lobechat/heterogeneous-agents/codexPlanMode';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { ThreadType } from '@lobechat/types';
@@ -364,6 +372,24 @@ export class HeterogeneousPersistenceHandler {
   private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<void> {
     if (isSteerReplay(event)) {
       await this.consumeSteer(state, event.data.uuid);
+      return;
+    }
+    // Claude Code's mode, incl. the switch it makes when a plan is approved:
+    // the topic's next run starts in it, and the composer chip shows it.
+    if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
+      await this.deps.topicModel.updateMetadata(state.topicId, {
+        ...permissionModeReportPatch(event.data),
+        heteroPermissionModeReportPending: null,
+      });
+      return;
+    }
+    // Codex Plan switch: a thread back in `default` clears the pending reset;
+    // the switch follows Codex only where Codex disagrees with the request.
+    if (event.type === 'step_complete' && isCollaborationModeReport(event.data)) {
+      const patch = collaborationModeReportPatch(event.data);
+      if (Object.keys(patch).length > 0) {
+        await this.deps.topicModel.updateMetadata(state.topicId, patch);
+      }
       return;
     }
     await this.reduceAndApply(state, event);

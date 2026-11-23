@@ -1,5 +1,4 @@
 import { type MarkdownProps } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
@@ -8,12 +7,13 @@ import { MENTION_TAG } from '@/const/plugin';
 import { createRemarkSelfClosingTagPlugin } from '@/features/Conversation/Markdown/plugins/remarkPlugins/createRemarkSelfClosingTagPlugin';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { mentionTokens } from '@/styles/mention.stylex';
 
 import { resolveCommentMentionName } from './commentMentionName';
 
 const styles = stylex.create({
   mention: {
-    color: cssVar.colorInfo,
+    color: mentionTokens.color,
     wordBreak: 'break-word',
   },
 });

@@ -48,6 +48,8 @@ export default {
   'FileManager.actions.copyUrlError': 'Failed to copy the file link',
   'FileManager.actions.copyUrlSuccess': 'File url copied successfully.',
   'FileManager.actions.createChunkingTask': 'Preparing...',
+  'FileManager.actions.createFolderFailedRetry':
+    "Couldn't create the folder. Check your network and try again.",
   'FileManager.actions.deleteSuccess': 'File deleted successfully.',
   'FileManager.actions.deleteAll': 'Delete All Items',
   'FileManager.actions.deleteAllOwn': 'Delete All Items I Created',
@@ -73,7 +75,7 @@ export default {
   'FileManager.actions.renameSuccess': 'Rename successful',
   'FileManager.actions.reorderError': 'Failed to update order, please try again',
   'FileManager.actions.sendToMessenger': 'Send to Messenger',
-  'FileManager.actions.sendToMessengerSettings': 'Messenger Settings',
+  'FileManager.actions.manageChatApps': 'Manage chat apps',
   'FileManager.actions.sendToMessengerSetup': 'Set Up Channels',
   'FileManager.actions.sendToMessengerSetupAction': 'Set Up',
   'FileManager.bottom': "You've reached the end.",

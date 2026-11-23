@@ -16,6 +16,9 @@ export const componentMap = {
   [SettingsTabs.Appearance]: dynamic(() => import('../appearance'), {
     loading: loading('Settings > Appearance'),
   }),
+  [SettingsTabs.Conversation]: dynamic(() => import('../conversation'), {
+    loading: loading('Settings > Conversation'),
+  }),
   [SettingsTabs.Provider]: dynamic(() => import('../provider'), {
     loading: loading('Settings > Provider'),
   }),
@@ -24,12 +27,6 @@ export const componentMap = {
   }),
   [SettingsTabs.Memory]: dynamic(() => import('../memory'), {
     loading: loading('Settings > Memory'),
-  }),
-  [SettingsTabs.Messenger]: dynamic(() => import('../messenger'), {
-    loading: loading('Settings > Messenger'),
-  }),
-  [SettingsTabs.Integrations]: dynamic(() => import('../integrations'), {
-    loading: loading('Settings > Integrations'),
   }),
   [SettingsTabs.Notification]: dynamic(
     () => import('@/business/client/BusinessSettingPages/Notification'),
@@ -88,12 +85,6 @@ export const componentMap = {
   }),
   [SettingsTabs.Security]: dynamic(() => import('../security'), {
     loading: loading('Settings > Security'),
-  }),
-  [SettingsTabs.Skill]: dynamic(() => import('../skill'), {
-    loading: loading('Settings > Skill'),
-  }),
-  [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
-    loading: loading('Settings > Connector'),
   }),
   [SettingsTabs.Automations]: dynamic(() => import('../automations'), {
     loading: loading('Settings > Automations'),

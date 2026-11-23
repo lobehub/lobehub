@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildNewTopicMetadata } from './newTopicMetadata';
+import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
 
 const worktree = '/Users/me/.lobehub/worktrees/lobehub-0000beef/quiet-hill';
 const prepared = {
@@ -72,6 +72,76 @@ describe('buildNewTopicMetadata — project directory', () => {
     });
 
     expect(metadata?.workingDirectoryConfig).toEqual({ path: '/code/lobehub' });
+  });
+});
+
+describe('buildNewTopicMetadata — Claude Code permission mode', () => {
+  it('is born with the mode the composer chip showed', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: {
+          initialTopicMetadata: { heteroPermissionMode: 'plan', workingDirectory: '/code/d' },
+        } as any,
+      }),
+    ).toMatchObject({ heteroPermissionMode: 'plan', workingDirectory: '/code/d' });
+  });
+
+  it('keeps the mode inside a project directory too', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { heteroPermissionMode: 'default' } } as any,
+        projectDirectory: { path: '/code/lobehub' },
+      }),
+    ).toMatchObject({ heteroPermissionMode: 'default', workingDirectory: '/code/lobehub' });
+  });
+});
+
+describe('buildNewTopicMetadata — Codex Plan switch', () => {
+  it('is born with the switch the composer showed, off included', () => {
+    for (const heteroPlanMode of [true, false]) {
+      expect(
+        buildNewTopicMetadata({
+          appContext: { initialTopicMetadata: { heteroPlanMode } } as any,
+        }),
+      ).toMatchObject({ heteroPlanMode });
+    }
+  });
+
+  it('records nothing when the composer showed no switch', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { workingDirectory: '/code/d' } } as any,
+      }),
+    ).not.toHaveProperty('heteroPlanMode');
+  });
+});
+
+describe('sub-topic link (metadata.openedBy)', () => {
+  it('records the opener read through the caller scope', async () => {
+    const findById = vi.fn().mockResolvedValue({ agentId: 'agt_parent', id: 'tpc_parent' });
+
+    const openedBy = await resolveTopicOpenedBy({ findById } as any, 'tpc_parent');
+
+    expect(findById).toHaveBeenCalledWith('tpc_parent');
+    expect(openedBy).toEqual({
+      agentId: 'agt_parent',
+      at: expect.any(String),
+      topicId: 'tpc_parent',
+    });
+    expect(buildNewTopicMetadata({ openedBy })).toEqual(expect.objectContaining({ openedBy }));
+  });
+
+  it('records nothing for an unknown or unreadable opener', async () => {
+    expect(
+      await resolveTopicOpenedBy({ findById: vi.fn().mockResolvedValue(undefined) } as any, 'x'),
+    ).toBeUndefined();
+    expect(
+      await resolveTopicOpenedBy(
+        { findById: vi.fn().mockRejectedValue(new Error('no')) } as any,
+        'x',
+      ),
+    ).toBeUndefined();
+    expect(await resolveTopicOpenedBy({ findById: vi.fn() } as any, undefined)).toBeUndefined();
   });
 });
 

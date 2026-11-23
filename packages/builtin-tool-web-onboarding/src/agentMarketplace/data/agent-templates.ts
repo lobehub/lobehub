@@ -4,10 +4,13 @@ import { MARKETPLACE_CATEGORY_VALUES } from '../types';
 const MARKETPLACE_CATEGORY_SET = new Set<string>(MARKETPLACE_CATEGORY_VALUES);
 
 export interface RawAgentTemplate {
+  author?: { name?: string } | string;
   avatar?: string;
   description?: string;
+  forkCount?: number;
   identifier?: string;
   name?: string;
+  pluginCount?: number;
 }
 
 /** API response shape: top-level keys are MarketplaceCategory slugs. */
@@ -19,11 +22,15 @@ export const normalizeAgentTemplate = (
 ): AgentTemplate | undefined => {
   if (!item.identifier || !item.name) return undefined;
   if (!MARKETPLACE_CATEGORY_SET.has(category)) return undefined;
+  const author = typeof item.author === 'string' ? item.author : item.author?.name;
   return {
+    ...(author ? { author } : {}),
     avatar: item.avatar,
     category: category as MarketplaceCategory,
     description: item.description,
+    ...(typeof item.forkCount === 'number' ? { forkCount: item.forkCount } : {}),
     id: item.identifier,
+    ...(typeof item.pluginCount === 'number' ? { pluginCount: item.pluginCount } : {}),
     title: item.name,
   };
 };

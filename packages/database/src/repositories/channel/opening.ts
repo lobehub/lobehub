@@ -1,9 +1,10 @@
-import type { ChannelContextMessage } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
+import type { ChannelContextMessage, ChannelSharedAgentAccess } from '@lobechat/types';
+import { and, desc, eq, gte, inArray, isNull, lt, max, ne } from 'drizzle-orm';
 import pMap from 'p-map';
 
-import type { ChannelJobItem } from '../../schemas';
+import type { ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
+  agentOperations,
   agents,
   channelAudit,
   channelJobs,
@@ -13,9 +14,12 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { channelReplyShare } from './agent';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
+import { isMergedBehind } from './merge';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
 import { chooseOpeningLayout } from './openingLayout';
 import { messageStands } from './tombstone';
@@ -36,6 +40,15 @@ const OPENING_CONTEXT_LIMIT = 6;
  * by where each sits on the timeline, so the choice stays about what was just being discussed.
  */
 const OPENING_THREAD_LIMIT = 5;
+
+/** Threads read before the filters below, so some are left for {@link OPENING_THREAD_LIMIT}. */
+const OPENING_THREAD_SCAN_LIMIT = 20;
+
+/**
+ * How long a Thread may have been quiet before the request and still be continued. An older one
+ * is a finished conversation: picking it up again hides the new request in it.
+ */
+const OPENING_THREAD_IDLE_MS = 2 * 60 * 60 * 1000;
 
 /** Threads described at once; each reads two messages. */
 const OPENING_THREAD_READ_CONCURRENCY = 3;
@@ -77,10 +90,24 @@ export interface ChannelOpeningCandidate {
   canOpenThread: boolean;
   /** The other Agents the request asked to answer; they share one Thread with this reply. */
   coAddressed: ChannelCoAddressedAgent[];
+  /**
+   * The device picked for the Agent in this Channel. Every reply of the member runs there, so
+   * it names the run's target before the claim; without one only the claim resolves it.
+   */
+  deviceId?: string;
+  /** The Agent's membership in this Channel, which its replies run as. */
+  memberId: string;
+  /** The message the request replies to, when its branch can read it. */
+  quoted?: ChannelContextMessage;
   /** Public messages just before the request, oldest first. */
   recent: ChannelContextMessage[];
   request: ChannelContextMessage;
   requesterUserId: string;
+  /**
+   * Set when the Agent is another person's, reached through its share: the reply opens only once
+   * the share admits the request, so a refused one fails where it was asked, with no acknowledgement.
+   */
+  share?: ChannelSharedAgentAccess;
   /**
    * Open Threads started before the request, nearest first, that the reply may continue in.
    * Empty when it cannot move: already in a Thread, or asked together with other Agents.
@@ -134,7 +161,7 @@ const coAddressedJobs = async (
 ) => {
   if (!opensReply(job)) return [];
   const rows = await db
-    .select({ name: agents.name, title: agents.title, wake: channelJobs.wake })
+    .select({ name: agents.name, title: agentTitleSql(), wake: channelJobs.wake })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
     .innerJoin(agents, eq(agents.id, channelMembers.agentId))
@@ -178,7 +205,8 @@ export const findOpeningCandidate = async (
       job: channelJobs,
       agentId: channelMembers.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
+      memberConfig: channelMembers.config,
     })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
@@ -201,10 +229,7 @@ export const findOpeningCandidate = async (
   if (!requester?.userId) return;
 
   const [[request], [thread], [channel]] = await Promise.all([
-    db
-      .select({ sequence: channelMessages.sequence })
-      .from(channelMessages)
-      .where(eq(channelMessages.id, job.messageId)),
+    db.select().from(channelMessages).where(eq(channelMessages.id, job.messageId)),
     job.threadId
       ? db
           .select({ rootSequence: channelThreads.rootSequence })
@@ -212,27 +237,34 @@ export const findOpeningCandidate = async (
           .where(eq(channelThreads.id, job.threadId))
       : [],
     db
-      .select({ workspaceId: channels.workspaceId })
+      .select({ agentId: channels.agentId, workspaceId: channels.workspaceId })
       .from(channels)
       .where(eq(channels.id, channelId)),
   ]);
   if (!request || !channel) return;
+  const share = await channelReplyShare(db, channel, row.agentId, requester.userId);
+  // Answered in the run of the same person's earlier request, which opens for both. A shared
+  // Agent answers each of a visitor's requests in its own run.
+  if (!share && (await isMergedBehind(db, job, request))) return;
   // The request's branch up to the request itself, as the run's manifest will freeze it.
-  const messages = await readManifestMessages(
-    db,
-    channelId,
-    {
-      cutoffSequence: request.sequence,
-      requestMessageId: job.messageId,
-      requesterMemberId: job.requesterMemberId,
-      self: { agentId: row.agentId, memberId: job.memberId, name: '' },
-      threadId: job.threadId,
-      threadRootSequence: thread?.rootSequence ?? null,
-    },
-    { limit: OPENING_CONTEXT_LIMIT + 1 },
-  );
+  const manifest = {
+    cutoffSequence: request.sequence,
+    requestMessageId: job.messageId,
+    requesterMemberId: job.requesterMemberId,
+    self: { agentId: row.agentId, memberId: job.memberId, name: '' },
+    threadId: job.threadId,
+    threadRootSequence: thread?.rootSequence ?? null,
+  };
+  const messages = await readManifestMessages(db, channelId, manifest, {
+    limit: OPENING_CONTEXT_LIMIT + 1,
+  });
   const requestMessage = messages.find((message) => message.id === job.messageId);
   if (!requestMessage) return;
+  const quotedId = requestMessage.replyToId;
+  const quoted = quotedId
+    ? (messages.find((message) => message.id === quotedId) ??
+      (await readManifestMessages(db, channelId, manifest, { messageId: quotedId }))[0])
+    : undefined;
   const coAddressed = await coAddressedJobs(db, job);
 
   return {
@@ -240,18 +272,18 @@ export const findOpeningCandidate = async (
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
     canOpenThread: !job.threadId,
     coAddressed,
+    ...(row.memberConfig?.deviceId && { deviceId: row.memberConfig.deviceId }),
+    memberId: job.memberId,
+    ...(quoted && { quoted }),
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
+    share,
     // Agents asked together share one new Thread under the request instead.
     threads:
       job.threadId || coAddressed.length
         ? []
-        : await describeThreads(
-            db,
-            channelId,
-            await recentOpenThreads(db, channelId, request.sequence),
-          ),
+        : await describeThreads(db, channelId, await continuableThreads(db, job, request)),
     workspaceId: channel.workspaceId,
   };
 };
@@ -510,36 +542,119 @@ const followThread = async (
     .where(eq(channelThreads.id, thread.id));
 };
 
-/** The open Threads started on the main timeline before `beforeSequence`, nearest first. */
-const recentOpenThreads = (
+/** What {@link continuableThreads} reads of the request. */
+const requestColumns = {
+  createdAt: channelMessages.createdAt,
+  replyToId: channelMessages.replyToId,
+  sequence: channelMessages.sequence,
+};
+
+/**
+ * Where the message a request quotes was answered, when it was a request itself: the Thread it
+ * sits in, or the Threads its own answers moved into (none when they stayed in place). Undefined
+ * when it quotes no request, such as a note nobody was asked about.
+ */
+const quotedRequestThreads = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
-  beforeSequence: number,
-) =>
-  db
-    .select({
-      followerMemberIds: channelThreads.followerMemberIds,
-      id: channelThreads.id,
-      metadata: channelThreads.metadata,
-      rootMessageId: channelThreads.rootMessageId,
-    })
-    .from(channelThreads)
-    .where(
-      and(
-        eq(channelThreads.channelId, channelId),
-        lt(channelThreads.rootSequence, beforeSequence),
-        ne(channelThreads.status, 'archived'),
-        notTrashed(channelThreads.isDeleted),
+  replyToId: string | null,
+): Promise<Set<string> | undefined> => {
+  if (!replyToId) return;
+  const [quoted] = await db
+    .select({ threadId: channelMessages.threadId })
+    .from(channelMessages)
+    .where(and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, replyToId)));
+  if (!quoted) return;
+  if (quoted.threadId) return new Set([quoted.threadId]);
+  const answers = await db
+    .select({ threadId: channelJobs.threadId })
+    .from(channelJobs)
+    .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.messageId, replyToId)));
+  if (!answers.length) return;
+  return new Set(answers.flatMap(({ threadId }) => (threadId ? [threadId] : [])));
+};
+
+/**
+ * The open Threads a job's reply may continue in, nearest first: started on the main timeline
+ * before the request, and still the Agent's own live conversation there.
+ *
+ * - The Agent follows it: it has answered there, so continuing is its own follow-up, not joining
+ *   another Agent's work on a related subject.
+ * - It was active within {@link OPENING_THREAD_IDLE_MS} of the request.
+ * - No other Agent is answering in it right now.
+ * - When the request quotes another request, it is where that one was answered: "this" means the
+ *   quoted message, not whatever Thread sits nearest.
+ */
+const continuableThreads = async (
+  db: LobeChatDatabase | Transaction,
+  job: Pick<ChannelJobItem, 'channelId' | 'memberId'>,
+  request: { createdAt: Date; replyToId: string | null; sequence: number },
+) => {
+  const { channelId } = job;
+  const [scanned, quotedIn] = await Promise.all([
+    db
+      .select({
+        createdAt: channelThreads.createdAt,
+        followerMemberIds: channelThreads.followerMemberIds,
+        id: channelThreads.id,
+        metadata: channelThreads.metadata,
+        rootMessageId: channelThreads.rootMessageId,
+      })
+      .from(channelThreads)
+      .where(
+        and(
+          eq(channelThreads.channelId, channelId),
+          lt(channelThreads.rootSequence, request.sequence),
+          ne(channelThreads.status, 'archived'),
+          notTrashed(channelThreads.isDeleted),
+        ),
+      )
+      .orderBy(desc(channelThreads.rootSequence))
+      .limit(OPENING_THREAD_SCAN_LIMIT),
+    quotedRequestThreads(db, channelId, request.replyToId),
+  ]);
+  const followed = scanned.filter(
+    (thread) =>
+      thread.followerMemberIds.includes(job.memberId) && (!quotedIn || quotedIn.has(thread.id)),
+  );
+  if (!followed.length) return [];
+
+  const ids = followed.map(({ id }) => id);
+  const [activity, busy] = await Promise.all([
+    db
+      .select({ at: max(channelMessages.createdAt), threadId: channelMessages.threadId })
+      .from(channelMessages)
+      .where(and(eq(channelMessages.channelId, channelId), inArray(channelMessages.threadId, ids)))
+      .groupBy(channelMessages.threadId),
+    db
+      .select({ threadId: channelJobs.threadId })
+      .from(channelJobs)
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          inArray(channelJobs.threadId, ids),
+          inArray(channelJobs.status, ['queued', 'running']),
+          ne(channelJobs.memberId, job.memberId),
+        ),
       ),
-    )
-    .orderBy(desc(channelThreads.rootSequence))
-    .limit(OPENING_THREAD_LIMIT);
+  ]);
+  const lastActive = new Map(activity.map(({ at, threadId }) => [threadId, at]));
+  const answering = new Set(busy.map(({ threadId }) => threadId));
+  const since = request.createdAt.getTime() - OPENING_THREAD_IDLE_MS;
+
+  return followed
+    .filter((thread) => {
+      const active = lastActive.get(thread.id) ?? thread.createdAt;
+      return active.getTime() >= since && !answering.has(thread.id);
+    })
+    .slice(0, OPENING_THREAD_LIMIT);
+};
 
 /** What the opener reads of each Thread: its name, where it started and where it is now. */
 const describeThreads = async (
   db: LobeChatDatabase,
   channelId: string,
-  threads: Awaited<ReturnType<typeof recentOpenThreads>>,
+  threads: Awaited<ReturnType<typeof continuableThreads>>,
 ): Promise<ChannelOpeningThread[]> =>
   pMap(
     threads,
@@ -586,11 +701,11 @@ const describeThreads = async (
 const continuableThread = async (tx: Transaction, job: ChannelJobItem, threadId: string) => {
   if (job.threadId || (await coAddressedJobs(tx, job)).length) return;
   const [request] = await tx
-    .select({ sequence: channelMessages.sequence })
+    .select(requestColumns)
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
   if (!request) return;
-  const threads = await recentOpenThreads(tx, job.channelId, request.sequence);
+  const threads = await continuableThreads(tx, job, request);
   return threads.find((thread) => thread.id === threadId);
 };
 
@@ -627,9 +742,13 @@ export const findOpeningReply = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   jobId: string,
-): Promise<{ content: string; id: string } | undefined> => {
+): Promise<Pick<ChannelMessageItem, 'content' | 'id' | 'metadata'> | undefined> => {
   const [message] = await db
-    .select({ content: channelMessages.content, id: channelMessages.id })
+    .select({
+      content: channelMessages.content,
+      id: channelMessages.id,
+      metadata: channelMessages.metadata,
+    })
     .from(channelMessages)
     .where(
       and(
@@ -639,4 +758,31 @@ export const findOpeningReply = async (
     )
     .limit(1);
   return message;
+};
+
+/**
+ * The newest reply of `memberId` on `deviceId` since `since` that finished: answered, chose
+ * silence, or failed, with its run's error. A stopped reply says nothing about the device.
+ */
+export const findLastSettledReplyOnDevice = async (
+  db: LobeChatDatabase,
+  channelId: string,
+  { deviceId, memberId, since }: { deviceId: string; memberId: string; since: Date },
+) => {
+  const [row] = await db
+    .select({ error: agentOperations.error, status: channelJobs.status })
+    .from(channelJobs)
+    .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        eq(channelJobs.deviceId, deviceId),
+        inArray(channelJobs.status, ['completed', 'failed', 'silent']),
+        gte(channelJobs.createdAt, since),
+      ),
+    )
+    .orderBy(desc(channelJobs.createdAt))
+    .limit(1);
+  return row;
 };

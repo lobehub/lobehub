@@ -80,6 +80,7 @@ export interface OperationCompletionInput {
   /** Trace / usage aggregates (llm calls, tokens, tool calls). */
   usage?: unknown;
   userId?: string;
+  worksRegistered?: boolean;
 }
 
 /** Options shared by {@link CompletionLifecycle.completeOperation} / `dispatchHooks`. */

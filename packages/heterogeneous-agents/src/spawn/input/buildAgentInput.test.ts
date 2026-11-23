@@ -192,6 +192,51 @@ describe('buildAgentInput', () => {
     });
   });
 
+  describe('antigravity', () => {
+    it('references every attached image in the text stream and materializes distinct bytes', async () => {
+      const header = Buffer.concat([PNG_BYTES, Buffer.alloc(64)]);
+      const images = [
+        Buffer.concat([header, Buffer.from('a')]),
+        Buffer.concat([header, Buffer.from('b')]),
+      ];
+
+      const plan = await buildAgentInput(
+        'antigravity',
+        [
+          { text: 'Compare the two images', type: 'text' },
+          ...images.map((image) => ({
+            source: {
+              data: image.toString('base64'),
+              mediaType: 'image/png',
+              type: 'base64' as const,
+            },
+            type: 'image' as const,
+          })),
+        ],
+        { cacheDir: tmp },
+      );
+
+      const {
+        event,
+        message: { content },
+      } = JSON.parse(plan.stdin);
+      expect(event).toBe('user');
+      expect(content).toContain('Compare the two images');
+      const paths = [...content.matchAll(/^- (".+")$/gm)].map(([, value]) => JSON.parse(value));
+      expect(paths).toHaveLength(2);
+      expect(await Promise.all(paths.map((filePath) => readFile(filePath)))).toEqual(images);
+    });
+
+    it('reports a missing attachment instead of sending a prompt without the image', async () => {
+      const filePath = path.join(tmp, 'missing.png');
+      await expect(
+        buildAgentInput('antigravity', [
+          { source: { path: filePath, type: 'path' }, type: 'image' },
+        ]),
+      ).rejects.toMatchObject({ code: 'ENOENT', path: filePath });
+    });
+  });
+
   describe('codex', () => {
     it('puts text on stdin and emits no --image flags when there are no images', async () => {
       const plan = await buildAgentInput('codex', 'just text');

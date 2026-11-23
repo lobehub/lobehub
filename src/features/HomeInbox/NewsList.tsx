@@ -1,9 +1,10 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import BriefPriorityIcon from '@/features/DailyBrief/BriefPriorityIcon';
@@ -14,6 +15,7 @@ import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import NewsChatActions from './NewsChatActions';
 
@@ -47,7 +49,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadius};
   `,
   body: css`
-    padding-block-end: 12px;
+    padding-block-end: ${densityVars.contentGap};
     padding-inline: ${ROW_PADDING_INLINE + HEADLINE_INSET}px ${ROW_PADDING_INLINE}px;
   `,
   bodyCompact: css`

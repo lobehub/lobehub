@@ -41,7 +41,7 @@ import {
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
 import { getModelLabel, getModelOptionDescription } from './labels';
@@ -54,7 +54,7 @@ const styles = stylex.create({
   check: { flex: 'none', color: cssVar.colorPrimary },
   empty: {
     paddingBlock: '24px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
@@ -103,6 +103,9 @@ const styles = stylex.create({
 
 const getCatalogErrorKey = (name: string) => {
   switch (name) {
+    case 'auth_required': {
+      return 'heteroAgent.antigravityQuota.authRequired';
+    }
     case 'cli_not_found': {
       return 'heteroAgent.cliModel.cliNotFound';
     }
@@ -347,9 +350,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                 </DropdownMenuItemLabel>
               )}
               <DropdownMenuItemExtra className={stylex.props(styles.submenuMeta).className}>
-                {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-                  ? t('heteroAgent.modelSelector.default')
-                  : currentModel}
+                {triggerModelLabel}
               </DropdownMenuItemExtra>
               <DropdownMenuSubmenuArrow>
                 <Icon icon={ChevronRightIcon} size={12} />

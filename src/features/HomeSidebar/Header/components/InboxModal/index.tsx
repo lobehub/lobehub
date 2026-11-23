@@ -47,6 +47,7 @@ import { useHomeStore } from '@/store/home';
 import { homeNotificationSelectors } from '@/store/home/selectors';
 import type { InboxNavigationCount } from '@/store/home/slices/notification/projection';
 import { useHeaderActionSize, useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useNavigationCounts } from './useNavigationCounts';
 
@@ -70,14 +71,18 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorFillSecondary,
   },
-  headerMain: { minWidth: '0', paddingBlock: '12px', paddingInline: '16px' },
+  headerMain: {
+    minWidth: '0',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+  },
   // Small tabs/actions are 28px tall, so 6px block padding lands on the 40px compact header.
   headerMainCompact: { paddingBlock: '6px' },
   headerTitle: {
     flex: 'none',
     boxSizing: 'border-box',
     width: 'clamp(160px, 22vw, 220px)',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     whiteSpace: 'nowrap',
   },
   main: { overflow: 'hidden', minWidth: '0' },

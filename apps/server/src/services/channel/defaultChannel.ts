@@ -1,5 +1,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
+import { onAgentCreated } from '@/business/server/channel/onAgentCreated';
+
 import { ChannelService } from './ChannelService';
 import { isChannelEnabled } from './featureGate';
 
@@ -55,10 +57,20 @@ export interface AgentDirectChannelParams {
 
 /**
  * Opens the direct conversation between a person and the Agent they just created, named after the
- * Agent and bound to no device; see `ChannelService.createDirect`.
+ * Agent and bound to no device; see `ChannelService.createDirect`. Then hands the Agent to the
+ * `onAgentCreated` slot, which may seed its documents. Both run only while Channels are on for the
+ * creator, and each failure is reported on its own.
  */
-export const createAgentDirectChannel = async ({ db, ...context }: AgentDirectChannelParams) =>
-  openForCreator('the direct channel of a new agent', context, async () => {
-    if (!(await isChannelEnabled(context.userId))) return;
+export const createAgentDirectChannel = async ({ db, ...context }: AgentDirectChannelParams) => {
+  let enabled = false;
+  await openForCreator('the direct channel of a new agent', context, async () => {
+    enabled = await isChannelEnabled(context.userId);
+    if (!enabled) return;
     await new ChannelService(db, context.userId, context.workspaceId).createDirect(context.agentId);
   });
+  if (!enabled) return;
+
+  await openForCreator('the setup of a new channel agent', context, () =>
+    onAgentCreated({ db, ...context }),
+  );
+};

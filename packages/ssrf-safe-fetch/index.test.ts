@@ -1,8 +1,16 @@
 // @ts-ignore
+import dns from 'node:dns';
+
 import fetch from 'node-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isSSRFBlockedError, SSRFBlockedError, ssrfSafeFetch } from './index';
+import {
+  assertSsrfSafeUrl,
+  isSSRFBlockedError,
+  SSRFBlockedError,
+  ssrfSafeAgent,
+  ssrfSafeFetch,
+} from './index';
 
 // Mock node-fetch to avoid actual network requests
 vi.mock('node-fetch', () => ({
@@ -571,5 +579,121 @@ describe('ssrfSafeFetch', () => {
         }),
       );
     });
+  });
+});
+
+describe('assertSsrfSafeUrl', () => {
+  beforeEach(() => {
+    delete process.env.SSRF_ALLOW_IP_ADDRESS_LIST;
+    delete process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS;
+    vi.restoreAllMocks();
+  });
+
+  describe('literal IP hostnames', () => {
+    const blockedUrls = [
+      'http://127.0.0.1:8188/system_stats',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://10.0.0.1/internal',
+      'http://192.168.1.1/admin',
+      'http://172.16.0.1/',
+      'http://0.0.0.0:80',
+      'http://[::1]:8188/',
+      'http://[fe80::1]/',
+    ];
+
+    blockedUrls.forEach((url) => {
+      it(`rejects ${url} with an SSRF blocked error`, async () => {
+        const error = await assertSsrfSafeUrl(url).catch((e) => e);
+        expect(error).toBeInstanceOf(SSRFBlockedError);
+        expect(error.message).toMatch(/^SSRF blocked: /);
+        expect(isSSRFBlockedError(error)).toBe(true);
+      });
+    });
+
+    it('resolves for a public unicast IP', async () => {
+      await expect(assertSsrfSafeUrl('http://93.184.215.14/')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('hostnames', () => {
+    it('rejects a hostname resolving to a private address', async () => {
+      vi.spyOn(dns.promises, 'lookup').mockResolvedValue([
+        { address: '10.1.2.3', family: 4 },
+      ] as dns.LookupAddress[]);
+
+      await expect(assertSsrfSafeUrl('http://comfy.intranet.example:8188')).rejects.toThrow(
+        /SSRF blocked: .*10\.1\.2\.3.*private IP address/,
+      );
+    });
+
+    it('rejects when any resolved address is private', async () => {
+      vi.spyOn(dns.promises, 'lookup').mockResolvedValue([
+        { address: '93.184.215.14', family: 4 },
+        { address: '127.0.0.1', family: 4 },
+      ] as dns.LookupAddress[]);
+
+      await expect(assertSsrfSafeUrl('http://mixed.example')).rejects.toThrow(/SSRF blocked/);
+    });
+
+    it('resolves when every resolved address is public', async () => {
+      vi.spyOn(dns.promises, 'lookup').mockResolvedValue([
+        { address: '93.184.215.14', family: 4 },
+        { address: '93.184.215.15', family: 4 },
+      ] as dns.LookupAddress[]);
+
+      await expect(assertSsrfSafeUrl('http://public.example')).resolves.toBeUndefined();
+    });
+
+    it('rejects localhost, which resolves to loopback', async () => {
+      await expect(assertSsrfSafeUrl('http://localhost:8188')).rejects.toThrow(/SSRF blocked/);
+    });
+  });
+
+  describe('policy overrides', () => {
+    it('allows private addresses when SSRF_ALLOW_PRIVATE_IP_ADDRESS is set', async () => {
+      process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = '1';
+      await expect(assertSsrfSafeUrl('http://127.0.0.1:8188')).resolves.toBeUndefined();
+    });
+
+    it('allows a literal IP listed in SSRF_ALLOW_IP_ADDRESS_LIST', async () => {
+      process.env.SSRF_ALLOW_IP_ADDRESS_LIST = '127.0.0.1';
+      await expect(assertSsrfSafeUrl('http://127.0.0.1/')).resolves.toBeUndefined();
+    });
+
+    it('allows addresses inside an allow-listed CIDR', async () => {
+      await expect(
+        assertSsrfSafeUrl('http://10.20.30.40/', { allowIPAddressList: ['10.0.0.0/8'] }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('respects a per-call allowPrivateIPAddress override', async () => {
+      await expect(
+        assertSsrfSafeUrl('http://192.168.1.1/', { allowPrivateIPAddress: true }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('invalid input', () => {
+    it('rejects malformed URLs', async () => {
+      const error = await assertSsrfSafeUrl('not a url').catch((e) => e);
+      expect(error).toBeInstanceOf(SSRFBlockedError);
+      expect(error.message).toContain('Invalid URL');
+    });
+  });
+});
+
+describe('ssrfSafeAgent', () => {
+  it('returns an HTTP agent for http and ws URLs', () => {
+    expect(ssrfSafeAgent('http://example.com').constructor.name).toBe('RequestFilteringHttpAgent');
+    expect(ssrfSafeAgent('ws://example.com:8188').constructor.name).toBe(
+      'RequestFilteringHttpAgent',
+    );
+  });
+
+  it('returns an HTTPS agent for https and wss URLs', () => {
+    expect(ssrfSafeAgent('https://example.com').constructor.name).toBe(
+      'RequestFilteringHttpsAgent',
+    );
+    expect(ssrfSafeAgent('wss://example.com').constructor.name).toBe('RequestFilteringHttpsAgent');
   });
 });

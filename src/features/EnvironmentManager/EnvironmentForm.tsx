@@ -27,8 +27,10 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import InlineErrorText from '@/components/InlineErrorText';
 import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
 import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
+import { densityVars } from '@/styles/densityVars';
 
 import EnvironmentVariables from './EnvironmentVariables';
 import { describeError } from './errorMessage';
@@ -41,7 +43,7 @@ const styles = createStaticStyles(({ css }) => ({
   /** One repository: a row, with its fields underneath while edited. */
   item: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -282,6 +284,11 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
   const [pickingRepository, setPickingRepository] = useState(false);
   const [busy, setBusy] = useState(false);
+  /**
+   * Failure of a repository add / remove, shown in the Sources section: the page stays open and
+   * the control that failed has no confirm step of its own to hang an error on.
+   */
+  const [repositoryError, setRepositoryError] = useState('');
 
   // Every field saves the whole specification, so two saves in flight at once
   // would each start from the same snapshot and the later one would undo the
@@ -324,10 +331,12 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   /** For controls with no confirm step of their own: a switch, a disconnect. */
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
+    setRepositoryError('');
     try {
       await action();
     } catch (error) {
-      toast.error(describeError(error, t, t('environments.saveFailed')));
+      console.error('[EnvironmentForm] Save failed:', error);
+      setRepositoryError(describeError(error, t, t('environments.saveFailedRetry')));
     } finally {
       setBusy(false);
     }
@@ -489,6 +498,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
             ))}
           </Flexbox>
         )}
+        {repositoryError && <InlineErrorText>{repositoryError}</InlineErrorText>}
         {pickingRepository ? (
           <Flexbox gap={8}>
             <GithubRepositoryPicker onChange={addRepository} />
@@ -547,7 +557,6 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
           multiline
           desc={t('environments.form.bootstrapHint')}
           label={t('environments.form.bootstrap')}
-          placeholder={'pnpm install'}
           value={configuration.bootstrapCommand ?? ''}
           onSave={(bootstrapCommand) => saveConfiguration({ bootstrapCommand })}
         />

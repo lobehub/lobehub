@@ -26,6 +26,8 @@ import { CheckCircle2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineErrorText from '@/components/InlineErrorText';
+import { type InlineErrorState, toInlineError } from '@/components/InlineErrorText/errorDetail';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
 import { KeyReveal } from './KeyReveal';
@@ -74,11 +76,14 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
     source?.topicId && item?.topic ? item.topic : undefined,
   );
   const [saving, setSaving] = useState(false);
+  /** Save/create failure, shown above the submit button: the modal stays open with the user's input. */
+  const [error, setError] = useState<InlineErrorState | null>(null);
   // Set once a new webhook exists; the modal then shows its URL and its key, this one time.
   const [created, setCreated] = useState<InboundWebhookItemWithSecret>();
 
   const submit = async () => {
     setSaving(true);
+    setError(null);
     try {
       const settings = {
         autoApprove,
@@ -96,8 +101,11 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
         onSaved(next.item);
         setCreated(next);
       }
-    } catch {
-      toast.error(t(item ? 'webhook.form.saveFailed' : 'webhook.form.createFailed'));
+    } catch (err) {
+      console.error(err);
+      setError(
+        toInlineError(t(item ? 'webhook.form.saveFailed' : 'webhook.form.createFailed'), err),
+      );
     } finally {
       setSaving(false);
     }
@@ -176,6 +184,7 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
           {t(autoApprove ? 'webhook.form.autoApprove.onHint' : 'webhook.form.autoApprove.offHint')}
         </span>
       </Flexbox>
+      {error && <InlineErrorText detail={error.detail}>{error.summary}</InlineErrorText>}
       <Button block loading={saving} type={'primary'} onClick={submit}>
         {t(item ? 'webhook.form.save' : 'webhook.form.create')}
       </Button>

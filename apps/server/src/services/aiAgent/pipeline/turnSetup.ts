@@ -43,7 +43,7 @@ import { ingestAttachment } from '../ingestAttachment';
 import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
-import { buildNewTopicMetadata } from './newTopicMetadata';
+import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
 import { assertShareHeteroAllowed } from './shareHeteroGate';
@@ -357,6 +357,8 @@ export interface TurnSetupInput {
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
   modelOverride?: string;
+  /** See `ExecAgentParams.openedByTopicId`. */
+  openedByTopicId?: string;
   operationTaskId?: string;
   parentMessageId?: string;
   persistedUserMessageId?: string;
@@ -469,6 +471,7 @@ export const setupTurn = async (
     externalOrigin,
     cronJobId,
     webhookThread,
+    openedByTopicId,
     files,
     modelOverride,
     operationTaskId,
@@ -552,7 +555,7 @@ export const setupTurn = async (
     : providerOverride;
   let topicEditingGroupId: string | undefined;
 
-  // Share visitors run Claude Code / Codex only on the granted device. Checked
+  // Share visitors run a local CLI Agent only on the granted device. Checked
   // against the agent-level config before any row is written, and re-asserted
   // once a reused topic's pinned model and device are applied.
   const assertShareHetero = async (runModel: string) => {
@@ -636,12 +639,14 @@ export const setupTurn = async (
         await routeToProjectDirectory(projectDirectory);
       }
 
+      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId);
       const metadata = buildNewTopicMetadata({
         appContext,
         botContext,
         cronJobId,
         deviceBindingPinned: Boolean(effectiveRequestedDeviceId),
         editingAgentId,
+        openedBy,
         projectDirectory,
         taskId: operationTaskId,
         topicBoundDeviceId,
@@ -703,6 +708,7 @@ export const setupTurn = async (
               db: deps.db,
               expectedShareId: shareGate.shareId,
               ownerId: deps.userId,
+              visitorUserId: shareGate.visitorUserId,
               workspaceId: deps.workspaceId,
             },
             newTopicParams,

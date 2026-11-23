@@ -30,8 +30,9 @@ const PortalMoreMenu = memo<PortalMoreMenuProps>(({ config, outdent }) => {
   const items = useMemo(
     () =>
       buildPortalMoreMenuItems(config, {
-        copy: async (value, successKey) => {
+        copy: async (value, successKey, onCopied) => {
           await copyToClipboard(value);
+          if (await onCopied?.()) return;
           toast.success(t(successKey));
         },
         t: (key) => t(key),

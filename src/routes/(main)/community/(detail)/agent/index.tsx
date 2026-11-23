@@ -1,21 +1,17 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import AgentDetail from '@/features/Marketplace/Agents/AgentDetail';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 import { assistantSelectors } from '@/store/discover/selectors';
 import { type AssistantMarketSource } from '@/types/discover';
 
 import NotFound from '../components/NotFound';
-import { TocProvider } from '../features/Toc/useToc';
-import { DetailProvider } from './features/DetailProvider';
-import Details from './features/Details';
-import Header from './features/Header';
 import StatusPage from './features/StatusPage';
 
 interface AssistantDetailPageProps {
@@ -45,16 +41,7 @@ const AssistantDetailPage = memo<AssistantDetailPageProps>(({ mobile }) => {
     return <StatusPage status={status} />;
   }
 
-  return (
-    <TocProvider>
-      <DetailProvider config={data}>
-        <Flexbox data-testid="assistant-detail-content" gap={16}>
-          <Header mobile={mobile} />
-          <Details mobile={mobile} />
-        </Flexbox>
-      </DetailProvider>
-    </TocProvider>
-  );
+  return <AgentDetail detail={data} mobile={mobile} />;
 });
 
 export const MobileDiscoverAssistantDetailPage = (_props: { mobile?: boolean }) => {

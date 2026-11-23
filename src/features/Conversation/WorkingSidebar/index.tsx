@@ -16,6 +16,7 @@ import {
   PlusIcon,
   SearchIcon,
   Settings2Icon,
+  WrenchIcon,
 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -68,7 +69,7 @@ import {
   useHeaderActionSize,
   useInterfaceDensity,
 } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
@@ -79,9 +80,9 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserTabMetadata,
   isBrowserTab,
-  isCanvasTab,
   isDynamicTab,
   isMcpAppTab,
+  isWorkTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -106,6 +107,7 @@ import WorkspaceTab from './WorkspaceTab';
 import WorksSection from './WorksSection';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
+const ToolsSection = lazy(() => import('./ToolsSection'));
 
 const styles = stylex.create({
   body: { overflowY: 'auto', flex: '1', minHeight: '0' },
@@ -113,7 +115,7 @@ const styles = stylex.create({
   header: { flexShrink: 0, minWidth: '0' },
   pane: { overflowY: 'auto', flex: '1', minHeight: '0' },
   paneHidden: { display: 'none' },
-  paramsLoading: { width: '100%', padding: '16px' },
+  paramsLoading: { width: '100%', padding: densityTokens['--lobe-density-card-padding'] },
   add: { flexShrink: 0 },
   overviewBody: { overflowY: 'auto', minHeight: '0' },
   overviewPanel: {
@@ -393,6 +395,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     workingDirectory: sourceWorkingDirectory ?? workingDirectory,
   });
   const paramsAvailable = !isHetero;
+  const toolsAvailable = !isHetero && !isChatMode;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
   const browserAvailable = isDesktop;
   const terminalAvailable = isDesktop;
@@ -426,6 +429,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
     () => [
       { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
+      ...(toolsAvailable
+        ? [{ icon: WrenchIcon, key: 'tools', label: t('tools.picker.title', { ns: 'setting' }) }]
+        : []),
       // Documents / web resources are agent-document features — heterogeneous
       // agents only carry filesystem skills, so hide both tabs there.
       ...(isHetero
@@ -485,6 +491,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       reviewAvailable,
       searchAvailable,
       t,
+      toolsAvailable,
     ],
   );
   const { enabled: mcpAppsEnabled } = useMcpAppSidebar(composerTarget);
@@ -497,7 +504,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     (tab: string) =>
       availableTabs.has(tab) ||
       (browserAvailable && isBrowserTab(tab)) ||
-      isCanvasTab(tab) ||
+      isWorkTab(tab) ||
       (mcpAppsEnabled && isMcpAppTab(tab)),
     [availableTabs, browserAvailable, mcpAppsEnabled],
   );
@@ -811,7 +818,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const preferredMinWidth = reviewTwoPane
     ? TWO_PANE_MIN_WIDTH
-    : isCanvasTab(activeTab)
+    : isWorkTab(activeTab)
       ? CANVAS_MIN_WIDTH
       : 0;
   const displayWidth = Math.max(storedWidth, preferredMinWidth);
@@ -1033,6 +1040,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                       }
                     >
                       <ParamsSection />
+                    </Suspense>
+                  </Flexbox>
+                )}
+                {toolsAvailable && activeTab === 'tools' && (
+                  <Flexbox
+                    className={stylex.props(styles.pane).className}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <Suspense
+                      fallback={
+                        <Skeleton.Text
+                          className={stylex.props(styles.paramsLoading).className}
+                          rows={6}
+                        />
+                      }
+                    >
+                      <ToolsSection />
                     </Suspense>
                   </Flexbox>
                 )}

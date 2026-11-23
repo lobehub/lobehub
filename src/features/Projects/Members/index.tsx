@@ -36,6 +36,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
 import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { directoryAgentName } from '../WorkingDirectories/useDirectoryAgent';
 import { openEditMemberModal } from './EditMemberModal';
@@ -46,7 +47,7 @@ const styles = stylex.create({
   agentLink: {
     display: 'flex',
     flex: '1',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     minWidth: 0,
     color: 'inherit',

@@ -32,7 +32,7 @@ describe('createPreferenceSlice', () => {
   });
 
   describe('updateLab', () => {
-    it('mirrors enableGoals into the legacy enableTopicAcceptance key for older clients', async () => {
+    it('preserves other saved preferences when updating a lab', async () => {
       const updatePreferenceSpy = vi
         .spyOn(userService, 'updatePreference')
         .mockResolvedValue(undefined as any);
@@ -47,16 +47,16 @@ describe('createPreferenceSlice', () => {
       });
 
       await act(async () => {
-        await useUserStore.getState().updateLab({ enableGoals: false });
+        await useUserStore.getState().updateLab({ enableProjects: false });
       });
 
       expect(useUserStore.getState().preference.lab).toMatchObject({
-        enableGoals: false,
-        enableTopicAcceptance: false,
+        enableProjects: false,
+        enableTopicAcceptance: true,
       });
       expect(updatePreferenceSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          lab: expect.objectContaining({ enableGoals: false, enableTopicAcceptance: false }),
+          lab: expect.objectContaining({ enableProjects: false, enableTopicAcceptance: true }),
         }),
       );
     });

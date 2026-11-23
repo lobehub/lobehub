@@ -111,6 +111,24 @@ describe('PlatformDetail saving', () => {
     expect(patch).not.toHaveProperty('applicationId');
   });
 
+  it('keeps a failed reply-setting autosave on screen after the switch rolls back', async () => {
+    mocks.updateBotProvider.mockRejectedValue(new Error('network down'));
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.reply']);
+    fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    // The post-save recompute is not a user edit, so it must not clear the failure.
+    expect(await screen.findByText(en['channel.updateFailedRetry'])).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByText(en['channel.updateFailedRetry'])).toBeInTheDocument();
+  });
+
   it('saves the wake switch by itself as soon as it is turned off, and hides the options', async () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
       wrapper: MemoryRouter,

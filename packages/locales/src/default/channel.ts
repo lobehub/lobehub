@@ -11,10 +11,17 @@ export default {
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
   'receipt.errorShareMessageLimit':
     'You have sent all the messages its creator allows to this shared Agent.',
+  'receipt.errorSharePromptTooLong':
+    'This message is longer than a shared Agent accepts. Shorten it and send it again.',
   'receipt.errorShareSpendLimit':
     'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
     'No detailed reason was recorded. Check the Agent’s model and device settings before sending again.',
+  'shareRefusal.addOwner': 'Add contact',
+  'shareRefusal.added': 'Added as a contact',
+  'shareRefusal.alreadyContact': 'Already your contact',
+  'shareRefusal.ownerCaption': 'Creator of this Agent',
+  'shareRefusal.requestSent': 'Request sent',
   'sort.by': 'Sort by',
   'sort.by.createdAt': 'Date created',
   'sort.by.title': 'Name',
@@ -71,6 +78,8 @@ export default {
     'Choose an online device and working directory for every coding Agent.',
   'environment.permissionRequired':
     'You do not have permission to save these members. Check channel and Agent access.',
+  'environment.privateAgent':
+    'A private Agent cannot join a group. Make it visible to the workspace first, or remove it.',
   'environment.resolveRequired': 'Resolve the issues shown under the selected Agents first.',
   'environment.saveFailed':
     'Could not save channel members. Your choices are preserved; try again.',
@@ -139,6 +148,8 @@ export default {
   'threadCard.messages_other': '{{count}} messages',
   'closeThread': 'Close thread',
   'thread': 'Thread',
+  /** Heads the Channel's own actions in a menu that also holds a thread's. */
+  'channel': 'Channel',
   'threadDivider': 'Replies in this thread',
   'followers': 'Replies from: {{names}}',
   'olderMessages': 'Older messages',
@@ -178,6 +189,7 @@ export default {
   'status.failed': 'Reply failed',
   'status.cancelled': 'Stopped',
   'status.silent': 'Stayed quiet',
+  'status.merged': 'Answered with an earlier message',
   'blocked.awaiting_primary': 'Waiting for another Agent to reply first',
   'blocked.device_approval_pending': 'Waiting for device approval',
   'blocked.device_offline': 'Waiting for device to connect',
@@ -213,7 +225,6 @@ export default {
   'events.joined': '{{names}} joined the channel',
   'events.youInvited': 'You invited {{names}} to the channel',
   'failure.locate': 'Show message',
-  'failure.messageLabel': 'Reply failed: {{names}}',
   'failure.title': 'Failed replies · {{count}}',
   'nameOptional': 'Channel name (optional)',
   'rename': 'Rename channel',
@@ -349,4 +360,5 @@ export default {
   'mentionInvite.confirmAgentProject':
     'It is not in the project “{{project}}” yet: it joins the project first, then this channel.',
   'mentionInvite.confirmOk': 'Invite and mention',
+  'openDirect.unavailable': "This Agent's conversation can't be opened right now.",
 };

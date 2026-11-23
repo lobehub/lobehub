@@ -12,8 +12,7 @@ import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
 import type { GoalListItem } from '@/services/goal';
 import { useChatStore } from '@/store/chat';
 import { goalSelectors, useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { isGoalRequestGenerating, linkedGoalConfirmState, selectLinkedGoals } from './linkedGoals';
@@ -37,7 +36,7 @@ const styles = stylex.create({
   row: {
     cursor: 'pointer',
     paddingBlock: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
     borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
     borderBlockStartColor: {
@@ -134,12 +133,11 @@ interface LinkedGoalTrayProps {
 
 /**
  * The goals this conversation planned, floating above the composer with their
- * live status (behind the `enableGoals` lab). The conversation is the
+ * live status. The conversation is the
  * goal's planning conversation, so its progress belongs here — clicking a row
  * opens the whole goal in the Portal, beside the chat that shaped it.
  */
 const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
-  const enabled = useUserStore(labPreferSelectors.enableGoals);
   const topicId = useConversationStore((s) => s.context.topicId);
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
   const useFetchTopicGoals = useGoalStore((s) => s.useFetchTopicGoals);
@@ -151,27 +149,21 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
       messageStateSelectors.isAIGenerating(s),
     ),
   );
-  const { error, revalidate } = useFetchTopicGoals(
-    enabled ? topicId : undefined,
-    goalRequestGenerating,
-  );
+  const { error, revalidate } = useFetchTopicGoals(topicId, goalRequestGenerating);
   const topicGoals = useGoalStore(goalSelectors.topicGoals(topicId));
   const confirmed = useGoalStore(goalSelectors.topicGoalsConfirmed(topicId));
   const confirmState = linkedGoalConfirmState(confirmed, error);
   const retry = useCallback(() => void revalidate(), [revalidate]);
   // Server-confirmed rows only, in both directions: a goal still pending in a
   // tool result may not exist yet, and a cached empty list proves nothing.
-  useMarkSidebarTopicGoal(
-    enabled ? topicId : undefined,
-    confirmed ? !!topicGoals?.length : undefined,
-  );
+  useMarkSidebarTopicGoal(topicId, confirmed ? !!topicGoals?.length : undefined);
 
   const goals = useMemo(
     () => selectLinkedGoals(topicGoals, displayMessages),
     [topicGoals, displayMessages],
   );
 
-  if (!enabled || !topicId || goals.length === 0) return null;
+  if (!topicId || goals.length === 0) return null;
 
   return (
     <Flexbox {...stylex.props(styles.container, topAttached && styles.containerTopAttached)}>

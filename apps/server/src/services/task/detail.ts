@@ -20,6 +20,7 @@ import { TaskLabelModel } from '@/database/models/taskLabel';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { extractFileIdsFromEditorData } from '../file/extractFileIdsFromEditorData';
@@ -556,9 +557,15 @@ export class TaskDetailService {
   ): Promise<Map<string, TaskDetailActivityAuthor>> {
     const map = new Map<string, TaskDetailActivityAuthor>();
 
-    const [agentRows, userRows] = await Promise.all([
+    const [agentRows, userRows, nicknames] = await Promise.all([
       this.agentModel.getAgentAvatarsByIds([...agentIds]),
       UserModel.findByIds(this.db, [...userIds]),
+      // Inside a workspace, people go by the nickname they set there.
+      this.workspaceId
+        ? new WorkspaceMemberModel(this.db, this.userId).getNicknames(this.workspaceId, [
+            ...userIds,
+          ])
+        : new Map<string, string>(),
     ]);
 
     // An agent is labelled by its name, with `title` (its role) as the
@@ -569,7 +576,12 @@ export class TaskDetailService {
       map.set(a.id, { avatar: a.avatar, id: a.id, name: agentDisplayName(a), type: 'agent' });
     }
     for (const u of userRows) {
-      map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName || u.username, type: 'user' });
+      map.set(u.id, {
+        avatar: u.avatar,
+        id: u.id,
+        name: nicknames.get(u.id) || u.fullName || u.username,
+        type: 'user',
+      });
     }
 
     return map;

@@ -29,7 +29,6 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
                 ),
                 id: channel.id,
                 projectId: channel.projectId,
-                workspaceId: channel.workspaceId,
               })
             }
           >

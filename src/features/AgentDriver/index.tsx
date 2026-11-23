@@ -2,13 +2,13 @@
 
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
-import { confirmModal, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
-import { SparklesIcon } from 'lucide-react';
+import { confirmModal, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { ProductLogo } from '@/components/Branding';
 import { CONNECTABLE_PROVIDERS, getConnectableProvider } from '@/features/ConnectAgent/providers';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
@@ -193,7 +193,7 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
         grid(
           <DriverTile
             disabled={!canEdit}
-            icon={<Icon icon={SparklesIcon} size={20} />}
+            icon={<ProductLogo size={20} style={{ flex: 'none' }} />}
             label={harnessName}
             selected={current === HARNESS}
             onChoose={() => choose(HARNESS)}

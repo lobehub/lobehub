@@ -2,6 +2,7 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import type { GenerateToolsParams, LobeToolManifest } from '@lobechat/context-engine';
 import {
@@ -52,19 +53,35 @@ export const resolveInvocationToolIds = (request: InvocationToolIdsRequest): str
   ];
 };
 
-/** Build the initial invocation set. Subsequent explicit activations use the full eligible pool. */
+/**
+ * Build the initial invocation set. Subsequent explicit activations use the full eligible pool.
+ *
+ * `lobe-web-browsing` stays preloaded whenever search is enabled: it is the
+ * highest-frequency tool in general conversations, its slimmed footprint is small,
+ * and deferring it forces an extra activation round-trip plus a prompt-cache wipe
+ * on providers that lack mid-conversation tool additions. Turning search off still
+ * removes it completely via `resolveToolRules` (`runtimeManagedToolIds`).
+ */
 export const initialToolSelection = (
   toolIds: string[] | undefined,
   chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'toolMode'> | null,
   skipDefaultTools?: boolean,
 ): Pick<GenerateToolsParams, 'toolIds' | 'excludeDefaultToolIds' | 'skipDefaultTools'> => {
   const deferCapabilities = !skipDefaultTools && resolveToolMode(chatConfig) === 'agent';
+  if (!deferCapabilities) {
+    return {
+      excludeDefaultToolIds: undefined,
+      skipDefaultTools: skipDefaultTools || undefined,
+      toolIds,
+    };
+  }
+  const deferredRuntimeToolIds = runtimeManagedToolIds.filter(
+    (id) => id !== WebBrowsingManifest.identifier,
+  );
   return {
-    excludeDefaultToolIds: deferCapabilities ? runtimeManagedToolIds : undefined,
-    skipDefaultTools: skipDefaultTools || undefined,
-    toolIds: deferCapabilities
-      ? toolIds?.filter((id) => !runtimeManagedToolIds.includes(id))
-      : toolIds,
+    excludeDefaultToolIds: deferredRuntimeToolIds,
+    skipDefaultTools: undefined,
+    toolIds: toolIds?.filter((id) => !deferredRuntimeToolIds.includes(id)),
   };
 };
 

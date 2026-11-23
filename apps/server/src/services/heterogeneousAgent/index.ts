@@ -37,6 +37,7 @@ import {
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
 import { HeteroTraceRecorder } from './HeteroTraceRecorder';
+import { settlePermissionModeReport } from './permissionModeReport';
 
 const log = debug('lobe-server:hetero-agent-service');
 
@@ -472,6 +473,14 @@ export class HeterogeneousAgentService {
       result,
       topicId,
     });
+    // `cancelled` is followed by the terminal callback, which settles this.
+    if (result !== 'cancelled') {
+      await settlePermissionModeReport(this.topicModel, {
+        operationId,
+        succeeded: result === 'success',
+        topicId,
+      }).catch((err) => log('heteroFinish: permission mode report (non-fatal): %O', err));
+    }
 
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId = seedAssistantMessageId;
@@ -595,11 +604,13 @@ export class HeterogeneousAgentService {
     // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
     // if the CLI stream missed it. A stale callback that belongs to neither the
     // root operation nor one of its children returns above.
-    await this.streamEventManager.publishStreamEvent(operationId, {
-      data: endData,
-      stepIndex: 0,
-      type: 'agent_runtime_end',
-    });
+    const publishRuntimeEnd = () =>
+      this.streamEventManager.publishStreamEvent(operationId, {
+        data: endData,
+        stepIndex: 0,
+        type: 'agent_runtime_end',
+      });
+    if (result !== 'success') await publishRuntimeEnd();
 
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
@@ -741,40 +752,46 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
+    const lifecycle = new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
       includeShareVisitor: !!this.shareVisitor,
-    }).completeOperation(
-      {
-        agentId,
-        assistantMessageId,
-        cost: { total: totals?.totalCost ?? null },
-        deliverable: lastAssistantContent ?? '',
-        error: error ?? undefined,
-        goal: goalContent,
-        // Backfilled executed model/provider — the verify gate bails when absent.
-        model: totals?.model,
-        operationId,
-        orchestrationRole,
-        provider: totals?.provider,
-        serializedHooks,
-        shareVisitor: this.shareVisitor,
-        stepCount: totals?.stepCount ?? null,
-        topicId,
-        usage: {
-          llm: {
-            apiCalls: totals?.llmCalls ?? null,
-            tokens: {
-              input: totals?.totalInputTokens ?? null,
-              output: totals?.totalOutputTokens ?? null,
-              total: totals?.totalTokens ?? null,
-            },
+    });
+    const completionInput = {
+      agentId,
+      assistantMessageId,
+      cost: { total: totals?.totalCost ?? null },
+      deliverable: lastAssistantContent ?? '',
+      error: error ?? undefined,
+      goal: goalContent,
+      // Backfilled executed model/provider — the verify gate bails when absent.
+      model: totals?.model,
+      operationId,
+      orchestrationRole,
+      provider: totals?.provider,
+      serializedHooks,
+      shareVisitor: this.shareVisitor,
+      stepCount: totals?.stepCount ?? null,
+      topicId,
+      usage: {
+        llm: {
+          apiCalls: totals?.llmCalls ?? null,
+          tokens: {
+            input: totals?.totalInputTokens ?? null,
+            output: totals?.totalOutputTokens ?? null,
+            total: totals?.totalTokens ?? null,
           },
-          tools: { totalCalls: totals?.toolCalls ?? null },
         },
-        userId: this.userId,
+        tools: { totalCalls: totals?.toolCalls ?? null },
       },
-      completionReason,
-    );
+      userId: this.userId,
+    };
+    // The client refetches messages on `agent_runtime_end`; Works registered after it
+    // (the lifecycle backstop) leave the Work card missing until a manual reload.
+    let worksRegistered = false;
+    if (result === 'success') {
+      worksRegistered = await lifecycle.registerOperationWorks(completionInput);
+      await publishRuntimeEnd();
+    }
+    await lifecycle.completeOperation({ ...completionInput, worksRegistered }, completionReason);
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
 
     // The completion's thread hooks rewrite the thread's metadata from what the

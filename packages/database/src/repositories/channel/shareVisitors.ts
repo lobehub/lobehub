@@ -1,4 +1,10 @@
-import type { ShareVisitorConversation } from '@lobechat/types';
+import type {
+  ShareVisitorConversation,
+  ShareVisitorIdentity,
+  ShareVisitorTopic,
+  ShareVisitorTopicGroup,
+} from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 
 import { agents, agentShares, channelJobs, channels, topics, users } from '../../schemas';
@@ -98,6 +104,121 @@ export const listShareVisitorConversations = async (
   }));
 };
 
+/** Characters of the visitor's first message kept to name an untitled run topic. */
+const SHARE_VISITOR_TOPIC_PREVIEW_LENGTH = 100;
+
+/**
+ * Run topics behind the visitor Channels `ownerId` may read (see {@link shareVisitorChannelWhere}).
+ * The topic belongs to the owner and records the visitor as its sender; both are checked so a
+ * topic reached through a Channel job never widens into another user's topics.
+ */
+const shareVisitorTopics = (db: LobeChatDatabase | Transaction, ownerId: string, scope: SQL) =>
+  db
+    .selectDistinct({
+      agentId: channels.agentId,
+      topic: {
+        createdAt: topics.createdAt,
+        id: topics.id,
+        // The Channel message that started the topic's first run: it exists from the claim on,
+        // before the run writes its own copy into the topic.
+        preview: sql<string | null>`(
+          SELECT left(m.content, ${SHARE_VISITOR_TOPIC_PREVIEW_LENGTH})
+          FROM channel_jobs j JOIN channel_messages m ON m.id = j.message_id
+          WHERE j.topic_id = ${topics.id}
+          ORDER BY m.created_at
+          LIMIT 1
+        )`,
+        title: topics.title,
+        totalCost: topics.totalCost,
+        totalTokens: topics.totalTokens,
+        updatedAt: topics.updatedAt,
+      },
+      visitorAvatar: users.avatar,
+      visitorId: channels.userId,
+      visitorName: users.fullName,
+      visitorUsername: users.username,
+    })
+    .from(topics)
+    .innerJoin(channelJobs, eq(channelJobs.topicId, topics.id))
+    .innerJoin(channels, eq(channels.id, channelJobs.channelId))
+    .innerJoin(agents, eq(agents.id, channels.agentId))
+    .innerJoin(agentShares, eq(agentShares.agentId, agents.id))
+    .leftJoin(users, eq(users.id, channels.userId))
+    .where(
+      and(
+        scope,
+        shareVisitorChannelWhere(ownerId),
+        eq(topics.userId, ownerId),
+        eq(topics.senderId, channels.userId),
+        notTrashed(topics.isDeleted),
+      ),
+    );
+
+/**
+ * Topics one sidebar list returns across every visitor of an Agent, newest first. Older topics
+ * beyond it drop out of the sidebar but still open from a link ({@link findShareVisitorTopic}).
+ */
+const SHARE_VISITOR_TOPIC_LIMIT = 500;
+
+/**
+ * The run topics of every visitor conversation with `ownerId`'s Agent the owner may read, grouped
+ * by visitor. Visitors and their topics are both ordered by latest activity.
+ */
+export const listShareVisitorTopics = async (
+  db: LobeChatDatabase,
+  ownerId: string,
+  agentId: string,
+): Promise<ShareVisitorTopicGroup[]> => {
+  const rows = await shareVisitorTopics(db, ownerId, eq(channels.agentId, agentId))
+    .orderBy(desc(topics.updatedAt), desc(topics.id))
+    .limit(SHARE_VISITOR_TOPIC_LIMIT);
+
+  const groups = new Map<string, ShareVisitorTopicGroup>();
+  for (const { topic, visitorAvatar, visitorId, visitorName, visitorUsername } of rows) {
+    if (!visitorId) continue;
+    let group = groups.get(visitorId);
+    if (!group) {
+      group = {
+        topics: [],
+        visitor: { avatar: visitorAvatar, id: visitorId, name: visitorName || visitorUsername },
+      };
+      groups.set(visitorId, group);
+    }
+    group.topics.push({
+      ...topic,
+      totalCost: Number(topic.totalCost ?? 0),
+      totalTokens: topic.totalTokens ?? 0,
+    });
+  }
+  return [...groups.values()];
+};
+
+/**
+ * A visitor's run topic as the share's owner may open it, with the Agent and visitor it belongs to.
+ * Undefined when `viewerId` may not read it.
+ */
+export const findShareVisitorTopic = async (
+  db: LobeChatDatabase,
+  viewerId: string,
+  topicId: string,
+): Promise<
+  (ShareVisitorTopic & { agentId: string; visitor: ShareVisitorIdentity }) | undefined
+> => {
+  const [row] = await shareVisitorTopics(db, viewerId, eq(topics.id, topicId)).limit(1);
+  if (!row?.visitorId || !row.agentId) return;
+  return {
+    ...row.topic,
+    agentId: row.agentId,
+    totalCost: Number(row.topic.totalCost ?? 0),
+    totalTokens: row.topic.totalTokens ?? 0,
+    visitor: {
+      avatar: row.visitorAvatar,
+      id: row.visitorId,
+      name: row.visitorName || row.visitorUsername,
+    },
+  };
+};
+
 /**
  * A visitor's conversation as the share's owner reads it: the same public view the visitor sees,
  * read-only. Run topic links are left out — the owner's topic views exclude visitor topics, so
@@ -132,7 +253,9 @@ export const readShareVisitorChannel = (
       joined: false,
       readOnly: true as const,
       ...view,
-      jobs: viewerJobs(view.jobs, viewerId, () => false).map(({ topicId: _, ...job }) => job),
+      jobs: viewerJobs(view.jobs, viewerId, () => false).map(
+        ({ topicId: _, topicTitle: __, ...job }) => job,
+      ),
       messages: view.messages.map(withoutTopic),
       rootMessage: view.rootMessage && withoutTopic(view.rootMessage),
     };

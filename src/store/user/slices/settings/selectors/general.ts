@@ -1,4 +1,3 @@
-import { isDesktop } from '@lobechat/const';
 import { type FollowUpMode, type InterfaceDensity, resolveFollowUpMode } from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
@@ -18,11 +17,6 @@ const highlighterTheme = (s: UserStore) => generalConfig(s).highlighterTheme;
 const mermaidTheme = (s: UserStore) => generalConfig(s).mermaidTheme;
 const transitionMode = (s: UserStore) => generalConfig(s).transitionMode;
 const animationMode = (s: UserStore) => generalConfig(s).animationMode;
-const contextMenuMode = (s: UserStore) => {
-  const config = generalConfig(s).contextMenuMode;
-  if (config !== undefined) return config;
-  return isDesktop ? 'default' : 'disabled';
-};
 const responseLanguage = (s: UserStore) => generalConfig(s).responseLanguage;
 const currentResponseLanguage = (s: UserStore): Locales => {
   const locale = responseLanguage(s);
@@ -44,7 +38,14 @@ const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLi
 // Users who switched off the retired `enableInputMarkdown` lab did so to keep pasted text verbatim.
 const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
+const enableVoiceMessage = (s: UserStore) => generalConfig(s).enableVoiceMessage ?? false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
+// `isDevMode` (the retired Advanced Tools switch) used to gate the usage row,
+// so it seeds the default for people who never chose this setting.
+const showMessageUsage = (s: UserStore) =>
+  generalConfig(s).showMessageUsage ??
+  (generalConfig(s) as { isDevMode?: boolean }).isDevMode ??
+  false;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
 const interfaceDensity = (s: UserStore): InterfaceDensity =>
   generalConfig(s).interfaceDensity ?? 'loose';
@@ -67,10 +68,10 @@ const followUpBehavior = (s: UserStore): FollowUpMode =>
 export const userGeneralSettingsSelectors = {
   animationMode,
   config: generalConfig,
-  contextMenuMode,
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
   enablePasteAutoConvert,
+  enableVoiceMessage,
   followUpBehavior,
   fontAntialiasing,
   fontSize,
@@ -83,6 +84,7 @@ export const userGeneralSettingsSelectors = {
   currentTimezone,
   responseLanguage,
   showImageReadPreview,
+  showMessageUsage,
   telemetry,
   timezone,
   transitionMode,

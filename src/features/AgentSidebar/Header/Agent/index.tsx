@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { useAgentAvatarActivity } from '@/features/AgentAvatarActivity/useAgentAvatarActivity';
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { SidebarHeaderSelectTrigger } from '@/features/NavPanel/SidebarHeaderSelect';
@@ -28,6 +29,8 @@ const Agent = memo<PropsWithChildren>(() => {
     agentSelectors.currentAgentBackgroundColor(s),
   ]);
 
+  const activity = useAgentAvatarActivity(agentId);
+
   const displayTitle = isInbox
     ? title || DEFAULT_INBOX_TITLE
     : title || t('defaultSession', { ns: 'common' });
@@ -41,6 +44,8 @@ const Agent = memo<PropsWithChildren>(() => {
         title={displayTitle}
         avatarNode={
           <AgentAvatar
+            {...activity.avatar}
+            {...activity.hover}
             agentId={agentId}
             avatar={isInbox ? avatar || DEFAULT_INBOX_AVATAR : avatar}
             background={backgroundColor || undefined}

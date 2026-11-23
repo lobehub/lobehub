@@ -16,7 +16,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
 import RepositoryField, {
   AdvancedRepositories,
@@ -62,7 +62,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     const navigate = useWorkspaceAwareNavigate();
     const connectGithub = () => {
       close();
-      navigate(GITHUB_RETURN_TO);
+      navigate(buildConnectorPagePath('github'));
     };
     const [creating, setCreating] = useState(false);
     // The Enter that confirms an IME candidate reaches `keydown` as an Enter,
@@ -103,9 +103,9 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
                 }
               : { kind: 'code' },
           name: trimmed,
-          // Created into the pool the person is looking at. Opening the dialog
-          // from the Private tab and having the result land in the workspace's
-          // shared list would be a publication nobody asked for.
+          // Created into the pool the host chose (private on the workspace
+          // page). Landing in the workspace's shared pool by default would be
+          // a publication nobody asked for.
           visibility,
         });
         close();
@@ -130,7 +130,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // first instance on — and an instance keeps whatever a session leaves in its
     // home directory, credentials included. So creating one there asks the same
     // question publishing one does, with the same explanation, rather than
-    // publishing it silently because of which tab happened to be open.
+    // publishing it silently.
     const submit = () => {
       if (!trimmed || creating) return;
       if (visibility !== 'public') return void create();

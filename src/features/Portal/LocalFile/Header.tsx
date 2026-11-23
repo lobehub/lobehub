@@ -20,6 +20,7 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
   const activeLocalFilePath = useChatStore(chatPortalSelectors.activeLocalFilePath);
   // Remote device and sandbox paths cannot be revealed in the local filesystem.
   const isRemoteFile = useChatStore(chatPortalSelectors.isCurrentLocalFileRemote);
+  const canGoBack = useChatStore(chatPortalSelectors.canGoBack);
   const handleOpenFileFolder = useCallback(() => {
     if (!activeLocalFilePath) return;
 
@@ -28,9 +29,13 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
 
   return (
     <PortalHeader
-      // The tab strip runs the full header height and starts at the edge.
+      // The tab strip runs the full header height and starts at the edge: it
+      // carries its own 8px start inset inside the scroll area, so tabs that
+      // overflow scroll out under the panel edge instead of being clipped 8px
+      // in. The back arrow sits outside the scroll area, so when it shows the
+      // header pads the left like the right, as every other Portal header does.
       paddingInline={0}
-      style={{ padding: '0 8px 0 0' }}
+      style={{ padding: canGoBack ? '0 8px' : '0 8px 0 0' }}
       title={<TabStrip />}
       rightExtra={
         isDesktop &&
