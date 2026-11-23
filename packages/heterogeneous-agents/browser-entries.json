@@ -4,6 +4,7 @@
   "./client",
   "./codexAppServerArgs",
   "./codexPlanMode",
+  "./connectAgent",
   "./errors",
   "./quota"
 ]
