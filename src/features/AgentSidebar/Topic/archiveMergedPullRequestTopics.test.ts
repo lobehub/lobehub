@@ -82,6 +82,26 @@ describe('findMergedPullRequestTopics', () => {
     expect((await findMergedPullRequestTopics([topic('t')])).map((item) => item.id)).toEqual(['t']);
     gitReviewState.gitPullRequestDetailMap = {};
   });
+  it('keeps a merge the server knows of when this client holds an older open read', async () => {
+    vi.mocked(workService.listTopicsPullRequests).mockResolvedValue({ t: [mergedPr(10)] });
+    gitReviewState.gitPullRequestDetailMap = {
+      'device:/repo:10': {
+        value: {
+          detail: {
+            number: 10,
+            repo: { name: 'lobehub', owner: 'lobehub' },
+            state: 'open',
+            title: 'Read before the merge',
+            url: 'https://github.com/lobehub/lobehub/pull/10',
+          } as any,
+          status: 'ok',
+        } as any,
+      },
+    };
+
+    expect((await findMergedPullRequestTopics([topic('t')])).map((item) => item.id)).toEqual(['t']);
+    gitReviewState.gitPullRequestDetailMap = {};
+  });
 });
 
 describe('archiveMergedPullRequestTopics', () => {

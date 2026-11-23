@@ -1,4 +1,4 @@
-import type { DeviceGitPullRequestDetail } from '@lobechat/types';
+import type { DeviceGitPullRequestDetail, TopicPullRequestItem } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { type TFunction } from 'i18next';
 
@@ -16,12 +16,17 @@ import {
 /** Topic ids per server read — the `work.listTopicsPullRequests` input bound. */
 const TOPIC_BATCH = 100;
 
-/** The device `gh pr view` answers this client holds (persisted or read this session). */
-const readDevicePullRequestDetails = () => {
+/**
+ * Merges seen by the execution devices' `gh pr view` reads loaded in this
+ * client — in practice, PRs of topics opened in this session. Only merges:
+ * merged is final, while an older "open" read must not hide a merge the server
+ * knows of.
+ */
+const readDeviceMergedPullRequests = () => {
   const details = new Map<string, DeviceGitPullRequestDetail>();
   for (const read of Object.values(useGitReviewStore.getState().gitPullRequestDetailMap)) {
     const detail = read?.value?.detail;
-    if (!detail) continue;
+    if (detail?.state !== 'merged') continue;
     details.set(
       pullRequestIdentityKey(`${detail.repo.owner}/${detail.repo.name}`, detail.number),
       detail,
@@ -42,16 +47,19 @@ export const findMergedPullRequestTopics = async (
   if (candidates.length === 0) return [];
 
   const ids = candidates.map((topic) => topic.id);
-  const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += TOPIC_BATCH) batches.push(ids.slice(i, i + TOPIC_BATCH));
-  const results = await Promise.all(
-    batches.map((batch) => workService.listTopicsPullRequests(batch)),
-  );
+  const pullRequestsByTopic: Record<string, TopicPullRequestItem[]> = {};
+  // One read at a time: a long topic list must not turn into a burst.
+  for (let i = 0; i < ids.length; i += TOPIC_BATCH) {
+    Object.assign(
+      pullRequestsByTopic,
+      await workService.listTopicsPullRequests(ids.slice(i, i + TOPIC_BATCH)),
+    );
+  }
 
   return getMergedPullRequestTopics(
     candidates,
-    Object.assign({}, ...results),
-    readDevicePullRequestDetails(),
+    pullRequestsByTopic,
+    readDeviceMergedPullRequests(),
   );
 };
 

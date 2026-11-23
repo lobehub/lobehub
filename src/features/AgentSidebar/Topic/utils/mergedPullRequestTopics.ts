@@ -45,22 +45,23 @@ export const hasLandedPullRequests = (
 
 /**
  * The topics whose pull requests have landed (see {@link hasLandedPullRequests}),
- * from their Work-row listing. `deviceDetails` are the execution devices'
- * `gh pr view` answers this client already holds, keyed by
- * {@link pullRequestIdentityKey}: without the GitHub App they are what knows a
- * PR was merged on GitHub rather than by the agent.
+ * from their Work-row listing. `deviceMerges` are execution-device
+ * `gh pr view` reads showing a merge, keyed by {@link pullRequestIdentityKey}:
+ * without the GitHub App they are what knows a PR was merged on GitHub rather
+ * than by the agent. Pass merged reads only — a stale "open" read would hide a
+ * merge the server already knows of.
  */
 export const getMergedPullRequestTopics = (
   topics: ChatTopic[],
   pullRequestsByTopic: Record<string, TopicPullRequestItem[]>,
-  deviceDetails: Map<string, DeviceGitPullRequestDetail> = new Map(),
+  deviceMerges: Map<string, DeviceGitPullRequestDetail> = new Map(),
 ): ChatTopic[] =>
   topics.filter((topic) => {
     const items = pullRequestsByTopic[topic.id];
     if (!items?.length) return false;
     return hasLandedPullRequests(
       items.map((item) => {
-        const detail = deviceDetails.get(pullRequestIdentityKey(item.repoFullName, item.number));
+        const detail = deviceMerges.get(pullRequestIdentityKey(item.repoFullName, item.number));
         return resolvePullRequestView(item, detail ? { confirmed: false, detail } : undefined);
       }),
     );
