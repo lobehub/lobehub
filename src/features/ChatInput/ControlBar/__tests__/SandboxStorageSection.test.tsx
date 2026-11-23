@@ -23,6 +23,8 @@ const state = vi.hoisted(() => {
     },
     // The agent's drive switched off for its new conversations.
     temporary: false,
+    workspaceId: null as string | null,
+    environmentsLoaded: true,
     setPrefersTemporary: vi.fn(),
     topicId: null as string | null,
     userId: 'user-a' as string | undefined,
@@ -80,7 +82,7 @@ vi.mock('../useSandboxStorageAccess', () => ({
   useSandboxStorageAccess: () => ({ eligible: true, status: 'ready' }),
 }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  useActiveWorkspaceId: () => null,
+  useActiveWorkspaceId: () => state.workspaceId,
 }));
 
 vi.mock('@/store/user', () => ({
@@ -99,12 +101,16 @@ const ENVIRONMENTS = [
     configuration: { sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobe-chat' }] },
     id: 'env_repo',
     name: 'Chat',
+    visibility: 'private',
   },
 ];
 
 vi.mock('../useSandboxEnvironmentList', () => ({
   useIsSharedAgent: () => false,
-  useSandboxEnvironmentList: () => ({ environments: ENVIRONMENTS }),
+  useSandboxEnvironmentList: () => ({
+    environments: state.environmentsLoaded ? ENVIRONMENTS : [],
+    loaded: state.environmentsLoaded,
+  }),
   useProjectSandboxEnvironments: (projectId?: string) => ({
     environments: projectId ? (state.projectEnvironments[projectId] ?? []) : [],
   }),
@@ -133,16 +139,26 @@ vi.mock('../SandboxDriveChip', () => ({
   default: ({
     onChange,
     onToggle,
+    toggleDisabled,
     value,
   }: {
     onChange: (s: SandboxSelection) => Promise<void>;
     onToggle: (enabled: boolean) => Promise<void>;
+    toggleDisabled?: boolean;
     value: SandboxSelection;
   }) => (
     <div>
       <span data-testid="chip">{label(value)}</span>
+      <span data-testid="toggle-disabled">{String(!!toggleDisabled)}</span>
       <button onClick={() => onChange({ workingDirectory: 'projects/demo' }).catch(() => {})}>
         pick-folder
+      </button>
+      <button
+        onClick={() =>
+          onChange({ ...value, drive: 'public', workingDirectory: 'team' }).catch(() => {})
+        }
+      >
+        pick-public-folder
       </button>
       <button onClick={() => onToggle(false).catch(() => {})}>drive-off</button>
       <button onClick={() => onToggle(true).catch(() => {})}>drive-on</button>
@@ -189,6 +205,8 @@ vi.mock('../SandboxEnvironmentChip', () => ({
 
 beforeEach(() => {
   state.temporary = false;
+  state.workspaceId = null;
+  state.environmentsLoaded = true;
   state.setPrefersTemporary.mockReset();
   state.topicId = null;
   state.userId = 'user-a';
@@ -295,18 +313,18 @@ describe('SandboxStorageSection — T-14158', () => {
       'topic-1',
       expect.objectContaining({
         sandboxEnvironmentId: 'env_repo',
-        sandboxWorkingDirectory: 'lobe-chat',
+        sandboxWorkingDirectory: 'lobe-chat-nvrepo',
       }),
     );
     expect(state.setPrefersTemporary).toHaveBeenLastCalledWith(expect.anything(), AGENT, false);
 
     openNewConversation();
-    expect(screen.getByTestId('chip').textContent).toBe('lobe-chat+repo:env_repo');
+    expect(screen.getByTestId('chip').textContent).toBe('lobe-chat-nvrepo+repo:env_repo');
     send('topic-2');
     expect(state.topics['topic-2']).toMatchObject({
       sandboxEnvironmentId: 'env_repo',
       sandboxSeeded: true,
-      sandboxWorkingDirectory: 'lobe-chat',
+      sandboxWorkingDirectory: 'lobe-chat-nvrepo',
     });
   });
 
@@ -326,6 +344,37 @@ describe('SandboxStorageSection — T-14158', () => {
     });
     openNewConversation();
     expect(screen.getByTestId('chip').textContent).toBe('projects/demo');
+  });
+
+  // Every member browses the workspace's public drive: a private environment
+  // is not carried into a folder there.
+  it("drops a private environment when a folder on the workspace's public drive is picked", async () => {
+    state.workspaceId = 'ws-1';
+    render(<SandboxStorageSection agentId={AGENT} />);
+    send('topic-1');
+    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+
+    await act(async () => fireEvent.click(screen.getByText('pick-public-folder')));
+    expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
+      'topic-1',
+      expect.objectContaining({ sandboxEnvironmentId: undefined, sandboxWorkingDirectory: 'team' }),
+    );
+  });
+
+  // The drive is switched on into the environment's own folder, named after
+  // it: until the list says what the environment is, the switch waits.
+  it('holds the drive switch while the picked environment is not known yet', async () => {
+    state.temporary = true;
+    render(<SandboxStorageSection agentId={AGENT} />);
+    send('topic-1');
+    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+    expect(screen.getByTestId('toggle-disabled').textContent).toBe('false');
+
+    act(() => {
+      state.environmentsLoaded = false;
+      commit();
+    });
+    expect(screen.getByTestId('toggle-disabled').textContent).toBe('true');
   });
 
   it('keeps the environment when the drive is switched off', async () => {

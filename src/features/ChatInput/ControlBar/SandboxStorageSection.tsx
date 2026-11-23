@@ -16,7 +16,11 @@ import {
 } from './rememberedSandboxDirectory';
 import SandboxDriveChip from './SandboxDriveChip';
 import SandboxEnvironmentChip from './SandboxEnvironmentChip';
-import { projectStartEnvironmentId, selectionWithDrive } from './sandboxEnvironmentOptions';
+import {
+  isOnPublicDrive,
+  projectStartEnvironmentId,
+  selectionWithDrive,
+} from './sandboxEnvironmentOptions';
 import {
   setPrefersTemporarySandbox,
   usePrefersTemporarySandbox,
@@ -75,7 +79,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     eligible,
   );
   // The environment objects, for the folder an environment is set up in.
-  const { environments } = useSandboxEnvironmentList({
+  const { environments, loaded: environmentsLoaded } = useSandboxEnvironmentList({
     enabled: status !== 'hidden',
     projectId,
     sharedAgent,
@@ -98,14 +102,23 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   // environment picked inside a project: it belongs to that project, and the
   // agent's next conversation elsewhere could not use it. A drive folder is
   // usable anywhere.
+  //
+  // Every member can browse the workspace's public drive, so a private
+  // environment is not carried into a folder there — the server would not
+  // apply it either, and the chip would name a setup that never runs.
   const pick = useCallback(
-    async (next: SandboxSelection) => {
+    async (picked: SandboxSelection) => {
+      const environment = environments.find((item) => item.id === picked.environmentId);
+      const next =
+        environment && environment.visibility !== 'public' && isOnPublicDrive(picked, workspaceId)
+          ? { ...picked, environmentId: undefined }
+          : picked;
       await setSelection(next);
       rememberSandboxSelection({ userId, workspaceId }, agentId, next, {
         folderOnly: !!projectId,
       });
     },
-    [agentId, projectId, setSelection, userId, workspaceId],
+    [agentId, environments, projectId, setSelection, userId, workspaceId],
   );
   // Switching the drive on starts in the environment's own folder when one is
   // picked, so it is set up in an empty folder; otherwise in the folder the
@@ -143,11 +156,19 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   if (status === 'hidden') return null;
 
   const entitled = status === 'ready';
+  // The drive is switched on into the environment's own folder, which is
+  // named after it: until the list says what the environment is, the switch
+  // waits rather than putting it in a folder that may already hold files.
+  const environmentPending =
+    !!selection.environmentId &&
+    !environmentsLoaded &&
+    !environments.some((item) => item.id === selection.environmentId);
 
   return (
     <Flexbox horizontal align={'center'} gap={4}>
       <SandboxDriveChip
         entitled={entitled}
+        toggleDisabled={environmentPending}
         topicId={topicId}
         value={selection}
         onChange={pick}
@@ -155,7 +176,8 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
       />
       <SandboxEnvironmentChip
         projectId={projectId}
-        sharedAgent={sharedAgent}
+        // A folder on the public drive is set up from published environments only.
+        sharedAgent={sharedAgent || isOnPublicDrive(selection, workspaceId)}
         value={selection}
         onChange={pick}
         onDrive={entitled && isPersistentSelection(selection)}

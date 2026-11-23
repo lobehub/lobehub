@@ -50,6 +50,8 @@ interface SandboxDriveChipProps {
   onChange: (selection: SandboxSelection) => Promise<void>;
   /** Switches the drive on or off; the section decides the folder it starts on. */
   onToggle: (enabled: boolean) => Promise<void>;
+  /** Holds the switch while what it would switch into is not known yet. */
+  toggleDisabled?: boolean;
   topicId?: string;
   /** Where this conversation works today. */
   value: SandboxSelection;
@@ -70,7 +72,7 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * another pick replaces it.
  */
 const SandboxDriveChip = memo<SandboxDriveChipProps>(
-  ({ entitled, onChange, onToggle, topicId, value }) => {
+  ({ entitled, onChange, onToggle, toggleDisabled = false, topicId, value }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const [toggling, setToggling] = useState(false);
@@ -195,18 +197,21 @@ const SandboxDriveChip = memo<SandboxDriveChipProps>(
       <OptionRow
         compact
         desc={t(onDrive ? 'sandboxDrive.onDesc' : 'sandboxDrive.offDesc')}
-        disabled={toggling}
+        disabled={toggling || toggleDisabled}
         icon={<Icon icon={HardDriveIcon} size={16} />}
         label={t('sandboxDrive.toggle')}
         extra={
           <Switch
+            disabled={toggleDisabled}
             loading={toggling}
             size={'small'}
             value={onDrive}
             onChange={(enabled) => void toggle(enabled)}
           />
         }
-        onClick={() => void toggle(!onDrive)}
+        onClick={() => {
+          if (!toggleDisabled) void toggle(!onDrive);
+        }}
       />
     ) : (
       <OptionRow

@@ -31,6 +31,8 @@ export interface SandboxRepositoryOption {
   description?: string | null;
   id: string;
   name: string;
+  /** `public` once published to the workspace; anything else is its owner's alone. */
+  visibility?: string | null;
 }
 
 interface SandboxRepositoryMenuProps {

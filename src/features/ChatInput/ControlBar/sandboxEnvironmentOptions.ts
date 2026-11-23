@@ -104,16 +104,21 @@ export const environmentSettingsPath = (projectId?: string) =>
 /**
  * The folder an environment is set up in when the conversation keeps its files
  * on the drive: one of its own, named after the repository it checks out (or
- * the environment itself), at the top of the drive. The server creates it on
- * the first run, so it is empty when the environment is applied — an
- * environment is only set up in an empty folder — and the next conversation
- * that picks it finds the checkout already there.
+ * the environment itself) plus a short piece of its id, at the top of the
+ * drive. The id keeps two environments of the same repository — different
+ * refs, setup or variables — and a folder of the person's own apart: the
+ * setup only runs in an empty folder, so a shared one would keep the first
+ * environment's checkout under the second's name. The server creates it on
+ * the first run, and the next conversation that picks the environment finds
+ * the checkout already there.
  */
 export const environmentFolderName = (environment: {
   configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+  id: string;
   name: string;
 }): string => {
   const base = repositorySlug(environment)?.split('/').pop() || environment.name;
+  const suffix = environment.id.replaceAll(/[^\dA-Za-z]/g, '').slice(-6);
   // A single path segment the drive accepts: no separators, no leading dot
   // (hidden, and `.`/`..` are not folders) or `~`, no surrounding whitespace.
   // Checked with the server's own rule at the end: a name it refuses would
@@ -122,10 +127,22 @@ export const environmentFolderName = (environment: {
     .replaceAll(/[/\\]+/g, '-')
     .trim()
     .replace(/^[.~]+/, '')
-    .slice(0, 64)
+    .slice(0, 56)
     .trim();
-  return name && isSafeSandboxCwd(name) ? name : 'environment';
+  const folder = [name || 'environment', suffix].filter(Boolean).join('-');
+  return isSafeSandboxCwd(folder) ? folder : 'environment';
 };
+
+/**
+ * Whether a selection works in a folder of a workspace's public drive, which
+ * every member can browse. In a workspace a folder with no drive named is on
+ * the public one.
+ */
+export const isOnPublicDrive = (selection: SandboxSelection, workspaceId?: string | null) =>
+  !!workspaceId &&
+  !selection.instanceId &&
+  selection.workingDirectory !== undefined &&
+  selection.drive !== 'personal';
 
 /**
  * The selection once the drive is switched on or off. Off is the temporary
