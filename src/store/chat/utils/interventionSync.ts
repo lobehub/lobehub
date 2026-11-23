@@ -40,12 +40,8 @@ export const hasPendingInterventions = (messages: UIChatMessage[]) =>
       intervention(message)?.status === 'pending',
   );
 
-/**
- * Ids of the unanswered cards, joined into a stable string so a selector only
- * changes when a card is raised or answered. A newly raised card restarts the
- * fast poll window of `backoffPollInterval`.
- */
-export const pendingInterventionKey = (messages: UIChatMessage[]) =>
+/** Ids of the persisted cards still waiting for an answer. */
+export const pendingInterventionIds = (messages: UIChatMessage[]) =>
   messages
     .filter(
       (message) =>
@@ -53,8 +49,7 @@ export const pendingInterventionKey = (messages: UIChatMessage[]) =>
         !message.id.startsWith('tmp_') &&
         intervention(message)?.status === 'pending',
     )
-    .map((message) => message.id)
-    .join(',');
+    .map((message) => message.id);
 
 const isTerminal = (status: string | undefined) =>
   status === 'approved' || status === 'rejected' || status === 'aborted';

@@ -3,6 +3,7 @@ import debug from 'debug';
 import { useEffect, useRef } from 'react';
 import { type StoreApi, useStore } from 'zustand';
 
+import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
   getMessageListFetchPolicy,
@@ -17,12 +18,15 @@ import {
   backoffPollInterval,
   hasPendingInterventions,
   INTERVENTION_REFRESH_INTERVAL,
-  pendingInterventionKey,
+  pendingInterventionIds,
 } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 
 import { getMessageTranscript } from '../transcript';
+
+/** Matches the `getInterventionStatuses` input cap in the lambda router. */
+const INTERVENTION_STATUS_BATCH_SIZE = 50;
 
 const log = debug('lobe-store:message-transcript');
 
@@ -261,6 +265,7 @@ export class MessageTranscriptActionImpl {
       let pollingSince: number | undefined;
       /** Cards pending when `pollingSince` was set; a newly raised card restarts the fast window. */
       let pollingFor: string | undefined;
+      const pendingCardIds = () => pendingInterventionIds(this.#get().dbMessagesMap[bucket] ?? []);
       const next = () => {
         // A read still in flight when the effect re-ran must not restart this chain.
         if (cancelled) return;
@@ -268,18 +273,45 @@ export class MessageTranscriptActionImpl {
         if (base <= 0) return;
         // Read from the store, not a subscription: a re-render here would
         // reorder this hook against the sync it drives.
-        const pendingCards = pendingInterventionKey(this.#get().dbMessagesMap[bucket] ?? []);
+        const pendingCards = pendingCardIds().join(',');
         if (pollingSince === undefined || pollingFor !== pendingCards) {
           pollingSince = Date.now();
           pollingFor = pendingCards;
         }
         timer = setTimeout(tick, backoffPollInterval(base, Date.now() - pollingSince));
       };
+      /**
+       * Whether this tick must re-read the transcript. While cards wait for an
+       * answer, ask only for their status: the full page can be megabytes, and
+       * a card whose run died stays pending in the database for good, so an
+       * open tab used to re-read it every tick all day. The page is re-read
+       * once a card changed, or when the status read fails (e.g. a server
+       * without the endpoint).
+       */
+      const needsRead = async () => {
+        const ids = pendingCardIds();
+        if (
+          !syncContinuation ||
+          !context.topicId ||
+          ids.length === 0 ||
+          ids.length > INTERVENTION_STATUS_BATCH_SIZE
+        )
+          return true;
+        try {
+          const statuses = await messageService.getInterventionStatuses(context.topicId, ids);
+          return ids.some((id) => statuses[id] !== 'pending');
+        } catch (error) {
+          log('[poll] status read failed | key=%s | %O', bucket, error);
+          return true;
+        }
+      };
       const tick = () => {
         const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
         const online = typeof navigator === 'undefined' || navigator.onLine !== false;
         if (visible && online && !validatingRef.current) {
-          void Promise.resolve(revalidateRef.current()).finally(next);
+          void needsRead()
+            .then((read) => (read && !cancelled ? revalidateRef.current() : undefined))
+            .finally(next);
           return;
         }
         next();

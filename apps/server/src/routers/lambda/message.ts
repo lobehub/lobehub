@@ -1,5 +1,6 @@
 import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
+import type { ToolIntervention } from '@lobechat/types';
 import {
   AgentSenderMetadataSchema,
   CreateNewMessageParamsSchema,
@@ -421,6 +422,28 @@ export const messageRouter = router({
       await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
 
       return ctx.messageService.getToolResultPayloads(input.messageIds);
+    }),
+
+  /**
+   * Intervention status of a topic's pending approval cards, for the client
+   * poll that waits for an answer from another device. A topic's full message
+   * page can be megabytes; this answers "is it still pending?" in a few bytes,
+   * so the client re-reads the page only once a card changed. Ids that do not
+   * come back (deleted, or not visible) map to `null`.
+   */
+  getInterventionStatuses: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(50), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
+
+      const rows = await ctx.messageModel.listMessagePluginsByIds({
+        ids: input.messageIds,
+        topicId: input.topicId,
+      });
+      const statuses = new Map(rows.map((row) => [row.id, row.intervention?.status ?? null]));
+      return Object.fromEntries(
+        input.messageIds.map((id) => [id, statuses.get(id) ?? null]),
+      ) as Record<string, ToolIntervention['status'] | null>;
     }),
 
   /**

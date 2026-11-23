@@ -23,6 +23,7 @@ vi.mock('@/services/message', () => {
   return {
     messageService: {
       getEarlierMessages: vi.fn(),
+      getInterventionStatuses: vi.fn(),
       getMessages,
       getMessageListPage: vi.fn(async (params: unknown) => ({
         messages: await getMessages(params),
@@ -73,6 +74,8 @@ describe('pending approval poll backoff', () => {
       olderCursor: null,
     }));
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(null);
+    // A server without the status endpoint: every tick re-reads the page.
+    vi.mocked(messageService.getInterventionStatuses).mockRejectedValue(new Error('NOT_FOUND'));
   });
 
   afterEach(() => {
@@ -153,6 +156,71 @@ describe('pending approval poll backoff', () => {
     expect(
       vi.mocked(messageService.getMessages).mock.calls.length - requests,
     ).toBeGreaterThanOrEqual(28);
+    view.unmount();
+  });
+});
+
+describe('pending approval status poll', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    clearMessageListClientCacheState();
+    useChatStore.setState({ topicDataMap: {}, topicDetailMap: {} });
+    vi.mocked(messageService.getMessages).mockResolvedValue([pending]);
+    vi.mocked(messageService.getMessageListPage).mockImplementation(async (params) => ({
+      messages: await messageService.getMessages(params),
+      olderCursor: null,
+    }));
+    vi.mocked(topicService.getTopicDetail).mockResolvedValue(null);
+    vi.mocked(messageService.getInterventionStatuses).mockResolvedValue({ question: 'pending' });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  const mount = async () => {
+    seedPending();
+    const cache = new Map();
+    const view = renderHook(
+      () => useChatStore.getState().useFetchMessages(context, { syncInterventions: true }),
+      {
+        wrapper: ({ children }: PropsWithChildren) =>
+          createElement(SWRConfig, { value: { provider: () => cache } }, children),
+      },
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    return view;
+  };
+
+  // Regression: each tick re-read the whole message page, megabytes for a long
+  // topic, only to learn the card was still pending.
+  it('asks only for the card status while it stays pending', async () => {
+    const view = await mount();
+    const reads = vi.mocked(messageService.getMessages).mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(vi.mocked(messageService.getMessages).mock.calls.length).toBe(reads);
+    expect(messageService.getInterventionStatuses).toHaveBeenCalledWith(context.topicId, [
+      'question',
+    ]);
+    expect(
+      vi.mocked(messageService.getInterventionStatuses).mock.calls.length,
+    ).toBeGreaterThanOrEqual(28);
+    view.unmount();
+  });
+
+  it('re-reads the page once another device answered the card', async () => {
+    const view = await mount();
+    const reads = vi.mocked(messageService.getMessages).mock.calls.length;
+    vi.mocked(messageService.getInterventionStatuses).mockResolvedValue({ question: 'approved' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL);
+    });
+    expect(vi.mocked(messageService.getMessages).mock.calls.length).toBeGreaterThan(reads);
     view.unmount();
   });
 });
