@@ -13,6 +13,18 @@ export const RESEARCH_SERVERS: OfficialMcpServerType[] = [
   },
   {
     auth: 'oauth',
+    author: 'AI/ML API',
+    category: 'research',
+    // Model lookups and account checks are free; tool runs, chat and generation are
+    // billed pay-as-you-go to the user's AI/ML API account.
+    description: 'Search the web, read pages and run 10,000+ AI tools and models with AI/ML API',
+    icon: favicon('aimlapi.com'),
+    identifier: 'aimlapi',
+    label: 'AI/ML API',
+    url: 'https://mcp.aimlapi.com/mcp',
+  },
+  {
+    auth: 'oauth',
     author: 'Apify',
     category: 'research',
     description: 'Run Apify actors to scrape and automate the web',
