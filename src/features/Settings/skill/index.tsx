@@ -1,16 +1,19 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronLeft } from 'lucide-react';
-import { Activity, memo, useCallback, useEffect } from 'react';
+import { Activity, memo, type ReactNode, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import DetailBreadcrumb from './features/DetailBreadcrumb';
@@ -37,14 +40,12 @@ const styles = stylex.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
     height: '100%',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-page-padding-inline'],
   },
   /**
-   * The connector list insets its rows and intro 12px, so the body is 12px wider
-   * than the shared 1024px settings column on each side: text then lines up with
-   * every other settings tab, and the bottom space matches their 128px. The body
-   * grows with its content (the page aligns it to the top instead of stretching it
-   * to the scroll box), otherwise the list overflows it and the bottom padding is lost.
+   * The body grows with its content (the page aligns it to the top instead of
+   * stretching it to the scroll box), otherwise the list overflows it and the
+   * bottom padding is lost. A detail keeps the wider 1048px reading column.
    */
   pageBody: {
     display: 'flex',
@@ -54,26 +55,56 @@ const styles = stylex.create({
     minHeight: '100%',
     paddingBlockEnd: '104px',
   },
+  /**
+   * The Codex Plugins catalog column: ~900px of two ~430px columns. The rows and
+   * header inset 12px inside it, so titles, headings and icon tiles share one
+   * left edge.
+   */
+  listBody: { maxWidth: '920px' },
   resourceDetailPage: { height: '100%', minHeight: 0, paddingBlockEnd: '24px' },
 });
 
 interface ToolSettingsProps {
+  /** Rendered under the list page header (the Marketplace Discover / Installed tabs). */
+  headerExtra?: ReactNode;
   /**
-   * Which surface to manage. Fixed per-route now that skills and connectors
-   * each own a dedicated settings page (`/settings/skill` and
-   * `/settings/connector`) instead of sharing one tab-switched page.
+   * Which surface to manage. Fixed per-route: skills and connectors each own a
+   * dedicated Marketplace page (`/marketplace/skill/installed` and
+   * `/marketplace/connector`; the old `/settings/skill` and
+   * `/settings/connector` URLs redirect there).
    */
   viewMode: SkillViewMode;
 }
 
 const PUSHED_DETAIL_STATE = 'skillDetailPushed';
 
-export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
+export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) => {
   const { t } = useTranslation(['common', 'setting']);
   const mobile = isMobileSurface();
   const [searchParams, setSearchParams] = useSearchParams();
   const querySkillIdentifier = searchParams.get('skill');
   const stackedSelected = parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM));
+  // Workspace connectors sit behind two tabs, as devices do: the shared pool
+  // every member and agent uses, and the caller's private connectors, which
+  // only their private agents load. The tab lives in `?visibility=`, so a
+  // detail opened from it returns to it and names that tab's row.
+  const workspaceId = useActiveWorkspaceId();
+  const visibility: ConnectorVisibility | undefined =
+    viewMode !== 'skill' && workspaceId
+      ? searchParams.get('visibility') === 'private'
+        ? 'private'
+        : 'public'
+      : undefined;
+  const changeVisibility = (next: ConnectorVisibility) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'private') params.set('visibility', next);
+        else params.delete('visibility');
+        return params;
+      },
+      { replace: true },
+    );
 
   // Stacked: opening a detail is a history entry, so back returns to the list.
   const openStackedDetail = useCallback(
@@ -95,7 +126,8 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const closeStackedDetail = () => {
     // Pop the entry this page pushed, so history keeps one list entry; a
     // deep-linked detail has none to pop and is replaced by the list instead.
-    if ((location.state as Record<string, unknown> | null)?.[PUSHED_DETAIL_STATE]) {
+    const state = location.state as Record<string, unknown> | null;
+    if (state?.[PUSHED_DETAIL_STATE] || typeof state?.marketplaceCatalog === 'string') {
       navigate(-1);
       return;
     }
@@ -133,19 +165,26 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
     <Activity mode={stackedSelected ? 'hidden' : 'visible'}>
       <LeftPanel
         fullWidth
-        page={!mobile || viewMode === 'skill'}
+        compact={mobile}
+        headerExtra={headerExtra}
+        page={!mobile || viewMode !== 'connector'}
         viewMode={viewMode}
+        visibility={visibility}
         onDeleteSelected={closeStackedDetail}
         onSelect={handleSelect}
+        onVisibilityChange={changeVisibility}
       />
     </Activity>
   );
 
-  // Mobile: the settings layout owns the header; list and detail take turns
-  // full-width instead of a 300px list squeezing the detail.
+  // Mobile: the route shell (`mobileShellHeader`) owns the header; list and detail take turns
+  // full-width instead of a 300px list squeezing the detail. The shell centers its
+  // children, so the page claims the full width: sized by its content it shrank
+  // the connector list to a 260px column and centered the wider skill header
+  // off both screen edges.
   if (mobile)
     return (
-      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
+      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }} width={'100%'}>
         {list}
         {stackedSelected && (
           <Flexbox className={stylex.props(styles.detail).className}>
@@ -155,6 +194,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
             <SkillDetail
               identifier={stackedSelected.identifier}
               type={stackedSelected.type}
+              visibility={visibility}
               onDelete={closeStackedDetail}
             />
           </Flexbox>
@@ -172,6 +212,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
         <div
           {...stylex.props(
             styles.pageBody,
+            !stackedSelected && styles.listBody,
             stackedSelected?.type === 'agent-skill' && styles.resourceDetailPage,
           )}
         >
@@ -181,15 +222,21 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
               <DetailBreadcrumb
                 identifier={stackedSelected.identifier}
                 type={stackedSelected.type}
-                listLabel={t(viewMode === 'skill' ? 'skillView.skills' : 'skillView.connectors', {
-                  ns: 'setting',
-                })}
+                visibility={visibility}
+                listLabel={
+                  viewMode === 'mcp'
+                    ? t('tab.mcp', { ns: 'discover' })
+                    : t(viewMode === 'skill' ? 'skillView.skills' : 'skillView.connectors', {
+                        ns: 'setting',
+                      })
+                }
                 onBack={closeStackedDetail}
               />
               <Flexbox flex={1} style={{ minHeight: 0 }}>
                 <SkillDetail
                   identifier={stackedSelected.identifier}
                   type={stackedSelected.type}
+                  visibility={visibility}
                   onDelete={closeStackedDetail}
                 />
               </Flexbox>
@@ -202,7 +249,3 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
 });
 
 ToolSettings.displayName = 'ToolSettings';
-
-const Page = () => <ToolSettings viewMode="skill" />;
-
-export default Page;

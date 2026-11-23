@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 import { scheduleStaleConnectorToolsRefresh } from '@/server/services/connector/refresh';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 const explicitConnectorInput = (toolId: string) => ({
@@ -105,6 +106,10 @@ interface RunOptions {
 const connectorModel = {
   resolveAll: vi.fn(),
   resolveByIdentifiers: vi.fn(),
+  resolveToolSets: toolSetsFrom(
+    (ids: string[], target: unknown) => connectorModel.resolveByIdentifiers(ids, target),
+    (target: unknown) => connectorModel.resolveAll(target),
+  ),
 };
 
 const run = (options: RunOptions = {}) => {
@@ -149,6 +154,7 @@ const run = (options: RunOptions = {}) => {
       prompt: '470008 呢',
       provider: 'test-provider',
       resolvedAgentId: 'agent-1',
+      topicId: 'tpc-1',
       runFacts: {
         deviceSystemInfo: vi.fn().mockResolvedValue(undefined),
         userPreference: vi.fn().mockResolvedValue(undefined),
@@ -321,8 +327,9 @@ describe('discoverTools — custom MCP connector discovery', () => {
     expect(result.toolManifestMap[YINGMI]).toBeUndefined();
     expect(result.toolSourceMap[YINGMI]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
-    expect(connectorModel.resolveAll).toHaveBeenCalledWith(
+    expect(connectorModel.resolveToolSets).toHaveBeenCalledWith(
       expect.anything(),
+      undefined,
       gateKeeper,
       expect.arrayContaining([YINGMI]),
     );
@@ -558,10 +565,11 @@ describe('discoverTools — custom MCP connector discovery', () => {
 
       // Resolved by identifier only — never the creator's whole connector list.
       expect(connectorModel.resolveAll).not.toHaveBeenCalled();
-      expect(connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(
+      expect(connectorModel.resolveToolSets).toHaveBeenCalledWith(
+        { agentId: 'agent-1', topicId: 'tpc-1' },
         [YINGMI],
-        'agent-1',
         gateKeeper,
+        [],
       );
       expect(result.toolManifestMap[YINGMI]).toBeDefined();
       expect(result.toolSourceMap[YINGMI]).toBe('mcp');

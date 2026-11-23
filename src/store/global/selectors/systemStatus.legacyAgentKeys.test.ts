@@ -75,8 +75,10 @@ describe('legacy `private` sidebar key', () => {
 
       expect(items).not.toContain('private');
       expect(items.filter((key) => key === 'agent')).toHaveLength(1);
-      // Stays in the accordion block, right above the spacer.
-      expect(items[items.indexOf(SIDEBAR_SPACER_ID) - 1]).toBe('agent');
+      // Stays at the end of the accordion block, with Channels right below it.
+      expect(
+        items.slice(items.indexOf(SIDEBAR_SPACER_ID) - 2, items.indexOf(SIDEBAR_SPACER_ID)),
+      ).toEqual(['agent', 'channels']);
     });
 
     it('does not resurrect `private` through the missing-key backfill', () => {

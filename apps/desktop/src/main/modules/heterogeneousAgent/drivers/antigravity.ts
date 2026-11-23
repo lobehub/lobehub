@@ -7,6 +7,7 @@ export const antigravityDriver: HeterogeneousAgentDriver = {
     const input = await helpers.buildAgentInput('antigravity', promptInput);
     return {
       args: buildAntigravityArgs({ extraArgs: args, resumeSessionId }),
+      liveInput: true,
       stdinPayload: input.stdin,
     };
   },

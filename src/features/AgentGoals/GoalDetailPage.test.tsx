@@ -3,6 +3,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceSidePanelProvider } from '@/features/RightPanel/WorkspaceSidePanel';
@@ -208,10 +209,16 @@ describe('GoalDetailPage', () => {
     mocks.showPortal = false;
   });
 
+  it('links back to the goals list from the agent-less route', () => {
+    render(<GoalDetailPage goalId={'goal_1'} />, { wrapper: MemoryRouter });
+
+    expect(screen.getByRole('link', { name: 'goalList.title' })).toHaveAttribute('href', '/goals');
+  });
+
   // The measured numbers are what executing the requirement has observed, so
   // they read below it as its outcome.
   it('renders the north-star metrics below the requirement', () => {
-    render(<GoalDetailPage goalId={'goal_1'} />);
+    render(<GoalDetailPage goalId={'goal_1'} />, { wrapper: MemoryRouter });
 
     expect(
       screen
@@ -246,6 +253,7 @@ describe('GoalDetailPage', () => {
       <WorkspaceSidePanelProvider>
         <GoalDetailPage goalId={'goal_1'} />
       </WorkspaceSidePanelProvider>,
+      { wrapper: MemoryRouter },
     );
 
     expect(screen.getByTestId('goal-supervisor-toggle')).toHaveTextContent(
@@ -262,7 +270,7 @@ describe('GoalDetailPage', () => {
   // agent is the only thing that can say whose conversation this is.
   it('falls back to the goal agent’s conversation without a route agent or a record', () => {
     mocks.hasSupervision = false;
-    render(<GoalDetailPage goalId={'goal_1'} />);
+    render(<GoalDetailPage goalId={'goal_1'} />, { wrapper: MemoryRouter });
 
     expect(screen.getByTestId('goal-supervisor-toggle')).toHaveTextContent('goalChat.title');
     fireEvent.click(screen.getByTestId('goal-supervisor-toggle'));
@@ -322,6 +330,7 @@ describe('GoalDetailPage', () => {
       <WorkspaceSidePanelProvider>
         <GoalDetailPage goalId={'goal_1'} />
       </WorkspaceSidePanelProvider>,
+      { wrapper: MemoryRouter },
     );
 
     expect(screen.queryByTestId('goal-portal-content')).not.toBeInTheDocument();
@@ -342,7 +351,7 @@ describe('GoalDetailPage', () => {
     mocks.graphError = { data: { code: 'NOT_FOUND', httpStatus: 404 } };
     mocks.recovery = { pending: true };
 
-    render(<GoalDetailPage goalId={'goal_1'} />);
+    render(<GoalDetailPage goalId={'goal_1'} />, { wrapper: MemoryRouter });
 
     expect(screen.getByTestId('goal-detail-skeleton')).toBeTruthy();
   });

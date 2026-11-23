@@ -14,7 +14,7 @@ const styles = stylex.create({
     borderWidth: 0,
     color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
     cursor: 'pointer',
-    fontSize: 14,
+    fontSize: 'var(--lobe-density-font-size)',
     fontWeight: 400,
     paddingBlock: 4,
     paddingInline: 8,

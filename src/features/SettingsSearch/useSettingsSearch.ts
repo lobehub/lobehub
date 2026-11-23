@@ -1,4 +1,4 @@
-import { isDesktop, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import type { IconProps } from '@lobehub/ui';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useEffect, useMemo, useState } from 'react';
@@ -13,6 +13,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { getPlatform } from '@/utils/platform';
 
 import {
@@ -158,6 +159,7 @@ export const useSettingsSearch = (
       hideDocs: !!hideDocs,
       isDesktop,
       isLogin: !!isLogin,
+      isMobile: isMobileSurface(),
       isWindows: getPlatform() === 'Windows',
       showAiImage: !!showAiImage,
     };
@@ -267,26 +269,6 @@ export const useSettingsSearch = (
           pinyinBase: [platform.name.toLowerCase()],
           tab: SettingsTabs.Notification,
           url: `${notificationTab.url}#notification-${platform.id}`,
-        });
-      }
-
-    // Builtin OAuth connectors (Notion, GitHub, …): searching a connector name
-    // should land on the connector page. The page has no per-connector deep
-    // link, so these navigate to the tab itself. Availability ultimately
-    // depends on the Market API, but this static catalog is what the page
-    // renders from.
-    const connectorTab = getItemTab(SettingsTabs.Connector);
-    if (connectorTab)
-      for (const connector of LOBEHUB_SKILL_PROVIDERS) {
-        entries.push({
-          breadcrumb: `${connectorTab.groupTitle} › ${connectorTab.label}`,
-          haystack: [connector.label.toLowerCase(), connector.id.toLowerCase()],
-          icon: connectorTab.icon,
-          key: `connector-${connector.id}`,
-          label: connector.label,
-          pinyinBase: [],
-          tab: SettingsTabs.Connector,
-          url: connectorTab.url,
         });
       }
 

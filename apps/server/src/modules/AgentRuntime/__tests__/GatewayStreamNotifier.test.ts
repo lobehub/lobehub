@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
-import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
+import { sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
 import { createMockInner } from '../testUtils';
 
@@ -187,7 +187,7 @@ describe('GatewayStreamNotifier', () => {
         initialContext: { prompt: 'context' },
         status: 'done',
       });
-      expect(sanitizeGatewayEventData(data, FULL_STRIP_REDACTION, 'step_complete')).toEqual({
+      expect(sanitizeGatewayEventData(data, true, 'step_complete')).toEqual({
         phase: 'execution_complete',
         reason: 'done',
       });

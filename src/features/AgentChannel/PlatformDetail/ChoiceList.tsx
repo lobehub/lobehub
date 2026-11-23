@@ -5,6 +5,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type KeyboardEvent, memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   dot: {
     borderColor: cssVar.colorBorder,
@@ -35,11 +37,11 @@ const styles = stylex.create({
     },
     borderRadius: cssVar.borderRadius,
     borderWidth: 0,
-    columnGap: 12,
+    columnGap: densityTokens['--lobe-density-content-gap'],
     cursor: 'pointer',
     display: 'flex',
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     textAlign: 'start',
     width: '100%',
   },

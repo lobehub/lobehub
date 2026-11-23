@@ -3,6 +3,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties } from 'react';
 
+import { useInterfaceDensity } from '@/styles/density';
+
 import type { CaseAttempt } from './caseResults';
 
 const styles = stylex.create({
@@ -22,6 +24,8 @@ const styles = stylex.create({
     cursor: 'pointer',
   },
   cell: { paddingBlock: 8, paddingInline: 8, minWidth: 0 },
+  // Compact density: 4px cell padding and 28px heat chips → ~48px rows.
+  cellCompact: { paddingBlock: 4 },
   index: {
     color: cssVar.colorTextQuaternary,
     fontFamily: cssVar.fontFamilyCode,
@@ -36,6 +40,7 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: 12,
   },
+  heatCompact: { minHeight: 28 },
 });
 
 interface ExperimentCaseRowProps {
@@ -55,31 +60,39 @@ export const ExperimentCaseRow = ({
   results,
   subtitle,
   title,
-}: ExperimentCaseRowProps) => (
-  <button
-    className={stylex.props(styles.row).className}
-    style={{ gridTemplateColumns: columns }}
-    type={'button'}
-    onClick={onOpen}
-  >
-    <Flexbox className={stylex.props(styles.cell).className} gap={2}>
-      <Text ellipsis fontSize={13}>
-        <span className={stylex.props(styles.index).className}>{index}</span>
-        {title}
-      </Text>
-      <Text ellipsis fontSize={11} type={'secondary'}>
-        {subtitle}
-      </Text>
-    </Flexbox>
-    {results.map((result) => (
-      <div className={stylex.props(styles.cell).className} key={result.id}>
-        <div className={stylex.props(styles.heat).className} style={result.style}>
-          {result.label}
+}: ExperimentCaseRowProps) => {
+  const compact = useInterfaceDensity() === 'compact';
+  const cellClassName = stylex.props(styles.cell, compact && styles.cellCompact).className;
+
+  return (
+    <button
+      className={stylex.props(styles.row).className}
+      style={{ gridTemplateColumns: columns }}
+      type={'button'}
+      onClick={onOpen}
+    >
+      <Flexbox className={cellClassName} gap={2}>
+        <Text ellipsis fontSize={13}>
+          <span className={stylex.props(styles.index).className}>{index}</span>
+          {title}
+        </Text>
+        <Text ellipsis fontSize={11} type={'secondary'}>
+          {subtitle}
+        </Text>
+      </Flexbox>
+      {results.map((result) => (
+        <div className={cellClassName} key={result.id}>
+          <div
+            className={stylex.props(styles.heat, compact && styles.heatCompact).className}
+            style={result.style}
+          >
+            {result.label}
+          </div>
         </div>
-      </div>
-    ))}
-  </button>
-);
+      ))}
+    </button>
+  );
+};
 
 export const verdictStyle = (verdict: CaseAttempt['verdict']) => {
   switch (verdict) {

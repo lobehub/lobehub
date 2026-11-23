@@ -11,6 +11,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const runtimeAgentConfig = (chatConfig: Record<string, unknown>, id: string, slug: string) => ({
   chatConfig,
@@ -136,6 +137,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([])),
     };
   }),
 }));
@@ -308,7 +310,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     mockResolveTask.mockResolvedValue(null);
     mockToolState.enabledToolIds = [];
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'en-US',
+      preferredReplyLanguage: 'en-US',
       userName: 'Test User',
     });
     mockGetModelMetadata.mockResolvedValue(undefined);
@@ -471,7 +473,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
   it('should pass user response language into web onboarding runtime systemRole', async () => {
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'zh-CN',
+      preferredReplyLanguage: 'zh-CN',
       userName: 'Test User',
     });
     mockGetAgentConfig.mockResolvedValue({
@@ -512,7 +514,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.systemRole).toBe(customSystemRole);
+    expect(callArgs.agentConfig.systemRole).toBe(`${customSystemRole}\n\n${REPLY_LANGUAGE_ONLY}`);
   });
 
   // Regular agents get no builtin runtime prompt. They do get the user's reply

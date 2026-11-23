@@ -220,7 +220,6 @@
   "verify.error.generic": "Er is iets misgegaan. Probeer het opnieuw.",
   "verify.error.missingToken": "Ongeldige koppeling. Open deze pagina vanuit de bot.",
   "verify.error.title": "Koppeling kan niet worden bevestigd",
-  "verify.error.unlinkBeforeRelink": "Dit LobeHub-account is al gekoppeld aan een ander Telegram-account. Ontkoppel het in Instellingen → Messenger voordat je een nieuw account koppelt.",
   "verify.signInCta": "Log in om door te gaan",
   "verify.signInRequired": "Log in bij LobeHub om de koppeling te bevestigen.",
   "verify.success.backToLobeHub": "Terug naar LobeHub",

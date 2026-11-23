@@ -19,6 +19,7 @@ import {
   recordAnthropicNonStreamingResponse,
   recordAnthropicResponseMetadata,
 } from './diagnostics';
+import { prepareAnthropicToolChanges } from './inlineToolChanges';
 import { transformMessageToStream } from './nonStreamToStream';
 import { AnthropicStream, type AnthropicStreamOptions } from './stream';
 
@@ -28,7 +29,8 @@ export const chatViaMessages = async (
   payload: ChatStreamPayload,
   options?: ChatMethodOptions,
 ): Promise<Response> => {
-  if (!factory.chatCompletion?.handlePayload) {
+  const handlePayload = factory.chatCompletion?.handlePayload;
+  if (!handlePayload) {
     throw new Error('Anthropic-compatible runtime requires chatCompletion.handlePayload');
   }
 
@@ -37,7 +39,13 @@ export const chatViaMessages = async (
 
   log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
 
-  const postPayload = await factory.chatCompletion.handlePayload(payload, runtime._options);
+  const build = (input: ChatStreamPayload) => handlePayload(input, runtime._options);
+  const { body: postPayload, headers } = await prepareAnthropicToolChanges(
+    runtime,
+    payload,
+    options,
+    build,
+  );
   const shouldStream = postPayload.stream ?? payload.stream ?? true;
   const finalPayload = { ...postPayload, stream: shouldStream };
   const requestPayload = runtime.withMappedRequestModel(finalPayload, payload.model);
@@ -81,7 +89,7 @@ export const chatViaMessages = async (
     sentAt: providerRequestStartedAt,
   });
   const responsePromise = runtime.client.messages.create(providerRequestPayload, {
-    headers: options?.requestHeaders,
+    headers,
     signal: options?.signal,
   });
   /**

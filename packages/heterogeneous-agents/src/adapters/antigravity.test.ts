@@ -285,4 +285,54 @@ describe('AntigravityAdapter', () => {
       expect(adapter.adapt(raw)).toEqual([]);
     }
   });
+
+  it('adapts multi-turn liveInput streams and emits user_message replay for steered turns', () => {
+    const steerQueue = ['steer-uuid-1'];
+    const adapter = new AntigravityAdapter({
+      runtimeEndStrategy: 'on-transport-close',
+      takeNextSteerUuid: () => steerQueue.shift(),
+    });
+    const events = [
+      init,
+      step(0, { state: 'DONE', step_type: 'user_input' }),
+      step(1, { state: 'DONE', step_type: 'agent_response', text_delta: 'turn1' }),
+      result({ num_turns: 1, response: 'turn1' }),
+      step(2, { state: 'DONE', step_type: 'user_input' }),
+      step(3, { state: 'DONE', step_type: 'agent_response', text_delta: 'turn2' }),
+      result({ num_turns: 2, response: 'turn2' }),
+    ].flatMap((raw) => adapter.adapt(raw));
+
+    expect(text(events)).toBe('turn1turn2');
+    const replays = events.filter(
+      (e) => e.type === 'step_complete' && e.data.phase === 'user_message',
+    );
+    expect(replays).toHaveLength(1);
+    expect(replays[0].data).toEqual({ phase: 'user_message', uuid: 'steer-uuid-1' });
+    expect(adapter.validateCompletion()).toEqual([]);
+  });
+
+  it('reports incomplete_response when a steered live turn ends without a final result', () => {
+    const steerQueue = ['steer-uuid-1'];
+    const adapter = new AntigravityAdapter({
+      runtimeEndStrategy: 'on-transport-close',
+      takeNextSteerUuid: () => steerQueue.shift(),
+    });
+    for (const raw of [
+      init,
+      step(0, { state: 'DONE', step_type: 'user_input' }),
+      step(1, { state: 'DONE', step_type: 'agent_response', text_delta: 'turn1' }),
+      result({ num_turns: 1, response: 'turn1' }),
+      step(2, { state: 'DONE', step_type: 'user_input' }),
+      step(3, { state: 'ACTIVE', step_type: 'agent_response', text_delta: 'partial' }),
+    ]) {
+      adapter.adapt(raw);
+    }
+
+    const validation = adapter.validateCompletion();
+    expect(validation).toHaveLength(1);
+    expect(validation[0]).toMatchObject({
+      data: { agentType: 'antigravity', code: 'incomplete_response' },
+      type: 'error',
+    });
+  });
 });

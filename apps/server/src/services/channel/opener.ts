@@ -61,16 +61,38 @@ export interface CreateChannelReplyOpenerOptions {
 
 const oneLine = (text: string, max: number) => text.replaceAll(/\s+/g, ' ').trim().slice(0, max);
 
+const NESTED_ACK = /"ack"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+
+/**
+ * The sentence to post, from the model's `ack`. A model sometimes writes its whole answer, JSON and
+ * all, into that one field, often with stray text after it; posting it would put raw JSON in the
+ * Channel. Only the sentence inside is kept, and an `ack` that is JSON without one posts nothing.
+ */
+const ackSentence = (ack: string) => {
+  const text = ack.trim();
+  if (!text.startsWith('{')) return text;
+
+  const nested = NESTED_ACK.exec(text)?.[1];
+  if (!nested) return '';
+  try {
+    return JSON.parse(`"${nested}"`) as string;
+  } catch {
+    return '';
+  }
+};
+
 /**
  * Turns the model's answer into something safe to act on: a new Thread needs a title, an existing
- * one must be among those the opener was shown, and an acknowledgement needs words. Anything else
- * answers in place.
+ * one must be among those the opener was shown, and an acknowledgement needs words, not JSON.
+ * Anything else answers in place.
  */
 export const normalizeChannelReplyOpening = (
   answer: z.infer<typeof OpenerSchema>,
   input: Pick<ChannelReplyOpenerInput, 'canOpenThread' | 'coAddressed' | 'threads'>,
 ): ChannelReplyOpening => {
-  const ack = answer.acknowledge ? oneLine(answer.ack, CHANNEL_REPLY_OPENER_MAX_ACK_LENGTH) : '';
+  const ack = answer.acknowledge
+    ? oneLine(ackSentence(answer.ack), CHANNEL_REPLY_OPENER_MAX_ACK_LENGTH)
+    : '';
   const opening = { ...(ack && { ack }) };
   if (!input.canOpenThread) return { ...opening, placement: 'channel' };
 

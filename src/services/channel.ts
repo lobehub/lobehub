@@ -3,6 +3,8 @@ import type {
   ChannelJoinableItem,
   ChannelListItem,
   ChannelVisibility,
+  ShareVisitorConversation,
+  ShareVisitorTopicGroup,
 } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -87,8 +89,18 @@ class ChannelService {
   /** The caller's direct Channel with another person's shared Agent, from its share id or handle. */
   openShared = async (input: { share: string }) =>
     (await lambdaClient.channel.openShared.mutate(input)).data;
+  /** Visitors' conversations with the caller's shared Agent, when its share lets the owner read them. */
+  shareVisitors = async (agentId: string): Promise<ShareVisitorConversation[]> =>
+    (await lambdaClient.channel.shareVisitors.query({ agentId })).data;
+  /** The run topics of those conversations, grouped by visitor. */
+  shareVisitorTopics = async (agentId: string): Promise<ShareVisitorTopicGroup[]> =>
+    (await lambdaClient.channel.shareVisitorTopics.query({ agentId })).data;
+  /** A visitor's run topic with its transcript, read-only for the Agent's owner. */
+  shareVisitorTopic = async (topicId: string) =>
+    (await lambdaClient.channel.shareVisitorTopic.query({ topicId })).data;
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
-    (await lambdaClient.channel.detail.query(params)).data;
+    // `ReplyWorks` renders the opt-in Work types (files, collections).
+    (await lambdaClient.channel.detail.query({ ...params, includeFileWorks: true })).data;
   list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;
   markRead = (channelId: string, sequence: number) =>
     lambdaClient.channel.markRead.mutate({ channelId, sequence });

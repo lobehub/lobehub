@@ -43,6 +43,19 @@ describe('ActivatorExecutionRuntime.activateTools — request-name resolution', 
     expect(service.markActivated).toHaveBeenCalledWith(['lobe-web-browsing']);
   });
 
+  it('asks the host for what the conversation may discover', async () => {
+    // A private agent's own connectors are discoverable in its own topic only
+    const service = buildService([webBrowsingManifest]);
+    const runtime = new ActivatorExecutionRuntime({ service });
+    const run = { agentId: 'agt-private', topicId: 'tpc-own' };
+
+    await runtime.activateTools({ identifiers: ['search'], reason: 'test' }, run);
+
+    expect(service.getToolManifests).toHaveBeenCalledWith(['search'], run);
+    expect(service.listToolManifests).toHaveBeenCalledWith(run);
+    expect(service.getToolManifests).toHaveBeenLastCalledWith(['lobe-web-browsing'], run);
+  });
+
   it('resolves a bare API name by loading the full discoverable list', async () => {
     // Codex P2 on PR #20791: the probe sends only the API name to the
     // identifier-keyed map (no manifests come back), so the unique bare-name
@@ -52,7 +65,7 @@ describe('ActivatorExecutionRuntime.activateTools — request-name resolution', 
 
     const result = await runtime.activateTools({ identifiers: ['search'], reason: 'test' });
 
-    expect(service.getToolManifests).toHaveBeenCalledWith(['search']);
+    expect(service.getToolManifests).toHaveBeenCalledWith(['search'], undefined);
     expect(service.listToolManifests).toHaveBeenCalled();
     expect(result.content).toContain('Successfully activated tools: lobe-web-browsing.search');
     expect(result.state?.notFound).toEqual([]);

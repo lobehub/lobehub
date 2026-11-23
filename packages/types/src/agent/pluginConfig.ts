@@ -14,6 +14,8 @@ import { resolveToolMode } from './executionTargetRules';
 export type AgentPluginMode = 'pinned' | 'auto' | 'disabled';
 
 export interface AgentPluginConfigItem {
+  /** An explicit agent choice made after library-wide builtin uninstalls were retired. */
+  builtinOverride?: true;
   identifier: string;
   /**
    * @default 'pinned' — absent on legacy string entries and on object
@@ -35,7 +37,11 @@ export const AgentPluginModeSchema = z.enum(['pinned', 'auto', 'disabled']);
  */
 export const AgentPluginEntrySchema: z.ZodType<AgentPluginEntry> = z.union([
   z.string(),
-  z.object({ identifier: z.string(), mode: AgentPluginModeSchema.optional() }),
+  z.object({
+    builtinOverride: z.literal(true).optional(),
+    identifier: z.string(),
+    mode: AgentPluginModeSchema.optional(),
+  }),
 ]);
 
 /**
@@ -199,3 +205,25 @@ export const upsertConnectorEnabled = (
   enabled
     ? upsertPluginMode(plugins, identifier, CONNECTOR_ON_MODE, 'disabled')
     : upsertPluginMode(plugins, identifier, 'disabled');
+
+export const getBuiltinOverrides = (plugins?: AgentPluginEntry[] | null): string[] =>
+  (plugins ?? []).flatMap((entry) =>
+    typeof entry !== 'string' && entry.builtinOverride ? [entry.identifier] : [],
+  );
+
+export const setBuiltinPluginMode = (
+  plugins: AgentPluginEntry[] | undefined,
+  identifier: string,
+  mode: AgentPluginMode,
+): AgentPluginEntry[] => {
+  const choice = {
+    builtinOverride: true,
+    identifier,
+    mode,
+  } as const;
+  const entries = plugins ?? [];
+  const index = entries.findIndex((entry) => parsePluginEntry(entry).identifier === identifier);
+  return index === -1
+    ? [...entries, choice]
+    : entries.map((entry, i) => (i === index ? choice : entry));
+};

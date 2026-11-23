@@ -4,29 +4,19 @@ import {
   redactCreatorPrivateBlob,
   sanitizeVisitorError,
   toVisitorMessage,
-  type VisitorRedactionOptions,
 } from '@/database/models/message';
 
 import { stripFinalStateInEventData } from './StreamEventManager';
 
 /**
- * Per-operation redaction policy for a shared-agent visitor run, derived from
- * the share's `AgentShareConfig` (`showErrorDetails`) and
- * carried on `state.principal.actor.shareVisitor`.
+ * Whether an operation's Gateway pushes go to a shared-agent visitor. A visitor
+ * run is always fully redacted: creator model/provider/usage are stripped and
+ * errors are projected to a classified type, with no per-share opt-out.
  *
- * `null` is the explicit "not a share run — push verbatim" marker, so a
+ * `false` is the explicit "not a share run — push verbatim" marker, so a
  * missing/undefined value can stay reserved for "not resolved yet".
  */
-export type GatewayVisitorRedaction = VisitorRedactionOptions | null;
-
-/**
- * The most restrictive policy: strip model/provider/usage AND project errors
- * down to a classified type. Used as the fail-closed fallback whenever the
- * share's real config is unavailable (a queue worker that never ran the op's
- * init can only read `streamOwnerUserId` back from persisted op metadata, not
- * the share config).
- */
-export const FULL_STRIP_REDACTION: GatewayVisitorRedaction = {};
+export type GatewayVisitorRedaction = boolean;
 
 /**
  * Whether `publishAgentRuntimeInit` is initializing a shared-agent visitor run.
@@ -39,33 +29,22 @@ export const isShareVisitorInit = (initialState: any): boolean =>
   typeof initialState?.streamOwnerUserId === 'string' && initialState.streamOwnerUserId.length > 0;
 
 /**
- * Read the redaction policy off whatever the notifier was handed.
+ * Read whether a run is a shared-agent visitor run off whatever the notifier
+ * was handed.
  *
  * Two shapes reach here, deliberately handled by one function so the fast path
  * never disagrees with itself:
- *  - a runtime `AgentState`, whose `metadata.agentShareVisitor` is stamped once at
- *    operation creation (`AgentRuntimeService.createOperation`) and rides the
+ *  - a runtime `AgentState`, whose `principal.actor.shareVisitor` is stamped once
+ *    at operation creation (`AgentRuntimeService.createOperation`) and rides the
  *    state through to the terminal event (`publishAgentRuntimeEnd`);
  *  - an `AgentOperationMetadata` record, which is what
  *    `AgentRuntimeCoordinator.createAgentOperation` passes to
- *    `publishAgentRuntimeInit` — it carries the flattened
- *    `streamOwnerUserId` + `visitorRedaction` pair instead.
- *
- * Returns `null` for a normal (non-share) run. Fails closed to
- * {@link FULL_STRIP_REDACTION} when a run is identifiable as a share run but
- * its policy is unreadable.
+ *    `publishAgentRuntimeInit` — it carries the flattened `streamOwnerUserId`
+ *    instead.
  */
 export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction => {
-  const share = state?.principal?.actor?.shareVisitor as
-    { showErrorDetails?: boolean; visitorUserId?: string } | undefined;
-
-  if (share?.visitorUserId) {
-    return { showErrorDetails: share.showErrorDetails };
-  }
-
-  if (!isShareVisitorInit(state)) return null;
-
-  return (state.visitorRedaction as GatewayVisitorRedaction) ?? FULL_STRIP_REDACTION;
+  const share = state?.principal?.actor?.shareVisitor as { visitorUserId?: string } | undefined;
+  return !!share?.visitorUserId || isShareVisitorInit(state);
 };
 
 /**
@@ -110,12 +89,9 @@ export const buildPublicEndEventData = <T extends { finalState?: unknown }>(
  * `toVisitorMessage` — the same projection `shareChat.getMessages` applies — so
  * the two paths cannot drift apart.
  */
-const sanitizeUiMessagesForVisitor = (
-  uiMessages: unknown,
-  redaction: VisitorRedactionOptions,
-): unknown => {
+const sanitizeUiMessagesForVisitor = (uiMessages: unknown): unknown => {
   if (!Array.isArray(uiMessages)) return uiMessages;
-  return (uiMessages as UIChatMessage[]).map((message) => toVisitorMessage(message, redaction));
+  return (uiMessages as UIChatMessage[]).map((message) => toVisitorMessage(message));
 };
 
 /**
@@ -131,10 +107,7 @@ const sanitizeUiMessagesForVisitor = (
  * `formatErrorEventData`'s flatter `{ error, errorType, phase }` wire shape
  * instead of `ChatMessageError`'s `{ body, message, type }`.
  */
-const sanitizeErrorEventDataForVisitor = (
-  data: unknown,
-  redaction: VisitorRedactionOptions,
-): unknown => {
+const sanitizeErrorEventDataForVisitor = (data: unknown): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as { error?: unknown; errorType?: unknown; phase?: unknown };
 
@@ -145,7 +118,6 @@ const sanitizeErrorEventDataForVisitor = (
           type: record.errorType,
         } as ChatMessageError)
       : undefined,
-    redaction,
   );
 
   return {
@@ -168,8 +140,7 @@ const sanitizeErrorEventDataForVisitor = (
  *    {@link sanitizeErrorEventDataForVisitor} — a SEPARATE leak from
  *    `uiMessages`/`finalState`, since it carries `formatErrorEventData`'s raw
  *    `{ body, error, errorType }` shape with no `finalState`/`uiMessages` key
- *    for the other checks to even look at. Skipped when the share opted into
- *    `showErrorDetails`.
+ *    for the other checks to even look at.
  * 3. {@link redactCreatorPrivateBlob} runs over the WHOLE remaining payload.
  *    Every other event type for a share run — `stream_start` (`{ model,
  *    provider }`), `tool_end` (a tool's own free-form `result.state` blob, e.g.
@@ -208,7 +179,7 @@ export const sanitizeGatewayEventData = (
         })()
       : record;
 
-  if (eventType === 'error') return sanitizeErrorEventDataForVisitor(withoutFinalState, redaction);
+  if (eventType === 'error') return sanitizeErrorEventDataForVisitor(withoutFinalState);
 
   const redacted = redactCreatorPrivateBlob(withoutFinalState);
 
@@ -216,6 +187,6 @@ export const sanitizeGatewayEventData = (
 
   return {
     ...redacted,
-    uiMessages: sanitizeUiMessagesForVisitor(withoutFinalState.uiMessages, redaction),
+    uiMessages: sanitizeUiMessagesForVisitor(withoutFinalState.uiMessages),
   };
 };

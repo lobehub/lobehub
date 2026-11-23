@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
 import { DIFF_OPTIONS, withTrailingNewline } from '@/features/Dashboard/WidgetDetail/diffContent';
+import { densityVars } from '@/styles/densityVars';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
 import type { PlanVersion } from './planVersion';
@@ -25,7 +26,7 @@ import { unreadableVersions, useSkillVersion } from './skillVersions';
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorBgLayout};
   `,
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: auto;
     flex: 1;
     min-height: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   root: css`
     overflow: hidden;

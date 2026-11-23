@@ -6,7 +6,7 @@ import { ArrowUpIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import ChecksList from './ChecksList';
@@ -51,8 +51,8 @@ const styles = stylex.create({
   dock: {
     flexShrink: 0,
     paddingBlockStart: '10px',
-    paddingBlockEnd: '12px',
-    paddingInline: '12px',
+    paddingBlockEnd: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -75,7 +75,7 @@ const styles = stylex.create({
   local: {
     flexShrink: 0,
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,

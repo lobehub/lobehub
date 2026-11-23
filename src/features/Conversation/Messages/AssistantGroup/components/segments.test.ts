@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 
+import { registerDeliverableTool } from '../toolRenderRules';
 import {
   countAssistantLlmCalls,
   hasRenderableFinalAnswer,
@@ -84,6 +85,34 @@ describe('shouldFoldProcess', () => {
     },
   );
   const proc = [w('t1')];
+
+  it('keeps a registered deliverable tool visible after the turn ends', () => {
+    registerDeliverableTool('deliverable-tool');
+    const card = { apiName: 'open', id: 'card', identifier: 'deliverable-tool' };
+    const finished = {
+      enabled: true,
+      isGenerating: false,
+      operationEnded: true,
+    };
+
+    expect(
+      shouldFoldProcess({
+        ...finished,
+        processSegments: [{ blocks: [{ id: 'card', tools: [card] } as any], kind: 'workflow' }],
+      }),
+    ).toBe(false);
+    expect(
+      shouldFoldProcess({
+        ...finished,
+        processSegments: [
+          {
+            blocks: [{ id: 'other', tools: [{ ...card, identifier: 'other' }] } as any],
+            kind: 'workflow',
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
 
   it('folds a finished turn whose process only READ an image', () => {
     const readImage = {

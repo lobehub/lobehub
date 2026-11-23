@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { receiverTestSecret, signedWebhookHeaders } from './receiverTestUtils';
 import { verifyInboundWebhook } from './verification';
@@ -38,10 +38,17 @@ describe('Standard Webhooks inbound verification', () => {
   });
 
   it('rejects expired and future timestamps outside the five-minute window', () => {
-    const now = Math.floor(Date.now() / 1000);
-    expect(verify(signedWebhookHeaders(body, { timestamp: now - 301 }))).toBe(false);
-    expect(verify(signedWebhookHeaders(body, { timestamp: now + 301 }))).toBe(false);
-    expect(verify(signedWebhookHeaders(body, { timestamp: now - 290 }))).toBe(true);
+    // Freeze the clock: the verifier reads it again, and a second boundary between the two reads
+    // would put `now + 301` exactly on the window's edge.
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00.500Z'), toFake: ['Date'] });
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      expect(verify(signedWebhookHeaders(body, { timestamp: now - 301 }))).toBe(false);
+      expect(verify(signedWebhookHeaders(body, { timestamp: now + 301 }))).toBe(false);
+      expect(verify(signedWebhookHeaders(body, { timestamp: now - 290 }))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects the wrong key, absent keys and unsupported verification schemes', () => {

@@ -1,5 +1,9 @@
-import type { WorkspaceUserPreference } from '@lobechat/types';
-import { applyWorktreeModeDir } from '@lobechat/types';
+import type { HeteroPermissionMode, WorkspaceUserPreference } from '@lobechat/types';
+import {
+  applyHeteroPermissionModeDir,
+  applyHeteroPlanModeDir,
+  applyWorktreeModeDir,
+} from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import isEqual from 'fast-deep-equal';
 import type { ReplicaSlice } from 'local-replica/zustand';
@@ -24,6 +28,12 @@ import {
 } from './projection';
 
 const n = setNamespace('workspaceUserSettings');
+
+/** Per-directory habits stored the same way in both preference buckets. */
+type DirectoryPreference = Pick<
+  WorkspaceUserPreference,
+  'heteroPermissionModeDirs' | 'heteroPlanModeDirs' | 'worktreeModeDirs'
+>;
 
 type Setter = StoreSetter<UserStore>;
 
@@ -266,43 +276,98 @@ export class WorkspaceUserSettingsActionImpl {
 
   /**
    * Turn the composer's "New worktree" switch on or off for one directory
-   * (`getWorktreeModeKey`). Inside a workspace it lives in this member's
-   * workspace bucket, in personal mode in `users.preference`. Applied
-   * optimistically so the switch flips at once, rolled back if the write fails
-   * (rethrown, so the caller can say so); the server applies the cap.
+   * (`getWorktreeModeKey`). See `#setDirectoryPreference` for where it lives.
    */
-  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<void> => {
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<void> =>
+    this.#setDirectoryPreference({
+      apply: (preference) => ({
+        worktreeModeDirs: applyWorktreeModeDir(preference.worktreeModeDirs, key, enabled),
+      }),
+      name: 'setWorktreeModeDir',
+      writePersonal: async () => ({
+        worktreeModeDirs: await userService.setWorktreeModeDir(key, enabled),
+      }),
+      writeWorkspace: () => workspaceUserSettingsService.setWorktreeModeDir(key, enabled),
+    });
+
+  /**
+   * Remember whether the Codex Plan switch was left on for one directory (same
+   * key as the worktree switch), which a new Codex topic there starts with.
+   */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<void> =>
+    this.#setDirectoryPreference({
+      apply: (preference) => ({
+        heteroPlanModeDirs: applyHeteroPlanModeDir(preference.heteroPlanModeDirs, key, enabled),
+      }),
+      name: 'setHeteroPlanModeDir',
+      writePersonal: async () => ({
+        heteroPlanModeDirs: await userService.setHeteroPlanModeDir(key, enabled),
+      }),
+      writeWorkspace: () => workspaceUserSettingsService.setHeteroPlanModeDir(key, enabled),
+    });
+
+  /**
+   * Remember the Claude Code permission mode picked for one directory (same key
+   * as the worktree switch), which a new topic there starts in.
+   */
+  setHeteroPermissionModeDir = async (key: string, mode: HeteroPermissionMode): Promise<void> =>
+    this.#setDirectoryPreference({
+      apply: (preference) => ({
+        heteroPermissionModeDirs: applyHeteroPermissionModeDir(
+          preference.heteroPermissionModeDirs,
+          key,
+          mode,
+        ),
+      }),
+      name: 'setHeteroPermissionModeDir',
+      writePersonal: async () => ({
+        heteroPermissionModeDirs: await userService.setHeteroPermissionModeDir(key, mode),
+      }),
+      writeWorkspace: () => workspaceUserSettingsService.setHeteroPermissionModeDir(key, mode),
+    });
+
+  /**
+   * One per-directory habit of whoever is acting now: inside a workspace it
+   * lives in this member's workspace bucket, in personal mode in
+   * `users.preference`. Applied optimistically so the control changes at once,
+   * rolled back if the write fails (rethrown, so the caller can say so); the
+   * server applies the list's cap.
+   */
+  #setDirectoryPreference = async ({
+    apply,
+    name,
+    writePersonal,
+    writeWorkspace,
+  }: {
+    apply: (preference: DirectoryPreference) => DirectoryPreference;
+    name: string;
+    writePersonal: () => Promise<DirectoryPreference>;
+    writeWorkspace: () => Promise<unknown>;
+  }): Promise<void> => {
     const workspaceId = getActiveWorkspaceId();
 
     if (!workspaceId) {
       const previous = this.#get().preference;
-      this.#set(
-        {
-          preference: {
-            ...previous,
-            worktreeModeDirs: applyWorktreeModeDir(previous.worktreeModeDirs, key, enabled),
-          },
-        },
-        false,
-        n('setWorktreeModeDir'),
-      );
+      const optimistic = apply(previous);
+      this.#set({ preference: { ...previous, ...optimistic } }, false, n(name));
       try {
-        const worktreeModeDirs = await userService.setWorktreeModeDir(key, enabled);
+        const stored = await writePersonal();
         this.#set(
-          { preference: { ...this.#get().preference, worktreeModeDirs } },
+          { preference: { ...this.#get().preference, ...stored } },
           false,
-          n('setWorktreeModeDir/confirmed'),
+          n(`${name}/confirmed`),
         );
       } catch (error) {
+        const rollback = Object.fromEntries(
+          Object.keys(optimistic).map((field) => [
+            field,
+            previous[field as keyof DirectoryPreference],
+          ]),
+        );
         this.#set(
-          {
-            preference: {
-              ...this.#get().preference,
-              worktreeModeDirs: previous.worktreeModeDirs,
-            },
-          },
+          { preference: { ...this.#get().preference, ...rollback } },
           false,
-          n('setWorktreeModeDir/rollback'),
+          n(`${name}/rollback`),
         );
         throw error;
       }
@@ -316,15 +381,9 @@ export class WorkspaceUserSettingsActionImpl {
     }
     const previous = this.#get().workspaceUserPreference;
     replica.update(workspaceId, (data) => data ?? previous, { persist: false });
-    await replica.optimistic(
-      workspaceId,
-      (data) => ({
-        ...data,
-        worktreeModeDirs: applyWorktreeModeDir(data.worktreeModeDirs, key, enabled),
-      }),
-      () => workspaceUserSettingsService.setWorktreeModeDir(key, enabled),
-      { revalidate: true },
-    );
+    await replica.optimistic(workspaceId, (data) => ({ ...data, ...apply(data) }), writeWorkspace, {
+      revalidate: true,
+    });
   };
 }
 

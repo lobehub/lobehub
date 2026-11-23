@@ -113,7 +113,7 @@ describe('GET /api/agent/messenger/:platform/oauth/callback', () => {
       const res = await messengerOAuthCallback(buildContext('slack', 'error=access_denied'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.pathname).toBe('/marketplace/app/slack');
       expect(loc.searchParams.get('error')).toBe('access_denied');
     });
 
@@ -121,7 +121,7 @@ describe('GET /api/agent/messenger/:platform/oauth/callback', () => {
       const res = await messengerOAuthCallback(buildContext('slack', ''));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.pathname).toBe('/marketplace/app/slack');
       expect(loc.searchParams.get('error')).toBe('missing_code_or_state');
     });
 
@@ -257,7 +257,7 @@ describe('GET /api/agent/messenger/:platform/oauth/callback', () => {
 
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.pathname).toBe('/marketplace/app/slack');
       expect(loc.searchParams.get('error')).toBe('already_installed');
       expect(loc.searchParams.get('workspace')).toBe('Acme Inc');
     });
@@ -326,7 +326,7 @@ describe('GET /api/agent/messenger/:platform/oauth/callback', () => {
 
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.pathname).toBe('/marketplace/app/slack');
       expect(loc.searchParams.get('installed')).toBe('ok');
     });
   });
@@ -382,7 +382,7 @@ describe('GET /api/agent/messenger/:platform/oauth/callback', () => {
 
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger/discord');
+      expect(loc.pathname).toBe('/marketplace/app/discord');
       expect(loc.searchParams.get('installed')).toBe('ok');
     });
   });

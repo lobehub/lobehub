@@ -533,16 +533,17 @@ const requestViaRpc = async <T>(
       settleError(new Error(`${failureMessage}: RPC timed out`), true);
     }, timeoutMs);
 
-    void resolveCliSpawnPlan(options.command ?? 'codex', rpcArgs)
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...options.env,
+      ...(options.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {}),
+    };
+    void resolveCliSpawnPlan(options.command ?? 'codex', rpcArgs, childEnv)
       .then((spawnPlan) => {
         if (finished) return;
 
         child = spawn(spawnPlan.command, spawnPlan.args, {
-          env: {
-            ...process.env,
-            ...options.env,
-            ...(options.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {}),
-          },
+          env: spawnPlan.env ?? childEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
         });

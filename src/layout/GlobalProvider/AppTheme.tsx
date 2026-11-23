@@ -22,6 +22,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { resolveEffectiveDensity } from '@/styles/density';
 import { compactDensityTheme } from '@/styles/densityTheme';
 import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
@@ -131,9 +132,12 @@ const AppTheme = memo<AppThemeProps>(
     }, [fontAntialiasing]);
 
     useEffect(() => {
-      document.documentElement.dataset.density = interfaceDensity;
-      if (interfaceDensity !== 'compact') return;
-      const classes = stylex.props(compactDensityTheme).className?.split(' ') ?? [];
+      const effectiveDensity = resolveEffectiveDensity(interfaceDensity);
+      document.documentElement.dataset.density = effectiveDensity;
+      if (effectiveDensity !== 'compact') return;
+      const classes =
+        stylex.props(compactDensityTheme).className?.split(/\s+/).filter(Boolean) ?? [];
+      if (classes.length === 0) return;
       document.documentElement.classList.add(...classes);
       return () => document.documentElement.classList.remove(...classes);
     }, [interfaceDensity]);

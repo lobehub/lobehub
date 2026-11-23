@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelReplyJob } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicJob, ChannelReplyJob } from '@lobechat/types';
 import type { AgentAvatarState } from '@lobehub/ui';
 
 export const channelJobStatus = (job: ChannelReplyJob) =>
@@ -50,12 +50,13 @@ export const replyActivityJobs = <T extends ChannelReplyJob>(jobs: T[]) =>
 
 /**
  * Each member's newest job when it failed. A later reply, stop or retry by the same member
- * settles the failure, so the header does not stay red forever. Jobs arrive newest first.
+ * settles the failure, so the header does not stay red forever. Jobs arrive newest first. A
+ * request merged into an earlier run settles with that run, so it settles nothing itself.
  */
 export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
   const seen = new Set<string>();
   return jobs.filter((job) => {
-    if (seen.has(job.memberId)) return false;
+    if (job.status === 'merged' || seen.has(job.memberId)) return false;
     seen.add(job.memberId);
     return job.status === 'failed';
   });
@@ -67,6 +68,34 @@ export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
  */
 export const mainTimelineFailures = <T extends ChannelReplyJob>(jobs: T[]) =>
   unresolvedFailures(jobs.filter((job) => !job.threadId));
+
+type FailedReply = Pick<ChannelPublicJob, 'messageId' | 'openingMessageId' | 'status' | 'threadId'>;
+
+const append = <T>(map: Map<string, T[]>, key: string, value: T) =>
+  map.set(key, [...(map.get(key) ?? []), value]);
+
+/**
+ * Where a conversation's failed replies show, keyed by message id, oldest first: under the
+ * acknowledgement the reply posted before its run (`underMessage`), or, when it posted none or
+ * that is not loaded, as the Agent's own row after the request (`afterMessage`). A reply whose
+ * request is not loaded either shows only in the header.
+ */
+export const replyFailurePlacement = <T extends FailedReply>(
+  jobs: T[],
+  loadedMessageIds: ReadonlySet<string>,
+  threadId: string | null,
+) => {
+  const underMessage = new Map<string, T[]>();
+  const afterMessage = new Map<string, T[]>();
+  // Jobs arrive newest first; a message lists its failures in the order they happened.
+  for (const job of [...jobs].reverse()) {
+    if (job.status !== 'failed' || (job.threadId ?? null) !== threadId) continue;
+    if (job.openingMessageId && loadedMessageIds.has(job.openingMessageId))
+      append(underMessage, job.openingMessageId, job);
+    else if (loadedMessageIds.has(job.messageId)) append(afterMessage, job.messageId, job);
+  }
+  return { afterMessage, underMessage };
+};
 
 /** What a member is busy with now: a running reply first, then the next queued one. */
 export const memberCurrentJob = <T extends ChannelReplyJob>(jobs: T[], memberId: string) => {

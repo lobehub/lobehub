@@ -27,6 +27,14 @@ const log = debug('context-engine:processor:ActivationResultTrimProcessor');
 const ACTIVATOR_IDENTIFIER = 'lobe-activator';
 const SKILLS_IDENTIFIER = 'lobe-skills';
 
+/**
+ * Closing line of an `activateTools` result, as written by the activator and by this
+ * processor's trimmed form. ToolActivationAnchorProcessor replaces it when the
+ * instructions stay with the result instead.
+ */
+export const ACTIVATION_DOCS_IN_SYSTEM_PROMPT_NOTE =
+  'Usage instructions for the activated items are in the system prompt.';
+
 interface ActivatedToolState {
   apiCount?: number;
   identifier?: string;
@@ -262,7 +270,7 @@ export class ActivationResultTrimProcessor extends BaseProcessor {
       parts.push(`Not found: ${notFound.join(', ')}.`);
     }
 
-    parts.push('Usage instructions for the activated items are in the system prompt.');
+    parts.push(ACTIVATION_DOCS_IN_SYSTEM_PROMPT_NOTE);
 
     return parts.join('\n');
   }

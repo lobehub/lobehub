@@ -35,7 +35,7 @@ const ProviderList = memo(() => {
                 return (
                   <WorkspaceLink
                     style={{ color: 'inherit' }}
-                    to={urlJoin('/community/provider', record.id)}
+                    to={urlJoin('/marketplace/provider', record.id)}
                   >
                     <Flexbox horizontal align="center" gap={8}>
                       <ProviderIcon provider={record.id} size={24} type={'avatar'} />
@@ -165,7 +165,7 @@ const ProviderList = memo(() => {
                     </Tooltip>
                     <WorkspaceLink
                       style={{ color: 'inherit' }}
-                      to={urlJoin('/community/provider', record.id)}
+                      to={urlJoin('/marketplace/provider', record.id)}
                     >
                       <ActionIcon
                         color={cssVar.colorTextDescription}

@@ -45,7 +45,7 @@ describe('createChannelReplyOpener', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v1',
+      promptVersion: 'v2',
       scenario: 'channel_reply_opener',
       schemaName: 'channel_reply_opener',
     });
@@ -111,6 +111,27 @@ describe('normalizeChannelReplyOpening', () => {
     ).toEqual({ ack: '收到， 我先看下。', placement: 'thread', title: '部署' });
     expect(
       normalizeChannelReplyOpening({ ...answer, placement: 'thread' }, { canOpenThread: true }),
+    ).toEqual({ placement: 'channel' });
+  });
+
+  it('posts only the sentence when the model writes its whole answer into the acknowledgement', () => {
+    const leaked =
+      '{"acknowledge":true,"ack":"我先查一下 lobot 目前好友添加和联系人列表的实际入口。","placement":"channel","thread":"","title":""}”】【注：需要输出 JSON object';
+    expect(
+      normalizeChannelReplyOpening(
+        { ...answer, ack: leaked, acknowledge: true },
+        { canOpenThread: true },
+      ),
+    ).toEqual({
+      ack: '我先查一下 lobot 目前好友添加和联系人列表的实际入口。',
+      placement: 'channel',
+    });
+
+    expect(
+      normalizeChannelReplyOpening(
+        { ...answer, ack: '{"acknowledge":true,"placement":"channel"', acknowledge: true },
+        { canOpenThread: true },
+      ),
     ).toEqual({ placement: 'channel' });
   });
 });

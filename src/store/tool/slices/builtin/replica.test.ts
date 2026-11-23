@@ -21,7 +21,12 @@ import { userService } from '@/services/user';
 
 import { useToolStore } from '../../store';
 import { initialBuiltinToolState } from './initialState';
-import { UNINSTALLED_BUILTIN_TOOLS_KEY, uninstalledBuiltinToolsResource } from './projection';
+import {
+  installedImplicitBuiltinSkillIds,
+  legacyDisabledBuiltinSkillsForRun,
+  UNINSTALLED_BUILTIN_TOOLS_KEY,
+  uninstalledBuiltinToolsResource,
+} from './projection';
 
 vi.mock('@/services/user', () => ({
   userService: {
@@ -92,6 +97,38 @@ describe('uninstalled builtin tools replica', () => {
     ]);
     await expect(read()).resolves.toEqual(['lobe-calculator']);
     expect(userService.getUserState).toHaveBeenCalledTimes(1);
+  });
+
+  it('only offers installed legacy skills after confirming the current scope', async () => {
+    const skills = (createdAt: string) =>
+      installedImplicitBuiltinSkillIds(useToolStore.getState(), createdAt, undefined);
+    const oldAgent = '2026-11-01T00:00:00Z';
+    expect(skills(oldAgent)).toEqual([]);
+    vi.mocked(userService.getUserState).mockResolvedValue(
+      userState({ uninstalledBuiltinTools: ['lobe-agent-browser'] }),
+    );
+    await useToolStore.getState().getUninstalledBuiltinToolsForRun();
+    expect(skills(oldAgent)).toContain('lobe-artifacts');
+    expect(skills(oldAgent)).not.toContain('lobe-agent-browser');
+    expect(skills('2026-11-18T15:53:51Z')).toEqual([]);
+    useScope(`other-${randomUUID()}:personal`);
+    expect(skills(oldAgent)).toEqual([]);
+  });
+
+  it('applies the stored uninstall to old agent entries and honors only the new choice on this agent', async () => {
+    const id = 'lobe-artifacts';
+    vi.mocked(userService.getUserState).mockResolvedValue(
+      userState({ uninstalledBuiltinTools: [id] }),
+    );
+    await useToolStore.getState().getUninstalledBuiltinToolsForRun();
+    const state = useToolStore.getState();
+    expect(legacyDisabledBuiltinSkillsForRun(state, [id])).toEqual([id]);
+    expect(
+      legacyDisabledBuiltinSkillsForRun(state, [
+        { builtinOverride: true, identifier: id, mode: 'auto' },
+      ]),
+    ).toEqual([]);
+    expect(legacyDisabledBuiltinSkillsForRun(state, [])).toEqual([id]);
   });
 
   it('withholds on-demand tools after a failed read and retries on the next send', async () => {

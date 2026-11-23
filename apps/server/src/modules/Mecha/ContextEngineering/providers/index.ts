@@ -16,7 +16,7 @@ import {
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
-  getActivePluginIds,
+  getOptedInPluginIds,
   isLiveAgentAccount,
   ordinaryDocumentAccessScope,
 } from '@lobechat/types';
@@ -191,7 +191,7 @@ export const createServerContextFactProviders = ({
       if (!config) return null;
       return {
         ...config,
-        plugins: getActivePluginIds(Array.isArray(config.plugins) ? config.plugins : undefined),
+        plugins: getOptedInPluginIds(Array.isArray(config.plugins) ? config.plugins : undefined),
       };
     },
 
@@ -270,7 +270,7 @@ export const createServerContextFactProviders = ({
 
     getUserInfo: async (targetUserId) => {
       const info = await UserModel.getInfoForAIGeneration(db, targetUserId ?? userId);
-      return { language: info.responseLanguage, username: info.userName };
+      return { language: info.preferredReplyLanguage, username: info.userName };
     },
 
     getWorkspaceContext: async (targetWorkspaceId) => {
@@ -339,7 +339,10 @@ export const createServerContextFactProviders = ({
     // discovered for this run (their manifests are only fetched for connected
     // providers, so presence in the tool set is the connection).
     listConnectedConnectorIds: async (agentId) => {
-      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, agentId);
+      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, {
+        agentId,
+        topicId: ctx.topicId,
+      });
       const sourceMap = selectToolSourceMap(state);
       for (const [identifier, source] of Object.entries(sourceMap)) {
         if (source === 'lobehubSkill') connected.add(identifier);

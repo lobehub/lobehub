@@ -48,13 +48,11 @@ vi.mock('@/database/repositories/channel/projectMainChannel', () => ({
   findProjectMainChannelId,
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
-vi.mock('@/database/models/contact', async (original) => ({
+vi.mock('@/business/server/contact/addressBook', async (original) => ({
   ...(await original<object>()),
-  ContactModel: class {
-    constructor(_db: unknown, userId: string, workspaceId?: string) {
-      contactScope(userId, workspaceId);
-    }
-    findAgentAccess = findSharedAgent;
+  getAddressBook: (_db: unknown, userId: string, workspaceId?: string) => {
+    contactScope(userId, workspaceId);
+    return { findAgentAccess: findSharedAgent };
   },
 }));
 vi.mock('@/database/models/agentShare', () => ({

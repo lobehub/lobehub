@@ -94,6 +94,21 @@ describe('defineConfig', () => {
         { key: 'x-robots-tag', value: 'noindex, nofollow' },
       ]);
     });
+
+    it('lets the app frame artboard files while every other page refuses to be framed', async () => {
+      vi.stubEnv('ENABLED_CSP', '1');
+      const headersOf = async (url: string) =>
+        (await unstable_getResponseFromNextConfig({ nextConfig: defineConfig({}), url })).headers;
+
+      const page = await headersOf('https://app.example.com/settings');
+      const file = await headersOf('https://app.example.com/artboard-files/tok/pages/a.html');
+
+      expect(page.get('x-frame-options')).toBe('DENY');
+      expect(page.get('content-security-policy')).toBe("frame-ancestors 'none';");
+      expect(file.get('x-frame-options')).toBeNull();
+      expect(file.get('content-security-policy')).toBeNull();
+      expect(file.get('x-robots-tag')).toBe('all');
+    });
   });
 
   it('disables Next.js agent rule injection', () => {

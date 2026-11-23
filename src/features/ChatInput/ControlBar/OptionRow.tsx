@@ -6,6 +6,8 @@ import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
+import { sidebarRow } from '@/styles/density.stylex';
+
 /**
  * One choice in a composer menu: framed icon, title over a description, and a
  * check when it is the current one.
@@ -35,9 +37,9 @@ const styles = stylex.create({
     display: 'flex',
     gap: '10px',
     alignItems: 'center',
-    paddingBlock: '8px',
+    paddingBlock: '6px',
     paddingInline: '8px',
-    borderRadius: cssVar.borderRadius,
+    borderRadius: sidebarRow.radius,
     transition: 'background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -75,12 +77,12 @@ const styles = stylex.create({
     flex: 'none',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '28px',
-    height: '28px',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadius,
+    borderRadius: sidebarRow.radius,
     color: cssVar.colorText,
     backgroundColor: cssVar.colorBgElevated,
     backgroundImage: 'none',

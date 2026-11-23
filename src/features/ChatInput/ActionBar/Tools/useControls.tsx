@@ -1,9 +1,14 @@
-import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
-import { parsePluginEntry, resolveToolMode, upsertPluginMode } from '@lobechat/types';
+import {
+  parsePluginEntry,
+  resolveToolMode,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
+  upsertPluginMode,
+} from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, confirmModal, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -21,12 +26,12 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
 import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
-import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
+import { openPluginEditModal } from '@/features/PluginDevModal/imperative';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
@@ -43,7 +48,6 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -53,6 +57,7 @@ import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import { MemoryEffortControl } from '../Memory/Controls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { SearchAdvancedControls } from '../Search/Controls';
+import { useAgentMenuConnectors, useUnpinDeletedConnector } from './agentMenuConnectors';
 import { isCapabilityTool, resolveCapabilityConfigPatch } from './capabilityTools';
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
@@ -60,6 +65,7 @@ import { SKILL_ICON_SIZE } from './constants';
 import { resolveImplicitMode } from './librarySkillPolicy';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
+import PrivateConnectorTag from './PrivateConnectorTag';
 import SkillRow from './SkillRow';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 import { ToolPickerHeader } from './ToolPickerHeader';
@@ -133,7 +139,17 @@ type SkillMenuItem = NonNullable<ItemType> & {
   detailContent?: ReactNode;
 };
 
-export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
+export const useControls = ({
+  closeDropdown,
+  detailPlacement,
+  enabledOnly = false,
+  headerAction,
+}: {
+  closeDropdown?: () => void;
+  detailPlacement?: 'leftTop' | 'rightTop';
+  enabledOnly?: boolean;
+  headerAction?: ReactNode;
+} = {}) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const navigate = useWorkspaceAwareNavigate();
@@ -144,12 +160,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const { allowed: canEdit } = usePermission('edit_own_content');
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const uninstallPluginRow = usePluginRowUninstall();
-  const [removeComposioConnection, uninstallBuiltinTool, deleteConnector] = useToolStore((s) => [
+  const [removeComposioConnection, deleteConnector] = useToolStore((s) => [
     s.removeComposioConnection,
-    s.uninstallBuiltinTool,
     s.deleteConnector,
   ]);
-  const checked = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
   const rawPlugins = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
   );
@@ -159,8 +173,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     (s) =>
       resolveToolMode(agentByIdSelectors.getAgentConfigById(agentId)(s)?.chatConfig) === 'agent',
   );
-  const activationSets = useActivationSets(agentId, checked, rawPlugins, discoverBuiltins);
-  const { disabledIdSet, optInIds } = activationSets;
+  const { connectorIds, disabledIdSet, optInIds } = useActivationSets(
+    agentId,
+    rawPlugins,
+    discoverBuiltins,
+  );
   const builtinList = useToolStore(builtinToolSelectors.metaListIncludingHidden, isEqual);
 
   // Memory and web browsing are runtime-managed builtin tools: `hidden` keeps them
@@ -203,22 +220,23 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           ...(hasLegacyEntry && { plugins: upsertPluginMode(plugins, id, 'auto') }),
         });
       } else {
-        // Chat has no activator: media generation reaches the model there only when pinned.
-        // Pin it in every mode — the mode can switch later without rewriting plugins, and
-        // Agent mode still loads a pinned on-demand builtin through the activator.
-        const pinMediaTool =
-          mode === 'auto' && (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier);
         await updateAgentConfig({
-          plugins: upsertPluginMode(
-            plugins,
-            id,
-            pinMediaTool ? 'pinned' : mode,
-            mode === 'auto' && !discoverBuiltins ? 'disabled' : resolveImplicitMode(id, optInIds),
-          ),
+          plugins: isOnDemandBuiltinTool(id)
+            ? setBuiltinPluginMode(plugins, id, mode)
+            : connectorIds.has(id)
+              ? upsertConnectorEnabled(plugins, id, mode === 'auto')
+              : upsertPluginMode(
+                  plugins,
+                  id,
+                  mode,
+                  mode === 'auto' && !discoverBuiltins
+                    ? 'disabled'
+                    : resolveImplicitMode(id, optInIds),
+                ),
         });
       }
     },
-    [agentId, canEdit, discoverBuiltins, optInIds, updateAgentConfig],
+    [agentId, canEdit, connectorIds, discoverBuiltins, optInIds, updateAgentConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -252,8 +270,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // status readout — group headers still use the state labels below.
       // `as const` keeps literal keys so `t()` stays typed against setting resources.
       const policyActionKey = {
-        auto: 'tools.loading.onDemand',
-        disabled: 'tools.loading.never',
+        auto: 'tools.status.enabled',
+        disabled: 'tools.status.disabled',
       } as const satisfies Record<SkillPolicyMode, string>;
 
       const renderPolicyItem = (value: SkillPolicyMode, icon: ReactNode) => (
@@ -368,7 +386,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           arrow={false}
           content={content}
           open={policyOpenId === id}
-          placement="rightTop"
+          placement={detailPlacement ?? 'rightTop'}
           positionerProps={{ sideOffset: 8 }}
           styles={{ content: { padding: 0 } }}
           trigger="click"
@@ -399,7 +417,15 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [canEdit, disabledIdSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
+    [
+      canEdit,
+      detailPlacement,
+      disabledIdSet,
+      openSkillPolicyMenu,
+      policyOpenId,
+      t,
+      updateSkillPolicy,
+    ],
   );
 
   const renderToolLabel = useCallback(
@@ -416,6 +442,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         className={stylex.props(styles.toolRow, stylex.defaultMarker()).className}
         detailContent={detailContent}
         detailDisabled={policyOpenId !== null}
+        detailPlacement={detailPlacement}
         labelClassName={stylex.props(styles.toolLabel).className}
         label={
           <>
@@ -427,19 +454,21 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           </>
         }
         trailing={
-          <>
-            {badge && <span {...stylex.props(styles.typeTag)}>{badge}</span>}
-            {action}
-          </>
+          enabledOnly || (!badge && !action) ? undefined : (
+            <>
+              {badge && <span {...stylex.props(styles.typeTag)}>{badge}</span>}
+              {action}
+            </>
+          )
         }
         trailingClassName={
           stylex.props(styles.toolTrailing, policyOpenId === id && styles.toolTrailingVisible)
             .className
         }
-        onContextMenu={() => openSkillPolicyMenu(id)}
+        onContextMenu={enabledOnly ? undefined : () => openSkillPolicyMenu(id)}
       />
     ),
-    [openSkillPolicyMenu, policyOpenId],
+    [detailPlacement, enabledOnly, openSkillPolicyMenu, policyOpenId],
   );
 
   const createManagedSkillItem = useCallback(
@@ -482,22 +511,24 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         label: renderToolLabel(
           id,
           title,
-          renderPolicyMenu(id, {
-            configureConfig,
-            defaultMode,
-            deleteConfig,
-            modeOverride,
-            panelExtra,
-            supportedModes,
-          }),
-          badge,
+          enabledOnly
+            ? undefined
+            : renderPolicyMenu(id, {
+                configureConfig,
+                defaultMode,
+                deleteConfig,
+                modeOverride,
+                panelExtra,
+                supportedModes,
+              }),
+          enabledOnly ? undefined : badge,
           icon,
-          extraTag,
+          enabledOnly ? undefined : extraTag,
           popoverContent,
         ),
         searchText: searchText || String(title || id),
       }) as SkillMenuItem,
-    [renderPolicyMenu, renderToolLabel],
+    [enabledOnly, renderPolicyMenu, renderToolLabel],
   );
 
   // Composio-related state
@@ -511,15 +542,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Agent Skills related state
   const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
 
-  // MCP connectors the user added: custom ones and marketplace installs
-  const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
+  // MCP connectors the user added that this agent loads (custom and marketplace)
+  const customConnectors = useAgentMenuConnectors(agentId);
+  // A deleted connector's switch turns off, unless the agent still loads a row of it
+  const unpinDeleted = useUnpinDeletedConnector(agentId, (identifier) =>
+    updateSkillPolicy(identifier, 'disabled'),
+  );
   const getConfigure = useConnectorConfigure();
-  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
-  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-  useEffect(() => {
-    if (!isConnectorsInit) fetchConnectors();
-  }, [isConnectorsInit, fetchConnectors]);
-
   const [
     useFetchUserComposioConnections,
     useFetchLobehubSkillConnections,
@@ -791,10 +820,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={Wrench} size={12} />,
-          deleteConfig: {
-            displayName: title,
-            onDelete: () => uninstallBuiltinTool(item.identifier),
-          },
           extraTag: officialTag,
           icon,
           id: item.identifier,
@@ -803,7 +828,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
+    [filteredBuiltinList, t, createManagedSkillItem],
   );
 
   // Search and memory expose their own settings alongside the on/off choice.
@@ -868,9 +893,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ],
   );
 
-  // Connector MCP list items (custom ones and marketplace installs).
-  // Toggling adds the connector identifier to agents.plugins[] — the same field
-  // the runtime resolves connectors from, so they become callable immediately.
+  // Connector MCP rows (custom and marketplace). Toggling adds the identifier to
+  // agents.plugins[], the field the runtime resolves connectors from.
   const customConnectorItems = useMemo(
     () =>
       customConnectors.map((connector) => {
@@ -893,15 +917,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             displayName: title,
             onDelete: async () => {
               await deleteConnector(connector.id);
-              // Mirror removeComposioServer: drop the identifier from agent.plugins so
-              // no orphaned pin survives the connector deletion.
-              try {
-                await updateSkillPolicy(connector.identifier, 'disabled');
-              } catch (error) {
-                console.error('[Connector] Failed to unpin plugin after delete:', error);
-              }
+              await unpinDeleted(connector);
             },
           },
+          extraTag: connector.visibility === 'private' ? <PrivateConnectorTag /> : undefined,
           icon,
           id: connector.identifier,
           popoverContent,
@@ -909,11 +928,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, updateSkillPolicy],
+    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, unpinDeleted],
   );
 
   // Distinguish community plugins and custom plugins.
-  // Whitelist `type === 'plugin'` (matching /settings/skill) so connected
+  // Whitelist `type === 'plugin'` (matching /marketplace/skill/installed) so connected
   // integrations (Composio/LobeHub Skill gateway plugins with other sources like
   // 'self'/'builtin') don't leak in here and duplicate the brand-icon items
   // already rendered under the LobeHub group.
@@ -958,7 +977,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
       configureConfig: isCustom
-        ? { onConfigure: () => openPluginEditDrawer(item.identifier) }
+        ? { onConfigure: () => openPluginEditModal(item.identifier) }
         : undefined,
       deleteConfig: {
         displayName: title,
@@ -1037,27 +1056,31 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     {
       children: autoItems,
       key: 'auto',
-      label: t('tools.loading.onDemand'),
+      label: t('tools.status.enabled'),
       type: 'group' as const,
     },
     {
       children: disabledItems,
       key: 'disabled',
-      label: t('tools.loading.never'),
+      label: t('tools.status.disabled'),
       type: 'group' as const,
     },
   ];
-  const marketItems: ItemType[] = normalizedSearchKeyword
-    ? groups.filter((group) => group.children.length > 0)
-    : filter === 'auto'
-      ? autoItems
-      : disabledItems;
+  const marketItems: ItemType[] = enabledOnly
+    ? autoItems
+    : normalizedSearchKeyword
+      ? groups.filter((group) => group.children.length > 0)
+      : filter === 'auto'
+        ? autoItems
+        : disabledItems;
 
   const marketHeader = (
     <ToolPickerHeader
+      action={headerAction}
       empty={!marketItems.length}
       filter={filter}
       query={searchKeyword}
+      showFilter={!enabledOnly}
       onFilterChange={setFilter}
       onSearchChange={setSearchKeyword}
     />
@@ -1082,8 +1105,48 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       </button>
     ) : undefined;
 
+  const activeSkillSet = new Set(activeSkillItems);
+  const enabledSections = [
+    {
+      items: filterBySearch([
+        ...capabilityAutoItems,
+        ...builtinItems.filter((item) => activeSkillSet.has(item)),
+      ]),
+      key: 'builtin' as const,
+      title: t('tools.picker.section.builtin'),
+    },
+    {
+      items: filterBySearch(
+        [...lobehubSkillItems, ...composioServerItems].filter((item): item is SkillMenuItem =>
+          activeSkillSet.has(item as SkillMenuItem),
+        ),
+      ),
+      key: 'connected' as const,
+      title: t('tools.picker.section.connected'),
+    },
+    {
+      items: filterBySearch(
+        communityGroupChildren.filter((item): item is SkillMenuItem =>
+          activeSkillSet.has(item as SkillMenuItem),
+        ),
+      ),
+      key: 'community' as const,
+      title: t('skillStore.tabs.community'),
+    },
+    {
+      items: filterBySearch(
+        customGroupChildren.filter((item): item is SkillMenuItem =>
+          activeSkillSet.has(item as SkillMenuItem),
+        ),
+      ),
+      key: 'custom' as const,
+      title: t('skillStore.tabs.custom'),
+    },
+  ].filter((section) => section.items.length > 0);
+
   return {
     autoCount: allAutoItems.length,
+    enabledSections,
     // Stable inventory order: toggling a checkbox must not move its row.
     toolOptions: [...capabilityItems, ...allSkillItems].map((item) => ({
       canDisable: !!item.canDisable,
@@ -1099,10 +1162,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       detail: item.detailContent ?? item.popoverContent,
       searchText: item.searchText,
       title: item.optionTitle,
-    })),
-    activeTools: allAutoItems.map((item) => ({
-      canDisable: !!item.canDisable,
-      id: String(item.key),
     })),
     canEdit,
     setPolicy: updateSkillPolicy,

@@ -51,6 +51,7 @@ import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
+import { isOpStatusVisible } from './OpStatusTray/visibility';
 import QueueTray from './QueueTray';
 import SendErrorAlert from './SendErrorAlert';
 import { sendVoiceMessage } from './sendVoiceMessage';
@@ -58,6 +59,7 @@ import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
 import { useRestoreServerQueue } from './useRestoreServerQueue';
 import {
+  clearSentAttachments,
   getContextWindow,
   getConversationSendButtonProps,
   partitionSendableUploads,
@@ -304,12 +306,10 @@ const ChatInput = memo<ChatInputProps>(
     // can square the top corners of OpStatusTray when it sits flush below.
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
-    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
-    // gate) so LinkedGoalTray — which sits flush below it — can square its top corners
-    // and merge with the status strip instead of showing a seam.
-    const hasOpStatus = useChatStore(
-      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
-    );
+    // Detect whether OpStatusTray will render so LinkedGoalTray — which sits flush
+    // below it — can square its top corners and merge with the status strip instead
+    // of showing a seam, and the send area can drop its duplicate running spinner.
+    const hasOpStatus = useChatStore(isOpStatusVisible(context));
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
@@ -415,11 +415,7 @@ const ChatInput = memo<ChatInputProps>(
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList(
-            contextKey,
-            currentFileList.map((file) => file.id),
-          );
-          fileStore.clearChatContextSelections(contextKey);
+          clearSentAttachments(fileStore, contextKey, currentFileList);
         };
 
         // A deferred send was armed from the composer (see `scheduledSendAt`):
@@ -455,8 +451,7 @@ const ChatInput = memo<ChatInputProps>(
           stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
         });
         if (handoff.clearEditor) clearContent();
-        fileStore.clearChatUploadFileList(contextKey);
-        fileStore.clearChatContextSelections(contextKey);
+        clearSentAttachments(fileStore, contextKey, currentFileList);
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
@@ -477,7 +472,12 @@ const ChatInput = memo<ChatInputProps>(
             // message owned the content must hand every part of it back —
             // uploads and context selections, not just the editor text the
             // lifecycle restores on its own.
-            store.restoreChatUploadFileList(contextKey, currentFileList);
+            // Back in their original places, around any failed upload that stayed.
+            store.restoreChatUploadFileList(
+              contextKey,
+              currentFileList,
+              uploadList.map((file) => file.id),
+            );
             store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
@@ -501,6 +501,8 @@ const ChatInput = memo<ChatInputProps>(
         // While the message is still being created there is no run to stop yet:
         // Send shows as loading, and Stop takes over once the run starts.
         generating: showStopButton && !isSendDispatchPending,
+        // Custom `children` replace the layout that mounts OpStatusTray.
+        hideRunningIndicator: !children && hasOpStatus,
         loading: isSendDispatchPending,
         onStop: stopGenerating,
         showSendWhileGenerating: showSendWhileGenerating && !isSendDispatchPending,

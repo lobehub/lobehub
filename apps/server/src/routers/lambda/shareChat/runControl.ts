@@ -162,9 +162,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('resolveInterventionBySource', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('resolveInterventionBySource', error);
       }
     }),
   /**
@@ -235,9 +233,7 @@ export const runControlRouter = router({
           } catch (error: any) {
             if (error instanceof TRPCError) throw error;
 
-            throw toVisitorSafeStartupError('stopPendingApproval', error, {
-              showErrorDetails: share.shareConfig.showErrorDetails,
-            });
+            throw toVisitorSafeStartupError('stopPendingApproval', error);
           }
           return {
             operationId: input.operationId,
@@ -257,9 +253,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('stopPendingApproval', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('stopPendingApproval', error);
       }
     }),
   /**
@@ -276,7 +270,7 @@ export const runControlRouter = router({
   interruptTask: shareChatProcedure
     .input(ShareTopicScopeSchema.extend({ operationId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const { aiAgentService, share } = await authorizeVisitorRunningOperation(
+      const { aiAgentService } = await authorizeVisitorRunningOperation(
         ctx.serverDB,
         ctx.userId,
         input,
@@ -298,9 +292,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('interruptTask', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('interruptTask', error);
       }
     }),
   /**
@@ -311,7 +303,7 @@ export const runControlRouter = router({
   setQueuedMessages: shareChatProcedure
     .input(ShareTopicScopeSchema.extend({ operationId: z.string(), pending: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
-      const { aiAgentService, share } = await authorizeVisitorRunningOperation(
+      const { aiAgentService } = await authorizeVisitorRunningOperation(
         ctx.serverDB,
         ctx.userId,
         input,
@@ -334,9 +326,7 @@ export const runControlRouter = router({
       } catch (error: any) {
         if (error instanceof TRPCError) throw error;
 
-        throw toVisitorSafeStartupError('setQueuedMessages', error, {
-          showErrorDetails: share.shareConfig.showErrorDetails,
-        });
+        throw toVisitorSafeStartupError('setQueuedMessages', error);
       }
     }),
   /**

@@ -3,6 +3,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const {
   mockConnectorQueryByIdentifiers,
@@ -37,7 +38,7 @@ vi.mock('@/server/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getServerFeatureFlagsStateFromRuntimeConfig: vi
     .fn()
-    .mockResolvedValue({ enableDashboard: true, enableWebhook: true }),
+    .mockResolvedValue({ enableArtboard: true, enableDashboard: true, enableWebhook: true }),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -90,6 +91,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: mockConnectorQueryByIdentifiers,
       resolveByIdentifiers: mockConnectorQueryByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockConnectorQueryByIdentifiers),
     };
   }),
 }));

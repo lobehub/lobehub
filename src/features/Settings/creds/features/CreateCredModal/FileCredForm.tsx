@@ -2,22 +2,18 @@
 
 import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { credErrorKey } from '../credError';
+import CredFormFooter from '../CredFormFooter';
 import { createExtras, type CredsApi } from '../useCredsApi';
-
-const styles = stylex.create({
-  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
-});
 
 interface FileCredFormProps {
   credsApi: CredsApi;
   disabled?: boolean;
-  onBack: () => void;
+  onCancel: () => void;
   onSuccess: () => void;
 }
 
@@ -27,7 +23,7 @@ interface FormValues {
   name: string;
 }
 
-const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
+const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onCancel, onSuccess }) => {
   const { t } = useTranslation(['setting', 'common']);
   const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
   const [fileHashId, setFileHashId] = useState<string | null>(null);
@@ -132,7 +128,12 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         )}
       </Form.Field>
 
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
+        <Input disabled={disabled} placeholder="e.g., GCP Service Account" />
+      </Form.Field>
+
       <Form.Field
+        desc={t('creds.form.keyDesc')}
         label={t('creds.form.key')}
         name="key"
         required={t('creds.form.keyRequired')}
@@ -143,10 +144,6 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         <Input disabled={disabled} placeholder="e.g., gcp-service-account" />
       </Form.Field>
 
-      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
-        <Input disabled={disabled} placeholder="e.g., GCP Service Account" />
-      </Form.Field>
-
       <Form.Field label={t('creds.form.description')} name="description">
         <TextArea
           disabled={disabled}
@@ -155,8 +152,8 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         />
       </Form.Field>
 
-      <div {...stylex.props(styles.footer)}>
-        <Button onClick={onBack}>{t('creds.form.back')}</Button>
+      <CredFormFooter>
+        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
         <Button
           disabled={!fileHashId || disabled}
           htmlType="submit"
@@ -165,7 +162,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         >
           {t('creds.form.submit')}
         </Button>
-      </div>
+      </CredFormFooter>
     </Form>
   );
 };

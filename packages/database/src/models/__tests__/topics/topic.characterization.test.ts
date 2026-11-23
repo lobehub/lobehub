@@ -77,6 +77,7 @@ const PUBLIC_METHODS = [
   'findWaitingCleanupTopicsUnder',
   'getCronTopicsGroupedByCronJob',
   'isRunningOperationAlive',
+  'listChildTopicAgentIds',
   'listTopicsForMemoryExtractor',
   'markRead',
   'patchRunningOperation',
@@ -218,12 +219,8 @@ describe('TopicModel - characterization', () => {
       ],
       [
         'softDeleteByParents',
-        () =>
-          topicModel.softDeleteByParents(
-            { groupIds: [groupId], sessionIds: [sessionId] },
-            { deletedAt },
-          ),
-        ['group-topic', 'session-topic'],
+        () => topicModel.softDeleteByParents({ groupIds: [groupId] }, { deletedAt }),
+        ['group-topic'],
       ],
       ['softDeleteByParents({})', () => topicModel.softDeleteByParents({}, { deletedAt }), []],
       [

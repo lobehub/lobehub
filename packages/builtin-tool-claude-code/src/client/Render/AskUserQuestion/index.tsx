@@ -7,10 +7,11 @@ import {
   resolveAskUserAnswers,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { memo } from 'react';
+import { type ComponentProps, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AskUserQuestionArgs } from '../../../types';
+import PermissionRequestResult from '../PermissionRequest';
 
 /**
  * Claude Code host for the shared completed AskUserQuestion result.
@@ -41,4 +42,23 @@ const AskUserQuestion = memo<
 
 AskUserQuestion.displayName = 'CCAskUserQuestion';
 
-export default AskUserQuestion;
+/**
+ * Claude Code's permission requests (Better Coding Experience) ride the same
+ * AskUserQuestion-shaped card every review surface understands; their extra
+ * `claudeCodePermission` detail gets the dedicated result instead.
+ */
+const AskUserQuestionOrPermission = memo<
+  BuiltinRenderProps<AskUserQuestionArgs, AskUserQuestionResultState, string>
+>((props) =>
+  (props.args as { claudeCodePermission?: unknown } | undefined)?.claudeCodePermission ? (
+    <PermissionRequestResult
+      {...(props as unknown as ComponentProps<typeof PermissionRequestResult>)}
+    />
+  ) : (
+    <AskUserQuestion {...props} />
+  ),
+);
+
+AskUserQuestionOrPermission.displayName = 'CCAskUserQuestionOrPermission';
+
+export default AskUserQuestionOrPermission;

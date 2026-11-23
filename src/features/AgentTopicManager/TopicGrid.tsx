@@ -5,6 +5,8 @@ import { createStaticStyles, cssVar, Flexbox, responsive, Text } from '@lobehub/
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import TopicCard from './TopicCard';
 import type { GroupBy } from './types';
 import { getProjectGroupTitle, getTimeGroupTitle } from './utils';
@@ -19,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
       keeps wrapping instead of overflowing horizontally.
     */
     grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-width: 0;

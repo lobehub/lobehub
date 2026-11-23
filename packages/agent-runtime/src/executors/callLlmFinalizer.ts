@@ -172,10 +172,23 @@ const buildWorkAnchor = ({
       : -1;
   const currentOperationMessages =
     sourceMessageIndex >= 0 ? state.messages.slice(sourceMessageIndex + 1) : [];
+  // Tool interaction also hides inside the conversation-flow `assistantGroup`
+  // virtual message: the server runtime hydrates `state.messages` from
+  // `parse(...).flatList`, where a turn's tool calls and results are nested
+  // under `children[].tools` rather than a `role: 'tool'` row or a top-level
+  // `tool_calls` array. Missing that shape dropped the Work display anchor —
+  // and so the card under the reply — for every server-side run.
+  const hasToolInteraction = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') return false;
+    if ('tool_calls' in value && Array.isArray(value.tool_calls) && value.tool_calls.length > 0)
+      return true;
+    if ('tools' in value && Array.isArray(value.tools) && value.tools.length > 0) return true;
+    if ('children' in value && Array.isArray(value.children))
+      return value.children.some((child) => hasToolInteraction(child));
+    return false;
+  };
   const hasPriorToolInteraction = currentOperationMessages.some(
-    (message) =>
-      message.role === 'tool' ||
-      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0),
+    (message) => message?.role === 'tool' || hasToolInteraction(message),
   );
   if (!hasPriorToolInteraction) return undefined;
 

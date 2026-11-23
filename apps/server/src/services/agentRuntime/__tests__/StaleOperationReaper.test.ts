@@ -203,6 +203,27 @@ describe('StaleOperationReaper', () => {
     );
   });
 
+  it('bounds both running scans by creation time so they can use the partial index', async () => {
+    // Without a `created_at` floor both scans walked every `running` row
+    // through `agent_operations_status_idx` (8.8s mean in production);
+    // `agent_operations_running_created_at_idx` only helps when it is bounded.
+    const before = Date.now();
+    await buildReaper([], runningState()).sweep();
+
+    expect(whereConditions).toHaveLength(2);
+    for (const condition of whereConditions) {
+      const { params, sql } = new PgDialect().sqlToQuery(condition);
+      expect(sql).toMatch(/"created_at" >= \$\d+/);
+      const floor = params.find(
+        (p) => typeof p === 'string' && new Date(p).getTime() <= before - 6 * 24 * 60 * 60_000,
+      );
+      expect(floor).toBeDefined();
+      expect(new Date(floor as string).getTime()).toBeGreaterThanOrEqual(
+        before - 7 * 24 * 60 * 60_000 - 1000,
+      );
+    }
+  });
+
   it('abandons a stateless heterogeneous run silent past the hetero window', async () => {
     // 2026-10-12: a device-dispatched Codex run went silent when its desktop
     // dropped off, the gateway inactivity watchdog never fired for it, and it

@@ -14,7 +14,8 @@ export default {
   'heteroAgent.antigravityQuota.resetUnconfirmed':
     'Reset time reached. Refresh to check the latest quota.',
   'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
-  'heteroAgent.antigravityQuota.authRequired': 'Run agy in a terminal to sign in, then refresh.',
+  'heteroAgent.antigravityQuota.authRequired':
+    'Sign in with agy on the execution device, then try again.',
   'heteroAgent.antigravityQuota.cliNotFound':
     'Antigravity CLI was not found on this device. Install agy, then refresh.',
   'heteroAgent.antigravityQuota.unsupported':
@@ -316,7 +317,7 @@ export default {
   'agentDocument.portal.titlePlaceholder': 'Untitled document',
   'agentDocument.portal.export': 'Export',
   'agentNotFound.desc':
-    'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+    "It may have been deleted, or it's another member's private agent. Ask its creator to publish it to the workspace.",
   'permission.configAccess.agentChatOnly':
     'You can only use this Agent, not configure it. You were returned to chat.',
   'permission.configAccess.agentManageRestricted':
@@ -327,7 +328,9 @@ export default {
     'You can only use this Agent Group, not configure it. You were returned to chat.',
   'permission.configAccess.groupRoleRestricted':
     'Your workspace role cannot configure Agent Groups. You were returned to chat.',
-  'agentNotFound.title': 'Agent Unavailable',
+  'agentNotFound.descPersonal': 'It may have been deleted, or the link is wrong.',
+  'agentNotFound.title': "This agent doesn't exist or you don't have access",
+  'agentNotFound.viewAgents': 'View all agents',
   'agentSkillModal.frontmatterInvalid':
     "This skill's SKILL.md has malformed frontmatter, so its name and description come from the last saved version. Open the document to fix it.",
   'agentSkillModal.loadFailed': "Couldn't load this skill",
@@ -398,6 +401,10 @@ export default {
   'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
     'You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.',
+  'confirmRemoveAgentOtherCreator':
+    'This agent was created by {{name}}, not you. Deleting it takes it away from its creator and everyone in the workspace.',
+  'confirmRemoveAgentOtherCreatorUnknown':
+    'This agent was created by another member, not you. Deleting it takes it away from its creator and everyone in the workspace.',
   'confirmRemoveChatGroupItemAlert':
     'This Group will be deleted. Group-specific assistants will also be deleted, while external assistants will not be affected.',
   'confirmRemoveGroupItemAlert':
@@ -405,6 +412,14 @@ export default {
   'confirmRemoveGroupSuccess': 'Group deleted successfully',
   'confirmRemoveSessionItemAlert':
     'You are about to delete this agent and its topics. They will be moved to the trash and can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertImpactUnknown':
+    "Couldn't check whether this agent holds other members' content. Deleting it moves every topic under it to the trash, including other members' topics. They can be restored within 30 days.",
+  'confirmRemoveSessionItemAlertWithOthers':
+    'This agent includes comments or messages from other members. Deleting the agent moves them to the trash too, not just your own. They can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertWithOthersCount_one':
+    'This agent has {{count}} topic started by another member. Deleting the agent moves that topic and its comments to the trash too, not just your own. It can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertWithOthersCount_other':
+    'This agent has {{count}} topics started by other members. Deleting the agent moves those topics and their comments to the trash too, not just your own. They can be restored within 30 days.',
   'confirmRemoveSessionSuccess': 'Agent removed successfully',
   'defaultAgent': 'Default Agent',
   'defaultGroupChat': 'Group',
@@ -670,6 +685,41 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.permissionMode.label': 'Permission mode',
+  'heteroAgent.permissionMode.tooltip':
+    'How Claude Code asks before acting. Applies to this topic; a new topic in this directory starts with your last pick.',
+  'heteroAgent.permissionMode.default.title': 'Ask every time',
+  'heteroAgent.permissionMode.default.desc': 'Asks before every edit and command',
+  'heteroAgent.permissionMode.acceptEdits.title': 'Accept edits',
+  'heteroAgent.permissionMode.acceptEdits.desc': 'Edits go ahead; commands still ask',
+  'heteroAgent.permissionMode.auto.title': 'Auto',
+  'heteroAgent.permissionMode.auto.desc': 'Claude Code decides what needs asking',
+  'heteroAgent.permissionMode.plan.title': 'Plan',
+  'heteroAgent.permissionMode.plan.desc': 'Reads and plans only; acts once you approve the plan',
+  'heteroAgent.permissionMode.bypassPermissions.title': 'Allow everything',
+  'heteroAgent.permissionMode.bypassPermissions.desc': 'Never asks; runs every action',
+  'heteroAgent.permissionMode.fallback.root':
+    'Running as root can’t allow everything, so this run accepts edits and asks before other commands.',
+  'heteroAgent.permissionMode.fallback.outdatedCli':
+    'The last run allowed every action: lh on this device is too old for permission modes. Update lh to apply “{{mode}}”.',
+  'heteroAgent.permissionMode.switchFailed':
+    'Couldn’t switch the running session. The new mode applies from the next message.',
+  'heteroAgent.permissionMode.switchPendingNotice':
+    'This run is still in “{{running}}”: the session couldn’t switch. “{{next}}” applies from the next message.',
+  'heteroAgent.permissionMode.switchUnsupported':
+    'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
+  'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',
+  'heteroAgent.planMode.label': 'Plan',
+  'heteroAgent.planMode.tooltipOff':
+    'Plan first: Codex explores and proposes a plan instead of making changes. Codex still has full access. A new topic in this directory starts with your last choice.',
+  'heteroAgent.planMode.tooltipOn':
+    'Plan is on: Codex proposes a plan instead of making changes. Turn it off, or choose Execute plan, to let it carry the plan out.',
+  'heteroAgent.planMode.nextTurn': 'Applies from the next turn',
+  'heteroAgent.planMode.saveFailed': 'Couldn’t save the Plan setting. Try again.',
+  'heteroAgent.planMode.unavailable.appServerLab':
+    'Plan needs the Codex App Server Runtime. Turn it on in Settings → Labs.',
+  'heteroAgent.planMode.unavailable.unsupported':
+    'Plan isn’t available where this agent runs: it needs Codex app-server on this computer, or a device whose Codex and lh support it. Update lh on the device to use it.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
@@ -1303,6 +1353,17 @@ export default {
   'minimap.senderAssistant': 'Agent',
   'minimap.senderUser': 'You',
   'modelSelector.model': 'Model',
+  'privateAgentLink.desc':
+    "This is your private agent, so other members can't open the link. Publish it to the workspace to share it.",
+  'privateAgentLink.title': 'Link copied, but only you can open it',
+  'createVisibility.inheritedPrivate': 'Follows its folder: only you can see it.',
+  'createVisibility.inheritedPublic': 'Follows its folder: everyone in the workspace can see it.',
+  'createVisibility.label': 'Visibility',
+  'createVisibility.private': 'Private',
+  'createVisibility.privateHint':
+    "Only you can see it. Other members can't open its link until you publish it to the workspace.",
+  'createVisibility.public': 'Workspace',
+  'createVisibility.publicHint': 'Everyone in the workspace can see and use it.',
   'createModal.createBlank': 'Start Blank',
   'createModal.groupPlaceholder': 'Describe what this Group should do...',
   'createModal.groupTitle': 'What should this Group do?',
@@ -1586,6 +1647,12 @@ export default {
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
     'Publish the fixed device to the workspace, or let members choose a device, before publishing this Agent.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
+  'agent.visibility': 'Visibility',
+  'agent.visibility.change': 'Change visibility',
+  'agent.visibility.private': 'Private',
+  'agent.visibility.privateDesc': 'Only you can see it',
+  'agent.visibility.workspace': 'Workspace',
+  'agent.visibility.workspaceDesc': 'Workspace members can access it',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
     'Other workspace members will be able to see this file. You will not be able to make it private again.',
@@ -1617,6 +1684,9 @@ export default {
   'connectAgent.create.stepDevice':
     'Step 1 of 3 · Pick the machine your agents run on — it will be scanned automatically.',
   'connectAgent.create.stepAgents': 'Step 2 of 3 · {{device}}',
+  'connectAgent.create.stepAgentsInline': 'Step 1 of 2 · {{device}}',
+  'connectAgent.create.stepConfirmInline': 'Step 2 of 2 · Name it for your agent list',
+  'connectAgent.create.switchDevice': 'Run on',
   'connectAgent.create.stepConfirm': 'Step 3 of 3 · Name it for your agent list',
   'connectAgent.create.thisDevice': 'This device',
   'connectAgent.create.connectedDevices': 'Connected devices',
@@ -1951,6 +2021,17 @@ export default {
   'shareModal.format.markdown': 'Markdown',
   'shareModal.generatePdf': 'Generate PDF',
   'shareModal.generatingPdf': 'Generating PDF...',
+  'shareModal.generation.disabled': 'Public link turned off',
+  'shareModal.generation.disabledHint': 'Turn on the public link to share it on social media',
+  'shareModal.generation.enabled': 'Public link created and copied',
+  'shareModal.generation.enabledNotCopied': 'Public link created',
+  'shareModal.generation.entry': 'Share',
+  'shareModal.generation.link.desc':
+    'Visitors can view and download the file. You can turn the link off at any time.',
+  'shareModal.generation.link.label': 'Anyone with the link can view',
+  'shareModal.generation.loadError': "Couldn't load the share settings",
+  'shareModal.generation.title': 'Share this creation',
+  'shareModal.generation.updateError': "Couldn't update the link. Try again.",
   'shareModal.imageType': 'Image Format',
   'shareModal.includeTool': 'Include Skill messages',
   'shareModal.includeUser': 'Include User Messages',
@@ -1997,6 +2078,35 @@ export default {
   'shareModal.popover.privacyWarning.title': 'Before you share this link',
   'shareModal.popover.title': 'Share Topic',
   'shareModal.popover.visibility': 'Visibility',
+  'shareModal.social.agent.description': 'An AI agent worth a try',
+  'shareModal.social.agent.disabledHint':
+    'Publish this agent to the Marketplace to share it on social media',
+  'shareModal.social.agent.entry': 'Share to social media',
+  'shareModal.social.agent.untitled': 'Untitled agent',
+  'shareModal.social.copyText': 'Copy caption',
+  'shareModal.social.copyTextSuccess': 'Caption copied',
+  'shareModal.social.description': 'A conversation worth a look',
+  'shareModal.social.disabledHint': 'Turn on link sharing to post this topic',
+  'shareModal.social.generation.description.image': 'An image made with AI',
+  'shareModal.social.generation.description.music': 'A song made with AI',
+  'shareModal.social.generation.description.video': 'A video made with AI',
+  'shareModal.social.generation.fallbackTitle.image': 'AI image',
+  'shareModal.social.generation.fallbackTitle.music': 'AI music',
+  'shareModal.social.generation.fallbackTitle.video': 'AI video',
+  'shareModal.social.instagram.copied': 'Caption copied. Paste it into an Instagram post or story',
+  'shareModal.social.instagram.hint':
+    "Instagram can't be filled in from the web. Copy the caption with the link, then paste it into a post or story.",
+  'shareModal.social.instagram.open': 'Open Instagram',
+  'shareModal.social.platform.instagram': 'Instagram',
+  'shareModal.social.platform.wechat': 'WeChat',
+  'shareModal.social.platform.weibo': 'Weibo',
+  'shareModal.social.platform.x': 'X',
+  'shareModal.social.shareTo': 'Share to {{platform}}',
+  'shareModal.social.title': 'Share to social media',
+  'shareModal.social.untitled': 'Untitled topic',
+  'shareModal.social.wechat.hint':
+    'Scan with WeChat, then tap ··· on the opened page to share to Moments',
+  'shareModal.social.wechat.qrLabel': 'QR code of the share link',
   'shareModal.regeneratePdf': 'Regenerate PDF',
   'shareModal.screenshot': 'Screenshot',
   'shareModal.settings': 'Export Settings',
@@ -2061,6 +2171,7 @@ export default {
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
   'tab.backToChat': 'Back to chat',
+  'tab.group.advanced': 'Advanced',
   'tab.group.identity': 'Identity',
   'tab.group.shape': 'Shape',
   'tab.group.setup': 'Configure',
@@ -2078,6 +2189,8 @@ export default {
   'tab.profileBasic': 'Profile',
   'tab.skills': 'Skills',
   'tab.search': 'Search',
+  'tab.goalsAndTasks': 'Tasks and goals',
+  'tab.scheduled': 'Scheduled',
   'tab.tasks': 'Tasks',
   'task.activity.calling': 'Calling Skill...',
   'task.activity.clientExecuting': 'Executing locally...',
@@ -2475,6 +2588,7 @@ export default {
   'createTask.expandToInline': 'Dock to page',
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',
+  'createTask.removeSchedule': 'Remove schedule',
   'createTask.submitScheduled': 'Create scheduled task',
   'createTask.titlePlaceholder': 'Task title',
   'createTask.visibility.changeFailed': 'Failed to change task visibility',
@@ -3119,12 +3233,48 @@ export default {
   'goalProcess.lifecycle.kind.hazard': 'hazard',
   'goalProcess.lifecycle.kind.dead_end': 'dead end',
   'goalProcess.lifecycle.kind.template': 'recipe',
+  'goalProcess.lifecycle.note.agentChanged': 'The Agent running this goal changed',
   'goalProcess.lifecycle.note.budgetExhausted': 'The goal or the main Agent ran out of turns',
+  'goalProcess.lifecycle.note.deadlinePassed': 'The deadline has passed; no new tasks will start',
+  'goalProcess.lifecycle.note.decisionPending': 'Waiting on a pending decision',
+  'goalProcess.lifecycle.note.descriptionRefined': 'The description was refined during planning',
+  'goalProcess.lifecycle.note.experimentLimit':
+    'Experiment limit reached ({{used}}/{{max}}) before the goal passed acceptance. {{detail}}',
+  'goalProcess.lifecycle.note.explorationBudget':
+    'The budget ran out before exploration could continue',
+  'goalProcess.lifecycle.note.explorationFailed':
+    'Exploration planning failed. Resume the goal to retry',
+  'goalProcess.lifecycle.note.foldedIntoBatch': 'Folded into the batch before the goal started',
+  'goalProcess.lifecycle.note.goalRenamed': 'The goal was renamed',
+  'goalProcess.lifecycle.note.lateRunUnstoppable':
+    'A planning run that started after the goal closed could not be stopped. Close the goal again to stop it',
   'goalProcess.lifecycle.note.mainAgent': 'Main Agent: {{text}}',
+  'goalProcess.lifecycle.note.measuredNotMet': 'Measured acceptance not met: {{detail}}',
+  'goalProcess.lifecycle.note.measurementCleared':
+    'The measured results met the acceptance criteria; the goal continued',
+  'goalProcess.lifecycle.note.noEligibleTask': 'No task can move forward right now',
+  'goalProcess.lifecycle.note.patternBreak':
+    'The batch broke its pattern and needs a decision: {{detail}}',
+  'goalProcess.lifecycle.note.planRevisionFailed':
+    'The main Agent could not take the plan revision. Resume the goal to send the correction again',
+  'goalProcess.lifecycle.note.planSentBack': 'The plan was sent back to the main Agent to revise',
+  'goalProcess.lifecycle.note.recipeSuperseded': 'Replaced by a newer recipe revision',
   'goalProcess.lifecycle.note.recoveredAbandoned':
     'The previous run stopped responding; a new attempt started automatically',
+  'goalProcess.lifecycle.note.releaseApproved': 'Release approved',
+  'goalProcess.lifecycle.note.releaseReview': 'The batch release needs approval: {{detail}}',
+  'goalProcess.lifecycle.note.reportSubmitted': 'The goal report was submitted',
+  'goalProcess.lifecycle.note.reportWriting': 'Writing the goal report',
+  'goalProcess.lifecycle.note.retiredWithPrerequisite':
+    'Retired along with its prerequisite "{{title}}"',
   'goalProcess.lifecycle.note.retryAfterVerification':
     'Verification did not pass; the next attempt started automatically',
+  'goalProcess.lifecycle.note.revisionLimit':
+    'The experiment used all {{count}} protocol corrections. Resume the goal to replan',
+  'goalProcess.lifecycle.note.stoppingBeforeClose': 'Stopped before closing the goal',
+  'goalProcess.lifecycle.note.stoppingBeforeDelete': 'Stopped before deleting the goal',
+  'goalProcess.lifecycle.note.taskMissing': 'The task responsible for this step no longer exists',
+  'goalProcess.lifecycle.note.topicMoved': 'The goal moved to another conversation',
   'goalProcess.metricDetail.budget.controlTitle': 'Budget control',
   'goalProcess.metricDetail.budget.perTaskEmpty': 'No run has been billed yet.',
   'goalProcess.metricDetail.budget.perTaskTitle': 'Where it went',
@@ -3410,7 +3560,36 @@ export default {
   'taskList.mine.emptyAssigned': 'No tasks assigned to you yet',
   'taskList.mine.emptyCreated': "You haven't created any tasks yet",
   'taskList.mine.title': 'My tasks',
+  'taskList.scheduled.columns.assignee': 'Assignee',
+  'taskList.scheduled.columns.cadence': 'Frequency',
+  'taskList.scheduled.columns.nextRun': 'Next run',
+  'taskList.scheduled.columns.recentRuns': 'Recent runs',
+  'taskList.scheduled.columns.task': 'Task',
   'taskList.scheduled.empty': 'No scheduled tasks yet',
+  'taskList.scheduled.group.attention': 'Needs attention',
+  'taskList.scheduled.group.running': 'Running',
+  'taskList.scheduled.group.scheduled': 'Scheduled',
+  'taskList.scheduled.runs.none': 'No runs yet',
+  'taskList.scheduled.runs.outcome.canceled': 'Canceled',
+  'taskList.scheduled.runs.outcome.failed': 'Failed',
+  'taskList.scheduled.runs.outcome.interrupted': 'Interrupted',
+  'taskList.scheduled.runs.outcome.running': 'Running',
+  'taskList.scheduled.runs.outcome.succeeded': 'Succeeded',
+  'taskList.scheduled.runs.tooltip': 'Run #{{seq}} · {{outcome}} · {{time}}',
+  'taskList.scheduled.state.awaitingHuman': 'Waiting for your reply',
+  'taskList.scheduled.state.awaitingHuman.hint':
+    'Runs are skipped until you answer the question on this task',
+  'taskList.scheduled.state.awaitingReview': 'Pending review',
+  'taskList.scheduled.state.awaitingReview.hint': 'Open the task to review its latest result',
+  'taskList.scheduled.state.nextRunUnknown': 'Schedule can’t be read',
+  'taskList.scheduled.state.overrun': 'Running for {{duration}}, not finished',
+  'taskList.scheduled.state.overrun.hint': 'Later runs are skipped until this run ends',
+  'taskList.scheduled.state.running': 'Running · {{duration}}',
+  'taskList.scheduled.state.runningNoDuration': 'Running',
+  'taskList.scheduled.state.stopped_one': 'Stopped after {{count}} failed run',
+  'taskList.scheduled.state.stopped_other': 'Stopped after {{count}} failed runs',
+  'taskList.scheduled.state.stopped.hint':
+    'It won’t run again until a run succeeds. Open the task to see the error, then run it now',
   'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.subtaskProgress.loadFailed':
     "Couldn't load sub-tasks. Click the progress badge to retry.",
@@ -4092,6 +4271,10 @@ export default {
   'workingPanel.works.documentLoadError': 'Failed to load document',
   'workingPanel.works.canvasShared': 'Shared',
   'workingPanel.works.canvasUntitled': 'Untitled canvas',
+  'workingPanel.works.collectionCount_one': '{{count}} image',
+  'workingPanel.works.collectionCount_other': '{{count}} images',
+  'workingPanel.works.collectionEmpty': 'This gallery has no images',
+  'workingPanel.works.collectionUntitled': 'Untitled gallery',
   'workingPanel.works.changeType.created': 'Created',
   'workingPanel.works.changeType.updated': 'Updated',
   'workingPanel.works.documentDeleted': 'This document has been deleted',

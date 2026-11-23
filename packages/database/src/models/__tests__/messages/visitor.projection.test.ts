@@ -80,12 +80,6 @@ describe('sanitizeVisitorError', () => {
     expect(sanitized).toEqual({ type: AgentRuntimeErrorType.AgentRuntimeError });
   });
 
-  it('passes the raw failure through when the share opted into details', () => {
-    const error = { message: 'raw upstream body', type: 'UpstreamError' as ChatErrorType };
-
-    expect(sanitizeVisitorError(error, { showErrorDetails: true })).toBe(error);
-  });
-
   it('returns an absent error as-is', () => {
     expect(sanitizeVisitorError(undefined)).toBeUndefined();
     expect(sanitizeVisitorError(null)).toBeNull();
@@ -222,7 +216,7 @@ describe('toVisitorMessage', () => {
     ]);
   });
 
-  it('projects the error through the share error policy', () => {
+  it('projects the error to a classified type', () => {
     const raw = {
       message: 'OpenAI rejected the creator key',
       type: 'InvalidProviderAPIKey' as ChatErrorType,
@@ -231,6 +225,5 @@ describe('toVisitorMessage', () => {
     expect(toVisitorMessage(message({ error: raw })).error).toEqual({
       type: AgentRuntimeErrorType.AgentRuntimeError,
     });
-    expect(toVisitorMessage(message({ error: raw }), { showErrorDetails: true }).error).toBe(raw);
   });
 });

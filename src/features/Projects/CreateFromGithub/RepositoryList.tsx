@@ -6,6 +6,8 @@ import { ArrowRightIcon, LockIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useScmRepositories } from './useScmRepositories';
 
 const styles = stylex.create({
@@ -18,8 +20,8 @@ const styles = stylex.create({
     borderWidth: 1,
     display: 'flex',
     gap: 10,
-    paddingBlock: 12,
-    paddingInline: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   guideText: {
     color: cssVar.colorTextSecondary,
@@ -54,7 +56,7 @@ const styles = stylex.create({
     display: 'flex',
     gap: 10,
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     textAlign: 'start',
     width: '100%',
   },

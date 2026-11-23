@@ -1,6 +1,6 @@
 'use client';
 
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, getOptedInPluginIds } from '@lobechat/types';
 import {
   ActionIcon,
   createStaticStyles,
@@ -28,6 +28,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentProfileCard from '.';
 import { resolveAgentRuntimeLabel } from './runtime';
@@ -72,13 +73,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   section: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
   `,
   sectionTitle: css`
     margin-block-end: 8px;
@@ -184,7 +185,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const hasDisplay = Boolean(agentDisplayName(merged) || merged.avatar || merged.description);
     const showSkeleton = !hasDisplay && isLoading;
 
-    const pluginCount = fetched?.plugins?.length ?? 0;
+    const pluginCount = getOptedInPluginIds(fetched?.plugins).length;
     const knowledgeCount = fetched?.knowledgeBases?.length ?? 0;
     const fileCount = fetched?.files?.length ?? 0;
     const hasStats = pluginCount > 0 || knowledgeCount > 0 || fileCount > 0;

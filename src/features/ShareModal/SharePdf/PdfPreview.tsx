@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { Document, Page } from '@/libs/pdfjs';
+import { densityVars } from '@/styles/densityVars';
 
 import { containerStyles } from '../style';
 
@@ -37,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-end: 0;
     inset-inline: 0;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-start: 1px solid color-mix(in srgb, black 10%, transparent);
 
     background: color-mix(in srgb, white 90%, transparent);
@@ -67,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-start: 50%;
     transform: translateX(-50%);
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-radius: 8px;
 
@@ -79,7 +80,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   fullscreenPageText: css`
     min-width: 20px;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: white;
   `,
   loadingState: css`
@@ -106,7 +107,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
 }));
 

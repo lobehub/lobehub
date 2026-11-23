@@ -1,6 +1,11 @@
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
 import { resolveConnectorCatalogItem } from '@lobechat/const';
-import { type BuiltinToolResult, getPluginMode, upsertPluginMode } from '@lobechat/types';
+import {
+  type BuiltinToolResult,
+  parsePluginEntry,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors/selectors';
@@ -81,7 +86,7 @@ export const installPlugin = async (
       const builtinTool = builtinTools.find((t) => t.identifier === identifier);
 
       if (builtinTool) {
-        await enablePluginForAgent(agentService, agentId, identifier);
+        await enablePluginForAgent(agentService, agentId, identifier, { builtin: true });
 
         return {
           content: `Successfully enabled builtin tool: ${builtinTool.meta?.title || identifier}`,
@@ -407,17 +412,20 @@ export const enablePluginForAgent = async (
   agentService: IAgentService,
   agentId: string,
   pluginId: string,
+  options?: { builtin?: boolean },
 ): Promise<void> => {
   await ensureAgentLoaded(agentService, agentId);
   const agentState = getAgentStoreState();
   const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins;
 
-  // upsertPluginMode preserves an already-matching entry as-is and flips a
-  // disabled entry back to pinned in place, instead of blindly pushing a
-  // duplicate bare-string identifier.
-  if (getPluginMode(currentPlugins, pluginId) !== 'pinned') {
+  const existing = currentPlugins?.find((entry) => parsePluginEntry(entry).identifier === pluginId);
+  const needsBuiltinOverride =
+    !!options?.builtin && (!existing || typeof existing === 'string' || !existing.builtinOverride);
+  if (!existing || parsePluginEntry(existing).mode === 'disabled' || needsBuiltinOverride) {
     await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-      plugins: upsertPluginMode(currentPlugins, pluginId, 'pinned'),
+      plugins: options?.builtin
+        ? setBuiltinPluginMode(currentPlugins, pluginId, 'auto')
+        : upsertConnectorEnabled(currentPlugins, pluginId, true),
     });
   }
 };

@@ -1,5 +1,9 @@
 // @vitest-environment node
-import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
+import {
+  CURRENT_ONBOARDING_VERSION,
+  DEFAULT_INBOX_AVATAR,
+  DEFAULT_INBOX_TITLE,
+} from '@lobechat/const';
 import { OnboardingUnderstandingRepository } from '@lobechat/database';
 import type { OnboardingUnderstandingSession } from '@lobechat/types';
 import { SaveUserQuestionInputSchema } from '@lobechat/types';
@@ -333,6 +337,32 @@ describe('OnboardingService', () => {
     );
     expect(persistedUserState.fullName).toBe('anbex');
     expect(mockAgentModel.update).not.toHaveBeenCalled();
+  });
+
+  it('saves the assistant name as the inbox agent name, not its title', async () => {
+    const service = new OnboardingService(mockDb, userId);
+    const result = await service.saveUserQuestion({ agentEmoji: '⚡', agentName: 'Jarvis' });
+
+    expect(result.savedFields).toEqual(['agentName', 'agentEmoji']);
+    expect(mockAgentModel.update).toHaveBeenCalledWith('inbox-agent-1', {
+      avatar: '⚡',
+      name: 'Jarvis',
+    });
+  });
+
+  // `getBuiltinAgent` fills a blank inbox with the defaults, which hid the identity step.
+  it('still asks for the agent identity when the inbox only carries the defaults', async () => {
+    mockAgentModel.getBuiltinAgent.mockResolvedValue({
+      avatar: DEFAULT_INBOX_AVATAR,
+      id: 'inbox-agent-1',
+      name: null,
+      title: DEFAULT_INBOX_TITLE,
+    });
+
+    const service = new OnboardingService(mockDb, userId);
+    const context = await service.getState();
+
+    expect(context.missingStructuredFields).toEqual(['agentName', 'agentEmoji', 'fullName']);
   });
 
   it('rejects saveUserQuestion when no supported fields are provided', async () => {

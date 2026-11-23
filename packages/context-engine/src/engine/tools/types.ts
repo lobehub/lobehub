@@ -28,6 +28,8 @@ export interface LobeChatPluginApi {
 
 export interface LobeToolManifest {
   api: LobeChatPluginApi[];
+  /** A connector row's tool set: its row and the base identifier it serves. */
+  connector?: { id: string; identifier: string };
   connectorLinks?: { connectorId: string; param: string };
   identifier: string;
   meta: any;
@@ -198,6 +200,8 @@ export interface OperationToolSet {
  */
 export interface ActivatedStepTool {
   activatedAtStep: number;
+  /** Absent for initially available tools and older persisted operations. */
+  afterToolCallId?: string;
   id: string;
   manifest?: LobeToolManifest;
   source: ActivationSource;

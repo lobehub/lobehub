@@ -6,6 +6,7 @@ import {
   isOpenAIComputerUseModel,
   isOpenAIReasoningPayloadModel,
   isResponsesAPIModel,
+  isToolAnchoringGPTModel,
   parseOpenAIModelId,
   supportsGPTResponsesReasoningEffortNone,
   supportsOpenAIServiceTierFlex,
@@ -233,5 +234,34 @@ describe('supportsOpenAIServiceTierFlex', () => {
   it('should preserve unsupported flex tier cases', () => {
     expect(supportsOpenAIServiceTierFlex('o3-mini')).toBe(false);
     expect(supportsOpenAIServiceTierFlex('gpt-4o')).toBe(false);
+  });
+});
+
+describe('isToolAnchoringGPTModel', () => {
+  it.each([
+    'gpt-5.6-sol',
+    'gpt-5.6-luna',
+    'gpt-6-astra',
+    'gpt-6.1-terra',
+    'gpt-6.2-sol',
+    'codex/gpt-6.1-sol',
+  ])('should accept in-conversation tools for %s', (model) => {
+    expect(isToolAnchoringGPTModel(model)).toBe(true);
+  });
+
+  it.each([
+    // Namespaces dynamically loaded tools and rejects replayed calls without it.
+    'gpt-5.5',
+    'gpt-5.4-mini',
+    'gpt-5',
+    'gpt-4.1',
+    // Chat-tuned snapshots stay on Chat Completions.
+    'gpt-6-chat-latest',
+    // OpenRouter does not speak the Responses contract for these ids.
+    'openai/gpt-6.1-sol',
+    'o3-pro',
+    'claude-opus-5-5',
+  ])('should keep the top-level tool list for %s', (model) => {
+    expect(isToolAnchoringGPTModel(model)).toBe(false);
   });
 });

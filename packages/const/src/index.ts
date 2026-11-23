@@ -22,6 +22,7 @@ export * from './llmGenerationTracing';
 export * from './lobehubSkill';
 export * from './message';
 export * from './meta';
+export * from './officialMcp';
 export * from './plugin';
 export * from './protocol';
 export * from './recommendedSkill';

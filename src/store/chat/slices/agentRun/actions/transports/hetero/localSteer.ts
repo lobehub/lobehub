@@ -25,6 +25,7 @@ export const supportsLocalSteer = (
   agentType: HeterogeneousAgentType | string,
   options: { codexAppServer?: boolean },
 ): boolean =>
+  agentType === 'antigravity' ||
   agentType === 'claude-code' ||
   agentType === 'pi' ||
   (agentType === 'codex' && !!options.codexAppServer);

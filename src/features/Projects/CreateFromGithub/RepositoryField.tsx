@@ -7,6 +7,8 @@ import { ArrowRightIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from 'lucide
 import { type ClipboardEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
 import { useScmRepositories } from './useScmRepositories';
@@ -33,7 +35,7 @@ const styles = stylex.create({
     gap: 8,
     paddingBlock: 6,
     paddingInlineEnd: 6,
-    paddingInlineStart: 12,
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
   },
   popover: {
     width: 'min(400px, calc(100vw - 32px))',

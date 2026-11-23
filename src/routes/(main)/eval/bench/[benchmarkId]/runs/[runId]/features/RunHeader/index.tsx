@@ -38,6 +38,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   backLink: css`
@@ -79,7 +80,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: auto;
 
     max-height: 300px;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusSM};
 
     font-size: ${cssVar.fontSize};

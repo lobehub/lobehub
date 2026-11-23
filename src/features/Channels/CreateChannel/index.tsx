@@ -5,7 +5,6 @@ import { Hash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import type { ChannelPersonOption } from '@/services/channel';
 import { channelActions } from '@/store/channel';
@@ -29,8 +28,6 @@ interface ExistingChannel {
   id: string;
   /** The project a project Channel belongs to: it seats only that project's Agents. */
   projectId: string | null;
-  /** People can be invited only into workspace Channels. */
-  workspaceId: string | null;
 }
 
 interface CreateChannelProps {
@@ -59,7 +56,8 @@ export const openInviteMembers = (existing: ExistingChannel, onCreated?: (id: st
 /**
  * Like starting a group chat: choose members first. The name is optional and defaults to the
  * members' names; the sidebar renames it later. Inviting into an existing Channel uses the
- * same picker without a name. Workspace Channels, new or existing, also list workspace members.
+ * same picker without a name. It also lists the people who can join: workspace members in a
+ * workspace, mutual contacts in the personal space.
  */
 function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const { t } = useTranslation('channel');
@@ -72,9 +70,6 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const options = useChannelAgentOptions((existing ? existing.projectId : projectId) ?? undefined);
   const direct = existing?.directAgentName !== undefined;
   const nameOf = usePersonName();
-  const activeWorkspaceId = useActiveWorkspaceId();
-  // People join only workspace Channels: a new one is created in the active workspace.
-  const canPickPeople = existing ? !!existing.workspaceId : !!activeWorkspaceId;
   const dirty = !!title.trim() || agents.length > 0 || people.length > 0;
 
   // A mask click must not drop what the user typed or picked; ✕ and Esc still close.
@@ -162,12 +157,8 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           emptyHint={existing ? undefined : t('create.onlyYou')}
           exclude={existing?.agentIds}
           options={options}
+          people={{ channelId: existing?.id, onChange: setPeople, value: people }}
           value={agents}
-          people={
-            canPickPeople
-              ? { channelId: existing?.id, onChange: setPeople, value: people }
-              : undefined
-          }
           onChange={setAgents}
         />
       </Flexbox>

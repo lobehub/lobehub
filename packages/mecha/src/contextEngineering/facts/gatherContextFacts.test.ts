@@ -587,6 +587,16 @@ describe('which tool counts as reaching the sandbox', () => {
 
     expect(resolveSandboxPersistence).not.toHaveBeenCalled();
   });
+
+  it('skips sandbox persistence lookup when lobe-skills is routed to a local device without cloud-sandbox', async () => {
+    const resolveSandboxPersistence = vi.fn(async () => persistence);
+    await gatherContextFacts(
+      request({ activeDeviceId: 'dev_1', enabledToolIds: ['lobe-skills'] }),
+      { resolveSandboxPersistence },
+    );
+
+    expect(resolveSandboxPersistence).not.toHaveBeenCalled();
+  });
 });
 
 describe('gatherContextFacts — revoked document reads', () => {
