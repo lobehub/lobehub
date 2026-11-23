@@ -22,6 +22,19 @@ interface AimlApiToolRunResponse {
   status?: string;
 }
 
+/**
+ * URL for logs: origin and path only. Query and fragment may carry signatures or tokens
+ * (presigned storage links), so they never reach the server logs.
+ */
+const redactUrl = (url: string): string => {
+  try {
+    const { origin, pathname } = new URL(url);
+    return `${origin}${pathname}`;
+  } catch {
+    return '[invalid url]';
+  }
+};
+
 export const aimlapi: CrawlImpl = async (url) => {
   const apiKey = process.env.AIMLAPI_API_KEY;
 
@@ -53,7 +66,11 @@ export const aimlapi: CrawlImpl = async (url) => {
   const data = await parseJSONResponse<AimlApiToolRunResponse>(res, 'AI/ML API');
 
   if (data.is_error || (data.status && data.status !== 'completed')) {
-    console.warn('AI/ML API page read failed for URL:', url, data.error?.message || data.status);
+    console.warn(
+      'AI/ML API page read failed for URL:',
+      redactUrl(url),
+      data.error?.message || data.status,
+    );
     return;
   }
 

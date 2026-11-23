@@ -38,6 +38,10 @@ describe('AimlApiImpl', () => {
     expect(createSearchServiceImpl(SearchImplType.AimlApi)).toBeInstanceOf(AimlApiImpl);
   });
 
+  it('selects its own engines so an empty result is not re-run without the filter', () => {
+    expect(impl.useAutoSearchEngineSelection).toBe(true);
+  });
+
   it('runs the web/search tool and maps results', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       createMockResponse(

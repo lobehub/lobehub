@@ -28,6 +28,10 @@ const MAX_RESULTS = 15;
  * of the AI/ML API Toolbox (billed per run to the user's AI/ML API account).
  */
 export class AimlApiImpl implements SearchServiceImpl {
+  // The web/search tool picks its own sources, so retrying without `searchEngines` would
+  // repeat the same billed run
+  readonly useAutoSearchEngineSelection = true;
+
   private get apiKey(): string | undefined {
     return process.env.AIMLAPI_API_KEY;
   }

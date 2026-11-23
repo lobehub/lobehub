@@ -84,6 +84,24 @@ describe('aimlapi crawler', () => {
     warn.mockRestore();
   });
 
+  it('logs a failed run without the query or fragment of the page URL', async () => {
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockResolvedValue(
+      createMockResponse({ error: { message: 'boom' }, is_error: true, status: 'failed' }),
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await aimlapi('https://bucket.example.com/doc.pdf?X-Amz-Signature=secret#token=abc', {
+      filterOptions: {},
+    });
+
+    const logged = warn.mock.calls.flat().join(' ');
+    expect(logged).toContain('https://bucket.example.com/doc.pdf');
+    expect(logged).not.toContain('secret');
+    expect(logged).not.toContain('token=abc');
+    warn.mockRestore();
+  });
+
   it('returns undefined for too-short content', async () => {
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(
