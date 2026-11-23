@@ -1,17 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import {
-  Button,
-  confirmModal,
-  createModal,
-  Flexbox,
-  Icon,
-  Select,
-  Tag,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Button, createModal, Flexbox, Icon, Select, Tag, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
@@ -24,6 +14,7 @@ import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { confirmCredModal } from './confirmCredModal';
 import { credErrorKey } from './credError';
 
 type Visibility = 'private' | 'public';
@@ -164,9 +155,9 @@ const ShareCredContent = memo<ShareCredContentProps>(({ credId }) => {
   };
 
   const handleRevoke = (workspaceId: string, name: string) =>
-    confirmModal({
+    confirmCredModal({
       content: tSetting('creds.share.revokeConfirmDesc'),
-      okButtonProps: { danger: true },
+      danger: true,
       okText: tSetting('creds.share.revoke'),
       onOk: async () => {
         try {
