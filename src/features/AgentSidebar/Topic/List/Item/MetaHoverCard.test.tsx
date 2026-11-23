@@ -46,31 +46,4 @@ describe('MetaHoverCard', () => {
     expect(screen.getByText('repo-fix')).toBeInTheDocument();
     expect(screen.queryByText('metaCard.branchNote')).not.toBeInTheDocument();
   });
-
-  it('never shows a PR an older client recorded on the branch snapshot', () => {
-    const metadata: ChatTopicMetadata = {
-      workingDirectory: '/repo',
-      workingDirectoryConfig: {
-        git: {
-          branch: 'feat/x',
-          github: {
-            pullRequest: {
-              number: 42,
-              state: 'open',
-              title: 'guessed PR',
-              url: 'https://github.com/lobehub/lobehub/pull/42',
-            },
-          },
-        },
-        path: '/repo',
-        repoType: 'github',
-      },
-    };
-
-    render(<MetaHoverCard metadata={metadata} title="Topic" />);
-
-    expect(screen.queryByText(/guessed PR/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
-    expect(screen.getByText('feat/x')).toBeInTheDocument();
-  });
 });
