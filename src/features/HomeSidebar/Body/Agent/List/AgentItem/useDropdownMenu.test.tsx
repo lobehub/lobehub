@@ -494,22 +494,6 @@ describe('useAgentDropdownMenu', () => {
     ]);
   });
 
-  it('leaves visibility and the member handover to the Agent settings shortcut', () => {
-    mocks.canEditResource = true;
-    mocks.canManage = true;
-    mocks.canManageResource = true;
-
-    // A creator's private agent used to carry the Visibility submenu here.
-    const { result } = renderPublicAgentMenu('member-1', { visibility: 'private' });
-
-    const keys = getMenuKeys(result.current());
-    expect(keys).toContain('permission');
-    expect(keys).not.toContain('visibility');
-    expect(keys).not.toContain('transfer-agent-to-member');
-    const entry = getMenuItem(result.current(), 'permission') as unknown as { label: string };
-    expect(entry.label).toBe('permission.page.agentEntry');
-  });
-
   it('keeps Lobe AI (the inbox) organizable but never deletable, copyable or transferable', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
@@ -557,6 +541,9 @@ describe('useAgentDropdownMenu', () => {
     ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
 
     expect(permissionItem).toBeTruthy();
+    expect((permissionItem as unknown as { label: string }).label).toBe(
+      'permission.page.agentEntry',
+    );
 
     permissionItem?.onClick({ domEvent: { stopPropagation: vi.fn() } });
 

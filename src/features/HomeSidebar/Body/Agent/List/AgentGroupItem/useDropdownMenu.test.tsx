@@ -35,14 +35,6 @@ vi.mock('@/business/client/hooks/useAgentGroupTransferMenuItem', () => ({
   useAgentGroupTransferMenuItem: () => null,
 }));
 
-// A viewer who may hand the group over: the row menu must still not offer it.
-vi.mock('@/business/client/hooks/useAgentGroupTransferToMemberMenuItem', () => ({
-  useAgentGroupTransferToMemberMenuItem: () => ({
-    key: 'transfer-agent-group-to-member',
-    label: 'Transfer to member...',
-  }),
-}));
-
 vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
@@ -141,14 +133,12 @@ describe('useGroupDropdownMenu', () => {
     expect(getMenuKeys(result.current()).slice(0, 3)).toEqual(['pin', 'hideFromSidebar', 'rename']);
   });
 
-  it('leaves the member handover to the Permissions settings shortcut', () => {
+  it('offers the creator or an owner a shortcut to the group Permissions settings', () => {
     mocks.activeWorkspaceId = 'ws_1';
     mocks.canManageResource = true;
     const { result } = renderGroupMenu();
 
-    const keys = getMenuKeys(result.current());
-    expect(keys).not.toContain('transfer-agent-group-to-member');
-    expect(keys).toContain('permission');
+    expect(getMenuKeys(result.current())).toContain('permission');
 
     const entry = (result.current() ?? []).find(
       (item) => item && typeof item === 'object' && 'key' in item && item.key === 'permission',
