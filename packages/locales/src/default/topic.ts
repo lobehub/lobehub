@@ -17,6 +17,8 @@ export default {
   'actions.archiveMergedPullRequestsOwn': 'Archive My Topics with Merged PRs',
   'actions.archiveMergedPullRequestsWorkspace': 'Archive All Topics with Merged PRs',
   'actions.archiveMergedPullRequestsNone': 'No topics with merged PRs found.',
+  'actions.archiveMergedPullRequestsFailed':
+    "Couldn't check which topics have merged PRs. Check your network and try again.",
   'actions.archiveMergedPullRequestsSuccess_one': 'Archived {{count}} topic with a merged PR.',
   'actions.archiveMergedPullRequestsSuccess_other': 'Archived {{count}} topics with merged PRs.',
   'actions.confirmArchiveMergedPullRequestsWorkspace':

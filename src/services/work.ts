@@ -136,6 +136,12 @@ class WorkService {
   listTopicPullRequests = async (topicId: string): Promise<TopicPullRequestItem[]> =>
     lambdaClient.work.listTopicPullRequests.query({ topicId });
 
+  /** {@link listTopicPullRequests} for up to 100 topics, keyed by topic id. */
+  listTopicsPullRequests = async (
+    topicIds: string[],
+  ): Promise<Record<string, TopicPullRequestItem[]>> =>
+    lambdaClient.work.listTopicsPullRequests.query({ topicIds });
+
   /**
    * Link the pull requests a `git push` tool call
    * updated. `pullRequests` is the execution device's `gh pr list --head`
