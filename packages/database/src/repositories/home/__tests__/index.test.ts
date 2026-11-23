@@ -721,7 +721,7 @@ describe('HomeRepository', () => {
       expect(result).toHaveLength(0);
     });
 
-    it('should find the inbox agent by its default name, ignoring case and spacing', async () => {
+    it('should find the inbox agent by its default name only when asked, ignoring case and spacing', async () => {
       await clientDB.insert(Schema.agents).values({
         id: 'search-inbox',
         slug: 'inbox',
@@ -729,14 +729,18 @@ describe('HomeRepository', () => {
         virtual: true,
       });
 
+      expect((await homeRepo.searchAgents('LobeAI')).map((a) => a.id)).not.toContain(
+        'search-inbox',
+      );
+
       for (const keyword of ['LobeAI', 'lobe ai', 'Lobe']) {
-        const result = await homeRepo.searchAgents(keyword);
+        const result = await homeRepo.searchAgents(keyword, true);
         expect(result.map((a) => a.id)).toContain('search-inbox');
       }
 
-      const [inbox] = await homeRepo.searchAgents('LobeAI');
+      const [inbox] = await homeRepo.searchAgents('LobeAI', true);
       expect(inbox).toMatchObject({ slug: 'inbox', title: 'Lobe AI' });
-      expect((await homeRepo.searchAgents('Searchable')).map((a) => a.id)).not.toContain(
+      expect((await homeRepo.searchAgents('Searchable', true)).map((a) => a.id)).not.toContain(
         'search-inbox',
       );
     });

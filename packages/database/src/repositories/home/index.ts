@@ -93,10 +93,13 @@ export class HomeRepository {
    * @param includeLabels - whether the caller holds `agent_label:read`. The
    *   router decides; defaulting to `true` keeps personal mode and every
    *   existing caller unchanged, since that grant only exists in a workspace.
+   * @param includeInbox - list the scope's inbox (Lobe AI) as an ordinary item.
+   *   Off by default: released clients render the inbox as their own row.
    */
   async getSidebarAgentList(
     includeLabels = true,
     includeGroups = true,
+    includeInbox = false,
   ): Promise<SidebarAgentListResponse> {
     // 1. Query all non-virtual agents, plus the scope's inbox (Lobe AI).
     //    `visibility` is selected so we can later bucket public vs. the
@@ -129,7 +132,7 @@ export class HomeRepository {
             workspaceId: agents.workspaceId,
             visibility: agents.visibility,
           }),
-          listedAgentWhere(),
+          includeInbox ? listedAgentWhere() : not(eq(agents.virtual, true)),
         ),
       )
       .orderBy(desc(agents.updatedAt));
@@ -553,8 +556,11 @@ export class HomeRepository {
   /**
    * Search agents and chat groups by keyword
    * Searches in title and description fields
+   *
+   * @param includeInbox - also match the scope's inbox (Lobe AI); see
+   *   {@link getSidebarAgentList}.
    */
-  async searchAgents(keyword: string): Promise<SidebarAgentItem[]> {
+  async searchAgents(keyword: string, includeInbox = false): Promise<SidebarAgentItem[]> {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
@@ -608,17 +614,19 @@ export class HomeRepository {
               // The inbox is a virtual row the search index skips, so it is matched by name
               // here. Its stored title is usually blank and shown as Lobe AI, so a blank
               // title also matches that default name.
-              and(
-                eq(agents.slug, INBOX_SESSION_ID),
-                or(
-                  ilikeContains(agents.title, keyword.trim()),
-                  ilikeContains(agents.name, keyword.trim()),
-                  ilikeContains(agents.description, keyword.trim()),
-                  keywordMatchesInboxTitle(keyword)
-                    ? sql`nullif(trim(${agents.title}), '') is null`
-                    : undefined,
-                ),
-              ),
+              includeInbox
+                ? and(
+                    eq(agents.slug, INBOX_SESSION_ID),
+                    or(
+                      ilikeContains(agents.title, keyword.trim()),
+                      ilikeContains(agents.name, keyword.trim()),
+                      ilikeContains(agents.description, keyword.trim()),
+                      keywordMatchesInboxTitle(keyword)
+                        ? sql`nullif(trim(${agents.title}), '') is null`
+                        : undefined,
+                    ),
+                  )
+                : undefined,
             ),
           ),
         )

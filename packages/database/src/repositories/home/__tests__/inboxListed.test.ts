@@ -48,7 +48,11 @@ describe('inbox agent in the sidebar list', () => {
       { id: 'a-supervisor', title: 'Supervisor', userId: memberA, virtual: true },
     ]);
 
-    const result = await new HomeRepository(clientDB, memberA).getSidebarAgentList();
+    const result = await new HomeRepository(clientDB, memberA).getSidebarAgentList(
+      true,
+      true,
+      true,
+    );
 
     expect(ids(result.ungrouped)).toEqual(['a-inbox', 'a-recent']);
     expect(result.ungrouped[0]).toMatchObject({
@@ -66,7 +70,11 @@ describe('inbox agent in the sidebar list', () => {
       virtual: true,
     });
 
-    const result = await new HomeRepository(clientDB, memberA).getSidebarAgentList();
+    const result = await new HomeRepository(clientDB, memberA).getSidebarAgentList(
+      true,
+      true,
+      true,
+    );
 
     expect(ids(result.pinned)).toEqual(['a-inbox']);
     expect(ids(result.ungrouped)).toEqual([]);
@@ -92,8 +100,23 @@ describe('inbox agent in the sidebar list', () => {
     ]);
 
     for (const member of [memberA, memberB]) {
-      const view = await new HomeRepository(clientDB, member, ws).getSidebarAgentList();
+      const view = await new HomeRepository(clientDB, member, ws).getSidebarAgentList(
+        true,
+        true,
+        true,
+      );
       expect(ids(view.ungrouped)).toEqual(['ws-inbox']);
     }
+  });
+
+  it('keeps the inbox out for callers that do not ask for it (released clients)', async () => {
+    await clientDB.insert(Schema.agents).values([
+      { id: 'a-inbox', slug: INBOX_SESSION_ID, userId: memberA, virtual: true },
+      { id: 'a-plain', title: 'Plain Agent', userId: memberA },
+    ]);
+
+    const result = await new HomeRepository(clientDB, memberA).getSidebarAgentList();
+
+    expect(ids(result.ungrouped)).toEqual(['a-plain']);
   });
 });
