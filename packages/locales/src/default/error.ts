@@ -12,6 +12,10 @@ export default {
   'chatRequestBlocked.description':
     'This request was blocked by our security checks. If you think this is a mistake, contact support to restore access.',
   'chatRequestBlocked.title': 'Request blocked',
+  'chatOnboardingRequired.action': 'Finish onboarding',
+  'chatOnboardingRequired.description':
+    'Finish the short onboarding to keep chatting. You will come back to this conversation afterwards.',
+  'chatOnboardingRequired.title': 'Finish onboarding to continue',
   'saveState.retry': 'Retry',
   'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
