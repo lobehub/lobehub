@@ -167,6 +167,9 @@ export default {
   'connector.account.title': 'Accounts',
   'connector.account.usingAccount': 'Account: {{name}}',
   'connector.actionFailed': 'Operation failed, please try again',
+  'connector.dangerZone.desc':
+    'Disconnecting or removing {{name}} takes its tools away from every Agent that uses them.',
+  'connector.dangerZone.title': 'Danger zone',
   'connector.error.network':
     'The network connection was interrupted. Check your connection and try again.',
   'connector.error.stdioDesktopOnly':
