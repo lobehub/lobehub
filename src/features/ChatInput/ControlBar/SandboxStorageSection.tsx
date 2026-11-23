@@ -145,7 +145,17 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
         getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
       );
       const environment = environments.find((item) => item.id === selection.environmentId);
-      await pick(selectionWithDrive(selection, enabled, { defaultFolder, environment }));
+      // The environment's own folder goes on the member's personal drive
+      // unless the environment is published: one remembered from the public
+      // drive would put a private environment where every member browses,
+      // and the pick would drop it again.
+      const environmentDrive =
+        workspaceId && environment && environment.visibility !== 'public'
+          ? { ...defaultFolder, drive: 'personal' as const }
+          : defaultFolder;
+      await pick(
+        selectionWithDrive(selection, enabled, { defaultFolder: environmentDrive, environment }),
+      );
       if (!projectId) setPrefersTemporarySandbox({ userId, workspaceId }, agentId, !enabled);
     },
     [agentId, environments, pick, projectId, selection, userId, workspaceId],

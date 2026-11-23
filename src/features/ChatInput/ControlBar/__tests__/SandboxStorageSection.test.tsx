@@ -408,6 +408,27 @@ describe('SandboxStorageSection — T-14158', () => {
     );
   });
 
+  // A folder remembered from the public drive must not take a private
+  // environment there: its own folder goes on the member's personal drive.
+  it('switches the drive on into the personal drive for a private environment remembered off a public folder', async () => {
+    state.workspaceId = 'ws-1';
+    render(<SandboxStorageSection agentId={AGENT} />);
+    send('topic-1');
+    await act(async () => fireEvent.click(screen.getByText('pick-public-folder')));
+    await act(async () => fireEvent.click(screen.getByText('drive-off')));
+    await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+
+    await act(async () => fireEvent.click(screen.getByText('drive-on')));
+    expect(state.updateTopicMetadata).toHaveBeenLastCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        sandboxDrive: 'personal',
+        sandboxEnvironmentId: 'env_repo',
+        sandboxWorkingDirectory: 'lobe-chat-nvrepo',
+      }),
+    );
+  });
+
   // The drive is switched on into the environment's own folder, named after
   // it: until the list says what the environment is, the switch waits.
   it('holds the drive switch while the picked environment is not known yet', async () => {
