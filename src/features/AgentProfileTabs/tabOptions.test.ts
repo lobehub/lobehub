@@ -286,7 +286,7 @@ describe('groupAgentProfileTabOptions', () => {
     value,
   });
 
-  it('keeps who-it-is on top, then the setup pages, then mail and IM bots under identity', () => {
+  it('keeps who-it-is on top, then capabilities, mail and IM bots under identity, then growth', () => {
     const groups = groupAgentProfileTabOptions(
       (
         [
@@ -311,14 +311,15 @@ describe('groupAgentProfileTabOptions', () => {
       ['shape', ['instruction', 'knowledge']],
       ['setup', ['engine', 'environment', 'tools', 'skills']],
       ['identity', ['mail', 'channel']],
-      ['general', ['self-evolving', 'statistics', 'share']],
+      ['growth', ['self-evolving', 'statistics']],
+      ['general', ['share']],
     ]);
   });
 
   it('leaves out a group with nothing to open', () => {
     const groups = groupAgentProfileTabOptions([option('statistics')]);
 
-    expect(groups.map((group) => group.key)).toEqual(['general']);
+    expect(groups.map((group) => group.key)).toEqual(['growth']);
   });
 });
 
@@ -331,7 +332,7 @@ describe('webhook tab', () => {
     heterogeneous: false,
   };
 
-  it('lists webhooks after channels for an editor where the feature is on', () => {
+  it('lists webhooks after channels, under Advanced, for an editor where the feature is on', () => {
     const options = buildAgentProfileTabOptions({
       ...base,
       active: 'profile',
@@ -342,9 +343,9 @@ describe('webhook tab', () => {
     expect(values.indexOf('webhook')).toBe(values.indexOf('channel') + 1);
     expect(
       groupAgentProfileTabOptions(options)
-        .find((group) => group.key === 'identity')
+        .find((group) => group.key === 'advanced')
         ?.options.map((option) => option.value),
-    ).toEqual(['channel', 'webhook']);
+    ).toEqual(['webhook']);
   });
 
   it('leaves webhooks out while the feature is off or the member cannot edit', () => {
@@ -376,18 +377,19 @@ describe('automations tab', () => {
     heterogeneous: false,
   };
 
-  it('lists the automations after channels under identity while webhooks are on', () => {
+  it('lists the automations under Advanced, leaving identity to mail and IM bots', () => {
     const options = buildAgentProfileTabOptions({
       ...base,
       active: 'profile',
       automationsSupported: true,
       canConfigure: true,
     });
-    expect(
-      groupAgentProfileTabOptions(options)
-        .find((group) => group.key === 'identity')
-        ?.options.map((option) => option.value),
-    ).toEqual(['channel', 'automations']);
+    const groups = groupAgentProfileTabOptions(options);
+    const tabsOf = (key: string) =>
+      groups.find((group) => group.key === key)?.options.map((option) => option.value);
+
+    expect(tabsOf('identity')).toEqual(['channel']);
+    expect(tabsOf('advanced')).toEqual(['automations']);
   });
 
   it('shows the list to a member who cannot edit the agent too', () => {
@@ -432,7 +434,7 @@ describe('permission tab', () => {
       groupAgentProfileTabOptions(options)
         .find((group) => group.key === 'general')
         ?.options.map((option) => option.value),
-    ).toEqual(['statistics', 'permission', 'share']);
+    ).toEqual(['permission', 'share']);
   });
 
   it('leaves the tab out without a workspace or edit access', () => {
@@ -487,7 +489,7 @@ describe('opening and graph tabs', () => {
       'setup',
       'identity',
       'advanced',
-      'general',
+      'growth',
     ]);
   });
 
