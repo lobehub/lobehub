@@ -847,12 +847,14 @@ export class AgentShareModel {
    * Kept as the single access-check implementation so callers that already
    * hold a resolved row (e.g. via `findBySlugOrId`) don't need a second
    * lookup just to reuse the gate.
+   *
+   * `viewerId` is empty for a signed-out caller, which is never the owner.
    */
   static assertShareAccess = (
     share: Pick<AgentShareData, 'ownerId' | 'visibility'>,
-    viewerId: string,
+    viewerId: string | null | undefined,
   ): void => {
-    const isOwner = viewerId === share.ownerId;
+    const isOwner = !!viewerId && viewerId === share.ownerId;
     // NOT_FOUND, not FORBIDDEN: a paused (private) share must be
     // indistinguishable from a share that never existed, otherwise a
     // stranger can probe custom slugs / ids to learn which private shares
