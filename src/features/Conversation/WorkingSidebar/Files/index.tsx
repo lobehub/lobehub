@@ -27,7 +27,7 @@ import {
   SearchIcon,
   XIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
@@ -122,6 +122,8 @@ const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
 
 type FileViewMode = 'project' | 'changes';
+
+const NO_DIRTY_FILE_PATHS: Set<string> = new Set();
 
 const getProjectRootName = (root: string) => {
   const normalizedRoot = root.replace(/[\\/]+$/, '');
@@ -245,7 +247,10 @@ const Files = memo<FilesProps>(
     const projectRootName = getProjectRootName(projectRoot);
     const normalizedDebouncedQuery = debouncedQuery.trim();
     const isFiltering = normalizedDebouncedQuery.length > 0;
-    const changedOnly = viewMode === 'changes';
+    // The buttons flip on `viewMode` at once; the tree, which a view change
+    // rebuilds from scratch, follows in a deferred render so the click never
+    // waits on it.
+    const changedOnly = useDeferredValue(viewMode) === 'changes';
     const hasDisplayFilter = isFiltering || changedOnly || hideIgnored;
     const workingTreeGitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
     const dirtyFilePaths = useMemo(
@@ -311,7 +316,7 @@ const Files = memo<FilesProps>(
     const searchEntries = isSandbox ? sandboxMatches : remoteMatches;
     const isSearching = !isSandbox && !!normalizedDebouncedQuery && isSearchingRemote;
 
-    const displayEntries = useMemo(() => {
+    const baseEntries = useMemo(() => {
       const indexedEntries = isFiltering
         ? (searchEntries ?? [])
         : [...entries, ...collapsedChildren];
@@ -320,29 +325,40 @@ const Files = memo<FilesProps>(
         isFiltering ? [] : (gitFiles?.deleted ?? []),
         projectRoot,
       );
-      const visibleEntries = entriesWithDeleted.filter(
-        (entry) => !isExcludedProjectFileEntry(entry),
-      );
 
-      return filterProjectFileEntries(visibleEntries, dirtyFilePaths, {
-        changedOnly,
-        hideIgnored,
-      });
-    }, [
-      changedOnly,
-      collapsedChildren,
-      dirtyFilePaths,
-      entries,
-      gitFiles?.deleted,
-      hideIgnored,
-      isFiltering,
-      projectRoot,
-      searchEntries,
-    ]);
-    const nodes = useMemo(
-      () => buildTreeNodes(displayEntries, projectRootName),
-      [displayEntries, projectRootName],
+      return entriesWithDeleted.filter((entry) => !isExcludedProjectFileEntry(entry));
+    }, [collapsedChildren, entries, gitFiles?.deleted, isFiltering, projectRoot, searchEntries]);
+    // The two views keep separate entries and nodes, so the project tree
+    // survives a visit to Changes: switching back hands the tree the very same
+    // nodes array, which it recognises instead of normalising every path again.
+    const projectEntries = useMemo(
+      () =>
+        filterProjectFileEntries(baseEntries, NO_DIRTY_FILE_PATHS, {
+          changedOnly: false,
+          hideIgnored,
+        }),
+      [baseEntries, hideIgnored],
     );
+    const changesEntries = useMemo(
+      () =>
+        changedOnly
+          ? filterProjectFileEntries(baseEntries, dirtyFilePaths, {
+              changedOnly: true,
+              hideIgnored,
+            })
+          : undefined,
+      [baseEntries, changedOnly, dirtyFilePaths, hideIgnored],
+    );
+    const displayEntries = changesEntries ?? projectEntries;
+    const projectNodes = useMemo(
+      () => buildTreeNodes(projectEntries, projectRootName),
+      [projectEntries, projectRootName],
+    );
+    const changesNodes = useMemo(
+      () => (changesEntries ? buildTreeNodes(changesEntries, projectRootName) : undefined),
+      [changesEntries, projectRootName],
+    );
+    const nodes = changesNodes ?? projectNodes;
     const gitStatus = useMemo(
       () =>
         prefixGitStatusPaths(
