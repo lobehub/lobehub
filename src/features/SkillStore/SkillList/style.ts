@@ -42,6 +42,13 @@ export const virtuosoGridStyles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+export const masonicGridStyles = createStaticStyles(({ css }) => ({
+  list: css`
+    padding-block-end: ${densityVars.cardPadding};
+    padding-inline: ${densityVars.cardPadding};
+  `,
+}));
+
 export const itemStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     position: relative;
