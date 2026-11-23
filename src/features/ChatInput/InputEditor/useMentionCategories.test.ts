@@ -26,7 +26,7 @@ vi.mock('../hooks/useAgentId', () => ({
 
 // Context store: no group-chat mentionItems, i.e. the agent picker path.
 vi.mock('../store', () => ({
-  useChatInputStore: <T,>(selector: (s: { mentionItems?: unknown }) => T) =>
+  useChatInputStore: <T>(selector: (s: { mentionItems?: unknown }) => T) =>
     selector({ mentionItems: undefined }),
 }));
 
