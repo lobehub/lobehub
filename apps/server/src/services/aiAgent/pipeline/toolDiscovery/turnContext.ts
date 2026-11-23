@@ -23,6 +23,122 @@ import type { ToolDiscoveryDeps, ToolDiscoveryInput } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
 
+const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
+const SERIALIZED_AGENT_MENTION_RE =
+  /<mention\b[^>]*\bid=["']?(?:agt_|market:)[^"'\s/>]+["']?[^>]*\/>/;
+
+const extractEditorTurnToolIds = (
+  node: unknown,
+  includeAgentMentions: boolean,
+  out: string[],
+): void => {
+  if (!node || typeof node !== 'object') return;
+  const record = node as Record<string, unknown>;
+  if (
+    record.type === 'action-tag' &&
+    record.actionCategory === 'tool' &&
+    typeof record.actionType === 'string' &&
+    record.actionType.length > 0
+  ) {
+    out.push(record.actionType);
+  }
+  if (
+    includeAgentMentions &&
+    record.type === 'mention' &&
+    record.metadata &&
+    typeof record.metadata === 'object' &&
+    (record.metadata as Record<string, unknown>).type === 'agent' &&
+    typeof (record.metadata as Record<string, unknown>).id === 'string' &&
+    ((record.metadata as Record<string, unknown>).id as string).length > 0
+  ) {
+    out.push(AGENT_MANAGEMENT_IDENTIFIER);
+  }
+  if (Array.isArray(record.children)) {
+    for (const child of record.children) {
+      extractEditorTurnToolIds(child, includeAgentMentions, out);
+    }
+  }
+};
+
+export interface HistoryTurnSelectionMessage {
+  compressedMessages?: ReadonlyArray<HistoryTurnSelectionMessage> | null;
+  content?: unknown;
+  editorData?: Record<string, any> | null;
+  metadata?: {
+    botSender?: unknown;
+    externalOrigin?: unknown;
+    selectedToolIds?: unknown;
+  } | null;
+  role: string;
+}
+
+/**
+ * The tools the user selected or triggered via @-mentions anywhere in this
+ * topic so far: earlier user turns' persisted `metadata.selectedToolIds`
+ * (falling back to composer `editorData` action tags / agent mentions and
+ * serialized `<mention id="agt_..." />` tags for legacy rows), plus this
+ * turn's selection. Deduplicated, in first-selected order.
+ *
+ * Keeping turn-selected tools in the operation's initial invocation set on
+ * follow-up turns preserves the system prompt and `<available_tools>` prefix
+ * across turns, avoiding prompt-cache invalidation and `tool_name_unresolved`
+ * when the model continues calling a tool it already used in an earlier turn.
+ */
+export const collectSelectedToolIds = (
+  historyMessages: ReadonlyArray<HistoryTurnSelectionMessage>,
+  current: readonly string[] = [],
+  options?: { hasMentionedAgents?: boolean; isGroupConversation?: boolean },
+): string[] => {
+  const includeAgentMentions = !options?.isGroupConversation;
+  const ids: string[] = [];
+
+  const visitMessage = (message: HistoryTurnSelectionMessage) => {
+    if (Array.isArray(message.compressedMessages)) {
+      for (const member of message.compressedMessages) {
+        if (member && typeof member === 'object') visitMessage(member);
+      }
+    }
+    if (message.role !== 'user') return;
+
+    const persisted = message.metadata?.selectedToolIds;
+    if (Array.isArray(persisted)) {
+      for (const id of persisted) {
+        if (typeof id === 'string' && id.length > 0) ids.push(id);
+      }
+    }
+    const isExternalMessage = Boolean(
+      message.metadata?.botSender || message.metadata?.externalOrigin,
+    );
+    if (!isExternalMessage && message.editorData && typeof message.editorData === 'object') {
+      extractEditorTurnToolIds(
+        (message.editorData as Record<string, unknown>).root,
+        includeAgentMentions,
+        ids,
+      );
+    }
+    if (
+      !isExternalMessage &&
+      includeAgentMentions &&
+      typeof message.content === 'string' &&
+      SERIALIZED_AGENT_MENTION_RE.test(message.content)
+    ) {
+      ids.push(AGENT_MANAGEMENT_IDENTIFIER);
+    }
+  };
+
+  for (const message of historyMessages) {
+    visitMessage(message);
+  }
+
+  return [
+    ...new Set([
+      ...ids,
+      ...current,
+      ...(includeAgentMentions && options?.hasMentionedAgents ? [AGENT_MANAGEMENT_IDENTIFIER] : []),
+    ]),
+  ];
+};
+
 /**
  * Turn-scoped builtin tools to append to the candidate plugin ids: the IM
  * message tool for bot conversations, the task tool for a project coordinator

@@ -356,6 +356,8 @@ export interface TurnSetupInput {
   cronJobId?: string;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
+  /** Whether the turn @-mentions agents in a non-group conversation. */
+  hasMentionedAgents?: boolean;
   modelOverride?: string;
   /** See `ExecAgentParams.openedByTopicId`. */
   openedByTopicId?: string;
@@ -374,6 +376,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Skills the user selected for this turn; see `ExecAgentParams.selectedSkillIds`. */
   selectedSkillIds?: string[];
+  /** Tools the user selected for this turn; see `ExecAgentParams.selectedToolIds`. */
+  selectedToolIds?: string[];
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
   /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
@@ -473,6 +477,7 @@ export const setupTurn = async (
     webhookThread,
     openedByTopicId,
     files,
+    hasMentionedAgents,
     modelOverride,
     operationTaskId,
     parentMessageId,
@@ -486,6 +491,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     selectedSkillIds,
+    selectedToolIds,
     shareGate,
     steer,
     throwIfExecutionAborted,
@@ -923,7 +929,9 @@ export const setupTurn = async (
     botSender,
     composerMetadata: userMessage?.metadata,
     externalOrigin,
+    hasMentionedAgents,
     selectedSkillIds,
+    selectedToolIds,
     steer,
     trigger,
   });

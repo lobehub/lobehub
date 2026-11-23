@@ -427,6 +427,27 @@ describe('discoverTools — connector discovery', () => {
     expect(result.agentPlugins).toContain('community-mcp');
   });
 
+  it('keeps tools and @agent delegation from earlier turns in the topic enabled on follow-up turns', async () => {
+    const result = await run({
+      ...sources,
+      input: {
+        loadHistoryMessages: vi.fn().mockResolvedValue([
+          {
+            content: '<mention name="Writer" id="agt_writer" /> Hello',
+            metadata: { selectedToolIds: ['community-mcp', 'lobe-agent-management'] },
+            role: 'user',
+          },
+          { content: 'How can I help?', role: 'assistant' },
+        ]),
+      },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toEqual(
+      expect.arrayContaining(['community-mcp', 'lobe-agent-management']),
+    );
+  });
+
   it('leaves an exact toolset untouched by the agent switches', async () => {
     const result = await run({
       ...sources,
