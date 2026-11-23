@@ -91,10 +91,10 @@ const findAgent = (
  * `metadata.via` only records which Agent relayed it. The run itself (live, unrevoked, requester
  * still a member) is checked first, exactly as a history read checks it.
  *
- * The bot's owner messaging their Agent on an IM platform may do the same from that bot run. It
- * has no Channel of its own, so nothing is current, and the reply stays in the target Channel:
- * there is no origin to deliver a receipt back to. Only the CLI route, which has checked the
- * run's operation token for `channel:message`, opts in (`allowBotRun`).
+ * The requester's own direct run may do the same: a chat turn they sent, or the bot's owner
+ * messaging their Agent on an IM platform. It has no Channel of its own, so nothing is current,
+ * and the reply stays in the target Channel: there is no origin to deliver a receipt back to. Only the CLI route, which has checked the
+ * run's operation token for `channel:message`, opts in (`allowDirectRun`).
  */
 export class ChannelMessagingService {
   private readonly history: ChannelHistoryRepository;
@@ -105,7 +105,7 @@ export class ChannelMessagingService {
     private readonly userId: string,
     private readonly operationId: string,
     private readonly workspaceId?: string,
-    private readonly options: { allowBotRun?: boolean } = {},
+    private readonly options: { allowDirectRun?: boolean } = {},
   ) {
     this.history = new ChannelHistoryRepository(db, userId, workspaceId);
     this.channels = new ChannelRepository(db, userId, workspaceId, channelContacts);

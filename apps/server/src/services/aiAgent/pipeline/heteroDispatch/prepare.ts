@@ -106,6 +106,14 @@ export const prepareHeteroRun = async (
   // Channels. `isOwner` is decided once, fail-closed, in `buildBotContext`.
   const isOwnerBotOperation =
     ctx.trigger === RequestTrigger.Bot && ctx.botContext?.isOwner === true;
+  // A scheduled run replays the user's own message off history, so it has
+  // no fresh user row; server-started `chat` deliveries have none either.
+  const isUserTurn =
+    (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
+    ctx.trigger === RequestTrigger.Scheduled;
+  // Mirrors the `channel:message` grant in `heteroOperationCapabilities`.
+  const canMessageForUser =
+    !shareGate && (isOwnerBotOperation || (isUserTurn && !isChannelOperation && !operationTaskId));
 
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
@@ -121,11 +129,7 @@ export const prepareHeteroRun = async (
           ownerBotTurn: isOwnerBotOperation,
           shareVisitor: !!shareGate,
           taskId: operationTaskId,
-          // A scheduled run replays the user's own message off history, so it has
-          // no fresh user row; server-started `chat` deliveries have none either.
-          userTurn:
-            (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
-            ctx.trigger === RequestTrigger.Scheduled,
+          userTurn: isUserTurn,
         }),
         operationId,
         userId: deps.userId,
@@ -339,7 +343,7 @@ export const prepareHeteroRun = async (
     selectionContext,
     isChannelOperation
       ? CHANNEL_INSTRUCTIONS
-      : isOwnerBotOperation
+      : canMessageForUser
         ? BOT_CHANNEL_MESSAGING_INSTRUCTIONS
         : undefined,
   );
