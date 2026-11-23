@@ -495,9 +495,10 @@ export class ActionImpl {
   useFetchAcceptanceBySubject = (
     subjectType: CreatableAcceptanceSubjectType,
     subjectId?: string | null,
-    options: { enabled?: boolean; refreshInterval?: number } = {},
+    options: { dedupingInterval?: number; enabled?: boolean; refreshInterval?: number } = {},
   ): ReplicaSyncResult =>
     this.#bySubject.useSync(subjectId ? { subjectId, subjectType } : null, {
+      ...(options.dedupingInterval !== undefined && { dedupingInterval: options.dedupingInterval }),
       enabled: options.enabled ?? true,
       refreshInterval: options.refreshInterval,
       revalidateOnFocus: true,

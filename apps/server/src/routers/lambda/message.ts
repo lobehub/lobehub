@@ -424,6 +424,28 @@ export const messageRouter = router({
     }),
 
   /**
+   * Change probe for a topic waiting on approval cards, for the client poll
+   * that waits for an answer from another device. A topic's full message page
+   * can be megabytes; this answers "did anything change?" in a few bytes: each
+   * card's intervention status (`null` when deleted or not visible) and a
+   * revision that moves on any message or card-argument change. The client
+   * re-reads the page only when a card settled or the revision moved.
+   */
+  getInterventionSnapshot: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(50), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await Promise.all([
+        assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]),
+        assertCanViewMessageTargets(guardCtx(ctx), input.messageIds),
+      ]);
+
+      return ctx.messageModel.getInterventionSnapshot({
+        ids: input.messageIds,
+        topicId: input.topicId,
+      });
+    }),
+
+  /**
    * Where a message came from, for answering it: its conversation and, for a
    * message another agent sent, that agent and its conversation
    * (`metadata.agentSender`). Read by `lh message reply`.

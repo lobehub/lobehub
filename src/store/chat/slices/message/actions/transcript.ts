@@ -3,6 +3,7 @@ import debug from 'debug';
 import { useEffect, useRef } from 'react';
 import { type StoreApi, useStore } from 'zustand';
 
+import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
   getMessageListFetchPolicy,
@@ -14,13 +15,30 @@ import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
+  backoffPollInterval,
   hasPendingInterventions,
   INTERVENTION_REFRESH_INTERVAL,
+  pendingInterventionIds,
 } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 
 import { getMessageTranscript } from '../transcript';
+
+/** Matches the `getInterventionSnapshot` input cap in the lambda router. */
+const INTERVENTION_STATUS_BATCH_SIZE = 50;
+
+/** Set once the server proved it lacks the snapshot probe (an older deployment). */
+let snapshotUnsupported = false;
+
+/** tRPC's answer for a procedure the server does not have. */
+const isMissingProcedure = (error: unknown) =>
+  error instanceof Error && /no procedure found/i.test(error.message);
+
+/** Test hook: forget a previous server's missing probe. */
+export const resetInterventionSnapshotSupport = () => {
+  snapshotUnsupported = false;
+};
 
 const log = debug('lobe-store:message-transcript');
 
@@ -242,6 +260,7 @@ export class MessageTranscriptActionImpl {
     // card that arrived over the stream) was deduped for the whole 30s list
     // window and another device's answer showed up that late. Each tick
     // re-reads the interval: the pending set changes without a render.
+    const bucket = messageMapKey(context);
     const revalidateRef = useRef(result.revalidate);
     revalidateRef.current = result.revalidate;
     const validatingRef = useRef(result.isValidating);
@@ -254,25 +273,117 @@ export class MessageTranscriptActionImpl {
           : refreshInterval;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let cancelled = false;
+      /** A tick is reading; its `finally` schedules the next one. */
+      let inFlight = false;
+      /** Start of the current uninterrupted polling run; drives the backoff. */
+      let pollingSince: number | undefined;
+      /** Cards pending when `pollingSince` was set; a newly raised card restarts the fast window. */
+      let pollingFor: string | undefined;
+      /** Snapshot revision seen by the previous status poll. */
+      let lastRevision: string | undefined;
+      const pendingCardIds = () => pendingInterventionIds(this.#get().dbMessagesMap[bucket] ?? []);
       const next = () => {
         // A read still in flight when the effect re-ran must not restart this chain.
-        if (cancelled) return;
-        const interval = intervalOf();
-        if (interval > 0) timer = setTimeout(tick, interval);
+        if (cancelled || inFlight) return;
+        clearTimeout(timer);
+        const base = intervalOf();
+        if (base <= 0) return;
+        // Read from the store, not a subscription: a re-render here would
+        // reorder this hook against the sync it drives.
+        const pendingCards = pendingCardIds().join(',');
+        if (pollingSince === undefined || pollingFor !== pendingCards) {
+          pollingSince = Date.now();
+          pollingFor = pendingCards;
+        }
+        timer = setTimeout(tick, backoffPollInterval(base, Date.now() - pollingSince));
+      };
+      /**
+       * Whether this tick must re-read the transcript. While cards wait for an
+       * answer, ask only for a snapshot of them: the full page can be
+       * megabytes, and an unanswered card can stay pending for days, so an open
+       * tab used to re-read it every tick all that time. The page is re-read
+       * once a card settled, the topic changed (revision moved), or the probe
+       * failed.
+       */
+      const needsRead = async () => {
+        const ids = pendingCardIds();
+        if (
+          !syncContinuation ||
+          !context.topicId ||
+          snapshotUnsupported ||
+          ids.length === 0 ||
+          ids.length > INTERVENTION_STATUS_BATCH_SIZE
+        )
+          return true;
+        try {
+          const { revision, statuses } = await messageService.getInterventionSnapshot(
+            context.topicId,
+            ids,
+          );
+          // The first probe of a chain has no baseline: a card edited between
+          // the page read and this probe would otherwise never be re-read, so
+          // it re-reads once.
+          const changed = lastRevision !== revision;
+          lastRevision = revision;
+          return changed || ids.some((id) => statuses[id] !== 'pending');
+        } catch (error) {
+          // A server without the probe answers every tick with the same error;
+          // stop asking for the rest of the session.
+          if (isMissingProcedure(error)) snapshotUnsupported = true;
+          log('[poll] snapshot read failed | key=%s | %O', bucket, error);
+          return true;
+        }
       };
       const tick = () => {
+        if (cancelled || inFlight) return;
         const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
         const online = typeof navigator === 'undefined' || navigator.onLine !== false;
         if (visible && online && !validatingRef.current) {
-          void Promise.resolve(revalidateRef.current()).finally(next);
+          inFlight = true;
+          void needsRead()
+            .then((read) => (read && !cancelled ? revalidateRef.current() : undefined))
+            .finally(() => {
+              inFlight = false;
+              next();
+            });
           return;
         }
         next();
       };
+      // A card raised while the chain sits in a long backed-off wait must not
+      // wait that long: restart at the base interval as soon as it appears.
+      let knownRows = this.#get().dbMessagesMap[bucket];
+      let knownIds = new Set(pendingCardIds());
+      const unsubscribe = this.#api.subscribe((state) => {
+        const rows = state.dbMessagesMap[bucket];
+        if (rows === knownRows) return;
+        knownRows = rows;
+        const ids = pendingInterventionIds(rows ?? []);
+        const raised = ids.some((id) => !knownIds.has(id));
+        knownIds = new Set(ids);
+        if (raised) next();
+      });
+      // Returning to the window answers "was it answered elsewhere?" at once,
+      // even while SWR throttles focus revalidation.
+      const onReturn = () => {
+        if (document.visibilityState === 'hidden' || !pendingInterventions.has(syncKey)) return;
+        clearTimeout(timer);
+        tick();
+      };
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      if (hasDom) {
+        window.addEventListener('focus', onReturn);
+        document.addEventListener('visibilitychange', onReturn);
+      }
       next();
       return () => {
         cancelled = true;
         clearTimeout(timer);
+        unsubscribe();
+        if (hasDom) {
+          window.removeEventListener('focus', onReturn);
+          document.removeEventListener('visibilitychange', onReturn);
+        }
       };
     }, [shouldFetch, syncContinuation, syncKey, refreshInterval]);
 
@@ -282,7 +393,6 @@ export class MessageTranscriptActionImpl {
       this.#api,
       operationSelectors.isAgentRuntimeRunningByContext(context),
     );
-    const bucket = messageMapKey(context);
     const wasStreamingRef = useRef({ bucket, running: isStreaming });
     useEffect(() => {
       if (
