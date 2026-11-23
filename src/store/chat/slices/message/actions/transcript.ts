@@ -25,8 +25,20 @@ import { type StoreSetter } from '@/store/types';
 
 import { getMessageTranscript } from '../transcript';
 
-/** Matches the `getInterventionStatuses` input cap in the lambda router. */
+/** Matches the `getInterventionSnapshot` input cap in the lambda router. */
 const INTERVENTION_STATUS_BATCH_SIZE = 50;
+
+/** Set once the server proved it lacks the snapshot probe (an older deployment). */
+let snapshotUnsupported = false;
+
+/** tRPC's answer for a procedure the server does not have. */
+const isMissingProcedure = (error: unknown) =>
+  error instanceof Error && /no procedure found/i.test(error.message);
+
+/** Test hook: forget a previous server's missing probe. */
+export const resetInterventionSnapshotSupport = () => {
+  snapshotUnsupported = false;
+};
 
 const log = debug('lobe-store:message-transcript');
 
@@ -261,14 +273,19 @@ export class MessageTranscriptActionImpl {
           : refreshInterval;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let cancelled = false;
+      /** A tick is reading; its `finally` schedules the next one. */
+      let inFlight = false;
       /** Start of the current uninterrupted polling run; drives the backoff. */
       let pollingSince: number | undefined;
       /** Cards pending when `pollingSince` was set; a newly raised card restarts the fast window. */
       let pollingFor: string | undefined;
+      /** Snapshot revision seen by the previous status poll. */
+      let lastRevision: string | undefined;
       const pendingCardIds = () => pendingInterventionIds(this.#get().dbMessagesMap[bucket] ?? []);
       const next = () => {
         // A read still in flight when the effect re-ran must not restart this chain.
-        if (cancelled) return;
+        if (cancelled || inFlight) return;
+        clearTimeout(timer);
         const base = intervalOf();
         if (base <= 0) return;
         // Read from the store, not a subscription: a re-render here would
@@ -282,44 +299,88 @@ export class MessageTranscriptActionImpl {
       };
       /**
        * Whether this tick must re-read the transcript. While cards wait for an
-       * answer, ask only for their status: the full page can be megabytes, and
-       * a card whose run died stays pending in the database for good, so an
-       * open tab used to re-read it every tick all day. The page is re-read
-       * once a card changed, or when the status read fails (e.g. a server
-       * without the endpoint).
+       * answer, ask only for a snapshot of them: the full page can be
+       * megabytes, and an unanswered card can stay pending for days, so an open
+       * tab used to re-read it every tick all that time. The page is re-read
+       * once a card settled, the topic changed (revision moved), or the probe
+       * failed.
        */
       const needsRead = async () => {
         const ids = pendingCardIds();
         if (
           !syncContinuation ||
           !context.topicId ||
+          snapshotUnsupported ||
           ids.length === 0 ||
           ids.length > INTERVENTION_STATUS_BATCH_SIZE
         )
           return true;
         try {
-          const statuses = await messageService.getInterventionStatuses(context.topicId, ids);
-          return ids.some((id) => statuses[id] !== 'pending');
+          const { revision, statuses } = await messageService.getInterventionSnapshot(
+            context.topicId,
+            ids,
+          );
+          const changed = lastRevision !== undefined && lastRevision !== revision;
+          lastRevision = revision;
+          return changed || ids.some((id) => statuses[id] !== 'pending');
         } catch (error) {
-          log('[poll] status read failed | key=%s | %O', bucket, error);
+          // A server without the probe answers every tick with the same error;
+          // stop asking for the rest of the session.
+          if (isMissingProcedure(error)) snapshotUnsupported = true;
+          log('[poll] snapshot read failed | key=%s | %O', bucket, error);
           return true;
         }
       };
       const tick = () => {
+        if (cancelled || inFlight) return;
         const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
         const online = typeof navigator === 'undefined' || navigator.onLine !== false;
         if (visible && online && !validatingRef.current) {
+          inFlight = true;
           void needsRead()
             .then((read) => (read && !cancelled ? revalidateRef.current() : undefined))
-            .finally(next);
+            .finally(() => {
+              inFlight = false;
+              next();
+            });
           return;
         }
         next();
       };
+      // A card raised while the chain sits in a long backed-off wait must not
+      // wait that long: restart at the base interval as soon as it appears.
+      let knownRows = this.#get().dbMessagesMap[bucket];
+      let knownIds = new Set(pendingCardIds());
+      const unsubscribe = this.#api.subscribe((state) => {
+        const rows = state.dbMessagesMap[bucket];
+        if (rows === knownRows) return;
+        knownRows = rows;
+        const ids = pendingInterventionIds(rows ?? []);
+        const raised = ids.some((id) => !knownIds.has(id));
+        knownIds = new Set(ids);
+        if (raised) next();
+      });
+      // Returning to the window answers "was it answered elsewhere?" at once,
+      // even while SWR throttles focus revalidation.
+      const onReturn = () => {
+        if (document.visibilityState === 'hidden' || !pendingInterventions.has(syncKey)) return;
+        clearTimeout(timer);
+        tick();
+      };
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      if (hasDom) {
+        window.addEventListener('focus', onReturn);
+        document.addEventListener('visibilitychange', onReturn);
+      }
       next();
       return () => {
         cancelled = true;
         clearTimeout(timer);
+        unsubscribe();
+        if (hasDom) {
+          window.removeEventListener('focus', onReturn);
+          document.removeEventListener('visibilitychange', onReturn);
+        }
       };
     }, [shouldFetch, syncContinuation, syncKey, refreshInterval]);
 

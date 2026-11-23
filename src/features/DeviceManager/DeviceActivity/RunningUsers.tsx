@@ -62,62 +62,59 @@ RunUserAvatar.displayName = 'RunUserAvatar';
  *
  * Every device card mounts its own reader, each on its own timer, and
  * `useClientDataSWR` dedupes nothing by default: N cards meant N requests every
- * 15s. The dedupe window lets one read serve them all. `active: false` (a
- * hidden working sidebar) reads once and stops polling.
+ * 15s. The dedupe window lets one read serve them all.
  */
-export const useDeviceRunningSummary = (active = true) =>
+export const useDeviceRunningSummary = () =>
   useClientDataSWR(['device/runningSummary'], () => deviceService.getRunningSummary(), {
     dedupingInterval: REFRESH_INTERVAL_MS - 1000,
     focusThrottleInterval: 1000,
-    refreshInterval: active ? REFRESH_INTERVAL_MS : 0,
+    refreshInterval: REFRESH_INTERVAL_MS,
   });
 
 /**
  * How many topics a device is running and whose they are — the card-sized
  * answer to "is anyone using this machine right now?".
  */
-export const DeviceRunningSummaryValue = memo<{ active?: boolean; deviceId: string }>(
-  ({ active = true, deviceId }) => {
-    const { t } = useTranslation('setting');
-    const { data, error, isLoading } = useDeviceRunningSummary(active);
+export const DeviceRunningSummaryValue = memo<{ deviceId: string }>(({ deviceId }) => {
+  const { t } = useTranslation('setting');
+  const { data, error, isLoading } = useDeviceRunningSummary();
 
-    if (isLoading) return <Text type={'secondary'}>…</Text>;
-    // A failed read must not pass for an idle machine — "—" means nothing runs.
-    if (error && !data)
-      return (
-        <Tooltip title={t('devices.activity.error')}>
-          <Icon
-            aria-label={t('devices.activity.error')}
-            color={cssVar.colorWarning}
-            icon={TriangleAlertIcon}
-            size={14}
-          />
-        </Tooltip>
-      );
-
-    const summary = data?.find((entry) => entry.deviceId === deviceId);
-    if (!summary || summary.count === 0) return <Text type={'secondary'}>—</Text>;
-
-    // A server that predates per-user attribution sends no `users`.
-    const users = summary.users ?? [];
-    const shown = users.slice(0, MAX_STACKED);
-    const overflow = users.length - shown.length;
-
+  if (isLoading) return <Text type={'secondary'}>…</Text>;
+  // A failed read must not pass for an idle machine — "—" means nothing runs.
+  if (error && !data)
     return (
-      <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-        <RunningGlyph size={14} />
-        <Text fontSize={13} style={{ flex: 'none' }}>
-          {summary.count}
-        </Text>
-        <Flexbox horizontal align={'center'} className={styles.stack}>
-          {shown.map((user) => (
-            <RunUserAvatar className={styles.stacked} key={user.userId} size={18} user={user} />
-          ))}
-          {overflow > 0 && <span className={styles.overflowCount}>+{overflow}</span>}
-        </Flexbox>
-      </Flexbox>
+      <Tooltip title={t('devices.activity.error')}>
+        <Icon
+          aria-label={t('devices.activity.error')}
+          color={cssVar.colorWarning}
+          icon={TriangleAlertIcon}
+          size={14}
+        />
+      </Tooltip>
     );
-  },
-);
+
+  const summary = data?.find((entry) => entry.deviceId === deviceId);
+  if (!summary || summary.count === 0) return <Text type={'secondary'}>—</Text>;
+
+  // A server that predates per-user attribution sends no `users`.
+  const users = summary.users ?? [];
+  const shown = users.slice(0, MAX_STACKED);
+  const overflow = users.length - shown.length;
+
+  return (
+    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+      <RunningGlyph size={14} />
+      <Text fontSize={13} style={{ flex: 'none' }}>
+        {summary.count}
+      </Text>
+      <Flexbox horizontal align={'center'} className={styles.stack}>
+        {shown.map((user) => (
+          <RunUserAvatar className={styles.stacked} key={user.userId} size={18} user={user} />
+        ))}
+        {overflow > 0 && <span className={styles.overflowCount}>+{overflow}</span>}
+      </Flexbox>
+    </Flexbox>
+  );
+});
 
 DeviceRunningSummaryValue.displayName = 'DeviceRunningSummaryValue';

@@ -43,12 +43,4 @@ describe('useDeviceRunningSummary', () => {
     await tick(60_000);
     expect(calls() - before).toBeLessThanOrEqual(5);
   });
-
-  it('reads once and stops polling while inactive', async () => {
-    renderHook(() => useDeviceRunningSummary(false), { wrapper });
-    await tick(0);
-    expect(calls()).toBe(1);
-    await tick(60_000);
-    expect(calls()).toBe(1);
-  });
 });

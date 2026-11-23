@@ -99,8 +99,9 @@ describe('Verify data hooks', () => {
   });
 
   // Regression: the task page mounts the state row and the acceptance section on the same
-  // subject, and each polled it on its own timer.
-  it('shares one poll between readers of the same subject', async () => {
+  // subject, and each polled it on its own timer; a reader opened seconds later (the result
+  // portal) kept a second chain.
+  it('shares one poll between readers of the same subject, even mounted seconds apart', async () => {
     vi.useFakeTimers();
     try {
       const getAcceptanceBySubject = vi
@@ -109,7 +110,7 @@ describe('Verify data hooks', () => {
       const wrapper = createSWRWrapper(new Map());
       renderHook(() => useAcceptanceBySubject('task', 'T-shared'), { wrapper });
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(2000);
       });
       renderHook(() => useAcceptanceBySubject('task', 'T-shared'), { wrapper });
       await act(async () => {

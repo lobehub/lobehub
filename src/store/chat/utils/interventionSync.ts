@@ -5,15 +5,15 @@ export const INTERVENTION_REFRESH_INTERVAL = 2000;
 /** How long a pending card polls at the base interval before backing off. */
 export const INTERVENTION_FAST_POLL_WINDOW = 5 * 60_000;
 /** Ceiling of the backed-off poll interval. */
-export const INTERVENTION_MAX_REFRESH_INTERVAL = 30_000;
+export const INTERVENTION_MAX_REFRESH_INTERVAL = 5 * 60_000;
 
 /**
  * Poll interval after `elapsed` ms of continuous polling. An answer from
  * another device normally lands within minutes, so the first window keeps the
  * base interval; after that the interval doubles every minute up to the
- * ceiling. A card whose run already died stays `pending` in the database
- * forever, and without this backoff an open tab re-read the whole transcript
- * every 2 s all day (one desktop client fetched a 4.5 MB page ~17k times a day).
+ * ceiling. A question nobody answers keeps its run parked in
+ * `waiting_for_human` for days, and without this backoff an open tab polled
+ * every 2 s all that time.
  * Focus revalidation still refreshes immediately when the user returns.
  */
 export const backoffPollInterval = (base: number, elapsed: number) => {

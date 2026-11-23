@@ -1,6 +1,5 @@
 import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
-import type { ToolIntervention } from '@lobechat/types';
 import {
   AgentSenderMetadataSchema,
   CreateNewMessageParamsSchema,
@@ -425,25 +424,25 @@ export const messageRouter = router({
     }),
 
   /**
-   * Intervention status of a topic's pending approval cards, for the client
-   * poll that waits for an answer from another device. A topic's full message
-   * page can be megabytes; this answers "is it still pending?" in a few bytes,
-   * so the client re-reads the page only once a card changed. Ids that do not
-   * come back (deleted, or not visible) map to `null`.
+   * Change probe for a topic waiting on approval cards, for the client poll
+   * that waits for an answer from another device. A topic's full message page
+   * can be megabytes; this answers "did anything change?" in a few bytes: each
+   * card's intervention status (`null` when deleted or not visible) and a
+   * revision that moves on any message or card-argument change. The client
+   * re-reads the page only when a card settled or the revision moved.
    */
-  getInterventionStatuses: messageProcedure
+  getInterventionSnapshot: messageProcedure
     .input(z.object({ messageIds: z.array(z.string()).min(1).max(50), topicId: z.string() }))
     .query(async ({ input, ctx }) => {
-      await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
+      await Promise.all([
+        assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]),
+        assertCanViewMessageTargets(guardCtx(ctx), input.messageIds),
+      ]);
 
-      const rows = await ctx.messageModel.listMessagePluginsByIds({
+      return ctx.messageModel.getInterventionSnapshot({
         ids: input.messageIds,
         topicId: input.topicId,
       });
-      const statuses = new Map(rows.map((row) => [row.id, row.intervention?.status ?? null]));
-      return Object.fromEntries(
-        input.messageIds.map((id) => [id, statuses.get(id) ?? null]),
-      ) as Record<string, ToolIntervention['status'] | null>;
     }),
 
   /**

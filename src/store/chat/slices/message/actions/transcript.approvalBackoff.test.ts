@@ -18,12 +18,14 @@ import {
 } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { resetInterventionSnapshotSupport } from './transcript';
+
 vi.mock('@/services/message', () => {
   const getMessages = vi.fn();
   return {
     messageService: {
       getEarlierMessages: vi.fn(),
-      getInterventionStatuses: vi.fn(),
+      getInterventionSnapshot: vi.fn(),
       getMessages,
       getMessageListPage: vi.fn(async (params: unknown) => ({
         messages: await getMessages(params),
@@ -74,8 +76,9 @@ describe('pending approval poll backoff', () => {
       olderCursor: null,
     }));
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(null);
-    // A server without the status endpoint: every tick re-reads the page.
-    vi.mocked(messageService.getInterventionStatuses).mockRejectedValue(new Error('NOT_FOUND'));
+    resetInterventionSnapshotSupport();
+    // A failing probe: every tick re-reads the page.
+    vi.mocked(messageService.getInterventionSnapshot).mockRejectedValue(new Error('timeout'));
   });
 
   afterEach(() => {
@@ -108,20 +111,20 @@ describe('pending approval poll backoff', () => {
   };
 
   it('backs off a card that stays pending past the fast window', async () => {
-    // Regression: a card whose run died stays `pending` in the database, and an
-    // open tab re-read the whole transcript every 2s for as long as it stayed open.
+    // Regression: an unanswered card can stay `pending` for days, and an open
+    // tab re-read the whole transcript every 2s for as long as it stayed open.
     const view = await mountPolling();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(INTERVENTION_FAST_POLL_WINDOW + 4 * 60_000);
+      await vi.advanceTimersByTimeAsync(INTERVENTION_FAST_POLL_WINDOW + 8 * 60_000);
     });
     const requests = vi.mocked(messageService.getMessages).mock.calls.length;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      await vi.advanceTimersByTimeAsync(30 * 60_000);
     });
-    const perTenMinutes = vi.mocked(messageService.getMessages).mock.calls.length - requests;
-    // 30s ceiling: about 20 reads in ten minutes instead of 300.
-    expect(perTenMinutes).toBeLessThanOrEqual(21);
-    expect(perTenMinutes).toBeGreaterThanOrEqual(19);
+    const perHalfHour = vi.mocked(messageService.getMessages).mock.calls.length - requests;
+    // At the ceiling: one read every five minutes instead of one every 2s.
+    expect(perHalfHour).toBeLessThanOrEqual(7);
+    expect(perHalfHour).toBeGreaterThanOrEqual(5);
     view.unmount();
   });
 
@@ -160,6 +163,11 @@ describe('pending approval poll backoff', () => {
   });
 });
 
+const snapshot = (status: 'approved' | 'pending', revision = 'r1') => ({
+  revision,
+  statuses: { question: status } as Record<string, 'approved' | 'pending'>,
+});
+
 describe('pending approval status poll', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -171,7 +179,8 @@ describe('pending approval status poll', () => {
       olderCursor: null,
     }));
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(null);
-    vi.mocked(messageService.getInterventionStatuses).mockResolvedValue({ question: 'pending' });
+    resetInterventionSnapshotSupport();
+    vi.mocked(messageService.getInterventionSnapshot).mockResolvedValue(snapshot('pending'));
   });
 
   afterEach(() => {
@@ -204,11 +213,11 @@ describe('pending approval status poll', () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
     expect(vi.mocked(messageService.getMessages).mock.calls.length).toBe(reads);
-    expect(messageService.getInterventionStatuses).toHaveBeenCalledWith(context.topicId, [
+    expect(messageService.getInterventionSnapshot).toHaveBeenCalledWith(context.topicId, [
       'question',
     ]);
     expect(
-      vi.mocked(messageService.getInterventionStatuses).mock.calls.length,
+      vi.mocked(messageService.getInterventionSnapshot).mock.calls.length,
     ).toBeGreaterThanOrEqual(28);
     view.unmount();
   });
@@ -216,11 +225,61 @@ describe('pending approval status poll', () => {
   it('re-reads the page once another device answered the card', async () => {
     const view = await mount();
     const reads = vi.mocked(messageService.getMessages).mock.calls.length;
-    vi.mocked(messageService.getInterventionStatuses).mockResolvedValue({ question: 'approved' });
+    vi.mocked(messageService.getInterventionSnapshot).mockResolvedValue(snapshot('approved'));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL);
     });
     expect(vi.mocked(messageService.getMessages).mock.calls.length).toBeGreaterThan(reads);
+    view.unmount();
+  });
+
+  it('re-reads the page when the topic changed while the card stays pending', async () => {
+    const view = await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL * 2);
+    });
+    const reads = vi.mocked(messageService.getMessages).mock.calls.length;
+    // Another device edited the card's arguments or added a row.
+    vi.mocked(messageService.getInterventionSnapshot).mockResolvedValue(snapshot('pending', 'r2'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL);
+    });
+    expect(vi.mocked(messageService.getMessages).mock.calls.length).toBeGreaterThan(reads);
+    view.unmount();
+  });
+
+  it('stops asking a server that has no snapshot probe', async () => {
+    vi.mocked(messageService.getInterventionSnapshot).mockRejectedValue(
+      new Error('No procedure found on path "message.getInterventionSnapshot"'),
+    );
+    const view = await mount();
+    const reads = vi.mocked(messageService.getMessages).mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(messageService.getInterventionSnapshot).toHaveBeenCalledTimes(1);
+    // Falls back to re-reading the page, as before the probe existed.
+    expect(vi.mocked(messageService.getMessages).mock.calls.length - reads).toBeGreaterThanOrEqual(
+      8,
+    );
+    view.unmount();
+  });
+
+  it('polls a newly raised card at once instead of waiting out the backoff', async () => {
+    const view = await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVENTION_FAST_POLL_WINDOW + 4 * 60_000);
+    });
+    // Sitting in a backed-off wait; the run raises a second card over the stream.
+    const second = { ...pending, id: 'question-2', tool_call_id: 'call-2' };
+    const probes = vi.mocked(messageService.getInterventionSnapshot).mock.calls.length;
+    await act(async () => {
+      useChatStore.setState({ dbMessagesMap: { [key]: [pending, second] } });
+      await vi.advanceTimersByTimeAsync(INTERVENTION_REFRESH_INTERVAL + 100);
+    });
+    expect(vi.mocked(messageService.getInterventionSnapshot).mock.calls.length).toBeGreaterThan(
+      probes,
+    );
     view.unmount();
   });
 });

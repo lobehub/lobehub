@@ -89,6 +89,7 @@ export class MessageModel {
   listToolCallsInTopics: MessagePluginStore['listToolCallsInTopics'];
   listMessagePluginsForOperation: MessagePluginStore['listMessagePluginsForOperation'];
   listMessagePluginsByIds: MessagePluginStore['listMessagePluginsByIds'];
+  getInterventionSnapshot: MessagePluginStore['getInterventionSnapshot'];
   findToolMessageIdByToolCallId: MessagePluginStore['findToolMessageIdByToolCallId'];
 
   updateToolMessage: MessageToolMutations['updateToolMessage'];
@@ -208,6 +209,7 @@ export class MessageModel {
     this.listToolCallsInTopics = plugins.listToolCallsInTopics;
     this.listMessagePluginsForOperation = plugins.listMessagePluginsForOperation;
     this.listMessagePluginsByIds = plugins.listMessagePluginsByIds;
+    this.getInterventionSnapshot = plugins.getInterventionSnapshot;
     this.findToolMessageIdByToolCallId = plugins.findToolMessageIdByToolCallId;
     this.updateToolMessage = tools.updateToolMessage;
     this.updateToolArguments = tools.updateToolArguments;

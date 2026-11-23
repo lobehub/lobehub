@@ -42,12 +42,17 @@ export const CHANNEL_IDLE_REFRESH_MS = 60_000;
 /**
  * Several mounted views poll the same list or detail (sidebar + agent manager, page header +
  * conversation), each on its own timer. `useClientDataSWR` dedupes nothing by default, so every
- * extra mount multiplied the fast poll; one read per window serves all of them. Idle views keep
- * no window: a dedupe record left by an idle read would swallow the first fast polls after a
- * send.
+ * extra mount multiplied the fast poll; one read per window serves all of them.
+ *
+ * The window stays the same in both states: SWR keeps the dedupe window a key had when it was
+ * first mounted, so views that mounted idle with no window kept separate fast polls once the
+ * channel turned active. A window shorter than one fast interval delays at most the first fast
+ * poll after an idle read, by under one interval.
  */
+const CHANNEL_POLL_DEDUPE_MS = CHANNEL_ACTIVE_REFRESH_MS - 500;
+
 const pollDedupe = (pending: boolean) => ({
-  dedupingInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS - 500 : 0,
+  dedupingInterval: CHANNEL_POLL_DEDUPE_MS,
   refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS,
 });
 
