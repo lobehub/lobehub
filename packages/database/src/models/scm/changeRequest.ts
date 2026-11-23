@@ -14,6 +14,12 @@ import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-o
 import type { ScmChangeRequestItem } from '../../schemas';
 import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import {
+  claimTopicFromLink,
+  releaseTopicFromLink,
+  topicLinkAfterEvent,
+  workTopicValues,
+} from './changeRequestTopicLink';
 
 const ownedByScope = (scope: { userId: string; workspaceId?: string | null }) =>
   scope.workspaceId
@@ -520,6 +526,16 @@ export class ScmChangeRequestModel {
         workId: pick(links.workId, inherited?.workId),
       };
 
+      // What is left of a topic link's claim (see `topicLinkAfterEvent`).
+      // Applied after either metadata composition below: the stale one
+      // re-spreads the stored metadata.
+      const topicLink = topicLinkAfterEvent(
+        existing?.metadata?.topicLink,
+        links.topicId,
+        linkValues.topicId,
+      );
+      snapshot.metadata.topicLink = topicLink;
+
       // Both link sources below are resolved before this transaction opens, so
       // an unlink may have committed in between. Writing the acceptance anyway
       // would put back a binding the user removed, and a later merge would
@@ -581,6 +597,7 @@ export class ScmChangeRequestModel {
                 ...existing.metadata,
                 ...params.metadata,
                 routedBy: existing.metadata?.routedBy,
+                topicLink,
               },
             }
           : snapshot;
@@ -666,8 +683,9 @@ export class ScmChangeRequestModel {
    * Provider events re-resolve links on every `pull_request` delivery, so
    * this covers the gap between the last delivery and the next: a review or
    * a failing check in between would otherwise find no conversation to
-   * wake. Fill-only like the event path; a link already set is never
-   * replaced.
+   * wake. Fill-only like the event path: a link already set is never
+   * replaced, except a conversation only a topic link holds, which a Work
+   * takes over like the next event would (see `workTopicValues`).
    */
   static attachPullRequestWork = async (
     db: LobeChatDatabase,
@@ -692,21 +710,29 @@ export class ScmChangeRequestModel {
     // would occupy a fill-only slot the right link can never take. The check
     // rides inside the UPDATE — a row re-routed between our read and write
     // is refused, not written.
-    await ScmChangeRequestModel.attachLinks(
-      db,
-      row.id,
-      {
-        topicId: params.topicId,
-        workId: params.workId,
-      },
-      and(
-        eq(scmChangeRequests.userId, params.scope.userId),
-        params.scope.workspaceId == null
-          ? isNull(scmChangeRequests.workspaceId)
-          : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
-      ),
-    );
+    await db
+      .update(scmChangeRequests)
+      .set({
+        ...(params.topicId ? workTopicValues(params.topicId) : {}),
+        updatedAt: new Date(),
+        workId: sql`coalesce(${scmChangeRequests.workId}, ${params.workId})`,
+      })
+      .where(
+        and(
+          eq(scmChangeRequests.id, row.id),
+          eq(scmChangeRequests.userId, params.scope.userId),
+          params.scope.workspaceId == null
+            ? isNull(scmChangeRequests.workspaceId)
+            : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
+        ),
+      );
   };
+
+  /** See {@link claimTopicFromLink}. */
+  static claimTopicFromLink = claimTopicFromLink;
+
+  /** See {@link releaseTopicFromLink}. */
+  static releaseTopicFromLink = releaseTopicFromLink;
 
   /**
    * Point the row at `acceptanceId` unless it already names another one,

@@ -61,6 +61,18 @@ describe('resolveAutoFixAvailability', () => {
     });
   });
 
+  it('stays switchable here while off, so the person can turn it back on', () => {
+    expect(
+      resolveAutoFixAvailability(autoFix({ enabled: false, wakeCount: 3 }), 'tpc-here'),
+    ).toEqual({
+      changeRequestId: 'scr-1',
+      enabled: false,
+      kind: 'own',
+      maxWakes: 3,
+      wakeCount: 3,
+    });
+  });
+
   it('needs the GitHub App, a linked conversation, and that it is this one', () => {
     expect(resolveAutoFixAvailability(undefined, 'tpc-here')).toEqual({ kind: 'noApp' });
     expect(resolveAutoFixAvailability(autoFix({ ownerTopicId: null }), 'tpc-here')).toEqual({

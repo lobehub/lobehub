@@ -212,6 +212,16 @@ export interface ScmChangeRequestMetadata {
    * tenant and need no such check.
    */
   routedBy?: 'author' | 'installation';
+  /**
+   * Set when the linked conversation (`topicId`) came from a topic's own PR
+   * link (branch match or Link a PR) rather than from a source the provider
+   * events resolve (acceptance, Work). Removing the PR from that topic clears
+   * the conversation again; once an event resolves a conversation of its
+   * own, the marker is dropped and the binding is that source's.
+   * `claimId` is the generation of the latest claim: a release only clears
+   * the generation it observed, so it cannot undo a relink that came after.
+   */
+  topicLink?: { at: string; claimId: string; topicId: string };
 }
 
 /** Processing state of one inbound webhook delivery. */
