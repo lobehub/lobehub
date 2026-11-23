@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -100,6 +101,36 @@ describe('fileRouter admission slot', () => {
 
     expect(release).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledWith(scope, 'task');
+  });
+
+  it('keeps the slot after a parse times out, until the work behind it stops', async () => {
+    vi.useFakeTimers();
+    let finishChunking!: (value: { chunks: never[] }) => void;
+    vi.mocked(ChunkService).mockImplementation(function () {
+      return {
+        asyncEmbeddingFileChunks,
+        chunkContent: vi.fn(() => new Promise((resolve) => (finishChunking = resolve))),
+      } as any;
+    });
+
+    try {
+      const run = caller().parseFileToChunks({
+        admissionScope: scope,
+        fileId: 'file',
+        taskId: 'task',
+      });
+      await vi.advanceTimersByTimeAsync(ASYNC_TASK_TIMEOUT + 1);
+
+      await expect(run).resolves.toMatchObject({ success: false });
+      expect(release).not.toHaveBeenCalled();
+
+      finishChunking({ chunks: [] });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(release).toHaveBeenCalledWith(scope, 'task');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('admits embedding on its own when the parse holds no slot', async () => {

@@ -51,8 +51,9 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
 
 /** Holds the slot a task was admitted with until its route finishes, on every exit path. */
 const admittedFileProcedure = fileProcedure.use(async ({ getRawInput, next }) =>
-  holdFileTaskLease((await getRawInput()) as { admissionScope?: string; taskId?: string }, () =>
-    next(),
+  holdFileTaskLease(
+    (await getRawInput()) as { admissionScope?: string; taskId?: string },
+    (holdLeaseUntil) => next({ ctx: { holdLeaseUntil } }),
   ),
 );
 
@@ -504,6 +505,7 @@ export const fileRouter = router({
           // so the slot stays taken until it is really done.
           const chunking = chunkingPromise();
           slot.holdUntil(chunking);
+          ctx.holdLeaseUntil(chunking);
           try {
             return await Promise.race([chunking, timeoutPromise]);
           } finally {

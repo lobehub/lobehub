@@ -11,6 +11,7 @@ import { qstashAuth } from '../middlewares/qstashAuth';
 const payloadSchema = z.object({
   fileId: z.string(),
   kind: z.enum(['embedding', 'parse']),
+  queuedUntil: z.string(),
   taskId: z.string(),
   userId: z.string(),
   workspaceId: z.string().optional(),

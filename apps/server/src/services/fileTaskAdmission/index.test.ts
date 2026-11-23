@@ -82,6 +82,12 @@ vi.mock('@/database/models/asyncTask', () => ({
         return id;
       },
       findById: async (id: string) => h.tasks.get(id),
+      swapFileTaskQueueMarker: async (id: string, from: string, to: Date) => {
+        const task = h.tasks.get(id);
+        if (task?.metadata?.fileTaskQueuedUntil !== from) return false;
+        task.metadata = { ...task.metadata, fileTaskQueuedUntil: to.toISOString() };
+        return true;
+      },
       markFileTaskQueued: async (id: string, until: Date) => {
         const task = h.tasks.get(id);
         task.metadata = { ...task.metadata, fileTaskQueuedUntil: until.toISOString() };
@@ -390,10 +396,11 @@ describe('file task admission', () => {
   });
 
   describe('queue delivery', () => {
+    const queuedUntil = '2030-01-01T00:00:00.000Z';
     const queuedTask = (status: string = AsyncTaskStatus.Processing): FakeTask => {
       const task: FakeTask = {
         id: 'queued-task',
-        metadata: { fileTaskQueuedUntil: new Date(Date.now() + 60_000).toISOString() },
+        metadata: { fileTaskQueuedUntil: queuedUntil },
         status,
         type: 'chunk',
       };
@@ -403,6 +410,7 @@ describe('file task admission', () => {
     const ref = {
       fileId: 'file',
       kind: 'parse' as const,
+      queuedUntil,
       taskId: 'queued-task',
       userId: 'user',
       workspaceId: 'ws-1',
@@ -466,7 +474,41 @@ describe('file task admission', () => {
 
       await expect(delivery).resolves.toBe('deferred');
       expect(h.publish).toHaveBeenCalledWith(expect.objectContaining({ delay: 10 }));
-      expect(h.tasks.get(ref.taskId).metadata.fileTaskQueuedUntil).toBeDefined();
+      const [{ body }] = h.publish.mock.calls[0];
+      expect(body.queuedUntil).not.toBe(queuedUntil);
+      expect(h.tasks.get(ref.taskId).metadata.fileTaskQueuedUntil).toBe(body.queuedUntil);
+    });
+
+    it('lets only one duplicate requeue, and ignores the stale copy afterwards', async () => {
+      h.fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY = 1;
+      h.slots.scopes.set('workspace:ws-1', new Set(['other']));
+      h.slots.global.add('other');
+      queuedTask();
+      h.publish.mockResolvedValue({ messageId: 'message' });
+
+      const deliveries = Promise.all([
+        processQueuedFileTask(ref, { finalAttempt: false }),
+        processQueuedFileTask(ref, { finalAttempt: false }),
+      ]);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect((await deliveries).sort()).toEqual(['deferred', 'skipped']);
+      await expect(processQueuedFileTask(ref, { finalAttempt: false })).resolves.toBe('skipped');
+    });
+
+    it('keeps the task redeliverable when the requeue cannot be published', async () => {
+      h.fileEnv.FILE_TASK_WORKSPACE_CONCURRENCY = 1;
+      h.slots.scopes.set('workspace:ws-1', new Set(['other']));
+      h.slots.global.add('other');
+      queuedTask();
+      h.publish.mockRejectedValue(new Error('qstash down'));
+
+      const delivery = processQueuedFileTask(ref, { finalAttempt: false });
+      const settled = expect(delivery).rejects.toThrow('qstash down');
+      await vi.advanceTimersByTimeAsync(10_000);
+      await settled;
+
+      expect(h.tasks.get(ref.taskId).metadata.fileTaskQueuedUntil).toBe(queuedUntil);
     });
 
     it('drains queued tasks right away once admission is turned off', async () => {
@@ -490,7 +532,7 @@ describe('file task admission', () => {
 
       await expect(processQueuedFileTask(ref, { finalAttempt: false })).rejects.toBe(unavailable);
 
-      expect(h.tasks.get(ref.taskId).metadata.fileTaskQueuedUntil).toBeDefined();
+      expect(h.tasks.get(ref.taskId).metadata.fileTaskQueuedUntil).toBe(queuedUntil);
       expect(h.slots.global.size).toBe(0);
     });
 
@@ -548,6 +590,23 @@ describe('file task admission', () => {
       }),
     ).rejects.toThrow('boom');
 
+    expect(h.slots.global.has('task')).toBe(false);
+  });
+
+  it('keeps the slot until work the route stopped waiting for has settled', async () => {
+    h.slots.scopes.set('workspace:ws-1', new Set(['task']));
+    h.slots.global.add('task');
+    let finish!: () => void;
+    const background = new Promise<void>((resolve) => (finish = resolve));
+
+    await holdFileTaskLease(
+      { admissionScope: 'workspace:ws-1', taskId: 'task' },
+      async (holdUntil) => holdUntil(background),
+    );
+    expect(h.slots.global.has('task')).toBe(true);
+
+    finish();
+    await vi.advanceTimersByTimeAsync(0);
     expect(h.slots.global.has('task')).toBe(false);
   });
 

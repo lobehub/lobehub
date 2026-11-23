@@ -15,10 +15,10 @@ import type { FileTaskSlotAcquireResult } from '@/server/services/redis/fileTask
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 
 import { triggerFileTask } from './trigger';
-import type { FileTaskAdmission, FileTaskRef } from './types';
+import type { FileTaskAdmission, FileTaskRef, QueuedFileTask } from './types';
 
 export { prepareFileTaskTrigger, triggerFileTask } from './trigger';
-export type { FileTaskAdmission, FileTaskKind, FileTaskRef } from './types';
+export type { FileTaskAdmission, FileTaskKind, FileTaskRef, QueuedFileTask } from './types';
 
 /** Lapses within minutes when a function dies; a live task renews it. */
 const LEASE_TTL_MS = 180_000;
@@ -102,7 +102,7 @@ const report = (
 
 const queueDeadline = () => new Date(Date.now() + QUEUE_DEADLINE_MS);
 
-const publishQueuedFileTask = async (task: FileTaskRef, delaySeconds?: number) => {
+const publishQueuedFileTask = async (task: QueuedFileTask, delaySeconds?: number) => {
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   const scope = getFileTaskScope(task.userId, task.workspaceId);
 
@@ -143,8 +143,9 @@ export const admitFileTask = async (
   }
 
   // Written before publishing: a delivery can arrive before the publish call returns.
-  await asyncTaskModel.markFileTaskQueued(task.taskId, queueDeadline());
-  await publishQueuedFileTask(task);
+  const queuedUntil = queueDeadline();
+  await asyncTaskModel.markFileTaskQueued(task.taskId, queuedUntil);
+  await publishQueuedFileTask({ ...task, queuedUntil: queuedUntil.toISOString() });
   report('queued', task, lease.status === 'full' ? lease : undefined);
 
   return { queued: true };
@@ -157,25 +158,43 @@ export const releaseFileTaskAdmission = async (scope: string | undefined, taskId
   if (globalActive !== undefined) recordFileTaskGlobalActive(globalActive);
 };
 
-/** Holds the task's slot for as long as the async route runs it. */
+/**
+ * Holds the task's slot for as long as the async route runs it. `run` can extend that with
+ * `holdUntil`: a timed-out parse stops being waited for but keeps working and keeps the file in
+ * memory, so its slot stays taken until that work settles.
+ */
 export const holdFileTaskLease = async <T>(
   input: { admissionScope?: string; taskId?: string } | undefined,
-  run: () => Promise<T>,
+  run: (holdUntil: (work: Promise<unknown>) => void) => Promise<T>,
 ): Promise<T> => {
   const scope = input?.admissionScope;
   const taskId = input?.taskId;
-  if (!scope || !taskId) return run();
+  if (!scope || !taskId) return run(() => undefined);
 
   const heartbeat = setInterval(() => {
     void redisService.fileTaskSlots.renew(scope, taskId, LEASE_TTL_MS);
   }, LEASE_RENEW_MS);
   heartbeat.unref?.();
 
-  try {
-    return await run();
-  } finally {
+  const release = async () => {
     clearInterval(heartbeat);
     await releaseFileTaskAdmission(scope, taskId);
+  };
+
+  let held: Promise<unknown> | undefined;
+  let heldSettled = false;
+  try {
+    return await run((work) => {
+      const markSettled = () => {
+        heldSettled = true;
+      };
+      held = work;
+      work.then(markSettled, markSettled);
+    });
+  } finally {
+    // Awaited whenever possible: a function can be frozen as soon as its response returns.
+    if (held && !heldSettled) void held.then(release, release);
+    else await release();
   }
 };
 
@@ -202,7 +221,7 @@ export type QueuedFileTaskOutcome = 'deferred' | 'failed' | 'skipped' | 'started
  * delivery starts the task. Throwing asks QStash to redeliver.
  */
 export const processQueuedFileTask = async (
-  task: FileTaskRef,
+  task: QueuedFileTask,
   { finalAttempt }: { finalAttempt: boolean },
 ): Promise<QueuedFileTaskOutcome> => {
   const db = await getServerDB();
@@ -211,7 +230,7 @@ export const processQueuedFileTask = async (
   const current = await asyncTaskModel.findById(task.taskId);
   const queuedUntil = (current?.metadata as { fileTaskQueuedUntil?: string } | null)
     ?.fileTaskQueuedUntil;
-  if (!current || !queuedUntil || isSettled(current.status)) return 'skipped';
+  if (!current || queuedUntil !== task.queuedUntil || isSettled(current.status)) return 'skipped';
 
   const scope = getFileTaskScope(task.userId, task.workspaceId);
   const deadline = Date.now() + SLOT_WAIT_MS;
@@ -229,8 +248,19 @@ export const processQueuedFileTask = async (
   }
 
   if (lease.status === 'full') {
-    await asyncTaskModel.markFileTaskQueued(task.taskId, queueDeadline());
-    await publishQueuedFileTask(task, REQUEUE_DELAY_SECONDS);
+    // Published before the swap: if this throws, the marker still matches and QStash can redeliver.
+    // A duplicate delivery loses the swap, so its message never matches and the copies die out.
+    const nextQueuedUntil = queueDeadline();
+    await publishQueuedFileTask(
+      { ...task, queuedUntil: nextQueuedUntil.toISOString() },
+      REQUEUE_DELAY_SECONDS,
+    );
+    const swapped = await asyncTaskModel.swapFileTaskQueueMarker(
+      task.taskId,
+      task.queuedUntil,
+      nextQueuedUntil,
+    );
+    if (!swapped) return 'skipped';
     report('deferred', task, lease);
     return 'deferred';
   }
@@ -272,7 +302,8 @@ export const processQueuedFileTask = async (
   if (!latest || isSettled(latest.status)) return 'failed';
 
   if (!finalAttempt && neverStarted(outcome.error)) {
-    await asyncTaskModel.markFileTaskQueued(task.taskId, queueDeadline());
+    // The same token, because QStash redelivers this same message.
+    await asyncTaskModel.markFileTaskQueued(task.taskId, new Date(task.queuedUntil));
     throw outcome.error;
   }
 

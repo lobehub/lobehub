@@ -491,6 +491,21 @@ describe('AsyncTaskModel', () => {
       expect(task?.metadata).toEqual({ keep: true });
     });
 
+    it('lets exactly one duplicate delivery requeue the task', async () => {
+      const id = await insertQueuedTask();
+      const task = await serverDB.query.asyncTasks.findFirst({ where: eq(asyncTasks.id, id) });
+      const marker = (task?.metadata as { fileTaskQueuedUntil: string }).fileTaskQueuedUntil;
+      const next = new Date(Date.now() + 120_000);
+
+      const swaps = await Promise.all([
+        asyncTaskModel.swapFileTaskQueueMarker(id, marker, next),
+        asyncTaskModel.swapFileTaskQueueMarker(id, marker, new Date(next.getTime() + 1)),
+      ]);
+
+      expect(swaps.filter(Boolean)).toHaveLength(1);
+      await expect(asyncTaskModel.swapFileTaskQueueMarker(id, marker, next)).resolves.toBe(false);
+    });
+
     it('refuses a task that already settled', async () => {
       const id = await insertQueuedTask(AsyncTaskStatus.Error);
 
