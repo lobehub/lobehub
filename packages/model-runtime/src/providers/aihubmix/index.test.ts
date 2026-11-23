@@ -251,6 +251,90 @@ describe('LobeAiHubMixAI', () => {
       expect(passedModels.find((m) => m.id === 'gpt-4o')).toBeDefined();
     });
 
+    it('should omit non-positive context_length and max_output so image models do not show infinite context', async () => {
+      const spy = vi.spyOn(modelParse, 'processMultiProviderModelList').mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                context_length: 0,
+                desc: 'Image generation model',
+                max_output: 0,
+                model_id: 'gpt-image-1',
+                types: 'image_generation',
+              },
+              {
+                context_length: -1,
+                max_output: -10,
+                model_id: 'dall-e-3',
+                types: 'image_generation',
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await instance.models();
+
+      const passedModels = spy.mock.calls.at(-1)![0] as Record<string, unknown>[];
+      expect(passedModels).toHaveLength(2);
+      for (const model of passedModels) {
+        expect(model.type).toBe('image');
+        expect(model.contextWindowTokens).toBeUndefined();
+        expect(model.maxOutput).toBeUndefined();
+      }
+    });
+
+    it('should parse comma-separated compound types and keep multi-type models containing supported types', async () => {
+      const spy = vi.spyOn(modelParse, 'processMultiProviderModelList').mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              { model_id: 'gemini-2.5-flash-image', types: 'image_generation,llm' },
+              { model_id: 'sonar-pro', types: 'llm,search' },
+              { features: 'tools', model_id: 'sonar-reasoning', types: 'llm,search' },
+              { model_id: 'deepseek-ocr', types: 'llm,ocr' },
+              { model_id: 'bge-m3-hybrid', types: 'embedding,rerank' },
+              { model_id: 'router-decision', types: 'decision' },
+              { model_id: 'gpt-4o-realtime-preview', types: 'stt,tts' },
+              { model_id: 'rerank-combo-only', types: 'rerank, reranking' },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await instance.models();
+
+      const passedModels = spy.mock.calls.at(-1)![0] as Record<string, unknown>[];
+      const byId = new Map(passedModels.map((m) => [m.id, m]));
+
+      expect(byId.get('gemini-2.5-flash-image')).toMatchObject({
+        imageOutput: true,
+        type: 'chat',
+      });
+      expect(byId.get('sonar-pro')).toMatchObject({
+        search: true,
+        type: 'chat',
+      });
+      expect(byId.get('sonar-reasoning')).toMatchObject({
+        functionCall: true,
+        search: true,
+        type: 'chat',
+      });
+      expect(byId.get('deepseek-ocr')).toMatchObject({ type: 'chat' });
+      expect(byId.get('bge-m3-hybrid')).toMatchObject({ type: 'embedding' });
+      expect(byId.get('router-decision')).toMatchObject({ type: 'decision' });
+      expect(byId.get('gpt-4o-realtime-preview')).toBeDefined();
+      expect(byId.get('gpt-4o-realtime-preview')?.type).toBeUndefined();
+      expect(byId.get('rerank-combo-only')).toBeUndefined();
+    });
+
     it('should throw on non-ok HTTP response', async () => {
       mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
 

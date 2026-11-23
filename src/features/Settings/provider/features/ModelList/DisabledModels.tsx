@@ -37,8 +37,11 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
   ]);
 
   // Only render at most PAGE_SIZE items on first paint and reveal more in
-  // PAGE_SIZE steps as the user scrolls.
-  const [visibleSize, setVisibleSize] = useState(PAGE_SIZE);
+  // PAGE_SIZE steps as the user scrolls. Key pagination by provider/tab/sort so
+  // changing any of them resets the window immediately without an effect.
+  const windowKey = `${providerId}:${activeTab}:${sortType}`;
+  const [pagination, setPagination] = useState({ key: windowKey, size: PAGE_SIZE });
+  const visibleSize = pagination.key === windowKey ? pagination.size : PAGE_SIZE;
 
   const updateSortType = useCallback(
     (newSortType: SortType) => {
@@ -52,57 +55,14 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
   // copy on the first frame — and never refetches pages of the same rows.
   const disabledModels = useAiInfraStore(aiModelSelectors.disabledAiProviderModelList, isEqual);
 
-  useEffect(() => {
-    // reset visible window on provider change
-    setVisibleSize(PAGE_SIZE);
-  }, [providerId]);
-
-  const sourceDisabledModels = useMemo(
-    () => disabledModels.slice(0, visibleSize),
-    [disabledModels, visibleSize],
-  );
-
-  const hasMore = visibleSize < disabledModels.length;
-
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
-  const triggerLoadMore = useCallback(() => {
-    setVisibleSize((v) => Math.min(v + PAGE_SIZE, disabledModels.length));
-  }, [disabledModels.length]);
-
-  useEffect(() => {
-    if (!hasMore) return;
-    if (!loadMoreRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          triggerLoadMore();
-        });
-      },
-      {
-        rootMargin: '200px',
-        threshold: 0.01,
-      },
-    );
-
-    observer.observe(loadMoreRef.current);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasMore, triggerLoadMore]);
-
-  const shouldRenderSection = disabledModels.length > 0;
-
-  // Filter models based on active tab
+  // Filter models based on active tab before sorting and windowing so
+  // switching tabs (e.g. Image / Video) reveals matching models beyond PAGE_SIZE.
   const filteredDisabledModels = useMemo(() => {
-    if (activeTab === 'all') return sourceDisabledModels;
-    return sourceDisabledModels.filter((model) => model.type === activeTab);
-  }, [activeTab, sourceDisabledModels]);
+    if (activeTab === 'all') return disabledModels;
+    return disabledModels.filter((model) => model.type === activeTab);
+  }, [activeTab, disabledModels]);
 
-  // Sort models based on sort type
+  // Sort models based on sort type across the full filtered set before slicing.
   const sortedDisabledModels = useMemo(() => {
     const models = [...filteredDisabledModels];
     switch (sortType) {
@@ -153,7 +113,50 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
     }
   }, [filteredDisabledModels, sortType]);
 
-  const displayModels = sortedDisabledModels;
+  const displayModels = useMemo(
+    () => sortedDisabledModels.slice(0, visibleSize),
+    [sortedDisabledModels, visibleSize],
+  );
+
+  const hasMore = visibleSize < sortedDisabledModels.length;
+
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const triggerLoadMore = useCallback(() => {
+    setPagination((prev) => {
+      const currentSize = prev.key === windowKey ? prev.size : PAGE_SIZE;
+      return {
+        key: windowKey,
+        size: Math.min(currentSize + PAGE_SIZE, sortedDisabledModels.length),
+      };
+    });
+  }, [sortedDisabledModels.length, windowKey]);
+
+  useEffect(() => {
+    if (!hasMore) return;
+    if (!loadMoreRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          triggerLoadMore();
+        });
+      },
+      {
+        rootMargin: '200px',
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, triggerLoadMore, windowKey]);
+
+  const shouldRenderSection = filteredDisabledModels.length > 0;
 
   return (
     shouldRenderSection && (
@@ -162,7 +165,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
           <Text style={{ fontSize: 12, marginTop: 8 }} type={'secondary'}>
             {t('providerModels.list.disabled')}
           </Text>
-          {sourceDisabledModels.length > 1 && (
+          {filteredDisabledModels.length > 1 && (
             <DropdownMenu
               items={
                 [
