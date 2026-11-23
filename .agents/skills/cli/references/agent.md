@@ -77,7 +77,7 @@ lh agent connect [types...] [--device <deviceId>] [--visibility <private|public>
 | `--yes`                     | Skip the confirmation prompt (required without an interactive terminal)                             |
 | `--json [fields]`           | Print `{ created: [{ id, title, type, url, version? }], deviceId, skipped: [{ id, title, type }] }` |
 
-The device defaults to this machine in the current scope's pool: its workspace device inside a workspace (only workspace devices qualify there), else its personal device. It must be connected (`lh connect`, or `lh connect --workspace <id>` for a workspace) and online. The device is scanned through the server, so a named type that is not installed there fails with the scan's reason. Types that already have an agent bound to the device are skipped, so rerunning connects only what is missing. The scan checks the binary only: an agent CLI that needs sign-in (Antigravity, Codex, …) must be signed in on the device before its first run.
+The device defaults to this machine in the current scope's pool: its workspace device inside a workspace (only workspace devices qualify there), else its personal device. It must be connected (`lh connect`, or `lh connect --workspace <id>` for a workspace) and online. The device is scanned through the server, so a named type that is not installed there fails with the scan's reason. Types you already have an agent for on the device are skipped (teammates' agents on a shared workspace device do not count), so rerunning connects only what is missing. The scan checks the binary only: an agent CLI that needs sign-in (Antigravity, Codex, …) must be signed in on the device before its first run.
 
 ---
 

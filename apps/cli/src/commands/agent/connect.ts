@@ -141,13 +141,15 @@ const selectAvailable = (
 };
 
 /**
- * Agent types that already have an agent routed to the device, so a rerun
- * connects only what is missing. Best effort: when the lookup fails the
+ * Agent types the caller already has an agent for on the device, so a rerun
+ * connects only what is missing. Teammates' agents on a shared workspace device
+ * do not count: each member connects their own. Best effort: when the lookup fails the
  * command still connects, it just cannot skip duplicates.
  */
 const findConnectedAgents = async (
   client: Awaited<ReturnType<typeof getTrpcClient>>,
   deviceId: string,
+  userId: string | undefined,
 ): Promise<Map<string, string>> => {
   const connected = new Map<string, string>();
   try {
@@ -159,7 +161,8 @@ const findConnectedAgents = async (
     );
     configs.forEach((config: any, index: number) => {
       const type = config?.agencyConfig?.heterogeneousProvider?.type;
-      if (type && !connected.has(type)) connected.set(type, agents[index].id);
+      if (!type || connected.has(type) || config.userId !== userId) return;
+      connected.set(type, agents[index].id);
     });
   } catch (error) {
     log.warn(
@@ -238,7 +241,7 @@ Examples:
         );
       }
 
-      const connected = await findConnectedAgents(client, device.deviceId);
+      const connected = await findConnectedAgents(client, device.deviceId, user?.userId);
       const skipped = available
         .filter((p) => connected.has(p.type))
         .map((p) => ({ id: connected.get(p.type)!, title: p.title, type: p.type }));

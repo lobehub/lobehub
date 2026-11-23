@@ -183,6 +183,7 @@ describe('agent connect', () => {
     });
     mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue({
       agencyConfig: { heterogeneousProvider: { type: 'antigravity' } },
+      userId: 'u1',
     });
     const jsonSpy = vi.fn();
     consoleSpy.mockImplementation(jsonSpy);
@@ -195,6 +196,20 @@ describe('agent connect', () => {
       deviceId: 'personal-u1',
       skipped: [{ id: 'agt_old', title: 'Antigravity', type: 'antigravity' }],
     });
+  });
+
+  it("does not skip a teammate's agent on a shared device", async () => {
+    mockTrpcClient.device.getDeviceActivity.query.mockResolvedValue({
+      agents: [{ id: 'agt_ann' }],
+    });
+    mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue({
+      agencyConfig: { heterogeneousProvider: { type: 'antigravity' } },
+      userId: 'ann',
+    });
+
+    await run('antigravity', '--yes');
+
+    expect(createdConfigs()).toHaveLength(1);
   });
 
   it('still connects when the existing-agent lookup fails', async () => {
