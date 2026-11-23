@@ -45,11 +45,6 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Button: ({ children, onClick, icon: _icon, ...rest }: any) => (
-    <button type="button" onClick={onClick} {...rest}>
-      {children}
-    </button>
-  ),
   Center: ({ children, horizontal: _h, gap: _g, ...rest }: any) => <div {...rest}>{children}</div>,
   Divider: () => <hr />,
   Flexbox: ({ children, horizontal: _h, gap: _g, align: _a, justify: _j, ...rest }: any) => (
@@ -63,8 +58,11 @@ vi.mock('@lobehub/ui', () => ({
     </div>
   ),
   cssVar: {
+    borderRadiusSM: '4px',
     colorFill: '#ccc',
+    colorFillTertiary: '#eee',
     colorSuccess: '#0f0',
+    colorText: '#111',
     colorTextDescription: '#666',
     colorTextSecondary: '#999',
     cyan9: '#0ff',
@@ -130,9 +128,11 @@ describe('TokenDetail (UsageDetail)', () => {
     fireEvent.click(screen.getByTestId('animated-number'));
     expect(mockUpdateSystemStatus).not.toHaveBeenCalled();
 
-    // Tapping the in-popover format toggle switches compact -> full
+    // Tapping the in-popover format toggle switches compact -> full and meets >=44px mobile touch target
     const toggleBtn = screen.getByTestId('token-format-toggle');
-    expect(toggleBtn.textContent).toBe('messages.tokenDetails.format.compact');
+    expect(toggleBtn.textContent).toContain('messages.tokenDetails.format.compact');
+    expect(toggleBtn.style.minHeight).toBe('44px');
+    expect(toggleBtn.style.minWidth).toBe('44px');
     fireEvent.click(toggleBtn);
     expect(mockUpdateSystemStatus).toHaveBeenCalledWith({ tokenDisplayFormatShort: false });
   });
@@ -153,7 +153,7 @@ describe('TokenDetail (UsageDetail)', () => {
     // In-popover toggle also works on desktop
     mockUpdateSystemStatus.mockClear();
     const toggleBtn = screen.getByTestId('token-format-toggle');
-    expect(toggleBtn.textContent).toBe('messages.tokenDetails.format.full');
+    expect(toggleBtn.textContent).toContain('messages.tokenDetails.format.full');
     fireEvent.click(toggleBtn);
     expect(mockUpdateSystemStatus).toHaveBeenCalledWith({ tokenDisplayFormatShort: true });
   });
