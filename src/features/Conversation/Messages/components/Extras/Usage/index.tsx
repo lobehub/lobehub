@@ -168,7 +168,11 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
           (showMemberTokenUsage
             ? !isShowCredit && !!usage.cost && usage.cost >= MIN_DISPLAY_COST
             : usage.cost > 0 && isUsageCreditsEnabled()) && (
-            <Center horizontal gap={2}>
+            <Center
+              horizontal
+              gap={2}
+              title={showMemberTokenUsage ? undefined : t('messages.creditUsageHint')}
+            >
               <Icon icon={isUsageCreditsEnabled() ? BadgeCent : CircleDollarSignIcon} />
               {formatUsageCost(usage.cost, formatCost)}
             </Center>

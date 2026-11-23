@@ -11,8 +11,6 @@
   "error.stack": "مكدس الأخطاء",
   "error.title": "عذرًا، حدث خطأ ما..",
   "exceededContext.compact": "ضغط السياق",
-  "exceededContext.desc": "تجاوزت المحادثة حد نافذة السياق. يمكنك ضغط السياق لتقليل التاريخ ومواصلة الدردشة.",
-  "exceededContext.title": "تم تجاوز نافذة السياق",
   "fetchError.detail": "تفاصيل الخطأ",
   "fetchError.title": "فشل الطلب",
   "forbidden.backHome": "العودة إلى الصفحة الرئيسية",

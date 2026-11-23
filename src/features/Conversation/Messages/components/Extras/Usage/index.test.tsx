@@ -11,7 +11,7 @@ vi.mock('@/hooks/useShowMemberTokenUsage', () => ({
 
 vi.mock('@/store/agent', () => ({ useAgentStore: () => undefined }));
 vi.mock('@/store/aiInfra', () => ({ aiModelSelectors: {}, useAiInfraStore: () => undefined }));
-vi.mock('@/store/global', () => ({ useGlobalStore: () => true }));
+vi.mock('@/store/global', () => ({ useGlobalStore: () => false }));
 vi.mock('../../../../store', () => ({ contextSelectors: {}, useConversationStore: () => 'chat' }));
 vi.mock('@/components/LobeIcons', () => ({ ModelIcon: () => null }));
 vi.mock('./UsageDetail', () => ({ default: () => <span>543 tokens</span> }));
@@ -32,7 +32,8 @@ it.each([false, true])('gates diagnostics in the developer footer (%s)', (enable
   );
   expect(container.textContent?.includes('543 tokens')).toBe(enabled);
   expect(container.textContent?.includes('777')).toBe(enabled);
-  if (!enabled) expect(container.textContent).toContain('31 credits');
+  expect(!!container.querySelector('[title="messages.creditUsageHint"]')).toBe(!enabled);
+  expect(container.textContent).toContain('31 credits');
 });
 
 it('shows a charge even without a token total', () => {

@@ -1826,7 +1826,6 @@
   "opencodeInstallGuide.menuNotification.title": "لم يتم العثور على واجهة OpenCode CLI",
   "opencodeInstallGuide.reason": "تعذر على LobeHub تشغيل OpenCode: {{message}}",
   "opencodeInstallGuide.title": "تثبيت واجهة OpenCode CLI",
-  "operation.contextCompression": "السياق طويل جدًا، يتم ضغط السجل...",
   "operation.execAgentRuntime": "جارٍ تحضير الرد",
   "operation.execClientSubAgent": "تشغيل الوكيل الفرعي",
   "operation.execHeterogeneousAgent": "{{name}} قيد التشغيل",

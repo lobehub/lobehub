@@ -327,6 +327,7 @@
   "channel.settingsResetConfirm": "Are you sure you want to reset advanced settings to default?",
   "channel.settingsResetDefault": "Reset to Default",
   "channel.setupGuide": "Setup Guide",
+  "channel.showCreditStatsHint": "Show credits, elapsed time and call counts at the end of each reply",
   "channel.showUsageStats": "Show Usage Stats",
   "channel.showUsageStatsHint": "Show token usage, cost, and duration stats in bot replies",
   "channel.signingSecret": "Signing Secret",

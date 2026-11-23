@@ -11,8 +11,6 @@
   "error.stack": "Stack degli errori",
   "error.title": "Ops, qualcosa è andato storto...",
   "exceededContext.compact": "Compatta Contesto",
-  "exceededContext.desc": "La conversazione ha superato il limite della finestra di contesto. Puoi compattare il contesto per comprimere la cronologia e continuare a chattare.",
-  "exceededContext.title": "Finestra di Contesto Superata",
   "fetchError.detail": "Dettagli dell'errore",
   "fetchError.title": "Richiesta fallita",
   "forbidden.backHome": "Torna alla Home",

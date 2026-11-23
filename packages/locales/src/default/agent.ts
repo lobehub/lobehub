@@ -441,6 +441,8 @@ export default {
   'channel.signingSecret': 'Signing Secret',
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
+  'channel.showCreditStatsHint':
+    'Show credits, elapsed time and call counts at the end of each reply',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
   'channel.displayToolCalls': 'Display Tool Calls',
   'channel.displayToolCallsHint':

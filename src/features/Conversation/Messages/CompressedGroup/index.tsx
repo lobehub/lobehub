@@ -15,6 +15,7 @@ import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore } from '../../store';
 import CompressedMessageItem from './CompressedMessageItem';
+import FirstCompressionHint from './FirstCompressionHint';
 import {
   getCompressedTurnCount,
   isCompressionSummaryGenerating,
@@ -188,6 +189,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
           </button>
         </Divider>
       )}
+      <FirstCompressionHint id={id} />
     </Flexbox>
   );
 });

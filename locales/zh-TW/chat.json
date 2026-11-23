@@ -1826,7 +1826,6 @@
   "opencodeInstallGuide.menuNotification.title": "未找到 OpenCode CLI",
   "opencodeInstallGuide.reason": "LobeHub 無法啟動 OpenCode：{{message}}",
   "opencodeInstallGuide.title": "安裝 OpenCode CLI",
-  "operation.contextCompression": "內容過長，正在壓縮歷史記錄⋯⋯",
   "operation.execAgentRuntime": "正在準備回應",
   "operation.execClientSubAgent": "執行子代理",
   "operation.execHeterogeneousAgent": "{{name}} 正在執行",

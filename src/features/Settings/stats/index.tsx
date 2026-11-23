@@ -1,6 +1,6 @@
 'use client';
 
-import { DayjsDatePicker as DatePicker, Divider, Grid, Icon, Tabs } from '@lobehub/ui';
+import { cssVar, DayjsDatePicker as DatePicker, Divider, Grid, Icon, Tabs } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import dayjs from 'dayjs';
@@ -147,6 +147,11 @@ const StatsSetting = memo<StatsSettingProps>(
             </>
           }
         >
+          {!showMemberTokenUsage && (
+            <p style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>
+              {t('usage.creditDescription')}
+            </p>
+          )}
           <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
             <UsageCards
               data={data}

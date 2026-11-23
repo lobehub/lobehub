@@ -11,8 +11,6 @@
   "error.stack": "오류 스택",
   "error.title": "페이지를 일시적으로 사용할 수 없습니다",
   "exceededContext.compact": "컨텍스트 압축",
-  "exceededContext.desc": "대화가 컨텍스트 창 제한을 초과했습니다. 컨텍스트를 압축하여 기록을 줄이고 계속 대화할 수 있습니다.",
-  "exceededContext.title": "컨텍스트 창 초과",
   "fetchError.detail": "자세히 보기",
   "fetchError.title": "요청을 완료할 수 없습니다",
   "forbidden.backHome": "홈으로 돌아가기",

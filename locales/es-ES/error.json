@@ -11,8 +11,6 @@
   "error.stack": "Pila de errores",
   "error.title": "Vaya, algo salió mal...",
   "exceededContext.compact": "Contexto Compacto",
-  "exceededContext.desc": "La conversación ha excedido el límite de la ventana de contexto. Puedes compactar el contexto para comprimir el historial y continuar conversando.",
-  "exceededContext.title": "Límite de Ventana de Contexto Excedido",
   "fetchError.detail": "Detalles del error",
   "fetchError.title": "La solicitud falló",
   "forbidden.backHome": "Volver a Inicio",

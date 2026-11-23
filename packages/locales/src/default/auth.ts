@@ -507,6 +507,8 @@ export default {
   'tab.profile': 'My Account',
   'tab.security': 'Security',
   'tab.stats': 'Statistics',
+  'usage.creditDescription':
+    "Credits measure the computing resources used by your AI assistant. Each request's usage depends on the model, the length of the conversation, and whether deep thinking, tools, or image processing are used. Your organization's admin manages your allowance.",
   'tab.usage': 'Usage',
   'usage.activeModels.modelTable': 'Model List',
   'usage.activeModels.models': 'Active Models',

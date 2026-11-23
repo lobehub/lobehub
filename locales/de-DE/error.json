@@ -11,8 +11,6 @@
   "error.stack": "Fehlerstapel",
   "error.title": "Hoppla, da ist etwas schiefgelaufen..",
   "exceededContext.compact": "Kontext komprimieren",
-  "exceededContext.desc": "Das Gespräch hat das Kontextfensterlimit überschritten. Sie können den Kontext komprimieren, um den Verlauf zu verkürzen und weiter zu chatten.",
-  "exceededContext.title": "Kontextfenster überschritten",
   "fetchError.detail": "Fehlerdetails",
   "fetchError.title": "Anfrage fehlgeschlagen",
   "forbidden.backHome": "Zurück zur Startseite",

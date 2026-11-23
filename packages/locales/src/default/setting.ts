@@ -1412,7 +1412,7 @@ export default {
   'settingImage.defaultCount.label': 'Default Image Count',
   'settingImage.defaultCount.title': 'Generation',
   'settingModel.enableContextCompression.desc':
-    'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
+    'When a conversation gets long, earlier messages are summarized automatically so the chat can keep going.',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
   'settingModel.enableMaxTokens.title': 'Enable Max Tokens Limit',
   'settingModel.enableReasoningEffort.title': 'Enable Reasoning Effort Adjustment',
@@ -1440,7 +1440,7 @@ export default {
     'The higher the value, the more inclined to use different expressions and avoid concept repetition; the lower the value, the more inclined to use repeated concepts or narratives, resulting in more consistent expression.',
   'settingModel.presencePenalty.title': 'Expression Divergence',
   'settingModel.reasoningEffort.desc':
-    'Higher values enhance reasoning ability but may increase response time and token usage.',
+    'Higher values enhance reasoning ability but may increase response time and credit usage.',
   'settingModel.reasoningEffort.options.high': 'High',
   'settingModel.reasoningEffort.options.low': 'Low',
   'settingModel.reasoningEffort.options.medium': 'Medium',

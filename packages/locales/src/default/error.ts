@@ -112,8 +112,8 @@ export default {
     'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
   'exceededContext.compact': 'Compact Context',
   'exceededContext.desc':
-    'The conversation has exceeded the context window limit. You can compact the context to compress history and continue chatting.',
-  'exceededContext.title': 'Context Window Exceeded',
+    'This message and the chat history exceed what the assistant can handle at once. Click "Compact Context" to condense and retry automatically, or shorten this message and remove its attachments.',
+  'exceededContext.title': 'This is more than the assistant can handle at once',
 
   'unknownError.emailDesc': 'An unexpected error occurred. You can retry or email',
   'unknownError.sharedEmailDesc': 'Please report this issue by email to',

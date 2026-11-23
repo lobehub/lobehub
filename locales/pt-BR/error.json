@@ -11,8 +11,6 @@
   "error.stack": "Stack de erros",
   "error.title": "Ops, algo deu errado...",
   "exceededContext.compact": "Compactar Contexto",
-  "exceededContext.desc": "A conversa excedeu o limite da janela de contexto. Você pode compactar o contexto para comprimir o histórico e continuar conversando.",
-  "exceededContext.title": "Janela de Contexto Excedida",
   "fetchError.detail": "Detalhes do erro",
   "fetchError.title": "Falha na solicitação",
   "forbidden.backHome": "Voltar para a Página Inicial",

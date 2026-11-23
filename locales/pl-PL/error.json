@@ -11,8 +11,6 @@
   "error.stack": "Stos błędów",
   "error.title": "Ups, coś poszło nie tak...",
   "exceededContext.compact": "Kompaktowy Kontekst",
-  "exceededContext.desc": "Rozmowa przekroczyła limit okna kontekstu. Możesz skompaktować kontekst, aby skompresować historię i kontynuować rozmowę.",
-  "exceededContext.title": "Przekroczono Limit Okna Kontekstu",
   "fetchError.detail": "Szczegóły błędu",
   "fetchError.title": "Żądanie nie powiodło się",
   "forbidden.backHome": "Powrót do strony głównej",

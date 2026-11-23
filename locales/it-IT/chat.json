@@ -1826,7 +1826,6 @@
   "opencodeInstallGuide.menuNotification.title": "CLI di OpenCode non trovato",
   "opencodeInstallGuide.reason": "LobeHub non è riuscito ad avviare OpenCode: {{message}}",
   "opencodeInstallGuide.title": "Installa CLI di OpenCode",
-  "operation.contextCompression": "Contesto troppo lungo, compressione della cronologia in corso...",
   "operation.execAgentRuntime": "Preparazione della risposta",
   "operation.execClientSubAgent": "Esecuzione del sotto-agente",
   "operation.execHeterogeneousAgent": "{{name}} è in esecuzione",

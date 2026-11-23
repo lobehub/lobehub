@@ -11,8 +11,6 @@
   "error.stack": "پشته خطا",
   "error.title": "اوه، مشکلی پیش آمده...",
   "exceededContext.compact": "فشرده‌سازی زمینه",
-  "exceededContext.desc": "مکالمه از حد مجاز پنجره زمینه فراتر رفته است. می‌توانید زمینه را فشرده کنید تا تاریخچه را فشرده کرده و به گفتگو ادامه دهید.",
-  "exceededContext.title": "حد مجاز پنجره زمینه فراتر رفته است",
   "fetchError.detail": "جزئیات خطا",
   "fetchError.title": "درخواست ناموفق بود",
   "forbidden.backHome": "بازگشت به خانه",

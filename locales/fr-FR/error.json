@@ -11,8 +11,6 @@
   "error.stack": "Pile d'erreurs",
   "error.title": "Oups, une erreur s'est produite...",
   "exceededContext.compact": "Contexte Compact",
-  "exceededContext.desc": "La conversation a dépassé la limite de la fenêtre de contexte. Vous pouvez compacter le contexte pour compresser l'historique et continuer à discuter.",
-  "exceededContext.title": "Fenêtre de Contexte Dépassée",
   "fetchError.detail": "Détails de l'erreur",
   "fetchError.title": "Échec de la requête",
   "forbidden.backHome": "Retour à l'accueil",

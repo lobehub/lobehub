@@ -448,6 +448,8 @@ export default {
   'compression.cancelConfirm':
     'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.collapsed': 'Compressed {{turns}} earlier turns · View summary',
+  'compression.firstHint':
+    'Earlier messages have been summarized into key points, and you can expand the originals anytime. If you set any strict rules or formats earlier, it helps to mention them again.',
   'compression.collapsedUnknown': 'Compressed earlier history · View summary',
   'compression.history': 'Original conversation',
   'compression.summary': 'History summary',
@@ -1266,6 +1268,8 @@ export default {
   'messages.modelCard.pricing.writeCacheInputTokens':
     'Cache write {{amount}} credits · ${{amount}}/M',
   'messages.tokenDetails.average': 'Average unit price',
+  'messages.creditUsageHint':
+    'Credit usage depends on the model, the length of the conversation, and whether deep thinking, tools, or image processing are used.',
   'messages.tokenDetails.cliCredits.title': '{{value}} Credits',
   'messages.tokenDetails.cliCredits.tooltip':
     'Subscription credits reported by the agent CLI for this turn. The CLI bills in credits instead of reporting tokens; these are not LobeHub credits.',
@@ -1668,7 +1672,7 @@ export default {
   'noMembersYet': "This group doesn't have any members yet. Click the + button to invite agents.",
   'noSelectedAgents': 'No members selected yet',
   'openInNewWindow': 'Open in New Window',
-  'operation.contextCompression': 'Context too long, compressing history...',
+  'operation.contextCompression': 'Summarizing earlier messages…',
   'operation.execAgentRuntime': 'Preparing response',
   'operation.execClientSubAgent': 'Running sub-agent',
   'operation.execHeterogeneousAgent': '{{name}} is running',

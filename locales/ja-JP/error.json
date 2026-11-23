@@ -11,8 +11,6 @@
   "error.stack": "エラースタック",
   "error.title": "ページが一時的に利用できません",
   "exceededContext.compact": "コンパクトコンテキスト",
-  "exceededContext.desc": "会話がコンテキストウィンドウの制限を超えました。履歴を圧縮してチャットを続けるためにコンテキストをコンパクト化できます。",
-  "exceededContext.title": "コンテキストウィンドウ超過",
   "fetchError.detail": "詳細を見る",
   "fetchError.title": "リクエストが完了できませんでした",
   "forbidden.backHome": "ホームに戻る",

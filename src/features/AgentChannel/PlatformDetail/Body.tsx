@@ -35,6 +35,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import InfoTooltip from '@/components/InfoTooltip';
+import { useShowMemberTokenUsage } from '@/hooks/useShowMemberTokenUsage';
 import type {
   FieldSchema,
   SerializedPlatformDefinition,
@@ -126,9 +127,7 @@ interface SchemaFieldProps {
   parentKey: string;
 }
 
-const renderFieldLabel = (field: FieldSchema, t: (key: string) => string) => {
-  const hint = field.tooltip;
-
+const renderFieldLabel = (field: FieldSchema, t: (key: string) => string, hint = field.tooltip) => {
   if (!hint && !field.devOnly && !field.paidFeature) return t(field.label);
 
   return (
@@ -170,6 +169,7 @@ const SchemaField = memo<SchemaFieldProps>(
 
     // Scalar controls fully lock with the feature; list fields handle the
     // locked state themselves so operators can still remove stale rows.
+    const showMemberTokenUsage = useShowMemberTokenUsage();
     const disabled = formDisabled || featureLocked;
 
     // Conditional visibility: watch the sibling field specified by visibleWhen
@@ -189,7 +189,13 @@ const SchemaField = memo<SchemaFieldProps>(
 
     // Only explicitly authored, actionable guidance earns a help affordance.
     // Generic schema descriptions stay out of the compact row layout.
-    const label = renderFieldLabel(field, t);
+    const hint =
+      field.description === 'channel.showUsageStatsHint'
+        ? showMemberTokenUsage
+          ? field.description
+          : 'channel.showCreditStatsHint'
+        : field.tooltip;
+    const label = renderFieldLabel(field, t, hint);
 
     // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
     // be expressed as a single control inside a name-bound Form.Field.

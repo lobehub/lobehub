@@ -11,8 +11,6 @@
   "error.stack": "Hata Yığını",
   "error.title": "Hata oluştu..",
   "exceededContext.compact": "Kompakt Bağlam",
-  "exceededContext.desc": "Sohbet, bağlam penceresi sınırını aştı. Geçmişi sıkıştırmak ve sohbet etmeye devam etmek için bağlamı kompakt hale getirebilirsiniz.",
-  "exceededContext.title": "Bağlam Penceresi Aşıldı",
   "fetchError.detail": "Hata detayları",
   "fetchError.title": "İstek başarısız oldu",
   "forbidden.backHome": "Ana Sayfaya Dön",

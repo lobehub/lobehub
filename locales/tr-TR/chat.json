@@ -1826,7 +1826,6 @@
   "opencodeInstallGuide.menuNotification.title": "OpenCode CLI bulunamadı",
   "opencodeInstallGuide.reason": "LobeHub OpenCode'u başlatamadı: {{message}}",
   "opencodeInstallGuide.title": "OpenCode CLI'yi Yükle",
-  "operation.contextCompression": "Bağlam çok uzun, geçmiş sıkıştırılıyor...",
   "operation.execAgentRuntime": "Yanıt hazırlanıyor",
   "operation.execClientSubAgent": "Alt ajan çalıştırılıyor",
   "operation.execHeterogeneousAgent": "{{name}} çalışıyor",

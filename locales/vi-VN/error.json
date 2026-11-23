@@ -11,8 +11,6 @@
   "error.stack": "Ngăn xếp lỗi",
   "error.title": "Ôi, đã xảy ra lỗi..",
   "exceededContext.compact": "Thu gọn Ngữ cảnh",
-  "exceededContext.desc": "Cuộc trò chuyện đã vượt quá giới hạn cửa sổ ngữ cảnh. Bạn có thể thu gọn ngữ cảnh để nén lịch sử và tiếp tục trò chuyện.",
-  "exceededContext.title": "Vượt Quá Giới Hạn Cửa Sổ Ngữ Cảnh",
   "fetchError.detail": "Chi tiết lỗi",
   "fetchError.title": "Yêu cầu thất bại",
   "forbidden.backHome": "Quay về Trang chủ",

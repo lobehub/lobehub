@@ -11,8 +11,6 @@
   "error.stack": "錯誤堆疊",
   "error.title": "頁面遇到一點問題..",
   "exceededContext.compact": "壓縮上下文",
-  "exceededContext.desc": "對話已超過上下文窗口限制。您可以壓縮上下文以壓縮歷史記錄並繼續聊天。",
-  "exceededContext.title": "上下文窗口已超出",
   "fetchError.detail": "錯誤詳情",
   "fetchError.title": "請求失敗",
   "forbidden.backHome": "返回首頁",

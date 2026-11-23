@@ -11,8 +11,6 @@
   "error.stack": "Стек ошибок",
   "error.title": "Упс, что-то пошло не так...",
   "exceededContext.compact": "Сжать контекст",
-  "exceededContext.desc": "Беседа превысила лимит окна контекста. Вы можете сжать контекст, чтобы сжать историю и продолжить общение.",
-  "exceededContext.title": "Превышен лимит окна контекста",
   "fetchError.detail": "Детали ошибки",
   "fetchError.title": "Запрос не выполнен",
   "forbidden.backHome": "Вернуться на главную",

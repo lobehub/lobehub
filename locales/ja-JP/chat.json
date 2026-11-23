@@ -1826,7 +1826,6 @@
   "opencodeInstallGuide.menuNotification.title": "OpenCode CLI が見つかりません",
   "opencodeInstallGuide.reason": "LobeHub は OpenCode を開始できませんでした: {{message}}",
   "opencodeInstallGuide.title": "OpenCode CLI をインストール",
-  "operation.contextCompression": "コンテキストが長すぎるため、履歴を圧縮しています...",
   "operation.execAgentRuntime": "応答を準備中",
   "operation.execClientSubAgent": "サブエージェントを実行中",
   "operation.execHeterogeneousAgent": "{{name}} を実行中",

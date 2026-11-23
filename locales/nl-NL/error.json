@@ -11,8 +11,6 @@
   "error.stack": "Foutstack",
   "error.title": "Oeps, er ging iets mis..",
   "exceededContext.compact": "Compact Context",
-  "exceededContext.desc": "Het gesprek heeft de limiet van het contextvenster overschreden. U kunt de context comprimeren om de geschiedenis samen te vatten en verder te chatten.",
-  "exceededContext.title": "Contextvenster Overschreden",
   "fetchError.detail": "Foutdetails",
   "fetchError.title": "Verzoek mislukt",
   "forbidden.backHome": "Terug naar Home",
