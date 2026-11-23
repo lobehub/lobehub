@@ -30,7 +30,10 @@ describe('useCascadeApply', () => {
     // First attempt fails: the rejection is surfaced instead of discarded,
     // and the modal is not closed so the user can retry or cancel.
     await act(() => result.current.handleApply(true));
-    expect(result.current.error).toBe('taskDetail.statusCascade.applyFailedRetry');
+    expect(result.current.error).toEqual({
+      detail: 'network error',
+      summary: 'taskDetail.statusCascade.applyFailedRetry',
+    });
     expect(modalContext.close).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.loadingAction).toBeNull());
 
