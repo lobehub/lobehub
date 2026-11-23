@@ -1005,7 +1005,7 @@ export default {
     '{{count}} tools or skills turned on in this Agent aren’t open to visitors yet',
   'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
-    'Off by default: visitor conversations stay private to the visitor. When on, you can read them below.',
+    "You can read visitors' conversations with the Agent.",
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
@@ -1048,7 +1048,6 @@ export default {
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
-  'share.settings.permissions.visitorConversations.empty': 'No visitor conversations yet',
   'share.settings.permissions.visitorConversations.topics_one': '{{count}} conversation',
   'share.settings.permissions.visitorConversations.topics_other': '{{count}} conversations',
   'share.settings.permissions.visitorConversations.view': 'View conversations',
