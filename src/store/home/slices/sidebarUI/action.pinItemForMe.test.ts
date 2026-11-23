@@ -12,14 +12,17 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 }));
 
 const updatePreference = vi.fn();
+const refreshPreference = vi.fn();
 
 beforeEach(() => {
   updatePreference.mockReset().mockResolvedValue(undefined);
+  refreshPreference.mockReset().mockResolvedValue(undefined);
   vi.spyOn(agentService, 'updateAgentPinned').mockResolvedValue(undefined as any);
   vi.spyOn(chatGroupService, 'updateGroup').mockResolvedValue(undefined as any);
   vi.spyOn(useHomeStore.getState(), 'refreshAgentList').mockResolvedValue(undefined);
   useHomeStore.setState({ pinnedAgents: [] } as any);
   useUserStore.setState({
+    refreshWorkspaceUserPreference: refreshPreference,
     updateWorkspaceUserPreference: updatePreference,
     workspaceUserPreference: { sidebarPinnedItemIds: ['older'] },
   } as any);
@@ -55,15 +58,36 @@ describe('pinItemForMe', () => {
     expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
   });
 
-  it('saves the team pins with the first pin made before the server set the sidebar up', async () => {
-    useHomeStore.setState({ pinnedAgents: [{ id: 'team-1' }, { id: 'older' }] } as any);
+  it('waits for the server to set the sidebar up before a first pin', async () => {
+    useHomeStore.setState({ pinnedAgents: [{ id: 'team-1' }] } as any);
+    // The server answers with the team pins copied in after the member's own.
+    refreshPreference.mockImplementation(async () => {
+      useUserStore.setState({
+        workspaceUserPreference: {
+          sidebarInitialized: true,
+          sidebarPinnedItemIds: ['older', 'team-1'],
+        },
+      });
+    });
 
     await pinForMe({ id: 'pub', pinned: false, type: 'agent', visibility: 'public' }, true);
 
+    expect(refreshPreference).toHaveBeenCalledTimes(1);
+    // Built on the server's answer; the client never sets the sidebar up itself.
     expect(updatePreference).toHaveBeenCalledWith({
       sidebarPinnedItemIds: ['pub', 'older', 'team-1'],
-      sidebarInitialized: true,
     });
+  });
+
+  it('does not wait once the sidebar is set up', async () => {
+    useUserStore.setState({
+      workspaceUserPreference: { sidebarInitialized: true, sidebarPinnedItemIds: ['older'] },
+    });
+
+    await pinForMe({ id: 'pub', pinned: false, type: 'agent', visibility: 'public' }, true);
+
+    expect(refreshPreference).not.toHaveBeenCalled();
+    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['pub', 'older'] });
   });
 
   it('keeps an explicit sidebar choice when unpinning', async () => {

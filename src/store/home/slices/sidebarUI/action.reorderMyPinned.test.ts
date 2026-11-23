@@ -13,9 +13,11 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 let scope = 'user-a:ws-1';
 
 const updatePreference = vi.fn();
+const refreshPreference = vi.fn();
 
 const setPinned = (ids: string[]) =>
   useUserStore.setState({
+    refreshWorkspaceUserPreference: refreshPreference,
     updateWorkspaceUserPreference: updatePreference,
     workspaceUserPreference: { sidebarPinnedItemIds: ids },
   } as any);
@@ -26,6 +28,7 @@ beforeEach(() => {
   scope = 'user-a:ws-1';
   vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
   updatePreference.mockReset().mockResolvedValue(undefined);
+  refreshPreference.mockReset().mockResolvedValue(undefined);
 });
 
 describe('reorderMyPinned', () => {
@@ -64,20 +67,21 @@ describe('reorderMyPinned', () => {
     expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: many });
   });
 
-  it('saves the team pins and marks the sidebar set up when the member reorders before the server did', async () => {
+  it('never pins a team pin the sidebar only previewed as pinned', async () => {
     useHomeStore.setState({ pinnedAgents: [{ id: 'team-1' }] } as any);
-    useUserStore.setState({
-      updateWorkspaceUserPreference: updatePreference,
-      workspaceUserPreference: { sidebarPinnedItemIds: ['a'] },
-    } as any);
-
-    // The sidebar already showed the default pin after the member's own.
-    await reorder(['team-1', 'a']);
-
-    expect(updatePreference).toHaveBeenCalledWith({
-      sidebarPinnedItemIds: ['team-1', 'a'],
-      sidebarInitialized: true,
+    setPinned(['a', 'b']);
+    // The server answers that this (new) member gets no team pins.
+    refreshPreference.mockImplementation(async () => {
+      useUserStore.setState({
+        workspaceUserPreference: { sidebarInitialized: true, sidebarPinnedItemIds: ['a', 'b'] },
+      });
     });
+
+    // The sidebar had guessed the team pin would follow the member's own.
+    await reorder(['b', 'team-1', 'a']);
+
+    expect(refreshPreference).toHaveBeenCalledTimes(1);
+    expect(updatePreference).toHaveBeenCalledWith({ sidebarPinnedItemIds: ['b', 'a'] });
     useHomeStore.setState({ pinnedAgents: [] } as any);
   });
 

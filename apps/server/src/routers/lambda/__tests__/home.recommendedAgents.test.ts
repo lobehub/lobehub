@@ -57,4 +57,16 @@ describe('homeRouter.updateRecommendedAgents', () => {
     });
     expect(updateRecommendedIds).not.toHaveBeenCalled();
   });
+
+  it('accepts a list as long as the team pins it starts from', async () => {
+    // Until a list is saved the team pins are the list, so admins must be able
+    // to save it back — trimmed or reordered — however many there are.
+    matches.mockResolvedValue({ hasAllScope: true } as never);
+    const ids = Array.from({ length: 500 }, (_, index) => `agent-${index}`);
+    const caller = homeRouter.createCaller({ userId: 'admin-1', workspaceId: 'ws-1' } as never);
+
+    await caller.updateRecommendedAgents({ ids });
+
+    expect(updateRecommendedIds).toHaveBeenCalledWith(ids);
+  });
 });

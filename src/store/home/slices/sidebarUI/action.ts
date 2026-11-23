@@ -36,28 +36,20 @@ const isSameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, i) => id === b[i]);
 
 /**
- * The member's pin list as the sidebar shows it. While the server is about to
- * copy the team pins in after the member's own
- * (`workspaceUserSettingsSelectors.sidebarSetupPreview`), the sidebar already
- * shows them there; a write made before that lands saves them the same way
- * and marks the sidebar as set up, so it never drops pins the server was
- * about to add.
+ * The caller's user store once the server has set their sidebar up. Pin
+ * writes replace the whole list, so one built from a cached preference the
+ * server has not answered yet could drop what the server is about to add —
+ * or, built from the sidebar's guess of the outcome
+ * (`workspaceUserSettingsSelectors.sidebarSetupPreview`), persist the wrong
+ * one. Such a write waits for that answer instead; the server sets the
+ * sidebar up in it.
  */
-const resolveMyPinned = (
-  userStore: ReturnType<typeof getUserStoreState>,
-  teamPinnedIds: readonly string[],
-): { current: string[]; seed: Partial<WorkspaceUserPreference> } => {
-  const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
-  if (
-    workspaceUserSettingsSelectors.sidebarSetupPreview(userStore) !== 'teamPins' ||
-    teamPinnedIds.length === 0
-  )
-    return { current, seed: {} };
+const getSettledUserStore = async () => {
+  const userStore = getUserStoreState();
+  if (workspaceUserSettingsSelectors.sidebarSetupPreview(userStore) === null) return userStore;
 
-  return {
-    current: [...new Set([...current, ...teamPinnedIds])].slice(0, MAX_SIDEBAR_PINNED_ITEMS),
-    seed: { sidebarInitialized: true },
-  };
+  await userStore.refreshWorkspaceUserPreference();
+  return getUserStoreState();
 };
 
 type Setter = StoreSetter<HomeStore>;
@@ -150,9 +142,9 @@ export class SidebarUIActionImpl {
    *   keeps showing it. Unpinning clears both places.
    */
   pinItemForMe = async (item: PersonalPinTarget, pinned: boolean): Promise<void> => {
-    const userStore = getUserStoreState();
+    const userStore = await getSettledUserStore();
     const preference = userStore.workspaceUserPreference;
-    const { current, seed } = resolveMyPinned(userStore, this.#teamPinnedIds());
+    const current = preference.sidebarPinnedItemIds ?? [];
     const isPrivate = item.visibility === 'private';
     const writeColumn = (value: boolean) =>
       item.type === 'group' ? this.pinAgentGroup(item.id, value) : this.pinAgent(item.id, value);
@@ -161,9 +153,8 @@ export class SidebarUIActionImpl {
       ? [item.id, ...current.filter((id) => id !== item.id)].slice(0, MAX_SIDEBAR_PINNED_ITEMS)
       : current.filter((id) => id !== item.id);
 
-    const patch: Partial<WorkspaceUserPreference> = { ...seed };
-    if (seed.sidebarInitialized || !isSameIds(nextIds, current))
-      patch.sidebarPinnedItemIds = nextIds;
+    const patch: Partial<WorkspaceUserPreference> = {};
+    if (!isSameIds(nextIds, current)) patch.sidebarPinnedItemIds = nextIds;
     if (
       !pinned &&
       !isPrivate &&
@@ -192,16 +183,21 @@ export class SidebarUIActionImpl {
       .catch(() => undefined)
       .then(async () => {
         if (cacheScope.get() !== scope) return;
-        const userStore = getUserStoreState();
-        const { current, seed } = resolveMyPinned(userStore, this.#teamPinnedIds());
-        const shown = new Set(ids);
-        const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
+        const userStore = await getSettledUserStore();
+        if (cacheScope.get() !== scope) return;
+        const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+        // A team pin is pinned only through the member's own list; one the
+        // sidebar merely previewed as pinned is not pinned by a drag.
+        const teamPinned = new Set(this.#teamPinnedIds());
+        const kept = ids.filter((id) => !teamPinned.has(id) || current.includes(id));
+        const shown = new Set(kept);
+        const nextIds = [...kept, ...current.filter((id) => !shown.has(id))].slice(
           0,
           MAX_SIDEBAR_PINNED_ITEMS,
         );
-        if (isSameIds(nextIds, current) && !seed.sidebarInitialized) return;
+        if (isSameIds(nextIds, current)) return;
 
-        await userStore.updateWorkspaceUserPreference({ ...seed, sidebarPinnedItemIds: nextIds });
+        await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
       });
     this.#myPinnedQueue = operation;
     await operation;

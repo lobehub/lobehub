@@ -6,8 +6,12 @@
  */
 export const MAX_PINNED_ORDER_ITEMS = 2000;
 
-/** Upper bound for a workspace's recommended Agents list. */
-export const MAX_RECOMMENDED_ITEMS = 200;
+/**
+ * Upper bound for a workspace's recommended Agents list. Until a list is
+ * saved, the team pins are the list, so it matches their order's cap: admins
+ * must be able to save that list back, trimmed or reordered.
+ */
+export const MAX_RECOMMENDED_ITEMS = MAX_PINNED_ORDER_ITEMS;
 
 /** Reads a stored order defensively: anything but a string array is no order. */
 export const parsePinnedOrder = (value: unknown): string[] =>
