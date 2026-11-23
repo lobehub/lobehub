@@ -27,7 +27,7 @@ export const validateSsrfAddress = (
       allowIPAddressList: policy.allowIPAddressList ?? [],
       allowMetaIPAddress: policy.allowPrivateIPAddress ?? false,
       allowPrivateIPAddress: policy.allowPrivateIPAddress ?? false,
-      denyIPAddressList: [],
+      denyIPAddressList: policy.denyIPAddressList ?? [],
     });
     return undefined;
   } catch (error) {
@@ -229,7 +229,9 @@ export const createSsrfSafeFetch = (
 ): typeof fetch => {
   const getBaseFetch = () => options.fetch ?? globalThis.fetch;
 
-  if (policy.allowPrivateIPAddress)
+  // Passthrough only when nothing can still be denied; a deny list applies
+  // even when private addresses are allowed.
+  if (policy.allowPrivateIPAddress && !policy.denyIPAddressList?.length)
     return ((input, init) => getBaseFetch()(input, init)) as typeof fetch;
 
   const dispatcher = createSsrfSafeDispatcher(policy);

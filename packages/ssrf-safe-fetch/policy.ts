@@ -11,6 +11,8 @@ export interface SSRFOptions {
   allowIPAddressList?: string[];
   /** Whether to allow private/local IP addresses */
   allowPrivateIPAddress?: boolean;
+  /** List of IP addresses to deny, checked even when private addresses are allowed */
+  denyIPAddressList?: string[];
   /**
    * Maximum response body size in bytes. When set, the body stream ends as soon as
    * the cap is reached and the upstream connection is closed. Readers get only the
@@ -82,7 +84,7 @@ export const resolveAgentOptions = (ssrfOptions?: SSRFOptions): RequestFiltering
     allowIPAddressList: ssrfOptions?.allowIPAddressList ?? envAllowIPAddressList(),
     allowMetaIPAddress: allowPrivate,
     allowPrivateIPAddress: allowPrivate,
-    denyIPAddressList: [],
+    denyIPAddressList: ssrfOptions?.denyIPAddressList ?? [],
   };
 };
 

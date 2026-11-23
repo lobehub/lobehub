@@ -2,12 +2,14 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { SSRFBlockedError } from '@lobechat/ssrf-safe-fetch';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initModelRuntimeWithUserPayload } from './index';
 import {
+  createProviderBaseURLBlockedError,
   createUserEndpointGuardedRuntime,
   resolveUserEndpointSsrfPolicy,
 } from './userEndpointGuard';
@@ -97,6 +99,13 @@ describe('resolveUserEndpointSsrfPolicy', () => {
     expect(resolveUserEndpointSsrfPolicy().allowIPAddressList).toEqual([
       '10.0.0.5',
       '192.168.0.0/16',
+    ]);
+  });
+
+  it('denies link-local even when self-hosted deployments allow private addresses', () => {
+    expect(resolveUserEndpointSsrfPolicy().denyIPAddressList).toEqual([
+      '169.254.0.0/16',
+      'fe80::/10',
     ]);
   });
 });
@@ -198,6 +207,14 @@ describe('initModelRuntimeWithUserPayload SSRF guard', () => {
       });
       expect(hits).toEqual([]);
     });
+
+    it('blocks link-local metadata endpoints even though private addresses are allowed', async () => {
+      await expect(
+        chat(ModelProvider.OpenAI, 'http://169.254.169.254/latest'),
+      ).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.ProviderBaseURLBlocked,
+      });
+    });
   });
 
   it('does not guard an operator-configured env proxy URL (no user baseURL in the payload)', async () => {
@@ -245,5 +262,87 @@ describe('createUserEndpointGuardedRuntime', () => {
     expect(
       createUserEndpointGuardedRuntime({ create: () => bare, endpoints: [], provider: 'openai' }),
     ).toBe(bare);
+  });
+
+  describe('node:http transports', () => {
+    /**
+     * `@azure-rest/ai-inference` (via `@typespec/ts-http-runtime`) and similar
+     * SDKs drive `node:http(s)` directly instead of `fetch`; the guard must
+     * cover them by injecting a filtering agent.
+     */
+    const nodeTransport = () => ({
+      probe: () =>
+        new Promise<number>((resolve, reject) => {
+          http
+            .get(`${baseURL}/models`, (res) => {
+              res.resume();
+              resolve(res.statusCode ?? 0);
+            })
+            .on('error', reject);
+        }),
+    });
+
+    it('blocks node:http requests to a private endpoint host in cloud mode', async () => {
+      edition.cloud = true;
+      const runtime = createUserEndpointGuardedRuntime({
+        create: nodeTransport,
+        endpoints: [baseURL],
+        provider: 'azureai',
+      });
+
+      await expect(runtime.probe()).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.ProviderBaseURLBlocked,
+      });
+      expect(hits).toEqual([]);
+    });
+
+    it('still reaches a private endpoint over node:http when the policy allows private addresses', async () => {
+      const runtime = createUserEndpointGuardedRuntime({
+        create: nodeTransport,
+        endpoints: [baseURL],
+        provider: 'azureai',
+      });
+
+      await expect(runtime.probe()).resolves.toBe(200);
+      expect(hits).toEqual(['GET /v1/models']);
+    });
+  });
+});
+
+describe('vertexAIRegion', () => {
+  it.each(['us-central1.evil.com', 'evil.com/x', 'a b', 'a?b=1', 'x@evil.com'])(
+    'rejects a region that could corrupt the derived aiplatform host: %s',
+    (region) => {
+      try {
+        initModelRuntimeWithUserPayload(ModelProvider.VertexAI, {
+          apiKey: JSON.stringify({ project_id: 'p' }),
+          vertexAIRegion: region,
+        });
+        expect.unreachable(`region ${region} should be rejected`);
+      } catch (error) {
+        expect(error).toMatchObject({
+          errorType: AgentRuntimeErrorType.InvalidVertexCredentials,
+        });
+      }
+    },
+  );
+});
+
+describe('createProviderBaseURLBlockedError', () => {
+  it('does not leak the resolved address to the client', () => {
+    const blocked = new SSRFBlockedError(
+      'SSRF blocked: DNS lookup 10.1.2.3(family:4, host:internal.corp) is not allowed.',
+    );
+    blocked.address = '10.1.2.3';
+    blocked.hostname = 'internal.corp';
+
+    const error = createProviderBaseURLBlockedError('openai', blocked);
+
+    expect(error).toMatchObject({
+      errorType: AgentRuntimeErrorType.ProviderBaseURLBlocked,
+      provider: 'openai',
+    });
+    expect(JSON.stringify(error)).not.toContain('10.1.2.3');
+    expect(JSON.stringify(error)).not.toContain('DNS lookup');
   });
 });

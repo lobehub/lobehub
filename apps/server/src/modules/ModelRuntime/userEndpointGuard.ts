@@ -1,9 +1,19 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
-import type { SSRFBlockedError, SSRFOptions } from '@lobechat/ssrf-safe-fetch';
-import { createSsrfSafeFetch, findSSRFBlockedError } from '@lobechat/ssrf-safe-fetch';
+import type { SSRFOptions } from '@lobechat/ssrf-safe-fetch';
+import {
+  createSsrfSafeFetch,
+  findSSRFBlockedError,
+  SSRF_BLOCKED_PREFIX,
+  SSRF_DOCS_URL,
+  SSRFBlockedError,
+  ssrfSafeAgent,
+} from '@lobechat/ssrf-safe-fetch';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
 
@@ -41,12 +51,21 @@ export const resolveUserEndpointSsrfPolicy = (): SSRFOptions => ({
   allowPrivateIPAddress: ENABLE_BUSINESS_FEATURES
     ? false
     : process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS !== '0',
+  /**
+   * Link-local stays denied even when a self-hosted deployment allows private
+   * endpoints: an open-registration instance must not hand every user a path
+   * to the cloud metadata service (169.254.169.254). `SSRF_ALLOW_IP_ADDRESS_LIST`
+   * still wins for an operator who genuinely needs a link-local endpoint.
+   */
+  denyIPAddressList: ['169.254.0.0/16', 'fe80::/10'],
 });
 
 interface GuardScope {
+  agents: { http: http.Agent; https: https.Agent };
   blocked?: SSRFBlockedError;
   fetch: typeof fetch;
   hosts: ReadonlySet<string>;
+  provider: string;
 }
 
 const scopeStorage = new AsyncLocalStorage<GuardScope>();
@@ -72,6 +91,45 @@ const getRequestHostname = (input: RequestInfo | URL) => {
 };
 
 /**
+ * The hostname a `http(s).request(url[, options][, cb])` /
+ * `http(s).request(options[, cb])` call targets. `options.host` may carry a
+ * port, `options.hostname` never does.
+ */
+type NodeRequestCallback = (res: http.IncomingMessage) => void;
+
+const getNodeRequestHostname = (args: unknown[]) => {
+  const [urlOrOptions, options] = args as [
+    string | URL | http.RequestOptions | undefined,
+    (http.RequestOptions | NodeRequestCallback) | undefined,
+  ];
+  if (typeof urlOrOptions === 'string' || urlOrOptions instanceof URL) {
+    try {
+      return normalizeHostname(new URL(urlOrOptions).hostname);
+    } catch {
+      return;
+    }
+  }
+  const host =
+    (urlOrOptions as http.RequestOptions | undefined)?.hostname ??
+    (urlOrOptions as http.RequestOptions | undefined)?.host ??
+    (options as http.RequestOptions | undefined)?.hostname ??
+    (options as http.RequestOptions | undefined)?.host;
+  if (typeof host !== 'string') return;
+  // A bare IP never carries a port; only strip `:port` from names and
+  // bracketed IPv6 so `::1` is not mangled into a bypass.
+  if (net.isIP(host) !== 0) return normalizeHostname(host);
+  return normalizeHostname(host.replace(/:\d+$/, ''));
+};
+
+/** request-filtering-agent refuses with an "… is not allowed" message. */
+const toBlockedFromAgentError = (error: Error) =>
+  error.message.includes('is not allowed') || error instanceof SSRFBlockedError
+    ? new SSRFBlockedError(`${SSRF_BLOCKED_PREFIX}: ${error.message}. See: ${SSRF_DOCS_URL}`, {
+        cause: error,
+      })
+    : undefined;
+
+/**
  * SDKs retry a rejected fetch as a connection error (the OpenAI SDK twice, with
  * backoff), which would re-send the request to an allowed first hop on every
  * attempt. A non-retryable 403 ends the attempt immediately; the guarded call
@@ -85,6 +143,83 @@ const createBlockedResponse = (blocked: SSRFBlockedError) =>
   );
 
 let originalFetch: typeof fetch | undefined;
+let nodeRequestsWrapped = false;
+
+/**
+ * Wrap `http.request` / `https.request` once. Some SDK transports bypass
+ * `fetch` entirely (e.g. `@typespec/ts-http-runtime` used by
+ * `@azure-rest/ai-inference` calls `node:https` directly), so endpoint-host
+ * requests made inside a guard scope get a request-filtering agent injected
+ * that applies the same connect-time policy — redirects included.
+ */
+const wrapNodeRequest = (
+  module: typeof http | typeof https,
+  agent: 'http' | 'https',
+  method: 'request' | 'get',
+) => {
+  const original = module[method] as (...args: unknown[]) => http.ClientRequest;
+
+  module[method] = function (...args: unknown[]) {
+    const scope = scopeStorage.getStore();
+    const hostname = scope && getNodeRequestHostname(args);
+
+    if (!scope || !hostname || !scope.hosts.has(hostname)) {
+      return original.apply(this, args as []);
+    }
+
+    if (scope.blocked) {
+      const request = new http.ClientRequest({});
+      queueMicrotask(() => request.destroy(scope.blocked));
+      return request;
+    }
+
+    const [urlOrOptions, options, callback] = args as [
+      string | URL | http.RequestOptions | undefined,
+      (http.RequestOptions | NodeRequestCallback) | undefined,
+      NodeRequestCallback | undefined,
+    ];
+    const filteringAgent = scope.agents[agent];
+
+    const wrappedArgs =
+      typeof urlOrOptions === 'string' || urlOrOptions instanceof URL
+        ? typeof options === 'function'
+          ? [urlOrOptions, { agent: filteringAgent }, options]
+          : [urlOrOptions, { ...(options as http.RequestOptions), agent: filteringAgent }, callback]
+        : typeof options === 'function'
+          ? [{ ...(urlOrOptions as http.RequestOptions), agent: filteringAgent }, options]
+          : [
+              { ...(urlOrOptions as http.RequestOptions), agent: filteringAgent },
+              options === undefined ? undefined : (options as NodeRequestCallback),
+            ];
+
+    const request = original.apply(this, wrappedArgs as []);
+    request.on('error', (error) => {
+      if (scope.blocked) return;
+      const blocked = toBlockedFromAgentError(error);
+      if (blocked) {
+        log(
+          'blocked %s request to %s for provider %s: %s',
+          agent,
+          hostname,
+          scope.provider,
+          blocked.message,
+        );
+        scope.blocked = blocked;
+      }
+    });
+    return request;
+  } as typeof module.request;
+};
+
+const wrapNodeRequests = () => {
+  if (nodeRequestsWrapped) return;
+  nodeRequestsWrapped = true;
+  // `get` calls an internal `request`, not `module.request`, so both are wrapped.
+  wrapNodeRequest(http, 'http', 'request');
+  wrapNodeRequest(http, 'http', 'get');
+  wrapNodeRequest(https, 'https', 'request');
+  wrapNodeRequest(https, 'https', 'get');
+};
 
 /**
  * Wrap `globalThis.fetch` once. SDKs capture the global fetch when a client is
@@ -108,7 +243,7 @@ const installScopedFetch = () => {
       const blocked = findSSRFBlockedError(error);
       if (!blocked) throw error;
 
-      log('blocked request to %s: %s', hostname, blocked.message);
+      log('blocked fetch to %s for provider %s: %s', hostname, scope.provider, blocked.message);
       scope.blocked = blocked;
       return createBlockedResponse(blocked);
     });
@@ -118,6 +253,7 @@ const installScopedFetch = () => {
   // they do not wrap it a second time.
   Object.assign(scopedFetch, baseFetch);
   globalThis.fetch = scopedFetch;
+  wrapNodeRequests();
 
   return baseFetch;
 };
@@ -134,12 +270,29 @@ const getGuardedFetch = (policy: SSRFOptions, baseFetch: typeof fetch) => {
   return guardedFetch;
 };
 
+const guardedAgentCache = new Map<string, GuardScope['agents']>();
+
+const getGuardedAgents = (policy: SSRFOptions): GuardScope['agents'] => {
+  const key = JSON.stringify(policy);
+  let agents = guardedAgentCache.get(key);
+  if (!agents) {
+    agents = {
+      http: ssrfSafeAgent('http://endpoint.invalid', policy) as http.Agent,
+      https: ssrfSafeAgent('https://endpoint.invalid', policy) as https.Agent,
+    };
+    guardedAgentCache.set(key, agents);
+  }
+  return agents;
+};
+
 export const createProviderBaseURLBlockedError = (provider: string, blocked: SSRFBlockedError) =>
   AgentRuntimeError.chat({
     error: {
-      address: blocked.address,
       hostname: blocked.hostname,
-      message: blocked.message,
+      // Never return the resolved address — that would leak internal DNS
+      // results to whoever configured the endpoint.
+      message:
+        'The provider endpoint resolves to a private or reserved network address that the server is not allowed to reach.',
     },
     errorType: AgentRuntimeErrorType.ProviderBaseURLBlocked,
     provider,
@@ -180,8 +333,9 @@ const runInScope = <T>(provider: string, scope: GuardScope, fn: () => T): T =>
 
 /**
  * Build a provider runtime whose requests to the given user endpoints are
- * SSRF-guarded. Returns the plain runtime when the policy allows private
- * addresses or no endpoint is user-supplied.
+ * SSRF-guarded. Returns the plain runtime when no endpoint is user-supplied.
+ * Self-hosted deployments still go through the guard: the policy allows
+ * private addresses there but keeps link-local (metadata) denied.
  *
  * A blocked connection surfaces as `ProviderBaseURLBlocked` instead of the
  * SDK's generic `Connection error.`.
@@ -195,10 +349,11 @@ export const createUserEndpointGuardedRuntime = <T extends object>(params: {
   const policy = resolveUserEndpointSsrfPolicy();
   const hosts = new Set(endpoints.map(getEndpointHostname).filter((host) => !!host) as string[]);
 
-  if (policy.allowPrivateIPAddress || hosts.size === 0) return create();
+  if (hosts.size === 0) return create();
 
   const baseFetch = installScopedFetch();
   const guardedFetch = getGuardedFetch(policy, baseFetch);
+  const agents = getGuardedAgents(policy);
   const runtime = create();
 
   return new Proxy(runtime, {
@@ -207,7 +362,9 @@ export const createUserEndpointGuardedRuntime = <T extends object>(params: {
       if (typeof value !== 'function' || property === 'constructor') return value;
 
       return (...args: unknown[]) =>
-        runInScope(provider, { fetch: guardedFetch, hosts }, () => value.apply(target, args));
+        runInScope(provider, { agents, fetch: guardedFetch, hosts, provider }, () =>
+          value.apply(target, args),
+        );
     },
   });
 };

@@ -150,6 +150,23 @@ describe('validateSsrfAddress', () => {
       SSRFBlockedError,
     );
   });
+
+  it('deny list wins over allowPrivateIPAddress but loses to the allow list', () => {
+    const policy = {
+      allowPrivateIPAddress: true,
+      denyIPAddressList: ['169.254.0.0/16', 'fe80::/10'],
+    };
+
+    expect(validateSsrfAddress('169.254.169.254', policy)).toBeInstanceOf(SSRFBlockedError);
+    expect(validateSsrfAddress('fe80::1', policy)).toBeInstanceOf(SSRFBlockedError);
+    expect(validateSsrfAddress('10.0.0.1', policy)).toBeUndefined();
+    expect(
+      validateSsrfAddress('169.254.169.254', {
+        ...policy,
+        allowIPAddressList: ['169.254.169.254'],
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('createSsrfSafeFetch', () => {

@@ -448,6 +448,14 @@ const buildVertexOptions = (
     (useServerConfig ? process.env.VERTEXAI_LOCATION : undefined) ||
     undefined;
 
+  // The region is interpolated into `<region>-aiplatform.googleapis.com` by the
+  // SDK; reject anything that could change the resulting host.
+  if (location && !/^[a-z0-9-]+$/.test(location)) {
+    throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidVertexCredentials, {
+      message: 'Invalid VertexAI region',
+    });
+  }
+
   const googleAuthOptions = params.googleAuthOptions || (credentials ? { credentials } : undefined);
 
   // Without explicit user credentials Google auth would load the server's ambient credentials.
