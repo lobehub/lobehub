@@ -2,6 +2,7 @@ import type {
   DeviceGitPullRequestCheck,
   DeviceGitPullRequestCiStatus,
   DeviceGitPullRequestDetail,
+  TopicPullRequestAutoFix,
   TopicPullRequestItem,
   TopicPullRequestLinkSource,
 } from '@lobechat/types';
@@ -15,6 +16,8 @@ import type { PullRequestState } from '@/features/AgentSidebar/Topic/List/Item/m
  * known), or the status the agent's own commands left on the Work row.
  */
 export interface TopicPullRequestView {
+  /** Present only when the GitHub App tracks the PR: Auto-fix needs its webhooks. */
+  autoFix?: TopicPullRequestAutoFix;
   ciStatus?: DeviceGitPullRequestCiStatus;
   /** Confirmed by the GitHub App or by the device in this session. */
   confirmed: boolean;
@@ -81,6 +84,7 @@ export const resolvePullRequestView = (
   if (item.scm) {
     return {
       ...base,
+      autoFix: item.scm.autoFix,
       ciStatus: item.scm.ciStatus ?? undefined,
       confirmed: true,
       isDraft: item.scm.isDraft,

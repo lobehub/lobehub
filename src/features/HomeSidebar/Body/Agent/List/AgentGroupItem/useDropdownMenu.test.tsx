@@ -8,13 +8,14 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   canEditResource: true,
   canManage: true,
+  canManageResource: false,
   home: {
     duplicateAgentGroup: vi.fn(),
     pinAgentGroup: vi.fn(),
     removeAgentGroup: vi.fn(),
   },
   isSidebarItemVisible: vi.fn(() => true),
-  isTeamPinned: false,
+  navigate: vi.fn(),
   openAgentInNewWindow: vi.fn(),
   setSidebarItemVisible: vi.fn(),
   toastError: vi.fn(),
@@ -34,14 +35,18 @@ vi.mock('@/business/client/hooks/useAgentGroupTransferMenuItem', () => ({
   useAgentGroupTransferMenuItem: () => null,
 }));
 
-vi.mock('@/business/client/hooks/useAgentGroupTransferToMemberMenuItem', () => ({
-  useAgentGroupTransferToMemberMenuItem: () => null,
-}));
-
 vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
-  useResourceAccess: () => ({ canEditResource: mocks.canEditResource, isAccessResolved: true }),
+  useResourceAccess: () => ({
+    canEditResource: mocks.canEditResource,
+    canManageResource: mocks.canManageResource,
+    isAccessResolved: true,
+  }),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -70,7 +75,6 @@ vi.mock('../../useSidebarItemVisibility', () => ({
 
 vi.mock('../../useSidebarPinMenuItems', () => ({
   useSidebarPinMenuItems: () => ({
-    isTeamPinned: mocks.isTeamPinned,
     menuItems: mocks.activeWorkspaceId ? [{ key: 'pin', label: 'pin' }] : [],
   }),
 }));
@@ -101,8 +105,8 @@ describe('useGroupDropdownMenu', () => {
     mocks.canEdit = true;
     mocks.canEditResource = true;
     mocks.canManage = true;
+    mocks.canManageResource = false;
     mocks.isSidebarItemVisible.mockReturnValue(true);
-    mocks.isTeamPinned = false;
   });
 
   it('hides a group through the caller sidebar preference, like an Agent row', async () => {
@@ -127,6 +131,27 @@ describe('useGroupDropdownMenu', () => {
     const { result } = renderGroupMenu();
 
     expect(getMenuKeys(result.current()).slice(0, 3)).toEqual(['pin', 'hideFromSidebar', 'rename']);
+  });
+
+  it('offers the creator or an owner a shortcut to the group Permissions settings', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    mocks.canManageResource = true;
+    const { result } = renderGroupMenu();
+
+    expect(getMenuKeys(result.current())).toContain('permission');
+
+    const entry = (result.current() ?? []).find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'permission',
+    ) as { onClick: (info: unknown) => void };
+    entry.onClick({ domEvent: { stopPropagation: vi.fn() } });
+    expect(mocks.navigate).toHaveBeenCalledWith('/group/cg_1/permission');
+  });
+
+  it('keeps the Permissions shortcut from members who do not manage the group', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    const { result } = renderGroupMenu();
+
+    expect(getMenuKeys(result.current())).not.toContain('permission');
   });
 
   it('offers hide to a member who cannot configure the group', () => {
@@ -159,11 +184,10 @@ describe('useGroupDropdownMenu', () => {
     expect(getMenuKeys(result.current())).not.toContain('hideFromSidebar');
   });
 
-  it('omits hide on a team-pinned workspace group, which every member sees', () => {
+  it('offers hide on a workspace group that is a default pin for new members', () => {
     mocks.activeWorkspaceId = 'workspace-1';
-    mocks.isTeamPinned = true;
     const { result } = renderGroupMenu({ pinned: true, visibility: 'public' });
 
-    expect(getMenuKeys(result.current())).not.toContain('hideFromSidebar');
+    expect(getMenuKeys(result.current())).toContain('hideFromSidebar');
   });
 });

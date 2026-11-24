@@ -1,6 +1,8 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
+import type { LegacyArrayListQuery } from '../helpers/legacy-array-list';
+import { pageLoadedList } from '../helpers/legacy-array-list';
 import { McpServerService } from '../services/mcp-server.service';
 import type { CreateMcpServerRequest, UpdateMcpServerRequest } from '../types/mcp-server.type';
 
@@ -14,7 +16,10 @@ export class McpServerController extends BaseController {
     try {
       return this.success(
         c,
-        await (await this.getService(c)).listServers(),
+        pageLoadedList(
+          await (await this.getService(c)).listServers(),
+          this.getQuery<LegacyArrayListQuery>(c),
+        ),
         'MCP servers retrieved',
       );
     } catch (error) {

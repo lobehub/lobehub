@@ -5,16 +5,18 @@ import { linearService } from '@/services/linear';
 
 import { linearKeys } from './Linear/swrKeys';
 
+export const useLinearConnections = () => {
+  const workspaceId = useActiveWorkspaceId();
+  return useSWR(linearKeys.connections(workspaceId), () => linearService.listConnections());
+};
+
 /**
  * Everything the Linear integration surfaces need, shared by the overview
  * card and the detail page. `enabled` is "at least one active connection".
  */
 export const useLinearIntegration = () => {
-  const workspaceId = useActiveWorkspaceId();
   const config = useSWR(linearKeys.config(), () => linearService.getConfig());
-  const connections = useSWR(linearKeys.connections(workspaceId), () =>
-    linearService.listConnections(),
-  );
+  const connections = useLinearConnections();
 
   const isInitialLoading = config.data === undefined || connections.data === undefined;
   const error = config.error ?? connections.error;

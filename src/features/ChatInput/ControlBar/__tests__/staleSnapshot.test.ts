@@ -8,26 +8,16 @@ import { resolveStaleSnapshot } from '../staleSnapshot';
 const deadWorktree = {
   activeWorktree: '/tmp/lobehub-wt-subtask',
   branch: 'feat/task-list-subtask-nesting',
-  github: {
-    pullRequest: {
-      number: 18_454,
-      state: 'OPEN',
-      title: 'PR #18454',
-      url: 'https://github.com/lobehub/lobehub/pull/18454',
-    },
-    pullRequestStatus: 'ok' as const,
-  },
   isWorktree: true,
 };
 
 describe('resolveStaleSnapshot', () => {
-  it('surfaces the recorded branch, worktree and linked PR', () => {
+  it('surfaces the recorded branch and worktree', () => {
     const view = resolveStaleSnapshot({ git: deadWorktree, path: '/tmp/lobehub-wt-subtask' });
 
     expect(view.branch).toBe('feat/task-list-subtask-nesting');
     expect(view.worktreePath).toBe('/tmp/lobehub-wt-subtask');
     expect(view.isWorktree).toBe(true);
-    expect(view.pullRequest?.number).toBe(18_454);
   });
 
   it('labels the chip with the recorded branch', () => {

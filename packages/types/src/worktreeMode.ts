@@ -1,5 +1,5 @@
 /**
- * The per-directory "New worktree" switch of the Better Coding Experience lab.
+ * The per-directory "New worktree" switch of the composer.
  *
  * Remembered per workspace + user (the preference bucket it is stored in) and
  * per device + directory (the key). Deliberately NOT on the device's shared

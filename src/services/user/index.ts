@@ -2,6 +2,8 @@ import type { OnboardingUserInfo } from '@lobechat/context-engine';
 import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
   OnboardingUnderstandingPollingResult,
   PersonalSystemAgentKey,
   RetryOnboardingUnderstandingProviderInput,
@@ -137,6 +139,17 @@ export class UserService {
   setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> => {
     return lambdaClient.user.setWorktreeModeDir.mutate({ enabled, key });
   };
+
+  /** Personal-mode Codex Plan switch for one directory; resolves to the stored list. */
+  setHeteroPlanModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    lambdaClient.user.setHeteroPlanModeDir.mutate({ enabled, key });
+
+  /** Personal-mode Claude Code permission mode for one directory; resolves to the stored list. */
+  setHeteroPermissionModeDir = async (
+    key: string,
+    mode: HeteroPermissionMode,
+  ): Promise<HeteroPermissionModeDir[]> =>
+    lambdaClient.user.setHeteroPermissionModeDir.mutate({ key, mode });
 
   updateGuide = async (guide: Partial<UserGuide>) => {
     return lambdaClient.user.updateGuide.mutate(guide);

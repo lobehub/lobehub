@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
 import AsyncError from '@/components/AsyncError';
+import { buildConnectorPagePath } from '@/features/Integrations/connectorPage';
 import { useLinearIntegration } from '@/features/Integrations/useLinearIntegration';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
@@ -16,13 +17,11 @@ import SyncJobs from './SyncJobs';
 import SyncRules, { useLinearSyncRules } from './SyncRules';
 import { useLinearSyncJobNotifier, useLinearSyncJobs } from './useLinearSyncJobs';
 
-const LINEAR_SETTINGS_PATH = '/settings/integrations/linear';
-
 /**
  * Project settings → Advanced → "Sync from Linear": a settings row that
  * imports Linear issues as this project's tasks, plus the project's saved
  * sync rules and recent background syncs below the settings form. Syncing is one way; Linear is only
- * read. Connecting a Linear workspace stays in Settings → Integrations,
+ * read. Connecting a Linear workspace stays on its Marketplace connector,
  * shared by every project in the scope. A deployment without a Linear app,
  * and no connection left, contributes nothing.
  */
@@ -62,7 +61,10 @@ export const useProjectLinearSync = (
           onSynced={refresh}
         />
       ) : (
-        <Button icon={<Icon icon={LinkIcon} />} onClick={() => navigate(LINEAR_SETTINGS_PATH)}>
+        <Button
+          icon={<Icon icon={LinkIcon} />}
+          onClick={() => navigate(buildConnectorPagePath('linear'))}
+        >
           {t('linear.sync.project.connect')}
         </Button>
       ),

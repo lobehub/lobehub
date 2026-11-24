@@ -9,6 +9,7 @@ Add and manage MCP servers as connectors. Each connector stores its server endpo
 - \`lh connector add --stdio-cmd <command> [--stdio-arg <arg>]...\` - Add a stdio MCP server launched on this machine
 - \`lh connector refresh <idOrIdentifier>\` (alias \`sync\`) - Refresh OAuth tokens and re-fetch the tool list
 - \`lh connector remove <idOrIdentifier> [--yes]\` - Remove a connector
+- \`lh connector request <identifier> [options]\` - Inside a Channel run: post a card the person connects with one click
 
 \`<idOrIdentifier>\` accepts the connector uuid or its identifier; when several connectors share an identifier, pass the uuid.
 
@@ -33,6 +34,17 @@ stdio connectors accept no \`--auth\` or \`--header\`. Their command and argumen
 - Remote URLs reachable from the server are synced by the server. stdio commands and local URLs are listed from this machine and the result is uploaded; the output marks this as \`synced from this machine\` (\`local: true\` in \`--json\`). Local means \`localhost\`, loopback, \`0.0.0.0\` and private IPv4 addresses (10.x, 172.16-31.x, 192.168.x). LAN hostnames such as \`*.local\` are synced by the server, so use the IP address instead.
 - Run \`refresh\` when the MCP server's tools change. It is a maintenance operation: in a workspace it may require permission to manage that connector. Refreshing a stdio connector runs its stored command locally; a command not yet approved on this machine requires an interactive confirmation, so \`refresh\` fails in a non-interactive shell until a person approves it.
 
+## Asking the person to connect (Channel runs)
+
+When the person asks you to connect an app or MCP server, or a task needs one that is not connected, prefer \`lh connector request\` over \`add\`: it posts a card in the current Channel conversation, and the person connects with one click (OAuth runs in their app, no URL or key passes through chat). It only works inside a Channel run.
+
+- \`<identifier>\` - A catalog identifier (LobeHub, Composio or official MCP, e.g. \`github\`, \`notion\`, \`sentry\`)
+- \`--url <url>\` - The https MCP endpoint of a server outside the catalog; then also \`--name <name>\` and \`--auth <none|oauth>\` (default \`oauth\`)
+- \`--reason <text>\` - One short sentence on what you will do with it, shown on the card
+- \`--request-key <key>\` - Reuse to retry without posting twice
+
+The connector is usable from your next turn once connected. A server that needs a bearer token still goes through \`add --token\`.
+
 ## Examples
 
 \`\`\`bash
@@ -42,6 +54,8 @@ lh mcp add --stdio-cmd uvx --stdio-arg mcp-server-fetch --name Fetch
 lh mcp list --json id,identifier,status,toolCount
 lh mcp refresh example
 lh mcp remove example --yes
+lh connector request notion --reason "to read the spec pages"
+lh connector request context7 --url https://mcp.context7.com/mcp --name Context7 --auth none
 \`\`\`
 `;
 

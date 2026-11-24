@@ -18,6 +18,7 @@ import type {
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   platformCredentialBodyMap,
@@ -52,7 +53,7 @@ import {
 const fallback = createStaticStyles(({ css }) => ({
   moduleGroup: css`
     .lobe-form-form__group-header {
-      gap: 12px;
+      gap: ${densityVars.contentGap};
     }
 
     .lobe-form-form__group-header > .lobe-form-form__group-title {
@@ -69,6 +70,8 @@ const fallback = createStaticStyles(({ css }) => ({
  */
 export interface ModuleControls {
   dirty: readonly SaveModuleId[];
+  /** A block's failed Save, shown beside its Save button until the next save or discard. */
+  errors?: Partial<Record<SaveModuleId, string>>;
   ids: readonly SaveModuleId[];
   onDiscard: (id: SaveModuleId) => void;
   onSave: (id: SaveModuleId) => void;
@@ -247,6 +250,7 @@ const Body = memo<BodyProps>(
         <ModuleSaveBar
           dirty={moduleControls.dirty.includes(id)}
           disabled={disabled}
+          error={moduleControls.errors?.[id]}
           saving={moduleControls.saving === id}
           onDiscard={() => moduleControls.onDiscard(id)}
           onSave={() => moduleControls.onSave(id)}

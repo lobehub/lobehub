@@ -20,6 +20,7 @@ import { type HeatmapsProps } from '@lobehub/charts';
 import pMap from 'p-map';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import { workTypeOptIn } from '@/services/workTypeOptIn';
 
 import { abortableRequest } from '../utils/abortableRequest';
 import type { MessageListPage, MessageRoundCursor } from './cache';
@@ -186,7 +187,7 @@ export class MessageService {
     // legacy set. See resolveAllowedWorkTypes.
     const data = await lambdaClient.message.getMessages.query({
       ...params,
-      includeFileWorks: true,
+      ...workTypeOptIn(),
     });
 
     return data as unknown as UIChatMessage[];
@@ -200,6 +201,10 @@ export class MessageService {
   getToolResultPayload = async (messageId: string) => {
     return lambdaClient.message.getToolResultPayload.query({ messageId });
   };
+
+  /** Status per pending card id (`null` when gone) plus a revision of the topic, for the approval poll. */
+  getInterventionSnapshot = async (topicId: string, messageIds: string[]) =>
+    lambdaClient.message.getInterventionSnapshot.query({ messageIds, topicId });
 
   /**
    * Bulk form, for surfaces that need every omitted row at once (export).
@@ -266,7 +271,7 @@ export class MessageService {
     const data = await lambdaClient.message.getMessages.query({
       ...params,
       before: { createdAt: new Date(cursor.createdAt), id: cursor.id },
-      includeFileWorks: true,
+      ...workTypeOptIn(),
     });
 
     return { messages: data as unknown as UIChatMessage[] };

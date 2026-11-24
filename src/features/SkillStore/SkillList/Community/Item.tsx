@@ -1,5 +1,6 @@
 'use client';
 
+import { parsePluginEntry } from '@lobechat/types';
 import {
   ActionIcon,
   Block,
@@ -65,9 +66,12 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     isEqual,
   );
 
-  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
+  const [togglePlugin, removePlugin, hasPluginEntry] = useAgentStore((s) => [
     s.togglePlugin,
-    agentSelectors.currentAgentPlugins(s).includes(identifier),
+    s.removePlugin,
+    (agentSelectors.currentAgentConfig(s)?.plugins ?? []).some(
+      (entry) => parsePluginEntry(entry).identifier === identifier,
+    ),
   ]);
   const { isAuthenticated, signIn } = useMarketAuth();
 
@@ -86,7 +90,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     const isSuccess = await installMCPPlugin(identifier);
 
     if (isSuccess) {
-      await togglePlugin(identifier);
+      await togglePlugin(identifier, true);
     }
   };
 
@@ -112,8 +116,8 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
                 confirmModal({
                   okButtonProps: { danger: true },
                   onOk: async () => {
-                    if (isPluginEnabledInAgent) {
-                      await togglePlugin(identifier, false);
+                    if (hasPluginEntry) {
+                      await removePlugin(identifier);
                     }
                     await unInstallPlugin(identifier);
                   },

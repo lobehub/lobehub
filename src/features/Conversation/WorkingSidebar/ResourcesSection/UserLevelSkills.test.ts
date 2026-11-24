@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { isValidElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
@@ -39,8 +38,7 @@ vi.mock('@/features/ChatInput/InputEditor/ActionTag/skillDragData', () => ({
   startSkillDrag: vi.fn(),
 }));
 
-// Exercise the sidebar's row data, not a component render. The icon's own
-// market lookup remains shared with the input menu.
+// User skills share the list's default glyph, regardless of their source.
 describe('useUserSkills', () => {
   const initialState = useAgentStore.getState();
 
@@ -83,7 +81,15 @@ describe('useUserSkills', () => {
     expect(result.current).toEqual([]);
   });
 
-  it('provides a market icon for installed market skills without changing their identity', () => {
+  it('keeps the full inventory available for management when every skill is disabled', () => {
+    act(() => useAgentStore.setState({ agentMap: { 'agent-a': { plugins: [] } } }));
+    const { result } = renderHook(() => useUserSkills(true, true));
+    expect(result.current.map((skill) => skill.id)).toEqual(
+      skills.map((skill) => skill.identifier),
+    );
+  });
+
+  it('uses the shared skill glyph for market skills without changing their identity', () => {
     const { result } = renderHook(() => useUserSkills());
 
     expect(result.current[0]).toMatchObject({
@@ -91,14 +97,13 @@ describe('useUserSkills', () => {
       id: skills[0].identifier,
       name: skills[0].name,
     });
-    expect(result.current[0]).toHaveProperty('icon', expect.anything());
-    expect(isValidElement(result.current[0].icon)).toBe(true);
+    expect(result.current[0]).not.toHaveProperty('icon');
   });
 
-  it('keeps the generic skill icon fallback for custom skills', () => {
+  it('uses the same shared skill glyph for custom skills', () => {
     const { result } = renderHook(() => useUserSkills());
 
-    expect(result.current[1].icon).toBeUndefined();
+    expect(result.current[1]).not.toHaveProperty('icon');
   });
 
   it('does not produce rows or icons when the section is disabled', () => {

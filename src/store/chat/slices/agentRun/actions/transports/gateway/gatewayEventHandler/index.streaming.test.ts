@@ -286,7 +286,8 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
   });
 
   describe('step_complete user_message (live steer read by a heterogeneous run)', () => {
-    it('shows the steer message as soon as the run reads it, before its reply starts', async () => {
+    it('shows the steer message and its images before the reply starts', async () => {
+      const imageList = [{ alt: 'screen.png', id: 'file_screen', url: '/f/file_screen' }];
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -297,6 +298,7 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
             agentId: 'agent-executing',
             content: 'summarize the refactor',
             id: 'steer-1',
+            imageList,
             metadata: { steer: true },
             parentId: 'msg-step1',
             role: 'user',
@@ -314,6 +316,7 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
             // The persisted author, not the conversation owner (`agent-1`).
             agentId: 'agent-executing',
             content: 'summarize the refactor',
+            imageList,
             metadata: { steer: true },
             parentId: 'msg-step1',
             role: 'user',

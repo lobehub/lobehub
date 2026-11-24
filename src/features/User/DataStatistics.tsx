@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
+import { densityVars } from '@/styles/densityVars';
 import { formatShortenNumber } from '@/utils/format';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -22,7 +23,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   count: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: bold;
     line-height: 1.2;
   `,

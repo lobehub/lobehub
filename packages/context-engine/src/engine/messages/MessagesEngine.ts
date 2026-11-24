@@ -28,6 +28,7 @@ import {
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
   TasksFlattenProcessor,
+  ToolActivationAnchorProcessor,
   ToolCallProcessor,
   ToolMessageReorder,
   VerifyMessageProcessor,
@@ -92,6 +93,7 @@ const log = debug('context-engine:MessagesEngine');
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
 const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
+const SKILLS_TOOL_ID = 'lobe-skills';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -242,12 +244,11 @@ export class MessagesEngine {
           : undefined;
     const isTodoEnabled = effectiveTodos !== undefined;
 
-    // System date is redundant when web-browsing or memory tools are enabled,
-    // as they already include current date in their system prompts
     const toolIds = toolsConfig?.tools || [];
-    const hasDateAwareTools =
-      toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
-    const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    // Keep SystemDateProvider independent of dynamically activated tools:
+    // toggling it off when web-browsing or user-memory is activated mid-run
+    // mutates the leading system message and invalidates the prompt-cache prefix.
+    const isSystemDateEnabled = enableSystemDate !== false;
     // An eval attempt renders "today" from its case clock, never the wall clock.
     const evalClock = evalContext?.sessionDate ? new Date(evalContext.sessionDate) : undefined;
     const currentUserMessage = [...messages]
@@ -267,6 +268,16 @@ export class MessagesEngine {
     // Same gate for referenced agent documents: only point at `readDocument` when it is sent.
     const canReadDocuments =
       toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
+    // Same gate for filesystem skills: only require `activateSkill` when it is sent. A Custom-mode
+    // agent or a goal turn that did not pin Skills still reaches them through readFile, and a run
+    // that deferred the skill APIs has Skills enabled with its sandbox shell only.
+    const skillsManifest = toolsConfig?.manifests?.find(
+      (manifest) => manifest.identifier === SKILLS_TOOL_ID,
+    );
+    const canActivateSkill =
+      toolIds.includes(SKILLS_TOOL_ID) &&
+      (!skillsManifest || skillsManifest.api.some((api) => api.name === 'activateSkill')) &&
+      !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -371,6 +382,7 @@ export class MessagesEngine {
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
       // sees neither the manifests nor the discovery prompt.
       new SkillContextProvider({
+        canActivateSkill,
         enabled:
           isAgentMode && !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
         enabledSkills: skillsConfig?.enabledSkills,
@@ -680,6 +692,15 @@ export class MessagesEngine {
       new ToolMessageReorder(),
       // Force finish summary (when maxSteps exceeded)
       new ForceFinishSummaryInjector({ enabled: !!forceFinish }),
+      // Only paired activation results still present in the outgoing conversation can own tools.
+      ...(toolsConfig?.anchorActivatedTools
+        ? [
+            new ToolActivationAnchorProcessor({
+              manifests: injectedToolManifests,
+              variableGenerators,
+            }),
+          ]
+        : []),
       // Message cleanup (final step)
       new MessageCleanupProcessor(),
     ];

@@ -321,7 +321,10 @@ export interface ResolveAgentDocumentIndexInput {
    * refreshed for free. Same test as `StaleToolResultTrimProcessor`.
    */
   cacheTtlMs: number;
-  /** Live documents of the agent. */
+  /**
+   * Live documents of the agent. Unused when the pinned snapshot is reused
+   * (`reusablePinnedAgentDocumentIndex`).
+   */
   docs: AgentContextDocument[];
   /** The conversation the step runs on. */
   messages: TurnMessage[];
@@ -347,6 +350,26 @@ export interface ResolvedAgentDocumentIndex {
   store: boolean;
 }
 
+const latestCompressionId = (messages: TurnMessage[]): string | undefined =>
+  messages.findLast((m) => m.role === 'compressedGroup')?.id;
+
+/**
+ * The snapshot the run already pinned, when this step keeps rendering from it.
+ *
+ * Such a step reads no progressive document: the index renders the pinned rows,
+ * so a caller can skip loading them (an agent can hold over 10k). A new history
+ * compression takes a fresh snapshot, which needs them again.
+ */
+export function reusablePinnedAgentDocumentIndex({
+  messages,
+  pinned,
+}: Pick<ResolveAgentDocumentIndexInput, 'messages' | 'pinned'>):
+  AgentDocumentIndexSnapshot | undefined {
+  return isSnapshot(pinned) && pinned.compressionId === latestCompressionId(messages)
+    ? pinned
+    : undefined;
+}
+
 /**
  * Pick the snapshot a step renders from.
  *
@@ -366,11 +389,10 @@ export function resolveAgentDocumentIndex({
   stored,
   visibleMessages = messages,
 }: ResolveAgentDocumentIndexInput): ResolvedAgentDocumentIndex {
-  const compressionId = messages.findLast((m) => m.role === 'compressedGroup')?.id;
+  const reused = reusablePinnedAgentDocumentIndex({ messages, pinned });
+  if (reused) return { pin: false, snapshot: reused, store: false };
 
-  if (isSnapshot(pinned) && pinned.compressionId === compressionId) {
-    return { pin: false, snapshot: pinned, store: false };
-  }
+  const compressionId = latestCompressionId(messages);
 
   const lastUserIndex = messages.findLastIndex((m) => m.role === 'user');
   const lastUser = messages[lastUserIndex];

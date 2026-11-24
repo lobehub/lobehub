@@ -4,26 +4,21 @@ import { ArchiveIcon, LockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { useDensityTokens } from '@/styles/density';
 
-import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { useTaskListOriginState } from '../shared/taskListOrigin';
-import AssigneeAgentSelector from './AssigneeAgentSelector';
-import AssigneeAvatar from './AssigneeAvatar';
-import AssigneeMemberSelector from './AssigneeMemberSelector';
-import AssigneeUserAvatar from './AssigneeUserAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
+import { TaskAssigneeCell } from './TaskAssigneeCell';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskProjectChip from './TaskProjectChip';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
-import { UnassignedAssigneeIcon } from './UnassignedAssigneeIcon';
 import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
 export type TaskItemRouteScope = 'agent' | 'global';
@@ -54,6 +49,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>((props) => {
+  const { fontSize: rowFontSize, listRowHeight } = useDensityTokens();
   const { className, hideProject, task, routeScope = 'agent', variant = 'default' } = props;
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
@@ -65,7 +61,6 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
   );
   const navigate = useWorkspaceAwareNavigate();
   const taskListOriginState = useTaskListOriginState();
-  const activeWorkspaceId = useActiveWorkspaceId();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
     formatOtherYear: t('time.formatOtherYear'),
@@ -139,15 +134,15 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
       {archivedBadge}
       {hasName ? (
         <>
-          <Text style={{ flex: 'none' }} type={'secondary'}>
+          <Text fontSize={rowFontSize} style={{ flex: 'none' }} type={'secondary'}>
             {task.identifier}
           </Text>
-          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          <Text ellipsis fontSize={rowFontSize} style={{ minWidth: 0 }} weight={500}>
             {task.name}
           </Text>
         </>
       ) : (
-        <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+        <Text ellipsis fontSize={rowFontSize} style={{ minWidth: 0 }} weight={500}>
           {task.identifier}
         </Text>
       )}
@@ -163,41 +158,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
     </Flexbox>
   );
 
-  const assigneeNode = (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
-      {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
-        <AssigneeMemberSelector
-          currentUserId={task.assigneeUserId}
-          taskCreatorId={task.createdByUserId}
-          taskIdentifier={task.id}
-          taskVisibility={task.visibility}
-        >
-          {task.assigneeUserId ? (
-            <AssigneeUserAvatar profileCard userId={task.assigneeUserId} />
-          ) : (
-            <Tooltip title={tChat('taskList.assignTo')}>
-              <UnassignedAssigneeIcon kind={'human'} />
-            </Tooltip>
-          )}
-        </AssigneeMemberSelector>
-      )}
-      <AssigneeAgentSelector
-        currentAgentId={task.assigneeAgentId}
-        disabled={status === 'running'}
-        taskCreatorId={task.createdByUserId}
-        taskIdentifier={task.id}
-        taskVisibility={task.visibility}
-      >
-        {task.assigneeAgentId ? (
-          <AssigneeAvatar agentId={task.assigneeAgentId} profileCard={status !== 'running'} />
-        ) : (
-          <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
-            <AssigneeAvatar agentId={task.assigneeAgentId} />
-          </Tooltip>
-        )}
-      </AssigneeAgentSelector>
-    </Flexbox>
-  );
+  const assigneeNode = <TaskAssigneeCell status={status} task={task} />;
 
   const projectNode = hideProject ? null : <TaskProjectChip projectId={task.projectId} />;
 
@@ -273,7 +234,8 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
         clickable
         className={className}
         gap={4}
-        padding={12}
+        paddingBlock={(listRowHeight - 24) / 2}
+        paddingInline={12}
         variant={'borderless'}
         onClick={handleClick}
       >

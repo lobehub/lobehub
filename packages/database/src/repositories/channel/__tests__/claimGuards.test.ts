@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { UserModel } from '../../../models/user';
-import { channelJobs, channelMemberGrants, channelMembers, devices } from '../../../schemas';
+import {
+  channelJobs,
+  channelMemberGrants,
+  channelMembers,
+  channelMessages,
+  devices,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { createChannelFixture, deviceConfig, jobsOf, lease } from './testUtils';
@@ -72,7 +78,7 @@ describe('claim guards', () => {
   });
 
   it('requires an approved grant that matches the device, directory and owner', async () => {
-    const { asOwner, channel, member } = await fixture.createTeamChannel();
+    const { asOwner, channel } = await fixture.createTeamChannel();
     // A private device owned by the member, not shared with the workspace.
     await db
       .insert(devices)
@@ -82,29 +88,28 @@ describe('claim guards', () => {
       'Coder',
       deviceConfig('/repo', 'device-2', fixture.memberId),
     );
-    const grant = {
-      channelId: channel.id,
-      deviceId: 'device-2',
-      deviceOwnerId: fixture.memberId,
-      memberId: agent.id,
-      requestedByMemberId: member.id,
-      status: 'approved' as const,
-      workingDirectory: '/elsewhere',
-    };
     const first = await request(asOwner, channel.id, agent.id, 'first');
 
-    // No grant at all fails closed.
+    // Adding the Agent asked the device owner; until they approve, the reply waits.
+    const [grant] = await db
+      .select()
+      .from(channelMemberGrants)
+      .where(eq(channelMemberGrants.memberId, agent.id));
+    expect(grant).toMatchObject({ deviceOwnerId: fixture.memberId, status: 'pending' });
     expect(await execution.claim(channel.id, first.job.id, lease)).toBeNull();
     expect(await jobById(first.job.id)).toMatchObject({ blockedCode: 'device_approval_pending' });
 
     // An approval for another directory does not count.
-    const [mismatched] = await db.insert(channelMemberGrants).values(grant).returning();
+    await db
+      .update(channelMemberGrants)
+      .set({ status: 'approved', workingDirectory: '/elsewhere' })
+      .where(eq(channelMemberGrants.id, grant.id));
     expect(await execution.claim(channel.id, first.job.id, lease)).toBeNull();
 
     await db
       .update(channelMemberGrants)
       .set({ workingDirectory: '/repo' })
-      .where(eq(channelMemberGrants.id, mismatched.id));
+      .where(eq(channelMemberGrants.id, grant.id));
     await answer(channel.id, first.job.id);
 
     // The grant goes with the owner's account; the device stays locked to this channel.
@@ -142,6 +147,21 @@ describe('claim guards', () => {
     const { job } = await request(asMember, channel.id, agent.id, 'req');
 
     await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, member.id));
+
+    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+    expect((await jobById(job.id)).status).toBe('cancelled');
+  });
+
+  it('cancels a job whose request was deleted while it waited', async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Coder');
+    const { job, message } = await request(asMember, channel.id, agent.id, 'withdrawn');
+
+    // Deletion racing the claim: the tombstone lands while the job is still queued.
+    await db
+      .update(channelMessages)
+      .set({ metadata: { deletedAt: new Date().toISOString() } })
+      .where(eq(channelMessages.id, message.id));
 
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
     expect((await jobById(job.id)).status).toBe('cancelled');

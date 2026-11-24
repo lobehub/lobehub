@@ -70,6 +70,12 @@ export interface UploadFileItem {
   errorCode?: string;
   file: File;
   /**
+   * MIME type stored with the uploaded file. Set once the upload succeeds; it can
+   * differ from `file.type` (a blank or wrong browser type corrected by byte
+   * sniffing or the file extension), and decides how the sent message shows it.
+   */
+  fileType?: string;
+  /**
    * the file url after upload,it will be s3 url
    * if enable the S3 storage, or the data is same as base64Url
    */
@@ -87,6 +93,11 @@ export interface UploadFileItem {
    * card pulses to show the paste was received.
    */
   repastedAt?: number;
+  /**
+   * `false` when the failure would repeat on retry (e.g. the file is over the
+   * upload size limit), so the chip offers only removal.
+   */
+  retryable?: boolean;
   /**
    * Set when the draft was uploaded as an agent-share VISITOR: the file lives
    * under the creator's account, so remove/retry must go through the
@@ -168,6 +179,11 @@ export const FileMetadataSchema = z.object({
    * consumers can group/reserve layout by orientation without recomputing
    */
   ratio: z.number().optional(),
+  /**
+   * base64 ThumbHash of the image, recorded for images so consumers can paint a
+   * blurred placeholder before the file loads
+   */
+  thumbhash: z.string().optional(),
   /**
    * intrinsic image width in pixels, recorded for images
    */

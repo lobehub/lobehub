@@ -289,6 +289,52 @@ export interface SandboxStoragePromptVariables {
   sandbox_workspace: string;
 }
 
+/** A repository the environment checks out into the working directory. */
+export interface SandboxRepositoryPromptInput {
+  /** The folder it is checked out into, relative to the working directory; absent for the top. */
+  folder?: string;
+  /** Branch or tag; absent for the repository's default branch. */
+  ref?: string;
+  /** `owner/name`, or the checkout url for anything but GitHub. */
+  repository: string;
+}
+
+/**
+ * What the model is told about the repositories in its working directory.
+ *
+ * They are cloned the first time a command runs, so they are not there to be
+ * discovered before the first call, and nothing else names them: without this
+ * the model learns the layout from a clone log. With several, the working
+ * directory itself is not a repository, which is the one thing a model reaching
+ * for `git status` at the top would otherwise get wrong — and each repository
+ * carries its own `AGENTS.md`, which no injection reads, since nothing is
+ * cloned yet when the prompt is built.
+ */
+export const formatSandboxRepositoriesPrompt = (
+  repositories: SandboxRepositoryPromptInput[] | undefined,
+): string[] => {
+  if (!repositories?.length) return [];
+
+  const describe = ({ ref, repository }: SandboxRepositoryPromptInput) =>
+    `\`${repository}\`${ref ? ` (\`${ref}\`)` : ''}`;
+
+  if (repositories.length === 1) {
+    const [only] = repositories;
+    return [
+      only.folder
+        ? `- This project's environment checks out ${describe(only)} into \`${only.folder}/\` of your working directory when your first command runs. Work on it there, and read its \`AGENTS.md\` / \`CLAUDE.md\` before changing anything when it has one.`
+        : `- Your working directory is a checkout of ${describe(only)}, cloned by this project's environment when your first command runs. Read its \`AGENTS.md\` / \`CLAUDE.md\` before changing anything when it has one.`,
+    ];
+  }
+
+  return [
+    `- This project's environment checks out ${repositories.length} repositories side by side in your working directory when your first command runs:`,
+    ...repositories.map((item) => `  - \`${item.folder ?? '.'}/\` — ${describe(item)}`),
+    '- The working directory itself is not a git repository. Run git, installs, builds and tests inside the folder of the repository they belong to, and commit to each repository separately.',
+    "- Each repository may have its own `AGENTS.md` / `CLAUDE.md`; read the one in a repository's folder before changing anything there.",
+  ];
+};
+
 export interface SandboxStoragePromptInput {
   /**
    * The folder the run works in, relative to the drive's root; absent on a
@@ -296,6 +342,8 @@ export interface SandboxStoragePromptInput {
    */
   cwd?: string;
   mode?: SandboxMode;
+  /** The repositories the environment checks out, in order; see {@link formatSandboxRepositoriesPrompt}. */
+  repositories?: SandboxRepositoryPromptInput[];
   /**
    * Where commands actually start when that is not {@link cwd}: the checkout
    * on the machine's own disk, for an instance built from a repository. The
@@ -310,8 +358,10 @@ export interface SandboxStoragePromptInput {
 export const formatSandboxStoragePromptVariables = ({
   cwd,
   mode = DEFAULT_SANDBOX_MODE,
+  repositories,
   workingDir,
 }: SandboxStoragePromptInput = {}): SandboxStoragePromptVariables => {
+  const repositoryLines = formatSandboxRepositoriesPrompt(repositories);
   if (!isPersistentSandboxMode(mode)) {
     return {
       sandbox_session_files: '- Files from previous sessions may not persist',
@@ -323,6 +373,7 @@ export const formatSandboxStoragePromptVariables = ({
         // What the disposable sandbox is FOR, so the model neither treats it as
         // somewhere to keep things nor apologizes for it on a coding task.
         '- This is a temporary sandbox, discarded after use: results and intermediate files are not kept once it is gone. It suits coding on a repository and one-off data processing, where nothing along the way needs keeping. Anything the user wants to keep has to leave the sandbox — export finished files with `exportFile`.',
+        ...repositoryLines,
       ].join('\n'),
     };
   }
@@ -385,6 +436,7 @@ export const formatSandboxStoragePromptVariables = ({
       // platform treats as scratch.
       '- The drive is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Keep the drive for what is worth keeping.',
       '- It has a storage quota, which covers what you leave on the drive.',
+      ...repositoryLines,
     ].join('\n'),
   };
 };

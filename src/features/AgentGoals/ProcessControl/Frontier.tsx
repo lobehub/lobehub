@@ -21,6 +21,8 @@ import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
 import GoalDecisionCase, {
@@ -67,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
@@ -84,7 +86,7 @@ const styles = createStaticStyles(({ css }) => ({
   // A gate is an intent card: lifted off the list so it reads as the one thing
   // asking for the owner, not another row.
   decisionCard: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -630,6 +632,7 @@ AddTaskButton.displayName = 'GoalAddTaskButton';
 
 const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, planning }) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const [showBlocked, setShowBlocked] = useState(false);
 
   const numbers = new Map(
@@ -666,7 +669,7 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
     <Flexbox gap={8}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'}>
         <Flexbox horizontal align={'baseline'} gap={8}>
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('goalProcess.frontier.title')}
           </Text>
           {graph.frontier.length > 0 && (

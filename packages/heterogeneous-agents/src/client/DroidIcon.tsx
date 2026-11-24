@@ -2,7 +2,9 @@ import type { IconType } from '@lobehub/icons';
 import type { ImgHTMLAttributes } from 'react';
 import { memo } from 'react';
 
-export const DROID_AVATAR_URL = 'https://factory.ai/favicon.svg';
+import { DROID_AVATAR_URL } from '../connectAgent';
+
+export { DROID_AVATAR_URL };
 
 interface DroidAvatarProps extends Omit<
   ImgHTMLAttributes<HTMLImageElement>,

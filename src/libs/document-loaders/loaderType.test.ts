@@ -10,7 +10,16 @@ describe('getChunkingLoaderType', () => {
     expect(getChunkingLoaderType('main.go')).toBe('code');
     expect(getChunkingLoaderType('data.csv')).toBe('csv');
     expect(getChunkingLoaderType('Report.XLSX')).toBe('excel');
+    expect(getChunkingLoaderType('report.final.DOC')).toBe('doc');
+    expect(getChunkingLoaderType('report.final.DOCX')).toBe('docx');
   });
+
+  it.each(['reportpdf', 'export.signedcsv', 'slidespptx', 'draftdocx', 'markdown', '.pdf'])(
+    'does not infer a loader from a filename fragment in %s',
+    (name) => {
+      expect(isChunkingSupported({ fileType: 'application/octet-stream', name })).toBe(false);
+    },
+  );
 
   it('returns undefined for formats without a chunking loader', () => {
     expect(getChunkingLoaderType('floor-plan.dwg')).toBeUndefined();

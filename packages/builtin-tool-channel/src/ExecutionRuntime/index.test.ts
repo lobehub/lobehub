@@ -147,3 +147,58 @@ describe('Channel messaging', () => {
     });
   });
 });
+
+describe('Channel askUser', () => {
+  const questions = [{ options: [{ label: 'A' }, { label: 'B' }], question: 'Which?' }];
+
+  it('holds the questions and tells the run to end its turn instead of waiting', async () => {
+    const askUser = vi.fn().mockResolvedValue({ questions: 1, status: 'posts_with_reply' });
+    const runtime = new ChannelExecutionRuntime({
+      askUser,
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+    });
+    const result = await runtime.askUser({ questions });
+    expect(askUser).toHaveBeenCalledWith({ questions });
+    expect(result).toMatchObject({ state: { status: 'posts_with_reply' }, success: true });
+    expect(result.content).toContain('End your turn now');
+  });
+
+  it('reports a refused ask as a tool error the model can correct', async () => {
+    const runtime = new ChannelExecutionRuntime({
+      askUser: vi.fn().mockRejectedValue(new Error('Question 1 has duplicate options')),
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+    });
+    expect(await runtime.askUser({ questions })).toMatchObject({
+      content: 'Question 1 has duplicate options',
+      error: { type: 'ChannelAskError' },
+      success: false,
+    });
+  });
+});
+
+describe('Channel connector requests', () => {
+  it('posts the card and tells the Agent the connector comes next turn', async () => {
+    const requestConnector = vi
+      .fn()
+      .mockResolvedValue({ messageId: 'msg', name: 'GitHub', source: 'lobehub' });
+    const runtime = new ChannelExecutionRuntime({
+      readMessage: vi.fn(),
+      readMessages: vi.fn(),
+      requestConnector,
+    });
+    const result = await runtime.requestConnector({ identifier: 'github' });
+    expect(requestConnector).toHaveBeenCalledWith({ identifier: 'github' });
+    expect(result).toMatchObject({ state: { messageId: 'msg' }, success: true });
+    expect(result.content).toContain('next turn');
+  });
+
+  it('fails as a tool error when the run cannot post one', async () => {
+    const runtime = new ChannelExecutionRuntime({ readMessage: vi.fn(), readMessages: vi.fn() });
+    expect(await runtime.requestConnector({ identifier: 'github' })).toMatchObject({
+      error: { type: 'ChannelConnectorError' },
+      success: false,
+    });
+  });
+});

@@ -49,6 +49,7 @@ describe('AgentShareModel', () => {
           description: 'Shareable agent',
           id: agentId,
           name: 'Shareable Agent',
+          plugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
           // Explicit (the column defaults to random words): `create` seeds the
           // share slug from it, so tests below can assert the exact value.
           slug: 'shareable-agent',
@@ -75,10 +76,7 @@ describe('AgentShareModel', () => {
         shareConfig: {
           allowCreatorViewSessions: false,
           allowReadMemory: false,
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
-          showErrorDetails: false,
-          showModelInfo: false,
+          maxMessagesPerVisitor: 100,
           toolGrants: [],
         },
         userViewCount: 0,
@@ -103,6 +101,21 @@ describe('AgentShareModel', () => {
         .where(eq(agentShares.agentId, agentId));
       expect(rows).toHaveLength(1);
       expect(rows[0].visibility).toBe('private');
+    });
+
+    it('marks only a newly inserted share for default grants', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+      expect(created.shareConfig.seedDefaultGrants).toBe(true);
+
+      await agentShareModel.updateConfig(agentId, {
+        seedDefaultGrants: false,
+        toolGrants: [{ identifier: 'search' }],
+      });
+      // Re-enabling returns the existing row and must not re-arm the marker.
+      const again = await agentShareModel.create(agentId, 'link');
+
+      expect(again.shareConfig.seedDefaultGrants).toBe(false);
+      expect(again.shareConfig.toolGrants).toEqual([{ identifier: 'search' }]);
     });
 
     describe('profile slug seed', () => {
@@ -193,7 +206,7 @@ describe('AgentShareModel', () => {
         .insert(agentShares)
         .values({
           agentId: workspaceAgentId,
-          shareConfig: { maxTopicsPerVisitor: 3, monthlySpendLimit: 2.5 },
+          shareConfig: { maxMessagesPerVisitor: 3, monthlySpendLimit: 2.5 },
           visibility: 'link',
         })
         .returning();
@@ -208,7 +221,7 @@ describe('AgentShareModel', () => {
       await expect(
         AgentShareModel.readCurrentVisitorCaps(serverDB, workspaceAgentId),
       ).resolves.toMatchObject({
-        maxTopicsPerVisitor: 3,
+        maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
         shareId: share.id,
         workspaceId,
@@ -241,10 +254,10 @@ describe('AgentShareModel', () => {
         AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, share.id),
       ).resolves.toBeNull();
       await expect(
-        workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxTopicsPerVisitor: 4 }),
+        workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxMessagesPerVisitor: 4 }),
       ).resolves.toMatchObject({
         id: share.id,
-        shareConfig: { maxTopicsPerVisitor: 4 },
+        shareConfig: { maxMessagesPerVisitor: 4 },
         visibility: 'link',
       });
       await expect(
@@ -342,7 +355,7 @@ describe('AgentShareModel', () => {
         { prompt: 'Review this change', description: 'Identify regression risks' },
       ];
       await agentShareModel.updateConfig(agentId, { demoCases });
-      await agentShareModel.updateConfig(agentId, { maxTurnsPerTopic: 8 });
+      await agentShareModel.updateConfig(agentId, { maxMessagesPerVisitor: 8 });
       expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual(
         demoCases,
       );
@@ -356,6 +369,20 @@ describe('AgentShareModel', () => {
       expect(agent.openingQuestions ?? []).toEqual([]);
       await agentShareModel.updateConfig(agentId, { demoCases: [] });
       expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
+    it('persists declined grant ids through unrelated patches', async () => {
+      await agentShareModel.create(agentId);
+      expect(
+        (await agentShareModel.getByAgentId(agentId))?.shareConfig.declinedGrantIds,
+      ).toBeUndefined();
+
+      await agentShareModel.updateConfig(agentId, { declinedGrantIds: ['calculator'] });
+      await agentShareModel.updateConfig(agentId, { toolGrants: [{ identifier: 'search' }] });
+
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.declinedGrantIds).toEqual([
+        'calculator',
+      ]);
     });
 
     it('does not let another owner replace profile content', async () => {
@@ -390,14 +417,11 @@ describe('AgentShareModel', () => {
         allowReadMemory: false,
         demoCases: [],
         deviceAccess: 'none',
-        deviceAllowEmails: [],
+        deviceAllowUserIds: [],
         featuredWorkIds: [],
         maxFileStorage: 512 * 1024 * 1024,
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
-        showErrorDetails: false,
-        showModelInfo: false,
         slug: undefined,
         toolGrants: [],
       });
@@ -409,14 +433,12 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        autoGrantAgentTools: true,
         deviceAccess: 'allowlist',
-        deviceAllowEmails: ['alice@example.com'],
+        deviceAllowUserIds: ['user_alice'],
         maxFileStorage: 256 * 1024 * 1024,
-        maxTopicsPerVisitor: 10,
-        maxTurnsPerTopic: 40,
+        maxMessagesPerVisitor: 40,
         monthlySpendLimit: 25,
-        showErrorDetails: true,
-        showModelInfo: true,
         toolGrants: [{ identifier: 'search' }],
       };
 
@@ -424,8 +446,15 @@ describe('AgentShareModel', () => {
       const readBack = await agentShareModel.getByAgentId(agentId);
 
       // The slug seeded from the agent's profile slug at `create` survives a
-      // full config overwrite — it is owner-facing url state, not config.
-      const expected = { demoCases: [], featuredWorkIds: [], ...config, slug: 'shareable-agent' };
+      // full config overwrite — it is owner-facing url state, not config. So
+      // does the default-grant marker `create` set, which this config omits.
+      const expected = {
+        demoCases: [],
+        featuredWorkIds: [],
+        seedDefaultGrants: true,
+        ...config,
+        slug: 'shareable-agent',
+      };
       expect(updated?.shareConfig).toEqual(expected);
       expect(readBack?.shareConfig).toEqual(expected);
     });
@@ -434,18 +463,18 @@ describe('AgentShareModel', () => {
       await agentShareModel.create(agentId);
 
       await agentShareModel.updateConfig(agentId, {
-        maxTopicsPerVisitor: 10,
+        maxMessagesPerVisitor: 10,
         toolGrants: [{ identifier: 'search' }],
       });
       const updated = await agentShareModel.updateConfig(agentId, {
-        maxTurnsPerTopic: 40,
-        showModelInfo: true,
+        allowCreatorViewSessions: true,
+        maxFileStorage: 1024,
       });
 
       expect(updated?.shareConfig).toMatchObject({
-        maxTopicsPerVisitor: 10,
-        maxTurnsPerTopic: 40,
-        showModelInfo: true,
+        allowCreatorViewSessions: true,
+        maxFileStorage: 1024,
+        maxMessagesPerVisitor: 10,
         toolGrants: [{ identifier: 'search' }],
       });
     });
@@ -455,15 +484,15 @@ describe('AgentShareModel', () => {
       await agentShareModel.updateConfig(agentId, { monthlySpendLimit: 25 });
 
       const updated = await agentShareModel.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
         monthlySpendLimit: 0,
-        showModelInfo: true,
         // smuggled past the type on purpose — must be stripped, not persisted
         ...({ slug: 'sneaky-slug' } as object),
       });
 
       // `0` is a real cap ("stop all visitor runs"), never a cleared one.
       expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
-      expect(updated?.shareConfig.showModelInfo).toBe(true);
+      expect(updated?.shareConfig.allowCreatorViewSessions).toBe(true);
       // The seeded profile slug is untouched; the smuggled one never lands.
       expect(updated?.shareConfig.slug).toBe('shareable-agent');
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
@@ -496,7 +525,7 @@ describe('AgentShareModel', () => {
 
     it('returns null for missing shares', async () => {
       expect(await agentShareModel.getByAgentId(agentId)).toBeNull();
-      expect(await agentShareModel.updateConfig(agentId, { maxTopicsPerVisitor: 5 })).toBeNull();
+      expect(await agentShareModel.updateConfig(agentId, { maxMessagesPerVisitor: 5 })).toBeNull();
       expect(await agentShareModel.updateVisibility(agentId, 'link')).toBeNull();
       expect(await agentShareModel.deleteByAgentId(agentId)).toBeNull();
     });
@@ -506,7 +535,7 @@ describe('AgentShareModel', () => {
 
       expect(await agentShareModel.getByAgentId(otherAgentId)).toBeNull();
       expect(
-        await agentShareModel.updateConfig(otherAgentId, { maxTopicsPerVisitor: 5 }),
+        await agentShareModel.updateConfig(otherAgentId, { maxMessagesPerVisitor: 5 }),
       ).toBeNull();
       expect(await agentShareModel.updateVisibility(otherAgentId, 'link')).toBeNull();
       expect(await agentShareModel.deleteByAgentId(otherAgentId)).toBeNull();
@@ -669,12 +698,10 @@ describe('AgentShareModel', () => {
         agentDescription: 'Shareable agent',
         agentId,
         agentName: 'Shareable Agent',
+        agentPlugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
         agentTitle: 'Shareable Agent Title',
         ownerId: userId,
-        shareConfig: expect.objectContaining({
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
-        }),
+        shareConfig: expect.objectContaining({ maxMessagesPerVisitor: 100 }),
         shareId: created!.id,
         visibility: 'link',
       });
@@ -743,6 +770,24 @@ describe('AgentShareModel', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Share not found' });
     });
 
+    // A card share admits its grantees in their Channels, never through the link page.
+    it('hides a card share page from non-owners, grantees included', async () => {
+      const created = await agentShareModel.create(agentId, 'card');
+      await AgentShareModel.grant(serverDB, {
+        issuedAt: new Date(),
+        shareId: created!.id,
+        source: { channelId: 'channel', messageId: 'message', type: 'card' },
+        userId: otherUserId,
+      });
+
+      await expect(
+        AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, otherUserId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(
+        (await AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, userId)).shareId,
+      ).toBe(created!.id);
+    });
+
     it('allows authenticated access to a link share', async () => {
       const created = await agentShareModel.create(agentId, 'link');
 
@@ -753,6 +798,19 @@ describe('AgentShareModel', () => {
       );
 
       expect(share.shareId).toBe(created!.id);
+    });
+
+    it('lets a signed-out viewer read a link share and nothing else', async () => {
+      const link = await agentShareModel.create(agentId, 'link');
+      const linkShare = await AgentShareModel.findByShareId(serverDB, link!.id);
+
+      expect(() => AgentShareModel.assertShareAccess(linkShare!, undefined)).not.toThrow();
+      // An empty viewer must never match the owner, even a row with no owner id.
+      for (const visibility of ['private', 'card'] as const) {
+        expect(() =>
+          AgentShareModel.assertShareAccess({ ownerId: '', visibility }, undefined),
+        ).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
+      }
     });
 
     it('throws NOT_FOUND for an unknown UUID', async () => {
@@ -808,24 +866,36 @@ describe('AgentShareModel', () => {
     it('reads fresh caps and the live shareId', async () => {
       const created = await agentShareModel.create(agentId);
       await agentShareModel.updateConfig(agentId, {
-        maxTopicsPerVisitor: 3,
-        maxTurnsPerTopic: 8,
+        maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
       });
 
       await expect(AgentShareModel.readCurrentVisitorCaps(serverDB, agentId)).resolves.toEqual({
-        maxTopicsPerVisitor: 3,
-        maxTurnsPerTopic: 8,
+        maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
         shareId: created!.id,
         workspaceId: null,
       });
     });
 
+    it('ignores retired cap keys left in a stored config', async () => {
+      await serverDB.insert(agentShares).values({
+        agentId,
+        shareConfig: { maxTopicsPerVisitor: 1, maxTurnsPerTopic: 1, showModelInfo: true } as never,
+        visibility: 'link',
+      });
+
+      const caps = await AgentShareModel.readCurrentVisitorCaps(serverDB, agentId);
+      expect(caps).toMatchObject({ maxMessagesPerVisitor: 100, monthlySpendLimit: 10 });
+      expect(caps).not.toHaveProperty('maxTurnsPerTopic');
+      const share = await agentShareModel.getByAgentId(agentId);
+      expect(share?.shareConfig).not.toHaveProperty('maxTopicsPerVisitor');
+      expect(share?.shareConfig).not.toHaveProperty('showModelInfo');
+    });
+
     it('falls back to defaults and a null shareId when there is no share', async () => {
       await expect(AgentShareModel.readCurrentVisitorCaps(serverDB, agentId)).resolves.toEqual({
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
         shareId: null,
         workspaceId: null,

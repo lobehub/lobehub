@@ -1,15 +1,7 @@
 'use client';
 
 import type { TrashProjectFilter } from '@lobechat/types';
-import {
-  controlHeight,
-  cssVar,
-  Flexbox,
-  Icon,
-  Select,
-  type SelectOptions,
-  Text,
-} from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Select, type SelectOptions, Text } from '@lobehub/ui';
 import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { FolderKanbanIcon, LockIcon } from 'lucide-react';
@@ -17,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import type { ProjectListItem } from '@/store/project';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   fromProjectFilterValue,
@@ -27,8 +20,9 @@ import {
 
 /**
  * The picker sits beside the type Segmented in one filter row, so it takes
- * that track's height (`controlHeight.middle`), radius and surface while
- * keeping the small control's 12px text. Open / hover feedback stays.
+ * that track's height (the density control height: 32px loose, 28px compact),
+ * radius and surface while keeping the small control's 12px text. Open /
+ * hover feedback stays.
  */
 const styles = stylex.create({
   trigger: {
@@ -114,7 +108,7 @@ export const ProjectFilter = ({
         popupMatchSelectWidth={280}
         prefix={FolderKanbanIcon}
         size={'small'}
-        style={{ maxWidth: 260, minHeight: controlHeight.middle, minWidth: 160 }}
+        style={{ maxWidth: 260, minHeight: densityVars.controlHeight, minWidth: 160 }}
         // Not `virtual`: the virtual list counts the whole project group as one
         // row and crashes once search shrinks the options; search is the way
         // through a long list.

@@ -7,7 +7,9 @@ import { UnreadableServerResponseError } from '@/libs/trpc/client/unreadableServ
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
+import { UploadRequestError } from '@/services/upload';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import { useFileStore as useStore } from '../../store';
 
@@ -55,8 +57,19 @@ vi.mock('@/services/shareChat', () => ({
 vi.mock('i18next', () => ({
   t: (
     key: string,
-    options?: { message?: string; reason?: string; requestId?: string; status?: number },
+    options?: {
+      detail?: string;
+      max?: string;
+      message?: string;
+      reason?: string;
+      requestId?: string;
+      status?: number;
+    },
   ) => {
+    if (key === 'upload.storageRejected') return `Storage rejected the upload (${options?.detail})`;
+
+    if (key === 'upload.fileTooLarge') return `Over the ${options?.max} limit`;
+
     if (key === 'upload.permissionDenied') {
       return 'You do not have permission to upload files in this workspace.';
     }
@@ -251,6 +264,24 @@ describe('useFileStore:chat', () => {
       result.current.restoreChatUploadFileList(CONTEXT_KEY, []);
     });
     expect(uploadList()).toEqual([newerFile, submittedFile]);
+  });
+
+  it('restoreChatUploadFileList puts restored uploads back around a retained failed one', () => {
+    const { result } = renderHook(() => useStore());
+    const a = { id: 'a', status: 'success' };
+    const failed = { id: 'b', status: 'error' };
+    const c = { id: 'c', status: 'success' };
+    const newer = { id: 'new', status: 'uploading' };
+
+    // The send took a and c; the failed b stayed, and a newer draft arrived meanwhile.
+    act(() => {
+      useStore.setState({
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [failed, newer] } as any,
+      });
+      result.current.restoreChatUploadFileList(CONTEXT_KEY, [a, c] as any, ['a', 'b', 'c']);
+    });
+
+    expect(uploadList()).toEqual([a, failed, c, newer]);
   });
 
   // Regression: one global upload list showed a conversation's attachments in
@@ -531,6 +562,135 @@ describe('useFileStore:chat', () => {
         status: 'error',
       }),
     ]);
+  });
+
+  // Regression (T-14442): a 117 MB zip's last S3 part was refused over HTTP/2, the
+  // rejection carried the empty `statusText`, and the chip failed with no reason.
+  it('never leaves a failed upload without a reason', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue('');
+
+    await act(async () => {
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+    });
+
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ error: 'File upload failed.', status: 'error' }),
+    ]);
+  });
+
+  it('names the storage status and code when storage refuses the upload', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue(
+      new UploadRequestError({ code: 'RequestTimeout', status: 400 }),
+    );
+
+    await act(async () => {
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+    });
+
+    expect(uploadList()).toEqual([
+      expect.objectContaining({
+        error: 'Storage rejected the upload (HTTP 400 · RequestTimeout)',
+        status: 'error',
+      }),
+    ]);
+    expect(uploadList()[0].retryable).not.toBe(false);
+  });
+
+  it('states the size limit and offers no retry for a file over it', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['zip'], 'huge.zip', { type: 'application/zip' });
+    const uploadWithProgress = vi
+      .spyOn(result.current, 'uploadWithProgress')
+      .mockRejectedValue(new Error('Files larger than 2147483647 bytes cannot be uploaded'));
+
+    await act(async () => {
+      await result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+    });
+
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ error: 'Over the 2 GB limit', retryable: false, status: 'error' }),
+    ]);
+
+    await act(async () => {
+      await result.current.retryChatUploadFile(CONTEXT_KEY, uploadList()[0].id);
+    });
+    expect(uploadWithProgress).toHaveBeenCalledOnce();
+  });
+
+  describe('removing a chip while it uploads', () => {
+    it('cancels the transfer and deletes nothing server-side', async () => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useStore());
+      const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+      let signal: AbortSignal | undefined;
+      vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+        ({ abortController }) =>
+          new Promise((resolve) => {
+            signal = abortController?.signal;
+            signal?.addEventListener('abort', () => resolve(undefined));
+          }),
+      );
+
+      let upload!: Promise<void>;
+      await act(async () => {
+        upload = result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+        await vi.waitFor(() => expect(uploadList()).toHaveLength(1));
+      });
+      const pending = uploadList()[0] as UploadFileItem;
+      expect(pending.status).toBe('pending');
+
+      await act(async () => {
+        await result.current.removeChatUploadFile(CONTEXT_KEY, pending.id);
+        await upload;
+      });
+
+      expect(signal?.aborted).toBe(true);
+      expect(uploadList()).toEqual([]);
+      expect(removeFile).not.toHaveBeenCalled();
+    });
+
+    it('deletes a file record that lands after the chip was removed', async () => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useStore());
+      const file = new File(['zip'], 'readme.zip', { type: 'application/zip' });
+      let finish!: () => void;
+      vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            // createFile is not cancellable: the record arrives despite the abort.
+            finish = () => resolve({ id: 'file-landed', url: 'https://example.com/f' });
+          }),
+      );
+
+      let upload!: Promise<void>;
+      await act(async () => {
+        upload = result.current.uploadChatFiles(CONTEXT_KEY, [file], AGENT_ID);
+        await vi.waitFor(() => expect(uploadList()).toHaveLength(1));
+      });
+
+      await act(async () => {
+        await result.current.removeChatUploadFile(CONTEXT_KEY, uploadList()[0].id);
+        finish();
+        await upload;
+      });
+
+      expect(removeFile).toHaveBeenCalledWith('file-landed');
+      expect(ragService.parseFileContent).not.toHaveBeenCalled();
+    });
   });
 
   // Regression: a gateway HTML error page answered the upload API and the card

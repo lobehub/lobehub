@@ -1,5 +1,15 @@
-import type { ChatTopicMetadata, OwnedWorktree, OwnedWorktreeTopicRow } from '@lobechat/types';
-import { claimAutoCreatedWorktree, resolveOwnedWorktrees } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  OwnedWorktree,
+  OwnedWorktreeTopicRow,
+  WorkingDirConfig,
+} from '@lobechat/types';
+import {
+  claimAutoCreatedWorktree,
+  getWorkingDirEffectivePath,
+  isRetiredTopicStatus,
+  resolveOwnedWorktrees,
+} from '@lobechat/types';
 import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
 
 import { topics } from '../../schemas';
@@ -48,6 +58,64 @@ export const carriedOwnedWorktrees = (
   const owned = resolveOwnedWorktrees(existing);
   return owned.length > 0 ? { ownedWorktrees: owned } : {};
 };
+
+/** Attach a checkout under the dispatch claim, or record it for cleanup if the topic retired meanwhile. */
+export const recordFirstSendWorktreeCheckout = async (
+  ctx: TopicModelContext,
+  id: string,
+  {
+    claimId,
+    deviceId,
+    workingDirectoryConfig,
+  }: { claimId?: string; deviceId: string; workingDirectoryConfig: WorkingDirConfig },
+): Promise<{ canDispatch: boolean; cleanupTrigger?: 'archived' | 'trashed' }> =>
+  ctx.db.transaction(async (tx) => {
+    const ownedTopic = and(eq(topics.id, id), eq(topics.userId, ctx.userId), ctx.trashScope());
+    const [row] = await tx.select(rowColumns).from(topics).where(ownedTopic).for('update');
+    if (!row) return { canDispatch: false };
+
+    const run = row.metadata?.scheduledRun;
+    const ownsClaim = !!claimId && run?.kind === 'worktree_start' && run.claim?.id === claimId;
+    const cleanupTrigger: 'archived' | 'trashed' | undefined = row.isDeleted
+      ? 'trashed'
+      : isRetiredTopicStatus(row.status)
+        ? 'archived'
+        : undefined;
+    const canDispatch = !cleanupTrigger && ownsClaim && row.status === 'scheduled';
+    const checkout = claimAutoCreatedWorktree({
+      ...row.metadata,
+      ...carriedOwnedWorktrees(row.metadata),
+      boundDeviceId: deviceId,
+      workingDirectory: getWorkingDirEffectivePath(workingDirectoryConfig),
+      workingDirectoryConfig,
+    });
+    const ownedWorktrees = checkout.ownedWorktrees?.map((entry) =>
+      cleanupTrigger && !entry.cleanup && entry.path === workingDirectoryConfig.git?.activeWorktree
+        ? {
+            ...entry,
+            cleanup: {
+              at: new Date().toISOString(),
+              state: 'pending' as const,
+              trigger: cleanupTrigger,
+            },
+          }
+        : entry,
+    );
+    await tx
+      .update(topics)
+      .set({
+        metadata: {
+          ...(canDispatch ? checkout : row.metadata),
+          ...(ownedWorktrees && { ownedWorktrees }),
+          ...(cleanupTrigger && ownsClaim && { scheduledRun: null }),
+        },
+        ...(cleanupTrigger === 'trashed' &&
+          ownsClaim &&
+          row.status === 'scheduled' && { status: 'active' as const }),
+      })
+      .where(ownedTopic);
+    return { canDispatch, cleanupTrigger };
+  });
 
 /** Topics by id with their owned-worktree data, trashed ones included. */
 export const findOwnedWorktreeTopics = async (
@@ -105,15 +173,15 @@ export const findPendingOwnedWorktreeTopics = async (
 };
 
 /**
- * Topics under these agents / legacy sessions whose worktree cleanup is still
+ * Topics under these agents, or listed by id, whose worktree cleanup is still
  * waiting (`pending` / `running`), trashed ones included: purging the parent
- * would cascade them away with the only record of the folder to delete.
+ * would take them with the only record of the folder to delete.
  */
 export const findWaitingCleanupTopicsUnder = async (
   ctx: TopicModelContext,
-  { agentIds, sessionIds }: { agentIds: string[]; sessionIds: string[] },
+  { agentIds, topicIds }: { agentIds: string[]; topicIds: string[] },
 ): Promise<OwnedWorktreeTopicRow[]> => {
-  if (agentIds.length === 0 && sessionIds.length === 0) return [];
+  if (agentIds.length === 0 && topicIds.length === 0) return [];
   return ctx.db
     .select(rowColumns)
     .from(topics)
@@ -122,7 +190,7 @@ export const findWaitingCleanupTopicsUnder = async (
         ctx.trashScope(),
         or(
           agentIds.length > 0 ? inArray(topics.agentId, agentIds) : undefined,
-          sessionIds.length > 0 ? inArray(topics.sessionId, sessionIds) : undefined,
+          topicIds.length > 0 ? inArray(topics.id, topicIds) : undefined,
         ),
         or(
           containsEntry({ cleanup: { state: 'pending' } }),

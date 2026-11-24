@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { linkPushedPullRequests, listTopicPullRequestsWithStatus } from './topicPullRequests';
+import {
+  linkPushedPullRequests,
+  listTopicPullRequestsWithStatus,
+  listTopicsPullRequestsWithStatus,
+} from './topicPullRequests';
 
-const { getUserPreference, listByIdentities, listOpenByHeadRefs } = vi.hoisted(() => ({
-  getUserPreference: vi.fn(),
+const { listByIdentities, listOpenByHeadRefs } = vi.hoisted(() => ({
   listByIdentities: vi.fn(),
   listOpenByHeadRefs: vi.fn(),
-}));
-
-vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn(function () {
-    return { getUserPreference };
-  }),
 }));
 
 vi.mock('@/database/models/scm', () => ({
@@ -19,8 +16,23 @@ vi.mock('@/database/models/scm', () => ({
 }));
 
 const db = {} as any;
-const topicModelWith = (pullRequests?: unknown) =>
-  ({ findById: vi.fn(async () => ({ metadata: pullRequests ? { pullRequests } : {} })) }) as any;
+const topicModelWith = (pullRequests?: unknown, visibleTopics: Record<string, unknown>[] = []) => {
+  const topics = [{ id: 't1', metadata: pullRequests ? { pullRequests } : {} }, ...visibleTopics];
+  return {
+    findByIds: vi.fn(async (ids: string[]) =>
+      topics.filter((topic) => ids.includes(topic.id as string)),
+    ),
+  } as any;
+};
+
+/** A Work model whose `byTopic` map lists each topic's PR Work rows. */
+const workModelWith = (byTopic: Record<string, unknown[]>) =>
+  ({
+    listTopicsPullRequests: vi.fn(
+      async (ids: string[]) =>
+        new Map(ids.flatMap((id) => (byTopic[id] ? [[id, byTopic[id]] as const] : []))),
+    ),
+  }) as any;
 
 const workItem = (number: number, repoFullName = 'lobehub/lobehub') => ({
   identifier: `${repoFullName}#${number}`,
@@ -38,21 +50,23 @@ describe('listTopicPullRequestsWithStatus', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('attaches the GitHub App state where a row is visible, null elsewhere', async () => {
-    const workModel = {
-      listTopicPullRequests: vi.fn(async () => [workItem(1), workItem(2)]),
-    } as any;
+    const workModel = workModelWith({ t1: [workItem(1), workItem(2)] });
     const updatedAt = new Date('2026-11-17T01:00:00Z');
     listByIdentities.mockResolvedValue([
       {
         ciStatus: 'failure',
+        id: 'scr-1',
         isDraft: false,
         mergedAt: null,
+        metadata: {},
         number: 1,
         repoFullName: 'LobeHub/LobeHub',
         reviewDecision: 'approved',
         state: 'open',
         title: 'From the App',
+        topicId: 't1',
         updatedAt,
+        wakeCount: 1,
       },
     ]);
 
@@ -70,6 +84,14 @@ describe('listTopicPullRequestsWithStatus', () => {
       { number: 2, repoFullName: 'lobehub/lobehub' },
     ]);
     expect(items[0].scm).toEqual({
+      autoFix: {
+        changeRequestId: 'scr-1',
+        enabled: true,
+        maxWakes: 3,
+        ownerTopic: null,
+        ownerTopicId: 't1',
+        wakeCount: 1,
+      },
       ciStatus: 'failure',
       isDraft: false,
       mergedAt: null,
@@ -82,11 +104,57 @@ describe('listTopicPullRequestsWithStatus', () => {
     expect(items.every((item) => item.vouched)).toBe(true);
   });
 
+  it('reports Auto-fix off and names the other conversation it wakes, when visible', async () => {
+    const workModel = workModelWith({ t1: [workItem(1), workItem(2), workItem(3)] });
+    const row = (number: number, extra: Record<string, unknown>) => ({
+      id: `scr-${number}`,
+      isDraft: false,
+      metadata: {},
+      number,
+      repoFullName: 'lobehub/lobehub',
+      state: 'open',
+      topicId: null,
+      updatedAt: new Date(),
+      wakeCount: 0,
+      ...extra,
+    });
+    listByIdentities.mockResolvedValue([
+      row(1, { metadata: { autoFix: false }, topicId: 'other' }),
+      row(2, { topicId: 'hidden' }),
+      row(3, {}),
+    ]);
+    const topicModel = topicModelWith(undefined, [
+      { agentId: 'agt-2', id: 'other', title: 'Other conversation' },
+    ]);
+
+    const items = await listTopicPullRequestsWithStatus({
+      db,
+      topicId: 't1',
+      topicModel,
+      userId: 'u1',
+      workModel,
+    });
+
+    expect(topicModel.findByIds).toHaveBeenLastCalledWith(['other', 'hidden']);
+    expect(items.map((item) => item.scm?.autoFix)).toEqual([
+      {
+        changeRequestId: 'scr-1',
+        enabled: false,
+        maxWakes: 3,
+        ownerTopic: { agentId: 'agt-2', id: 'other', title: 'Other conversation' },
+        ownerTopicId: 'other',
+        wakeCount: 0,
+      },
+      // Woken elsewhere, but not a conversation this viewer can open.
+      expect.objectContaining({ enabled: true, ownerTopic: null, ownerTopicId: 'hidden' }),
+      // Tracked, but no conversation to wake.
+      expect.objectContaining({ ownerTopic: null, ownerTopicId: null }),
+    ]);
+  });
+
   it('adds the topic links, hides removed PRs, and keeps the latest link first', async () => {
     listByIdentities.mockResolvedValue([]);
-    const workModel = {
-      listTopicPullRequests: vi.fn(async () => [workItem(1), workItem(2)]),
-    } as any;
+    const workModel = workModelWith({ t1: [workItem(1), workItem(2)] });
     const topicModel = topicModelWith({
       dismissed: ['LobeHub/lobehub#2'],
       links: [
@@ -125,7 +193,7 @@ describe('listTopicPullRequestsWithStatus', () => {
   });
 
   it('skips the scm lookup for a topic without pull requests', async () => {
-    const workModel = { listTopicPullRequests: vi.fn(async () => []) } as any;
+    const workModel = workModelWith({});
 
     expect(
       await listTopicPullRequestsWithStatus({
@@ -137,6 +205,78 @@ describe('listTopicPullRequestsWithStatus', () => {
       }),
     ).toEqual([]);
     expect(listByIdentities).not.toHaveBeenCalled();
+  });
+});
+
+describe('listTopicsPullRequestsWithStatus', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reads many topics with one scm lookup and leaves out topics the viewer cannot see', async () => {
+    listByIdentities.mockResolvedValue([
+      {
+        id: 'scr-1',
+        isDraft: false,
+        mergedAt: new Date('2026-11-18T00:00:00Z'),
+        metadata: {},
+        number: 1,
+        repoFullName: 'lobehub/lobehub',
+        state: 'merged',
+        topicId: 't2',
+        updatedAt: new Date(),
+        wakeCount: 0,
+      },
+    ]);
+    const topicModel = topicModelWith(undefined, [
+      { agentId: 'agt-1', id: 't2', metadata: {}, title: 'Second' },
+    ]);
+    const workModel = workModelWith({
+      hidden: [workItem(9)],
+      t1: [workItem(1)],
+      t2: [workItem(1), workItem(2)],
+    });
+
+    const byTopic = await listTopicsPullRequestsWithStatus({
+      db,
+      topicIds: ['t1', 't2', 'hidden', 't1'],
+      topicModel,
+      userId: 'u1',
+      workModel,
+    });
+
+    expect(workModel.listTopicsPullRequests).toHaveBeenCalledWith(['t1', 't2']);
+    expect([...byTopic.keys()]).toEqual(['t1', 't2']);
+    expect(listByIdentities).toHaveBeenCalledTimes(1);
+    expect(listByIdentities.mock.calls[0][2]).toEqual([
+      { number: 1, repoFullName: 'lobehub/lobehub' },
+      { number: 2, repoFullName: 'lobehub/lobehub' },
+    ]);
+    // The owner conversation is in the batch already: named without another read.
+    expect(topicModel.findByIds).toHaveBeenCalledTimes(1);
+    expect(byTopic.get('t1')?.[0].scm).toMatchObject({
+      autoFix: { ownerTopic: { agentId: 'agt-1', id: 't2', title: 'Second' } },
+      state: 'merged',
+    });
+    expect(byTopic.get('t2')?.map((item) => item.scm?.autoFix.ownerTopic ?? null)).toEqual([
+      null,
+      null,
+    ]);
+    expect(byTopic.get('t2')?.[1].scm).toBeNull();
+  });
+
+  it('reads nothing for an empty list', async () => {
+    const topicModel = topicModelWith();
+    expect(
+      (
+        await listTopicsPullRequestsWithStatus({
+          db,
+          topicIds: [],
+          topicModel,
+          userId: 'u1',
+          workModel: workModelWith({}),
+        })
+      ).size,
+    ).toBe(0);
+    expect(topicModel.findByIds).not.toHaveBeenCalled();
   });
 });
 
@@ -179,16 +319,7 @@ describe('linkPushedPullRequests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    getUserPreference.mockResolvedValue({ lab: { enableBetterCodingExperience: true } });
     listOpenByHeadRefs.mockResolvedValue([]);
-  });
-
-  it('does nothing while the lab is off', async () => {
-    getUserPreference.mockResolvedValue({ lab: {} });
-    const models = createModels();
-
-    expect(await link(models)).toEqual({ status: 'skipped' });
-    expect(models.messageModel.findToolMessageIdByToolCallId).not.toHaveBeenCalled();
   });
 
   it('prefers the GitHub App rows for the pushed branch', async () => {

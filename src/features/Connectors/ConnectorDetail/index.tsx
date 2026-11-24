@@ -6,9 +6,9 @@ import {
 import { Button, confirmModal, Flexbox, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { PencilIcon, Plus, RefreshCwIcon, Trash2 } from 'lucide-react';
+import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useState } from 'react';
+import { createContext, memo, use, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
@@ -16,8 +16,8 @@ import { ConnectorSourceType } from '@/database/schemas';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { densityTokens } from '@/styles/density.stylex';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 
 import ConnectorActionErrorText from '../ConnectorActionErrorText';
@@ -31,6 +31,13 @@ import ManageTooltip from './ManageTooltip';
 import Section from './Section';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
+/**
+ * Set by a page that already shows the connector's icon and name (the
+ * Marketplace app page), so a connector detail rendered anywhere below it —
+ * however many wrappers deep — drops its own and keeps only the actions.
+ */
+export const ConnectorDetailEmbeddedContext = createContext(false);
+
 interface ConnectorDetailProps {
   /**
    * Title of the owning agent when this is an agent-dimension connector. Drives
@@ -39,6 +46,11 @@ interface ConnectorDetailProps {
    */
   agentTitle?: string | null;
   connectorId: string;
+  /**
+   * The page around it already shows the connector's icon and name (the
+   * Marketplace app page): drop them here and keep only the actions.
+   */
+  hideIdentity?: boolean;
   lifecycleActions?: ReactNode;
   /**
    * Extra content rendered in the Overview tab, below the connector facts.
@@ -50,17 +62,23 @@ interface ConnectorDetailProps {
 }
 
 const styles = stylex.create({
+  // Inside a page that scrolls on its own: no second scroller, no inset.
+  bodyEmbedded: {
+    overflowY: 'visible',
+    paddingBlock: 0,
+    paddingInline: 0,
+  },
   body: {
     flex: '1',
     minHeight: 0,
     overflowY: 'auto',
     paddingBlockStart: 8,
     paddingBlockEnd: 24,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   description: {
     color: cssVar.colorText,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: 1.6,
   },
   // Identity on the left (icon, name, who made it and what it is), the
@@ -70,11 +88,11 @@ const styles = stylex.create({
     flexWrap: 'wrap',
     paddingBlockStart: '8px',
     paddingBlockEnd: '24px',
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   meta: {
     color: cssVar.colorTextSecondary,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
   },
   root: {
     display: 'flex',
@@ -91,7 +109,15 @@ const styles = stylex.create({
 });
 
 const ConnectorDetail = memo<ConnectorDetailProps>(
-  ({ agentTitle, connectorId, lifecycleActions, middleSlot, onDelete }) => {
+  ({
+    agentTitle,
+    connectorId,
+    hideIdentity: hideIdentityProp,
+    lifecycleActions,
+    middleSlot,
+    onDelete,
+  }) => {
+    const hideIdentity = use(ConnectorDetailEmbeddedContext) || !!hideIdentityProp;
     const { t } = useTranslation('tool');
     const { t: ts } = useTranslation('setting');
 
@@ -110,9 +136,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const disconnectConnector = useToolStore((s) => s.disconnectConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const forgetComposioConnection = useToolStore((s) => s.forgetComposioConnection);
-    const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
-    const installBuiltinTool = useToolStore((s) => s.installBuiltinTool);
-    const useFetchUninstalledBuiltinTools = useToolStore((s) => s.useFetchUninstalledBuiltinTools);
     const uninstallMCPPlugin = useToolStore((s) => s.uninstallMCPPlugin);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const updateToolPermission = useToolStore((s) => s.updateToolPermission);
@@ -123,13 +146,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       isMcpConnector &&
       (connector?.mcpConnectionType === 'http' || connector?.mcpConnectionType === 'stdio');
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
-    // A detail opened by link mounts without the list, which is what loads the
-    // built-in install state; load it here so Status and the actions match the list.
-    useFetchUninstalledBuiltinTools(isBuiltin);
-    const isBuiltinInstalled = useToolStore(
-      builtinToolSelectors.isBuiltinToolInstalled(connector?.identifier ?? ''),
-    );
-    const isUninstalledBuiltin = isBuiltin && !isBuiltinInstalled;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
 
     // Members co-maintain shared connectors unless the workspace restricted it;
@@ -231,7 +247,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     ]);
 
     const handleUninstall = () => {
-      if (!connector) return;
+      if (!connector || !isMarketplace) return;
       confirmModal({
         // The modal's built-in label is not localized.
         cancelText: t('cancel', { ns: 'common' }),
@@ -240,11 +256,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         onOk: async () => {
           setRemoveError(undefined);
           try {
-            if (isBuiltin) {
-              await uninstallBuiltinTool(connector.identifier);
-            } else if (isMarketplace) {
-              await uninstallMCPPlugin(connector.identifier);
-            }
+            await uninstallMCPPlugin(connector.identifier);
             await deleteConnector(connectorId);
             // The Composio list does not watch these writes; without this the
             // uninstalled row keeps showing as connected until a reload.
@@ -330,6 +342,15 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             </Button>
           </ManageTooltip>
         )}
+      </>
+    );
+
+    const hasDangerActions =
+      lifecycleActions !== undefined ? !!lifecycleActions : isMcpConnector || isMarketplace;
+
+    // Disconnect / delete / uninstall sit apart at the bottom, in their own card.
+    const dangerActions = (
+      <>
         {lifecycleActions !== undefined ? (
           lifecycleActions
         ) : (
@@ -383,28 +404,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 </ManageTooltip>
               </>
             )}
-            {/* Uninstall for builtin and marketplace tools */}
-            {/* An uninstalled built-in offers the way back in, not another Uninstall. */}
-            {isUninstalledBuiltin && (
-              <ManageTooltip title={credentialsTooltip}>
-                <Button
-                  disabled={!canManageCredentials}
-                  icon={<Plus size={14} />}
-                  size="small"
-                  type="primary"
-                  onClick={async () => {
-                    try {
-                      await installBuiltinTool(connector.identifier);
-                    } catch (error) {
-                      notifyActionError(error);
-                    }
-                  }}
-                >
-                  {ts('connectorMarket.action.install')}
-                </Button>
-              </ManageTooltip>
-            )}
-            {((isBuiltin && !isUninstalledBuiltin) || isMarketplace) && (
+            {isMarketplace && (
               <ManageTooltip title={credentialsTooltip}>
                 <Button
                   danger
@@ -434,7 +434,17 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           </Section>
         )}
 
-        <Section label={ts('connectorMarket.detail.information')}>
+        <Section
+          label={ts('connectorMarket.detail.information')}
+          extra={
+            // Embedded, there is no header row: its actions join the first card's label.
+            hideIdentity ? (
+              <Flexbox horizontal gap={8} wrap={'wrap'}>
+                {actions}
+              </Flexbox>
+            ) : undefined
+          }
+        >
           <ConnectorOverviewInfo connector={connector} />
         </Section>
 
@@ -519,41 +529,43 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
 
     return (
       <div {...stylex.props(styles.root)}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={16}
-          justify={'space-between'}
-          {...stylex.props(styles.header)}
-        >
-          <Flexbox horizontal align={'center'} gap={16} style={{ minWidth: 0 }}>
-            <ConnectorDetailIcon connector={connector} size={'large'} />
-            <Flexbox gap={4} style={{ minWidth: 0 }}>
-              <h2 {...stylex.props(styles.title)}>{connectorName}</h2>
-              <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.meta)}>
-                {author && (
-                  <>
-                    <span>{ts('connectorMarket.detail.byAuthor', { author })}</span>
-                    <span aria-hidden>·</span>
-                  </>
-                )}
-                <span>{t(`connector.kind.${getConnectorKind(connector)}`)}</span>
-                {hasTools && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>{t('connector.toolCount', { count: toolCount })}</span>
-                  </>
-                )}
+        {!hideIdentity && (
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={16}
+            justify={'space-between'}
+            {...stylex.props(styles.header)}
+          >
+            <Flexbox horizontal align={'center'} gap={16} style={{ minWidth: 0 }}>
+              <ConnectorDetailIcon connector={connector} size={'large'} />
+              <Flexbox gap={4} style={{ minWidth: 0 }}>
+                <h2 {...stylex.props(styles.title)}>{connectorName}</h2>
+                <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.meta)}>
+                  {author && (
+                    <>
+                      <span>{ts('connectorMarket.detail.byAuthor', { author })}</span>
+                      <span aria-hidden>·</span>
+                    </>
+                  )}
+                  <span>{t(`connector.kind.${getConnectorKind(connector)}`)}</span>
+                  {hasTools && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span>{t('connector.toolCount', { count: toolCount })}</span>
+                    </>
+                  )}
+                </Flexbox>
               </Flexbox>
             </Flexbox>
+            <Flexbox horizontal align={'center'} flex={'none'} gap={8} wrap={'wrap'}>
+              {actions}
+            </Flexbox>
           </Flexbox>
-          <Flexbox horizontal align={'center'} flex={'none'} gap={8} wrap={'wrap'}>
-            {actions}
-          </Flexbox>
-        </Flexbox>
+        )}
 
         {/* One page: what it is and who authorized it, then what its tools may do. */}
-        <div {...stylex.props(styles.body)}>
+        <div {...stylex.props(styles.body, hideIdentity && styles.bodyEmbedded)}>
           <Flexbox gap={32}>
             {overview}
             <Section
@@ -570,6 +582,24 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             >
               {tools}
             </Section>
+            {hasDangerActions && (
+              <Section label={t('connector.dangerZone.title')}>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  gap={16}
+                  justify={'space-between'}
+                  wrap={'wrap'}
+                >
+                  <Text style={{ minWidth: 0 }} type={'secondary'}>
+                    {t('connector.dangerZone.desc', { name: connectorName })}
+                  </Text>
+                  <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+                    {dangerActions}
+                  </Flexbox>
+                </Flexbox>
+              </Section>
+            )}
           </Flexbox>
 
           {/* Edit modal for an http or stdio custom connector */}

@@ -3,6 +3,10 @@
 Import `redisService` from `@/server/services/redis`. Domains expose business operations;
 callers do not choose a provider, prefix, key, SET options or claim lifetime.
 
+- `agentAvailability`: what the dispatch layer reads to tell whether an Agent can take work —
+  device presence per principal pool (30 seconds) and each agent's quota verdict per caller, agent
+  and device (a minute, or until a spent agent's reset, at most ten minutes). Batched reads; a miss or no Redis reads
+  as unknown and the caller does the live read.
 - `deviceSystemInfo.remember`: principal/device scoped answers, three minute default freshness;
   callers may request a freshness bound through the existing gateway API.
 - `skillTools.remember`: connection scoped tool lists, ten minutes; empty/failed results are not cached.
@@ -14,7 +18,14 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   operation, handed out through its `waitHeteroSteer` poll. At most once: a claim pops the message
   and nothing re-queues it; unclaimed past its expiry it reads `expired`, and the run's reported
   result stays readable for an hour. Writes throw without Redis; reads answer `undefined`.
+- `openapi`: the public REST API's per-caller rate-limit windows (fixed, epoch-aligned) and
+  `Idempotency-Key` records — a five minute in-flight claim, then the first response for 24 hours,
+  per user and hashed key. Every method returns `undefined` without Redis; the REST layer then
+  admits the request (fail open).
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
+- `gitHubRefs`: the commit a public GitHub ref points at, shared by every user's skill update
+  check for five minutes. `record` replaces it with a commit an import just resolved live.
+  Without Redis each check resolves live.
 - `connectorOAuth`: how each connector OAuth flow ended (account and outcome), for ten minutes,
   read back by the window that started the flow. `null` without Redis.
 - `agentDocumentIndex`: the agent-document index snapshot and change notes one conversation

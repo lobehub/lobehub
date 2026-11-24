@@ -18,6 +18,7 @@ import UserAvatar from '@/components/UserAvatar';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
+import { useDensityTokens } from '@/styles/density';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
@@ -197,6 +198,7 @@ const FileListItem = ({
   userId,
   visibility,
 }: FileListItemProps) => {
+  const { listRowHeight } = useDensityTokens();
   const { t } = useTranslation(['components', 'file', 'chat', 'common']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
@@ -362,7 +364,7 @@ const FileListItem = ({
         data-parent-key={parentKey}
         data-row-index={index}
         draggable={!!resourceManagerState.libraryId}
-        height={48}
+        height={listRowHeight}
         paddingInline={8}
         className={cx(
           styles.container,

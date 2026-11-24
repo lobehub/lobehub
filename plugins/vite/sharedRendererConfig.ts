@@ -587,6 +587,7 @@ export const sharedOptimizeDeps = {
     'react-dom/client',
     'react-router',
     'react-router/dom',
+    'remark-cjk-friendly',
     '@lobehub/ui',
     '@lobehub/ui > @emotion/react',
     'zustand',

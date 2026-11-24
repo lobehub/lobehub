@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { DeletedResourceSchema } from '../types/common.type';
 import { TaskRestService } from './task.service';
 
 const {
@@ -102,6 +103,15 @@ const CALLER = 'me';
 const WORKSPACE = 'ws-1';
 
 describe('TaskRestService delete scope', () => {
+  it('answers with the resolved row id when the path carries the identifier', async () => {
+    resolveMock.mockResolvedValue({ createdByUserId: CALLER, id: 'task-1' });
+    deleteTaskMock.mockResolvedValue({ id: 'task-1' });
+
+    const result = await new TaskRestService({} as LobeChatDatabase, CALLER).deleteTask('T-1');
+
+    expect(DeletedResourceSchema.parse(result)).toEqual({ deleted: true, id: 'task-1' });
+  });
+
   const service = (workspaceId?: string) =>
     new TaskRestService({} as LobeChatDatabase, CALLER, workspaceId);
 
@@ -114,7 +124,10 @@ describe('TaskRestService delete scope', () => {
   it('deletes a visible task created by another workspace member', async () => {
     deleteTaskMock.mockResolvedValue({ id: 'task-1' });
 
-    await expect(service(WORKSPACE).deleteTask('task-1')).resolves.toEqual({ id: 'task-1' });
+    await expect(service(WORKSPACE).deleteTask('task-1')).resolves.toEqual({
+      deleted: true,
+      id: 'task-1',
+    });
     expect(deleteTaskMock).toHaveBeenCalledWith('task-1');
   });
 
@@ -129,7 +142,10 @@ describe('TaskRestService delete scope', () => {
     resolveMock.mockResolvedValue({ createdByUserId: CALLER, id: 'task-1' });
     deleteTaskMock.mockResolvedValue({ id: 'task-1' });
 
-    await expect(service(WORKSPACE).deleteTask('task-1')).resolves.toEqual({ id: 'task-1' });
+    await expect(service(WORKSPACE).deleteTask('task-1')).resolves.toEqual({
+      deleted: true,
+      id: 'task-1',
+    });
     expect(deleteTaskMock).toHaveBeenCalledWith('task-1');
   });
 });

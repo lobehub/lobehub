@@ -27,6 +27,7 @@ import { resolveInlineImages } from '@/server/services/file/inlineImages';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
+import { expectPermissionModeReport } from '@/server/services/heterogeneousAgent/permissionModeReport';
 import type { UnansweredUserTurn } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { collectUnansweredUserTurns } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox/session';
@@ -37,6 +38,8 @@ import { heteroOperationCapabilities } from '../heteroOperationCapabilities';
 import { buildHeteroProjectContext } from '../projectContext';
 import { traceHeteroStage } from '../sendTracing';
 import { buildViewedTaskContextPrompt, joinSystemContext } from '../viewedTaskContext';
+import { resolveDispatchCollaborationMode } from './codexCollaboration';
+import { resolveDispatchPermissionMode } from './permissionMode';
 import type { HeteroDispatchDeps, HeteroDispatchInput } from './types';
 import { settleInOrder } from './utils';
 
@@ -88,8 +91,14 @@ export const prepareHeteroRun = async (
     selfMessageIds,
   } = input;
 
-  // Read resume session id for next-turn continuity.
+  const { shareGate } = ctx;
+  // Read resume session id for next-turn continuity. A share visitor's topic
+  // is hidden from a default-scoped read, so the visitor scope is needed to
+  // find the session the previous turn recorded.
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
+    shareVisitor: shareGate
+      ? { shareId: shareGate.shareId, visitorUserId: shareGate.visitorUserId }
+      : undefined,
     workspaceId: deps.workspaceId,
   });
   const isChannelOperation = ctx.trigger === 'channel' && input.reservedOperationId === operationId;
@@ -97,6 +106,14 @@ export const prepareHeteroRun = async (
   // Channels. `isOwner` is decided once, fail-closed, in `buildBotContext`.
   const isOwnerBotOperation =
     ctx.trigger === RequestTrigger.Bot && ctx.botContext?.isOwner === true;
+  // A scheduled run replays the user's own message off history, so it has
+  // no fresh user row; server-started `chat` deliveries have none either.
+  const isUserTurn =
+    (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
+    ctx.trigger === RequestTrigger.Scheduled;
+  // Mirrors the `channel:message` grant in `heteroOperationCapabilities`.
+  const canMessageForUser =
+    !shareGate && (isOwnerBotOperation || (isUserTurn && !isChannelOperation && !operationTaskId));
 
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
@@ -110,12 +127,9 @@ export const prepareHeteroRun = async (
         capabilities: heteroOperationCapabilities(prompt, {
           channel: isChannelOperation,
           ownerBotTurn: isOwnerBotOperation,
+          shareVisitor: !!shareGate,
           taskId: operationTaskId,
-          // A scheduled run replays the user's own message off history, so it has
-          // no fresh user row; server-started `chat` deliveries have none either.
-          userTurn:
-            (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
-            ctx.trigger === RequestTrigger.Scheduled,
+          userTurn: isUserTurn,
         }),
         operationId,
         userId: deps.userId,
@@ -134,6 +148,9 @@ export const prepareHeteroRun = async (
   const githubCredKey =
     agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY ?? 'github';
   const resolveGithubToken = async (): Promise<string | undefined> => {
+    // The creator's (or workspace's) GitHub credential is never handed to a
+    // run a share visitor drives.
+    if (shareGate) return;
     try {
       const marketService = await deps.getMarketService();
       // Inside a workspace, the GitHub cred must come from the workspace's shared
@@ -177,14 +194,35 @@ export const prepareHeteroRun = async (
   const githubTokenPromise = traceHeteroStage('github_token', resolveGithubToken);
   const recentMessagesPromise = traceHeteroStage('history', loadRecentMessages);
   const [resumeSessionId, operationJwt, topic] = await settleInOrder([
+    // A sub-agent resumes its own session, never the topic's: the topic's
+    // belongs to the conversation's agent or to another sub-agent. The thread
+    // decides, not `isolationThread`: that flag is only set when the sub-agent
+    // is spawned, and a later message in its thread has to resume it too.
     traceHeteroStage('resume_session', () =>
-      heteroService.getHeterogeneousResumeSessionId(topicId),
+      appContext?.threadId
+        ? heteroService.getThreadResumeSessionId(appContext.threadId, topicId)
+        : heteroService.getHeterogeneousResumeSessionId(topicId),
     ),
     traceHeteroStage('sign_operation_jwt', signOperationJwt),
     // Read repos from topic metadata for sandbox setup (web/cloud only).
     traceHeteroStage('topic', () => deps.topicModel.findById(topicId)),
   ]);
   const topicRepos: string[] = topic?.metadata?.repos ?? [];
+  const permissionMode = resolveDispatchPermissionMode({
+    heteroType,
+    topicMetadata: topic?.metadata,
+  });
+  // An `lh` that never reports the mode back is flagged when the run ends.
+  const permissionModeReportPromise = expectPermissionModeReport(deps.topicModel, {
+    mode: permissionMode,
+    operationId,
+    topicId,
+  }).catch((error) => log('execAgent: permission mode report marker failed: %O', error));
+
+  const collaborationModePromise = resolveDispatchCollaborationMode(deps.db, deps.userId, {
+    heteroType,
+    topicMetadata: topic?.metadata,
+  });
 
   // The primary resumed attempt already has native history and must not get
   // a serialized duplicate. A resumed session still needs the prompts of runs
@@ -304,20 +342,22 @@ export const prepareHeteroRun = async (
     : pageSelections?.length
       ? formatPageSelections(pageSelections)
       : undefined;
-  const agentSystemContext = withConversationGoalPrompt(
-    joinSystemContext(
-      providerContext,
-      projectContext,
-      viewedTaskContext,
-      selectionContext,
-      isChannelOperation
-        ? CHANNEL_INSTRUCTIONS
-        : isOwnerBotOperation
-          ? BOT_CHANNEL_MESSAGING_INSTRUCTIONS
-          : undefined,
-    ),
-    prompt,
+  const baseSystemContext = joinSystemContext(
+    providerContext,
+    projectContext,
+    viewedTaskContext,
+    selectionContext,
+    isChannelOperation
+      ? CHANNEL_INSTRUCTIONS
+      : canMessageForUser
+        ? BOT_CHANNEL_MESSAGING_INSTRUCTIONS
+        : undefined,
   );
+  // A share visitor gets no goal capability (see `heteroOperationCapabilities`),
+  // so a `/goal` prompt must not add goal instructions either.
+  const agentSystemContext = shareGate
+    ? baseSystemContext
+    : withConversationGoalPrompt(baseSystemContext, prompt);
   const systemContext = buildCloudHeteroContext({
     agentSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
@@ -361,6 +401,7 @@ export const prepareHeteroRun = async (
         )
       : undefined;
 
+  await permissionModeReportPromise;
   const heteroParams = {
     agentType: heteroType,
     assistantMessageId,
@@ -371,10 +412,14 @@ export const prepareHeteroRun = async (
       heteroType === 'claude-code' && heterogeneousProvider?.type === heteroType
         ? resolveDispatchedClaudeCodeEntrypoint(heterogeneousProvider.env)
         : undefined,
+    // The Codex Plan switch before the runtime is known; the device dispatch
+    // narrows it (`forDeviceRuntime`), and the cloud sandbox (`codex exec`) ignores it.
+    collaborationMode: await collaborationModePromise,
     githubToken,
     imageList: heteroImageList,
     jwt: operationJwt,
     operationId,
+    permissionMode,
     // The CLI receives only the request: `/goal` is already in the system
     // context, and Claude Code's own `/goal` command would otherwise take it.
     // Non-image attachments have no content block a CLI accepts, so they ride

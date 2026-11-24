@@ -71,7 +71,7 @@ describe('sendMessage in gateway mode', () => {
   //
   // Before the fix, the server run never injected the skill body.
   // The fix forwards the picks as `selectedSkillIds`.
-  it('forwards the selected skills so the server injects their bodies', async () => {
+  it('forwards library and filesystem skill chips to the gateway', async () => {
     const { result } = renderHook(() => useChatStore());
     const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
       assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -108,6 +108,7 @@ describe('sendMessage in gateway mode', () => {
               {
                 children: [
                   skillTag('ux-audit', 'UX Audit'),
+                  { ...skillTag('local-audit', 'Local Audit'), actionCategory: 'projectSkill' },
                   { text: ' review the page', type: 'text' },
                   skillTag('ux-audit', 'UX Audit'),
                 ],
@@ -117,12 +118,13 @@ describe('sendMessage in gateway mode', () => {
             type: 'root',
           },
         },
-        message: '<skill name="ux-audit" label="UX Audit" /> review the page',
+        message:
+          '<skill name="ux-audit" label="UX Audit" /> <projectSkill name="local-audit" label="Local Audit" /> review the page',
       });
     });
 
     expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedSkillIds: ['ux-audit'] }),
+      expect.objectContaining({ selectedSkillIds: ['ux-audit', 'projectSkill:local-audit'] }),
     );
   });
 

@@ -56,6 +56,22 @@ export const isImageOutputTool = (tool: ChatToolPayloadWithResult): boolean => {
 };
 
 /**
+ * A plan Codex proposed in plan mode (`proposed_plan`): the turn delivers the
+ * plan, and its Execute plan / Keep discussing buttons, so neither folds away.
+ */
+export const isProposedPlanTool = (tool: ChatToolPayloadWithResult): boolean =>
+  tool.identifier === 'codex' && tool.apiName === 'proposed_plan';
+
+const deliverableTools = new Set<string>();
+
+export const registerDeliverableTool = (identifier: string) => {
+  deliverableTools.add(identifier);
+};
+
+export const isDeliverableTool = (tool: ChatToolPayloadWithResult): boolean =>
+  isImageOutputTool(tool) || isProposedPlanTool(tool) || deliverableTools.has(tool.identifier);
+
+/**
  * Any tool whose result carries an image, output or read. Drives the workflow
  * breakout only: a read image still surfaces as its own row once the process is
  * unfolded, but no longer keeps that process from folding in the first place.
@@ -73,7 +89,7 @@ export const isMcpAppTool = (tool: ChatToolPayloadWithResult): boolean =>
 
 /** Tools that surface on their own between collapsed workflow runs. */
 export const isBreakoutTool = (tool: ChatToolPayloadWithResult): boolean =>
-  isImageBearingTool(tool) || isMcpAppTool(tool);
+  isImageBearingTool(tool) || isMcpAppTool(tool) || isProposedPlanTool(tool);
 
 /**
  * A tool that only READ an image (Claude Code `Read`, `readFile`, a browser
@@ -101,6 +117,8 @@ export const getBreakoutPredicate = ({
   showImageReads = true,
 }: BreakoutToolOptions): ((tool: ChatToolPayloadWithResult) => boolean) => {
   const isImageBreakout = showImageReads ? isImageBearingTool : isImageOutputTool;
+  const isOutputBreakout = (tool: ChatToolPayloadWithResult) =>
+    isImageBreakout(tool) || isProposedPlanTool(tool);
 
-  return enableMcpApps ? (tool) => isImageBreakout(tool) || isMcpAppTool(tool) : isImageBreakout;
+  return enableMcpApps ? (tool) => isOutputBreakout(tool) || isMcpAppTool(tool) : isOutputBreakout;
 };

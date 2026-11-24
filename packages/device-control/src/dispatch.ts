@@ -1,3 +1,5 @@
+import { lstat, realpath } from 'node:fs/promises';
+
 import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
@@ -9,6 +11,7 @@ import {
 } from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
+  assertLinkedWorktree,
   checkoutGitBranch,
   cleanupOwnedWorktree,
   deleteGitBranch,
@@ -45,7 +48,11 @@ import { getAntigravityQuota } from './antigravityQuota';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
-import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import {
+  defaultCopyAssetForPublish,
+  defaultGetLocalFilePreview,
+  defaultReadExternalAssetForPublish,
+} from './filePreview';
 import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
 import { listListeningPorts, type ListListeningPortsParams } from './listeningPorts';
 import { defaultListProjectDirectory } from './projectFileIndex';
@@ -102,6 +109,7 @@ export const DEVICE_RPC_METHODS = [
   'listProjectDirectory',
   'searchProjectFiles',
   'getLocalFilePreview',
+  'runWorktreeFileOperation',
   'readExternalAssetForPublish',
   'copyAssetForPublish',
   'moveLocalFiles',
@@ -117,6 +125,7 @@ export const DEVICE_RPC_METHODS = [
   'getPullRequestActivity',
   'getPullRequestMergeContext',
   'runPullRequestAction',
+  'runPullRequestActionByUrl',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
   'getGitWorkingTreePatches',
@@ -195,6 +204,17 @@ const guardMutation = async (workspaceRoot: string | undefined, targets: string[
 const guardLegacyMutation = async (workspaceRoot: string | undefined, targets: string[]) => {
   if (workspaceRoot) await assertEntriesWithinWorkspace(workspaceRoot, targets);
 };
+
+const worktreeFileMethods = new Set([
+  'copyLocalFiles',
+  'createLocalDirectory',
+  'createLocalFile',
+  'getLocalFilePreview',
+  'moveLocalFiles',
+  'renameLocalFile',
+  'trashLocalFiles',
+  'writeLocalFile',
+]);
 
 /**
  * Dispatch a generic server-internal device RPC by method name. This is the
@@ -298,6 +318,44 @@ export const executeDeviceRpc = async (
 
     case 'getLocalFilePreview': {
       return deps.getLocalFilePreview(params as LocalFilePreviewUrlParams);
+    }
+
+    case 'runWorktreeFileOperation': {
+      const { approvedRoot, rpc, sourcePath, worktreePath } = params as {
+        approvedRoot: string;
+        rpc: {
+          method: string;
+          params: { path?: string; workingDirectory?: string; workspaceRoot?: string };
+        };
+        sourcePath: string;
+        worktreePath: string;
+      };
+      const isPreview = rpc.method === 'getLocalFilePreview';
+      const root = isPreview ? rpc.params.workingDirectory : rpc.params.workspaceRoot;
+      if (!worktreePath || !worktreeFileMethods.has(rpc.method) || root !== worktreePath)
+        throw new Error('Invalid worktree file operation');
+      const [realApprovedRoot, realSourcePath] = await Promise.all([
+        realpath(approvedRoot),
+        realpath(sourcePath),
+      ]);
+      if (realSourcePath !== realApprovedRoot) {
+        await guardMutation(realApprovedRoot, [realSourcePath]);
+      }
+      await assertLinkedWorktree(realSourcePath, worktreePath, realApprovedRoot);
+
+      // The Git check authorizes this request only. Use the contained reader
+      // without adding the worktree to the desktop preview approval cache.
+      if (isPreview) return defaultGetLocalFilePreview(rpc.params as LocalFilePreviewUrlParams);
+      if (rpc.method === 'writeLocalFile' && rpc.params.path) {
+        // Writes follow the final symlink. Other file mutations act on the entry itself.
+        const file = rpc.params.path;
+        const entry = await lstat(file).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return undefined;
+        });
+        if (entry?.isSymbolicLink()) await guardMutation(worktreePath, [await realpath(file)]);
+      }
+      return executeDeviceRpc(rpc.method, rpc.params, deps);
     }
 
     case 'readExternalAssetForPublish': {
@@ -410,6 +468,12 @@ export const executeDeviceRpc = async (
     case 'runPullRequestAction': {
       return runPullRequestAction(
         params as { action: GitPullRequestAction; number: number; path: string },
+      );
+    }
+
+    case 'runPullRequestActionByUrl': {
+      return runPullRequestAction(
+        params as { action: GitPullRequestAction; number: number; path: string; url: string },
       );
     }
 

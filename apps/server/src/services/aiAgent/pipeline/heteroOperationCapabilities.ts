@@ -23,14 +23,20 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * (`lh channel people|dm`), as the requester, never as the device owner. A bot run whose
  * sender is the bot's owner (`botContext.isOwner`, e.g. the owner messaging their Agent on
  * Telegram) gets `channel:message` alone: it may list the owner's Channels and post a request
- * there as the owner. It has no Channel conversation to read, and a bot message from anyone
- * else gets neither.
+ * there as the owner. A turn the user sent in an ordinary chat gets the same, so asking an Agent
+ * to "send tj a message" works there too. Neither has a Channel conversation to read; a bot
+ * message from anyone else, a Task run and a server-started run get neither.
  *
  * `acceptance:evidence` lets a Task run file evidence into its own verification
  * round (`lh acceptance run result submit|ingest --operation`). That round is
  * owned by the operation's creator, so on a device logged in as another member
  * the token is the only identity that can reach it. Only a Task run has a
  * round to file into.
+ *
+ * `work:write` lets every run register the files and links it produced as Work
+ * cards under its reply (`lh work create|update`). The Work lands in the run's
+ * own topic; a share visitor's run included, whose Works stay fenced to that
+ * visitor topic exactly like the ones its completion scan registers.
  *
  * Renewal copies the minted claims, so a run never gains either later.
  */
@@ -40,21 +46,31 @@ export const heteroOperationCapabilities = (
     channel?: boolean;
     /** The run answers a bot message its owner sent (`botContext.isOwner`). */
     ownerBotTurn?: boolean;
+    /**
+     * A share visitor drives the run. It gets only the run's own callbacks:
+     * a goal or acceptance round it created would belong to the creator.
+     */
+    shareVisitor?: boolean;
     taskId?: string;
     /** The run answers a message the user sent: a chat turn or one they scheduled. */
     userTurn?: boolean;
   } = {},
-): HeteroOperationCapability[] => [
-  'hetero:ingest',
-  ...(options.channel
-    ? (['channel:read', 'channel:message'] as const)
-    : options.ownerBotTurn
-      ? (['channel:message'] as const)
-      : []),
-  'hetero:finish',
-  'hetero:intervention:read',
-  ...(isGoalPrompt(prompt) || (options.userTurn && !options.channel && !options.taskId)
-    ? (['goal:manage'] as const)
-    : []),
-  ...(options.taskId ? (['acceptance:evidence'] as const) : []),
-];
+): HeteroOperationCapability[] => {
+  if (options.shareVisitor)
+    return ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'work:write'];
+
+  const directUserTurn = !!options.userTurn && !options.channel && !options.taskId;
+  return [
+    'hetero:ingest',
+    ...(options.channel
+      ? (['channel:read', 'channel:message'] as const)
+      : options.ownerBotTurn || directUserTurn
+        ? (['channel:message'] as const)
+        : []),
+    'hetero:finish',
+    'hetero:intervention:read',
+    ...(isGoalPrompt(prompt) || directUserTurn ? (['goal:manage'] as const) : []),
+    ...(options.taskId ? (['acceptance:evidence'] as const) : []),
+    'work:write',
+  ];
+};

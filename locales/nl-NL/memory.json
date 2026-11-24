@@ -237,7 +237,6 @@
   "rules.distill.truncated": "Het materiaal is lang; alleen het begin is gelezen.",
   "rules.distill.untitled": "Naamloos",
   "rules.distill.upload": "Upload een bestand",
-  "rules.distill.uploadFailed": "Kon het bestand niet uploaden.",
   "rules.distill.uploadHint": "Markdown, PDF, Word, PowerPoint of platte tekst",
   "rules.enforcement.block": "Blokkeren",
   "rules.enforcement.blockDesc": "Houdt de levering tegen totdat je het toestaat. Nog niet actief: voorlopig herinnert het alleen",

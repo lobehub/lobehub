@@ -1,4 +1,6 @@
-import { Center, createStaticStyles, cssVar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,24 +8,21 @@ import { useTranslation } from 'react-i18next';
 import { ModelTag } from '@/components/LobeIcons';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentStore } from '@/store/agent/store';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 import HistoryDivider from './HistoryDivider';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-inline: 12px;
-    border-radius: 12px;
-  `,
-  content: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-  line: css`
-    width: 3px;
-    height: 100%;
-    background: ${cssVar.colorBorder};
-  `,
-}));
+const styles = stylex.create({
+  container: { paddingInline: densityTokens['--lobe-density-content-gap'], borderRadius: '12px' },
+  content: { color: cssVar.colorTextDescription },
+  line: {
+    width: '3px',
+    height: '100%',
+    backgroundColor: cssVar.colorBorder,
+    backgroundImage: 'none',
+  },
+});
 
 const History = memo(() => {
   const { t } = useTranslation('chat');
@@ -41,7 +40,7 @@ const History = memo(() => {
     <Flexbox paddingInline={16} style={{ paddingBottom: 8 }}>
       <HistoryDivider enable />
       {enableCompressHistory && !!content && (
-        <Flexbox className={styles.container} gap={8}>
+        <Flexbox className={stylex.props(styles.container).className} gap={8}>
           <Flexbox horizontal align={'flex-start'} gap={8}>
             <Center height={20} width={20}>
               <Icon icon={ScrollText} size={16} style={{ color: cssVar.colorTextDescription }} />
@@ -55,9 +54,9 @@ const History = memo(() => {
           </Flexbox>
           <Flexbox horizontal align={'flex-start'} gap={8}>
             <Flexbox align={'center'} padding={8} width={20}>
-              <div className={styles.line} />
+              <div {...stylex.props(styles.line)} />
             </Flexbox>
-            <Markdown className={styles.content} variant={'chat'}>
+            <Markdown className={stylex.props(styles.content).className} variant={'chat'}>
               {content}
             </Markdown>
           </Flexbox>

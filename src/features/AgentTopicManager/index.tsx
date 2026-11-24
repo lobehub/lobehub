@@ -8,6 +8,7 @@ import {
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -23,11 +24,14 @@ import BulkActionBar from './BulkActionBar';
 import ChannelSection from './ChannelSection';
 import EmptyState from './EmptyState';
 import Header from './Header';
+import ShareVisitorSection from './ShareVisitorSection';
 import { useTopicsViewStore } from './store';
 import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import type { StatusFilter } from './types';
+import { parseTriggerParam, TOPICS_TRIGGER_PARAM } from './urlState';
+import { useShareVisitors } from './useShareVisitors';
 import {
   agentGroupChannels,
   buildBotChannelOptions,
@@ -37,10 +41,13 @@ import {
   matchesChannelSearch,
   matchesChannelStatus,
   matchesGroup,
+  matchesShareVisitorSearch,
+  matchesShareVisitorStatus,
   matchesStatus,
   matchesTimeRange,
   matchesTrigger,
   sortChannelsBy,
+  sortShareVisitorsBy,
   sortTopics,
 } from './utils';
 
@@ -94,6 +101,24 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
+  // A link that names a source (`?trigger=share` from the sidebar's Visitors section) picks only
+  // that source. Declared after the reset so it lands on top of it, then dropped from the URL so a
+  // later agent switch or reload keeps the page's own filters.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedTrigger = parseTriggerParam(searchParams.get(TOPICS_TRIGGER_PARAM));
+  useEffect(() => {
+    if (!searchParams.has(TOPICS_TRIGGER_PARAM)) return;
+    if (linkedTrigger) setTriggers([linkedTrigger]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(TOPICS_TRIGGER_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [linkedTrigger, searchParams, setSearchParams, setTriggers]);
+
   const { error, isHydrated, isValidating, revalidate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
     pageSize: PAGE_SIZE,
@@ -119,6 +144,10 @@ const AgentTopicManager = memo(() => {
   const retryChannels = () => {
     void channelActions.refreshList().catch(() => {});
   };
+  const shareVisitors = useShareVisitors(
+    activeAgentId,
+    channelsEnabled && triggers.includes('share'),
+  );
 
   const trimmedSearch = search.trim();
   const { data: searchResults } = useSearchTopics(
@@ -172,10 +201,29 @@ const AgentTopicManager = memo(() => {
     [channelPool, status, sortBy],
   );
 
+  // Project and bot-platform filters describe topics only, as for Channels.
+  const shareVisitorPool = useMemo(
+    () =>
+      groupIds.length === 0 && botChannels.length === 0
+        ? shareVisitors.conversations.filter(
+            (conversation) =>
+              matchesShareVisitorSearch(conversation, trimmedSearch) &&
+              matchesTimeRange(conversation, timeRange),
+          )
+        : [],
+    [shareVisitors.conversations, groupIds, botChannels, trimmedSearch, timeRange],
+  );
+
+  const visibleShareVisitors = useMemo(
+    () => (matchesShareVisitorStatus(status) ? sortShareVisitorsBy(shareVisitorPool, sortBy) : []),
+    [shareVisitorPool, status, sortBy],
+  );
+
   const statusCounts = useMemo(() => {
     const count = (tab: StatusFilter) =>
       preStatusPool.filter((t) => matchesStatus(t, tab)).length +
-      channelPool.filter((channel) => matchesChannelStatus(channel, tab)).length;
+      channelPool.filter((channel) => matchesChannelStatus(channel, tab)).length +
+      (matchesShareVisitorStatus(tab) ? shareVisitorPool.length : 0);
     return {
       active: count('active'),
       all: count('all'),
@@ -185,7 +233,7 @@ const AgentTopicManager = memo(() => {
       completed: count('completed'),
       running: count('running'),
     };
-  }, [preStatusPool, channelPool]);
+  }, [preStatusPool, channelPool, shareVisitorPool]);
 
   // Search results are flat — grouping by time confuses the relevance order
   // returned by the BM25 keyword search.
@@ -299,11 +347,19 @@ const AgentTopicManager = memo(() => {
               }}
             />
           ) : (isLoading && baseTopics.length === 0) ||
-            (channelsLoading && totalAfterFilter === 0) ? (
+            ((channelsLoading || shareVisitors.loading) && totalAfterFilter === 0) ? (
             <TopicsSkeleton chrome={'body'} />
           ) : channelsError && totalAfterFilter === 0 ? (
             <AsyncError error={channelsError} variant={'block'} onRetry={retryChannels} />
-          ) : totalAfterFilter === 0 && visibleChannels.length === 0 ? (
+          ) : shareVisitors.error && totalAfterFilter === 0 && visibleChannels.length === 0 ? (
+            <AsyncError
+              error={shareVisitors.error}
+              variant={'block'}
+              onRetry={shareVisitors.retry}
+            />
+          ) : totalAfterFilter === 0 &&
+            visibleChannels.length === 0 &&
+            visibleShareVisitors.length === 0 ? (
             <EmptyState
               agentId={activeAgentId}
               hasFilters={hasActiveFilters}
@@ -315,6 +371,15 @@ const AgentTopicManager = memo(() => {
                 <AsyncError error={channelsError} variant={'inline'} onRetry={retryChannels} />
               ) : (
                 <ChannelSection channels={visibleChannels} />
+              )}
+              {shareVisitors.error ? (
+                <AsyncError
+                  error={shareVisitors.error}
+                  variant={'inline'}
+                  onRetry={shareVisitors.retry}
+                />
+              ) : (
+                <ShareVisitorSection agentId={activeAgentId} conversations={visibleShareVisitors} />
               )}
               {totalAfterFilter === 0 ? null : viewMode === 'card' ? (
                 <TopicGrid

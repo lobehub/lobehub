@@ -6,6 +6,7 @@ import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -14,7 +15,6 @@ import { useHomeStore } from '@/store/home';
 
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
-import PrivateLockIcon from '../PrivateLockIcon';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
@@ -28,8 +28,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   const { id, avatar, backgroundColor, description, title, pinned, userId, visibility } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
+  const { isMyPinned, isPrivate } = useSidebarPinState({ id, pinned, visibility });
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -78,15 +77,15 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   // can't truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
+      isMyPinned || isPrivate ? (
         <>
           {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
+          {isMyPinned && (
             <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
           )}
         </>
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [isMyPinned, isPrivate],
   );
 
   // Memoize avatar icon (show loader when updating)

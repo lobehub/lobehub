@@ -37,8 +37,12 @@ const draftFor = (key: string) => {
   return draft;
 };
 
-/** Each Channel/Thread composer owns its uploads; ordinary chat's global draft is untouched. */
-export function useAttachments(draftKey: string) {
+/**
+ * Each Channel/Thread composer owns its uploads; ordinary chat's global draft is untouched.
+ * `workspaceId` pins the scope files upload into (`null` personal); `undefined` follows the
+ * active workspace.
+ */
+export function useAttachments(draftKey: string, workspaceId?: string | null) {
   const { t } = useTranslation('channel');
   const upload = useFileStore((s) => s.uploadWithProgress);
   const draft = draftFor(draftKey);
@@ -88,6 +92,7 @@ export function useAttachments(draftKey: string) {
         file,
         abortController,
         uploadId: item.id,
+        workspaceId,
         onStatusUpdate: (event) => {
           if (abortController.signal.aborted) return;
           if (event.type === 'updateFile') patch(item.id, event.value);

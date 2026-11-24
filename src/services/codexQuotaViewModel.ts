@@ -36,6 +36,7 @@ export const buildCodexPanelSnapshot = (
     externalAccountId: account.externalAccountId ?? undefined,
   };
   return {
+    credits: sample?.credits,
     error: null,
     identity,
     provider: 'codex',

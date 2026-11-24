@@ -51,6 +51,8 @@ export const recordLegacyPluginWrite = (
   clientMetadata: ClientMetadata | undefined,
 ) => {
   legacyPluginWriteCounter.add(1, {
+    // Lobot versions are not on LobeHub's line, so keep them out of its version buckets
+    client_app: clientMetadata?.app ?? 'none',
     client_type: clientMetadata?.type ?? 'unknown',
     client_version: toClientVersionLabel(clientMetadata?.version),
     plugin_type: pluginType,

@@ -103,8 +103,7 @@ export enum RequestTrigger {
 /**
  * Everything one shared-agent visitor run carries: WHO the run belongs to
  * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
- * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`), and HOW
- * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
+ * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`).
  *
  * Single source of truth for the runtime-side share marker: it is stamped once
  * at operation creation onto `state.metadata.agentShareVisitor` and read back
@@ -148,10 +147,6 @@ export interface AgentShareVisitorContext {
    * `AgentShareModel.isRunStillAuthorized`).
    */
   shareId: string;
-  /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
-  showErrorDetails?: boolean;
-  /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
-  showModelInfo?: boolean;
   /**
    * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
    * per-skill allowlist the operation's skill pool was built from. Absent or
@@ -310,6 +305,12 @@ export const AgentRuntimeErrorType = {
   OperationInactivityTimeout: 'OperationInactivityTimeout',
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
+  /**
+   * The provider base URL resolves to a private / reserved network address that
+   * the server is not allowed to reach (SSRF protection). The endpoint is only
+   * reachable from the user's own device.
+   */
+  ProviderBaseURLBlocked: 'ProviderBaseURLBlocked',
   /**
    * The model can only be reached from the user's own device, and no open
    * LobeHub client picked up the request (no client declared it can run this

@@ -37,6 +37,8 @@ describe('parsePullRequestUrl', () => {
       url: 'https://github.com/LobeHub/lobehub/pull/12',
     });
     expect(parsePullRequestUrl('https://github.com/a/b/issues/1')).toBeNull();
+    expect(parsePullRequestUrl('https://github.com/a/b/pull/0')).toBeNull();
+    expect(parsePullRequestUrl('https://github.com/a/b/pull/9007199254740993')).toBeNull();
     expect(parsePullRequestUrl('http://evil.com/a/b/pull/1')).toBeNull();
   });
 });

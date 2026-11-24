@@ -1,38 +1,14 @@
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 
 import type { ChannelItem } from '../../schemas';
-import { channelMembers, channels, userContacts, workspaceMembers } from '../../schemas';
+import { channelMembers, channels, workspaceMembers } from '../../schemas';
 import type { Transaction } from '../../type';
+import type { ChannelContacts } from './contacts';
 import { ChannelError } from './error';
 import type { ChannelAccess } from './types';
 
-/**
- * Whether two people are contacts in a scope, both directions still holding. Removing a contact
- * silences their conversation without deleting its history.
- */
-const areMutualContacts = async (
-  tx: Transaction,
-  workspaceId: string | null,
-  userId: string,
-  peerUserId: string,
-) => {
-  const rows = await tx
-    .select({ userId: userContacts.userId })
-    .from(userContacts)
-    .where(
-      and(
-        eq(userContacts.type, 'user'),
-        workspaceId ? eq(userContacts.workspaceId, workspaceId) : isNull(userContacts.workspaceId),
-        or(
-          and(eq(userContacts.userId, userId), eq(userContacts.contactUserId, peerUserId)),
-          and(eq(userContacts.userId, peerUserId), eq(userContacts.contactUserId, userId)),
-        ),
-      ),
-    );
-  return rows.length >= 2;
-};
-
-const isWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
+/** Whether `userId` is an active member of the workspace. */
+export const isWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
   const [member] = await tx
     .select({ userId: workspaceMembers.userId })
     .from(workspaceMembers)
@@ -55,12 +31,13 @@ const isWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: s
  */
 export const requirePeerRelation = async (
   tx: Transaction,
+  contacts: ChannelContacts,
   workspaceId: string | null,
   userId: string,
   peerUserId: string,
 ) => {
   if (!workspaceId) {
-    if (!(await areMutualContacts(tx, null, userId, peerUserId)))
+    if (!(await contacts.areMutualContacts(tx, null, userId, peerUserId)))
       throw new ChannelError('FORBIDDEN', 'You are not contacts');
     return;
   }
@@ -72,7 +49,7 @@ export const requirePeerRelation = async (
   // An external contact talks only with the members paired with them, never another outsider.
   if (
     (userIsMember || peerIsMember) &&
-    (await areMutualContacts(tx, workspaceId, userId, peerUserId))
+    (await contacts.areMutualContacts(tx, workspaceId, userId, peerUserId))
   )
     return;
   throw new ChannelError('NOT_FOUND', 'Workspace member not found');
@@ -124,4 +101,50 @@ export const findPeer = async (
     )
     .limit(1);
   return row as ChannelAccess | undefined;
+};
+
+/**
+ * Opens the pair's conversation, or finds the one that exists, trashed or not. Both people join
+ * it; whoever opens it first owns it.
+ */
+export const openPeerConversation = async (
+  tx: Transaction,
+  contacts: ChannelContacts,
+  {
+    peerUserId,
+    title,
+    userId,
+    workspaceId,
+  }: { peerUserId: string; title: string; userId: string; workspaceId: string | null },
+): Promise<ChannelAccess> => {
+  if (peerUserId === userId) throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
+  await requirePeerRelation(tx, contacts, workspaceId, userId, peerUserId);
+  // No unique index keeps one conversation per pair: serialize opening it, so two people
+  // opening it at once (or one twice) find the first one instead of creating a second.
+  await lockPeerPair(tx, workspaceId, userId, peerUserId);
+  const existing = await findPeer(tx, workspaceId, userId, peerUserId);
+  if (existing) return existing;
+
+  const [channel] = await tx
+    .insert(channels)
+    .values({ peerUserId, title, userId, visibility: 'private', workspaceId })
+    .returning();
+  const [member] = await tx
+    .insert(channelMembers)
+    .values({
+      actorType: 'user',
+      channelId: channel.id,
+      lastReadSequence: 0,
+      role: 'owner',
+      userId,
+    })
+    .returning();
+  await tx.insert(channelMembers).values({
+    actorType: 'user',
+    channelId: channel.id,
+    lastReadSequence: 0,
+    role: 'owner',
+    userId: peerUserId,
+  });
+  return { channel, member };
 };

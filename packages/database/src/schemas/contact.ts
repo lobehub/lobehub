@@ -1,4 +1,9 @@
-import type { ContactMetadata, ContactRequestStatus, ContactType } from '@lobechat/types';
+import type {
+  ContactMetadata,
+  ContactRequestSource,
+  ContactRequestStatus,
+  ContactType,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -113,6 +118,8 @@ export const userContactRequests = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     message: text('message'),
+    /** How the requester found the addressee, e.g. a card someone shared; null otherwise. */
+    source: jsonb('source').$type<ContactRequestSource>(),
     status: text('status').$type<ContactRequestStatus>().notNull().default('pending'),
     respondedAt: timestamptz('responded_at'),
 

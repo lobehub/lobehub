@@ -1540,6 +1540,69 @@
       "when": 1794890771557,
       "tag": "0219_contacts_external_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 220,
+      "version": "7",
+      "when": 1794939107563,
+      "tag": "0220_channel_sections",
+      "breakpoints": true
+    },
+    {
+      "idx": 221,
+      "version": "7",
+      "when": 1794996111307,
+      "tag": "0221_project_environment_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 222,
+      "version": "7",
+      "when": 1795064606437,
+      "tag": "0222_agent_skill_upstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 223,
+      "version": "7",
+      "when": 1795082781704,
+      "tag": "0223_running_operations_and_message_author_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "7",
+      "when": 1795115161849,
+      "tag": "0224_agent_deliveries_and_contact_request_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 225,
+      "version": "7",
+      "when": 1795165712823,
+      "tag": "0225_artboard_boards_drop_old_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 226,
+      "version": "7",
+      "when": 1795232920077,
+      "tag": "0226_agent_share_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 227,
+      "version": "7",
+      "when": 1795445232107,
+      "tag": "0227_channel_agent_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "7",
+      "when": 1795457259109,
+      "tag": "0228_channel_message_kind",
+      "breakpoints": true
     }
   ],
   "version": "6"

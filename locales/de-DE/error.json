@@ -79,7 +79,6 @@
   "response.DeviceGatewayNotConfigured": "Konnte kein Laufgerät für diesen Agenten erreichen. Verbinden Sie ein Gerät oder konfigurieren Sie das Geräte-Gateway auf dem Server und versuchen Sie es erneut.",
   "response.DeviceResponseTimeout": "Das Gerät hat nicht rechtzeitig geantwortet. Es könnte offline oder im Ruhezustand sein oder den Vorgang noch starten. Überprüfen Sie, ob das Gerät verbunden ist und ob dieser Vorgang bereits läuft, und versuchen Sie es dann erneut.",
   "response.ExceededContextWindowCloud": "Das Gespräch ist zu lang, um verarbeitet zu werden. Bitte bearbeiten Sie Ihre letzte Nachricht, um die Eingabe zu reduzieren, oder löschen Sie einige Nachrichten und versuchen Sie es erneut.",
-  "response.FreePlanLimit": "Sie nutzen derzeit den kostenlosen Plan. Bitte upgraden Sie, um fortzufahren.",
   "response.GoogleAIBlockReason.BLOCKLIST": "Der Inhalt enthält gesperrte Begriffe. Bitte formulieren Sie um und versuchen Sie es erneut.",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "Das generierte Bild wurde aus Sicherheitsgründen blockiert. Bitte ändern Sie Ihre Anfrage und versuchen Sie es erneut.",
   "response.GoogleAIBlockReason.LANGUAGE": "Die angeforderte Sprache wird nicht unterstützt. Bitte versuchen Sie es in einer unterstützten Sprache erneut.",

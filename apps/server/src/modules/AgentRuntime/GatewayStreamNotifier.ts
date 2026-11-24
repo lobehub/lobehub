@@ -14,9 +14,7 @@ import { projectGatewayEventData, toMirroredEvent } from './gatewayEventProjecti
 import {
   buildPublicEndEventData,
   buildPublicInitEventData,
-  FULL_STRIP_REDACTION,
   type GatewayVisitorRedaction,
-  isShareVisitorInit,
   resolveRedactionFromState,
   sanitizeGatewayEventData,
 } from './gatewayVisitorRedaction';
@@ -170,18 +168,16 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   private memberEndTargets = new Map<string, Promise<boolean>>();
 
   /**
-   * `operationId → visitor redaction policy` for confirmed shared-agent visitor
+   * `operationId → true` for confirmed shared-agent visitor
    * runs. `step_start` events carry neither `streamOwnerUserId` (only on
    * `agent_runtime_init`'s `initialState`) nor `finalState` (only on
    * `agent_runtime_end` / `step_complete`), so this per-operation entry is the
    * only signal `pushEvent` has for scrubbing `uiMessages` on those events.
    * Mirrors `mirrorTargets`'s two population paths:
    *  - fast path: set at `publishAgentRuntimeInit` / `publishAgentRuntimeEnd`
-   *    from the state's `metadata.agentShareVisitor`, so the share's real
-   *    `showModelInfo` / `showErrorDetails` config is honored.
+   *    from the state.
    *  - queue path: lazily resolved from persisted op metadata via
-   *    `resolvePersistedShareVisitor`, which can only tell share-or-not — it
-   *    therefore falls back to {@link FULL_STRIP_REDACTION}.
+   *    `resolvePersistedShareVisitor`.
    * Cleared at `publishAgentRuntimeEnd`.
    */
   private shareVisitorOps = new Map<string, GatewayVisitorRedaction>();
@@ -201,8 +197,8 @@ export class GatewayStreamNotifier implements IStreamEventManager {
      */
     private resolveMirrorTarget?: (operationId: string) => Promise<string | undefined>,
     /**
-     * Resolves an op's persisted share-visitor redaction policy (from
-     * `streamOwnerUserId` + `visitorRedaction` on op metadata); `null` for a
+     * Resolves whether an op is a share-visitor run (from `streamOwnerUserId`
+     * on op metadata); `false` for a
      * normal run. Lets a queue worker — which never ran the op's init — still
      * scrub events for that op. Omitted ⇒ in-process map only (safe: init
      * always precedes events for the op it created).
@@ -285,13 +281,9 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // `initialState` here) so every later event for this op — including
     // `step_start`, which carries neither `streamOwnerUserId` nor `finalState`
     // — is sanitized without re-resolving.
-    const initRedaction = resolveRedactionFromState(initialState);
-    const isShareInit = isShareVisitorInit(initialState);
-    if (initRedaction || isShareInit) {
-      // Fail closed: `streamOwnerUserId` alone (without a readable
-      // `metadata.agentShareVisitor`) still means a visitor is on the other end.
-      this.shareVisitorOps.set(operationId, initRedaction ?? FULL_STRIP_REDACTION);
-    }
+    // `streamOwnerUserId` alone (without a readable `principal.actor.shareVisitor`)
+    // still means a visitor is on the other end.
+    if (resolveRedactionFromState(initialState)) this.shareVisitorOps.set(operationId, true);
     this.shareVisitorResolved.add(operationId);
 
     try {
@@ -359,7 +351,6 @@ export class GatewayStreamNotifier implements IStreamEventManager {
           rawErrorType === undefined
             ? undefined
             : ({ message: finalState?.error?.message, type: rawErrorType } as ChatMessageError),
-          endRedaction,
         )
       : undefined;
     const effectiveReasonDetail = endRedaction
@@ -371,7 +362,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // so record it before pushing — covers the case where this runs in a
     // process that never saw the op's `publishAgentRuntimeInit` (queue mode)
     // without waiting on the async metadata resolver.
-    if (endRedaction) this.shareVisitorOps.set(operationId, endRedaction);
+    if (endRedaction) this.shareVisitorOps.set(operationId, true);
     this.shareVisitorResolved.add(operationId);
 
     // Forward `uiMessages` to the gateway push channel so terminal-state
@@ -802,8 +793,8 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   private isShareVisitorKnown(operationId: string): GatewayVisitorRedaction | undefined {
     const cached = this.shareVisitorOps.get(operationId);
     if (cached) return cached;
-    if (this.shareVisitorResolved.has(operationId)) return null;
-    if (!this.resolvePersistedShareVisitor) return null;
+    if (this.shareVisitorResolved.has(operationId)) return false;
+    if (!this.resolvePersistedShareVisitor) return false;
     return undefined;
   }
 
@@ -814,13 +805,13 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    * Deduped so concurrent events for the same unresolved op share one metadata
    * read.
    *
-   * Fails closed: a resolution error returns the full strip rather than risk
+   * Fails closed: a resolution error treats the op as a share run rather than risk
    * leaking the creator's identity, and deliberately does NOT cache that
    * outcome as resolved, so the next event retries once the transient failure
    * clears.
    */
   private resolveShareVisitor(operationId: string): Promise<GatewayVisitorRedaction> {
-    if (!this.resolvePersistedShareVisitor) return Promise.resolve(null);
+    if (!this.resolvePersistedShareVisitor) return Promise.resolve(false);
 
     let pending = this.shareVisitorResolving.get(operationId);
     if (!pending) {
@@ -828,14 +819,14 @@ export class GatewayStreamNotifier implements IStreamEventManager {
         .then((resolved) => {
           this.shareVisitorResolved.add(operationId);
           this.shareVisitorResolving.delete(operationId);
-          if (!resolved) return null;
-          this.shareVisitorOps.set(operationId, resolved);
-          return resolved;
+          if (!resolved) return false;
+          this.shareVisitorOps.set(operationId, true);
+          return true;
         })
         .catch((error) => {
           this.shareVisitorResolving.delete(operationId);
           log('[%s] Share visitor resolution failed, failing closed: %O', operationId, error);
-          return FULL_STRIP_REDACTION;
+          return true;
         });
       this.shareVisitorResolving.set(operationId, pending);
     }

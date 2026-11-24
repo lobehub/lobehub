@@ -123,3 +123,27 @@ describe('AgentDocumentModel binding states', () => {
     ).toEqual([]);
   });
 });
+
+describe('AgentDocumentModel binding-state guards', () => {
+  it('ignores refs of no known shape, and a ref list of only one kind', async () => {
+    const doc = await model.create(agentId, 'only.md', 'only');
+
+    // Nothing to look up at all.
+    expect(await model.listBindingStatesByRefs(agentId, [])).toEqual([]);
+    // Only a binding id: the document column takes part in the query alone.
+    const byBinding = await model.listBindingStatesByRefs(agentId, [doc.id]);
+    expect(byBinding.map((row) => row.id)).toEqual([doc.id]);
+    // Only a document id: the binding column takes part alone.
+    const byDocument = await model.listBindingStatesByRefs(agentId, [doc.documentId]);
+    expect(byDocument.map((row) => row.documentId)).toEqual([doc.documentId]);
+  });
+
+  it('answers empty id lists without querying', async () => {
+    expect(await model.listExistingDocumentIds([])).toEqual([]);
+    expect(await model.listExistingDocumentIds(['00000000-0000-4000-8000-000000000000'])).toEqual(
+      [],
+    );
+    expect(await model.listKnowledgeBaseMemberIds([])).toEqual([]);
+    expect(await model.listRevokedFromAllAgents([])).toEqual([]);
+  });
+});

@@ -1,7 +1,8 @@
 import type { AgentStreamEvent, LlmExecuteData } from '@lobechat/agent-gateway-client';
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { messageService } from '@/services/message';
 import * as agentSignalBridge from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -87,7 +88,12 @@ describe('createGatewayEventHandler — LLM relay', () => {
     relay.cancel.mockReset();
     relay.cancelOperation.mockReset();
     relay.owned.clear();
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
     vi.spyOn(agentSignalBridge, 'emitClientAgentSignalSourceEvent').mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('runs llm_execute locally, renders its output and skips the server echo', async () => {
@@ -144,7 +150,7 @@ describe('createGatewayEventHandler — LLM relay', () => {
         error: 'ClientLlmExecutorUnavailable',
       }),
     );
-    await flush();
+    await vi.waitFor(() => expect(store.replaceMessages).toHaveBeenCalled());
     // A client resumed it; the replayed call reaches this session.
     handler(makeEvent('llm_execute', execute({ callId: 'op-1:1:1', stepIndex: 1 })));
 
@@ -284,7 +290,7 @@ describe('createGatewayEventHandler — LLM relay', () => {
 
   // The terminal event closes the session that would carry a trailing
   // `llm_cancel`, so the run's end itself stops the local attempt.
-  it("stops the run's relayed attempts when the run ends", () => {
+  it("stops the run's relayed attempts when the run ends", async () => {
     const store = createStore();
     const handler = createGatewayEventHandler(() => store, {
       assistantMessageId: 'msg-1',
@@ -295,5 +301,6 @@ describe('createGatewayEventHandler — LLM relay', () => {
     handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
 
     expect(relay.cancelOperation).toHaveBeenCalledWith('op-1');
+    await vi.waitFor(() => expect(store.completeOperation).toHaveBeenCalledWith('op-1'));
   });
 });

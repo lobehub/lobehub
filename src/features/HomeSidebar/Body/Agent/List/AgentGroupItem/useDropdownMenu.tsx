@@ -8,6 +8,7 @@ import {
   PictureInPicture2Icon,
   Pin,
   PinOff,
+  ShieldIcon,
   Trash,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -15,9 +16,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
-import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useGlobalStore } from '@/store/global';
@@ -52,10 +53,13 @@ export const useGroupDropdownMenu = ({
   userId,
   visibility,
 }: UseGroupDropdownMenuParams): (() => DropdownItem[]) => {
-  const { t } = useTranslation(['chat', 'common']);
+  const { t } = useTranslation(['chat', 'common', 'setting']);
 
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const { canEditResource, isAccessResolved } = useResourceAccess('agentGroup', id);
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess(
+    'agentGroup',
+    id,
+  );
   const canConfigure = canEdit && isAccessResolved && canEditResource;
   const canManage = useResourceManageable(userId);
 
@@ -72,16 +76,12 @@ export const useGroupDropdownMenu = ({
     memberAvatars,
     title,
   });
-  const transferToMemberItem = useAgentGroupTransferToMemberMenuItem(id, {
-    avatar,
-    backgroundColor,
-    title,
-  });
+  const navigate = useWorkspaceAwareNavigate();
 
   const activeWorkspaceId = useActiveWorkspaceId();
   // Workspace: personal pin for every member + owner/admin team pin on public
   // groups. Personal mode keeps the single column-backed pin.
-  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
+  const { menuItems: workspacePinItems } = useSidebarPinMenuItems({
     id,
     pinned,
     type: 'group',
@@ -110,9 +110,7 @@ export const useGroupDropdownMenu = ({
                 },
               ]
             : []),
-        // Team-pinned rows are the fixed section every member sees; hiding
-        // them would do nothing there.
-        ...(isShownInSidebar && !isTeamPinned
+        ...(isShownInSidebar
           ? [
               {
                 icon: <Icon icon={EyeOffIcon} />,
@@ -175,11 +173,25 @@ export const useGroupDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
-        ...(canConfigure && (transferMenuItems?.length || transferToMemberItem)
+        ...(canConfigure && transferMenuItems?.length
+          ? [{ type: 'divider' as const }, ...transferMenuItems]
+          : []),
+        // Member permissions and the handover to a member live in the group's
+        // Permissions settings; the row keeps one shortcut there for the
+        // creator and workspace owners, like Agent rows.
+        ...(activeWorkspaceId && canConfigure && canManageResource
           ? [
               { type: 'divider' as const },
-              ...(transferMenuItems ?? []),
-              ...(transferToMemberItem ? [transferToMemberItem] : []),
+              {
+                icon: <Icon icon={ShieldIcon} />,
+                key: 'permission',
+                label: t('permission.page.entry', { ns: 'setting' }),
+                onClick: ({ domEvent }: any) => {
+                  domEvent?.stopPropagation();
+                  navigate(`/group/${id}/permission`);
+                },
+                sfSymbol: 'lock.shield',
+              },
             ]
           : []),
         ...(canConfigure && canManage
@@ -217,7 +229,6 @@ export const useGroupDropdownMenu = ({
       activeWorkspaceId,
       workspacePinItems,
       isShownInSidebar,
-      isTeamPinned,
       setSidebarItemVisible,
       anchor,
       avatar,
@@ -234,7 +245,8 @@ export const useGroupDropdownMenu = ({
       openAgentInNewWindow,
       removeAgentGroup,
       transferMenuItems,
-      transferToMemberItem,
+      canManageResource,
+      navigate,
     ],
   );
 };

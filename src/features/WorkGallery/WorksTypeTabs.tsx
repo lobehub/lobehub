@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessResourceCategories } from '@/business/client/features/ResourceCategories';
+import { useArtboardFeature } from '@/features/Artboard';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 /** Works types every deployment has; business types append after them. */
@@ -14,6 +15,12 @@ const WORK_TYPES = [
   { key: 'document', titleKey: 'docs.works.document', url: '/resource/works?works=document' },
   { key: 'canvas', titleKey: 'docs.works.canvas', url: '/resource/works?works=canvas' },
 ] as const;
+
+const ARTBOARD_TYPE = {
+  key: 'artboard',
+  titleKey: 'docs.works.artboard',
+  url: '/resource/works?works=artboard',
+} as const;
 
 interface WorksTypeTabsProps {
   /** A `?works=` key (`all` / `task` / `document` / `canvas`) or a business category key. */
@@ -28,10 +35,11 @@ const WorksTypeTabs = memo<WorksTypeTabsProps>(({ activeKey }) => {
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
+  const { enabled: artboardEnabled } = useArtboardFeature();
 
   const options = useMemo(
     () => [
-      ...WORK_TYPES.map((type) => ({
+      ...[...WORK_TYPES, ...(artboardEnabled ? [ARTBOARD_TYPE] : [])].map((type) => ({
         label: t(type.titleKey),
         url: type.url,
         value: type.key as string,
@@ -43,7 +51,7 @@ const WorksTypeTabs = memo<WorksTypeTabsProps>(({ activeKey }) => {
         value: category.key,
       })),
     ],
-    [businessCategories, t],
+    [artboardEnabled, businessCategories, t],
   );
 
   // Narrower provider keys (linear / github) have no tab; they read as "All".

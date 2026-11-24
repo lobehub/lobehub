@@ -29,38 +29,59 @@ export const resolveConnectorAuthorizerId = (connector: ConnectorAttributionRow)
 };
 
 /**
- * `linkedByUserId` marks the member whose credentials a Composio tool runs under
- * — it is server-owned, written only by the OAuth connect path
- * (`upsertComposioConnector`). The generic connector create/update accepts
- * free-form `metadata`, so without a guard a member could set
- * `metadata.composio.linkedByUserId` to another user's id and spoof both the
- * attribution tag and the runtime ownership note (and shift the Composio
- * execution entity). This forces the field to the TRUSTED value — the existing
- * DB row's `linkedByUserId` on update, or dropped on create (no server value
- * yet) — ignoring whatever the client supplied. All other metadata is preserved.
+ * The keys of a connector's `metadata` that only server paths write:
+ *
+ * - `composio` is written only by the Composio connect paths
+ *   (`upsertComposioConnector`, the plugin bootstrap sync). It names the
+ *   account a tool runs (`connectedAccountId`) and the member whose credentials
+ *   it runs under (`linkedByUserId`), and the rows naming an account decide who
+ *   may refresh or delete it (`findComposioAccountConflict`).
+ * - `mountedByAgentId` locks a base row onto one agent, and at run time that
+ *   mount outranks the agent owner's own private row of the same identifier
+ *   (`ConnectorModel.pickByPriority`). Only `mountToAgent` sets it, after
+ *   checking that the caller created the agent and may hand it the row.
+ *   `unmountFromAgent` and the agent lifecycle helpers clear it.
+ */
+const SERVER_OWNED_METADATA_KEYS = ['composio', 'mountedByAgentId'] as const;
+
+/**
+ * The generic connector create/update accepts free-form `metadata`, and every
+ * member reads the account ids of the workspace's shared connections and the
+ * ids of the agents they can see. Without a guard a member could:
+ * - name a teammate's Composio account on a row of their own, spoofing the
+ *   attribution tag and the runtime ownership note, or, on a private row nobody
+ *   else can see, claiming the account so its real owner can no longer refresh
+ *   or remove it;
+ * - mount a shared connector of their own on a teammate's private agent, under
+ *   the identifier of the owner's private connector, so the agent's tool calls
+ *   (and their arguments) go to the member's server instead.
+ *
+ * This replaces whatever the client sent for each {@link SERVER_OWNED_METADATA_KEYS}
+ * key with the TRUSTED value: the stored row's on update, none on create, where
+ * there is no stored row. All other metadata is preserved.
  *
  * `serverMetadata` is the persisted row's metadata (pass `undefined` on create).
- * Returns the client metadata untouched when neither side has anything Composio.
+ * Returns the client metadata untouched when neither side has a server-owned key.
  */
-export const withTrustedLinkedByUserId = (
+export const withServerOwnedMetadata = (
   clientMetadata: Record<string, unknown> | null | undefined,
   serverMetadata: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null | undefined => {
   // undefined → "leave metadata untouched"; null → "clear it". Nothing to guard.
   if (!clientMetadata) return clientMetadata;
 
-  const serverLinked = (serverMetadata as { composio?: { linkedByUserId?: string } } | null)
-    ?.composio?.linkedByUserId;
-  const clientComposio = (clientMetadata as { composio?: Record<string, unknown> }).composio;
+  const guarded = SERVER_OWNED_METADATA_KEYS.filter(
+    (key) => key in clientMetadata || serverMetadata?.[key] !== undefined,
+  );
+  if (guarded.length === 0) return clientMetadata;
 
-  // No composio block from the client and no trusted server value → nothing to do.
-  if (!clientComposio && serverLinked === undefined) return clientMetadata;
-
-  const composio: Record<string, unknown> = { ...clientComposio };
-  if (serverLinked === undefined) delete composio.linkedByUserId;
-  else composio.linkedByUserId = serverLinked;
-
-  return { ...clientMetadata, composio };
+  const result = { ...clientMetadata };
+  for (const key of guarded) {
+    const trusted = serverMetadata?.[key];
+    if (trusted === undefined) delete result[key];
+    else result[key] = trusted;
+  }
+  return result;
 };
 
 export interface UserDisplayInfo {

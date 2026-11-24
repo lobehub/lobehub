@@ -17,6 +17,7 @@ import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CopyableLabel from '@/components/CopyableLabel';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { curlExamples } from './endpoint';
 
@@ -24,7 +25,7 @@ const styles = stylex.create({
   hint: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
   value: {
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

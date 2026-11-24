@@ -39,7 +39,6 @@ vi.mock('./hooks/useCategory', () => ({
         { key: 'profile', label: 'Jane Doe' },
         { key: 'appearance', label: 'Appearance' },
         { key: 'hotkey', label: 'Hotkeys' },
-        { key: 'messenger', label: 'Messenger' },
         { key: 'labs', label: 'Labs' },
         { key: 'advanced', label: 'Advanced' },
         { key: 'about', label: 'About' },
@@ -77,7 +76,6 @@ describe('WorkspaceSettingsContentLayout', () => {
     ['usage', 'Usage'],
     ['appearance', 'Appearance'],
     ['hotkey', 'Hotkeys'],
-    ['messenger', 'Messenger'],
     ['labs', 'Labs'],
     ['about', 'About'],
     // The Profile nav item is labelled with the user's name; the header keeps

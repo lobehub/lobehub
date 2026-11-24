@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Stdio-коннекторы могут синхронизироваться только в настольном приложении. Откройте LobeHub Desktop, чтобы синхронизировать этот коннектор.",
   "connector.kind.agent": "Коннектор агента",
   "connector.kind.builtin": "Встроенный инструмент",
-  "connector.kind.community": "Инструмент сообщества",
+  "connector.kind.community": "Инструмент торговой площадки",
   "connector.kind.custom": "Пользовательский коннектор",
   "connector.kind.oauth": "OAuth-коннектор",
   "connector.manageOnlyCreator": "Только создатель или владелец рабочего пространства может управлять этим коннектором",
@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Добавить элемент",
   "updateArgs.form.key": "Ключ поля",
   "updateArgs.form.value": "Значение поля",
-  "updateArgs.formValidationFailed": "Ошибка проверки формы, проверьте формат параметров",
   "updateArgs.keyRequired": "Ключ поля не может быть пустым",
   "updateArgs.stringifyError": "Не удалось сериализовать параметры, проверьте их формат"
 }

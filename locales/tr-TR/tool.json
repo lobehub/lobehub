@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Stdio bağlayıcıları yalnızca masaüstü uygulamasında senkronize edilebilir. Bu bağlayıcıyı senkronize etmek için LobeHub Masaüstü'nü açın.",
   "connector.kind.agent": "Ajan bağlayıcı",
   "connector.kind.builtin": "Yerleşik araç",
-  "connector.kind.community": "Topluluk aracı",
+  "connector.kind.community": "Pazar Yeri aracı",
   "connector.kind.custom": "Özel bağlayıcı",
   "connector.kind.oauth": "OAuth bağlayıcı",
   "connector.manageOnlyCreator": "Bu bağlayıcıyı yalnızca oluşturucu veya bir çalışma alanı sahibi yönetebilir",
@@ -311,7 +311,6 @@
   "updateArgs.form.add": "Öğe Ekle",
   "updateArgs.form.key": "Alan Anahtarı",
   "updateArgs.form.value": "Alan Değeri",
-  "updateArgs.formValidationFailed": "Form doğrulaması başarısız oldu, lütfen parametre biçimini kontrol edin",
   "updateArgs.keyRequired": "Alan anahtarı boş olamaz",
   "updateArgs.stringifyError": "Parametreler serileştirilemedi, lütfen parametre biçimini kontrol edin"
 }

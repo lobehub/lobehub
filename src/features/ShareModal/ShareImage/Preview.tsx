@@ -1,5 +1,10 @@
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
-import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
+import {
+  agentDisplayName,
+  type ConversationContext,
+  getOptedInPluginIds,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { cx, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -60,7 +65,7 @@ const Preview = memo<PreviewProps>(
       return [
         s.activeAgentId,
         agentSelectors.currentAgentModel(s),
-        agentSelectors.displayableAgentPlugins(s),
+        filterToolIds(getOptedInPluginIds(agentSelectors.currentAgentConfig(s)?.plugins)),
         agentSelectors.currentAgentSystemRole(s),
         builtinAgentSelectors.isInboxAgent(s),
         agentSelectors.currentAgentDisplayName(s),
@@ -73,7 +78,11 @@ const Preview = memo<PreviewProps>(
           ? agentByIdSelectors.getAgentModelById(resolvedHeaderAgentId)(s)
           : undefined,
         resolvedHeaderAgentId
-          ? filterToolIds(agentByIdSelectors.getAgentPluginsById(resolvedHeaderAgentId)(s))
+          ? filterToolIds(
+              getOptedInPluginIds(
+                agentSelectors.getAgentConfigById(resolvedHeaderAgentId)(s)?.plugins,
+              ),
+            )
           : undefined,
         resolvedHeaderAgentId
           ? builtinAgentSelectors.inboxAgentId(s) === resolvedHeaderAgentId
@@ -82,9 +91,10 @@ const Preview = memo<PreviewProps>(
     });
 
     const displayTitle =
-      (isHeaderInbox ?? isInbox)
-        ? DEFAULT_INBOX_TITLE
-        : agentDisplayName(headerMeta) || title || currentTitle;
+      agentDisplayName(headerMeta) ||
+      title ||
+      currentTitle ||
+      ((isHeaderInbox ?? isInbox) ? DEFAULT_INBOX_TITLE : undefined);
     const resolvedAgentId = (headerMeta && headerAgentId) || activeAgentId;
     const displayAvatar = resolveHeaderAvatar(headerMeta, currentAvatar);
     const displayBackgroundColor = headerMeta?.backgroundColor || currentBackgroundColor;

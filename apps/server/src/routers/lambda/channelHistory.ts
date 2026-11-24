@@ -39,9 +39,9 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       const result = await next({
         ctx: {
           channelHistory: new ChannelHistoryService(...args),
-          // The token was checked for this capability above; an owner's bot run carries
-          // `channel:message` without a Channel of its own.
-          channelMessaging: new ChannelMessagingService(...args, { allowBotRun: true }),
+          // The token was checked for this capability above; a user's chat turn or an owner's
+          // bot run carries `channel:message` without a Channel of its own.
+          channelMessaging: new ChannelMessagingService(...args, { allowDirectRun: true }),
         },
       });
       if (!result.ok && result.error.cause instanceof ChannelError)
@@ -72,6 +72,8 @@ export const channelHistoryProcedures = {
         .object({
           beforeSequence: z.number().int().positive().optional(),
           limit: z.number().int().min(1).max(20).optional(),
+          /** Another Thread of the run's Channel, from `listThreads`. */
+          threadId: z.string().min(1).optional(),
         })
         .strict(),
     )
@@ -79,10 +81,25 @@ export const channelHistoryProcedures = {
   readMessage: historyProcedure
     .input(
       z
-        .object({ messageId: z.string().min(1), offset: z.number().int().nonnegative().optional() })
+        .object({
+          messageId: z.string().min(1),
+          offset: z.number().int().nonnegative().optional(),
+          threadId: z.string().min(1).optional(),
+        })
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelHistory.readMessage(input)),
+  listThreads: historyProcedure
+    .input(
+      z
+        .object({
+          activeOnly: z.boolean().optional(),
+          before: z.string().min(1).optional(),
+          limit: z.number().int().min(1).max(20).optional(),
+        })
+        .strict(),
+    )
+    .query(({ ctx, input }) => ctx.channelHistory.listThreads(input)),
   listChannels: messagingProcedure
     .input(
       z
@@ -117,6 +134,24 @@ export const channelHistoryProcedures = {
     )
     .mutation(({ ctx, input: { requestKey, ...params } }) =>
       ctx.channelMessaging.messagePerson(params, `cli:${requestKey}`),
+    ),
+  /** Posts a card in the run's own conversation asking its requester to connect a connector. */
+  requestConnector: historyProcedure
+    .input(
+      z
+        .object({
+          auth: z.enum(['none', 'oauth']).optional(),
+          identifier: z.string().min(1).max(64),
+          name: z.string().max(64).optional(),
+          reason: z.string().max(280).optional(),
+          /** Repeat it to retry without posting twice. */
+          requestKey: z.string().min(1).max(100),
+          url: z.string().url().max(2048).optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { requestKey, ...params } }) =>
+      ctx.channelHistory.requestConnector(params, `cli:${requestKey}`),
     ),
   sendMessage: messagingProcedure
     .input(

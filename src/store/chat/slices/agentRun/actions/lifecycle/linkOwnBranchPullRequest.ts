@@ -13,7 +13,7 @@ import { topicSelectors } from '../../../topic/selectors';
 const sameRepo = (a?: string, b?: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
 /**
- * At the end of a run (Better Coding Experience), link the open PR of the
+ * At the end of a run, link the open PR of the
  * branch the topic CREATED — its first-send worktree branch, or one its agent
  * made — when someone opened it outside the agent's commands (on GitHub, from
  * another tool). Never for a branch the topic merely switched to: that is the

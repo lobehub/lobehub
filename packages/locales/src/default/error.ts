@@ -12,6 +12,10 @@ export default {
   'chatRequestBlocked.description':
     'This request was blocked by our security checks. If you think this is a mistake, contact support to restore access.',
   'chatRequestBlocked.title': 'Request blocked',
+  'chatOnboardingRequired.action': 'Finish onboarding',
+  'chatOnboardingRequired.description':
+    'Finish the short onboarding to keep chatting. You will come back to this conversation afterwards.',
+  'chatOnboardingRequired.title': 'Finish onboarding to continue',
   'saveState.retry': 'Retry',
   'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
@@ -21,6 +25,9 @@ export default {
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',
   'fetchError.title': 'Request failed',
+  'import.github.access':
+    'Couldn’t open this repository or branch. Check the link and your GitHub account’s access.',
+  'import.github.connect': 'Private repositories need a GitHub account with read access.',
   'import.importConfigFile.description': 'Error reason: {{reason}}',
   'import.importConfigFile.title': 'Import Failed',
   'import.incompatible.description':
@@ -130,9 +137,9 @@ export default {
   'response.QuotaLimitReachedCloud':
     'The model service is currently under heavy load. Please try again later or switch to another model.',
   'response.FreePlanLimit':
-    'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+    'Your free allowance is used up. Top up or upgrade your plan to continue, or use a model on your own API key.',
   'response.InsufficientBudgetForAgentRunFee':
-    'Not enough credits to pay the agent run fee. Each agent run carries a fee, even on your own CLI account. Top up or upgrade your plan, then try again.',
+    'Not enough credits to pay the agent run fee. Each agent run carries a small fee, including runs on your own CLI account. Top up or upgrade your plan, then try again.',
   'response.InsufficientBudgetForModel':
     'Your remaining balance is insufficient for this model. Please top up, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':
@@ -318,6 +325,7 @@ export default {
   'upload.desc': 'Details: {{detail}}',
   'upload.fileOnlySupportInServerMode':
     'The current deployment mode does not support uploading non-image files. To upload files in {{ext}} format, please switch to server database deployment or use the {{cloud}} service.',
+  'upload.fileTooLarge': 'This file is over the {{max}} upload limit and can’t be uploaded.',
   'upload.networkError':
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
   'upload.serviceUnavailable':
@@ -340,6 +348,8 @@ export default {
   'upload.permissionDenied': "You don't have permission to upload files in this workspace.",
   'upload.storageLimitExceeded':
     'Your file storage has reached the plan limit. Please upgrade your plan or delete unused files to free up space.',
+  'upload.storageRejected':
+    'The file storage service rejected the upload ({{detail}}). Please try again later.',
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',

@@ -8,10 +8,9 @@ import { highlightMessageWhenScrollSettles } from '@/features/Portal/TopicCommen
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { getLocalBackgroundTaskStopper } from '@/store/chat/slices/agentRun/actions/transports/hetero/backgroundTasks';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
-import { sectionStyles } from '../sectionStyles';
+import { SectionHeader } from '../SectionHeader';
+import { sectionProps } from '../sectionStyles';
 import {
   type BackgroundTaskItem,
   groupBackgroundTasks,
@@ -23,6 +22,7 @@ import { BackgroundTaskRow } from './BackgroundTaskRow';
 import { useBackgroundTasks } from './useBackgroundTasks';
 
 interface BackgroundTasksSectionProps {
+  afterBreak?: boolean;
   /** Routes the output read to a connected device; empty for this device. */
   deviceId?: string;
   /** Whether this client can read the run's files (this device or a connected one). */
@@ -42,10 +42,13 @@ const locate = ({ toolCallId }: BackgroundTaskItem) => {
 
 /**
  * Background tasks a Claude Code run started (`run_in_background` Bash,
- * Monitor), Better Coding Experience only. Running ones all show; finished ones
- * fold to the most recent few.
+ * Monitor). Running ones all show; finished ones fold to the most recent few.
  */
-const BackgroundTasksBody = ({ deviceId, outputReadable }: BackgroundTasksSectionProps) => {
+export const BackgroundTasksSection = ({
+  afterBreak,
+  deviceId,
+  outputReadable,
+}: BackgroundTasksSectionProps) => {
   const { t } = useTranslation('chat');
   const { items, liveOperations } = useBackgroundTasks();
   const [showAllFinished, setShowAllFinished] = useState(false);
@@ -81,13 +84,11 @@ const BackgroundTasksBody = ({ deviceId, outputReadable }: BackgroundTasksSectio
   );
 
   return (
-    <Flexbox className={sectionStyles.section}>
-      <Flexbox horizontal align={'center'} className={sectionStyles.sectionHeader} gap={6}>
-        <span className={sectionStyles.sectionTitle}>
-          {t('workingPanel.overview.backgroundTasks.title')}
-        </span>
-        {running.length > 0 && <span className={sectionStyles.count}>{running.length}</span>}
-      </Flexbox>
+    <Flexbox {...sectionProps(afterBreak)}>
+      <SectionHeader
+        count={running.length > 0 ? running.length : undefined}
+        title={t('workingPanel.overview.backgroundTasks.title')}
+      />
       {running.map(renderRow)}
       {finished.map(renderRow)}
       {(hiddenCount > 0 || showAllFinished) && (
@@ -104,11 +105,4 @@ const BackgroundTasksBody = ({ deviceId, outputReadable }: BackgroundTasksSectio
       )}
     </Flexbox>
   );
-};
-
-/** Renders nothing unless the Better Coding Experience lab is on. */
-export const BackgroundTasksSection = (props: BackgroundTasksSectionProps) => {
-  const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-  if (!enabled) return null;
-  return <BackgroundTasksBody {...props} />;
 };

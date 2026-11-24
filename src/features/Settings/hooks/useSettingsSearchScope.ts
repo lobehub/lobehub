@@ -16,8 +16,17 @@ const MERGED_TABS: Partial<Record<string, readonly SettingsSearchTab[]>> = {
   [SettingsTabs.Usage]: [SettingsTabs.Credits],
 };
 
+/**
+ * Follow-up / input completion live on Conversation; the Service Model page
+ * hides them, so its keywords must not match them either.
+ */
+const KEYWORD_OWNER_TABS: readonly SettingsSearchTab[] = [SettingsTabs.Conversation];
+
 /** Settings-search scope for the personal sidebar. */
 export const usePersonalSettingsSearchScope = (
   categoryGroups: SettingsSearchCategoryGroup[],
 ): SettingsSearchScope =>
-  useMemo(() => ({ categoryGroups, mergedTabs: MERGED_TABS }), [categoryGroups]);
+  useMemo(
+    () => ({ categoryGroups, keywordOwnerTabs: KEYWORD_OWNER_TABS, mergedTabs: MERGED_TABS }),
+    [categoryGroups],
+  );

@@ -4,6 +4,7 @@ import type {
   ChannelMemberConfig,
   ChannelMemberRole,
   ChannelReplyJob,
+  ChannelThreadMention,
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
@@ -22,25 +23,33 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
-  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
+  sharedAgentFields,
+  sharedAgentView,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
+import type { ChannelContacts } from './contacts';
+import { noChannelContacts } from './contacts';
+import { deleteMessage } from './delete';
 import { findThread } from './delivery';
+import { withDisplayTitles } from './displayTitle';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
+import { syncMemberGrant } from './grants';
 import { channelLastMessages } from './lastMessage';
 import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
-import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
+import { notificationsMutedSql, setNotificationsMuted } from './notificationMute';
+import { openPeerConversation, peerOf } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
 import { postAgentMessage } from './post';
@@ -51,18 +60,29 @@ import {
   readOpenChannel,
 } from './projectAccess';
 import { joinPublicChannel, listJoinableChannels } from './publicAccess';
-import { retryJob } from './retry';
+import { type ChannelRetryMode, retryJob } from './retry';
 import { retryRouting } from './routing';
+import { type ChannelSearchOptions, searchChannelMessages } from './search';
+import { ChannelSectionRepository } from './sections';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
+import { channelMentionCounts, channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
-import { createChannelThread, readChannelView } from './view';
+import { createChannelThread, readChannelView, viewerJobs } from './view';
+import {
+  readWakeConfig,
+  replaceChannelWake,
+  replaceMemberWake,
+  wakeRecordScope,
+  withMemberWake,
+} from './wake';
 
 export type { ChannelAddAgentInput } from './agent';
 export { memberEnvironment } from './agent';
+export { channelAttachments } from './attachments';
 export {
   CHANNEL_ROUTING_BATCH_SIZE,
   CHANNEL_ROUTING_LEASE_MS,
@@ -74,6 +94,9 @@ export type {
   ChannelRoutedDevice,
   ChannelRoutedDeviceInput,
 } from './claim';
+export type { ChannelContacts } from './contacts';
+export { noChannelContacts } from './contacts';
+export * from './displayTitle';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
@@ -85,7 +108,10 @@ export type {
   ChannelOpeningDecision,
 } from './opening';
 export type { ChannelAgentPostInput } from './post';
+export type { ChannelReplyErrorDraft, ChannelReplyErrorFacts } from './replyError';
+export type { ChannelRetryMode } from './retry';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
+export { ChannelSectionRepository } from './sections';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
@@ -110,23 +136,20 @@ const WORKSPACE_MANAGER_ROLES = ['owner', 'admin'];
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
-/** A member config with its reply strategy set, or without one when `wake` is empty. */
-/** An environment plus the member's own settings that live beside it: reply strategy and mute. */
-const withMemberWake = (
-  config: ChannelMemberConfig,
-  wake: Record<string, unknown> | null | undefined,
-  muted: boolean | undefined,
-): ChannelMemberConfig => ({ ...config, ...(wake && { wake }), ...(muted && { muted }) });
-
 export class ChannelRepository {
   private readonly workspaceId: string | null;
+  /** The caller's own sidebar sections in this scope. */
+  readonly sections: ChannelSectionRepository;
 
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     workspaceId?: string | null,
+    /** Who counts as a contact for one-on-one and personal-group checks; nobody by default. */
+    private readonly contacts: ChannelContacts = noChannelContacts,
   ) {
     this.workspaceId = normalizeWorkspaceId(workspaceId);
+    this.sections = new ChannelSectionRepository(db, userId, this.workspaceId);
   }
 
   /** Opens the unique direct conversation, or creates a group with its initial members. */
@@ -135,10 +158,11 @@ export class ChannelRepository {
     /** The direct conversation's Agent environment; the caller resolved and checked it. */
     agentConfig?: ChannelMemberConfig;
     agents?: ChannelAddAgentInput[];
+    metadata?: ChannelItem['metadata'];
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
-    /** Workspace people a group starts with, checked the same way as adding them later. */
+    /** People a group starts with, checked the same way as adding them later. */
     userIds?: string[];
     /** The direct conversation binds another person's Agent through its live link share. */
     sharedAgent?: boolean;
@@ -168,6 +192,7 @@ export class ChannelRepository {
       }
       const insert = tx.insert(channels).values({
         agentId,
+        metadata: params.metadata,
         projectId: params.projectId,
         userId: this.userId,
         title: params.title,
@@ -186,11 +211,11 @@ export class ChannelRepository {
       const member = await this.addOwner(tx, channel.id);
 
       if (agentId)
-        await addAgentMember(tx, channel, this.userId, { agentId, config: params.agentConfig });
-      for (const agent of params.agents ?? [])
-        await addAgentMember(tx, channel, this.userId, agent);
+        await addAgentMember(tx, channel, member, { agentId, config: params.agentConfig });
+      for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
       const access = { channel, member } satisfies ChannelAccess;
-      for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
+      for (const userId of new Set(params.userIds))
+        await addChannelUser(tx, this.contacts, access, userId);
 
       return access;
     });
@@ -198,7 +223,7 @@ export class ChannelRepository {
   /**
    * Inviting into a direct conversation starts a group instead, and the direct conversation stays
    * as it is. The group holds its person and Agent, the Agent keeping its channel-local
-   * environment, joined by the invited Agents and workspace people.
+   * environment, joined by the invited Agents and people.
    */
   createGroupFromDirect = async (
     channelId: string,
@@ -230,15 +255,15 @@ export class ChannelRepository {
           .returning();
         const member = await this.addOwner(tx, channel.id);
         const access = { channel, member } satisfies ChannelAccess;
-        await addAgentMember(tx, channel, this.userId, {
+        await addAgentMember(tx, channel, member, {
           agentId: direct.agentId,
           config: bound.config ?? undefined,
           description: bound.description,
           name: bound.name ?? undefined,
         });
-        for (const agent of params.agents ?? [])
-          await addAgentMember(tx, channel, this.userId, agent);
-        for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
+        for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
+        for (const userId of new Set(params.userIds))
+          await addChannelUser(tx, this.contacts, access, userId);
         return access;
       },
       { minRole: 'admin' },
@@ -246,7 +271,7 @@ export class ChannelRepository {
 
   /** Adds a usable Agent reference; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
-    this.write(channelId, (tx, { channel }) => addAgentMember(tx, channel, this.userId, input), {
+    this.write(channelId, (tx, { channel, member }) => addAgentMember(tx, channel, member, input), {
       minRole: 'admin',
     });
 
@@ -274,7 +299,7 @@ export class ChannelRepository {
   ) =>
     this.write(
       channelId,
-      async (tx) => {
+      async (tx, access) => {
         const current = await requireAgentMember(tx, channelId, memberId);
         const [member] = await tx
           .update(channelMembers)
@@ -289,6 +314,7 @@ export class ChannelRepository {
           .where(eq(channelMembers.id, memberId))
           .returning();
         await audit(tx, channelId, 'member_environment_changed', memberId);
+        await syncMemberGrant(tx, access.channel, member, access.member);
         return member;
       },
       { minRole: 'admin' },
@@ -299,65 +325,22 @@ export class ChannelRepository {
    * `null` means the defaults apply. Validation belongs to the shared wake schema in the caller.
    */
   wakeConfig = async (channelId: string) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const members = await tx
-          .select({ config: channelMembers.config, id: channelMembers.id })
-          .from(channelMembers)
-          .where(
-            and(
-              eq(channelMembers.channelId, channelId),
-              eq(channelMembers.actorType, 'agent'),
-              eq(channelMembers.status, 'active'),
-            ),
-          );
-        return {
-          channel: channel.config?.wake ?? null,
-          members: members.map((member) => ({
-            memberId: member.id,
-            wake: member.config?.wake ?? null,
-          })),
-        };
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => readWakeConfig(tx, channel), { minRole: 'admin' });
 
   /**
    * Whose records one Agent member's wake decisions are filed under: its Agent's owner, in the
    * channel's workspace. `null` when the Agent has no owner left to file them under.
    */
   memberWakeRecordScope = async (channelId: string, memberId: string) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const member = await requireAgentMember(tx, channelId, memberId);
-        const [agent] = await tx
-          .select({ userId: agents.userId })
-          .from(agents)
-          .where(eq(agents.id, member.agentId));
-        return agent?.userId ? { userId: agent.userId, workspaceId: channel.workspaceId } : null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => wakeRecordScope(tx, channel, memberId), {
+      minRole: 'admin',
+    });
 
   /** Replaces the channel's reply strategy; `null` returns it to the defaults. */
   updateChannelWakeConfig = async (channelId: string, wake: Record<string, unknown> | null) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const { wake: _previous, ...rest } = channel.config ?? {};
-        const config = wake ? { ...rest, wake } : rest;
-        const [updated] = await tx
-          .update(channels)
-          .set({ config: Object.keys(config).length ? config : null })
-          .where(eq(channels.id, channelId))
-          .returning();
-        await audit(tx, channelId, 'wake_config_changed', channelId, { reset: !wake });
-        return updated.config?.wake ?? null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => replaceChannelWake(tx, channel, wake), {
+      minRole: 'admin',
+    });
 
   /**
    * Replaces one Agent member's own reply strategy over the channel's; `null` removes it. Its
@@ -368,22 +351,9 @@ export class ChannelRepository {
     memberId: string,
     wake: Record<string, unknown> | null,
   ) =>
-    this.write(
-      channelId,
-      async (tx) => {
-        const current = await requireAgentMember(tx, channelId, memberId);
-        const [member] = await tx
-          .update(channelMembers)
-          .set({
-            config: withMemberWake(memberEnvironment(current.config), wake, current.config?.muted),
-          })
-          .where(eq(channelMembers.id, memberId))
-          .returning();
-        await audit(tx, channelId, 'member_wake_config_changed', memberId, { reset: !wake });
-        return member.config?.wake ?? null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx) => replaceMemberWake(tx, channelId, memberId, wake), {
+      minRole: 'admin',
+    });
 
   rename = async (channelId: string, title: string) =>
     this.write(
@@ -444,7 +414,9 @@ export class ChannelRepository {
   };
 
   addUser = async (channelId: string, userId: string) =>
-    this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
+    this.write(channelId, (tx, access) => addChannelUser(tx, this.contacts, access, userId), {
+      minRole: 'admin',
+    });
 
   /** Removes a person or an Agent; returns the writers still to stop. See {@link removeChannelMember}. */
   removeMember = async (channelId: string, memberId: string): Promise<ChannelJobItem[]> =>
@@ -468,46 +440,53 @@ export class ChannelRepository {
       { allowArchived: true },
     );
 
-  /** People a new Channel in this workspace can start with. */
-  newChannelUserCandidates = async (search?: string) => {
-    const { workspaceId } = this;
-    if (!workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
-    return this.db.transaction((tx) =>
-      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+  /** People a new Channel in this scope can start with. */
+  newChannelUserCandidates = async (search?: string) =>
+    this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, this.contacts, this.workspaceId, this.userId, search),
     );
-  };
 
   userCandidates = async (channelId: string, search?: string) =>
-    this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
-      minRole: 'admin',
-    });
-
-  detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) => {
-    if (!(await this.findAccess(channelId)))
-      return readOpenChannel(this.db, this.userId, this.workspaceId, channelId, options);
-    return this.write(
+    this.write(
       channelId,
-      async (tx, access) => {
-        if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
-        const admin = hasRole(access.member.role, 'admin');
-        const view = await readChannelView(tx, channelId, options, this.userId);
-        return {
-          channel: { ...access.channel, canDelete: admin },
-          joined: true,
-          ...view,
-          jobs: view.jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
-            ...job,
-            // Mirrors `stop`: the requester or an admin.
-            canStop: admin || requesterMemberId === access.member.id,
-            // Only the viewer who runs the reply can follow it into its topic; for anyone else
-            // the job carries no topic at all.
-            ...(topicId && topicOwnerId === this.userId ? { topicId } : {}),
-          })),
-        };
+      (tx, access) => channelUserCandidates(tx, this.contacts, access, search),
+      {
+        minRole: 'admin',
       },
-      { allowArchived: true, allowTrashed: true },
     );
+
+  /** Messages in a Channel the caller can read, its live Threads included, matching `query`. */
+  searchMessages = async (channelId: string, options: ChannelSearchOptions) => {
+    const access = await this.findAccess(channelId);
+    return this.db.transaction(async (tx) => {
+      const readable = access
+        ? !access.channel.isDeleted
+        : !!(await findOpenChannel(tx, this.userId, this.workspaceId, channelId));
+      if (!readable) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      return searchChannelMessages(tx, channelId, options);
+    });
+  };
+
+  /** Takes no channel lock, so a busy Channel's sends and job updates never queue a read. */
+  detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) => {
+    const view = await this.db.transaction(async (tx) => {
+      const access = await this.memberAccess(tx, channelId);
+      if (!access) return;
+      if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      const admin = hasRole(access.member.role, 'admin');
+      const notificationsMuted = access.member.metadata?.notificationsMuted === true;
+      const view = await readChannelView(tx, channelId, options, this.userId);
+      const shared = await sharedAgentView(tx, access.channel, this.userId);
+      return {
+        channel: { ...access.channel, canDelete: admin, notificationsMuted, ...shared.channel },
+        joined: true,
+        sharedAgentOwner: shared.owner,
+        ...view,
+        // Mirrors `stop`: the requester or an admin.
+        jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
+      };
+    });
+    return view ?? readOpenChannel(this.db, this.userId, this.workspaceId, channelId, options);
   };
 
   createThread = async (channelId: string, input: Parameters<typeof createChannelThread>[2]) =>
@@ -530,7 +509,16 @@ export class ChannelRepository {
       { allowArchived: true, allowTrashed: true },
     );
 
-  /** Pins the conversation atop the caller's own list, or unpins it; nobody else sees it. */
+  /** Turns the caller's own push notifications for the conversation off or on. */
+  setNotificationsMuted = async (channelId: string, muted: boolean) =>
+    this.write(
+      channelId,
+      (tx, { member }) =>
+        setNotificationsMuted(tx, { memberId: member.id, userId: this.userId }, muted),
+      { allowArchived: true, allowTrashed: true },
+    );
+
+  /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
     this.write(
       channelId,
@@ -539,13 +527,43 @@ export class ChannelRepository {
         await tx.update(channelMembers).set({ pinnedAt }).where(eq(channelMembers.id, member.id));
         return pinnedAt;
       },
+      { allowArchived: true, allowTrashed: true, joinOpen: pinned },
+    );
+
+  /**
+   * Files the conversation under one of the caller's own sections (joining an open one), or back
+   * into its built-in section with `null`; nobody else sees it.
+   */
+  moveToSection = async (channelId: string, sectionId: string | null) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        if (sectionId) await this.sections.assertOwned(tx, sectionId);
+        await tx.update(channelMembers).set({ sectionId }).where(eq(channelMembers.id, member.id));
+        return sectionId;
+      },
+      { allowArchived: true, allowTrashed: true, joinOpen: sectionId !== null },
+    );
+
+  /**
+   * Hides the conversation from the caller's own list, or shows it again; the next message
+   * brings it back by itself.
+   */
+  setHidden = async (channelId: string, hidden: boolean) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        await tx.update(channelMembers).set({ hidden }).where(eq(channelMembers.id, member.id));
+        return hidden;
+      },
       { allowArchived: true, allowTrashed: true },
     );
 
   /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list. Active open
-   * project Channels the caller has not joined follow with `joined: false`.
+   * project Channels the caller has not joined follow with `joined: false`. A conversation
+   * between two Agents is left out: it opens from the report where the asking began.
    */
   list = async (): Promise<
     Array<
@@ -558,10 +576,15 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
+        hidden: boolean;
+        notificationsMuted: boolean;
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
+        sectionId: string | null;
         sharedAgentHandle: string | null;
+        threadMentions: ChannelThreadMention[];
         unreadCount: number;
+        displayTitle: string;
       }
     >
   > => {
@@ -571,10 +594,13 @@ export class ChannelRepository {
         agentVisibility: agents.visibility,
         agentWorkspaceId: agents.workspaceId,
         channel: channels,
+        hidden: channelMembers.hidden,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
+        notificationsMuted: notificationsMutedSql(),
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
+        sectionId: channelMembers.sectionId,
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
@@ -582,7 +608,9 @@ export class ChannelRepository {
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .leftJoin(agents, eq(agents.id, channels.agentId))
       .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
-      .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
+      .where(
+        and(this.membershipWhere(), notTrashed(channels.isDeleted), isNull(channels.agentPairKey)),
+      )
       .orderBy(desc(channels.createdAt));
     const open = await listUnjoinedOpenChannels(this.db, this.userId, this.workspaceId);
     const previewIds = [...rows.map(({ channel }) => channel.id), ...open.map(({ id }) => id)];
@@ -634,24 +662,13 @@ export class ChannelRepository {
     const unreadMemberIds = rows
       .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
       .map(({ memberId }) => memberId);
-    const mentioned = unreadMemberIds.length
-      ? await this.db
-          .select({
-            channelId: channelMessages.channelId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(channelMessages)
-          .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
-          .where(
-            and(
-              inArray(channelMembers.id, unreadMemberIds),
-              sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
-              sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
-            ),
-          )
-          .groupBy(channelMessages.channelId)
-      : [];
-    const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
+    const mentionCountOf = await channelMentionCounts(this.db, unreadMemberIds);
+
+    // Thread mentions outlive the read position, which opening the main conversation moves.
+    const threadMentionsOf = await channelThreadMentions(
+      this.db,
+      rows.map(({ memberId }) => memberId),
+    );
 
     // A group Channel's list avatar pictures its first members; a direct one, its Agent or the
     // other person, which also pictures a shared Agent the caller has no sidebar row for.
@@ -681,28 +698,40 @@ export class ChannelRepository {
     }
 
     const joined = rows.map(
-      ({ channel, lastReadSequence, pinnedAt, role, shareId, shareSlug, ...agent }) => {
-        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
+      ({
+        channel,
+        hidden,
+        lastReadSequence,
+        notificationsMuted,
+        pinnedAt,
+        role,
+        sectionId,
+        shareId,
+        shareSlug,
+        ...agent
+      }) => {
         return {
           ...channel,
           agentIds: agentIdsOf.get(channel.id) ?? [],
-          sharedAgent,
-          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
           canDelete: hasRole(role, 'admin'),
+          hidden,
           joined: true,
           lastMessage: lastMessageOf.get(channel.id) ?? null,
           memberAvatars: avatarsOf.get(channel.id) ?? [],
           memberRole: role,
           mentionCount: mentionCountOf.get(channel.id) ?? 0,
+          notificationsMuted,
           peerUserId: peerOf(channel, this.userId),
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
+          sectionId,
+          threadMentions: threadMentionsOf.get(channel.id) ?? [],
           unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
         };
       },
     );
-    return [
+    const items = [
       ...joined,
       // Not joined: nothing is unread or pending for the caller yet.
       ...open.map((channel) => ({
@@ -711,17 +740,22 @@ export class ChannelRepository {
         sharedAgent: false,
         sharedAgentHandle: null,
         canDelete: false,
+        hidden: false,
         joined: false,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
         memberRole: null,
         mentionCount: 0,
+        notificationsMuted: false,
         peerUserId: peerOf(channel, this.userId),
         pinnedAt: null,
         replyJobs: [],
+        sectionId: null,
+        threadMentions: [],
         unreadCount: 0,
       })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return withDisplayTitles(this.db, items);
   };
 
   /**
@@ -730,36 +764,14 @@ export class ChannelRepository {
    * existing conversation opens as it is, trashed or not.
    */
   openPeer = (peerUserId: string, title: string): Promise<ChannelAccess> =>
-    this.db.transaction(async (tx) => {
-      if (peerUserId === this.userId)
-        throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
-      await requirePeerRelation(tx, this.workspaceId, this.userId, peerUserId);
-      // No unique index keeps one conversation per pair: serialize opening it, so two people
-      // opening it at once (or one twice) find the first one instead of creating a second.
-      await lockPeerPair(tx, this.workspaceId, this.userId, peerUserId);
-      const existing = await findPeer(tx, this.workspaceId, this.userId, peerUserId);
-      if (existing) return existing;
-
-      const [channel] = await tx
-        .insert(channels)
-        .values({
-          peerUserId,
-          title,
-          userId: this.userId,
-          visibility: 'private',
-          workspaceId: this.workspaceId,
-        })
-        .returning();
-      const member = await this.addOwner(tx, channel.id);
-      await tx.insert(channelMembers).values({
-        actorType: 'user',
-        channelId: channel.id,
-        lastReadSequence: 0,
-        role: 'owner',
-        userId: peerUserId,
-      });
-      return { channel, member };
-    });
+    this.db.transaction((tx) =>
+      openPeerConversation(tx, this.contacts, {
+        peerUserId,
+        title,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      }),
+    );
 
   /** The conversation in which one of the caller's Agents asks another. See {@link openAgentPair}. */
   openAgentPair = (params: Parameters<typeof openAgentPair>[2]): Promise<ChannelAgentPairAccess> =>
@@ -797,7 +809,7 @@ export class ChannelRepository {
       .select({
         agentId: channelMembers.agentId,
         agentName: agents.name,
-        agentTitle: agents.title,
+        agentTitle: agentTitleSql(),
         channelId: channelMembers.channelId,
         description: sql<
           string | null
@@ -869,16 +881,7 @@ export class ChannelRepository {
 
       // Read membership only after the lock: a removal or demotion committed by the previous
       // lock holder must be visible here, not the snapshot from before the wait.
-      const [row] = await tx
-        .select({ channel: channels, member: channelMembers, role: this.callerRole() })
-        .from(channels)
-        .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
-        .where(and(eq(channels.id, channelId), this.membershipWhere()))
-        .limit(1);
-      let access: ChannelAccess | undefined = row && {
-        channel: row.channel,
-        member: { ...row.member, role: row.role },
-      };
+      let access: ChannelAccess | undefined = await this.memberAccess(tx, channelId);
       if (!access && options.joinOpen) {
         // Joining is itself a write, so a trashed or archived Channel stays closed to newcomers.
         const open = await findOpenChannel(tx, this.userId, this.workspaceId, channelId);
@@ -910,7 +913,9 @@ export class ChannelRepository {
   /** Posts a message as the caller. See {@link sendMessage} for routing. */
   /** Sending into an open project Channel joins it first. */
   send = async (channelId: string, input: ChannelSendInput): Promise<ChannelMessageItem> =>
-    this.write(channelId, (tx, access) => sendMessage(tx, access, input), { joinOpen: true });
+    this.write(channelId, (tx, access) => sendMessage(tx, access, input, this.contacts), {
+      joinOpen: true,
+    });
 
   /**
    * Stops one job (its requester or an admin) or a branch: everything for admins, only the
@@ -1088,6 +1093,17 @@ export class ChannelRepository {
   editMessage = async (channelId: string, messageId: string, content: string) =>
     this.write(channelId, (tx) => editMessage(tx, channelId, this.userId, messageId, content));
 
+  /** Deletes the caller's own message, or any as an admin; see `deleteMessage`. */
+  deleteMessage = async (channelId: string, messageId: string): Promise<ChannelJobItem[]> =>
+    this.write(channelId, (tx, { member }) =>
+      deleteMessage(
+        tx,
+        channelId,
+        { admin: hasRole(member.role, 'admin'), userId: this.userId },
+        messageId,
+      ),
+    );
+
   /** Sends an unassigned message back to the decision model. Its author or an admin may retry. */
   retryRouting = async (channelId: string, messageId: string): Promise<ChannelMessageItem> =>
     this.write(channelId, async (tx, { member }) => {
@@ -1102,22 +1118,15 @@ export class ChannelRepository {
       return retryRouting(tx, channelId, messageId);
     });
 
-  /**
-   * Queues a reply that could not reach its device again. Like a stop, only its requester or an
-   * admin may retry it.
-   */
-  retryJob = async (channelId: string, jobId: string): Promise<ChannelJobItem> =>
-    this.write(channelId, async (tx, { member }) => {
-      if (!hasRole(member.role, 'admin')) {
-        const [job] = await tx
-          .select({ requesterMemberId: channelJobs.requesterMemberId })
-          .from(channelJobs)
-          .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
-        if (job && job.requesterMemberId !== member.id)
-          throw new ChannelError('FORBIDDEN', 'Only the requester or an admin can retry this job');
-      }
-      return retryJob(tx, channelId, jobId);
-    });
+  /** Queues a failed reply again, like a stop only by its requester or an admin. */
+  retryJob = async (
+    channelId: string,
+    jobId: string,
+    mode: ChannelRetryMode = 'retry',
+  ): Promise<ChannelJobItem> =>
+    this.write(channelId, (tx, { member }) =>
+      retryJob(tx, channelId, jobId, mode, hasRole(member.role, 'admin') ? undefined : member.id),
+    );
 
   private addOwner = async (tx: Transaction, channelId: string) => {
     const [member] = await tx
@@ -1150,6 +1159,17 @@ export class ChannelRepository {
       )
       .limit(1);
     return row;
+  };
+
+  /** The caller's active membership, with the role permission checks see. */
+  private memberAccess = async (tx: Transaction, channelId: string) => {
+    const [row] = await tx
+      .select({ channel: channels, member: channelMembers, role: this.callerRole() })
+      .from(channels)
+      .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .where(and(eq(channels.id, channelId), this.membershipWhere()))
+      .limit(1);
+    return row && { channel: row.channel, member: { ...row.member, role: row.role } };
   };
 
   /**

@@ -15,6 +15,7 @@ import { marked, type Token, type Tokens } from 'marked';
 import { safeMatterOptions } from '@/server/utils/safeMatterOptions';
 
 import { SkillManifestError, SkillParseError } from './errors';
+import { type GitHubSkillDirectory, readGitHubArchive } from './githubArchive';
 
 export interface ParseSkillMdOptions {
   /**
@@ -27,6 +28,18 @@ export interface ParseSkillMdOptions {
 
 /** Max length of a description derived from SKILL.md body text */
 const DERIVED_DESCRIPTION_MAX_LENGTH = 300;
+
+/**
+ * Unzip guardrails (T-29): a small ZIP may declare huge entries and inflate into
+ * gigabytes inside a shared serverless process. fflate allocates each entry's
+ * output by its declared `originalSize` and cannot emit more than that, so
+ * bounding the declared sizes before inflation bounds the memory a package can
+ * consume. The count and total values match the archive scan limits in
+ * `githubArchive.ts`; the per-file value matches `MAX_FILE_PARSE_SIZE`.
+ */
+const MAX_ZIP_FILE_COUNT = 50_000;
+const MAX_ZIP_FILE_SIZE = 64 * 1024 * 1024;
+const MAX_ZIP_TOTAL_SIZE = 128 * 1024 * 1024;
 
 export interface ParseZipOptions extends ParseSkillMdOptions {
   /**
@@ -130,6 +143,16 @@ export class SkillParser {
     }
   }
 
+  async parseGitHubDirectory(
+    directory: GitHubSkillDirectory,
+    fallbackName?: string,
+  ): Promise<ParsedZipSkill> {
+    const { markdown, resources } = directory;
+    const { manifest, content } = this.parseSkillMd(markdown, { fallbackName });
+    const skillZipBuffer = await this.repackSkillZip(markdown, resources);
+    return { content, manifest, resources, skillZipBuffer, zipHash: sha256(skillZipBuffer) };
+  }
+
   /**
    * Parse ZIP package
    * @param buffer - ZIP file Buffer
@@ -138,6 +161,12 @@ export class SkillParser {
    */
   async parseZipPackage(buffer: Buffer, options?: ParseZipOptions): Promise<ParsedZipSkill> {
     try {
+      if (options?.repackSkillZip) {
+        const path = options.basePath?.replaceAll(/^\/|\/$/g, '') ?? '';
+        const directory = (await readGitHubArchive(buffer, path)).get(path);
+        if (!directory) throw new SkillParseError('SKILL.md not found in zip package');
+        return this.parseGitHubDirectory(directory, options.fallbackName || path.split('/').at(-1));
+      }
       const unzipped = await this.unzipBuffer(buffer);
 
       // Find SKILL.md (support root directory, first-level subdirectory, or specified basePath)
@@ -154,13 +183,6 @@ export class SkillParser {
 
       // Extract resource files
       const resources = this.extractResources(unzipped, skillMdPath);
-
-      // If repackSkillZip is true, create a new ZIP with only the skill files
-      if (options?.repackSkillZip) {
-        const skillZipBuffer = await this.repackSkillZip(skillMdContent, resources);
-        const zipHash = sha256(skillZipBuffer);
-        return { content, manifest, resources, skillZipBuffer, zipHash };
-      }
 
       // Calculate ZIP hash from original buffer
       const zipHash = sha256(buffer);
@@ -283,10 +305,36 @@ export class SkillParser {
    */
   private unzipBuffer(buffer: Buffer): Promise<Record<string, Uint8Array>> {
     return new Promise((resolve, reject) => {
-      fflateUnzip(new Uint8Array(buffer), (error, unzipped) => {
-        if (error) reject(new SkillParseError('Failed to unzip buffer', error));
-        else resolve(unzipped);
-      });
+      let fileCount = 0;
+      let totalSize = 0;
+      fflateUnzip(
+        new Uint8Array(buffer),
+        {
+          filter(entry) {
+            if (++fileCount > MAX_ZIP_FILE_COUNT) {
+              throw new SkillParseError(
+                `Skill package exceeds the ${MAX_ZIP_FILE_COUNT} file-count limit`,
+              );
+            }
+            if (entry.originalSize > MAX_ZIP_FILE_SIZE) {
+              throw new SkillParseError(
+                `Skill package file "${entry.name}" exceeds the ${MAX_ZIP_FILE_SIZE} byte single-file limit`,
+              );
+            }
+            totalSize += entry.originalSize;
+            if (totalSize > MAX_ZIP_TOTAL_SIZE) {
+              throw new SkillParseError(
+                `Skill package exceeds the ${MAX_ZIP_TOTAL_SIZE} byte total extracted size limit`,
+              );
+            }
+            return true;
+          },
+        },
+        (error, unzipped) => {
+          if (error) reject(new SkillParseError('Failed to unzip buffer', error));
+          else resolve(unzipped);
+        },
+      );
     });
   }
 

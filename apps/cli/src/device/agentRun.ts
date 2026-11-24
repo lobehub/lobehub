@@ -13,6 +13,7 @@ import {
 } from '@lobechat/heterogeneous-agents/protocol';
 import type { ClaudeCodeAccountRouting } from '@lobechat/heterogeneous-agents/quota';
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
+import type { CodexCollaborationMode, HeteroPermissionMode } from '@lobechat/types';
 
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
 import { registerAgentRun } from './agentRunRegistry';
@@ -27,11 +28,15 @@ export interface SpawnHeteroAgentRunParams {
   claudeAccountRouting?: ClaudeCodeAccountRouting;
   /** Entrypoint name the agent asked Claude Code to report. */
   claudeCodeEntrypoint?: string;
+  /** Codex Plan switch, forwarded in the input envelope. */
+  collaborationMode?: CodexCollaborationMode;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
   jwt: string;
   operationId: string;
+  /** Claude Code permission mode, forwarded in the input envelope. */
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   /** System context used only by the automatic retry without native resume. */
   resumeFallbackSystemContext?: string;
@@ -141,8 +146,10 @@ function startHeteroAgentRun(
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
   const stdinPayload = buildHeteroExecStdinPayload({
+    collaborationMode: params.collaborationMode,
     imageList,
     isNewSession: !resumeSessionId,
+    permissionMode: params.permissionMode,
     prompt,
     resumeFallbackSystemContext,
     systemContext,

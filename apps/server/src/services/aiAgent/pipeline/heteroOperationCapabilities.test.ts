@@ -19,6 +19,21 @@ describe('heteroOperationCapabilities', () => {
     expect(capabilities).not.toContain('goal:manage');
   });
 
+  it('lets a turn the user sent in a chat message for them, but not read a Channel', () => {
+    const capabilities = heteroOperationCapabilities('send tj a message', { userTurn: true });
+    expect(capabilities).toContain('channel:message');
+    expect(capabilities).not.toContain('channel:read');
+  });
+
+  it('keeps Channel messaging out of Task and server-started runs', () => {
+    expect(
+      heteroOperationCapabilities('send tj a message', { taskId: 'task_1', userTurn: true }),
+    ).not.toContain('channel:message');
+    expect(heteroOperationCapabilities('send tj a message', { taskId: 'task_1' })).not.toContain(
+      'channel:message',
+    );
+  });
+
   it('grants goal management to a /goal run', () => {
     expect(heteroOperationCapabilities('/goal ship the report')).toContain('goal:manage');
   });
@@ -54,6 +69,7 @@ describe('heteroOperationCapabilities', () => {
       'hetero:ingest',
       'hetero:finish',
       'hetero:intervention:read',
+      'work:write',
     ]);
     expect(heteroOperationCapabilities(undefined)).not.toContain('goal:manage');
   });
@@ -68,5 +84,30 @@ describe('heteroOperationCapabilities', () => {
 
   it('keeps acceptance evidence out of a run with no Task', () => {
     expect(heteroOperationCapabilities('fix the build', {})).not.toContain('acceptance:evidence');
+  });
+
+  it.each([
+    ['an ordinary run', {}],
+    ['a Task run', { taskId: 'task_1' }],
+    ['a Channel dispatch', { channel: true }],
+    ['a user turn', { userTurn: true }],
+  ])('lets %s register its own Works', (_, options) => {
+    expect(heteroOperationCapabilities('make the deck', options)).toContain('work:write');
+  });
+});
+
+describe('heteroOperationCapabilities for a share visitor', () => {
+  it.each([
+    ['a /goal prompt', '/goal ship the report', { userTurn: true }],
+    ['a task', 'do the step', { taskId: 'task_1', userTurn: true }],
+    ['a channel', 'read the discussion', { channel: true, ownerBotTurn: true }],
+    ['a chat turn', 'send tj a message', { userTurn: true }],
+  ])('grants only the run callbacks and its own Works for %s', (_, prompt, options) => {
+    expect(heteroOperationCapabilities(prompt, { ...options, shareVisitor: true })).toEqual([
+      'hetero:ingest',
+      'hetero:finish',
+      'hetero:intervention:read',
+      'work:write',
+    ]);
   });
 });

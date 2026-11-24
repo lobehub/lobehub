@@ -50,13 +50,14 @@ export default {
   'assistants.duplicateAdd.content': '“{{title}}” is already in your Agents. Add another copy?',
   'assistants.duplicateAdd.ok': 'Add copy',
   'assistants.duplicateAdd.title': 'Add duplicate?',
-  'assistants.empty.description': 'Try adjusting filters, or explore more Agents in the Community.',
+  'assistants.empty.description':
+    'Try adjusting filters, or explore more Agents in the Marketplace.',
   'assistants.empty.search': 'No matching Agents found',
   'assistants.empty.title': 'No Agents found',
   'assistants.list': 'Agent List',
-  'assistants.marketSource.label': 'Switch Community Source',
-  'assistants.marketSource.legacy': 'Legacy Community',
-  'assistants.marketSource.new': 'New Community',
+  'assistants.marketSource.label': 'Switch Marketplace Source',
+  'assistants.marketSource.legacy': 'Legacy Marketplace',
+  'assistants.marketSource.new': 'New Marketplace',
   'assistants.more': 'More',
   'assistants.plugins': 'Integrated Skills',
   'assistants.recentSubmits': 'Recent Updates',
@@ -69,7 +70,7 @@ export default {
   'assistants.status.archived.reasons.owner': 'The creator archived or removed this Agent.',
   'assistants.status.archived.subtitle': 'This Agent has been archived. Possible reasons:',
   'assistants.status.archived.title': 'Agent archived',
-  'assistants.status.backToMarket': 'Back to Agent Community',
+  'assistants.status.backToMarket': 'Back to Marketplace',
   'assistants.status.deprecated.reasons.official':
     'The platform removed this Agent due to security, policy, or other concerns.',
   'assistants.status.deprecated.reasons.owner': 'The creator rejected or removed this Agent.',
@@ -87,6 +88,131 @@ export default {
   'assistants.withKnowledge': 'This Agent includes Libraries',
   'assistants.withPlugin': 'This Agent includes Skills',
   'back': 'Back to Discovery',
+  'apps.addMcp': 'Custom',
+  'apps.back': 'Back',
+  'apps.detail.category': 'Category',
+  'apps.detail.connected': 'Connected',
+  'apps.detail.developer': 'Developer',
+  'apps.detail.info': 'Information',
+  'apps.detail.integrator': 'Integrated by',
+  'apps.detail.website': 'Website',
+  'apps.category.automation': 'Automation',
+  'apps.category.coding': 'Developer tools',
+  'apps.category.communication': 'Communication',
+  'apps.category.data': 'Data & analytics',
+  'apps.category.design': 'Design & media',
+  'apps.category.documents': 'Docs & knowledge',
+  'apps.category.finance': 'Finance & trading',
+  'apps.category.other': 'Other',
+  'apps.category.productivity': 'Productivity',
+  'apps.category.research': 'Search & research',
+  'apps.category.sales': 'Sales & marketing',
+  'apps.chatCapability': 'Chat with your Agent',
+  'apps.connect': 'Connect',
+  'apps.connected': 'Connected apps',
+  'apps.continue': 'Continue setup',
+  'apps.description': 'Connect the apps you use to chat with your Agent or give it tools.',
+  'apps.empty': 'No apps available',
+  'apps.manage': 'Manage',
+  'apps.mcpDescription': 'Find MCP servers and connect custom servers to your Agents.',
+  'apps.noInstalledMcp': 'No installed MCP servers yet',
+  'apps.noMatches': 'No matching apps',
+  'apps.noneConnected': 'No connected apps yet',
+  'apps.summary.channel.discord': 'Chat privately with your Agent',
+  'apps.summary.channel.linq': 'Text your Agent from your phone',
+  'apps.summary.channel.slack': 'Chat with your Agent in DMs or channels',
+  'apps.summary.channel.telegram': 'Choose which Agent replies to your messages',
+  'apps.summary.channel.wechat': 'Scan to start a private chat',
+  'apps.summary.tool.airtable': 'Find and update records',
+  'apps.summary.tool.cal-com': 'Check availability and book meetings',
+  'apps.summary.tool.clickup': 'Create tasks and track project progress',
+  'apps.summary.tool.confluence': 'Search and organize team documentation',
+  'apps.summary.tool.dropbox': 'Share files and manage versions',
+  'apps.summary.tool.figma': 'Browse components and export design assets',
+  'apps.summary.tool.github': 'Review pull requests and track issues',
+  'apps.summary.tool.gmail': 'Search, draft, and send email',
+  'apps.summary.tool.google-calendar': 'Check availability and schedule events',
+  'apps.summary.tool.google-docs': 'Write and edit documents',
+  'apps.summary.tool.google-drive': 'Find, organize, and share files',
+  'apps.summary.tool.google-sheets': 'Update cells and analyze spreadsheet data',
+  'apps.summary.tool.hubspot': 'Manage contacts and track deals',
+  'apps.summary.tool.jira': 'Update tickets and plan sprints',
+  'apps.summary.tool.linear': 'Track issues and project progress',
+  'apps.summary.tool.microsoft': 'Schedule meetings and set reminders',
+  'apps.summary.tool.notion': 'Find pages and update databases',
+  'apps.summary.tool.onedrive': 'Upload and share cloud files',
+  'apps.summary.tool.outlook-mail': 'Search messages and organize your inbox',
+  'apps.summary.tool.posthog': 'Analyze funnels and review experiments',
+  'apps.summary.tool.salesforce': 'Track leads and update opportunities',
+  'apps.summary.tool.slack': 'Search conversations and send messages',
+  'apps.summary.tool.supabase': 'Query databases and manage storage',
+  'apps.summary.tool.twitter': 'Publish posts and track mentions',
+  'apps.summary.tool.vercel': 'Check deployments and build logs',
+  'apps.summary.tool.whatsapp': 'Send messages and reply to customers',
+  'apps.summary.tool.youtube': 'Find videos and read transcripts',
+  'apps.summary.tool.zendesk': 'Create and track support tickets',
+  'apps.toolCapability': 'Agent tools',
+  'apps.unavailable': 'This app is unavailable.',
+  'marketplaceAgents.add': 'Add',
+  'marketplaceAgents.addFailed': "Couldn't add it. Please try again.",
+  'marketplaceAgents.added': 'Added',
+  'marketplaceAgents.by': 'by {{name}}',
+  'marketplaceAgents.community': 'Community',
+  'marketplaceAgents.detail.add': 'Add Agent',
+  'marketplaceAgents.detail.author': 'Author',
+  'marketplaceAgents.detail.category': 'Category',
+  'marketplaceAgents.detail.copyLink': 'Copy link',
+  'marketplaceAgents.detail.info': 'Information',
+  'marketplaceAgents.detail.message': 'Message',
+  'marketplaceAgents.detail.notAdded': 'Not added',
+  'marketplaceAgents.detail.noticeCommunity':
+    'Made by community member {{author}}, not reviewed by LobeHub. Once added, it can take actions for you.',
+  'marketplaceAgents.detail.noticeVerified':
+    'Made by {{author}} and reviewed by LobeHub before listing. Once added, it can take actions for you.',
+  'marketplaceAgents.detail.showAll': 'Show all',
+  'marketplaceAgents.detail.showLess': 'Show less',
+  'marketplaceAgents.detail.skills': 'Skills',
+  'marketplaceAgents.detail.source': 'Source',
+  'marketplaceAgents.detail.sourceCommunity': 'Community',
+  'marketplaceAgents.detail.sourceVerified': 'Reviewed by LobeHub',
+  'marketplaceAgents.detail.updatedAt': 'Updated',
+  'marketplaceAgents.detail.version': 'Version',
+  'marketplaceAgents.emptySearch': 'No matching Agents',
+  'marketplaceAgents.featured': 'Featured',
+  'marketplaceAgents.installed': 'Added {{name}} to your Agents',
+  'marketplaceAgents.noDescription': 'No description',
+  'marketplaceAgents.skillCount': '{{count}} skills',
+  'marketplaceAgents.tabs.all': 'All',
+  'marketplaceAgents.tabs.public': 'Public',
+  'marketplaceAgents.tabs.verified': 'Verified',
+  'tab.apps': 'Apps',
+  'tab.mcp': 'MCP Servers',
+  'catalog.add': 'Add',
+  'catalog.agentDescription':
+    'Find Agents and groups for tasks like writing, coding, and research.',
+  'catalog.allAgents': 'All Agents',
+  'catalog.allConnectors': 'All connectors',
+  'catalog.allSkills': 'All skills',
+  'catalog.back': 'Back to Discover',
+  'catalog.installed': 'Installed',
+  'catalog.manageInstalledConnectors': 'Manage installed connectors',
+  'catalog.manageInstalledSkills': 'Manage installed skills',
+  'catalog.new': 'New & Noteworthy',
+  'catalog.noVerifiedConnectors': 'No verified connectors available',
+  'catalog.popular': 'Popular',
+  'catalog.public': 'Public',
+  'catalog.recommended': 'Recommended',
+  'catalog.retry': 'Retry',
+  'catalog.rowAction': '{{action}} {{name}}',
+  'catalog.searchAgents': 'Search Agents',
+  'catalog.searchIn': 'Search in {{name}}',
+  'catalog.searchResults': 'Results for “{{keyword}}”',
+  'catalog.sectionError': "Couldn't load this group",
+  'catalog.verified': 'Verified',
+  'catalog.viewAll': 'View all',
+  'catalog.viewAllIn': 'View all in {{name}}',
+  'catalog.yourMcpServers': 'Your MCP servers',
+  'catalog.yourSkills': 'Your skills',
   'category.assistant.academic': 'Academic',
   'category.assistant.all': 'All',
   'category.assistant.career': 'Career',
@@ -117,7 +243,7 @@ export default {
   'cleanFilter': 'Clear Filter',
   'create': 'Create',
   'createGuide.func1.desc1': 'In a conversation, open the Agent settings from the top-right menu.',
-  'createGuide.func1.desc2': 'Then click Submit to Agent Community in the top-right corner.',
+  'createGuide.func1.desc2': 'Then click Submit to Marketplace in the top-right corner.',
   'createGuide.func1.tag': 'Option 1',
   'createGuide.func1.title': 'Submit in LobeHub',
   'createGuide.func2.button': 'Open GitHub Agent repo',
@@ -146,8 +272,8 @@ export default {
   'filterBy.timePeriod.week': 'Last 7 Days',
   'filterBy.timePeriod.year': 'Last Year',
   'footer.desc':
-    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Community.',
-  'footer.title': 'Share your creation on LobeHub Community today',
+    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Marketplace.',
+  'footer.title': 'Share your creation on LobeHub Marketplace today',
 
   'fork.alreadyForked': 'You have already forked this agent. Navigating to your fork...',
 
@@ -165,7 +291,7 @@ export default {
   'fork.forksCount_other': '{{count}} forks',
 
   'fork.orgSetupRequired.memberContent':
-    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Community → Workspace.",
+    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Marketplace → Workspace.",
   'fork.orgSetupRequired.ownerContent':
     'This workspace has not yet set up a Community profile. Set one up to fork agents from the marketplace into your workspace.',
   'fork.orgSetupRequired.ownerOk': 'Go to setup',
@@ -186,7 +312,7 @@ export default {
   'home.creatorReward.subtitle': '2026 Creator Reward Program is officially live.',
   'home.creatorReward.title': 'Create. Share. Get Paid.',
 
-  'home.communityAgents': 'Community Agents',
+  'home.communityAgents': 'Marketplace Agents',
 
   'home.featuredAssistants': 'Featured Agents',
 
@@ -654,7 +780,7 @@ export default {
 
   'mcp.sorts.updatedAt': 'Recently Updated',
 
-  'mcp.title': 'MCP Community',
+  'mcp.title': 'MCP Marketplace',
 
   'mcp.unvalidated.desc': 'This MCP Server has not been validated yet',
 
@@ -787,7 +913,7 @@ export default {
 
   'plugins.builtinTag': 'Built-in',
 
-  'plugins.community': 'Community Skills',
+  'plugins.community': 'Marketplace Skills',
 
   'plugins.details.settings.title': 'Skill Settings',
 
@@ -1127,9 +1253,14 @@ export default {
 
   'skills.sorts.updatedAt': 'Recently Updated',
 
+  'skillView.discover': 'Discover',
+  'skillView.installed': 'Installed',
+
   'toc.permalink': 'Permalink for this section',
 
-  'tab.assistant': 'Agent',
+  'tab.assistant': 'Agents',
+
+  'tab.connector': 'Connectors',
 
   'tab.home': 'Home',
 
@@ -1178,14 +1309,14 @@ export default {
   'user.myProfile': 'My Profile',
 
   'user.workspaceProfile.cancel': 'Cancel',
-  'user.workspaceProfile.description': 'Update the public workspace profile shown in Community.',
+  'user.workspaceProfile.description':
+    'Update the public workspace profile shown in the Marketplace.',
   'user.workspaceProfile.errors.displayName': 'Enter a workspace name',
   'user.workspaceProfile.errors.fileTooLarge': 'Image must be smaller than 2 MB',
   'user.workspaceProfile.errors.namespace.length': 'Handle must be 3-32 characters',
   'user.workspaceProfile.errors.namespace.pattern':
     'Use lowercase letters, numbers, and hyphens. Start and end with a letter or number.',
   'user.workspaceProfile.errors.namespace.required': 'Enter a Community handle',
-  'user.workspaceProfile.errors.uploadFailed': 'Failed to upload avatar',
   'user.workspaceProfile.errors.url': 'Enter a valid URL',
   'user.workspaceProfile.failed': 'Failed to update workspace profile',
   'user.workspaceProfile.fields.avatar': 'Avatar',
@@ -1205,7 +1336,8 @@ export default {
   'user.workspaceProfile.fields.namespace.available': 'This URL is available',
   'user.workspaceProfile.fields.namespace.checking': 'Checking availability…',
   'user.workspaceProfile.fields.namespace.placeholder': 'workspace-handle',
-  'user.workspaceProfile.fields.namespace.taken': 'This URL is already taken',
+  'user.workspaceProfile.fields.namespace.taken':
+    'This URL is already taken. Try a different handle.',
   'user.workspaceProfile.fields.websiteUrl': 'Website',
   'user.workspaceProfile.fields.websiteUrl.placeholder': 'Workspace website link',
   'user.workspaceProfile.optional.toggle': 'More settings',
@@ -1240,7 +1372,6 @@ export default {
   'user.workspaceProfile.settings.members.role.admin': 'Admin',
   'user.workspaceProfile.settings.members.role.member': 'Member',
   'user.workspaceProfile.settings.members.sync': 'Sync members',
-  'user.workspaceProfile.settings.members.syncFailed': 'Failed to sync members',
   'user.workspaceProfile.settings.members.syncHint':
     'Sync the current workspace members to the Community organization.',
   'user.workspaceProfile.settings.members.syncSuccess': 'Members synced',
@@ -1259,7 +1390,6 @@ export default {
   'user.workspaceProfile.settings.tabs.members': 'Members',
   'user.workspaceProfile.settings.tabs.profile': 'Profile',
   'user.workspaceProfile.settings.title': 'Community Profile Settings',
-  'user.workspaceProfile.settings.updateFailed': 'Failed to update Community profile',
   'user.workspaceProfile.settings.updateSuccess': 'Community profile updated',
   'user.workspaceProfile.settings.website.description':
     'Add a website shown on the Community profile.',
@@ -1271,13 +1401,14 @@ export default {
 
   'user.noAgents': 'This user hasn’t published any Agents yet',
 
-  'user.noAgents.ownerDescription': 'Create your first Agent and share it with the Community.',
+  'user.noAgents.ownerDescription': 'Create your first Agent and share it on the Marketplace.',
 
   'user.noAgents.title': 'No Agents yet',
 
   'user.org.noAgents': 'This organization hasn’t published any Agents yet',
 
-  'user.workspace.noAgents': 'This organization has not published any Agents to Community yet.',
+  'user.workspace.noAgents':
+    'This organization has not published any Agents to the Marketplace yet.',
 
   'user.noFavoriteAgents': 'No saved Agents yet',
 
@@ -1286,7 +1417,7 @@ export default {
   'user.noGroups.title': 'No Agent Groups yet',
 
   'user.workspace.noGroups':
-    'This organization has not published any Agent Groups to Community yet.',
+    'This organization has not published any Agent Groups to the Marketplace yet.',
 
   'user.noForkedAgentGroups': 'No forked Agent Groups yet',
 
@@ -1334,9 +1465,17 @@ export default {
   'user.submit': 'Submit',
   'user.submitRepo': 'Submit Repo',
   'user.submitRepoDescription':
-    'Submit your GitHub repository to import your Skills or MCPs to the community.',
+    'Submit your GitHub repository to import your Skills or MCPs to the Marketplace.',
   'user.submitRepoError': 'Failed to submit repository. Please try again.',
   'user.submitRepoHint': 'The repository will be reviewed before being published.',
   'user.submitRepoSuccess': 'Repository submitted successfully! It will be reviewed shortly.',
   'user.submitRepoTitle': 'Submit Your Repository',
+  'user.workspaceProfile.errors.saveFailed':
+    "Couldn't save your profile. Check your network and try again.",
+  'user.workspaceProfile.errors.uploadFailedRetry':
+    'Upload failed. Check your network and try again.',
+  'user.workspaceProfile.settings.members.syncFailedRetry':
+    "Couldn't sync members. Check your network and click Sync members again.",
+  'user.workspaceProfile.settings.updateFailedRetry':
+    "Couldn't save. Check your network and click Save again.",
 };

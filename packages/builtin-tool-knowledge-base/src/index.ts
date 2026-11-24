@@ -24,6 +24,8 @@ export {
   type RemoveFilesArgs,
   type SearchKnowledgeBaseArgs,
   type SearchKnowledgeBaseState,
+  type UpdateDocumentArgs,
+  type UpdateDocumentState,
   type ViewKnowledgeBaseArgs,
   type ViewKnowledgeBaseState,
 } from './types';

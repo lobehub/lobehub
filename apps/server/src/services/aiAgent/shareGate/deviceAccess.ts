@@ -1,8 +1,9 @@
 import debug from 'debug';
 
-import { UserModel } from '@/database/models/user';
+import { getAddressBook } from '@/business/server/contact/addressBook';
 import type { AgentShareConfig } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { isChannelEnabled } from '@/server/services/channel/featureGate';
 
 import { DEVICE_TOOL_IDENTIFIERS, REMOTE_DEVICE_TOOL_IDENTIFIERS } from '../deviceToolRegistry';
 
@@ -27,47 +28,58 @@ export const SHARE_DEVICE_BUILTIN_IDENTIFIERS: ReadonlySet<string> = new Set(
 export const isShareDeviceBuiltin = (identifier: string) =>
   SHARE_DEVICE_BUILTIN_IDENTIFIERS.has(identifier);
 
+/** The share fields the device decision reads: its config and the scope that owns its address book. */
+export interface ShareDeviceAccessSubject {
+  ownerId: string;
+  shareConfig: Pick<AgentShareConfig, 'deviceAccess' | 'deviceAllowUserIds'>;
+  workspaceId?: string | null;
+}
+
 /**
  * Whether `visitorUserId` may run on the shared agent's execution environment.
  *
  * The only place `shareConfig.deviceAccess` is interpreted; every share-gate
  * builder calls it so a fresh turn and a deferred init decide alike.
  *
- * `allowlist` matches the visitor's account email only when it is verified:
- * an unverified address is a claim anyone can make at sign-up, and the grant
- * hands over the creator's machine. Deployments that never verify email
- * therefore fail closed under `allowlist`; `all` still works there.
+ * `everyone` grants every visitor: the share link (which requires sign-in)
+ * is the whole grant, so it reads neither the list nor the address book.
+ *
+ * `contacts` grants every visitor currently in the address book of the
+ * Agent's scope. `allowlist` grants a listed visitor only while they are still
+ * in that address book (`AddressBook.filterAddressBookPeople`):
+ * the owner's personal contacts, or the workspace's members and external
+ * contacts. The list was checked against the same book when written; checking
+ * again here makes removing a contact, or leaving the workspace, revoke the
+ * grant without anyone editing the share. The address book exists only while
+ * Channels are enabled for the owner, so turning them off grants nothing.
  */
 export const resolveShareVisitorDeviceAccess = async (
   db: LobeChatDatabase,
-  shareConfig: Pick<AgentShareConfig, 'deviceAccess' | 'deviceAllowEmails'>,
+  share: ShareDeviceAccessSubject,
   visitorUserId: string,
 ): Promise<boolean> => {
-  switch (shareConfig.deviceAccess) {
-    case 'all': {
-      return true;
-    }
-    case 'allowlist': {
-      const allowEmails = shareConfig.deviceAllowEmails;
-      if (!allowEmails?.length) {
-        log('allowlist denied visitor %s: the list is empty', visitorUserId);
-        return false;
-      }
+  const { deviceAccess, deviceAllowUserIds } = share.shareConfig;
+  if (deviceAccess === 'everyone') return true;
+  if (deviceAccess !== 'allowlist' && deviceAccess !== 'contacts') return false;
 
-      const visitor = await UserModel.findById(db, visitorUserId);
-      if (!visitor?.email || !visitor.emailVerified) {
-        // The most likely creator complaint ("I listed them but it doesn't
-        // work"), so it gets its own line; never log the address itself.
-        log('allowlist denied visitor %s: no verified account email', visitorUserId);
-        return false;
-      }
-
-      const listed = allowEmails.includes(visitor.email.trim().toLowerCase());
-      if (!listed) log('allowlist denied visitor %s: email not listed', visitorUserId);
-      return listed;
-    }
-    default: {
-      return false;
-    }
+  // `contacts` skips the list: being in the address book is the whole grant.
+  if (deviceAccess === 'allowlist' && !deviceAllowUserIds?.includes(visitorUserId)) {
+    log('allowlist denied visitor %s: not listed', visitorUserId);
+    return false;
   }
+
+  if (!(await isChannelEnabled(share.ownerId))) {
+    log('allowlist denied visitor %s: contacts are off for the owner', visitorUserId);
+    return false;
+  }
+
+  const [inBook] = await getAddressBook(
+    db,
+    share.ownerId,
+    share.workspaceId,
+  ).filterAddressBookPeople([visitorUserId]);
+  // The most likely creator complaint ("I listed them but it doesn't work"),
+  // so it gets its own line.
+  if (!inBook) log('allowlist denied visitor %s: no longer in the address book', visitorUserId);
+  return !!inBook;
 };

@@ -1728,7 +1728,7 @@ lossless tool result
       const service = new AgentDocumentsService(db, userId);
       const result = await service.getAgentContextDocuments('agent-1');
 
-      expect(mockModel.findContextByAgent).toHaveBeenCalledWith('agent-1');
+      expect(mockModel.findContextByAgent).toHaveBeenCalledWith('agent-1', undefined);
       expect(result).toMatchObject([
         { content: 'raw content', id: 'always-doc' },
         { content: '', contentCharCount: 12_000, id: 'progressive-doc' },

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SkillsManifest } from './manifest';
 import { resolveSkillsManifest } from './resolveManifest';
-import { systemPrompt } from './systemRole';
+import { deviceSystemPrompt, systemPrompt } from './systemRole';
 import { SkillsApiName } from './types';
 
 const EXEC_APIS = [SkillsApiName.runCommand, SkillsApiName.execScript, SkillsApiName.exportFile];
@@ -48,8 +48,12 @@ describe('resolveSkillsManifest', () => {
       expect(apiNames).toContain(SkillsApiName.activateSkill);
       expect(apiNames).toContain(SkillsApiName.readReference);
 
-      // cross-tool arbitration rides the tool systemRole, not the descriptions
-      expect(result.systemRole).toContain(systemPrompt);
+      // cross-tool arbitration rides the tool systemRole, not the descriptions,
+      // and the device role omits cloud-sandbox runCommand / exportFile / sandbox_environment
+      expect(result.systemRole).toContain(deviceSystemPrompt);
+      expect(result.systemRole).not.toContain('exportFile');
+      expect(result.systemRole).not.toContain('<sandbox_environment>');
+      expect(result.systemRole).not.toContain('{{sandbox_workspace}}');
       expect(result.systemRole).toContain('`execScript` runs skill scripts on the device');
       expect(result.systemRole).toContain('`lobe-local-system` runCommand');
     },

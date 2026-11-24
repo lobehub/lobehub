@@ -36,9 +36,21 @@ runs:
         overlay-ref: ${{ inputs.overlay-ref }}
         overlay-token: ${{ inputs.overlay-token }}
 
+    # The overlay root ships no lockfile, so pnpm resolves from package.json ranges
+    # on every run. The root `pnpm-lock.yaml` is gitignored, so the key hashes the
+    # tracked dependency declarations instead — hashing an absent file would pin one
+    # key forever and stop the store from ever taking new tarballs.
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/pnpm-store
+        key: pnpm-store-${{ runner.os }}-v1-${{ hashFiles('package.json', 'pnpm-workspace.yaml', 'apps/*/package.json', 'packages/*/package.json', 'patches/*.patch', 'apps/desktop/pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-v1-
+
     - name: Install dependencies
       shell: bash
-      run: cd .. && pnpm install --node-linker=hoisted
+      run: cd .. && pnpm install --node-linker=hoisted --store-dir "$RUNNER_TEMP/pnpm-store" --prefer-offline
 
     - name: Type check overlaid sources
       shell: bash

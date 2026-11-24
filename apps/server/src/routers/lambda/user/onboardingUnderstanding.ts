@@ -2,6 +2,7 @@ import type {
   ConfirmOnboardingUnderstandingInput,
   ConfirmOnboardingUnderstandingResult,
   CreateOnboardingTasksInput,
+  OnboardingGenerationProgressEvent,
   OnboardingTaskRecommendationPollingResult,
   OnboardingTaskRecommendationTopicInput,
   OnboardingUnderstandingPollingResult,
@@ -143,6 +144,15 @@ const waitForProgressRecovery = (delay: number, signal: AbortSignal | undefined)
     );
   });
 
+/**
+ * A session with no selected source has nothing scheduled, so no workflow will ever publish
+ * progress for it. Keeping its stream open only ends in the Vercel 300s timeout followed by an
+ * EventSource reconnect, repeating for as long as the onboarding page stays open. The client opens
+ * a fresh stream after it adds sources through `revise`, so ending the idle stream loses nothing.
+ */
+const isIdleOnboardingGenerationProgress = (progress: OnboardingGenerationProgressEvent) =>
+  progress.phase === 'collecting-sources' && progress.steps.collectSources === 'pending';
+
 export const onboardingUnderstandingRouter = router({
   confirmOnboardingUnderstanding: understandingServiceProcedure
     .input(confirmOnboardingUnderstandingInputSchema)
@@ -196,7 +206,8 @@ export const onboardingUnderstandingRouter = router({
       if (
         initial.progress.phase === 'completed' ||
         initial.progress.phase === 'failed' ||
-        initial.progress.phase === 'partial'
+        initial.progress.phase === 'partial' ||
+        isIdleOnboardingGenerationProgress(initial.progress)
       ) {
         return;
       }

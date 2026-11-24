@@ -32,6 +32,7 @@ export {
   resolveAgentDocumentIndex,
   type ResolveAgentDocumentIndexInput,
   type ResolvedAgentDocumentIndex,
+  reusablePinnedAgentDocumentIndex,
   sortByPriority,
   takeAgentDocumentIndexSnapshot,
   withRunStartedAt,

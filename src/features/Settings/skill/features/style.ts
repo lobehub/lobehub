@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const styles = stylex.create({
   connected: {
     fontSize: '12px',
@@ -40,7 +42,7 @@ export const styles = stylex.create({
   },
   title: {
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     color: { 'default': cssVar.colorText, ':hover': cssVar.colorPrimary },
   },
 });

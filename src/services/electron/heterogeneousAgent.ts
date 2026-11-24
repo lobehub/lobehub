@@ -15,7 +15,9 @@ import type {
   AntigravityQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  CodexCollaborationMode,
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -55,6 +57,10 @@ class HeterogeneousAgentService {
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
+    /** Claude Code permission mode; absent allows everything. */
+    permissionMode?: HeteroPermissionMode;
+    /** Codex Plan switch; absent sends no collaboration mode. */
+    collaborationMode?: CodexCollaborationMode;
     prompt: string;
     /**
      * Replay the session's on-disk transcript instead of spawning the CLI.
@@ -95,6 +101,16 @@ class HeterogeneousAgentService {
   /** Stop one background task of a local Claude Code SDK run. */
   async stopBackgroundTask(sessionId: string, taskId: string) {
     return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
+  }
+
+  /** Switch a local Claude Code run's permission mode (the composer's mode chip). */
+  async setPermissionMode(sessionId: string, mode: HeteroPermissionMode) {
+    return this.ipc.heterogeneousAgent.setPermissionMode({ mode, sessionId });
+  }
+
+  /** Flip a local native Codex thread's Plan switch; it applies from the next turn. */
+  async setCollaborationMode(sessionId: string, mode: CodexCollaborationMode) {
+    return this.ipc.heterogeneousAgent.setCollaborationMode({ mode, sessionId });
   }
 
   async stopSession(sessionId: string) {

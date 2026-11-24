@@ -1,11 +1,9 @@
 import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
-  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -21,12 +19,10 @@ import {
   Info,
   KeyboardIcon,
   KeyIcon,
-  KeyRound,
   Map,
-  MessageCircleIcon,
+  MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
-  PlugIcon,
   Sparkles,
   TagIcon,
   TerminalSquare,
@@ -49,7 +45,6 @@ import {
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
   Account = 'account',
@@ -86,9 +81,12 @@ export const useCategory = () => {
     userProfileSelectors.nickName(s),
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
+  // Advanced holds gateway mode and desktop diagnostics; on the web without
+  // gateway mode it would be an empty page.
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const showAdvanced = isDesktop || enableGatewayMode;
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -112,6 +110,11 @@ export const useCategory = () => {
         icon: PaletteIcon,
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
+      },
+      {
+        icon: MessagesSquareIcon,
+        key: SettingsTabs.Conversation,
+        label: t('tab.conversation'),
       },
       !mobile && {
         icon: KeyboardIcon,
@@ -174,11 +177,6 @@ export const useCategory = () => {
         key: SettingsTabs.ServiceModel,
         label: t('tab.serviceModel'),
       },
-      {
-        icon: SkillsIcon,
-        key: SettingsTabs.Skill,
-        label: t('tab.skill'),
-      },
       ENABLE_TOOL_CHANNEL_SETTINGS && {
         icon: Wrench,
         key: SettingsTabs.Tools,
@@ -205,25 +203,8 @@ export const useCategory = () => {
     // Connection group — the outside services agents can reach, whoever owns
     // the binding. Every entry here is already the user's own.
     const connectionItems: CategoryItem[] = [
-      // The bots are LobeHub-operated: their credentials are only ever written
-      // by the cloud admin, so a self-hosted deployment has nothing to bind to.
-      enableBusinessFeatures && {
-        icon: MessageCircleIcon,
-        key: SettingsTabs.Messenger,
-        label: t('tab.messenger'),
-      },
-      {
-        icon: PlugIcon,
-        key: SettingsTabs.Integrations,
-        label: t('tab.integrations'),
-      },
-      {
-        icon: Blocks,
-        key: SettingsTabs.Connector,
-        label: t('tab.connector'),
-      },
       // What connectors fire on their own: the event subscriptions agents made
-      // through them. Next to the connectors they come from.
+      // through them. Connectors themselves are managed in the Marketplace.
       enableWebhook && {
         icon: ZapIcon,
         key: SettingsTabs.Automations,
@@ -235,18 +216,15 @@ export const useCategory = () => {
         key: SettingsTabs.Webhooks,
         label: t('tab.webhooks'),
       },
-      {
-        icon: KeyRound,
-        key: SettingsTabs.Creds,
-        label: t('tab.creds'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
-    groups.push({
-      items: connectionItems,
-      key: SettingsGroupKey.Connection,
-      title: t('group.connection'),
-    });
+    // Every entry is conditional, so a self-hosted deployment may have none.
+    if (connectionItems.length > 0)
+      groups.push({
+        items: connectionItems,
+        key: SettingsGroupKey.Connection,
+        title: t('group.connection'),
+      });
 
     // Resource group — where agents run.
     const resourceItems: CategoryItem[] = [
@@ -262,12 +240,13 @@ export const useCategory = () => {
         key: SettingsTabs.SubscriptionAccounts,
         label: t('tab.subscriptionAccounts'),
       },
-      // Always there: a code environment is a definition, written down before
-      // anything runs it, and useful with or without a drive to run it on.
+      // Environments & Vault, always there: what a run starts from and
+      // the secrets it reads, in one place. An environment is a definition,
+      // written down before anything runs it, so it needs no drive.
       {
         icon: ContainerIcon,
         key: SettingsTabs.Environments,
-        label: t('tab.environments'),
+        label: t('tab.environmentsAndCreds'),
       },
       isDesktop && {
         icon: EthernetPort,
@@ -300,12 +279,12 @@ export const useCategory = () => {
         key: SettingsTabs.Trash,
         label: t('tab.trash'),
       },
-      {
+      showAdvanced && {
         icon: EllipsisIcon,
         key: SettingsTabs.Advanced,
         label: t('tab.advanced'),
       },
-      (showApiKeyManage || isDevMode) && {
+      showApiKeyManage && {
         icon: KeyIcon,
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
@@ -344,9 +323,9 @@ export const useCategory = () => {
     mobile,
     showApiKeyManage,
     showProvider,
-    isDevMode,
     enableOAuthApps,
     enableWebhook,
+    showAdvanced,
     avatarUrl,
     username,
   ]);

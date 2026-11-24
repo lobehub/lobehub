@@ -1,5 +1,6 @@
 import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
-import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { channelMessageDeletedAt } from '@lobechat/types';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem, TopicItem } from '../../schemas';
@@ -15,11 +16,13 @@ import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
+import { requestMissingGrant } from './grants';
 import { buildManifest } from './manifest';
+import { findMergeableRequests, mergeJobs } from './merge';
 import type { ChannelTopicScope } from './topic';
-import { continuationTopic, resolveTopic } from './topic';
+import { continuationTopic, resolveTopic, resumableTopic } from './topic';
 import { audit } from './transaction';
-import { assignedWorktree } from './worktree';
+import { assignedWorktree, sharesDirectory } from './worktree';
 
 export interface ChannelClaimOptions {
   /** How long the claimer may go without a heartbeat before reconcile takes over. */
@@ -30,10 +33,10 @@ export interface ChannelClaimOptions {
   onlineDeviceIds?: string[];
   /**
    * The device a run with no device picked in the Channel will route to, from the Agent's own
-   * settings as the requester's ordinary conversation would resolve them, and whether it is
-   * online for that requester; undefined when it needs none or would wake it. Lets an offline
-   * Agent-bound device wait like a Channel one. Its presence is the requester's, which may
-   * include their personal device, so it stays out of `onlineDeviceIds`. Only consulted with
+   * settings as the execution identity's ordinary conversation would resolve them, and whether it
+   * is online for that identity; undefined when it needs none or would wake it. Lets an offline
+   * Agent-bound device wait like a Channel one. Its presence is that identity's, which may
+   * include a personal device, so it stays out of `onlineDeviceIds`. Only consulted with
    * `onlineDeviceIds`.
    */
   routedDevice?: (run: ChannelRoutedDeviceInput) => Promise<ChannelRoutedDevice | undefined>;
@@ -54,8 +57,12 @@ export interface ChannelRoutedDeviceInput {
    */
   continuation?: Pick<TopicItem, 'agentId' | 'groupId' | 'metadata' | 'projectWorkingDirectoryId'>;
   executionConfig: ChannelExecutionConfig;
-  /** The requester: the run executes as them, with their device preference for the Agent. */
+  /**
+   * The execution identity, with its device preference for the Agent: the requester, or a shared
+   * Agent's owner, whose device the visitor's run uses.
+   */
   userId: string;
+  /** The run's scope: the Channel's, or a shared Agent's owner scope. */
   workspaceId: string | null;
 }
 
@@ -118,6 +125,7 @@ const deviceBlock = async (
   tx: Transaction,
   channel: ChannelItem,
   member: ChannelMemberItem,
+  job: Pick<ChannelJobItem, 'requesterMemberId'>,
 ): Promise<Block | undefined> => {
   const { deviceId, deviceOwnerId, workingDirectory } = member.config ?? {};
   if (workingDirectory && !deviceId)
@@ -147,6 +155,11 @@ const deviceBlock = async (
     .select()
     .from(channelMemberGrants)
     .where(eq(channelMemberGrants.memberId, member.id));
+  // Picked while the device was public, then made private: ask its owner now.
+  if (!grant) {
+    await requestMissingGrant(tx, channel, member, job.requesterMemberId);
+    return APPROVAL_PENDING;
+  }
   if (
     !grant ||
     grant.deviceId !== deviceId ||
@@ -202,6 +215,39 @@ const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
   'workspace_changed',
 ]);
 
+/**
+ * The run that answers a request: the job whose manifest lists the message in its batch. A request
+ * settled as `merged` has no writer and no queued row of its own — the run that merged it holds it.
+ */
+const answeringRun = async (
+  tx: Transaction,
+  channelId: string,
+  memberId: string,
+  messageId: string,
+) => {
+  const [owner] = await tx
+    .select({
+      blockedCode: channelJobs.blockedCode,
+      isolatedAt: channelJobs.isolatedAt,
+      publishedMessageId: channelJobs.publishedMessageId,
+      status: channelJobs.status,
+      writerHeld: channelJobs.writerHeld,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        inArray(channelJobs.status, ['queued', 'running', 'completed']),
+        sql`${channelJobs.manifest} -> 'requestMessageIds' @> ${JSON.stringify([messageId])}::jsonb`,
+      ),
+    )
+    .orderBy(desc(channelJobs.claimedAt))
+    .limit(1);
+
+  return owner;
+};
+
 /** The job of the member a deferred follow-up waits for, on the same message. */
 const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string) => {
   const [primary] = await tx
@@ -218,7 +264,14 @@ const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string
         eq(channelJobs.memberId, memberId),
       ),
     );
-  return primary;
+  // The request was queued right behind an earlier one of the same person and answered by that
+  // earlier request's run, which settles it as `merged`. Its answer is the batch's answer, so the
+  // follow-up waits for, and reads the reply of, the run that merged it.
+  if (primary?.status !== 'merged') return primary;
+
+  const owner = await answeringRun(tx, job.channelId, memberId, job.messageId);
+
+  return owner ?? primary;
 };
 
 /**
@@ -279,6 +332,12 @@ export const claimJob = async (
     .select()
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
+  // A request deleted while this job waited must not run: its tombstone carries no text or
+  // mentions, so the run would answer a message that no longer exists.
+  if (channelMessageDeletedAt(request.metadata)) {
+    await cancel(tx, job, 'request_deleted');
+    return null;
+  }
   // An earlier undecided message in this branch may still enqueue this member ahead of it, and
   // so may the Thread's root while it is undecided. Checking only jobs would let a later
   // request overtake it while another worker routes it. Other branches never hold this one.
@@ -324,24 +383,34 @@ export const claimJob = async (
   }
 
   // A Thread follows its root: the member answers the root on the main timeline first.
-  const [rootReply] = thread
+  const [root] = thread
     ? await tx
-        .select({ id: channelJobs.id })
+        .select({
+          isolatedAt: channelJobs.isolatedAt,
+          status: channelJobs.status,
+          writerHeld: channelJobs.writerHeld,
+        })
         .from(channelJobs)
         .where(
           and(
             eq(channelJobs.memberId, job.memberId),
             eq(channelJobs.messageId, thread.rootMessageId),
             isNull(channelJobs.threadId),
-            or(
-              eq(channelJobs.status, 'queued'),
-              and(eq(channelJobs.writerHeld, true), isNull(channelJobs.isolatedAt)),
-            ),
           ),
         )
         .limit(1)
     : [];
-  if (rootReply) {
+  // The root may have been settled as `merged` into an earlier run of the same batch: such a row
+  // has no writer and no queued row of its own, yet that run still owes the root its answer. So
+  // resolve it to the run that answers it before deciding, the way `primaryJob()` does.
+  const rootReply =
+    root?.status === 'merged'
+      ? await answeringRun(tx, channel.id, job.memberId, thread!.rootMessageId)
+      : root;
+  if (
+    rootReply &&
+    (rootReply.status === 'queued' || (rootReply.writerHeld && rootReply.isolatedAt === null))
+  ) {
     await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
     return null;
   }
@@ -406,8 +475,10 @@ export const claimJob = async (
   }
 
   const blocked =
-    (await deviceBlock(tx, channel, member)) ??
-    (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
+    (await deviceBlock(tx, channel, member, job)) ??
+    (sharesDirectory(member)
+      ? undefined
+      : await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
     return null;
@@ -421,24 +492,29 @@ export const claimJob = async (
     ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
     : { userId: requester.userId!, workspaceId: channel.workspaceId };
 
+  // A resumed reply continues the topic its failed run worked in, when it still can.
+  const resumed = await resumableTopic(tx, job, member, scope, executionConfig);
+
   // A device picked in the Channel, else the one the Agent's own settings route the run to.
   const channelDeviceId = member.config?.deviceId;
   const routed =
     options.onlineDeviceIds && !channelDeviceId
       ? await options.routedDevice?.({
           agentId: member.agentId!,
-          continuation: await continuationTopic(
-            tx,
-            channel,
-            job,
-            member,
-            scope,
-            request.sequence,
-            executionConfig,
-          ),
+          continuation:
+            resumed ??
+            (await continuationTopic(
+              tx,
+              channel,
+              job,
+              member,
+              scope,
+              request.sequence,
+              executionConfig,
+            )),
           executionConfig,
-          userId: requester.userId!,
-          workspaceId: channel.workspaceId,
+          userId: scope.userId,
+          workspaceId: scope.workspaceId,
         })
       : undefined;
   const offlineDeviceId = !options.onlineDeviceIds
@@ -462,20 +538,19 @@ export const claimJob = async (
   }
 
   const now = new Date();
-  const topic = await resolveTopic(
-    tx,
-    channel,
-    job,
-    member,
-    scope,
-    request.sequence,
-    executionConfig,
-  );
+  const topic =
+    resumed ??
+    (await resolveTopic(tx, channel, job, member, scope, request.sequence, executionConfig));
+  // The requester's next requests queued behind this one are answered in the same run. A shared
+  // Agent's visitor is metered per request, so each of theirs stays its own run.
+  const merged = share ? [] : await findMergeableRequests(tx, job, request);
   const manifest = buildManifest({
     job,
     member,
+    merged: merged.map((next) => next.request),
     primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
     request,
+    resumed: !!resumed,
     thread,
   });
   // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
@@ -512,6 +587,11 @@ export const claimJob = async (
     })
     .where(eq(channelJobs.id, job.id))
     .returning();
+  await mergeJobs(
+    tx,
+    updated,
+    merged.map((next) => next.job.id),
+  );
   const claimed = { job: updated, topic };
 
   await audit(tx, channel.id, 'run_claimed', job.id, {

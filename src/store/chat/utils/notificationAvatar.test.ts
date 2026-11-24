@@ -60,6 +60,14 @@ describe('renderAvatarToDataUrl', () => {
     expect(await renderAvatarToDataUrl('no-avatar', {})).toBeUndefined();
   });
 
+  // Drawn as text, the picked value printed "agent-avatar:rocket:cyan" as the picture.
+  it('gives a picked Agent character no picture instead of printing its value', async () => {
+    expect(
+      await renderAvatarToDataUrl('picked-1', { avatar: 'agent-avatar:rocket:cyan' }),
+    ).toBeUndefined();
+    expect(context2d.fillText).not.toHaveBeenCalled();
+  });
+
   it('draws emoji avatars onto the agent background color', async () => {
     const result = await renderAvatarToDataUrl('emoji-1', {
       avatar: '🤖',

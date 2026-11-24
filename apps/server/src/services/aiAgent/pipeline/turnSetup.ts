@@ -14,7 +14,6 @@ import type {
 } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
-  ChatErrorType,
   ordinaryFileAccessScope,
   resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
@@ -44,9 +43,10 @@ import { ingestAttachment } from '../ingestAttachment';
 import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
-import { buildNewTopicMetadata } from './newTopicMetadata';
+import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
+import { assertShareHeteroAllowed } from './shareHeteroGate';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
@@ -356,20 +356,28 @@ export interface TurnSetupInput {
   cronJobId?: string;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
+  /** Whether the turn @-mentions agents in a non-group conversation. */
+  hasMentionedAgents?: boolean;
   modelOverride?: string;
+  /** See `ExecAgentParams.openedByTopicId`. */
+  openedByTopicId?: string;
   operationTaskId?: string;
   parentMessageId?: string;
+  persistedUserMessageId?: string;
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
   /** See `InternalExecAgentParams.requireDevice`. */
   requireDevice?: boolean;
+  reservedOperationId?: string;
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
   runFromHistory: boolean;
   /** Skills the user selected for this turn; see `ExecAgentParams.selectedSkillIds`. */
   selectedSkillIds?: string[];
+  /** Tools the user selected for this turn; see `ExecAgentParams.selectedToolIds`. */
+  selectedToolIds?: string[];
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
   /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
@@ -467,18 +475,23 @@ export const setupTurn = async (
     externalOrigin,
     cronJobId,
     webhookThread,
+    openedByTopicId,
     files,
+    hasMentionedAgents,
     modelOverride,
     operationTaskId,
     parentMessageId,
+    persistedUserMessageId,
     prompt,
     providerOverride,
     requestedDeviceId,
     requireDevice,
+    reservedOperationId,
     resolvedAgentId,
     resume,
     runFromHistory,
     selectedSkillIds,
+    selectedToolIds,
     shareGate,
     steer,
     throwIfExecutionAborted,
@@ -548,22 +561,30 @@ export const setupTurn = async (
     : providerOverride;
   let topicEditingGroupId: string | undefined;
 
-  // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
-  // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
-  // agents are not available for shared visitor runs, even when the share
-  // grants device access (`shareGate.canUseDevice`): the hetero dispatch path
-  // signs its gateway token for the run's user (the creator) and registers no
-  // visitor stream owner, so opening it would hand the visitor creator account
-  // access. Checked here (using the agent-level config, before any
-  // topic-pinned model override) rather than at the later hetero-detection
-  // site (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
-  // message rows.
-  if (shareGate && (heterogeneousProvider?.type || isHeterogeneousAgentModelId(model))) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  // Share visitors run a local CLI Agent only on the granted device. Checked
+  // against the agent-level config before any row is written, and re-asserted
+  // once a reused topic's pinned model and device are applied.
+  const assertShareHetero = async (runModel: string) => {
+    const shareDeviceId = await assertShareHeteroAllowed({
+      agencyConfig: agentConfig.agencyConfig,
+      db: deps.db,
+      heterogeneousType: heterogeneousProvider?.type,
+      model: runModel,
+      ownerUserId: deps.userId,
+      requestedDeviceId: resolvedRequestedDeviceId,
+      shareGate,
+      trigger,
+      workspaceId: deps.workspaceId,
     });
-  }
+    // Route the dispatch to the device the gate selected (an `auto` Agent's
+    // single online device), which the dispatch would not find on its own.
+    // Only the dispatch gets it: pinning the topic to an automatic pick would
+    // keep a later turn on that device after it goes offline and another one
+    // is online.
+    if (shareDeviceId && !resolvedRequestedDeviceId && !isFixedExecutionTargetSelection)
+      resolvedRequestedDeviceId = shareDeviceId;
+  };
+  await assertShareHetero(model);
 
   const assertProjectDirectoryAccess = () => {
     if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
@@ -624,12 +645,14 @@ export const setupTurn = async (
         await routeToProjectDirectory(projectDirectory);
       }
 
+      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId);
       const metadata = buildNewTopicMetadata({
         appContext,
         botContext,
         cronJobId,
         deviceBindingPinned: Boolean(effectiveRequestedDeviceId),
         editingAgentId,
+        openedBy,
         projectDirectory,
         taskId: operationTaskId,
         topicBoundDeviceId,
@@ -673,7 +696,7 @@ export const setupTurn = async (
         // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
         // `queryRecent`, `rank`) filter out via `notShareVisitorTopic()`, and
         // what lets shareChat scope reads per visitor (`queryBySender` /
-        // `countBySender`).
+        // `countMessagesBySender`).
         senderId: shareGate?.visitorUserId,
         title:
           title !== undefined
@@ -681,10 +704,9 @@ export const setupTurn = async (
             : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
         trigger,
       };
-      // Share-visitor runs must reserve the `maxTopicsPerVisitor` slot and
-      // insert the topic in ONE locked transaction — see
-      // `reserveShareVisitorTopic`'s JSDoc for the race this closes. Non-share
-      // runs (no per-visitor cap to enforce) keep the plain unlocked insert.
+      // Share-visitor runs insert the topic only under the share's row lock, so
+      // a share paused mid-request writes nothing — see
+      // `reserveShareVisitorTopic`'s JSDoc. Non-share runs keep the plain insert.
       const newTopic = shareGate
         ? await reserveShareVisitorTopic(
             {
@@ -716,6 +738,17 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      const pendingRun = existingTopic?.metadata?.scheduledRun;
+      if (
+        existingTopic?.status === 'scheduled' &&
+        pendingRun?.kind === 'worktree_start' &&
+        pendingRun.operationId !== reservedOperationId
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This conversation is preparing its worktree.',
+        });
+      }
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
       turnProjectId = await resolveTurnProjectId(deps, {
         shareGate,
@@ -821,14 +854,9 @@ export const setupTurn = async (
         log('execAgent: routing topic %s to its bound device %s', topicId, topicPinnedDeviceId);
       }
 
-      // Re-assert the share restriction after topic overrides are applied.
-      // Heterogeneous agents are not available for shared visitor runs (see above).
-      if (shareGate && isHeterogeneousAgentModelId(model)) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
-        });
-      }
+      // Re-assert the share restriction after topic overrides are applied: a
+      // topic pin can switch the run to another heterogeneous runtime or device.
+      await assertShareHetero(model);
 
       // A builder conversation edits exactly one agent, stamped on the topic when
       // it was created. Continuations rebuilt from the durable operation (approval
@@ -901,7 +929,9 @@ export const setupTurn = async (
     botSender,
     composerMetadata: userMessage?.metadata,
     externalOrigin,
+    hasMentionedAgents,
     selectedSkillIds,
+    selectedToolIds,
     steer,
     trigger,
   });
@@ -970,12 +1000,10 @@ export const setupTurn = async (
         threadId: appContext?.threadId ?? undefined,
         topicId,
       };
-      // Share-visitor runs must reserve the `maxTurnsPerTopic` slot and insert
-      // the user message in ONE locked transaction — see
-      // `reserveShareVisitorTurn`'s JSDoc for the race this closes (same class of
-      // count-then-act bug as the topic cap above). Harmless no-op on a topic
-      // this same call just created (count is 0). Non-share runs (no per-turn
-      // cap) keep the plain unlocked insert.
+      // Share-visitor runs must reserve the `maxMessagesPerVisitor` slot and
+      // insert the user message in ONE locked transaction — see
+      // `reserveShareVisitorTurn`'s JSDoc for the race this closes. Non-share
+      // runs (no per-visitor cap) keep the plain unlocked insert.
       const userMessageRecord = runFromHistory
         ? undefined
         : shareGate
@@ -985,7 +1013,7 @@ export const setupTurn = async (
                 db: deps.db,
                 expectedShareId: shareGate.shareId,
                 ownerId: deps.userId,
-                topicId,
+                visitorUserId: shareGate.visitorUserId,
                 workspaceId: deps.workspaceId,
               },
               userMessageParams,
@@ -1146,6 +1174,6 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
-    userMessageId: userMessageRecord?.id,
+    userMessageId: userMessageRecord?.id ?? persistedUserMessageId,
   };
 };

@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { params as openAIParams } from '../openai';
+import { isToolAnchoringGPTModel } from '../openai/modelId';
 
 const CHATGPT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const CHATGPT_RESPONSES_LITE_HEADER = 'x-openai-internal-codex-responses-lite';
@@ -150,5 +151,8 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
         },
       };
     },
+    // The Codex backend is the endpoint Codex itself loads tools through with
+    // `additional_tools`, so there is no relay to second-guess.
+    toolAnchoring: ({ model }) => (isToolAnchoringGPTModel(model) ? 'additional_tools' : undefined),
   },
 });

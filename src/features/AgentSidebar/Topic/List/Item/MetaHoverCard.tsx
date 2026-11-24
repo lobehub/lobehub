@@ -7,16 +7,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
-import { useChatStore } from '@/store/chat';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
-import {
-  getCiVisual,
-  getPullRequestState,
-  getTopicMetaCard,
-  PR_STATE_VISUAL,
-} from './metaCardData';
+import { getTopicMetaCard } from './metaCardData';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -29,7 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: baseline;
     justify-content: space-between;
   `,
@@ -41,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
   headerTitle: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -69,41 +62,17 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  prLink: css`
-    cursor: pointer;
-
-    margin-inline: -6px;
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: 6px;
-
-    color: inherit;
-    text-decoration: none;
-
-    /* antd's global a:hover outranks the color:inherit above, so without this the
-       row would turn link-blue; hovering should read as emphasis instead. */
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
 }));
 
 interface DetailRowProps {
   children: ReactNode;
   icon: typeof Clock;
-  iconColor?: string;
   title?: string;
 }
 
-const DetailRow = memo<DetailRowProps>(({ icon, iconColor, title, children }) => (
+const DetailRow = memo<DetailRowProps>(({ icon, title, children }) => (
   <div className={styles.row}>
-    <Icon
-      className={styles.rowIcon}
-      icon={icon}
-      size={15}
-      style={iconColor ? { color: iconColor } : undefined}
-    />
+    <Icon className={styles.rowIcon} icon={icon} size={15} />
     <span className={styles.rowText} title={title}>
       {children}
     </span>
@@ -116,31 +85,19 @@ interface MetaHoverCardProps {
   metadata: ChatTopicMetadata | undefined;
   time?: ReactNode;
   title: string;
-  /** Enables the open-time PR/CI refresh below; without it the card is a pure snapshot reader. */
-  topicId?: string;
 }
 
 /**
  * Codex-style hover detail card for a topic row: surfaces the persisted repo /
- * branch / worktree / linked-PR / CI context on the right of the sidebar without
- * cluttering the row itself.
+ * branch / worktree context on the right of the sidebar without cluttering the
+ * row itself.
  */
-const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId }) => {
+const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
   const { t } = useTranslation('topic');
-  // The card only mounts while the popover is open, so hosting the linked-PR
-  // SWR hook here re-fetches the persisted PR/CI snapshot exactly when the
-  // user is looking at it (the hook dedupes to once a minute per PR).
-  // ChatHydration runs the same hook for the active topic only — without this,
-  // a background topic's badge stays frozen on whatever was last persisted.
-  const useFetchTopicLinkedPullRequest = useChatStore((s) => s.useFetchTopicLinkedPullRequest);
-  useFetchTopicLinkedPullRequest(topicId, metadata);
-
-  const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
-  const card = getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding });
+  const card = getTopicMetaCard(metadata);
   if (!card) return null;
 
-  const { repoName, repoType, branch, detached, worktreeName, pullRequest } = card;
-  const ci = pullRequest ? getCiVisual(pullRequest.ciStatus) : undefined;
+  const { repoName, repoType, branch, detached, worktreeName } = card;
 
   return (
     <div className={styles.card}>
@@ -167,56 +124,6 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
       {worktreeName && (
         <DetailRow icon={GitForkIcon} title={worktreeName}>
           {worktreeName}
-        </DetailRow>
-      )}
-
-      {pullRequest &&
-        (() => {
-          const prState = getPullRequestState(pullRequest);
-          const prVisual = PR_STATE_VISUAL[prState];
-          const prTitleAttr = pullRequest.title
-            ? `#${pullRequest.number} ${pullRequest.title}`
-            : `#${pullRequest.number}`;
-          const prInner = (
-            <>
-              <Icon
-                className={styles.rowIcon}
-                icon={prVisual.icon}
-                size={15}
-                style={{ color: prVisual.color }}
-              />
-              <span className={styles.rowText} title={prTitleAttr}>
-                <span style={{ color: prVisual.color, fontWeight: 500 }}>
-                  {t(prVisual.labelKey)}
-                </span>
-                {/* The number leads the title: it is the stable identifier, and a
-                    long title would otherwise push it past the ellipsis. */}
-                <span
-                  style={{ color: cssVar.colorTextTertiary }}
-                >{` · #${pullRequest.number}`}</span>
-                {pullRequest.title ? ` ${pullRequest.title}` : ''}
-              </span>
-            </>
-          );
-          // Clickable when a url is persisted — opens the PR on GitHub in the
-          // system browser; older snapshots without a url stay a plain row.
-          return pullRequest.url ? (
-            <a
-              className={`${styles.row} ${styles.prLink}`}
-              href={pullRequest.url}
-              rel={'noreferrer'}
-              target={'_blank'}
-            >
-              {prInner}
-            </a>
-          ) : (
-            <div className={styles.row}>{prInner}</div>
-          );
-        })()}
-
-      {ci && (
-        <DetailRow icon={ci.icon} iconColor={ci.color}>
-          {t(ci.labelKey)}
         </DetailRow>
       )}
     </div>

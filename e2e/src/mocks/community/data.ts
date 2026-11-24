@@ -129,6 +129,35 @@ export const mockAssistantItems: DiscoverAssistantItem[] = [
   },
 ];
 
+/**
+ * LobeHub's curated Agents (`market.agent.getOnboardingFull`), keyed by
+ * category: the Agents page's "All" and "Verified" tabs.
+ */
+export const mockOnboardingAgents = {
+  'engineering': [
+    {
+      author: { name: 'LobeHub' },
+      avatar: '🧑‍💻',
+      description: 'Reviews pull requests and points out risky changes.',
+      forkCount: 120,
+      identifier: 'agent-template-code-reviewer',
+      name: 'Code Reviewer',
+      pluginCount: 1,
+    },
+  ],
+  'product-management': [
+    {
+      author: { name: 'LobeHub' },
+      avatar: '📋',
+      description: 'Turns rough ideas into a dated scope document.',
+      forkCount: 300,
+      identifier: 'agent-template-release-planner',
+      name: 'Release Planner',
+      pluginCount: 0,
+    },
+  ],
+};
+
 export const mockAssistantList: AssistantListResponse = {
   currentPage: 1,
   items: mockAssistantItems,
@@ -304,6 +333,24 @@ export const mockMcpItems: DiscoverMcpItem[] = [
     toolsCount: 2,
     updatedAt: UPDATED_AT,
   },
+  // Keep Developer above the six-item preview so it has a "View all" link.
+  ...[
+    ['build-runner', 'Build Runner'],
+    ['code-search', 'Code Search'],
+    ['container-manager', 'Container Manager'],
+    ['database-browser', 'Database Browser'],
+    ['git-client', 'Git Client'],
+    ['log-viewer', 'Log Viewer'],
+  ].map<DiscoverMcpItem>(([identifier, name]) => ({
+    capabilities: { prompts: false, resources: false, tools: true },
+    category: 'developer',
+    connectionType: 'stdio',
+    createdAt: CREATED_AT,
+    description: `${name} MCP fixture.`,
+    identifier,
+    name,
+    updatedAt: UPDATED_AT,
+  })),
 ];
 
 export const mockMcpList: McpListResponse = {
@@ -314,12 +361,6 @@ export const mockMcpList: McpListResponse = {
   totalCount: mockMcpItems.length,
   totalPages: 1,
 };
-
-export const mockMcpCategories = [
-  { category: 'business', count: 7 },
-  { category: 'developer', count: 5 },
-  { category: 'productivity', count: 3 },
-];
 
 // ============================================
 // Detail Mock Data

@@ -27,7 +27,7 @@ export const useOnboardingActions = (detail: ProjectDetail, refreshSites: () => 
   const openConnection = (item: OnboardingConnection) => {
     switch (item.key) {
       case 'directory': {
-        if (item.done) navigate(getProjectSettingsPath(routeId, 'directories'));
+        if (item.done) navigate(getProjectSettingsPath(routeId, 'environments'));
         else openAddDirectoryModal(project.id);
         return;
       }

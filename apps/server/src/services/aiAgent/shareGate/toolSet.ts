@@ -208,7 +208,7 @@ const applyShareGateToCloudSandbox = (toolSet: ShareGateToolSet): void => {
  * never in a visitor's set, and its `activateSkill` lines stay only while
  * `lobe-skills` itself survived the gate (a share with `skillGrants`).
  */
-const applyShareGateToActivator = (toolSet: ShareGateToolSet): void => {
+export const applyShareGateToActivator = (toolSet: ShareGateToolSet): void => {
   const manifest = toolSet.manifestMap[LobeActivatorIdentifier];
   if (!manifest) return;
 

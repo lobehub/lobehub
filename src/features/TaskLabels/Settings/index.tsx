@@ -26,6 +26,7 @@ import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors } from '@/store/task/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import TaskLabelDot from '../TaskLabelDot';
@@ -34,7 +35,7 @@ import { openTaskLabelFormModal } from './TaskLabelFormModal';
 const styles = stylex.create({
   row: {
     paddingBlock: 10,
-    paddingInlineEnd: 12,
+    paddingInlineEnd: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
   },
