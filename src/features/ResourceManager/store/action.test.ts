@@ -13,12 +13,14 @@ const {
   mockDeleteResourcesByQuery,
   mockDropNodes,
   mockForgetSnapshot,
+  mockGetResource,
   mockResolveSelectionIds,
   mockRevalidateLoaded,
 } = vi.hoisted(() => ({
   mockDeleteResourcesByQuery: vi.fn(),
   mockDropNodes: vi.fn(async () => undefined),
   mockForgetSnapshot: vi.fn(),
+  mockGetResource: vi.fn(),
   mockResolveSelectionIds: vi.fn(),
   mockRevalidateLoaded: vi.fn(async () => undefined),
 }));
@@ -36,6 +38,7 @@ vi.mock('@/store/tree', () => ({
 vi.mock('@/services/resource', () => ({
   resourceService: {
     deleteResourcesByQuery: mockDeleteResourcesByQuery,
+    getResource: mockGetResource,
     resolveSelectionIds: mockResolveSelectionIds,
   },
 }));
@@ -128,6 +131,48 @@ describe('resource manager store actions', () => {
 
     expect(mockResolveSelectionIds).toHaveBeenCalledWith({ q: 'report' });
     expect(result).toEqual(['file-1', 'file-3']);
+  });
+
+  it('should resolve picked rows from the loaded list without fetching', async () => {
+    const report = { id: 'file-1', name: 'report.md' } as ResourceItem;
+    const sketch = { id: 'file-3', name: 'sketch.png' } as ResourceItem;
+    useFileStore.setState({
+      resourceMap: new Map([
+        ['file-1', report],
+        ['file-2', { id: 'file-2' } as ResourceItem],
+        ['file-3', sketch],
+      ]),
+    });
+    useResourceManagerStore.setState({
+      selectAllState: 'loaded',
+      selectedFileIds: ['file-1', 'file-3'],
+    });
+
+    const rows = await useResourceManagerStore.getState().resolveSelectedResources();
+
+    expect(rows).toEqual([report, sketch]);
+    expect(mockGetResource).not.toHaveBeenCalled();
+  });
+
+  it('should fetch the rows a select-all picked beyond the loaded pages', async () => {
+    const loaded = { id: 'file-1', name: 'loaded.md' } as ResourceItem;
+    const remote = { id: 'file-4', name: 'remote.pdf' } as ResourceItem;
+    useFileStore.setState({
+      queryParams: { libraryId: 'kb-1' } as any,
+      resourceMap: new Map([['file-1', loaded]]),
+    });
+    useResourceManagerStore.setState({ selectAllState: 'all', selectedFileIds: ['file-2'] });
+    mockResolveSelectionIds.mockResolvedValue({ ids: ['file-1', 'file-2', 'file-4', 'gone'] });
+    mockGetResource.mockImplementation(async (id: string) => {
+      if (id === 'file-4') return remote;
+      throw new Error('NOT_FOUND');
+    });
+
+    const rows = await useResourceManagerStore.getState().resolveSelectedResources();
+
+    // The deselected row stays out, and a row deleted meanwhile is dropped.
+    expect(mockGetResource.mock.calls.map(([id]) => id)).toEqual(['file-4', 'gone']);
+    expect(rows).toEqual([loaded, remote]);
   });
 
   it('should store the role-scoped total when selecting every query result', async () => {

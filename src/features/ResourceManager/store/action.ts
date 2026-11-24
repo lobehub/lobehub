@@ -514,6 +514,37 @@ export class ResourceManagerStoreActionImpl {
     return result.ids.filter((id) => !selectedFileIds.includes(id));
   };
 
+  /**
+   * The selected rows themselves, for actions that need more than the id. Rows
+   * a "select all" picked beyond the loaded pages are fetched one by one.
+   */
+  resolveSelectedResources = async (): Promise<ResourceItem[]> => {
+    const ids = await this.#get().resolveSelectedResourceIds();
+    const { resourceMap } = useFileStore.getState();
+    const local = (id: string) => resourceMap?.get(id) ?? this.#findSearchHit(id);
+
+    const missingIds = ids.filter((id) => !local(id));
+    const fetched = new Map<string, ResourceItem>();
+    if (missingIds.length > 0) {
+      const { resourceService } = await import('@/services/resource');
+      const { default: pMap } = await import('p-map');
+      // A row deleted since the selection was made just drops out.
+      const items = await pMap(
+        missingIds,
+        (id) => resourceService.getResource(id).catch(() => undefined),
+        { concurrency: 5 },
+      );
+      items.forEach((item, index) => {
+        if (item) fetched.set(missingIds[index], item);
+      });
+    }
+
+    return ids.flatMap((id) => {
+      const item = local(id) ?? fetched.get(id);
+      return item ? [item] : [];
+    });
+  };
+
   selectAllLoadedResources = (selectedFileIds: string[]): void => {
     this.#set({ selectedFileIds, selectAllState: 'loaded', selectionTotal: undefined });
   };
