@@ -1,3 +1,4 @@
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import type { AgentSenderMetadata, ComposerUserMessageMetadata } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
@@ -36,7 +37,8 @@ export const buildUserTurnMetadata = ({
 }: UserTurnMetadataInput) => {
   const effectiveSelectedToolIds = [
     ...(selectedToolIds ?? []),
-    ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+    // @mentioned agents are delegated to with `callSubAgent({ agentId })`.
+    ...(hasMentionedAgents ? [LobeAgentIdentifier] : []),
   ];
 
   return {

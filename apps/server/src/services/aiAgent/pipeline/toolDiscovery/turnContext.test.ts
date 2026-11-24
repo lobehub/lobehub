@@ -67,7 +67,7 @@ describe('collectSelectedToolIds', () => {
 
     expect(
       collectSelectedToolIds(history, ['feishu', 'xmind'], { hasMentionedAgents: true }),
-    ).toEqual(['xmind', 'lobe-web-browsing', 'feishu', 'lobe-agent-management']);
+    ).toEqual(['xmind', 'lobe-web-browsing', 'feishu', 'lobe-agent']);
   });
 
   it('recovers tool action tags and agent mentions from legacy user turns without metadata.selectedToolIds', () => {
@@ -110,10 +110,10 @@ describe('collectSelectedToolIds', () => {
       },
     ];
 
-    expect(collectSelectedToolIds(history)).toEqual(['xmind', 'lobe-agent-management']);
+    expect(collectSelectedToolIds(history)).toEqual(['xmind', 'lobe-agent']);
   });
 
-  it('does not enable lobe-agent-management from @mentions inside a group conversation', () => {
+  it('does not enable lobe-agent from @mentions inside a group conversation', () => {
     const history = [
       {
         content: '<mention name="Writer" id="agt_writer" /> Hello',

@@ -196,7 +196,7 @@ export const discoverTools = async (
   // selections persisted on earlier user turns in the topic; merged in
   // (deduped) alongside the agent's configured plugins and any internal
   // `additionalPluginIds` so a mentioned-but-not-enabled tool (e.g. a custom MCP
-  // connector or `lobe-agent-management` from an earlier @agent mention) stays
+  // connector or `lobe-agent` from an earlier @agent mention) stays
   // enabled across follow-up turns in the same conversation.
   let historyMessagesCache: any[] | undefined;
   const readHistoryMessages = async () => {
@@ -273,7 +273,11 @@ export const discoverTools = async (
           optedInIds,
           turnIds: [
             ...(additionalPluginIds || []),
-            ...effectiveSelectedToolIds.filter((id) => id !== 'lobe-agent-management'),
+            // The delegation tool an @agent mention implies is not a pick of
+            // the user's (`lobe-agent-management` on rows from before it moved).
+            ...effectiveSelectedToolIds.filter(
+              (id) => id !== LobeAgentIdentifier && id !== 'lobe-agent-management',
+            ),
             ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
             // An eval binds its connectors to the run by snapshot.
             ...boundConnectorIds,
