@@ -37,8 +37,10 @@ interface AntigravityAcpPromptResult {
   usage?: unknown;
 }
 
-interface SteerDelivery {
-  result: Promise<AntigravityAcpPromptResult>;
+/** A follow-up written to agy that the run has not confirmed as read yet. */
+interface UnconfirmedSteer {
+  /** Its position among the run's prompts (the first prompt is 0). */
+  index: number;
   uuid: string;
 }
 
@@ -114,6 +116,13 @@ export const buildAntigravityAcpPrompt = (
   options: BuildAgentInputOptions = {},
 ): Promise<AntigravityAcpPromptBlock[]> => buildTraeAcpPrompt(prompt, options);
 
+/** The response to a `session/prompt`: it carries a stop reason, or failed as one. */
+const isPromptResponse = (message: AcpRpcMessage): boolean => {
+  if (message.method !== undefined || message.id === undefined) return false;
+  if (message.error) return message.requestMethod === 'session/prompt';
+  return isRecord(message.result) && 'stopReason' in message.result;
+};
+
 /** `session/resume` and `session/load` both failed to find the saved conversation. */
 export const isAntigravityAcpSessionNotFoundError = (
   error: unknown,
@@ -134,10 +143,16 @@ export class AntigravityAcpSession extends AcpAgentSession<
 > {
   /** Session updates before the prompt (a `session/load` replay) are history, not output. */
   private acceptUpdates = false;
+  /** Read confirmations, chained so each lands before any update that follows it. */
+  private confirmations: Promise<void> = Promise.resolve();
   private readonly launch: ReturnType<typeof buildAntigravityAcpLaunch>;
+  /** Prompt responses handled so far, in stdout order. */
+  private promptResponses = 0;
   /** Steered prompts written to agy, in order, that the run has not settled yet. */
-  private readonly steers: SteerDelivery[] = [];
+  private readonly steers: Promise<AntigravityAcpPromptResult>[] = [];
+  private steerCount = 0;
   private steerable = false;
+  private readonly unconfirmedSteers: UnconfirmedSteer[] = [];
   private usage: UsageTotals = {
     cachedReadTokens: 0,
     inputTokens: 0,
@@ -179,7 +194,12 @@ export class AntigravityAcpSession extends AcpAgentSession<
     // Settled in order by `settlePrompt`; a closed transport must not surface
     // as an unhandled rejection before the run gets to it.
     result.catch(() => {});
-    this.steers.push({ result, uuid });
+    this.steers.push(result);
+
+    const index = ++this.steerCount;
+    // The prompt before it already returned: agy starts on this one now.
+    if (this.promptResponses >= index) this.confirmSteer(uuid);
+    else this.unconfirmedSteers.push({ index, uuid });
     return true;
   }
 
@@ -241,7 +261,7 @@ export class AntigravityAcpSession extends AcpAgentSession<
 
   /**
    * The first prompt settled; settle every message steered in after it, in
-   * order. Each one ends the prompt before it, so that is when agy read it.
+   * order. Each was confirmed as read when the prompt before it returned.
    */
   protected override async settlePrompt(result: unknown): Promise<void> {
     let last = (isRecord(result) ? result : {}) as AntigravityAcpPromptResult;
@@ -250,11 +270,11 @@ export class AntigravityAcpSession extends AcpAgentSession<
       await this.client.drain();
       const next = this.steers.shift();
       if (!next) break;
-      await this.pushToPipeline({ type: 'antigravity_user_message', uuid: next.uuid });
-      last = await next.result;
+      last = await next;
       this.addUsage(last.usage);
     }
     this.steerable = false;
+    await this.confirmations;
 
     const used = Object.values(this.usage).some((value) => value > 0);
     await this.pushToPipeline({
@@ -280,6 +300,19 @@ export class AntigravityAcpSession extends AcpAgentSession<
   }
 
   protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
+    await this.confirmations;
+    if (isPromptResponse(message)) {
+      // Each steer ends the prompt before it, so this is when agy read the
+      // next one. Confirm it here, in stdout order, so the answer to it that
+      // follows in the same output opens a step of its own.
+      this.promptResponses += 1;
+      const next = this.unconfirmedSteers[0];
+      if (next && next.index <= this.promptResponses) {
+        this.unconfirmedSteers.shift();
+        await this.confirmSteer(next.uuid);
+      }
+      return;
+    }
     if (!this.acceptUpdates || message.method !== 'session/update') return;
     const params = isRecord(message.params) ? message.params : undefined;
     if (!isRecord(params?.update)) return;
@@ -373,6 +406,16 @@ export class AntigravityAcpSession extends AcpAgentSession<
     const level = configValue(configOptions, 'thought_level');
     const variant = level ? `${family}-${level}` : undefined;
     return variant && availableModelIds(sessionResult).has(variant) ? variant : family;
+  }
+
+  private confirmSteer(uuid: string): Promise<void> {
+    const confirmed = this.confirmations.then(() =>
+      this.pushToPipeline({ type: 'antigravity_user_message', uuid }),
+    );
+    // Awaited by the next message and by `settlePrompt`.
+    confirmed.catch(() => {});
+    this.confirmations = confirmed;
+    return confirmed;
   }
 
   private addUsage(usage: unknown): void {

@@ -74,12 +74,15 @@ const createAgy = ({
   onPrompt,
   replayOnLoad = false,
   resumeError,
+  steerAnswerInSameChunk,
 }: {
   loadError?: { code: number; message: string };
   newError?: { code: number; message: string };
   onPrompt?: PromptHandler;
   replayOnLoad?: boolean;
   resumeError?: { code: number; message: string };
+  /** Write the steered prompt's first text in the same stdout chunk as the end of the prompt it interrupts. */
+  steerAnswerInSameChunk?: string;
 } = {}) => {
   const child = new EventEmitter() as ChildProcess;
   const stdout = new PassThrough();
@@ -201,16 +204,29 @@ const createAgy = ({
             }
             case 'session/prompt': {
               // A prompt arriving mid-turn ends the pending one (agy's steer).
-              if (pendingPrompt) {
-                finish(pendingPrompt.id, {
-                  stopReason: 'end_turn',
-                  usage: {
-                    cachedReadTokens: 10,
-                    inputTokens: 100,
-                    outputTokens: 20,
-                    thoughtTokens: 5,
+              const ended = {
+                stopReason: 'end_turn',
+                usage: {
+                  cachedReadTokens: 10,
+                  inputTokens: 100,
+                  outputTokens: 20,
+                  thoughtTokens: 5,
+                },
+              };
+              if (pendingPrompt && steerAnswerInSameChunk !== undefined) {
+                const lines = [
+                  { id: pendingPrompt.id, result: ended },
+                  {
+                    method: 'session/update',
+                    params: { sessionId: SESSION_ID, update: textChunk(steerAnswerInSameChunk) },
                   },
-                });
+                ];
+                stdout.write(
+                  lines.map((line) => `${JSON.stringify({ jsonrpc: '2.0', ...line })}\n`).join(''),
+                );
+                pendingPrompt = undefined;
+              } else if (pendingPrompt) {
+                finish(pendingPrompt.id, ended);
               }
               pendingPrompt = message;
               onPrompt?.(message, { finish, update });
@@ -452,6 +468,33 @@ describe('AntigravityAcpSession', () => {
         ?.data.usage,
     ).toMatchObject({ totalInputTokens: 161, totalOutputTokens: 27 });
     expect(session.steer([{ text: 'late', type: 'text' }], 'msg-late')).toBe(false);
+  });
+
+  it('confirms a steer before its answer when both arrive in one stdout chunk', async () => {
+    const agy = createAgy({
+      onPrompt: (prompt, { finish }) => {
+        if (prompt.params?.prompt?.[0]?.text === 'add BANANA') {
+          setTimeout(() => finish(prompt.id, { stopReason: 'end_turn' }), 0);
+        }
+      },
+      steerAnswerInSameChunk: 'FIRST BANANA',
+    });
+    const { events, session } = createSession(agy);
+    const run = session.run();
+    await vi.waitFor(() => expect(methods(agy.requests).includes('session/prompt')).toBe(true));
+
+    expect(session.steer([{ text: 'add BANANA', type: 'text' }], 'msg-steer')).toBe(true);
+    await run;
+
+    const confirmed = events.findIndex(
+      (event) => event.type === 'step_complete' && event.data.phase === 'user_message',
+    );
+    const answer = events.findIndex(
+      (event) => event.type === 'stream_chunk' && event.data.content === 'FIRST BANANA',
+    );
+    expect(confirmed).toBeGreaterThanOrEqual(0);
+    expect(answer).toBeGreaterThan(confirmed);
+    expect(events[answer].stepIndex).toBeGreaterThan(events[confirmed].stepIndex);
   });
 
   it('ends as interrupted when stopped after a steer, and refuses further steers', async () => {
