@@ -1,11 +1,12 @@
-import { ActionIcon, Button, Center, Flexbox, SearchBar, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Center, Flexbox, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useDebounce, useInViewport, useMemoizedFn } from 'ahooks';
+import { useInViewport, useMemoizedFn } from 'ahooks';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
@@ -13,7 +14,9 @@ import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { SkillCategory, SkillSorts } from '@/types/discover';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
+import DiscoverCatalogHeader from '../Catalog/DiscoverCatalogHeader';
 import { catalogStyles } from '../Catalog/styles';
 import BackLink from './BackLink';
 import { CustomSkills, useCustomSkills } from './CustomSkills';
@@ -378,8 +381,9 @@ GroupPage.displayName = 'MarketSkillGroupPage';
  */
 const SkillsPageContent = memo(() => {
   const { t } = useTranslation('setting');
-  const [query, setQuery] = useState('');
-  const q = useDebounce(query.trim(), { wait: 300 });
+  // The shared catalog header keeps the (debounced) search in `?q=`.
+  const [params] = useSearchParams();
+  const q = params.get('q')?.trim() ?? '';
   const { githubUrl, group: skillGroup, setGithubUrl } = useSkillsNav();
 
   if (githubUrl !== null)
@@ -389,40 +393,40 @@ const SkillsPageContent = memo(() => {
   if (skillGroup) return <GroupPage group={skillGroup} />;
 
   return (
-    <Flexbox gap={20}>
-      <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
-        <Flexbox gap={4}>
-          <Text fontSize={20} weight={600}>
-            {t('market.skills.title')}
-          </Text>
-          <Text type={'secondary'}>{t('market.skills.desc')}</Text>
-        </Flexbox>
-        <Button icon={GithubIcon} type={'fill'} onClick={() => setGithubUrl('')}>
-          {t('market.skills.github.entry')}
-        </Button>
-      </Flexbox>
-      <SearchBar
-        allowClear
-        placeholder={t('market.skills.search')}
-        value={query}
-        variant={'filled'}
-        onChange={(event) => setQuery(event.target.value)}
+    <>
+      <DiscoverCatalogHeader
+        kind={'skill'}
+        action={
+          <Button icon={GithubIcon} type={'fill'} onClick={() => setGithubUrl('')}>
+            {t('market.skills.github.entry')}
+          </Button>
+        }
       />
-      {q ? <SearchResults query={q} /> : <Catalog />}
-    </Flexbox>
+      <Flexbox gap={20}>{q ? <SearchResults query={q} /> : <Catalog />}</Flexbox>
+    </>
   );
 });
 
 SkillsPageContent.displayName = 'MarketSkillsPageContent';
 
 /** In the Marketplace's centered column, like the other catalogs and their pages. */
-const SkillsPage = memo(() => (
-  <MarketScrollProvider viewportId={SCROLL_PARENT_ID}>
-    <div {...stylex.props(catalogStyles.frame)}>
-      <SkillsPageContent />
-    </div>
-  </MarketScrollProvider>
-));
+const SkillsPage = memo(() => {
+  const { githubUrl, group } = useSkillsNav();
+  // The catalog draws the shared header; a group or the GitHub page starts where it would.
+  const subPage = githubUrl !== null || !!group;
+  return (
+    <MarketScrollProvider viewportId={SCROLL_PARENT_ID}>
+      <div
+        {...stylex.props(
+          catalogStyles.frame,
+          subPage && (isMobileSurface() ? catalogStyles.pageTopMobile : catalogStyles.pageTop),
+        )}
+      >
+        <SkillsPageContent />
+      </div>
+    </MarketScrollProvider>
+  );
+});
 
 SkillsPage.displayName = 'MarketSkillsPage';
 

@@ -88,7 +88,10 @@ const DesktopSkillPage = memo(() => {
   // The detail layout's header already carries the back arrow; the centered
   // column matches the Agent and App pages.
   return (
-    <div data-testid="skill-detail-content" {...stylex.props(catalogStyles.frame)}>
+    <div
+      data-testid="skill-detail-content"
+      {...stylex.props(catalogStyles.frame, catalogStyles.pageTop)}
+    >
       <MarketplaceSkillDetail identifier={slug} key={slug} />
     </div>
   );

@@ -21,7 +21,7 @@ export default {
     'Explore leading model providers OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter',
   'discover.providers.title': 'Provider Marketplace',
   'discover.search': 'Search',
-  'discover.title': 'Plugins',
+  'discover.title': 'Marketplace',
   'image.description':
     '{{appName}} brings you the best experience with GPT Image, Flux, Midjourney, and Stable Diffusion',
   'image.title': 'AI Art',

@@ -214,7 +214,13 @@ const AgentDetail = memo<{ detail: Partial<DiscoverAssistantDetail>; mobile?: bo
     const openChat = (agentId: string) => navigate(AGENT_CHAT_URL(agentId, mobile));
 
     return (
-      <div {...stylex.props(catalogStyles.frame)} data-testid={'assistant-detail-content'}>
+      <div
+        {...stylex.props(
+          catalogStyles.frame,
+          mobile ? catalogStyles.pageTopMobile : catalogStyles.pageTop,
+        )}
+        data-testid={'assistant-detail-content'}
+      >
         <Flexbox gap={24}>
           <Flexbox horizontal align={'flex-start'} gap={16} wrap={'wrap'}>
             <MarketAgentAvatar
