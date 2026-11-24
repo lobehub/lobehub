@@ -301,6 +301,16 @@ describe('workspace settings useCategory account set', () => {
     expect(accountItems.find((item) => item.key === SettingsTabs.Referral)?.href).toBe(
       '/settings/referral',
     );
+    // Personal notification preferences open the personal page; the
+    // workspace's own Notifications tab stays in the Workspace group.
+    expect(accountItems.find((item) => item.key === SettingsTabs.Notification)?.href).toBe(
+      '/settings/notification',
+    );
+    expect(
+      result.current
+        .find((group) => group.key === WorkspaceSettingsGroupKey.General)
+        ?.items.find((item) => item.key === WorkspaceSettingsTabs.Notification)?.href,
+    ).toBeUndefined();
     // Workspace tabs keep no href: they open under the workspace prefix.
     expect(
       accountItems.find((item) => item.key === WorkspaceSettingsTabs.Appearance)?.href,

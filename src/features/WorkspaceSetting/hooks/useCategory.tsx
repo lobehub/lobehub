@@ -70,7 +70,11 @@ export enum WorkspaceSettingsGroupKey {
  * personal page through `href`.
  */
 export type PersonalOnlyAccountTab =
-  SettingsTabs.Memory | SettingsTabs.Proxy | SettingsTabs.Referral | SettingsTabs.SystemTools;
+  | SettingsTabs.Notification
+  | SettingsTabs.Memory
+  | SettingsTabs.Proxy
+  | SettingsTabs.Referral
+  | SettingsTabs.SystemTools;
 
 export interface WorkspaceSettingCategoryItem {
   /** Set for a personal-only account tab: the personal page it opens. */
@@ -152,8 +156,16 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Conversation,
               label: t('tab.conversation'),
             },
-            // Memory and referral exist only as personal pages; listing them
-            // keeps the account set the same in every space.
+            // Notification preferences, memory and referral exist only as
+            // personal pages; listing them keeps the account set the same in
+            // every space. The workspace's own Notifications tab stays in the
+            // Workspace group.
+            (enableBusinessFeatures || isDesktop) && {
+              href: `/settings/${SettingsTabs.Notification}`,
+              icon: BellIcon,
+              key: SettingsTabs.Notification,
+              label: t('tab.notification'),
+            },
             {
               href: `/settings/${SettingsTabs.Memory}`,
               icon: BrainCircuit,

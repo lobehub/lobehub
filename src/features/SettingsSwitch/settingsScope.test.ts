@@ -38,6 +38,28 @@ describe('getActiveSettingsScope', () => {
   });
 });
 
+describe('links out of the space', () => {
+  // A workspace lists the personal Notifications page in its account set; the
+  // key repeats the workspace's own Notifications tab.
+  const withLink: ScopedSettingsGroup[] = [
+    {
+      items: [{ key: 'profile' }, { href: '/settings/notification', key: 'notification' }],
+      scope: 'account',
+    },
+    { items: [{ key: 'general' }, { key: 'notification' }], scope: 'space' },
+  ];
+
+  it('keeps the workspace tab with a repeated key in the space set', () => {
+    expect(getActiveSettingsScope(withLink, 'notification')).toBe('space');
+  });
+
+  it('never makes a link the remembered or entry tab', () => {
+    rememberSettingsTab('acme', 'account', 'notification');
+
+    expect(getSettingsScopeEntryTab('acme', 'account', withLink)).toBe('profile');
+  });
+});
+
 describe('filterGroupsByScope', () => {
   it('keeps only the groups of one set, so no tab shows in both sidebars', () => {
     const account = filterGroupsByScope(groups, 'account').flatMap((g) => g.items);

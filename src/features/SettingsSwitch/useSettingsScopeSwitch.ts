@@ -41,7 +41,9 @@ export const useSettingsScopeSwitch = <Group extends ScopedSettingsGroup>({
   const scope = getActiveSettingsScope(groups, activeTab);
   const switchScope = otherSettingsScope(scope);
   const scopeGroups = useMemo(() => filterGroupsByScope(groups, scope), [groups, scope]);
-  const isListed = scopeGroups.some((group) => group.items.some((item) => item.key === activeTab));
+  const isListed = scopeGroups.some((group) =>
+    group.items.some((item) => !item.href && item.key === activeTab),
+  );
 
   useEffect(() => {
     if (activeTab && isListed) rememberSettingsTab(spaceKey, scope, activeTab);

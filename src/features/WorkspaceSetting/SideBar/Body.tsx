@@ -56,7 +56,7 @@ const Body = memo(() => {
             children: (
               <Flexbox gap={1} paddingBlock={1}>
                 {group.items.map((item) => {
-                  const url = tabUrl(item.key);
+                  const url = item.href ?? tabUrl(item.key);
                   return (
                     <Link
                       key={item.key}
@@ -70,7 +70,7 @@ const Body = memo(() => {
                       }}
                     >
                       <NavItem
-                        active={activeTab === item.key}
+                        active={!item.href && activeTab === item.key}
                         icon={item.icon}
                         title={item.label}
                       />

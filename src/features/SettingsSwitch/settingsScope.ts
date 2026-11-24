@@ -15,7 +15,13 @@
 export type SettingsScope = 'account' | 'space';
 
 export interface ScopedSettingsGroup<TabKey extends string = string> {
-  items: { key: TabKey }[];
+  /**
+   * `href` marks a link out of this space (a personal-only page listed in a
+   * workspace's account set). It is never the active tab here, so it neither
+   * decides the active set nor becomes the remembered tab; its key may repeat
+   * a tab of this space, e.g. personal vs workspace Notifications.
+   */
+  items: { href?: string; key: TabKey }[];
   scope: SettingsScope;
 }
 
@@ -29,7 +35,8 @@ export const getActiveSettingsScope = <TabKey extends string>(
   activeTab: string | undefined,
 ): SettingsScope =>
   groups.some(
-    (group) => group.scope === 'account' && group.items.some((item) => item.key === activeTab),
+    (group) =>
+      group.scope === 'account' && group.items.some((item) => !item.href && item.key === activeTab),
   )
     ? 'account'
     : 'space';
@@ -67,7 +74,9 @@ export const getSettingsScopeEntryTab = <TabKey extends string>(
   scope: SettingsScope,
   groups: ScopedSettingsGroup<TabKey>[],
 ): TabKey | undefined => {
-  const items = filterGroupsByScope(groups, scope).flatMap((group) => group.items);
+  const items = filterGroupsByScope(groups, scope)
+    .flatMap((group) => group.items)
+    .filter((item) => !item.href);
   const remembered = rememberedTabs.get(rememberKey(spaceKey, scope));
   return items.find((item) => item.key === remembered)?.key ?? items[0]?.key;
 };

@@ -30,12 +30,12 @@ export const useWorkspaceSettingsScope = () => {
       : DEFAULT_WORKSPACE_SETTINGS_TAB;
   }, [location.pathname, slug]);
 
-  // A personal-only account tab carries the personal page it opens.
+  // URL of a tab of this workspace. A personal-only account tab carries its
+  // own `href` instead: its key can repeat a workspace tab (Notifications).
   const tabUrl = useCallback(
     (tab: WorkspaceSettingCategoryItem['key']) =>
-      groups.flatMap((group) => group.items).find((item) => item.key === tab)?.href ??
       getWorkspaceSettingsTabUrl(slug ?? '', tab as WorkspaceSettingsTabs),
-    [groups, slug],
+    [slug],
   );
 
   const scopeSwitch = useSettingsScopeSwitch({
