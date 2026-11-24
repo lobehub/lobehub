@@ -138,6 +138,34 @@ describe('workspace settings search scope', () => {
     );
   });
 
+  it('keeps personal and workspace Notifications as two results', () => {
+    const groups: WorkspaceSettingCategoryGroup[] = [
+      {
+        items: [
+          {
+            href: '/settings/notification',
+            icon: null,
+            key: SettingsTabs.Notification,
+            label: 'Notifications',
+          },
+        ],
+        key: WorkspaceSettingsGroupKey.Account,
+        scope: 'account',
+        title: 'Account',
+      },
+      {
+        items: [{ icon: null, key: WorkspaceSettingsTabs.Notification, label: 'Notifications' }],
+        key: WorkspaceSettingsGroupKey.General,
+        scope: 'space',
+        title: 'Workspace',
+      },
+    ];
+    const urls = search('notification', groups).map((result) => result.url);
+
+    expect(urls).toContain('/settings/notification');
+    expect(urls).toContain('/acme/settings/notification');
+  });
+
   it('indexes only the tab for workspace pages that differ from the personal ones', () => {
     const results = search('notification', memberGroups);
 
