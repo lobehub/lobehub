@@ -48,6 +48,7 @@ import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata'
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
 import { assertShareHeteroAllowed } from './shareHeteroGate';
+import { pickTopicModelPin } from './topicModelPin';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
@@ -374,6 +375,8 @@ export interface TurnSetupInput {
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
+  /** The reused topic, when the caller already read it (see `resolveRunStartingModel`). */
+  reusedTopic?: Awaited<ReturnType<TopicModel['findById']>>;
   runFromHistory: boolean;
   /** Skills the user selected for this turn; see `ExecAgentParams.selectedSkillIds`. */
   selectedSkillIds?: string[];
@@ -490,6 +493,7 @@ export const setupTurn = async (
     reservedOperationId,
     resolvedAgentId,
     resume,
+    reusedTopic,
     runFromHistory,
     selectedSkillIds,
     selectedToolIds,
@@ -738,7 +742,8 @@ export const setupTurn = async (
       // Explicit per-run values (such as callSubAgent) override their own field.
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
-      let existingTopic = await deps.topicModel.findById(topicId);
+      let existingTopic =
+        reusedTopic?.id === topicId ? reusedTopic : await deps.topicModel.findById(topicId);
       // The Project tool's `switchRunner` cannot move a conversation inside the
       // turn that called it, so it records the folder; the move happens here,
       // at the start of the next turn a user message opens (not a resume of
@@ -794,15 +799,10 @@ export const setupTurn = async (
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
       }
 
-      /** A group topic pins its owning agent; member runs keep their own model and effort. */
-      const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
-      // The model pin belongs to the topic's own agent. A `callAgent` child runs
-      // in an isolation thread on the CALLER's topic; inheriting that pin would
-      // run the callee on the caller's model (#19542). Legacy topics without an
-      // owner keep the pin.
-      const canUseTopicModelPin =
-        canUseTopicPin && (!existingTopic?.agentId || existingTopic.agentId === resolvedAgentId);
-      const pinnedModel = canUseTopicModelPin ? existingTopic?.model : undefined;
+      const { canUseTopicModelPin, canUseTopicPin, pinnedModel } = pickTopicModelPin(
+        existingTopic,
+        resolvedAgentId,
+      );
       if (pinnedModel) {
         model = nativeModelOverride || pinnedModel;
         provider = nativeProviderOverride || existingTopic?.provider || provider;
