@@ -5,6 +5,7 @@ import { ChannelService } from './ChannelService';
 
 const {
   archiveThread,
+  createNamedThread,
   onThreadArchived,
   remove,
   removeThread,
@@ -16,6 +17,7 @@ const {
   routing,
 } = vi.hoisted(() => ({
   archiveThread: vi.fn(),
+  createNamedThread: vi.fn(),
   onThreadArchived: vi.fn(),
   remove: vi.fn(),
   send: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
     archiveThread = archiveThread;
+    createNamedThread = createNamedThread;
     remove = remove;
     send = send;
     removeThread = removeThread;
@@ -45,6 +48,24 @@ vi.mock('./notify', () => ({ notifyChannel: notify }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: routing }));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
 vi.mock('@/business/server/channel/onThreadArchived', () => ({ onThreadArchived }));
+
+describe('Channel named thread', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    notify.mockResolvedValue(undefined);
+  });
+  const service = () => new ChannelService({} as never, 'owner', 'workspace');
+
+  it('refreshes members without waking any Agent', async () => {
+    createNamedThread.mockResolvedValue({ id: 'thread' });
+    await expect(
+      service().createThread('channel', { requestKey: 'key', title: 'Name' }),
+    ).resolves.toEqual({ id: 'thread' });
+    expect(createNamedThread).toHaveBeenCalledWith('channel', { requestKey: 'key', title: 'Name' });
+    expect(notify).toHaveBeenCalled();
+    expect(wake).not.toHaveBeenCalled();
+  });
+});
 
 describe('Channel thread archive', () => {
   beforeEach(() => {

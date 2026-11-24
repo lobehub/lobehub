@@ -681,6 +681,13 @@ export class ChannelService {
     ]);
   };
 
+  /** A Thread a person opens by name; posting its root wakes no Agent. */
+  createThread = async (channelId: string, input: { requestKey: string; title: string }) => {
+    const thread = await this.repository.createNamedThread(channelId, input);
+    await this.changed(channelId);
+    return thread;
+  };
+
   unarchiveThread = async (channelId: string, threadId: string) => {
     await this.repository.unarchiveThread(channelId, threadId);
     await this.changed(channelId);

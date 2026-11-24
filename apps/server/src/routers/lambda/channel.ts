@@ -88,6 +88,19 @@ export const channelRouter = router({
       await ctx.channelService.archiveThread(input.channelId, input.threadId);
       return { success: true };
     }),
+  /** Opens an empty Thread under a name the person typed. */
+  createThread: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        requestKey: z.string().min(1).max(200),
+        title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.createThread(input.channelId, input),
+      success: true,
+    })),
   /** In a project Channel, `joinProject` seats an Agent from outside in the project first. */
   addAgent: channelProcedure
     .input(z.object({ channelId, agent: agentSelection, joinProject: z.boolean().optional() }))

@@ -492,6 +492,34 @@ export class ChannelRepository {
   createThread = async (channelId: string, input: Parameters<typeof createChannelThread>[2]) =>
     this.write(channelId, (tx) => createChannelThread(tx, channelId, input), { joinOpen: true });
 
+  /**
+   * Opens a Thread a person names before anyone writes in it: the name is posted on the main
+   * timeline for the record, waking no Agent, and the Thread opens on it with the person following.
+   * The retry key keys the root, so a retry returns the same Thread.
+   */
+  createNamedThread = async (channelId: string, input: { requestKey: string; title: string }) =>
+    this.write(
+      channelId,
+      async (tx, access) => {
+        const root = await sendMessage(
+          tx,
+          access,
+          {
+            content: input.title,
+            requestKey: input.requestKey,
+            routing: 'fallback',
+            silent: true,
+          },
+          this.contacts,
+        );
+        return createChannelThread(tx, channelId, {
+          followerMemberIds: [access.member.id],
+          rootMessageId: root.id,
+        });
+      },
+      { joinOpen: true },
+    );
+
   markRead = async (channelId: string, sequence: number) =>
     this.write(
       channelId,
