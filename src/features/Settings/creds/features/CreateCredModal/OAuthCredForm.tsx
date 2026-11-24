@@ -30,7 +30,6 @@ interface OAuthCredFormProps {
 
 interface FormValues {
   description?: string;
-  key: string;
   name: string;
   oauthConnectionId: number;
 }
@@ -73,7 +72,6 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
 
       await credsApi.client.createOAuth.mutate({
         description: values.description,
-        key: values.key,
         name: values.name,
         oauthConnectionId: values.oauthConnectionId,
         ...createExtras(credsApi),
@@ -132,18 +130,6 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onCancel, o
 
       <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
         <Input disabled={disabled} placeholder="e.g., GitHub Connection" />
-      </Form.Field>
-
-      <Form.Field
-        desc={t('creds.form.keyDesc')}
-        label={t('creds.form.key')}
-        name="key"
-        required={t('creds.form.keyRequired')}
-        validate={(value?: string) =>
-          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
-        }
-      >
-        <Input disabled={disabled} placeholder="e.g., github-oauth" />
       </Form.Field>
 
       <Form.Field label={t('creds.form.description')} name="description">
