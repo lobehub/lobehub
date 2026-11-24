@@ -559,7 +559,9 @@ const ChatInput = memo<ChatInputProps>(
           {sendMessageErrorMsg && (
             <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
-          {businessAlerts}
+          {/* A refused send already says what to do next; a second notice with its
+              own buttons beside it would compete for the same decision. */}
+          {!sendMessageErrorMsg && businessAlerts}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}

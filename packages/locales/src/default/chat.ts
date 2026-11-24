@@ -1074,6 +1074,7 @@ export default {
   'input.agentRunFeeUnfunded.free.title': 'You’ve used your trial credits',
   'input.agentRunFeeUnfunded.free.upgrade': 'Upgrade plan',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
+  'input.agentRunFeeUnfunded.titleSwitchToAuto': 'Usage is used up. Switch to Auto to continue',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':
