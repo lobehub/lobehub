@@ -1,4 +1,6 @@
 {
+  "picker.offlineGroup": "离线设备（{{count}}）",
+  "picker.thisDevice": "本机",
   "workingDirectory.addFolder": "添加目录…",
   "workingDirectory.addFolderDesc": "输入目标设备上的绝对路径，如 /Users/name/projects",
   "workingDirectory.addFolderFailed": "无法添加此文件夹，请重试。",

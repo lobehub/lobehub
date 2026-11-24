@@ -1,4 +1,6 @@
 {
+  "picker.offlineGroup": "Offline ({{count}})",
+  "picker.thisDevice": "This device",
   "workingDirectory.addFolder": "Add folder…",
   "workingDirectory.addFolderDesc": "Enter an absolute path on the target device, e.g. /Users/name/projects",
   "workingDirectory.addFolderFailed": "Could not add this folder. Please try again.",

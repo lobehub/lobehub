@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { useDeviceSelectOptions } from '@/features/DeviceManager/useDeviceSelectOptions';
 import { deviceService } from '@/services/device';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
@@ -51,6 +52,7 @@ function AddDirectoryContent({
     ? fixedDevice?.friendlyName || fixedDevice?.hostname || initialDeviceId
     : undefined;
   const [path, setPath] = useState('');
+  const deviceOptions = useDeviceSelectOptions(devices, deviceId);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const bind = useProjectDirectoryStore((s) => s.bind);
@@ -96,12 +98,9 @@ function AddDirectoryContent({
           <Select
             aria-label={t('directories.device')}
             disabled={pending}
+            options={deviceOptions}
             placeholder={t('directories.device')}
             value={deviceId}
-            options={devices.map((d) => ({
-              value: d.deviceId,
-              label: d.friendlyName || d.deviceId,
-            }))}
             onChange={(id) => {
               setDevice(id ?? '');
               setError(undefined);
