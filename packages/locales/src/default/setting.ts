@@ -5330,7 +5330,7 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.scope.workspace': 'This workspace',
   'subscriptionAccounts.purchase.scope.workspaceHint':
     'The device and agent are created in this workspace for its members.',
-  'subscriptionAccounts.purchase.sku.currency': 'Priced in CNY',
+  'subscriptionAccounts.purchase.sku.currency': 'Priced in USD',
   'subscriptionAccounts.purchase.sku.perMonth': '/ month',
   'subscriptionAccounts.purchase.sku.perQuarter': '/ quarter',
   'subscriptionAccounts.purchase.sku.perYear': '/ year',
@@ -5367,7 +5367,7 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.summary.split': 'Device {{device}} + account {{account}}',
   'subscriptionAccounts.purchase.summary.support': 'Network, power and reconnection support',
   'subscriptionAccounts.purchase.summary.title': 'Summary',
-  'subscriptionAccounts.purchase.summary.total': 'Total this period · CNY',
+  'subscriptionAccounts.purchase.summary.total': 'Total this period · USD',
   'subscriptionAccounts.purchase.title': 'Coding account + cloud device',
   'subscriptionAccounts.searchPlaceholder': 'Search accounts…',
   'subscriptionAccounts.usageTitle': 'Usage history',
