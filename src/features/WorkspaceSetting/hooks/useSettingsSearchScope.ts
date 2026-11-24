@@ -21,6 +21,11 @@ const ITEM_TABS: ReadonlySet<SettingsSearchTab> = new Set<SettingsSearchTab>([
   SettingsTabs.Profile,
   SettingsTabs.Provider,
   SettingsTabs.ServiceModel,
+  // Personal-only account tabs: their items link into the personal page.
+  SettingsTabs.Memory,
+  SettingsTabs.Proxy,
+  SettingsTabs.Referral,
+  SettingsTabs.SystemTools,
 ]);
 
 /**

@@ -3,6 +3,7 @@ import { createElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { useSettingsSearch } from '@/features/SettingsSearch';
+import { SettingsTabs } from '@/store/global/initialState';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
@@ -113,6 +114,28 @@ describe('workspace settings search scope', () => {
       // Only the personal Usage page holds the balance
       expect(urls).not.toContain('/acme/settings/usage');
     }
+  });
+
+  it('deep-links rows of a personal-only account tab into its personal page', () => {
+    const groups: WorkspaceSettingCategoryGroup[] = [
+      {
+        items: [
+          {
+            href: '/settings/referral',
+            icon: null,
+            key: SettingsTabs.Referral,
+            label: 'Referral',
+          },
+        ],
+        key: WorkspaceSettingsGroupKey.Account,
+        scope: 'account',
+        title: 'Account',
+      },
+    ];
+
+    expect(search('invite code', groups).map((result) => result.url)).toContain(
+      '/settings/referral#referral-invite-code',
+    );
   });
 
   it('indexes only the tab for workspace pages that differ from the personal ones', () => {
