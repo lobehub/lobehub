@@ -1,30 +1,23 @@
-import { hasHistoricalToolInvocation } from '@lobechat/agent-runtime';
 import { LobeHubIdentifier } from '@lobechat/builtin-skills/manifests';
-import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { getUserDisabledToolIds } from '@lobechat/builtin-tools';
-import { isDesktop, resolveSubAgentChatConfig } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import type { OperationSkillSet } from '@lobechat/context-engine';
 import { mentionsTopic } from '@lobechat/context-engine';
-import { assembleSkillPool } from '@lobechat/mecha';
-import {
-  getAutoPluginIds,
-  type LobeAgentChatConfig,
-  resolveToolMode,
-  type UIChatMessage,
-} from '@lobechat/types';
+import { assembleSkillPool, type ResolvedAgentConfig } from '@lobechat/mecha';
+import { getAutoPluginIds, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { collectSelectedSkillIds } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { getToolStoreState } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/slices/agentSkills/selectors';
 import { loadBuiltinSkills } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 import {
+  confirmedUninstalledBuiltinTools,
   installedImplicitBuiltinSkillIds,
   legacyDisabledBuiltinSkillsForRun,
 } from '@/store/tool/slices/builtin/projection';
-
-import { resolveAgentConfig } from './agentConfigResolver';
 
 const log = debug('context-engine:resolveClientSkills');
 
@@ -82,69 +75,64 @@ export const resolveClientSkills = async (
 };
 
 /**
- * Determine whether a client-side Agent-mode run has any skills available (or
- * prior `lobe-skills` invocations in history) so `lobe-skills` can be deferred
- * on 0-skill turns without dropping historical replay or selected skills.
+ * Whether a client-side run has any skill to offer, for deciding if the skill
+ * APIs of `lobe-skills` can be left out of its first request.
+ *
+ * Answers from the run's own resolved agent config, so it reads the same
+ * plugins and chat config the run does, and from the same agent profile the
+ * context build uses for implicit builtin skills. The context build removes
+ * more from its pool than this does (unavailable builtins, switched-off
+ * connectors), so where the two differ this one errs towards keeping the
+ * skill APIs loaded.
+ *
+ * Returns `undefined` when the installed skill list could not be confirmed
+ * with the server, which must not be read as "no skills".
  */
 export const resolveClientRunHasSkills = async ({
+  agentConfig,
   agentId,
-  chatConfigOverride,
-  disableTools,
-  groupId,
-  isSubAgent,
   messages,
-  scope,
-  selectedSkillsCount = 0,
 }: {
+  agentConfig: Pick<ResolvedAgentConfig, 'agentConfig' | 'chatConfig' | 'plugins'>;
+  /** The agent the context build reads its profile from (`ClientContextBuilder`). */
   agentId?: string;
-  chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
-  disableTools?: boolean;
-  groupId?: string;
-  isSubAgent?: boolean;
   messages: UIChatMessage[];
-  scope?: string;
-  selectedSkillsCount?: number;
 }): Promise<boolean | undefined> => {
-  if (disableTools) return undefined;
-  if (selectedSkillsCount > 0 || hasHistoricalToolInvocation(messages, SkillsIdentifier)) {
-    return true;
-  }
+  // A skill picked with `/` is injected into the user message and is callable
+  // even when the agent has not opted into it, so it never reaches the pool.
+  if (collectSelectedSkillIds(messages).length > 0) return true;
 
-  const resolved = resolveAgentConfig({
-    agentId: agentId || '',
-    disableTools,
-    groupId,
-    isSubAgent,
-    scope: scope as any,
-  });
-  const chatConfig = chatConfigOverride
-    ? (resolveSubAgentChatConfig(resolved.chatConfig, chatConfigOverride) ?? resolved.chatConfig)
-    : resolved.chatConfig;
-  if (resolveToolMode(chatConfig) !== 'agent') return undefined;
-
-  const rawPlugins = resolved.agentConfig?.plugins;
+  const { chatConfig } = agentConfig;
+  const rawPlugins = agentConfig.agentConfig?.plugins;
   const agentItem = agentId
     ? agentByIdSelectors.getAgentById(agentId)(getAgentStoreState())
     : undefined;
-  const toolState = getToolStoreState();
-  try {
-    await toolState.ensureAgentSkillsLoaded();
-  } catch {
-    // Couldn't verify the installed skill list from the server; avoid deferring lobe-skills.
-    return undefined;
-  }
 
   const { skills } = await resolveClientSkills(
-    resolved.plugins ?? [],
+    agentConfig.plugins ?? [],
     [
       ...getUserDisabledToolIds(rawPlugins, chatConfig),
-      ...legacyDisabledBuiltinSkillsForRun(toolState, rawPlugins),
+      ...legacyDisabledBuiltinSkillsForRun(getToolStoreState(), rawPlugins),
     ],
     chatConfig?.skillActivateMode,
     mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
     getAutoPluginIds(rawPlugins),
-    installedImplicitBuiltinSkillIds(toolState, agentItem?.createdAt, chatConfig),
+    installedImplicitBuiltinSkillIds(getToolStoreState(), agentItem?.createdAt, chatConfig),
   );
+  if (skills.length > 0) return true;
 
-  return skills.length > 0;
+  // An empty pool only counts once the server confirmed both lists it is built
+  // from: `resolveClientSkills` falls back to whatever the store holds when the
+  // installed skills fail to load, and implicit builtin skills are withheld
+  // until the uninstall list is confirmed.
+  const toolState = getToolStoreState();
+  if (
+    !agentSkillsSelectors.isAgentSkillListSynced(toolState) ||
+    !confirmedUninstalledBuiltinTools(toolState)
+  ) {
+    log('Skill lists are not confirmed by the server; keeping lobe-skills loaded');
+    return undefined;
+  }
+
+  return false;
 };

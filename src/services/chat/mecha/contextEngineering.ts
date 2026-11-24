@@ -1,7 +1,6 @@
 import { LobeHubIdentifier } from '@lobechat/builtin-skills/manifests';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { isDesktop } from '@lobechat/const';
 import type {
   AgentGroupConfig,
@@ -269,7 +268,6 @@ export const contextEngineering = async ({
     const availableTools = Object.values(discoveryManifests ?? {})
       .filter(
         (manifest) =>
-          manifest.identifier !== SkillsIdentifier &&
           !discoveryExcludedSet.has(manifest.identifier) &&
           !disabledIdSet.has(manifest.identifier) &&
           !disabledIdSet.has(manifestBaseIdentifier(manifest)),

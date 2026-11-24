@@ -44,7 +44,6 @@ import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
-import { resolveClientRunHasSkills } from '@/services/chat/mecha/skillEngineering';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
 import { refreshRunConnectors } from '@/services/runConnectors';
@@ -77,6 +76,7 @@ import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
 import { steerQueuedFollowUps } from './clientSteer';
+import { deferClientSkillsTool } from './deferSkillsTool';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -136,10 +136,8 @@ export class StreamingExecutorActionImpl {
     isSubAgent,
     modelOverride,
     chatConfigOverride,
-    hasAvailableSkills,
     uninstalledBuiltinTools,
   }: {
-    hasAvailableSkills?: boolean;
     uninstalledBuiltinTools?: string[];
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -300,7 +298,6 @@ export class StreamingExecutorActionImpl {
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
       {
-        hasAvailableSkills,
         hasOversizedFiles: hasPreviewableFiles(messages),
         runAgent: { ...runAgent, connectors },
         ...(topicId && { topicId }),
@@ -642,38 +639,38 @@ export class StreamingExecutorActionImpl {
     // The connector rows this conversation may run, as the server resolves
     // them (bounded; the local lists stand in on a timeout or failure)
     await refreshRunConnectors({ agentId, topicId: topicId ?? undefined });
-    const hasAvailableSkills = await resolveClientRunHasSkills({
-      ...this.#get().operations[operationId]?.context,
-      agentId: subAgentId || agentId,
-      chatConfigOverride: params.chatConfigOverride,
-      disableTools,
-      isSubAgent,
-      messages,
-      selectedSkillsCount: params.initialContext?.initialContext?.selectedSkills?.length,
-    });
 
+    // ===========================================
     // Step 1: Create Agent State (resolves config once)
+    // ===========================================
+    // agentConfig already has isSubAgent filtering applied and is passed to callLLM executor
+    const createdRun = this.#get().internal_createAgentState({
+      messages,
+      parentMessageId: params.parentMessageId,
+      agentId,
+      uninstalledBuiltinTools,
+      disableTools,
+      topicId,
+      threadId: threadId ?? undefined,
+      initialState: params.initialState,
+      initialContext: params.initialContext,
+      operationId,
+      subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
+      isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
+      modelOverride: params.modelOverride,
+      chatConfigOverride: params.chatConfigOverride,
+    });
+    // A run with no skill to offer starts without the skill APIs of lobe-skills.
     const {
       state: initialAgentState,
       context: initialAgentContext,
       agentConfig,
       toolsEngine,
-    } = this.#get().internal_createAgentState({
-      agentId,
-      chatConfigOverride: params.chatConfigOverride,
+    } = await deferClientSkillsTool(createdRun, {
+      agentId: groupId && subAgentId ? subAgentId : agentId,
       disableTools,
-      hasAvailableSkills,
-      initialContext: params.initialContext,
-      initialState: params.initialState,
-      isSubAgent,
       messages,
-      modelOverride: params.modelOverride,
-      operationId,
-      parentMessageId: params.parentMessageId,
-      subAgentId,
-      threadId: threadId ?? undefined,
-      topicId,
-      uninstalledBuiltinTools,
+      resumed: !!params.initialState,
     });
 
     if (params.skipCreateFirstMessage) {

@@ -5,12 +5,6 @@ import type {
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
 import {
-  getSystemPrompt as getActivatorSystemPrompt,
-  LobeActivatorIdentifier,
-  systemPrompt as activatorSystemPrompt,
-} from '@lobechat/builtin-tool-activator';
-import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
-import {
   ToolResolver,
   type ToolsEngine,
   tryCountRequestPayloadTokens,
@@ -69,17 +63,9 @@ export class ClientContextBuilder implements ContextBuilder {
       [],
       input.payload.allowedToolNames,
     );
-    const hasSkillsTool = resolvedTools.enabledToolIds.includes(SkillsIdentifier);
-    const promptManifests = Object.values(resolvedTools.promptManifestMap).map((manifest) =>
-      !hasSkillsTool &&
-      manifest.identifier === LobeActivatorIdentifier &&
-      manifest.systemRole === activatorSystemPrompt
-        ? { ...manifest, systemRole: getActivatorSystemPrompt({ withSkills: false }) }
-        : manifest,
-    );
     const promptAgentConfig: ResolvedAgentConfig = {
       ...resolvedAgentConfig,
-      enabledManifests: promptManifests,
+      enabledManifests: Object.values(resolvedTools.promptManifestMap),
       enabledToolIds: resolvedTools.enabledToolIds,
       tools: resolvedTools.tools.length > 0 ? resolvedTools.tools : undefined,
     };
@@ -163,10 +149,24 @@ export class ClientContextBuilder implements ContextBuilder {
 
     if (!additional.tools?.length) return this.context.agentConfig;
 
+    // A tool the run deferred starts with a narrowed manifest; once activated,
+    // the engine's full one takes its place instead of losing to it below.
+    const deferredManifestMap = input.state.operationToolSet?.deferredManifestMap ?? {};
+    const promotedManifests = new Map(
+      additional.enabledManifests
+        .filter((manifest) => deferredManifestMap[manifest.identifier])
+        .map((manifest) => [manifest.identifier, manifest]),
+    );
+
     return {
       ...this.context.agentConfig,
       enabledManifests: dedupeBy(
-        [...(this.context.agentConfig.enabledManifests ?? []), ...additional.enabledManifests],
+        [
+          ...(this.context.agentConfig.enabledManifests ?? []).map(
+            (manifest) => promotedManifests.get(manifest.identifier) ?? manifest,
+          ),
+          ...additional.enabledManifests,
+        ],
         (manifest) => manifest.identifier,
       ),
       enabledToolIds: [

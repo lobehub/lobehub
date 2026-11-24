@@ -324,13 +324,25 @@ const messageHasToolInvocation = (
   msg: UIChatMessage,
   identifier: string,
   prefix: string,
+  apiNames?: ReadonlySet<string>,
 ): boolean => {
-  if (collectToolInvocations(msg).some((invocation) => invocation.identifier === identifier)) {
+  // A call whose API name was not recorded counts: it cannot be ruled out.
+  const matchesApi = (apiName: string | undefined) =>
+    !apiNames || !apiName || apiNames.has(apiName);
+
+  if (
+    collectToolInvocations(msg).some(
+      (invocation) => invocation.identifier === identifier && matchesApi(invocation.apiName),
+    )
+  ) {
     return true;
   }
 
   if (msg.role === 'assistant') {
-    if (Array.isArray(msg.tools) && msg.tools.some((tool) => tool?.identifier === identifier)) {
+    if (
+      Array.isArray(msg.tools) &&
+      msg.tools.some((tool) => tool?.identifier === identifier && matchesApi(tool?.apiName))
+    ) {
       return true;
     }
 
@@ -339,7 +351,12 @@ const messageHasToolInvocation = (
       Array.isArray(toolCalls) &&
       toolCalls.some((call) => {
         const name = call?.function?.name;
-        return name === identifier || (typeof name === 'string' && name.startsWith(prefix));
+        if (name === identifier) return true;
+        return (
+          typeof name === 'string' &&
+          name.startsWith(prefix) &&
+          matchesApi(name.slice(prefix.length))
+        );
       })
     ) {
       return true;
@@ -348,7 +365,7 @@ const messageHasToolInvocation = (
 
   if (Array.isArray(msg.compressedMessages)) {
     return msg.compressedMessages.some((compressed) =>
-      messageHasToolInvocation(compressed, identifier, prefix),
+      messageHasToolInvocation(compressed, identifier, prefix, apiNames),
     );
   }
 
@@ -356,18 +373,21 @@ const messageHasToolInvocation = (
 };
 
 /**
- * Whether the conversation history contains any tool invocation for `identifier`.
+ * Whether the conversation history contains a tool invocation for `identifier`,
+ * optionally limited to the given API names.
  *
  * Covers flat DB rows (`role='tool'` and `role='assistant'` with `tools` /
  * `tool_calls`), grouped `assistantGroup` / `supervisor` nodes, and nested
- * `compressedGroup` entries. Used to keep a deferred tool (such as
- * `lobe-skills`) available when earlier turns already called it, avoiding
- * provider errors on historical tool calls after all skills are removed.
+ * `compressedGroup` entries. Used to keep the APIs of a deferred tool (such as
+ * the skill APIs of `lobe-skills`) declared when earlier turns already called
+ * them: a provider rejects a history that calls a function the request no
+ * longer declares.
  */
 export const hasHistoricalToolInvocation = (
   messages: UIChatMessage[],
   identifier: string,
+  apiNames?: ReadonlySet<string>,
 ): boolean => {
   const prefix = `${identifier}${TOOL_NAME_SEPARATOR}`;
-  return messages.some((msg) => messageHasToolInvocation(msg, identifier, prefix));
+  return messages.some((msg) => messageHasToolInvocation(msg, identifier, prefix, apiNames));
 };

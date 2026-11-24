@@ -676,10 +676,17 @@ describe('single tool executors', () => {
       },
     });
 
+    // The run started without skills: `lobe-skills` is enabled with its shell
+    // surface only, and the full manifest waits in `deferredManifestMap`.
+    const shellManifest = {
+      ...skillsManifest,
+      api: [{ description: 'Run a command', name: 'runCommand', parameters: {} }],
+    };
     const state = createState({
       operationToolSet: {
-        enabledToolIds: ['lobe-activator', 'lobe-skill-store'],
-        manifestMap: { 'lobe-skills': skillsManifest },
+        deferredManifestMap: { 'lobe-skills': skillsManifest },
+        enabledToolIds: ['lobe-activator', 'lobe-skill-store', 'lobe-skills'],
+        manifestMap: { 'lobe-skills': shellManifest },
         sourceMap: { 'lobe-skills': 'builtin' },
         tools: [],
       },
@@ -709,7 +716,7 @@ describe('single tool executors', () => {
     ]);
   });
 
-  it('does not auto-activate lobe-skills when skill import fails or when lobe-skills is absent from manifestMap', async () => {
+  it('does not auto-activate lobe-skills when skill import fails or when the run did not defer it', async () => {
     runTool.mockResolvedValue({
       attempts: 1,
       result: {
@@ -731,8 +738,9 @@ describe('single tool executors', () => {
       },
       createState({
         operationToolSet: {
+          deferredManifestMap: { 'lobe-skills': { api: [], identifier: 'lobe-skills' } },
           enabledToolIds: ['lobe-activator', 'lobe-skill-store'],
-          manifestMap: { 'lobe-skills': { api: [], identifier: 'lobe-skills' } },
+          manifestMap: {},
           sourceMap: {},
           tools: [],
         },
@@ -748,7 +756,7 @@ describe('single tool executors', () => {
         success: true,
       },
     });
-    const noManifest = await callTool(host)(
+    const notDeferred = await callTool(host)(
       {
         payload: {
           parentMessageId: 'assistant-msg-1',
@@ -759,16 +767,17 @@ describe('single tool executors', () => {
         },
         type: 'call_tool',
       },
+      // `lobe-skills` is enabled in full here, so there is nothing to promote.
       createState({
         operationToolSet: {
-          enabledToolIds: ['lobe-activator'],
-          manifestMap: {},
+          enabledToolIds: ['lobe-activator', 'lobe-skills'],
+          manifestMap: { 'lobe-skills': { api: [], identifier: 'lobe-skills' } },
           sourceMap: {},
           tools: [],
         },
       } as any),
     );
-    expect(noManifest.newState.activatedStepTools).toBeUndefined();
+    expect(notDeferred.newState.activatedStepTools).toBeUndefined();
   });
 
   it('auto-activates deferred lobe-skills when lobe-activator activates a skill via fallback', async () => {
@@ -802,9 +811,11 @@ describe('single tool executors', () => {
         type: 'call_tool',
       },
       createState({
+        // A device run: nothing of `lobe-skills` is enabled at start.
         operationToolSet: {
+          deferredManifestMap: { 'lobe-skills': skillsManifest },
           enabledToolIds: ['lobe-activator'],
-          manifestMap: { 'lobe-skills': skillsManifest },
+          manifestMap: {},
           sourceMap: {},
           tools: [],
         },

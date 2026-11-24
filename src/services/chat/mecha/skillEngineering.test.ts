@@ -2,8 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { confirmedUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 
-import { resolveClientSkills } from './skillEngineering';
+import { resolveClientRunHasSkills, resolveClientSkills } from './skillEngineering';
+
+vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: { getAgentById: () => () => undefined },
+}));
+
+vi.mock('@/store/tool/slices/builtin/projection', () => ({
+  confirmedUninstalledBuiltinTools: vi.fn(),
+  installedImplicitBuiltinSkillIds: () => [],
+  legacyDisabledBuiltinSkillsForRun: () => [],
+}));
 
 vi.mock('@/store/tool', () => ({
   getToolStoreState: vi.fn(),
@@ -238,5 +251,102 @@ describe('resolveClientSkills', () => {
       expect(findSkill(result.skills, 'disabled-skill')).toBeUndefined();
       expect(findSkill(result.skills, 'enabled-skill')).toBeDefined();
     });
+  });
+});
+
+describe('resolveClientRunHasSkills', () => {
+  const agentConfig = {
+    agentConfig: { plugins: [] },
+    chatConfig: {},
+    plugins: [],
+  } as any;
+  const syncedList = { entries: { all: { source: 'server' } } };
+  const userMessage = (extra: Record<string, unknown> = {}) =>
+    ({ content: 'Hi', id: 'u-1', role: 'user', ...extra }) as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(confirmedUninstalledBuiltinTools).mockReturnValue([]);
+  });
+
+  it('reports no skills once the server confirmed an empty pool', async () => {
+    setToolState({ agentSkillListReplica: syncedList });
+
+    await expect(
+      resolveClientRunHasSkills({ agentConfig, messages: [userMessage()] }),
+    ).resolves.toBe(false);
+  });
+
+  it('reports skills when the agent has one enabled', async () => {
+    setToolState({
+      agentSkillListReplica: syncedList,
+      agentSkills: [{ description: 'mine', id: 'db-1', identifier: 'my-skill', name: 'Mine' }],
+    });
+
+    await expect(
+      resolveClientRunHasSkills({
+        agentConfig: { ...agentConfig, plugins: ['my-skill'] },
+        messages: [userMessage()],
+      }),
+    ).resolves.toBe(true);
+  });
+
+  // The main send path persists a `/` selection on the user message instead of
+  // passing it with the run, and the skill need not be enabled on the agent.
+  it('reports skills when a user turn selected one the agent has not enabled', async () => {
+    setToolState({ agentSkillListReplica: syncedList });
+
+    await expect(
+      resolveClientRunHasSkills({
+        agentConfig,
+        messages: [userMessage({ metadata: { selectedSkillIds: ['my-skill'] } })],
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it('reads a selection from the editor state of an older user turn', async () => {
+    setToolState({ agentSkillListReplica: syncedList });
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                actionCategory: 'skill',
+                actionLabel: 'Mine',
+                actionType: 'my-skill',
+                type: 'action-tag',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    await expect(
+      resolveClientRunHasSkills({
+        agentConfig,
+        messages: [userMessage({ editorData }), userMessage({ id: 'u-2' })],
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it('cannot tell while the installed skill list is unconfirmed', async () => {
+    setToolState({});
+
+    await expect(
+      resolveClientRunHasSkills({ agentConfig, messages: [userMessage()] }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('cannot tell while the builtin uninstall list is unconfirmed', async () => {
+    setToolState({ agentSkillListReplica: syncedList });
+    vi.mocked(confirmedUninstalledBuiltinTools).mockReturnValue(undefined);
+
+    await expect(
+      resolveClientRunHasSkills({ agentConfig, messages: [userMessage()] }),
+    ).resolves.toBeUndefined();
   });
 });

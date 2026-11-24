@@ -4,7 +4,6 @@ import {
   type ToolRunResult,
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
@@ -756,7 +755,7 @@ export const buildToolDiscoveryConfig = (
   if (!enabledToolSet.has(LobeActivatorIdentifier)) return undefined;
 
   const availableTools = Object.entries(operationToolSet.manifestMap)
-    .filter(([identifier]) => !enabledToolSet.has(identifier) && identifier !== SkillsIdentifier)
+    .filter(([identifier]) => !enabledToolSet.has(identifier))
     .map(([identifier, manifest]) => ({
       description: manifest.meta?.description || '',
       identifier,

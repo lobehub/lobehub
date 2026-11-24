@@ -662,4 +662,44 @@ describe('hasHistoricalToolInvocation', () => {
       ),
     ).toBe(true);
   });
+
+  it('limits the match to the given API names', () => {
+    const skillApis = new Set(['activateSkill', 'execScript', 'readReference']);
+    const shellOnly = [
+      createToolMessage({
+        plugin: { apiName: 'runCommand', identifier: 'lobe-skills' },
+      } as any),
+      createMessage({
+        role: 'assistant',
+        tool_calls: [{ function: { name: 'lobe-skills____exportFile' }, id: 'tc-1' }],
+        tools: [{ apiName: 'runCommand', id: 'tc-2', identifier: 'lobe-skills' }],
+      } as any),
+    ];
+
+    expect(hasHistoricalToolInvocation(shellOnly, 'lobe-skills')).toBe(true);
+    expect(hasHistoricalToolInvocation(shellOnly, 'lobe-skills', skillApis)).toBe(false);
+
+    expect(
+      hasHistoricalToolInvocation(
+        [
+          ...shellOnly,
+          createMessage({
+            role: 'assistant',
+            tool_calls: [{ function: { name: 'lobe-skills____execScript' }, id: 'tc-3' }],
+          } as any),
+        ],
+        'lobe-skills',
+        skillApis,
+      ),
+    ).toBe(true);
+
+    // A row that did not record its API cannot be ruled out.
+    expect(
+      hasHistoricalToolInvocation(
+        [createToolMessage({ plugin: { identifier: 'lobe-skills' } } as any)],
+        'lobe-skills',
+        skillApis,
+      ),
+    ).toBe(true);
+  });
 });

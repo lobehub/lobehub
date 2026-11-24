@@ -1,40 +1,34 @@
-import { hasHistoricalToolInvocation } from '@lobechat/agent-runtime';
-import {
-  getSystemPrompt as getActivatorSystemPrompt,
-  getSystemPromptForShareVisitor as getActivatorSystemPromptForShareVisitor,
-  LobeActivatorIdentifier,
-  systemPrompt as activatorSystemPrompt,
-} from '@lobechat/builtin-tool-activator';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const';
-import type {
-  LobeToolManifest,
-  OperationSkillSet,
-  ToolExecutor,
-  ToolSource,
-} from '@lobechat/context-engine';
-import { type LobeAgentChatConfig, resolveToolMode, type UIChatMessage } from '@lobechat/types';
-
+import type { LobeToolManifest, OperationSkillSet } from '@lobechat/context-engine';
 import {
-  dropToolFromSet,
-  generateOwnedToolNames,
-  pruneArrayInPlace,
-} from '../shareGate/toolSetMutation';
+  applySkillsToolDeferral,
+  canDeferSkillsTool,
+  planSkillsToolDeferral,
+} from '@lobechat/mecha';
+import type { LobeAgentChatConfig, UIChatMessage } from '@lobechat/types';
+
+import { applyShareGateToActivator } from '../shareGate/toolSet';
+import { dropToolFromSet } from '../shareGate/toolSetMutation';
+import type { ShareGateToolSet } from '../shareGate/types';
 
 export interface DeferUnusedSkillsToolParams {
-  activatableToolIds: string[];
   agentChatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'toolMode'> | null;
   allMessages: UIChatMessage[];
-  enabledToolIds: string[];
   evalAllowedTools?: readonly string[];
   exclusivePluginIds?: readonly string[];
-  executorMap: Record<string, ToolExecutor>;
   isGoalTurn?: boolean;
   isShareRun?: boolean;
-  manifestMap: Record<string, LobeToolManifest>;
+  /** `undefined` when the skill set could not be built, which never defers. */
   operationSkillSet?: OperationSkillSet;
-  sourceMap: Record<string, ToolSource>;
-  tools?: Array<{ function?: { name?: string } }>;
+  /**
+   * The operation's tool set. `enabledToolIds` is optional because the tools
+   * engine is not obliged to report it; a run without it is left untouched.
+   */
+  toolSet: Omit<ShareGateToolSet, 'enabledToolIds'> & {
+    deferredManifestMap?: Record<string, LobeToolManifest>;
+    enabledToolIds?: string[];
+  };
 }
 
 const isExplicitlyAllowedByEval = (evalAllowedTools?: readonly string[]): boolean =>
@@ -45,92 +39,60 @@ const isExplicitlyAllowedByEval = (evalAllowedTools?: readonly string[]): boolea
   );
 
 /**
- * Defer `lobe-skills` out of the initial enabled tool set when an Agent-mode
- * run starts with zero available skills and no prior `lobe-skills` usage in
- * conversation history.
+ * Start an Agent-mode run without the skill APIs of `lobe-skills` when it has
+ * no skill to offer and the conversation never used one.
  *
- * Keeps the resolved manifest in `manifestMap` on normal runs so mid-operation
- * skill installation (`lobe-skill-store`) or explicit activation can enable
- * `lobe-skills` on the next step without re-running discovery. Share runs never
- * allow `lobe-skill-store`, so when zero skills survive they drop it outright.
+ * The sandbox shell and `exportFile` stay enabled: they are the run's always-on
+ * shell and do not depend on skills. Only `activateSkill` / `readReference` /
+ * `execScript` leave, and the full manifest moves to `deferredManifestMap` so
+ * installing a skill mid-run (`lobe-skill-store`) restores them on the next
+ * step. On a routed device the tool has no shell to keep and leaves entirely.
+ * Share runs cannot install skills, so there the tool is dropped outright.
  *
- * Mutates the operation tool-set arrays/maps in place so `initialContext.payload.tools`
- * and `resolveOperationInitSlots` observe the exact same pruned surface.
+ * Mutates the tool set in place so `initialContext.payload.tools` and
+ * `resolveOperationInitSlots` observe the same narrowed surface.
  */
 export const deferUnusedSkillsTool = (params: DeferUnusedSkillsToolParams): boolean => {
   const {
-    activatableToolIds,
     agentChatConfig,
     allMessages,
-    enabledToolIds,
     evalAllowedTools,
     exclusivePluginIds,
-    executorMap,
     isGoalTurn = false,
     isShareRun = false,
-    manifestMap,
     operationSkillSet,
-    sourceMap,
-    tools,
+    toolSet,
   } = params;
+  const { enabledToolIds } = toolSet;
 
-  if (!enabledToolIds.includes(SkillsIdentifier)) return false;
-  if (isGoalTurn || resolveToolMode(agentChatConfig) !== 'agent') return false;
+  if (!enabledToolIds?.includes(SkillsIdentifier)) return false;
+  if (isGoalTurn) return false;
   if (exclusivePluginIds?.includes(SkillsIdentifier)) return false;
   if (isExplicitlyAllowedByEval(evalAllowedTools)) return false;
-  if ((operationSkillSet?.skills?.length ?? 0) > 0) return false;
-  if (activatableToolIds.includes(SkillsIdentifier)) return false;
-  if (hasHistoricalToolInvocation(allMessages, SkillsIdentifier)) return false;
+  if (toolSet.activatableToolIds.includes(SkillsIdentifier)) return false;
+  if (
+    !canDeferSkillsTool({
+      chatConfig: agentChatConfig,
+      hasSkills: operationSkillSet ? operationSkillSet.skills.length > 0 : undefined,
+      messages: allMessages,
+    })
+  ) {
+    return false;
+  }
 
-  const toolSet = {
-    activatableToolIds,
-    enabledToolIds,
-    executorMap,
-    manifestMap,
-    sourceMap,
-    tools,
-  };
+  const gatedToolSet = { ...toolSet, enabledToolIds };
 
   if (isShareRun) {
-    dropToolFromSet(toolSet, SkillsIdentifier);
-
-    const activatorManifest = manifestMap[LobeActivatorIdentifier];
-    if (activatorManifest) {
-      const enabled = new Set([...enabledToolIds, ...activatableToolIds]);
-      const hasActivatableTool = Object.keys(manifestMap).some(
-        (id) => id !== LobeActivatorIdentifier && !enabled.has(id),
-      );
-
-      if (!hasActivatableTool) {
-        dropToolFromSet(toolSet, LobeActivatorIdentifier);
-      } else {
-        manifestMap[LobeActivatorIdentifier] = {
-          ...activatorManifest,
-          systemRole: getActivatorSystemPromptForShareVisitor({ withSkills: false }),
-        };
-      }
-    }
-
+    dropToolFromSet(gatedToolSet, SkillsIdentifier);
+    applyShareGateToActivator(gatedToolSet);
     return true;
   }
 
-  const ownedNames = generateOwnedToolNames(SkillsIdentifier, manifestMap[SkillsIdentifier]);
-  pruneArrayInPlace(enabledToolIds, (id) => id !== SkillsIdentifier);
-  if (tools) {
-    pruneArrayInPlace(tools, (tool) => {
-      const name = tool?.function?.name;
-      if (!name) return true;
-      return !(ownedNames.has(name) || name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === SkillsIdentifier);
-    });
-  }
+  const deferral = planSkillsToolDeferral(toolSet.manifestMap);
+  if (!deferral) return false;
 
-  const activatorManifest = manifestMap[LobeActivatorIdentifier];
-  if (activatorManifest && activatorManifest.systemRole === activatorSystemPrompt) {
-    manifestMap[LobeActivatorIdentifier] = {
-      ...activatorManifest,
-      systemRole: getActivatorSystemPrompt({ withSkills: false }),
-    };
-  }
+  applySkillsToolDeferral(gatedToolSet, deferral);
+  toolSet.deferredManifestMap = gatedToolSet.deferredManifestMap;
 
   return true;
 };

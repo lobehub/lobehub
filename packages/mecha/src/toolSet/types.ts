@@ -49,14 +49,6 @@ export interface ToolRuleRequest {
   disableLocalSystem?: boolean;
   /** The run's effective execution target, resolved by the host. */
   executionTarget: DeviceExecutionTarget;
-  /**
-   * Whether this run has any skills available (or prior `lobe-skills` usage in
-   * conversation history). When explicitly `false` in agent mode, `lobe-skills`
-   * is omitted from the initial enabled tool set while its manifest stays in
-   * the pool so mid-run skill installation (`lobe-skill-store`) can activate it.
-   * Omitted (`undefined`) keeps `lobe-skills` enabled by default.
-   */
-  hasAvailableSkills?: boolean;
   hasEnabledKnowledgeBases?: boolean;
   /** Server confirmed an enabled HTTP connector supports MCP Events and the flag is on. */
   hasEventConnector?: boolean;

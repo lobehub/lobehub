@@ -444,22 +444,19 @@ const persistActivatedTools = ({
   stepCount: number;
 }) => {
   const existingIds = new Set((newState.activatedStepTools ?? []).map((tool) => tool.id));
-  const enabledOperationToolIds = new Set(newState.operationToolSet?.enabledToolIds ?? []);
+  const deferredManifestMap = newState.operationToolSet?.deferredManifestMap ?? {};
 
   for (const result of results) {
     const discoveredTools = (
       (result.data.state?.activatedTools as Array<{ identifier: string }> | undefined) ?? []
     ).map((tool) => tool.identifier);
 
-    // A 0-skill run defers `lobe-skills` while keeping its manifest in the pool.
-    // Once this operation installs a skill or activates one via the activator's
-    // skill fallback, bring `lobe-skills` into step activations immediately so
-    // the next LLM call can invoke `activateSkill` / `readReference` / `execScript`.
-    if (
-      shouldAutoActivateSkillsTool(result) &&
-      effectiveManifestMap[SKILLS_IDENTIFIER] &&
-      !enabledOperationToolIds.has(SKILLS_IDENTIFIER)
-    ) {
+    // A run that starts without skills defers the skill APIs of `lobe-skills`
+    // (`operationToolSet.deferredManifestMap`). Once this operation installs a
+    // skill, or activates one through the activator's skill fallback, promote
+    // the tool so the next LLM call can invoke `activateSkill` /
+    // `readReference` / `execScript`.
+    if (shouldAutoActivateSkillsTool(result) && deferredManifestMap[SKILLS_IDENTIFIER]) {
       discoveredTools.push(SKILLS_IDENTIFIER);
     }
 
