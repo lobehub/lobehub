@@ -172,6 +172,7 @@ export default {
   'limitation.insufficientBudget.window.rule.planUltraWeek': 'Ultra model weekly limit',
   'limitation.insufficientBudget.window.sentenceSeparator': ' ',
   'limitation.insufficientBudget.window.title': 'Usage limit reached',
+  'limitation.insufficientBudget.window.titleRules': '{{rules}} reached',
   'limitation.modelAccess.switchHint': 'Or switch to another model to keep chatting.',
   'limitation.modelAccess.switchHintUltra': 'Or switch to a Plus model to keep chatting.',
   'modelSelection.confirm.continue': 'Continue using',
@@ -608,8 +609,8 @@ export default {
   'plans.compare.artifactSites': 'Active Artifact sites',
   'plans.compare.auto': 'Auto',
   'plans.compare.auto.tooltip':
-    "Auto's model usage has its own 5-hour, weekly and monthly limits, separate from the other models. Agent run fees come from the other models' limits first, and from Auto's once those run out.",
-  'plans.compare.autoSeparate': 'Separate limit, about {{multiple}}× the other models',
+    "Auto picks a suitable model for each conversation. It has a limit of its own and doesn't use your plan limits. Agent run fees come from your plan limits first, then from Auto's.",
+  'plans.compare.autoSeparate': 'Extra {{multiple}}× plan limits',
   'plans.compare.baselineNote':
     'Each limit is shown as a multiple of the plan marked Standard in its row.',
   'plans.compare.concurrentAgentRuns': 'Concurrent agent tasks',
@@ -686,6 +687,7 @@ export default {
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
   'plans.limits.autoMonthlySpend.tooltip':
     'Auto usage across your billing month has its own limit, separate from other models.',
+  'plans.limits.autoPool': 'Extra {{multiple}}× plan limits for Auto',
   'plans.limits.autoRolling5hSpend': 'Auto 5-hour limit',
   'plans.limits.autoRolling5hSpend.multiple': 'Auto 5-hour limit: {{multiple}}× that of {{plan}}',
   'plans.limits.autoRolling5hSpend.tooltip': 'Auto usage within a 5-hour window has its own limit.',
