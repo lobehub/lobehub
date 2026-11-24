@@ -451,8 +451,6 @@ export default {
   'gotIt': 'Got it',
   'more': 'More',
   'navPanel.agent': 'Agents',
-  'navPanel.createPrivateFolder': 'New private category',
-  'navPanel.managePrivateFolders': 'Manage private categories',
   'navPanel.privateTooltip': 'Private · only you can see this',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
