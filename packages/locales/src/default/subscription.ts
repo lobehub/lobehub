@@ -714,7 +714,9 @@ export default {
   'plans.limits.ultraWeeklySpend.tooltip':
     'Ultra models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
   'plans.limits.ultraWeeklySpend.unavailable': 'Ultra models',
+  'plans.message.advancedLLM': 'Premium models',
   'plans.message.autoLLM': 'Auto model',
+  'plans.message.normalLLM': 'Standard models',
   'plans.message.plusLLM': 'Plus models',
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
