@@ -327,6 +327,8 @@ export const execAgentTurn = async (
   });
   await claimRunFee(runFee, {
     hold: shouldHoldRunFee(params, { workspaceId: deps.workspaceId }),
+    model: agentConfig.model,
+    provider: agentConfig.provider,
     userId: deps.userId,
   });
 

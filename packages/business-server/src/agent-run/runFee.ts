@@ -1,6 +1,10 @@
 export interface HoldAgentRunFeeParams {
   /** The run's operation id, or a provisional id later moved with {@link rebindAgentRunFee}. */
   holderId: string;
+  /** The model the run starts on, when it runs on one of ours (absent for an external agent). */
+  model?: string;
+  /** Provider of {@link model}. */
+  provider?: string;
   userId: string;
 }
 
