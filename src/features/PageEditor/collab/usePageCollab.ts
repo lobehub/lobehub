@@ -86,7 +86,10 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     if (!enabled || !gatewayUrl) return undefined;
 
     const doc = new Y.Doc();
+    const joinedAt = Date.now();
     let stopBodyWait: (() => void) | undefined;
+    // The failure-rate denominator: one join per page session, not per reconnect.
+    let roomJoinedTracked = false;
     const setCollab = (
       next: Partial<NonNullable<ReturnType<typeof storeApi.getState>['collab']>>,
     ) =>
@@ -136,6 +139,13 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         ) {
           setCollab({ status });
         }
+        if (status === 'synced' && !roomJoinedTracked) {
+          roomJoinedTracked = true;
+          void analyticsClient.track({
+            name: 'page_collab_room_joined',
+            properties: { elapsed_ms: Date.now() - joinedAt },
+          });
+        }
         if (status === 'synced' && !stopBodyWait) {
           stopBodyWait = whenBodyFilled(
             storeApi.getState().editor?.getLexicalEditor(),
@@ -148,7 +158,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     // The previous page's session state is still in the store at this point.
     setCollab({ bodyReady: false, retry: () => provider.retry(), status: 'connecting' });
 
-    return { doc, joinedAt: Date.now(), provider, stopBodyWait: () => stopBodyWait?.() };
+    return { doc, joinedAt, provider, stopBodyWait: () => stopBodyWait?.() };
   }, [enabled, gatewayUrl, documentId, storeApi, onReset]);
 
   useEffect(() => {
