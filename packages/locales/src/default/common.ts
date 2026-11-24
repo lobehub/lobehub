@@ -453,7 +453,6 @@ export default {
   'navPanel.agent': 'Agents',
   'navPanel.createPrivateFolder': 'New private category',
   'navPanel.managePrivateFolders': 'Manage private categories',
-  'navPanel.newChat': 'New chat',
   'navPanel.privateTooltip': 'Private · only you can see this',
   'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.openMenu': 'Open menu',
