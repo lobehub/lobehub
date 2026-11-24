@@ -2,7 +2,9 @@ import { revalidateTag } from 'next/cache';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-export const GET = async (request: NextRequest) => {
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
+
+const revalidate = async (request: NextRequest) => {
   if (!process.env.REVALIDATE_SECRET) {
     return NextResponse.json('REVALIDATE_SECRET is not set', { status: 501 });
   }
@@ -23,3 +25,5 @@ export const GET = async (request: NextRequest) => {
 
   return Response.json({ now: Date.now(), revalidated: true });
 };
+
+export const GET = async (request: NextRequest) => withNoStore(await revalidate(request));

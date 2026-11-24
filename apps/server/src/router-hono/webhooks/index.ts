@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { noStore } from '../middlewares/noStore';
 import { casdoorWebhook } from './handlers/casdoor';
 import { githubWebhook } from './handlers/github';
 import { githubInstall } from './handlers/githubInstall';
@@ -18,6 +19,8 @@ import { videoWebhook } from './handlers/video';
 import { memoryWebhookAuth } from './middlewares/memoryWebhookAuth';
 
 const app = new Hono().basePath('/api/webhooks');
+
+app.use('*', noStore());
 
 // Identity provider webhooks — each verifies its own provider signature.
 app.post('/casdoor', casdoorWebhook);

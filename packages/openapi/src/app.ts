@@ -15,6 +15,7 @@ import { SCALAR_CUSTOM_CSS } from './docs-theme';
 import { userAuthMiddleware } from './middleware/auth';
 import { authChallenge, WWW_AUTHENTICATE_HEADER } from './middleware/auth-challenge';
 import { idempotencyMiddleware, IDEMPOTENT_REPLAYED_HEADER } from './middleware/idempotency';
+import { noStoreMiddleware } from './middleware/no-store';
 import { openResponsesErrors } from './middleware/open-responses-errors';
 import { RATE_LIMIT_HEADERS, rateLimit } from './middleware/rate-limit';
 import { REQUEST_ID_HEADER, requestIdMiddleware } from './middleware/request-id';
@@ -29,6 +30,7 @@ const app = new Hono().basePath('/api/v1');
 
 // Global middleware
 app.use('*', requestIdMiddleware);
+app.use('*', noStoreMiddleware);
 app.use(
   '*',
   cors({

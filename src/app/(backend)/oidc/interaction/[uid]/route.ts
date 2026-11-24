@@ -3,6 +3,7 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { authEnv } from '@/envs/auth';
 import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
@@ -20,7 +21,7 @@ const acceptanceReviewOf = async (
   return describeReviewTarget(await getServerDB(), userId, resource);
 };
 
-export async function GET(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
+async function interaction(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
   if (!authEnv.ENABLE_OIDC) {
     log('OIDC is not enabled');
     return new NextResponse(null, { status: 404 });
@@ -80,4 +81,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
       { status: 500 },
     );
   }
+}
+
+// Interaction details are bound to one OIDC session: never cache them.
+export async function GET(request: NextRequest, props: { params: Promise<{ uid: string }> }) {
+  return withNoStore(await interaction(request, props));
 }

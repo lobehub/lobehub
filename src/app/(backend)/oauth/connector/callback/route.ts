@@ -2,6 +2,7 @@ import { IssuerMismatchError } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -98,7 +99,7 @@ const renderFailure = (error: string, cause?: unknown): NextResponse => {
   return renderResultPage({ error, success: false });
 };
 
-export const GET = async (req: NextRequest) => {
+const connectorOAuthCallback = async (req: NextRequest) => {
   const searchParams = req.nextUrl.searchParams;
   const code = searchParams.get('code');
   const state = searchParams.get('state');
@@ -244,3 +245,6 @@ export const GET = async (req: NextRequest) => {
     return renderFailure(message, err);
   }
 };
+
+// The callback consumes one-time `code`/`state` and issues credentials: never cache it.
+export const GET = async (req: NextRequest) => withNoStore(await connectorOAuthCallback(req));

@@ -38,6 +38,15 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
       : undefined;
   const headers = resHeaders ? new Headers(resHeaders) : new Headers();
 
+  // tRPC responses are scoped to the caller's credentials (Oidc-Auth / cookie)
+  // and frequently carry decrypted keyVaults or other user data. GET queries are
+  // otherwise HTTP-cacheable, so intermediaries — the Electron main process's
+  // disk cache (netFetch) and shared caches — must never store them. An explicit
+  // Cache-Control set by the procedure wins.
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'no-store');
+  }
+
   // Only set X-Auth-Required for LobeHub session failures, not for Market OAuth failures.
   // Market auth errors use MARKET_AUTH_REQUIRED_MESSAGE and are handled by the market-unauthorized
   // event flow (MarketAuthProvider) rather than the desktop re-login modal.
@@ -55,10 +64,5 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
     headers.delete(AUTH_FAILURE_HEADER);
   }
 
-  // Only return headers if there's content or auth error
-  if (hasUnauthorizedError || resHeaders) {
-    return { headers };
-  }
-
-  return { headers: undefined };
+  return { headers };
 }

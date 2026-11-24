@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 
+import { noStore } from '../middlewares/noStore';
 import { managedDeviceToken, NO_STORE } from './handlers/managedDeviceToken';
 
 /**
@@ -12,6 +13,7 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 const app = new Hono().basePath('/api/device');
 
+app.use('*', noStore());
 app.use(
   '*',
   bodyLimit({

@@ -3,6 +3,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 import { runRouteWithLlmRelayRequest } from '@/server/modules/AgentRuntime/llmRelay/requestScope';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -55,7 +56,7 @@ const createModelListErrorResponse = (provider: string, e: unknown) => {
 // the whole one-shot relay window (240 s).
 export const maxDuration = 300;
 
-export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
+const getProviderModels = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
   try {
@@ -77,3 +78,7 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
     return createModelListErrorResponse(provider, e);
   }
 });
+
+// The model list is fetched with the caller's provider credentials: never cache it.
+export const GET = async (...args: Parameters<typeof getProviderModels>) =>
+  withNoStore(await getProviderModels(...args));

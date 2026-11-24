@@ -10,9 +10,15 @@ import { describe, expect, it } from 'vitest';
 import { createResponseMeta } from './responseMeta';
 
 describe('createResponseMeta', () => {
-  it('should return undefined headers when no errors and no resHeaders', () => {
+  it('should always set Cache-Control: no-store', () => {
     const result = createResponseMeta({ ctx: undefined, errors: [] });
-    expect(result.headers).toBeUndefined();
+    expect(result.headers?.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('should not override an explicit Cache-Control from context', () => {
+    const resHeaders = new Headers({ 'Cache-Control': 'public, max-age=60' });
+    const result = createResponseMeta({ ctx: { resHeaders }, errors: [] });
+    expect(result.headers?.get('Cache-Control')).toBe('public, max-age=60');
   });
 
   it('should forward resHeaders from context', () => {
@@ -57,7 +63,8 @@ describe('createResponseMeta', () => {
       errors: [error],
     });
 
-    expect(result.headers).toBeUndefined();
+    expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBeNull();
+    expect(result.headers?.get('Cache-Control')).toBe('no-store');
   });
 
   it('should handle context without resHeaders property', () => {
@@ -81,7 +88,7 @@ describe('createResponseMeta', () => {
       errors: [error],
     });
 
-    expect(result.headers).toBeUndefined();
+    expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBeNull();
   });
 
   it('should NOT set AUTH_REQUIRED_HEADER for runtime provider auth errors', () => {
@@ -96,7 +103,7 @@ describe('createResponseMeta', () => {
       errors: [error],
     });
 
-    expect(result.headers).toBeUndefined();
+    expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBeNull();
   });
 
   it('should handle multiple errors where one is UNAUTHORIZED', () => {

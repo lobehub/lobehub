@@ -3,13 +3,17 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { authEnv } from '@/envs/auth';
 import { OIDCService } from '@/server/services/oidc';
 import type { OidcClientMetadata } from '@/types/oidc';
 
 const log = debug('lobe-oidc:client-metadata');
 
-export async function GET(_request: NextRequest, props: { params: Promise<{ clientId: string }> }) {
+async function clientMetadata(
+  _request: NextRequest,
+  props: { params: Promise<{ clientId: string }> },
+) {
   if (!authEnv.ENABLE_OIDC) {
     log('OIDC is not enabled');
     return new NextResponse(null, { status: 404 });
@@ -32,4 +36,9 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ clie
     log('Error resolving client metadata for %s: %O', clientId, error);
     return new NextResponse(null, { status: 500 });
   }
+}
+
+// Authenticated per-user consent data: never cache it.
+export async function GET(request: NextRequest, props: { params: Promise<{ clientId: string }> }) {
+  return withNoStore(await clientMetadata(request, props));
 }

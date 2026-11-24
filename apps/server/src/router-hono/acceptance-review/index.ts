@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 
+import { noStore } from '../middlewares/noStore';
 import type { ReviewEnv } from './auth';
 import { reviewAuth } from './auth';
 import { handleReviewError, reviewError } from './errors';
@@ -36,6 +37,8 @@ import { getSiteInfo, recordSiteBeacon } from './sites';
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 const app = new Hono<ReviewEnv>().basePath('/api/acceptance-review/v1');
+
+app.use('*', noStore());
 
 // The toolbar runs on arbitrary preview origins and authenticates with a
 // bearer token, never cookies, so echoing the origin grants nothing extra.

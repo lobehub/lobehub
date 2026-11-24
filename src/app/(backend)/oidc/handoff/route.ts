@@ -2,6 +2,7 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { withNoStore } from '@/app/(backend)/middleware/cacheControl';
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
 import { serverDB } from '@/database/server';
 
@@ -11,7 +12,7 @@ const log = debug('lobe-oidc:handoff');
  * GET /oidc/handoff?id=xxx&client=xxx
  * Poll to fetch and consume the authentication credential
  */
-export async function GET(request: NextRequest) {
+async function handoff(request: NextRequest) {
   log('Received GET request for /oidc/handoff');
 
   try {
@@ -44,4 +45,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+// Returns the OAuth credential payload: never cache it.
+export async function GET(request: NextRequest) {
+  return withNoStore(await handoff(request));
 }
