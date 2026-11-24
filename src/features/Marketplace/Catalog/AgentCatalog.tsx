@@ -1,6 +1,6 @@
 'use client';
 
-import { Center, Tabs, Text } from '@lobehub/ui';
+import { Center, Segmented, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -393,15 +393,14 @@ export const AgentCatalog = () => {
     <DiscoverCatalogHeader
       kind={'agent'}
       titleExtra={
-        <Tabs
-          activeKey={tab}
-          size={'small'}
-          variant={'square'}
-          items={TABS.map((value) => ({
-            key: value,
+        <Segmented
+          value={tab}
+          variant={'outlined'}
+          options={TABS.map((value) => ({
             label: t(`marketplaceAgents.tabs.${value}`),
+            value,
           }))}
-          onChange={(key) => setTab(key as AgentsTab)}
+          onChange={(value) => setTab(value as AgentsTab)}
         />
       }
     />

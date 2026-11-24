@@ -5,7 +5,10 @@ import { lazy } from 'react';
 import { type RouteObject, useParams, useSearchParams } from 'react-router';
 
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
-import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
+import {
+  MarketplaceCatalogSkeleton,
+  MarketplaceDetailSkeleton,
+} from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import {
   getLegacyConnectorCatalogPath,
@@ -129,7 +132,7 @@ export const marketplaceAppAndMcpRoutes: RouteObject[] = [
       meta: routeMeta({
         DynamicMeta: lazy(() => import('@/features/Marketplace/Apps/AppDynamicMeta')),
         icon: Blocks,
-        Skeleton: createSurfaceSkeleton('detail'),
+        Skeleton: MarketplaceDetailSkeleton,
         titleKey: 'navigation.marketplaceApps',
       }),
     },
