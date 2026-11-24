@@ -265,6 +265,11 @@ export interface SystemStatus {
    * Order of the sidebar Channel sections. Device-local view setting.
    */
   channelListSort?: ChannelListSort;
+  /**
+   * Channels whose sidebar thread list is folded, keyed by Channel id. Nested booleans for the
+   * same lodash `merge` reason as `assigneeAgentSelectorCollapsedGroups`. Device-local.
+   */
+  channelThreadsCollapsed?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
