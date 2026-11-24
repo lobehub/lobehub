@@ -4,7 +4,8 @@ import { and, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 
 import { AgentInterventionModel } from '@/database/models/agentIntervention';
 import { HumanApprovalAlreadyResolvedError, MessageModel } from '@/database/models/message';
-import { LIVE_OPERATION_STATUSES, TopicModel } from '@/database/models/topic';
+import { TopicModel } from '@/database/models/topic';
+import { LIVE_OPERATION_STATUSES } from '@/database/models/topic/runningOperation';
 import {
   agentInterventions,
   agentOperations,
