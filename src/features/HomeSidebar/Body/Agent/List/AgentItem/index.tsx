@@ -224,8 +224,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   ]);
 
   const dropdownMenu = useAgentDropdownMenu({
-    avatar: avatarUrl,
-    backgroundColor: backgroundColor || undefined,
     group: undefined, // TODO: pass group from parent if needed
     id,
     name,

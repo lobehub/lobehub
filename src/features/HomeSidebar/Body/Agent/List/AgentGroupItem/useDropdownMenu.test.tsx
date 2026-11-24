@@ -31,8 +31,20 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
+// A business build may supply Transfer to… / Copy to… / Transfer to member; the
+// row menu must not surface them even when they would be available.
 vi.mock('@/business/client/hooks/useAgentGroupTransferMenuItem', () => ({
-  useAgentGroupTransferMenuItem: () => null,
+  useAgentGroupTransferMenuItem: () => [
+    { key: 'transfer-group', label: 'Transfer to…' },
+    { key: 'copy-group', label: 'Copy to…' },
+  ],
+}));
+
+vi.mock('@/business/client/hooks/useAgentGroupTransferToMemberMenuItem', () => ({
+  useAgentGroupTransferToMemberMenuItem: () => ({
+    key: 'transfer-to-member',
+    label: 'Transfer to…',
+  }),
 }));
 
 vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() }));
@@ -145,6 +157,24 @@ describe('useGroupDropdownMenu', () => {
     ) as { onClick: (info: unknown) => void };
     entry.onClick({ domEvent: { stopPropagation: vi.fn() } });
     expect(mocks.navigate).toHaveBeenCalledWith('/group/cg_1/permission');
+  });
+
+  it('leaves Transfer to… / Copy to… / Transfer to member to the group settings', () => {
+    mocks.activeWorkspaceId = 'ws_1';
+    mocks.canManageResource = true;
+    const { result } = renderGroupMenu();
+
+    const items = result.current() ?? [];
+    const keys = getMenuKeys(items);
+    expect(keys).not.toContain('transfer-group');
+    expect(keys).not.toContain('copy-group');
+    expect(keys).not.toContain('transfer-to-member');
+    // No empty section is left behind: dividers never sit back to back.
+    const isDivider = (item: unknown) =>
+      !!item && typeof item === 'object' && 'type' in item && item.type === 'divider';
+    items.forEach((item, index) => {
+      if (isDivider(item)) expect(isDivider(items[index + 1])).toBe(false);
+    });
   });
 
   it('keeps the Permissions shortcut from members who do not manage the group', () => {

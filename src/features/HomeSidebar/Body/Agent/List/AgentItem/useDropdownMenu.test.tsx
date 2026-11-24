@@ -63,8 +63,14 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
+// A business build may supply Transfer to… / Copy to… / Transfer to member; the
+// row menu must not surface them even when they would be available.
 vi.mock('@/business/client/hooks/useAgentTransferMenuItem', () => ({
   useAgentTransferMenuItem: () => mocks.transferMenuItems,
+}));
+
+vi.mock('@/business/client/hooks/useAgentTransferToMemberMenuItem', () => ({
+  useAgentTransferToMemberMenuItem: () => ({ key: 'transfer-to-member', label: 'Transfer to…' }),
 }));
 
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
@@ -486,7 +492,6 @@ describe('useAgentDropdownMenu', () => {
       'rename',
       'duplicate',
       'moveGroup',
-      'copy-agent',
       'divider',
       'permission',
       'divider',
@@ -517,9 +522,25 @@ describe('useAgentDropdownMenu', () => {
     expect(keys).toEqual(expect.arrayContaining(['pin', 'hideFromSidebar', 'rename', 'moveGroup']));
     expect(keys).not.toContain('delete');
     expect(keys).not.toContain('duplicate');
-    expect(keys).not.toContain('copy-agent');
     expect(keys).not.toContain('permission');
     expect(keys).not.toContain('visibility');
+  });
+
+  it('leaves Transfer to… / Copy to… / Transfer to member to the Agent settings', () => {
+    mocks.canEditResource = true;
+    mocks.canManage = true;
+    mocks.canManageResource = true;
+    mocks.transferMenuItems = [
+      { key: 'transfer-agent', label: 'Transfer to…' },
+      { key: 'copy-agent', label: 'Copy to…' },
+    ];
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    const keys = getMenuKeys(result.current());
+    expect(keys).not.toContain('transfer-agent');
+    expect(keys).not.toContain('copy-agent');
+    expect(keys).not.toContain('transfer-to-member');
   });
 
   it('hides the Permission shortcut from a non-author member who can configure the agent', () => {

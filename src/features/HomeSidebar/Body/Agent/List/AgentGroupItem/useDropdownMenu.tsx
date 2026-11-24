@@ -15,7 +15,6 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -32,7 +31,6 @@ interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
   avatar?: string;
   backgroundColor?: string;
-  description?: string | null;
   id: string;
   memberAvatars?: { avatar?: string; background?: string }[];
   pinned: boolean;
@@ -45,7 +43,6 @@ export const useGroupDropdownMenu = ({
   anchor,
   avatar,
   backgroundColor,
-  description,
   id,
   memberAvatars,
   pinned,
@@ -69,13 +66,6 @@ export const useGroupDropdownMenu = ({
     s.duplicateAgentGroup,
     s.removeAgentGroup,
   ]);
-  const transferMenuItems = useAgentGroupTransferMenuItem(id, {
-    avatar,
-    backgroundColor,
-    description,
-    memberAvatars,
-    title,
-  });
   const navigate = useWorkspaceAwareNavigate();
 
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -173,12 +163,10 @@ export const useGroupDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
-        ...(canConfigure && transferMenuItems?.length
-          ? [{ type: 'divider' as const }, ...transferMenuItems]
-          : []),
-        // Member permissions and the handover to a member live in the group's
-        // Permissions settings; the row keeps one shortcut there for the
-        // creator and workspace owners, like Agent rows.
+        // Member permissions, the handover to a member and the cross-scope
+        // Transfer to… / Copy to… live in the group's settings; the row keeps
+        // one shortcut to Permissions for the creator and workspace owners,
+        // like Agent rows.
         ...(activeWorkspaceId && canConfigure && canManageResource
           ? [
               { type: 'divider' as const },
@@ -244,7 +232,6 @@ export const useGroupDropdownMenu = ({
       duplicateAgentGroup,
       openAgentInNewWindow,
       removeAgentGroup,
-      transferMenuItems,
       canManageResource,
       navigate,
     ],
