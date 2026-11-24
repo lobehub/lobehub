@@ -181,6 +181,22 @@ describe('Channel on-demand history', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('rejects an unknown Thread and a malformed message id as NOT_FOUND', async () => {
+    const state = await setup();
+    await state.say('Own conversation');
+    const { operationId, request } = await state.run();
+    await expect(
+      state.history.readMessages(operationId, { threadId: 'cht_missing' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      state.history.readMessage(operationId, { messageId: request.id, threadId: 'cht_missing' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // A Thread id passed as a message id is not a uuid; it must not reach Postgres as one.
+    await expect(
+      state.history.readMessage(operationId, { messageId: 'cht_uvOObyIW8CII' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it.each([
     'requester',
     'agent',
