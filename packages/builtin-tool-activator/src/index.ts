@@ -1,6 +1,6 @@
 export { ACTIVATE_TOOLS_AUDIT, activateToolsAudit } from './interventionAudit';
 export { LobeActivatorManifest } from './manifest';
-export { getSystemPromptForShareVisitor, systemPrompt } from './systemRole';
+export { getSystemPrompt, getSystemPromptForShareVisitor, systemPrompt } from './systemRole';
 export {
   type ActivatedToolInfo,
   type ActivateSkillParams,

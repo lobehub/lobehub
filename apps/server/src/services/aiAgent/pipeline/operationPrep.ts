@@ -2,9 +2,14 @@ import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
+import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
-import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
+import type {
+  LobeToolManifest,
+  OperationSkillSet,
+  ProjectInstructionFile,
+} from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
@@ -41,6 +46,7 @@ import type {
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import { buildArtboardCommentsPrompt } from './artboardContext';
+import { deferUnusedSkillsTool, type DeferUnusedSkillsToolParams } from './deferUnusedSkillsTool';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
 import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -196,6 +202,8 @@ export interface OperationPrepInput {
   evalAllowedTools?: string[];
   /** Isolated Memory scope of an eval trial; persona is read from it, never the caller. */
   evalMemory?: EvalMemoryReference;
+  /** Exact toolset requested by the caller (e.g. verify agent, goal supervisor). */
+  exclusivePluginIds?: string[];
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
   loadHistoryMessages: () => Promise<any[]>;
@@ -214,6 +222,8 @@ export interface OperationPrepInput {
 export interface OperationPrepResult {
   activatableToolIds: string[];
   allMessages: any[];
+  /** Full manifests of tools this run starts narrowed (`OperationToolSet.deferredManifestMap`). */
+  deferredManifestMap?: Record<string, LobeToolManifest>;
   deviceSystemInfo: Record<string, string>;
   expertise?: Awaited<ReturnType<typeof buildExpertiseContextSnapshot>>;
   initialContext: AgentRuntimeContext;
@@ -867,6 +877,32 @@ export const prepareOperation = async (
     workspaceInit,
   });
 
+  // 18b. A run with no skill to offer starts without the skill APIs of
+  // `lobe-skills`; its sandbox shell and `exportFile` stay. The full manifest
+  // waits in `deferredManifestMap` until a skill is installed mid-run.
+  const skillsToolSet: DeferUnusedSkillsToolParams['toolSet'] = {
+    activatableToolIds,
+    enabledToolIds: toolsResult.enabledToolIds,
+    executorMap: discovery.toolExecutorMap,
+    manifestMap: discovery.toolManifestMap,
+    sourceMap: discovery.toolSourceMap,
+    tools,
+  };
+  if (
+    deferUnusedSkillsTool({
+      agentChatConfig: agentConfig.chatConfig,
+      allMessages,
+      evalAllowedTools: input.evalAllowedTools,
+      exclusivePluginIds: input.exclusivePluginIds,
+      isGoalTurn: isGoalPrompt(prompt),
+      isShareRun: Boolean(shareGate),
+      operationSkillSet,
+      toolSet: skillsToolSet,
+    })
+  ) {
+    log('execAgent: deferred the skill APIs of lobe-skills (no skill available or used)');
+  }
+
   // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
   // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
   const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
@@ -886,6 +922,7 @@ export const prepareOperation = async (
   return {
     activatableToolIds,
     allMessages,
+    deferredManifestMap: skillsToolSet.deferredManifestMap,
     deviceSystemInfo,
     expertise,
     initialContext,

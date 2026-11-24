@@ -269,8 +269,15 @@ export class MessagesEngine {
     const canReadDocuments =
       toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
     // Same gate for filesystem skills: only require `activateSkill` when it is sent. A Custom-mode
-    // agent or a goal turn that did not pin Skills still reaches them through readFile.
-    const canActivateSkill = toolIds.includes(SKILLS_TOOL_ID) && !!canUseFC(model, provider);
+    // agent or a goal turn that did not pin Skills still reaches them through readFile, and a run
+    // that deferred the skill APIs has Skills enabled with its sandbox shell only.
+    const skillsManifest = toolsConfig?.manifests?.find(
+      (manifest) => manifest.identifier === SKILLS_TOOL_ID,
+    );
+    const canActivateSkill =
+      toolIds.includes(SKILLS_TOOL_ID) &&
+      (!skillsManifest || skillsManifest.api.some((api) => api.name === 'activateSkill')) &&
+      !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
