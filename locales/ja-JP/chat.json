@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "オンライン · {{count}} 接続",
   "heteroAgent.executionTarget.personalGroup": "プライベートデバイス",
   "heteroAgent.executionTarget.presenceChecking": "ステータスを確認中…",
-  "heteroAgent.executionTarget.projectDevicesHint": "このプロジェクトの作業ディレクトリを持つデバイスのみが表示されます。プロジェクト設定で別のデバイスのディレクトリを追加してください。",
   "heteroAgent.executionTarget.reconnect": "再接続",
   "heteroAgent.executionTarget.reconnectFailed": "このデバイスに再接続できませんでした。デスクトップアプリが実行中であることを確認し、再試行してください。",
   "heteroAgent.executionTarget.sandbox": "クラウドサンドボックス",

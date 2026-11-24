@@ -1539,7 +1539,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} conexões",
   "heteroAgent.executionTarget.personalGroup": "Dispositivos Privados",
   "heteroAgent.executionTarget.presenceChecking": "Verificando status…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Apenas dispositivos com o diretório de trabalho deste projeto estão listados. Adicione um diretório para outro dispositivo nas configurações do projeto.",
   "heteroAgent.executionTarget.reconnect": "Reconectar",
   "heteroAgent.executionTarget.reconnectFailed": "Não foi possível reconectar este dispositivo. Certifique-se de que o aplicativo de desktop está em execução e tente novamente.",
   "heteroAgent.executionTarget.sandbox": "Sandbox na nuvem",

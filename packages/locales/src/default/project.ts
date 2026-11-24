@@ -90,7 +90,7 @@ export default {
   'settings.noDirectories':
     'No device folders yet. Add a folder on a connected device to run this project there.',
   'settings.title': 'Project settings',
-  'settings.environments': 'Environment',
+  'settings.environments': 'Execution environments',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
@@ -690,11 +690,10 @@ export default {
   'overview.context.location.emptySandboxDesc':
     'Starts in an empty folder, without the project environment',
   'settings.cloudSandboxGroup': 'Cloud sandbox',
-  'settings.devicesGroup': 'Device working directories',
-  'settings.deviceNoDirectory': 'No folder set',
+  'settings.addExecutionEnvironment': 'Add execution environment',
+  'settings.configureSandbox': 'Configure',
+  'settings.reorderFailed': "Couldn't save the new order. Try again.",
   'settings.setDeviceDirectory': 'Set folder',
-  'settings.noDevices':
-    'No connected devices yet. Open the LobeHub desktop app or run lh connect on a machine to add it.',
   'settings.setDirectoryDescription':
     'Enter the full path of an existing folder on {{device}}. Files stay on that device.',
   'settings.directoryUnavailableTag': 'Unavailable',

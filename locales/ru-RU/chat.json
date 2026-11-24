@@ -1539,7 +1539,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Онлайн · {{count}} соединений",
   "heteroAgent.executionTarget.personalGroup": "Личные устройства",
   "heteroAgent.executionTarget.presenceChecking": "Проверка статуса…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Указаны только устройства с рабочей директорией этого проекта. Добавьте директорию для другого устройства в настройках проекта.",
   "heteroAgent.executionTarget.reconnect": "Переподключить",
   "heteroAgent.executionTarget.reconnectFailed": "Не удалось переподключить это устройство. Убедитесь, что настольное приложение запущено, затем попробуйте снова.",
   "heteroAgent.executionTarget.sandbox": "Облачная песочница",

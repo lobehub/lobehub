@@ -1539,7 +1539,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "متصل · {{count}} اتصالات",
   "heteroAgent.executionTarget.personalGroup": "الأجهزة الخاصة",
   "heteroAgent.executionTarget.presenceChecking": "جارٍ التحقق من الحالة...",
-  "heteroAgent.executionTarget.projectDevicesHint": "يتم إدراج الأجهزة التي تحتوي على دليل العمل لهذا المشروع فقط. أضف دليلاً لجهاز آخر في إعدادات المشروع.",
   "heteroAgent.executionTarget.reconnect": "إعادة الاتصال",
   "heteroAgent.executionTarget.reconnectFailed": "تعذر إعادة الاتصال بهذا الجهاز. تأكد من تشغيل تطبيق سطح المكتب، ثم حاول مرة أخرى.",
   "heteroAgent.executionTarget.sandbox": "بيئة سحابية مؤقتة",

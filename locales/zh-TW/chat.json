@@ -1541,7 +1541,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "在線 · {{count}} 個連接",
   "heteroAgent.executionTarget.personalGroup": "私人裝置",
   "heteroAgent.executionTarget.presenceChecking": "正在檢查狀態…",
-  "heteroAgent.executionTarget.projectDevicesHint": "僅列出具有此專案工作目錄的設備。請在專案設定中為其他設備新增目錄。",
   "heteroAgent.executionTarget.reconnect": "重新連接",
   "heteroAgent.executionTarget.reconnectFailed": "無法重新連接此裝置。請確保桌面應用程式正在運行，然後再試一次。",
   "heteroAgent.executionTarget.sandbox": "雲端沙盒",

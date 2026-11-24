@@ -1539,7 +1539,6 @@
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} Verbindungen",
   "heteroAgent.executionTarget.personalGroup": "Private Geräte",
   "heteroAgent.executionTarget.presenceChecking": "Status wird überprüft…",
-  "heteroAgent.executionTarget.projectDevicesHint": "Es werden nur Geräte mit dem Arbeitsverzeichnis dieses Projekts aufgelistet. Fügen Sie ein Verzeichnis für ein anderes Gerät in den Projekteinstellungen hinzu.",
   "heteroAgent.executionTarget.reconnect": "Erneut verbinden",
   "heteroAgent.executionTarget.reconnectFailed": "Dieses Gerät konnte nicht erneut verbunden werden. Stellen Sie sicher, dass die Desktop-App läuft, und versuchen Sie es dann erneut.",
   "heteroAgent.executionTarget.sandbox": "Cloud-Sandbox",
