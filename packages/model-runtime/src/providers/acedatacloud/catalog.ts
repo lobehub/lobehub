@@ -43,28 +43,12 @@ export const loadAceCatalog = async (fetcher = fetch): Promise<AceCatalogModel[]
   }
 };
 
-export const aceChatProtocol = (model: AceCatalogModel) => {
-  const endpoints = Array.isArray(model.endpoints) ? model.endpoints : [];
-  for (const [protocol, path] of [
-    ['chat_completions', '/v1/chat/completions'],
-    ['messages', '/v1/messages'],
-    ['responses', '/v1/responses'],
-  ]) {
-    if (
-      endpoints.some(
-        (endpoint) =>
-          endpoint &&
-          endpoint.protocol === protocol &&
-          endpoint.path === path &&
-          endpoint.auth === 'bearer' &&
-          endpoint.base_url ===
-            (protocol === 'messages'
-              ? 'https://api.acedata.cloud'
-              : 'https://api.acedata.cloud/v1'),
-      )
-    ) {
-      return protocol;
-    }
-  }
-  throw new Error(`No published chat protocol for Ace Data Cloud model ${model.id}`);
-};
+export const isAceChatModel = (model: AceCatalogModel) =>
+  Array.isArray(model.endpoints) &&
+  model.endpoints.some(
+    (endpoint) =>
+      endpoint?.protocol === 'chat_completions' &&
+      endpoint.path === '/v1/chat/completions' &&
+      endpoint.auth === 'bearer' &&
+      endpoint.base_url === 'https://api.acedata.cloud/v1',
+  );

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { aceChatProtocol, isOfficialAceEndpoint, loadAceCatalog } from './catalog';
+import { isAceChatModel, isOfficialAceEndpoint, loadAceCatalog } from './catalog';
 
 describe('Ace public catalog', () => {
   it('retains typed chat models independent of their names and caches only public metadata', async () => {
@@ -37,7 +37,7 @@ describe('Ace public catalog', () => {
     expect((await loadAceCatalog(fetcher))[0].id).toBe('fresh');
   });
 
-  it('does not send customer inference to an endpoint supplied by untrusted metadata', () => {
+  it('excludes incompatible endpoints from the official model picker', () => {
     const model = {
       id: 'example',
       modality: 'chat',
@@ -51,7 +51,7 @@ describe('Ace public catalog', () => {
         },
       ],
     };
-    expect(() => aceChatProtocol(model)).toThrow('No published chat protocol');
+    expect(isAceChatModel(model)).toBe(false);
     expect(isOfficialAceEndpoint('https://custom.example/v1')).toBe(false);
     expect(isOfficialAceEndpoint('https://api.acedata.cloud.evil.test/v1')).toBe(false);
   });

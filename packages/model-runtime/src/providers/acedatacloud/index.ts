@@ -1,21 +1,9 @@
 import { IMAGE_GENERATION_MODEL_WHITELIST, ModelProvider } from 'model-bank';
 
-import {
-  createAnthropicCompatibleParams,
-  createAnthropicCompatibleRuntime,
-  createDefaultAnthropicClient,
-} from '../../core/anthropicCompatible';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
-import type {
-  ChatMethodOptions,
-  ChatStreamPayload,
-  GenerateObjectOptions,
-  GenerateObjectPayload,
-} from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { type ModelIdMappingOptions, resolveMappedModelId } from '../../utils/modelIdMapping';
-import { aceChatProtocol, isOfficialAceEndpoint, loadAceCatalog } from './catalog';
+import { isAceChatModel, isOfficialAceEndpoint, loadAceCatalog } from './catalog';
 
 // The Ace /models catalog also includes image and embedding endpoints that
 // cannot be selected as a chat model. Keep those services in their own tools.
@@ -46,7 +34,7 @@ export const params = {
     if (isOfficialAceEndpoint(client.baseURL)) {
       const available = new Set(data.map(({ id }) => id));
       return (await loadAceCatalog())
-        .filter((model) => available.has(model.id))
+        .filter((model) => available.has(model.id) && isAceChatModel(model))
         .map((model) => ({
           abilities: {
             ...(model.capabilities?.includes('vision') && { vision: true }),
@@ -72,58 +60,4 @@ export const params = {
   provider: ModelProvider.AceDataCloud,
 } satisfies OpenAICompatibleFactoryOptions;
 
-const AceMessagesAI = createAnthropicCompatibleRuntime(
-  createAnthropicCompatibleParams({
-    baseURL: 'https://api.acedata.cloud',
-    chatCompletion: { handleError: handleAceError },
-    customClient: {
-      createClient: (options) =>
-        createDefaultAnthropicClient({ ...options, apiKey: null, authToken: options.apiKey }),
-    },
-    provider: ModelProvider.AceDataCloud,
-  }),
-);
-
-const AceChatAI = createOpenAICompatibleRuntime(params);
-
-export class LobeAceDataCloudAI extends AceChatAI {
-  private requestModelMapping: ModelIdMappingOptions;
-
-  constructor(options: NonNullable<ConstructorParameters<typeof AceChatAI>[0]> = {}) {
-    super(options);
-    this.requestModelMapping = { modelIdMapping: options.modelIdMapping };
-  }
-
-  private async publishedProtocol(model: string) {
-    if (!isOfficialAceEndpoint(this.baseURL)) return;
-    const requestModel = resolveMappedModelId(model, this.requestModelMapping);
-    const metadata = (await loadAceCatalog()).find((item) => item.id === requestModel);
-    return metadata ? aceChatProtocol(metadata) : undefined;
-  }
-
-  private messagesRuntime() {
-    return new AceMessagesAI({
-      ...this._options,
-      ...this.requestModelMapping,
-      baseURL: 'https://api.acedata.cloud',
-    });
-  }
-
-  override async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
-    const protocol = await this.publishedProtocol(payload.model);
-    if (protocol === 'messages') return this.messagesRuntime().chat(payload, options);
-    return super.chat(
-      protocol === 'responses' ? { ...payload, apiMode: 'responses' } : payload,
-      options,
-    );
-  }
-
-  override async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-    const protocol = await this.publishedProtocol(payload.model);
-    if (protocol === 'messages') return this.messagesRuntime().generateObject(payload, options);
-    return super.generateObject(
-      protocol === 'responses' ? { ...payload, responseApi: true } : payload,
-      options,
-    );
-  }
-}
+export const LobeAceDataCloudAI = createOpenAICompatibleRuntime(params);

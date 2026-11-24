@@ -69,6 +69,7 @@ describe('Ace Data Cloud endpoint contract', () => {
     const fetch = vi.fn().mockResolvedValue(
       jsonResponse({
         data: [
+          'messages-only-model',
           'example-chat-model',
           'gpt-6-astra',
           'gemini-2.5-pro',
@@ -109,40 +110,6 @@ describe('Ace Data Cloud endpoint contract', () => {
     );
   });
 
-  it.each(['messages-only-model', 'friendly-alias'])(
-    'uses Messages and Bearer for a model without Chat Completions (%s)',
-    async (model) => {
-      const fetch = vi.fn().mockResolvedValue(
-        jsonResponse({
-          content: [{ type: 'text', text: 'Messages reply' }],
-          id: 'msg_test',
-          model: 'messages-only-model',
-          role: 'assistant',
-          stop_reason: 'end_turn',
-          stop_sequence: null,
-          type: 'message',
-          usage: { input_tokens: 1, output_tokens: 2 },
-        }),
-      );
-      const runtime = new LobeAceDataCloudAI({
-        apiKey: 'dummy-token',
-        fetch,
-        modelIdMapping: { 'friendly-alias': 'messages-only-model' },
-      });
-      const response = await runtime.chat({
-        model,
-        messages: [{ role: 'user', content: 'Hello' }],
-        stream: false,
-      });
-      const [url, options] = fetch.mock.calls[0];
-      expect(String(url)).toBe('https://api.acedata.cloud/v1/messages');
-      expect(new Headers(options.headers).get('Authorization')).toBe('Bearer dummy-token');
-      expect(new Headers(options.headers).has('x-api-key')).toBe(false);
-      expect(JSON.parse(options.body).model).toBe('messages-only-model');
-      expect(await response.text()).toContain('Messages reply');
-    },
-  );
-
   it('preserves a user-supplied endpoint and surfaces model-fetch authorization failure', async () => {
     const fetch = vi
       .fn()
@@ -158,6 +125,12 @@ describe('Ace Data Cloud endpoint contract', () => {
   });
 
   it('keeps non-streaming chat and function tools on the configured completion endpoint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        throw new Error('Public metadata is unavailable');
+      }),
+    );
     const fetch = vi.fn().mockResolvedValue(jsonResponse(completion));
     const runtime = new LobeAceDataCloudAI({ apiKey: 'dummy-token', fetch });
     const response = await runtime.chat({
