@@ -28,6 +28,7 @@ import {
 import DeviceDetailPopover from './DeviceDetailPopover';
 import OptionRow from './OptionRow';
 import {
+  isProjectSandboxRowDisabled,
   listProjectDeviceTargets,
   type ProjectDeviceTarget,
   projectDirectoryDeviceName,
@@ -159,7 +160,7 @@ const ProjectDeviceSwitcher = ({
     <OptionRow
       active={sandbox.active}
       desc={sandboxLabel ? t('heteroAgent.executionTarget.sandbox') : undefined}
-      disabled={!sandbox.onSelect}
+      disabled={isProjectSandboxRowDisabled(sandbox)}
       key="sandbox"
       label={sandboxLabel || t('heteroAgent.executionTarget.sandbox')}
       tags={sandbox.active && activeTag ? [activeTag] : []}
@@ -171,9 +172,9 @@ const ProjectDeviceSwitcher = ({
         )
       }
       onClick={() => {
-        if (!sandbox.onSelect || sandbox.active) return;
+        if (isProjectSandboxRowDisabled(sandbox)) return;
         setOpen(false);
-        sandbox.onSelect();
+        if (!sandbox.active) sandbox.onSelect?.();
       }}
     />
   ) : null;
