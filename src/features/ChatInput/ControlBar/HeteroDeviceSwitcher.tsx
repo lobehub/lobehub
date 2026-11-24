@@ -56,6 +56,7 @@ import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
 import GroupSubmenu from './GroupSubmenu';
+import { LOCAL_SANDBOX_ENTRY_ENABLED } from './localSandboxEntry';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
 import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
@@ -334,17 +335,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // exactly when a command would actually be fenced.
   const localSandboxEnabled = isLocalSandboxEnabled(agencyConfig, executionTarget);
   const localSandboxNetwork = agencyConfig?.localSandboxNetwork === true;
+  // The entry can be switched off as a whole (T-14823). Hidden, it is not
+  // probed either: the capability only ever decides how that row looks.
+  const showLocalSandboxRow = isDesktop && LOCAL_SANDBOX_ENTRY_ENABLED;
   const { data: sandboxCapability, mutate: revalidateSandboxCapability } =
-    useLocalSandboxCapability();
+    useLocalSandboxCapability(showLocalSandboxRow);
   const canUseLocalSandbox = sandboxCapability?.available === true;
 
   // The desktop downgrades its own verdict when a fence fails to establish (the
   // cheap probe can't see that far), so re-ask each time the picker opens
   // instead of showing a stale "available" for the rest of the session.
   useEffect(() => {
-    if (!isDesktop || !open) return;
+    if (!showLocalSandboxRow || !open) return;
     void revalidateSandboxCapability();
-  }, [open, revalidateSandboxCapability]);
+  }, [open, revalidateSandboxCapability, showLocalSandboxRow]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const { selectTarget, topicDeviceId } = useTopicAwareTargetSelect({
@@ -784,8 +788,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           allowlist. Shown even when the host can't provide a sandbox — disabled,
           carrying the real reason, because "unavailable" here usually means
           "not installed yet" and silently hiding the feature would strand the
-          user with no way to find out why. */}
-      {isDesktop ? (
+          user with no way to find out why. Hidden as a whole while the entry is
+          switched off; see `LOCAL_SANDBOX_ENTRY_ENABLED`. */}
+      {showLocalSandboxRow ? (
         <OptionRow
           compact
           active={isLocalSandboxActive}
