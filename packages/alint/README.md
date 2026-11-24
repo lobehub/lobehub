@@ -146,6 +146,10 @@ Every summary now ends with the run's cost — model calls, cache hits, input an
 
 ## CI
 
+In CPC, pull requests run ESLint on changed source files. Run `bun run check --alint` for local ALint review.
+
+### Upstream automation
+
 The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.github/workflows/test.yml` run on pushes and pull requests (except the weekly-release cases below), on the change's diff only (they reuse that job's root install instead of paying for a runner of their own). The desktop job itself never fails because of alint:
 
 - `alint --dirty` lints the working tree against `HEAD` and keeps only findings on changed lines. The steps fetch the merge base (against the PR base, or `canary` on a push) and run `git reset --mixed <merge-base>`, which turns the whole change into dirty changes, so the scope is exactly its diff and nothing older is reported. On a push to `canary` itself the diff is empty and nothing runs.

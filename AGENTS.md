@@ -65,6 +65,7 @@ This proxy is a **development convenience, not a verification surface**: it runs
 
 - **CPC branch strategy**: This fork is `LobeHub-Enterprise-CPC/Lobehub-CPC`. New CPC branches and PRs target `chore/merge-canary-into-cpc-branding`; the enterprise parent tracks this branch while pinning a specific submodule commit.
 - Upstream `canary` remains the source for upstream synchronization; it is not the target for CPC feature PRs.
+- During upstream sync, keep CPC Actions scoped to PR lint and the on-demand desktop security policy workflow. Formal CPC desktop packaging runs in the enterprise parent repository.
 - Use rebase for `git pull`
 - Commit messages: prefix with gitmoji
 - Branch format: `<type>/<feature-name>`
@@ -102,8 +103,7 @@ When acceptance is required, put its published `https://app.lobehub.com/acceptan
 
 - Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
 - Ship en-US and zh-CN by hand in the same PR: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
-- Leave all other locales to the daily CI workflow (`.github/workflows/auto-i18n.yml`), which runs `bun run i18n` and opens an automated translation PR. Missing locale keys fall back to English until that PR is merged.
-- Run `bun run i18n` manually only when the translated locales are needed immediately instead of waiting for the daily workflow. It is slow and requires `OPENAI_API_KEY`; don't hand-translate the generated locales.
+- Generate the other locales on demand with `bun run i18n` and `OPENAI_API_KEY`. Missing keys fall back to English until the translations are merged.
 
 ### Code Style
 

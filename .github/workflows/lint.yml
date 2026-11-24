@@ -1,0 +1,62 @@
+name: Lint
+
+on:
+  pull_request:
+    paths:
+      - 'src/**.[jt]sx?'
+      - 'src/**.[cm][jt]s'
+      - 'tests/**.[jt]sx?'
+      - 'tests/**.[cm][jt]s'
+      - 'apps/server/src/**.[jt]sx?'
+      - 'apps/server/src/**.[cm][jt]s'
+      - '.github/workflows/lint.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Find changed source files
+        id: files
+        shell: bash
+        run: |
+          patterns=()
+          for directory in src tests apps/server/src; do
+            patterns+=(":(glob)$directory/**/*.[jt]s" ":(glob)$directory/**/*.[jt]sx" ":(glob)$directory/**/*.[cm][jt]s")
+          done
+          git diff --name-only -z --diff-filter=ACMRT HEAD^1 HEAD -- "${patterns[@]}" > "$RUNNER_TEMP/lint-files"
+          if [ -s "$RUNNER_TEMP/lint-files" ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup environment
+        if: steps.files.outputs.changed == 'true'
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: '24.11.1'
+
+      - name: Install lint dependencies
+        if: steps.files.outputs.changed == 'true'
+        # The lockfile-free graph no longer selects every patched version.
+        # Limit this exception to the lint install and skip lifecycle scripts.
+        env:
+          pnpm_config_allow_unused_patches: 'true'
+        run: pnpm install --ignore-scripts
+
+      - name: Lint changed source files
+        if: steps.files.outputs.changed == 'true'
+        run: xargs -0 -r pnpm exec eslint -- < "$RUNNER_TEMP/lint-files"

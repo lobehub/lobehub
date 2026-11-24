@@ -100,6 +100,8 @@ the gated tree into the worker anyway.
 Products: `build/client` (assets → CDN), `build/server` (worker; deploy with
 `wrangler deploy --config build/server/wrangler.json`). Budget: worker gzip ≤ 10MB paid.
 
+The Workbench and Share workflow examples below describe upstream deployments. In CPC, verify the affected app locally and use the parent repository's release process.
+
 **CI affected-detection**: build emits `build-inputs.txt` (module-graph file list, gitignored);
 the deploy workflow diffs changed files against the manifest from the **last successful run's
 artifact** (carry-forward on skip), plus meta triggers (app dir, plugins/vite, lockfile,

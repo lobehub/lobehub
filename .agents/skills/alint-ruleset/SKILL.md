@@ -88,11 +88,10 @@ interpret a skipped suite as a pass.
   audit). Everything a repo-wide group needs is `files`, `ignores`, `plugins`, `rules`.
 - **Runner** — `bun run check --alint` (changed lines by default; explicit paths lint whole
   files), `bun run alint --dirty`, `bun run alint:audit`.
-- **CI & reporting** — `.agents/scripts/check/alint.ts` (the `--alint` selector),
+- **Local check & upstream reporting** — `.agents/scripts/check/alint.ts` (the `--alint` selector),
   `packages/alint/report.ts` (the ALint check run, its annotations, one PR summary comment
   with marker `<!-- alint-summary -->`, and a usage line), and the `ALint & Test Desktop App`
-  job in `.github/workflows/test.yml`. The check is not required, so a red check informs
-  rather than blocks.
+  job in the upstream `.github/workflows/test.yml`. CPC runs the local ALint command on demand.
 - **Scripts in this skill** — [`scripts/`](scripts/): `collect-rejections.ts`,
   `sample-findings.ts`, `pull-alint-runs.ts`, `cost-report.ts`.
 

@@ -97,10 +97,8 @@ Refresh tokens rotate, so persist the one returned by every refresh. A `LobeHubO
 
 - `bun generate` — regenerate `src/generated/` from `../openapi/openapi.yml` (run after the spec changes; naming rules live in `openapi-ts.config.ts`)
 - `bun run build` — build ESM + d.ts to `dist/`
-- `bun run test` — unit tests + generated-output drift check (local and release workflow only; not wired into PR CI)
+- `bun run test` — unit tests and generated-output drift check
 
 ## Releasing
 
-Publishing is automated by [`release-sdk.yml`](../../.github/workflows/release-sdk.yml): every push to `canary` touching `packages/sdk/**` publishes `1.0.<UTC timestamp>` to npm with provenance (manual `workflow_dispatch` also available). To ship a spec change, run `bun generate` and commit the regenerated output — the workflow's drift check (`bun scripts/generate-sdk.ts --check`) guards the published artifact.
-
-Regular PR CI does not gate on spec drift — the check runs locally (`bun run test`) and inside the release workflow only.
+The public SDK is published from the upstream LobeHub repository. For a CPC spec change, run `bun generate`, commit the regenerated output, and run `bun run test` to verify the generated files.
