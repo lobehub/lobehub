@@ -155,6 +155,25 @@ describe('useCreateAgentIdentityForm', () => {
     expect(onCreated).toHaveBeenCalledExactlyOnceWith('agent-new');
   });
 
+  it('clears the previous error when a retry starts', async () => {
+    mocks.updateAgentSlug
+      .mockResolvedValueOnce({ reason: 'taken', success: false })
+      .mockImplementationOnce(() => new Promise(() => {}));
+    const { result } = setup();
+
+    act(() => result.current.setSlug('taken'));
+    await act(async () => {
+      await result.current.submit();
+    });
+    expect(result.current.error).toBe('settingAgent.slug.error.taken');
+
+    act(() => {
+      void result.current.submit();
+    });
+
+    expect(result.current.error).toBeUndefined();
+  });
+
   it('applies a visibility changed while the form stayed open for a rejected slug', async () => {
     mocks.updateAgentSlug
       .mockResolvedValueOnce({ reason: 'taken', success: false })

@@ -57,4 +57,18 @@ describe('CreateMoreOptions', () => {
     );
     expect(screen.getByLabelText('slug')).toBeTruthy();
   });
+
+  it('shows the summary only while collapsed', () => {
+    render(
+      <CreateMoreOptions summary={'Workspace'}>
+        <input aria-label={'slug'} />
+      </CreateMoreOptions>,
+    );
+
+    expect(screen.getByText('· Workspace')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('settingAgent.identity.moreOptions'));
+
+    expect(screen.queryByText('· Workspace')).toBeNull();
+  });
 });

@@ -29,7 +29,7 @@ export type CreateAgentIdentityContentProps = UseCreateAgentIdentityFormOptions;
  */
 const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
   ({ groupId, onCreated, visibility }) => {
-    const { t } = useTranslation(['setting', 'common']);
+    const { t } = useTranslation(['setting', 'common', 'chat']);
     const { close } = useModalContext();
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
     // `visibility` is only the starting point; in a workspace the user sees and
@@ -96,7 +96,14 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
           )}
         </Flexbox>
         <IdentityBasicFields form={form} />
-        <CreateMoreOptions error={form.error}>
+        <CreateMoreOptions
+          error={form.error}
+          summary={
+            visibilityState.show && visibilityState.value
+              ? t(`createVisibility.${visibilityState.value}`, { ns: 'chat' })
+              : undefined
+          }
+        >
           <IdentityDetailFields
             form={form}
             slugPlaceholder={t('settingAgent.slug.autoPlaceholder', { ns: 'setting' })}

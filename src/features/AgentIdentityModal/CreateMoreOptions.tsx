@@ -13,13 +13,18 @@ interface CreateMoreOptionsProps {
    * slug is never hidden behind a collapsed header.
    */
   error?: string;
+  /**
+   * A short reading of what the folded fields currently hold (e.g. the
+   * visibility), so a choice that matters is not invisible while collapsed.
+   */
+  summary?: ReactNode;
 }
 
 /**
  * Optional details of a new agent (description, slug, visibility), collapsed by
  * default so the main path is just "name it and create".
  */
-const CreateMoreOptions = memo<CreateMoreOptionsProps>(({ children, error }) => {
+const CreateMoreOptions = memo<CreateMoreOptionsProps>(({ children, error, summary }) => {
   const { t } = useTranslation('setting');
   const [expanded, setExpanded] = useState(false);
   const [revealedError, setRevealedError] = useState<string>();
@@ -46,9 +51,16 @@ const CreateMoreOptions = memo<CreateMoreOptionsProps>(({ children, error }) => 
           ),
           key: ITEM_KEY,
           title: (
-            <Text style={{ color: cssVar.colorTextSecondary }}>
-              {t('settingAgent.identity.moreOptions')}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Text style={{ color: cssVar.colorTextSecondary }}>
+                {t('settingAgent.identity.moreOptions')}
+              </Text>
+              {summary && !expanded && (
+                <Text fontSize={12} type={'secondary'}>
+                  · {summary}
+                </Text>
+              )}
+            </Flexbox>
           ),
         },
       ]}

@@ -86,6 +86,9 @@ export const useCreateAgentIdentityForm = ({
   const submit = async () => {
     if (saving || uploading) return;
     setSaving(true);
+    // A retry starts clean, so the same refusal arriving again is a new error
+    // the form can surface (e.g. re-open a folded "More options").
+    setError(undefined);
     try {
       const meta = {
         avatar: avatar ?? null,
