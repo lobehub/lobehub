@@ -1,8 +1,9 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Empty, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
-import { EyeOffIcon, GlobeIcon } from 'lucide-react';
+import { Empty, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { EyeOffIcon, GlobeIcon, LockIcon, UsersIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -197,7 +198,6 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
               key={cred.id}
               extra={
                 <>
-                  <Tag data-testid={`cred-visibility-${cred.id}`}>{visibilityLabel(cred)}</Tag>
                   {author && (
                     <Tooltip title={author.name}>
                       <span data-testid={`cred-author-${cred.id}`} style={{ display: 'flex' }}>
@@ -211,6 +211,23 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
                     </Tooltip>
                   )}
                 </>
+              }
+              titleSuffix={
+                <Tooltip title={visibilityLabel(cred)}>
+                  <span
+                    aria-label={visibilityLabel(cred)}
+                    data-testid={`cred-visibility-${cred.id}`}
+                    data-visibility={cred.visibility === 'private' ? 'private' : 'workspace'}
+                    role={'img'}
+                    style={{
+                      color: cssVar.colorTextTertiary,
+                      display: 'inline-flex',
+                      flex: 'none',
+                    }}
+                  >
+                    <Icon icon={cred.visibility === 'private' ? LockIcon : UsersIcon} size={14} />
+                  </span>
+                </Tooltip>
               }
               onClick={() =>
                 createViewCredModal({

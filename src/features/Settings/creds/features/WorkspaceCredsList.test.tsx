@@ -65,8 +65,13 @@ describe('WorkspaceCredsList', () => {
       />,
     );
 
-    expect(screen.getByTestId('cred-visibility-1')).toHaveTextContent('visibilityFilter.workspace');
-    expect(screen.getByTestId('cred-visibility-2')).toHaveTextContent('visibilityFilter.private');
+    // Visibility is an icon beside the name (team or lock), labelled for screen readers.
+    const workspaceIcon = screen.getByTestId('cred-visibility-1');
+    expect(workspaceIcon).toHaveAttribute('data-visibility', 'workspace');
+    expect(workspaceIcon).toHaveAccessibleName('visibilityFilter.workspace');
+    expect(workspaceIcon.parentElement).toHaveTextContent('Team token');
+    expect(screen.getByTestId('cred-visibility-2')).toHaveAttribute('data-visibility', 'private');
+    expect(screen.queryByText('visibilityFilter.workspace')).toBeNull();
     expect(screen.getByTestId('cred-author-1')).toBeInTheDocument();
     // Market returns no profile for another member's workspace credential.
     expect(screen.queryByTestId('cred-author-3')).toBeNull();
