@@ -58,7 +58,7 @@ afterEach(() => {
 });
 
 describe('settings useCategory', () => {
-  it('orders business groups with account, connection and resource contents', () => {
+  it('splits business groups into the account set and the personal space set', () => {
     const { result } = renderHook(() => useCategory(), {
       wrapper: createWrapper(true, true),
     });
@@ -66,24 +66,51 @@ describe('settings useCategory', () => {
     const groupKeys = (key: SettingsGroupKey) =>
       result.current.find((group) => group.key === key)?.items.map((item) => item.key);
 
-    expect(result.current.map((group) => group.key)).toEqual([
-      SettingsGroupKey.Account,
-      SettingsGroupKey.Subscription,
-      SettingsGroupKey.Agent,
-      SettingsGroupKey.Resource,
-      SettingsGroupKey.System,
+    expect(result.current.map((group) => [group.key, group.scope])).toEqual([
+      [SettingsGroupKey.Account, 'account'],
+      [SettingsGroupKey.System, 'account'],
+      [SettingsGroupKey.Subscription, 'space'],
+      [SettingsGroupKey.Agent, 'space'],
+      [SettingsGroupKey.Resource, 'space'],
+      [SettingsGroupKey.Data, 'space'],
     ]);
 
+    // Account settings follow the user across spaces.
     expect(groupKeys(SettingsGroupKey.Account)).toEqual([
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
       SettingsTabs.Conversation,
       SettingsTabs.Hotkey,
       SettingsTabs.Notification,
+      SettingsTabs.Memory,
+      SettingsTabs.Referral,
+    ]);
+    // Advanced needs gateway mode or the desktop app.
+    expect(groupKeys(SettingsGroupKey.System)).toEqual([SettingsTabs.Labs, SettingsTabs.About]);
+
+    // The personal subscription is the personal space's, like a workspace's.
+    expect(groupKeys(SettingsGroupKey.Subscription)).toEqual([
+      SettingsTabs.Plans,
+      SettingsTabs.Usage,
+      SettingsTabs.Billing,
+    ]);
+    // Every Connection entry is behind the webhook flag, so the group is gone.
+    expect(groupKeys(SettingsGroupKey.Connection)).toBeUndefined();
+    expect(groupKeys(SettingsGroupKey.Data)).toEqual([
       SettingsTabs.Stats,
+      SettingsTabs.Storage,
+      SettingsTabs.Trash,
     ]);
 
-    expect(groupKeys(SettingsGroupKey.Connection)).toBeUndefined();
+    // Every tab has exactly one home.
+    const allKeys = result.current.flatMap((group) => group.items.map((item) => item.key));
+    expect(new Set(allKeys).size).toBe(allKeys.length);
+
+    // Entries that moved out of settings must not come back: skills and
+    // connectors live in Plugins, Messenger left settings, and credentials
+    // share the Environments page.
+    for (const removed of ['messenger', 'integrations', SettingsTabs.Creds])
+      expect(allKeys).not.toContain(removed);
     expect(getItemKeys()).not.toContain(SettingsTabs.Skill);
     expect(getItemKeys()).not.toContain(SettingsTabs.Connector);
 
