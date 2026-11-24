@@ -56,6 +56,7 @@ import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { channelUserNameSql } from './nickname';
 import { isOpeningAck } from './openingAck';
+import { reactionsByMessage } from './reactions';
 import { replyWorksByMessage } from './works';
 
 export const publicMessageColumns = {
@@ -773,7 +774,7 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works, relayAvatars, grantCards] = await Promise.all([
+  const [sourceTopics, works, relayAvatars, grantCards, reactions] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
     replyWorksByMessage(tx, channelId, replyIds, {
       includeCanvasWorks: options.includeCanvasWorks,
@@ -782,7 +783,15 @@ export const readChannelView = async (
     }),
     relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
     deviceGrantCards(tx, [...page, ...(rootMessage ? [rootMessage] : [])], viewerUserId),
+    reactionsByMessage(
+      tx,
+      channelId,
+      [...page, ...(rootMessage ? [rootMessage] : [])].map((message) => message.id),
+    ),
   ]);
+  // A tombstone keeps its row for the Threads and replies that point at it, not its reactions.
+  const reactionsOf = (message: MessageRow) =>
+    channelMessageDeletedAt(message.metadata) ? [] : (reactions.get(message.id) ?? []);
   const ids = [...new Set([...files.values()].flat())];
   const attachments = await channelAttachments(tx, ids);
   return {
@@ -860,6 +869,7 @@ export const readChannelView = async (
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
           works: works.get(rootMessage.id) ?? [],
+          reactions: reactionsOf(rootMessage),
           replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
         }
       : null,
@@ -874,6 +884,7 @@ export const readChannelView = async (
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],
+      reactions: reactionsOf(message),
       replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
     })),
   };

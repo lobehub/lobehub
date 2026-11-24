@@ -21,6 +21,7 @@ const {
   messagePerson,
   readMessages,
   readMessage,
+  react,
   sendMessage,
   output,
 } = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ const {
   messagePerson: vi.fn(),
   readMessages: vi.fn(),
   readMessage: vi.fn(),
+  react: vi.fn(),
   sendMessage: vi.fn(),
   output: vi.fn(),
 }));
@@ -42,6 +44,7 @@ vi.mock('../api/client', () => ({
       messagePerson: { mutate: messagePerson },
       readMessages: { query: readMessages },
       readMessage: { query: readMessage },
+      react: { mutate: react },
       sendMessage: { mutate: sendMessage },
     },
   }),
@@ -55,6 +58,26 @@ describe('Channel CLI', () => {
     registerChannelCommand(program);
     return program.parseAsync(args, { from: 'user' });
   };
+  it('reacts as the running Agent, and takes a reaction back with --remove', async () => {
+    react.mockResolvedValue({ added: true, emoji: '👀', messageId: 'message-example' });
+    await run(['channel', 'react', 'message-example', '👀', '--json']);
+    expect(react).toHaveBeenLastCalledWith({
+      emoji: '👀',
+      messageId: 'message-example',
+      remove: undefined,
+      threadId: undefined,
+    });
+    expect(output).toHaveBeenCalledWith({ added: true, emoji: '👀', messageId: 'message-example' });
+
+    await run(['channel', 'react', 'message-example', '👀', '--remove', '--thread', 'thread-a']);
+    expect(react).toHaveBeenLastCalledWith({
+      emoji: '👀',
+      messageId: 'message-example',
+      remove: true,
+      threadId: 'thread-a',
+    });
+  });
+
   it('prints the cursor and messages without supplying an arbitrary channel or user identity', async () => {
     const page = { cutoffSequence: 20, messages: [historyMessage], nextBeforeSequence: 12 };
     readMessages.mockResolvedValue(page);

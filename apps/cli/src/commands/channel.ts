@@ -67,6 +67,27 @@ export const registerChannelCommand = (program: Command) => {
       );
     });
   channel
+    .command('react <messageId> <emoji>')
+    .description(
+      'React to a message in this conversation with an emoji, as the running Agent; it posts nothing and notifies nobody',
+    )
+    .option('--remove', 'Remove your reaction instead')
+    .option('--thread <threadId>', 'The Thread `history --thread` returned the message from')
+    .option('--json', 'Print structured JSON')
+    .action(
+      async (messageId: string, emoji: string, options: { remove?: boolean; thread?: string }) => {
+        const client = await getTrpcClient();
+        outputJson(
+          await client.channel.react.mutate({
+            emoji,
+            messageId,
+            remove: options.remove,
+            threadId: options.thread,
+          }),
+        );
+      },
+    );
+  channel
     .command('threads')
     .description('List the Threads of this Channel, newest first, to read one with --thread')
     .option('--active', 'Only Threads where you have a queued or running reply')
