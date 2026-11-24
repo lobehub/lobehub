@@ -97,6 +97,7 @@ vi.mock('@/services/agentQuota', () => ({ agentQuotaService: mockQuotaService })
 // target the exact i18n key + params a snapshot should produce.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: { language: 'en-US' },
     t: translate,
   }),
 }));

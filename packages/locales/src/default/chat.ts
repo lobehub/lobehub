@@ -815,6 +815,9 @@ export default {
   'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
   'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
   'heteroAgent.codexQuota.calendar.title': 'Codex usage calendar',
+  'heteroAgent.codexQuota.creditsBalance': 'Credits balance',
+  'heteroAgent.codexQuota.creditsUnlimited': 'Unlimited',
+  'heteroAgent.codexQuota.creditsUsdEstimate': '≈ {{amount}}',
   'heteroAgent.codexQuota.doesNotExpire': 'Does not expire',
   'heteroAgent.codexQuota.errorConnection':
     "Couldn't reach the Codex quota endpoint. Check your network or LobeHub proxy settings.",

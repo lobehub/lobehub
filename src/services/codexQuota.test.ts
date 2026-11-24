@@ -35,6 +35,7 @@ const reading = {
   windowMinutes: 300,
 };
 const sample = {
+  credits: { balance: '1250.75', unlimited: false },
   error: null,
   identity: { externalAccountId: 'external-a' },
   readings: [reading],
@@ -59,10 +60,11 @@ beforeEach(() => {
 });
 
 describe('account-scoped Codex quota', () => {
-  it('renders fresh persisted local quota without probing the CLI', async () => {
-    const result = await createCodexQuotaReader({})({});
-    expect(result.session?.usedPercent).toBe(23);
-    expect(heterogeneousAgentService.getCodexQuota).not.toHaveBeenCalled();
+  it('reads credits on first load even when persisted windows are fresh', async () => {
+    const reader = createCodexQuotaReader({});
+    expect((await reader()).credits).toEqual(sample.credits);
+    expect((await reader()).credits).toEqual(sample.credits);
+    expect(heterogeneousAgentService.getCodexQuota).toHaveBeenCalledTimes(1);
   });
 
   it('publishes a fresh local sample to the unified account layer', async () => {
@@ -95,11 +97,17 @@ describe('account-scoped Codex quota', () => {
 
   it('refreshes remote quota through agentQuota and keeps persisted data while offline', async () => {
     const reader = createCodexQuotaReader({ deviceId: 'device-a' });
-    expect((await reader()).session?.usedPercent).toBe(23);
+    expect(await reader()).toMatchObject({
+      credits: sample.credits,
+      session: { usedPercent: 23 },
+    });
     expect(agentQuotaService.refreshCodexQuota).toHaveBeenCalled();
     expect(agentQuotaService.ingestCodexSnapshot).not.toHaveBeenCalled();
     vi.mocked(agentQuotaService.refreshCodexQuota).mockResolvedValue(null);
-    expect((await reader({ revalidate: true })).session?.usedPercent).toBe(23);
+    expect(await reader({ revalidate: true })).toMatchObject({
+      credits: sample.credits,
+      session: { usedPercent: 23 },
+    });
     expect(heterogeneousAgentService.getCodexQuota).not.toHaveBeenCalled();
   });
 
@@ -115,6 +123,7 @@ describe('account-scoped Codex quota', () => {
     await reader();
     vi.mocked(agentQuotaService.refreshCodexQuota).mockResolvedValue({
       ...sample,
+      credits: undefined,
       identity: { externalAccountId: 'external-b' },
       readings: [],
       session: { ...sample.session, usedPercent: 80 },
@@ -122,6 +131,7 @@ describe('account-scoped Codex quota', () => {
     const result = await reader({ revalidate: true });
     expect(result.identity?.externalAccountId).toBe('external-b');
     expect(result.session?.usedPercent).toBe(80);
+    expect(result.credits).toBeUndefined();
   });
 
   it('refreshes the quota replica after accepting a local snapshot', async () => {
