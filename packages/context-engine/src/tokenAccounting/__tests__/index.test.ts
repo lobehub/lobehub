@@ -322,6 +322,52 @@ describe('countContextTokens', () => {
       });
       expect(r.bySource.reasoning).toBe(0);
     });
+
+    it('subtracts outputReasoningTokens on fast-path when reasoning was stripped or not replayed', () => {
+      const stripped = countContextTokens({
+        messages: [
+          mkMsg({
+            content: 'short answer',
+            role: 'assistant',
+            usage: { outputReasoningTokens: 7500, totalOutputTokens: 7661 } as any,
+          }),
+        ],
+      });
+      expect(stripped.bySource.content).toBe(161);
+      expect(stripped.bySource.reasoning).toBe(0);
+      expect(stripped.rawTotal).toBe(161);
+
+      const replayDisabled = countContextTokens({
+        messages: [
+          mkMsg({
+            content: 'short answer',
+            reasoning: { content: 'long thinking '.repeat(200) },
+            role: 'assistant',
+            usage: { outputReasoningTokens: 7500, totalOutputTokens: 7661 } as any,
+          }),
+        ],
+        options: { includeReasoning: false },
+      });
+      expect(replayDisabled.bySource.content).toBe(161);
+      expect(replayDisabled.bySource.reasoning).toBe(0);
+      expect(replayDisabled.rawTotal).toBe(161);
+    });
+
+    it('attributes outputReasoningTokens to reasoning bucket on fast-path when reasoning is replayed', () => {
+      const replayed = countContextTokens({
+        messages: [
+          mkMsg({
+            content: 'short answer',
+            reasoning: { content: 'long thinking '.repeat(200) },
+            role: 'assistant',
+            usage: { outputReasoningTokens: 7500, totalOutputTokens: 7661 } as any,
+          }),
+        ],
+      });
+      expect(replayed.bySource.content).toBe(161);
+      expect(replayed.bySource.reasoning).toBe(7500);
+      expect(replayed.rawTotal).toBe(7661);
+    });
   });
 
   describe('tool_call_id (tool messages)', () => {

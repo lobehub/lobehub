@@ -97,10 +97,28 @@ export interface CountContextTokensParams {
      */
     driftMultiplier?: number;
     /**
+     * Whether to count assistant `reasoning` tokens. Set to `false` when prior
+     * assistant reasoning is stripped before sending (`shouldReplayAssistantReasoning === false`),
+     * so neither `msg.reasoning` nor `usage.outputReasoningTokens` on the
+     * assistant fast-path inflates the context budget.
+     *
+     * @default true
+     */
+    includeReasoning?: boolean;
+    /**
      * Attachments sent as a preview instead of their full text, as planned by
      * `planAttachmentPreviews`.
      */
     previewFileIds?: ReadonlySet<string>;
+    /**
+     * Pre-counted or estimated system-prompt tokens (e.g. from the latest
+     * `metadata.contextAccounting.system` or `agentConfig.systemRole`) that
+     * will be sent alongside `messages` and `tools`. Added to `rawTotal`
+     * before applying `driftMultiplier`.
+     *
+     * @default 0
+     */
+    systemTokens?: number;
   };
   /**
    * Top-level tool definitions sent to the provider in the same request. Pass
