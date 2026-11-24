@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -130,7 +131,21 @@ export function Composer({
   /** The card the mention picker docks to, full width above the input like an IM. */
   const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
-  const attachments = useAttachments(draftKey);
+  const workspaces = useWorkspaces();
+  /**
+   * Files upload into the Channel's own scope, not whichever one the app has active: the send
+   * accepts a member's files only from the Channel's workspace. An external contact, not a member
+   * there, attaches files from their personal space.
+   */
+  const channelWorkspaceId = channel?.workspaceId;
+  const uploadWorkspaceId = !channel
+    ? undefined
+    : channelWorkspaceId &&
+        (channelWorkspaceId === workspaceId ||
+          workspaces.some((workspace) => workspace.id === channelWorkspaceId))
+      ? channelWorkspaceId
+      : null;
+  const attachments = useAttachments(draftKey, uploadWorkspaceId);
   const { allowed } = usePermission('create_content');
   const knowledgeBase = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   /** Files sent to another person's shared Agent are refused server-side, so offer no upload. */
