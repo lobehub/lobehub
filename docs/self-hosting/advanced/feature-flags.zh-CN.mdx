@@ -46,6 +46,7 @@ tags:
 | `dashboard`                      | 看板：首页与项目看板页面、监控组件侧边栏、对话内的组件预览，以及用于搭建监控组件的 `builtin-dashboard` 助理工具。关闭时以上入口均隐藏，组件与看板相关接口返回 FORBIDDEN；已发布的组件仍按计划刷新。                                                                                                                        | 关闭  |
 | `mcp_apps`                       | MCP Apps：MCP 服务器为工具结果声明了交互页面（`ui://`）时，在对话中渲染该页面（服务器提供的 HTML，运行在沙箱 iframe 中）。关闭时按普通工具结果显示，服务端也不再向 MCP 服务器声明支持 MCP Apps。                                                                                                                  | 关闭  |
 | `webhook`                        | 入站 Webhook 唤醒 Agent。MCP Events：Agent 订阅远程连接器事件，并在原 Topic 中运行；创建订阅遵循用户的工具审批设置。Agent Webhook：在助理档案 → Webhook 中管理、任意外部系统都能调用的 URL，调用即运行 Agent。每次事件或调用会消耗额度。需公网 `APP_URL` 与密钥加密配置；MCP Events 还需支持 webhook 事件的已认证 MCP 服务器。关闭后入口隐藏，投递仍会记录但不运行。 | 关闭  |
+| `page_collab`                    | 页面实时协作：在工作区页面中与成员实时共同编辑，显示成员光标和在线状态。关闭时页面照常保存，成员的修改在刷新后可见。仅 LobeHub Cloud 可用，详见下文边界。                                                                                                                                                     | 关闭  |
 | `edit_agent`                     | 允许用户编辑助手。                                                                                                                                                                                                                                | 开启  |
 | `ai_image`                       | 控制 AI 图像生成功能和页面 (/image)。                                                                                                                                                                                                                | 开启  |
 | `speech_to_text`                 | 启用语音转文本功能。                                                                                                                                                                                                                               | 开启  |
@@ -83,6 +84,23 @@ tags:
 [分享路由](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/agentShare.ts)在 `enableShare` 和将 `updateVisibility` 设为 `link` 时检查创建者门控。改为 `private` 不要求灰度开关，但会阻止访客访问。因此，关闭 `agent_share` 不能替代关闭某个具体分享。
 
 你可以随时检查 [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) 以获取最新的特性标志列表。
+
+## 页面实时协作：仅 Cloud 灰度
+
+`page_collab` 默认关闭，用于决定哪些用户通过共享房间编辑工作区页面。客户端与服务端都会检查它：未命中该开关的用户，服务端拒绝其进入房间，其编辑照常通过 HTTP 保存。
+
+该开关只在部署已支持页面房间时生效：
+
+1. 已开启 `ENABLE_WORKSPACE_PAGE_COLLAB`。
+2. 已配置房间网关（LobeHub agent gateway）。
+3. `ENABLE_BUSINESS_FEATURES` 为 `true`，即工作区可用。
+
+<Callout type={'warning'}>
+  以上前提仅存在于 LobeHub Cloud。开源代码中 `ENABLE_BUSINESS_FEATURES` 是值为 `false`
+  的代码常量，因此 `FEATURE_FLAGS="+page_collab"` 不会在自托管部署上开启页面实时协作。
+</Callout>
+
+在 LobeHub Cloud 上，该开关通过运行时配置发布，而不是 `FEATURE_FLAGS`。数组值为用户 ID，可包含 `rollout:N` 百分比标记，例如 `["rollout:5"]`。
 
 ## Agent Webhook：部署前提
 

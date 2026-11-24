@@ -5,7 +5,11 @@ import { DocumentService } from '@/server/services/document';
 import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
 
-import { isLegacyPageCollabEnabled, isPageCollabEnabled } from './config';
+import {
+  isLegacyPageCollabEnabled,
+  isPageCollabEnabled,
+  isPageCollabEnabledForUser,
+} from './config';
 import { DbPageSessions } from './dbSession';
 import { RoomPageSessions } from './roomSession';
 import { type PageSessions, PageUnsupportedError, type PageWriter } from './session';
@@ -78,9 +82,12 @@ export const resolveRoomAccess = async (
   userId: string,
   documentId: string,
 ): Promise<PageAccess> => {
+  // Clients released before workspace-only rooms join for every page and never read the
+  // `page_collab` flag; gating them here would break those released clients.
   if (!isLegacyPageCollabEnabled()) {
     const meta = await getResourceMeta(db, 'document', documentId);
     if (!meta?.workspaceId) return 'none';
+    if (!(await isPageCollabEnabledForUser(userId))) return 'none';
   }
   return resolvePageAccess(db, userId, documentId);
 };

@@ -30,6 +30,12 @@ export const serverConfigSelectors = {
     s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
+  /**
+   * Runtime flag `page_collab`: this user edits workspace pages through a room. Not the same as
+   * `enableWorkspacePageCollab`, which says whether the deployment runs rooms at all.
+   */
+  enablePageCollab: (s: ServerConfigStore) => s.featureFlags.enablePageCollab === true,
+  /** Deployment-static: the server runs workspace page rooms (`ENABLE_WORKSPACE_PAGE_COLLAB`). */
   enableWorkspacePageCollab: (s: ServerConfigStore) =>
     s.serverConfig.enableWorkspacePageCollab || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,

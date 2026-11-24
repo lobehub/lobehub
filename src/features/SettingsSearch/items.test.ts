@@ -86,16 +86,10 @@ describe('settings search index', () => {
     expect(item!.visible?.(webContext) ?? true).toBe(true);
   });
 
-  it('shows workspace lab features exactly where business features are enabled', () => {
-    const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
-    const workspaceItems = LAB_FEATURES.filter((feature) => feature.workspaceOnly).map(({ flag }) =>
-      labsItems.find(({ anchor }) => anchor === `labs-${flag}`)!,
+  it('does not index Live Page Collaboration, which moved to the page_collab flag', () => {
+    expect(SETTINGS_SEARCH_ITEMS.some((item) => item.anchor === 'labs-enablePageCollab')).toBe(
+      false,
     );
-
-    for (const item of workspaceItems) {
-      expect(item.visible?.(webContext)).toBe(true);
-      expect(item.visible?.({ ...webContext, enableBusinessFeatures: false })).toBe(false);
-    }
   });
 
   it('indexes the inbox notification channel', () => {

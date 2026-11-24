@@ -157,13 +157,14 @@ describe('Labs settings page', () => {
     // Every toggle carries exactly one stage tag — counted against the registry
     // rather than a literal, so adding an experiment does not fail this test for
     // the wrong reason.
-    expect(alphaTags.length + betaTags.length).toBe(
-      LAB_FEATURES.filter((feature) => !feature.workspaceOnly).length,
-    );
+    expect(alphaTags.length + betaTags.length).toBe(LAB_FEATURES.length);
   });
 
-  it('does not render an empty workspace group', () => {
+  it('no longer offers Live Page Collaboration as a lab toggle', () => {
+    // Moved to the `page_collab` runtime flag; the Workspace group it lived in is gone with it.
     renderPage({ enableBusinessFeatures: true });
+
+    expect(screen.queryByText('features.pageCollab.title')).toBeNull();
     expect(screen.queryByText('group.workspace')).toBeNull();
   });
 

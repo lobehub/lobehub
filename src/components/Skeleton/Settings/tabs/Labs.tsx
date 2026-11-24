@@ -6,21 +6,18 @@ import { FlaskConicalIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { LAB_FEATURES, type LabFeatureItem } from '@/features/Settings/labs/features';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import SkeletonBar from '../../Bar';
 import { SettingsFormSkeleton, type SettingsFormSkeletonItem, SWITCH_CONTROL } from '../Section';
 import type { SettingsTabSkeleton } from './types';
 
 /**
- * The experiment groups with the same General / Workspace / Desktop split and
+ * The experiment groups with the same General / Desktop split and
  * every experiment's real title and description. The labs page renders it
  * below its settled intro alert while user state loads.
  */
 export const LabsFormSkeleton = () => {
   const { t, ready } = useTranslation('labs');
-  // Workspaces exist wherever business features are enabled.
-  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const text = (key: string, width: number, height = 14) =>
     ready ? (t(key as any) as string) : <SkeletonBar height={height} width={width} />;
 
@@ -47,17 +44,13 @@ export const LabsFormSkeleton = () => {
     minWidth: undefined,
   });
 
-  const general = LAB_FEATURES.filter((f) => !f.desktopOnly && !f.workspaceOnly);
-  const workspace = enableWorkspace ? LAB_FEATURES.filter((f) => f.workspaceOnly) : [];
+  const general = LAB_FEATURES.filter((f) => !f.desktopOnly);
   const desktop = LAB_FEATURES.filter((f) => f.desktopOnly);
 
   return (
     <SettingsFormSkeleton
       groups={[
         { items: general.map(toItem), title: text('group.general', 72, 16) },
-        ...(workspace.length > 0
-          ? [{ items: workspace.map(toItem), title: text('group.workspace', 72, 16) }]
-          : []),
         ...(isDesktop
           ? [{ items: desktop.map(toItem), title: text('group.desktop', 72, 16) }]
           : []),

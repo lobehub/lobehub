@@ -103,6 +103,12 @@ export type IFeatureFlagsState = {
   /** Hover previews of a topic's final answer (`topic_preview`). */
   enableTopicPreview: boolean | undefined;
   /**
+   * Live Page Collaboration on workspace pages (`page_collab`). Off by default. Only takes effect
+   * where the deployment also runs rooms (`IServerConfig.enableWorkspacePageCollab`); the server
+   * refuses a room to a user this flag leaves out.
+   */
+  enablePageCollab: boolean | undefined;
+  /**
    * @deprecated The `voice_dictation` flag is retired: dictation is on wherever
    * business features are. Always equals `ENABLE_BUSINESS_FEATURES` (the value
    * Cloud already served) because released LobeHub Mobile clients still read

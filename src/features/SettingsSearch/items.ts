@@ -581,20 +581,15 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   // Labs — derived from the LAB_FEATURES catalog the page renders, so a new
   // lab flag becomes searchable without a second registration. Anchors use
   // `labs-${flag}`, matching the SettingsSearchAnchor wrap on each toggle.
-  ...LAB_FEATURES.map(
-    ({ desktopOnly, flag, i18nKey, searchKeywords, workspaceOnly }): SettingsSearchItem => ({
-      anchor: `labs-${flag}`,
-      descKey: `features.${i18nKey}.desc`,
-      keywords: searchKeywords,
-      labelKey: `features.${i18nKey}.title`,
-      ns: 'labs',
-      tab: SettingsTabs.Labs,
-      ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
-      ...(workspaceOnly
-        ? { visible: (ctx: SettingsSearchContext) => ctx.enableBusinessFeatures }
-        : {}),
-    }),
-  ),
+  ...LAB_FEATURES.map(({ desktopOnly, flag, i18nKey, searchKeywords }): SettingsSearchItem => ({
+    anchor: `labs-${flag}`,
+    descKey: `features.${i18nKey}.desc`,
+    keywords: searchKeywords,
+    labelKey: `features.${i18nKey}.title`,
+    ns: 'labs',
+    tab: SettingsTabs.Labs,
+    ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
+  })),
   // Service Model
   {
     anchor: 'service-model-assignments',

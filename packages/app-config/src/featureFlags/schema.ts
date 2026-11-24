@@ -132,6 +132,15 @@ export const FeatureFlagsSchema = z.object({
 
   topic_preview: FeatureFlagValue.optional(),
 
+  /**
+   * Live Page Collaboration: workspace pages edit through a shared room (live cursors, presence,
+   * conflict-free merges). Cloud-only grayscale: the deployment also needs
+   * `ENABLE_WORKSPACE_PAGE_COLLAB` and a room gateway, and the server refuses a room to a user
+   * the flag leaves out. Off: pages save over HTTP as before. Array values are user ids and may
+   * hold a `rollout:N` percentage.
+   */
+  page_collab: FeatureFlagValue.optional(),
+
   // internal flag
   agent_onboarding: FeatureFlagValue.optional(),
   dev_dock: FeatureFlagValue.optional(),
@@ -250,6 +259,10 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until the backend replaces the preview read; allowlist first.
   topic_preview: false,
 
+  // Cloud-only grayscale: off until an admin publishes `rollout:N` / a user allowlist or flips
+  // it to true. Without the deployment prerequisites it stays off even when set.
+  page_collab: false,
+
   agent_onboarding: isDev,
   dev_dock: isDev,
   auth_captcha: true,
@@ -318,6 +331,7 @@ export const mapFeatureFlagsEnvToState = (
       'managed_cloud_device',
     ),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId, 'topic_preview'),
+    enablePageCollab: evaluateFeatureFlag(config.page_collab, userId, 'page_collab'),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId, 'provider_settings'),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId, 'openai_api_key'),

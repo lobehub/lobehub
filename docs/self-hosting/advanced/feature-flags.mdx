@@ -48,6 +48,7 @@ You can achieve various feature combinations using the above configuration synta
 | `dashboard`                      | Dashboards: the home and project dashboard pages, the widget Portal, in-chat widget previews and the `builtin-dashboard` agent tool that builds monitoring widgets. When off, these are hidden and the widget / dashboard APIs return FORBIDDEN; widgets already published keep refreshing on their schedule.                                                                                                                                                                                                                         | Disabled      |
 | `mcp_apps`                       | MCP Apps: a tool result whose MCP server declares an interactive `ui://` view renders that view (the server's HTML, in a sandboxed iframe) in the conversation. When off, such results render as plain tool results and the server does not announce MCP Apps support to MCP servers.                                                                                                                                                                                                                                                 | Disabled      |
 | `webhook`                        | Inbound webhooks wake Agents. MCP Events: an Agent subscribes to remote connector events and runs in the original Topic; subscribing follows the user's tool approval settings. Agent webhooks: URLs under Agent Profile → Webhook that any outside system calls to run the Agent. Each event or call uses credits. Requires a public `APP_URL` and secret encryption; MCP Events also needs an authenticated MCP server offering webhook events. When off, the entries are hidden and deliveries are still recorded but run nothing. | Disabled      |
+| `page_collab`                    | Live Page Collaboration: workspace pages are edited together in real time, with live cursors and presence. When off, pages save normally and show teammates' changes after a refresh. LobeHub Cloud only; see the boundary below.                                                                                                                                                                                                                                                                                                     | Disabled      |
 | `edit_agent`                     | Allows users to edit assistants.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Enabled       |
 | `ai_image`                       | Controls AI image generation feature and page (/image).                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Enabled       |
 | `speech_to_text`                 | Enables speech-to-text functionality.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Enabled       |
@@ -85,6 +86,24 @@ On a supported deployment, removal from the creator rollout does not itself revo
 The [share router](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/agentShare.ts) checks the creator gate for `enableShare` and `updateVisibility` to `link`. A change to `private` does not require the rollout flag and blocks visitor access. Thus, disabling `agent_share` is not a substitute for disabling an individual share.
 
 You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) to get the latest list of feature flags.
+
+## Live Page Collaboration: Cloud-only Rollout
+
+`page_collab` is off by default. It chooses which users edit workspace pages through a shared room, and both the client and the server check it: the server refuses a room to a user the flag leaves out, and that user's edits keep saving over HTTP.
+
+The flag only takes effect where the deployment already runs page rooms:
+
+1. `ENABLE_WORKSPACE_PAGE_COLLAB` is on.
+2. A room gateway (the LobeHub agent gateway) is configured.
+3. `ENABLE_BUSINESS_FEATURES` is `true`, so workspaces exist.
+
+<Callout type={'warning'}>
+  These prerequisites exist only on LobeHub Cloud. `ENABLE_BUSINESS_FEATURES` is a code constant set
+  to `false` in the open-source code, so `FEATURE_FLAGS="+page_collab"` does not enable live page
+  collaboration on a self-hosted deployment.
+</Callout>
+
+On LobeHub Cloud the flag is published through runtime configuration rather than `FEATURE_FLAGS`. Array values are user IDs and may include a `rollout:N` percentage token, for example `["rollout:5"]`.
 
 ## Agent Webhooks: Deployment Requirements
 

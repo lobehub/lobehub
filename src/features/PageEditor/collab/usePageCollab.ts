@@ -10,9 +10,13 @@ import { getGatewayMux } from '@/store/chat/slices/agentRun/actions/transports/g
 import { useDocumentStore } from '@/store/document';
 import { registerPageCollab } from '@/store/document/collabRegistry';
 import { pageActions } from '@/store/page';
-import { getServerConfigStoreState } from '@/store/serverConfig';
+import {
+  getServerConfigStoreState,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { usePageEditorStore, useStoreApi } from '../store';
 import { getPresenceColor, type PresenceAwarenessData } from './presence';
@@ -42,9 +46,10 @@ const readGatewayUrl = () => {
     : undefined;
 };
 
+// The `page_collab` runtime flag picks the users; the deployment decides whether rooms exist.
 export const usePageCollabEnabled = () => {
-  const labEnabled = useUserStore(labPreferSelectors.enablePageCollab);
-  return labEnabled && !!readGatewayUrl();
+  const flagEnabled = useServerConfigStore(serverConfigSelectors.enablePageCollab);
+  return flagEnabled && !!readGatewayUrl();
 };
 
 /**
